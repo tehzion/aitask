@@ -55,6 +55,8 @@ interface StoreState {
   initializeBackend: () => Promise<void>;
   syncBackendNow: () => Promise<void>;
   login: (name: string, password?: string) => boolean;
+  updateCurrentUserProfile: (data: Pick<User, 'name' | 'avatar'>) => { ok: boolean; error?: string };
+  updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => { ok: boolean; error?: string };
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
   updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => void;
   reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => void;
@@ -105,6 +107,12 @@ const makeNotification = (data: Omit<AppNotification, 'id' | 'isRead' | 'created
   isRead: false,
   createdAt: new Date().toISOString(),
 });
+
+const stripPassword = <T extends { password?: string }>(item: T): Omit<T, 'password'> => {
+  const cleanItem = { ...item };
+  delete cleanItem.password;
+  return cleanItem;
+};
 
 export const useStore = create<StoreState>()(
   persist(
@@ -208,9 +216,85 @@ export const useStore = create<StoreState>()(
         }
 
         // Strip sensitive fields before placing in currentUser session state
-        const { password: _pw, ...safeUser } = user;
-        set({ currentUser: safeUser as typeof user });
+        set({ currentUser: stripPassword(user) as User });
         return true;
+      },
+
+      updateCurrentUserProfile: (data) => {
+        const currentUser = get().currentUser;
+        if (!currentUser) return { ok: false, error: 'You must be logged in to update your profile.' };
+
+        const name = data.name.trim();
+        const avatar = data.avatar?.trim() || undefined;
+
+        if (!name) return { ok: false, error: 'Name is required.' };
+
+        const duplicate = get().users.some(user => (
+          user.id !== currentUser.id &&
+          user.name.toLowerCase() === name.toLowerCase()
+        ));
+        if (duplicate) return { ok: false, error: 'Another user already uses this name.' };
+
+        const isAllowedAvatar =
+          !avatar ||
+          avatar.startsWith('/') ||
+          avatar.startsWith('data:image/') ||
+          /^https?:\/\//i.test(avatar);
+        if (!isAllowedAvatar) {
+          return { ok: false, error: 'Avatar must be a web image URL, data image, or app-relative path.' };
+        }
+
+        const nextCurrentUser: User = {
+          ...currentUser,
+          name,
+          avatar,
+        };
+
+        set((state) => ({
+          currentUser: nextCurrentUser,
+          users: state.users.map(user => (
+            user.id === currentUser.id
+              ? { ...user, name, avatar }
+              : user
+          )),
+        }));
+
+        return { ok: true };
+      },
+
+      updateCurrentUserPassword: (data) => {
+        const currentUser = get().currentUser;
+        if (!currentUser) return { ok: false, error: 'You must be logged in to update your password.' };
+
+        const account = get().users.find(user => user.id === currentUser.id);
+        if (!account) return { ok: false, error: 'User account was not found.' };
+
+        const currentPassword = data.currentPassword || '';
+        const newPassword = data.newPassword.trim();
+        const confirmPassword = data.confirmPassword.trim();
+
+        if (account.password && account.password !== currentPassword) {
+          return { ok: false, error: 'Current password is incorrect.' };
+        }
+        if (newPassword.length < 8) {
+          return { ok: false, error: 'New password must be at least 8 characters.' };
+        }
+        if (newPassword !== confirmPassword) {
+          return { ok: false, error: 'New password and confirmation do not match.' };
+        }
+        if (account.password === newPassword) {
+          return { ok: false, error: 'New password must be different from the current password.' };
+        }
+
+        set((state) => ({
+          users: state.users.map(user => (
+            user.id === currentUser.id
+              ? { ...user, password: newPassword }
+              : user
+          )),
+        }));
+
+        return { ok: true };
       },
 
       markNotificationRead: (id) => set((state) => ({
@@ -840,9 +924,8 @@ export const useStore = create<StoreState>()(
 
       _forceSyncMockData: () => set((state) => {
         // Re-apply isSuperAdmin and restore passwords for known mock accounts.
-        // Passwords are stripped from localStorage on persist, so we must
-        // re-hydrate them from the in-source mockUsers on every boot so that
-        // password checking works correctly after page reloads.
+        // Passwords may be absent in older localStorage snapshots, so we
+        // hydrate only missing mock passwords without overriding user changes.
         const mockPasswordMap = new Map(mockUsers.map(u => [u.id, u.password]));
 
         const usersWithProtectedOwner = state.users.map(user => {
@@ -850,7 +933,7 @@ export const useStore = create<StoreState>()(
           const restoredPassword = mockPasswordMap.get(user.id);
           return {
             ...user,
-            ...(restoredPassword ? { password: restoredPassword } : {}),
+            ...(!user.password && restoredPassword ? { password: restoredPassword } : {}),
             ...(isBoss ? { isSuperAdmin: true } : {}),
           };
         });
@@ -869,17 +952,16 @@ export const useStore = create<StoreState>()(
     {
       name: 'market-task-storage',
       partialize: (state) => ({
-        // Strip password only from currentUser (the active session object).
-        // The users[] array keeps passwords in memory for auth but they are
-        // re-hydrated from mockUsers on every boot for mock accounts.
-        // Registrations have their password stripped so it doesn't persist.
+        // currentUser never holds a password — strip it before writing to localStorage.
+        // users[] keeps passwords so that user-changed passwords survive page reloads.
+        // Registrations strip passwords (one-time use during approval flow).
         currentUser: state.currentUser
-          ? (({ password: _pw, ...rest }) => rest)(state.currentUser as typeof state.currentUser & { password?: string })
+          ? stripPassword(state.currentUser as User & { password?: string })
           : null,
         tasks: state.tasks,
         projects: state.projects,
-        users: state.users.map(({ password: _pw, ...rest }) => rest as typeof rest & { password?: undefined }),
-        registrations: state.registrations.map(({ password: _pw, ...rest }) => rest as typeof rest & { password?: undefined }),
+        users: state.users,
+        registrations: state.registrations.map(r => stripPassword(r)),
         notifications: state.notifications,
         rolePermissions: state.rolePermissions,
       }),
