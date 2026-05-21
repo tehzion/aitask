@@ -839,11 +839,22 @@ export const useStore = create<StoreState>()(
       },
 
       _forceSyncMockData: () => set((state) => {
-        const usersWithProtectedOwner = state.users.map(user => (
-          user.id === 'u-boss' || user.name === 'Boss Koo'
-            ? { ...user, isSuperAdmin: true }
-            : user
-        ));
+        // Re-apply isSuperAdmin and restore passwords for known mock accounts.
+        // Passwords are stripped from localStorage on persist, so we must
+        // re-hydrate them from the in-source mockUsers on every boot so that
+        // password checking works correctly after page reloads.
+        const mockPasswordMap = new Map(mockUsers.map(u => [u.id, u.password]));
+
+        const usersWithProtectedOwner = state.users.map(user => {
+          const isBoss = user.id === 'u-boss' || user.name === 'Boss Koo';
+          const restoredPassword = mockPasswordMap.get(user.id);
+          return {
+            ...user,
+            ...(restoredPassword ? { password: restoredPassword } : {}),
+            ...(isBoss ? { isSuperAdmin: true } : {}),
+          };
+        });
+
         const newUsers = mockUsers.filter(mu => !usersWithProtectedOwner.some(su => su.id === mu.id));
         const newProjects = mockProjects.filter(mp => !state.projects.some(sp => sp.id === mp.id));
         const newTasks = mockTasks.filter(mt => !state.tasks.some(st => st.id === mt.id));
@@ -858,7 +869,10 @@ export const useStore = create<StoreState>()(
     {
       name: 'market-task-storage',
       partialize: (state) => ({
-        // Strip passwords from every user before writing to localStorage
+        // Strip password only from currentUser (the active session object).
+        // The users[] array keeps passwords in memory for auth but they are
+        // re-hydrated from mockUsers on every boot for mock accounts.
+        // Registrations have their password stripped so it doesn't persist.
         currentUser: state.currentUser
           ? (({ password: _pw, ...rest }) => rest)(state.currentUser as typeof state.currentUser & { password?: string })
           : null,
