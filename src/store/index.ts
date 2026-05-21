@@ -54,7 +54,7 @@ interface StoreState {
 
   initializeBackend: () => Promise<void>;
   syncBackendNow: () => Promise<void>;
-  login: (userId: string, password?: string) => boolean;
+  login: (name: string, password?: string) => boolean;
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
   updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => void;
   reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => void;
@@ -197,15 +197,19 @@ export const useStore = create<StoreState>()(
         }
       },
 
-      login: (userId, password) => {
-        const user = get().users.find(u => u.id === userId);
+      login: (name, password) => {
+        // Match by name (case-insensitive) — never expose user IDs to the login UI
+        const user = get().users.find(u => u.name.toLowerCase() === name.trim().toLowerCase());
         if (!user) return false;
 
+        // If the user has a password set, it must match exactly
         if (user.password && user.password !== password) {
           return false;
         }
 
-        set({ currentUser: user });
+        // Strip sensitive fields before placing in currentUser session state
+        const { password: _pw, ...safeUser } = user;
+        set({ currentUser: safeUser as typeof user });
         return true;
       },
 
@@ -297,13 +301,24 @@ export const useStore = create<StoreState>()(
         const task = state.tasks.find(t => t.id === taskId);
         if (!task || !canEditTask(state.currentUser, task, state.rolePermissions)) return state;
 
+        // Validate that the attachment link is a safe http(s) URL
+        const trimmedLink = attachmentLink.trim();
+        if (trimmedLink) {
+          try {
+            const parsed = new URL(trimmedLink);
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return state;
+          } catch {
+            return state; // Invalid URL — reject silently
+          }
+        }
+
         return {
           tasks: state.tasks.map(task =>
             task.id === taskId
               ? {
                   ...task,
-                  attachmentLink: attachmentLink.trim() || undefined,
-                  attachmentName: attachmentName?.trim() || undefined
+                  attachmentLink: trimmedLink || undefined,
+                  attachmentName: attachmentName?.trim().slice(0, 200) || undefined
                 }
               : task
           )
@@ -461,10 +476,14 @@ export const useStore = create<StoreState>()(
         const task = state.tasks.find(t => t.id === taskId);
         if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
 
+        // Enforce a reasonable length cap to prevent storage abuse
+        const safeText = text.trim().slice(0, 2000);
+        if (!safeText) return state;
+
         const newComment: TaskComment = {
           id: nowId('C'),
           userId: currentUser.id,
-          text,
+          text: safeText,
           createdAt: new Date().toISOString(),
         };
 
@@ -839,11 +858,14 @@ export const useStore = create<StoreState>()(
     {
       name: 'market-task-storage',
       partialize: (state) => ({
-        currentUser: state.currentUser,
+        // Strip passwords from every user before writing to localStorage
+        currentUser: state.currentUser
+          ? (({ password: _pw, ...rest }) => rest)(state.currentUser as typeof state.currentUser & { password?: string })
+          : null,
         tasks: state.tasks,
         projects: state.projects,
-        users: state.users,
-        registrations: state.registrations,
+        users: state.users.map(({ password: _pw, ...rest }) => rest as typeof rest & { password?: undefined }),
+        registrations: state.registrations.map(({ password: _pw, ...rest }) => rest as typeof rest & { password?: undefined }),
         notifications: state.notifications,
         rolePermissions: state.rolePermissions,
       }),

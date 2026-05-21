@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, UserPlus } from 'lucide-react';
 import { useStore } from '../store';
@@ -6,14 +6,32 @@ import { Role } from '../types';
 import { Button, inputBase } from '../components/ui';
 import { cn } from '../lib/utils';
 
+/** Max failed attempts before a short lockout is applied */
+const MAX_ATTEMPTS = 5;
+/** Lockout duration in seconds */
+const LOCKOUT_SECONDS = 30;
+
 const Login: React.FC = () => {
-  const { users, login, currentUser, registerUser } = useStore();
+  const { login, currentUser, registerUser } = useStore();
   const navigate = useNavigate();
-  const [selectedUserId, setSelectedUserId] = useState(users[0]?.id || '');
+
+  // --- Login state ---
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const attemptsRef = useRef(0);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+
+  // --- Registration state ---
   const [isRegistering, setIsRegistering] = useState(false);
-  const [regData, setRegData] = useState({ name: '', email: '', phone: '', password: '', jobPosition: '', requestedRole: 'Staff' as Role });
+  const [regData, setRegData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    jobPosition: '',
+    requestedRole: 'Staff' as Role,
+  });
   const [regSuccess, setRegSuccess] = useState(false);
 
   React.useEffect(() => {
@@ -23,12 +41,34 @@ const Login: React.FC = () => {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
-    if (!selectedUserId) return;
 
-    if (login(selectedUserId, password)) {
+    // Lockout check
+    if (lockedUntil && Date.now() < lockedUntil) {
+      const remaining = Math.ceil((lockedUntil - Date.now()) / 1000);
+      setLoginError(`Too many attempts. Please wait ${remaining} seconds.`);
+      return;
+    }
+
+    if (!username.trim()) {
+      setLoginError('Please enter your username.');
+      return;
+    }
+
+    if (login(username, password)) {
+      attemptsRef.current = 0;
       setTimeout(() => navigate('/'), 50);
     } else {
-      setLoginError('Incorrect password. Please try again.');
+      attemptsRef.current += 1;
+      if (attemptsRef.current >= MAX_ATTEMPTS) {
+        const until = Date.now() + LOCKOUT_SECONDS * 1000;
+        setLockedUntil(until);
+        attemptsRef.current = 0;
+        setLoginError(`Too many failed attempts. Please wait ${LOCKOUT_SECONDS} seconds.`);
+        // Auto-clear lockout message after delay
+        setTimeout(() => setLockedUntil(null), LOCKOUT_SECONDS * 1000);
+      } else {
+        setLoginError('Incorrect username or password. Please try again.');
+      }
     }
   };
 
@@ -56,7 +96,9 @@ const Login: React.FC = () => {
           {isRegistering ? 'Register for Access' : 'Sign in to AiTask'}
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
-          {isRegistering ? 'Fill in your details. Boss Koo will approve your account.' : 'Select a demo user and enter the shared password.'}
+          {isRegistering
+            ? 'Fill in your details. An admin will review and approve your account.'
+            : 'Enter your username and password to access the dashboard.'}
         </p>
       </div>
 
@@ -66,26 +108,31 @@ const Login: React.FC = () => {
             <>
               <form className="space-y-6" onSubmit={handleLogin}>
                 <div>
-                  <label htmlFor="user" className="block text-sm font-medium text-slate-700">Select Member</label>
-                  <select
-                    id="user"
-                    name="user"
-                    className={cn(inputBase, 'mt-2 appearance-none px-4 py-3 bg-slate-50 cursor-pointer font-medium')}
-                    value={selectedUserId}
-                    onChange={(e) => setSelectedUserId(e.target.value)}
-                  >
-                    {users.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.name} - {user.role} ({user.department})
-                      </option>
-                    ))}
-                  </select>
+                  <label htmlFor="username" className="block text-sm font-medium text-slate-700">
+                    Username
+                  </label>
+                  <input
+                    id="username"
+                    name="username"
+                    type="text"
+                    autoComplete="username"
+                    required
+                    placeholder="Enter your username"
+                    className={cn(inputBase, 'mt-2 py-3 px-4')}
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700">Password</label>
+                  <label htmlFor="password" className="block text-sm font-medium text-slate-700">
+                    Password
+                  </label>
                   <input
+                    id="password"
+                    name="password"
                     type="password"
+                    autoComplete="current-password"
                     required
                     placeholder="Enter your password"
                     className={cn(inputBase, 'mt-2 py-3 px-4')}
@@ -119,13 +166,6 @@ const Login: React.FC = () => {
                   <UserPlus className="w-4 h-4" />
                   Register for Access
                 </Button>
-
-                <div className="mt-6 bg-slate-50 rounded-lg p-4 border border-slate-100 text-xs leading-5 text-slate-600">
-                  <p className="mb-2"><strong>Demo password:</strong> password123</p>
-                  <p className="mb-2"><strong>Admin:</strong> can create, assign, and edit all work.</p>
-                  <p className="mb-2"><strong>Staff:</strong> can view all tasks and update assigned tasks.</p>
-                  <p><strong>Client:</strong> can review completed or waiting-approval work for their company.</p>
-                </div>
               </div>
             </>
           ) : (
@@ -138,7 +178,9 @@ const Login: React.FC = () => {
                     </svg>
                   </div>
                   <h3 className="text-lg font-medium text-slate-900">Registration Submitted!</h3>
-                  <p className="mt-2 text-sm text-slate-500">Your request has been sent to Boss Koo for approval. Please wait for confirmation.</p>
+                  <p className="mt-2 text-sm text-slate-500">
+                    Your request has been submitted for approval. Please wait for confirmation.
+                  </p>
                   <Button
                     onClick={() => {
                       setRegSuccess(false);
@@ -165,18 +207,18 @@ const Login: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700">Password</label>
-                    <input type="password" required className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.password} onChange={e => setRegData({ ...regData, password: e.target.value })} />
+                    <input type="password" required autoComplete="new-password" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.password} onChange={e => setRegData({ ...regData, password: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700">Job Position / Department</label>
-                    <input type="text" required placeholder="e.g. Designer, Client, Ads Manager" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.jobPosition} onChange={e => setRegData({ ...regData, jobPosition: e.target.value })} />
+                    <input type="text" required placeholder="e.g. Designer, Ads Manager" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.jobPosition} onChange={e => setRegData({ ...regData, jobPosition: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700">Requested Access Role</label>
                     <select className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.requestedRole} onChange={e => setRegData({ ...regData, requestedRole: e.target.value as Role })}>
+                      {/* Admin role is not self-selectable; it must be assigned by the super admin */}
                       <option value="Staff">Staff (Internal Team Member)</option>
                       <option value="Client">Client (External Customer)</option>
-                      <option value="Admin">Admin (Manager / Boss)</option>
                     </select>
                   </div>
 

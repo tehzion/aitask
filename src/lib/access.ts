@@ -84,7 +84,7 @@ const routePermission: Record<AppPath, RolePermissionKey> = {
   '/settings': 'viewSettings',
 };
 
-export const isBossKoo = (user: User | null | undefined) => Boolean(user?.isSuperAdmin || user?.name === 'Boss Koo');
+export const isBossKoo = (user: User | null | undefined) => Boolean(user?.isSuperAdmin);
 export const isAdmin = (user: User | null | undefined) => user?.role === 'Admin';
 
 export const getEffectivePermissions = (

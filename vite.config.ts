@@ -1,35 +1,27 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tsconfigPaths from "vite-tsconfig-paths";
-import { traeBadgePlugin } from 'vite-plugin-trae-solo-badge';
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   server: {
     watch: {
       usePolling: true,
     },
   },
   build: {
-    sourcemap: 'hidden',
+    // Never emit source maps in production — they expose internal logic & file paths
+    sourcemap: false,
   },
   plugins: [
     react({
       babel: {
         plugins: [
-          'react-dev-locator',
+          // Only load the dev-locator in development; never ship it to production
+          ...(mode === 'development' ? ['react-dev-locator'] : []),
         ],
       },
     }),
-    traeBadgePlugin({
-      variant: 'dark',
-      position: 'bottom-right',
-      prodOnly: true,
-      clickable: true,
-      clickUrl: 'https://www.trae.ai/solo?showJoin=1',
-      autoTheme: true,
-      autoThemeTarget: '#root'
-    }), 
-    tsconfigPaths()
+    tsconfigPaths(),
   ],
-})
+}));
