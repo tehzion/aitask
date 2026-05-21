@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, UserPlus } from 'lucide-react';
+import { LayoutDashboard, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
 import { useStore } from '../store';
 import { Role } from '../types';
 import { Button, inputBase } from '../components/ui';
@@ -10,6 +10,14 @@ import { cn } from '../lib/utils';
 const MAX_ATTEMPTS = 5;
 /** Lockout duration in seconds */
 const LOCKOUT_SECONDS = 30;
+
+const DEMO_ACCOUNTS = [
+  { username: 'Boss Koo',               password: 'password123', role: 'Super Admin', badge: 'bg-purple-100 text-purple-700' },
+  { username: 'Admin Demo',             password: 'password123', role: 'Admin',       badge: 'bg-red-100 text-red-700' },
+  { username: 'Staff Demo',             password: 'password123', role: 'Staff',       badge: 'bg-blue-100 text-blue-700' },
+  { username: 'Finance Demo',           password: 'password123', role: 'Staff',       badge: 'bg-blue-100 text-blue-700' },
+  { username: 'UrbanEats Client Demo',  password: 'password123', role: 'Client',      badge: 'bg-emerald-100 text-emerald-700' },
+];
 
 const Login: React.FC = () => {
   const { login, currentUser, registerUser } = useStore();
@@ -21,16 +29,12 @@ const Login: React.FC = () => {
   const [loginError, setLoginError] = useState('');
   const attemptsRef = useRef(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [showDemo, setShowDemo] = useState(false);
 
   // --- Registration state ---
   const [isRegistering, setIsRegistering] = useState(false);
   const [regData, setRegData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    password: '',
-    jobPosition: '',
-    requestedRole: 'Staff' as Role,
+    name: '', email: '', phone: '', password: '', jobPosition: '', requestedRole: 'Staff' as Role,
   });
   const [regSuccess, setRegSuccess] = useState(false);
 
@@ -38,11 +42,16 @@ const Login: React.FC = () => {
     if (currentUser) navigate('/');
   }, [currentUser, navigate]);
 
+  const fillDemo = (account: typeof DEMO_ACCOUNTS[0]) => {
+    setUsername(account.username);
+    setPassword(account.password);
+    setLoginError('');
+  };
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
 
-    // Lockout check
     if (lockedUntil && Date.now() < lockedUntil) {
       const remaining = Math.ceil((lockedUntil - Date.now()) / 1000);
       setLoginError(`Too many attempts. Please wait ${remaining} seconds.`);
@@ -64,7 +73,6 @@ const Login: React.FC = () => {
         setLockedUntil(until);
         attemptsRef.current = 0;
         setLoginError(`Too many failed attempts. Please wait ${LOCKOUT_SECONDS} seconds.`);
-        // Auto-clear lockout message after delay
         setTimeout(() => setLockedUntil(null), LOCKOUT_SECONDS * 1000);
       } else {
         setLoginError('Incorrect username or password. Please try again.');
@@ -103,14 +111,12 @@ const Login: React.FC = () => {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow-lg sm:rounded-lg sm:px-10 border border-slate-200 relative overflow-hidden">
+        <div className="bg-white py-8 px-4 shadow-lg sm:rounded-lg sm:px-10 border border-slate-200">
           {!isRegistering ? (
             <>
-              <form className="space-y-6" onSubmit={handleLogin}>
+              <form className="space-y-5" onSubmit={handleLogin}>
                 <div>
-                  <label htmlFor="username" className="block text-sm font-medium text-slate-700">
-                    Username
-                  </label>
+                  <label htmlFor="username" className="block text-sm font-medium text-slate-700">Username</label>
                   <input
                     id="username"
                     name="username"
@@ -125,9 +131,7 @@ const Login: React.FC = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-slate-700">
-                    Password
-                  </label>
+                  <label htmlFor="password" className="block text-sm font-medium text-slate-700">Password</label>
                   <input
                     id="password"
                     name="password"
@@ -148,7 +152,54 @@ const Login: React.FC = () => {
                 </Button>
               </form>
 
-              <div className="mt-6">
+              {/* ── Demo Accounts ── */}
+              <div className="mt-5">
+                <button
+                  type="button"
+                  onClick={() => setShowDemo(v => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:bg-slate-100 transition-colors"
+                >
+                  <span>Demo Accounts — click to fill</span>
+                  {showDemo ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+
+                {showDemo && (
+                  <div className="mt-2 rounded-lg border border-slate-200 overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                          <th className="text-left px-3 py-2 font-semibold text-slate-500">Username</th>
+                          <th className="text-left px-3 py-2 font-semibold text-slate-500">Password</th>
+                          <th className="text-left px-3 py-2 font-semibold text-slate-500">Role</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {DEMO_ACCOUNTS.map((account) => (
+                          <tr
+                            key={account.username}
+                            onClick={() => fillDemo(account)}
+                            className={cn(
+                              'border-b border-slate-100 last:border-0 cursor-pointer hover:bg-indigo-50 transition-colors',
+                              username === account.username ? 'bg-indigo-50' : 'bg-white'
+                            )}
+                          >
+                            <td className="px-3 py-2 font-medium text-slate-700">{account.username}</td>
+                            <td className="px-3 py-2 font-mono text-slate-500">{account.password}</td>
+                            <td className="px-3 py-2">
+                              <span className={cn('px-1.5 py-0.5 rounded text-xs font-semibold', account.badge)}>
+                                {account.role}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Register link ── */}
+              <div className="mt-5">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-slate-200" />
@@ -157,11 +208,10 @@ const Login: React.FC = () => {
                     <span className="px-2 bg-white text-slate-500">Need an account?</span>
                   </div>
                 </div>
-
                 <Button
                   onClick={() => setIsRegistering(true)}
                   variant="secondary"
-                  className="mt-6 w-full border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                  className="mt-5 w-full border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
                 >
                   <UserPlus className="w-4 h-4" />
                   Register for Access
@@ -181,13 +231,7 @@ const Login: React.FC = () => {
                   <p className="mt-2 text-sm text-slate-500">
                     Your request has been submitted for approval. Please wait for confirmation.
                   </p>
-                  <Button
-                    onClick={() => {
-                      setRegSuccess(false);
-                      setIsRegistering(false);
-                    }}
-                    className="mt-6 w-full"
-                  >
+                  <Button onClick={() => { setRegSuccess(false); setIsRegistering(false); }} className="mt-6 w-full">
                     Back to Login
                   </Button>
                 </div>
@@ -216,14 +260,11 @@ const Login: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-slate-700">Requested Access Role</label>
                     <select className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.requestedRole} onChange={e => setRegData({ ...regData, requestedRole: e.target.value as Role })}>
-                      {/* Admin role is not self-selectable; it must be assigned by the super admin */}
                       <option value="Staff">Staff (Internal Team Member)</option>
                       <option value="Client">Client (External Customer)</option>
                     </select>
                   </div>
-
                   <Button type="submit" className="w-full py-3">Submit Registration</Button>
-
                   <div className="text-center mt-4">
                     <button type="button" onClick={() => setIsRegistering(false)} className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
                       Already have an account? Sign in
