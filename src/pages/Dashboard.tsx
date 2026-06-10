@@ -9,7 +9,7 @@ import { format, isToday, isThisWeek, isBefore, parseISO, subMonths, isSameMonth
 import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon } from 'lucide-react';
 import CreateTaskModal from '../components/CreateTaskModal';
 import { Link } from 'react-router-dom';
-import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader, pageShell } from '../components/ui';
+import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader, pageShell, cardBase } from '../components/ui';
 import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString } from '../lib/utils';
