@@ -1,17 +1,19 @@
 import React from 'react';
-import { AlertTriangle, Bell, CheckCircle2, Cloud, Database, Lock, RefreshCw, ShieldCheck, UserCircle } from 'lucide-react';
+import { AlertTriangle, Bell, CheckCircle2, Cloud, Database, Lock, RefreshCw, ShieldCheck, UserCircle, Volume2, VolumeX } from 'lucide-react';
 import { useStore } from '../store';
 import { Badge, Button, MetricCard, PageHeader, cardBase, inputBase, pageShell } from '../components/ui';
 import { getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
 import BackendFreshness from '../components/BackendFreshness';
+import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 
 const Settings: React.FC = () => {
   const { currentUser, tasks, projects, notifications, backend, rolePermissions, updateCurrentUserProfile, updateCurrentUserPassword, pullBackendNow } = useStore();
   const [profileName, setProfileName] = React.useState(currentUser?.name || '');
   const [avatarUrl, setAvatarUrl] = React.useState(currentUser?.avatar || '');
   const [profileMessage, setProfileMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [soundEnabled, setSoundEnabledState] = React.useState(getSoundEnabled);
   const [passwordForm, setPasswordForm] = React.useState({
     currentPassword: '',
     newPassword: '',
@@ -311,6 +313,47 @@ const Settings: React.FC = () => {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Sound Notifications */}
+        <div className={`${cardBase} overflow-hidden`}>
+          <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+            {soundEnabled ? <Volume2 className="w-5 h-5 text-indigo-600" /> : <VolumeX className="w-5 h-5 text-slate-400" />}
+            <h2 className="text-lg font-semibold text-slate-800">Sound Notifications</h2>
+          </div>
+          <div className="p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-slate-800">
+                {soundEnabled ? 'Sound alerts are enabled' : 'Sound alerts are muted'}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                Play a chime when a new notification arrives. You can also toggle sound from the volume icon in the top bar.
+              </p>
+            </div>
+            <button
+              id="settings-sound-toggle"
+              type="button"
+              onClick={() => {
+                const next = !soundEnabled;
+                setSoundEnabledState(next);
+                setSoundEnabled(next);
+              }}
+              className={cn(
+                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
+                soundEnabled ? 'bg-indigo-600' : 'bg-slate-200'
+              )}
+              role="switch"
+              aria-checked={soundEnabled}
+              aria-label="Toggle sound notifications"
+            >
+              <span
+                className={cn(
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  soundEnabled ? 'translate-x-5' : 'translate-x-0'
+                )}
+              />
+            </button>
           </div>
         </div>
       </div>

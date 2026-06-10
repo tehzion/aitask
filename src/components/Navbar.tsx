@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useStore } from '../store';
-import { Bell, Search, Menu, CheckCircle2, Info, AlertCircle, FileText, X } from 'lucide-react';
+import { Bell, Search, Menu, CheckCircle2, Info, AlertCircle, FileText, X, Volume2, VolumeX } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { IconButton, inputBase } from './ui';
 import { cn } from '../lib/utils';
 import { getEffectiveRoleName, isNotificationReadByUser, isNotificationVisible } from '../lib/access';
+import { useSoundNotifications } from '../hooks/useSoundNotifications';
+import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -16,8 +18,18 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
+  const [soundEnabled, setSoundEnabledState] = useState(getSoundEnabled);
   const notifRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  // Play sound on new notifications
+  useSoundNotifications(notifications, currentUser);
+
+  const handleToggleSound = () => {
+    const next = !soundEnabled;
+    setSoundEnabledState(next);
+    setSoundEnabled(next);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -99,6 +111,16 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
         >
           {showMobileSearch ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
         </IconButton>
+        <IconButton
+          onClick={handleToggleSound}
+          label={soundEnabled ? 'Mute notifications' : 'Unmute notifications'}
+          className="rounded-full"
+        >
+          {soundEnabled
+            ? <Volume2 className="w-5 h-5" />
+            : <VolumeX className="w-5 h-5 text-slate-400" />}
+        </IconButton>
+
         <div className="relative" ref={notifRef}>
           <IconButton
             onClick={handleBellClick}
