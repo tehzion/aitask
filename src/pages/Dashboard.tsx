@@ -300,6 +300,7 @@ const Dashboard: React.FC = () => {
             )}
           </div>
         </div>
+      </div>
       {/* My Tasks Personal Widget */}
       {currentUser && (
         <div className={cn(cardBase, "p-5 mt-6")}>
