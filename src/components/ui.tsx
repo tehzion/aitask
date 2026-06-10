@@ -108,10 +108,16 @@ export const ChartCard: React.FC<ChartCardProps> = ({ title, description, childr
       <h2 className="text-base font-semibold text-slate-900">{title}</h2>
       {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
     </div>
-    <div className={cn('w-full min-w-0 shrink-0', heightClassName)}>
+    <div className={cn('relative w-full min-w-0 overflow-hidden shrink-0', heightClassName)}>
       {children}
     </div>
   </section>
+);
+
+export const ChartEmptyState: React.FC<{ children?: React.ReactNode }> = ({ children = 'No data yet' }) => (
+  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/80 text-sm font-medium text-slate-400">
+    {children}
+  </div>
 );
 
 interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {

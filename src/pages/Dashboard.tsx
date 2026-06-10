@@ -8,7 +8,7 @@ import { format, isToday, isThisWeek, isBefore, parseISO, subMonths, isSameMonth
 import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon } from 'lucide-react';
 import CreateTaskModal from '../components/CreateTaskModal';
 import { Link } from 'react-router-dom';
-import { Button, ChartCard, MetricCard, PageHeader, pageShell } from '../components/ui';
+import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader, pageShell } from '../components/ui';
 import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
 
@@ -133,6 +133,9 @@ const Dashboard: React.FC = () => {
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartCard title="Tasks by Department">
+          {tasksByTeamData.length === 0 ? (
+            <ChartEmptyState>No task data yet</ChartEmptyState>
+          ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={tasksByTeamData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -142,9 +145,13 @@ const Dashboard: React.FC = () => {
                 <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={40} />
               </BarChart>
             </ResponsiveContainer>
+          )}
         </ChartCard>
 
         <ChartCard title="Tasks by Status">
+          {tasksByStatusData.length === 0 ? (
+            <ChartEmptyState>No status data yet</ChartEmptyState>
+          ) : (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -164,6 +171,7 @@ const Dashboard: React.FC = () => {
                 <Legend iconType="circle" wrapperStyle={{fontSize: '12px'}} />
               </PieChart>
             </ResponsiveContainer>
+          )}
         </ChartCard>
       </div>
 

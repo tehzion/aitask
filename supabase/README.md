@@ -17,7 +17,7 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 5. Restart the Vite dev server.
 
-The first run creates a `default` workspace snapshot from the local demo data. After that, task, project, user, registration, and notification state syncs to Supabase.
+The first run creates a `default` workspace snapshot from the current app state: maintained login accounts and starter projects, with no seeded demo tasks. After that, task, project, user, registration, and notification state syncs to Supabase.
 
 Existing live projects should rerun `supabase/schema.sql` before deploying newer frontend builds. The script is idempotent and adds the snapshot `version` column and explicit Data API grants needed for live freshness and conflict-safe saves.
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, Cloud, Database, Lock, ShieldCheck, UserCircle } from 'lucide-react';
+import { AlertTriangle, Bell, CheckCircle2, Cloud, Database, Lock, RefreshCw, ShieldCheck, UserCircle } from 'lucide-react';
 import { useStore } from '../store';
 import { Badge, Button, MetricCard, PageHeader, cardBase, inputBase, pageShell } from '../components/ui';
 import { getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels } from '../lib/access';
@@ -8,7 +8,7 @@ import { cn } from '../lib/utils';
 import BackendFreshness from '../components/BackendFreshness';
 
 const Settings: React.FC = () => {
-  const { currentUser, tasks, projects, notifications, backend, rolePermissions, updateCurrentUserProfile, updateCurrentUserPassword } = useStore();
+  const { currentUser, tasks, projects, notifications, backend, rolePermissions, updateCurrentUserProfile, updateCurrentUserPassword, pullBackendNow } = useStore();
   const [profileName, setProfileName] = React.useState(currentUser?.name || '');
   const [avatarUrl, setAvatarUrl] = React.useState(currentUser?.avatar || '');
   const [profileMessage, setProfileMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
@@ -32,10 +32,44 @@ const Settings: React.FC = () => {
   )).length;
   const scopeDescription = currentUser?.role === 'Client'
     ? `Review your profile and ${currentUser.companyName || 'client'} workspace state.`
-    : 'Review your profile, workspace scope, and local app state.';
+    : 'Review your profile, workspace scope, and backend sync state.';
   const profileChanged = profileName.trim() !== (currentUser?.name || '') || avatarUrl.trim() !== (currentUser?.avatar || '');
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
   const mustResetPassword = Boolean(currentUser?.mustResetPassword);
+  const isSupabaseMode = backendStatus.mode === 'supabase';
+  const hasSupabaseKey = isSupabaseMode && !backendStatus.missing.includes('VITE_SUPABASE_ANON_KEY');
+  const hasCheckedRemote = Boolean(backend.lastPulledAt || backend.lastSyncedAt || backend.remoteUpdatedAt);
+  const backendSetupItems = [
+    {
+      label: 'Backend mode',
+      done: isSupabaseMode,
+      detail: isSupabaseMode ? 'Supabase mode is active.' : 'Local mode is active.',
+    },
+    {
+      label: 'Supabase URL',
+      done: Boolean(backendStatus.supabaseUrl),
+      detail: backendStatus.supabaseUrl || 'Set VITE_SUPABASE_URL.',
+    },
+    {
+      label: 'Publishable key',
+      done: hasSupabaseKey,
+      detail: hasSupabaseKey ? 'Client key is configured.' : 'Set VITE_SUPABASE_ANON_KEY.',
+    },
+    {
+      label: 'Snapshot target',
+      done: true,
+      detail: `${backendStatus.stateTable} / ${backendStatus.stateId}`,
+    },
+    {
+      label: 'Remote check',
+      done: isSupabaseMode && backendStatus.ready && hasCheckedRemote && !backend.error,
+      detail: isSupabaseMode
+        ? hasCheckedRemote
+          ? 'Remote snapshot has been checked.'
+          : 'Use Check now after the Supabase table is ready.'
+        : 'Switch to Supabase mode before deployment.',
+    },
+  ];
 
   React.useEffect(() => {
     setProfileName(currentUser?.name || '');
@@ -282,6 +316,17 @@ const Settings: React.FC = () => {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <BackendFreshness compact />
+            {isSupabaseMode && (
+              <Button
+                variant="secondary"
+                onClick={() => pullBackendNow({ force: backend.hasRemoteUpdate, silent: false })}
+                disabled={!backendStatus.ready || backend.isLoading || backend.isPulling || backend.isSaving}
+                className="min-h-9 px-3 py-1.5 text-xs"
+              >
+                <RefreshCw className={cn('h-3.5 w-3.5', backend.isPulling && 'animate-spin')} />
+                Check now
+              </Button>
+            )}
             <Badge tone={backendStatus.ready ? 'emerald' : 'amber'}>
               {backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
             </Badge>
@@ -317,6 +362,42 @@ const Settings: React.FC = () => {
             {backendStatus.missing.length > 0 && (
               <p className="mt-1 text-slate-500">Missing: {backendStatus.missing.join(', ')}</p>
             )}
+          </div>
+        </div>
+
+        <div className="border-t border-slate-100 px-6 py-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Supabase readiness</p>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                {isSupabaseMode
+                  ? backendStatus.ready
+                    ? 'The app is configured to read and write the shared Supabase snapshot.'
+                    : 'Supabase mode is selected, but required environment variables are missing.'
+                  : 'The app is running locally. Set Supabase mode in deployment to share live workspace data.'}
+              </p>
+            </div>
+            {backend.error ? (
+              <div className="flex items-start gap-2 text-sm text-amber-700 lg:max-w-md">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{backend.error}</span>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {backendSetupItems.map(item => {
+              const Icon = item.done ? CheckCircle2 : AlertTriangle;
+              return (
+                <div key={item.label} className="flex items-start gap-2 border-t border-slate-100 pt-3">
+                  <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', item.done ? 'text-emerald-600' : 'text-amber-500')} />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{item.label}</p>
+                    <p className="mt-1 break-words text-sm font-medium text-slate-800">{item.detail}</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

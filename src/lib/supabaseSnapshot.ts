@@ -122,10 +122,10 @@ const createSupabaseSnapshot = async (state: PersistedWorkspaceState): Promise<S
   }
 
   const rows = await readJsonRows<Pick<SupabaseSnapshotRow, 'state' | 'updated_at' | 'version'>>(response);
-  return parseSnapshotRow(rows[0], 'Created a new Supabase snapshot from local demo data.', 'local') || {
+  return parseSnapshotRow(rows[0], 'Created a new Supabase snapshot from the current workspace.', 'local') || {
     state,
     source: 'local',
-    message: 'Created a new Supabase snapshot from local demo data.',
+    message: 'Created a new Supabase snapshot from the current workspace.',
     version: 1,
     updatedAt,
   };

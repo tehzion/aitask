@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Department } from '../types';
 import { Users, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { endOfWeek, format, isWithinInterval, parseISO, startOfWeek, subWeeks } from 'date-fns';
-import { ChartCard, MetricCard, PageHeader, cardBase, pageShell } from '../components/ui';
+import { ChartCard, ChartEmptyState, MetricCard, PageHeader, cardBase, pageShell } from '../components/ui';
 import { getVisibleTasks } from '../lib/access';
 
 const Reports: React.FC = () => {
@@ -94,6 +94,9 @@ const Reports: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartCard title="Task Completion Trend">
+          {tasks.length === 0 ? (
+            <ChartEmptyState>No task data yet</ChartEmptyState>
+          ) : (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trendData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -105,9 +108,13 @@ const Reports: React.FC = () => {
                 <Line type="monotone" dataKey="pending" stroke="#f59e0b" strokeWidth={3} />
               </LineChart>
             </ResponsiveContainer>
+          )}
         </ChartCard>
 
         <ChartCard title="Department Productivity Overview">
+          {departmentStats.length === 0 ? (
+            <ChartEmptyState>No department data yet</ChartEmptyState>
+          ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={departmentStats} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
@@ -119,6 +126,7 @@ const Reports: React.FC = () => {
                 <Bar dataKey="pending" name="Pending Tasks" stackId="a" fill="#f59e0b" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          )}
         </ChartCard>
       </div>
 
