@@ -3,22 +3,49 @@
 @tailwind utilities;
 
 @layer utilities {
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
 
+/* ── Warm design tokens ────────────────────────────────────────────── */
 :root {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --color-bg:        #faf8f5;   /* warm off-white */
+  --color-surface:   #ffffff;
+  --color-border:    #e8e3db;   /* warm sand border */
+  --color-text:      #2d2520;   /* warm near-black */
+  --color-muted:     #7c6f64;   /* warm brown-grey */
+  --color-primary:   #c2410c;   /* burnt orange */
+  --color-primary-h: #9a3412;   /* darker hover */
+  --color-primary-l: #fff4ed;   /* pale peach tint */
+  --color-accent:    #d97706;   /* amber accent */
+
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Global background warm tint ─────────────────────────────────── */
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* ── Custom scrollbar — warm tone ────────────────────────────────── */
+.custom-scrollbar::-webkit-scrollbar { width: 5px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: #f3ede6; border-radius: 99px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #c9b89e; border-radius: 99px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #b0936f; }
+
+/* ── Smooth page transitions ─────────────────────────────────────── */
+main { animation: pageFadeIn 0.18s ease; }
+@keyframes pageFadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Warm focus ring (override Tailwind default blue) ────────────── */
+*:focus-visible {
+  outline: 2px solid #c2410c;
+  outline-offset: 2px;
 }

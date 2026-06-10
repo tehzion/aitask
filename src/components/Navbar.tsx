@@ -80,7 +80,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-10 shrink-0">
+    <header className="h-16 bg-white border-b border-[#e8e3db] flex items-center justify-between px-4 sm:px-6 sticky top-0 z-10 shrink-0">
       <div className="flex items-center flex-1">
         <IconButton
           onClick={onMenuClick}
@@ -95,7 +95,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
           </span>
           <input 
             type="text" 
-            className={cn(inputBase, 'border-transparent bg-slate-100 py-2.5 pl-10 pr-3 shadow-none focus:bg-white')} 
+            className={cn(inputBase, 'border-transparent bg-stone-100 py-2.5 pl-10 pr-3 shadow-none focus:bg-white')} 
             placeholder="Search tasks, projects..." 
             value={globalSearch}
             onChange={(event) => setGlobalSearch(event.target.value)}
@@ -137,11 +137,11 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
 
           {/* Notifications Dropdown */}
           {showNotifs && (
-            <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-80 bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="px-4 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <h3 className="font-bold text-slate-800">Notifications</h3>
+            <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl shadow-xl border border-[#e8e3db] overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="px-4 py-3 border-b border-[#f0ebe2] flex justify-between items-center bg-stone-50/80">
+                <h3 className="font-bold text-stone-800">Notifications</h3>
                 {unreadCount > 0 && (
-                  <span className="text-xs text-indigo-600 font-medium bg-indigo-50 px-2 py-1 rounded-full">
+                  <span className="text-xs text-orange-700 font-medium bg-orange-100 px-2 py-1 rounded-full">
                     {unreadCount} New
                   </span>
                 )}
@@ -155,17 +155,17 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
                       markNotificationRead(notif.id);
                       setShowNotifs(false);
                     }}
-                    className={`px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors flex items-start gap-3 ${!isNotificationReadByUser(currentUser, notif) ? 'bg-indigo-50/30' : ''}`}
+                    className={`px-4 py-3 border-b border-stone-50 hover:bg-stone-50 transition-colors flex items-start gap-3 ${!isNotificationReadByUser(currentUser, notif) ? 'bg-orange-50/40' : ''}`}
                   >
                     <div className={`p-2 rounded-full shrink-0 ${getBgColor(notif.iconType)}`}>
                       {getIcon(notif.iconType)}
                     </div>
                     <div>
-                      <p className={`text-sm ${!isNotificationReadByUser(currentUser, notif) ? 'text-slate-900 font-medium' : 'text-slate-700'}`}>{notif.message}</p>
-                      <p className="text-xs text-slate-400 mt-1">{formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}</p>
+                      <p className={`text-sm ${!isNotificationReadByUser(currentUser, notif) ? 'text-stone-900 font-medium' : 'text-stone-600'}`}>{notif.message}</p>
+                      <p className="text-xs text-stone-400 mt-1">{formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}</p>
                     </div>
                     {!isNotificationReadByUser(currentUser, notif) && (
-                      <div className="w-2 h-2 bg-indigo-500 rounded-full mt-1.5 shrink-0"></div>
+                      <div className="w-2 h-2 bg-orange-500 rounded-full mt-1.5 shrink-0"></div>
                     )}
                   </Link>
                 )) : (
@@ -177,19 +177,19 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
               {myNotifs.length > 0 && (
                 <div 
                   onClick={() => markAllNotificationsRead()}
-                  className="px-4 py-2 text-center border-t border-slate-100 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="px-4 py-2 text-center border-t border-[#f0ebe2] bg-stone-50 hover:bg-stone-100 transition-colors cursor-pointer"
                 >
-                  <span className="text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors">Mark All as Read</span>
+                  <span className="text-xs font-semibold text-stone-500 hover:text-orange-700 transition-colors">Mark All as Read</span>
                 </div>
               )}
             </div>
           )}
         </div>
         
-        <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
+        <div className="flex items-center gap-3 pl-4 border-l border-[#e8e3db]">
           <div className="hidden md:flex flex-col items-end">
-            <span className="text-sm font-semibold text-slate-900 leading-tight">{currentUser.name}</span>
-            <span className="text-xs text-slate-500">{getEffectiveRoleName(currentUser, rolePermissions)} • {currentUser.department}</span>
+            <span className="text-sm font-semibold text-stone-900 leading-tight">{currentUser.name}</span>
+            <span className="text-xs text-stone-500">{getEffectiveRoleName(currentUser, rolePermissions)} • {currentUser.department}</span>
           </div>
           <img 
             src={currentUser.avatar} 
