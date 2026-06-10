@@ -69,6 +69,7 @@ interface StoreState {
   deletedTaskStatuses: string[];
   isCreateTaskModalOpen: boolean;
   setCreateTaskModalOpen: (open: boolean) => void;
+  createTaskInitialDate?: string;
 
   initializeBackend: () => Promise<void>;
   syncBackendNow: () => Promise<void>;
@@ -406,7 +407,11 @@ export const useStore = create<StoreState>()(
       deletedRoleIds: [],
       deletedTaskStatuses: [],
       isCreateTaskModalOpen: false,
-      setCreateTaskModalOpen: (open) => set({ isCreateTaskModalOpen: open }),
+      setCreateTaskModalOpen: (open) => set((state) => ({
+        isCreateTaskModalOpen: open,
+        createTaskInitialDate: open ? state.createTaskInitialDate : undefined
+      })),
+      createTaskInitialDate: undefined,
       notifications: [],
       registrations: [],
       rolePermissions: [],

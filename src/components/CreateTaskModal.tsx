@@ -15,7 +15,7 @@ const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const RECURRENCE_OPTIONS: RecurrenceFrequency[] = ['None', 'Daily', 'Weekly', 'Monthly'];
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { users, currentUser, addTask, projects } = useStore();
+  const { users, currentUser, addTask, projects, createTaskInitialDate } = useStore();
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -26,6 +26,12 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     }
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setDueDate(createTaskInitialDate || '');
+    }
+  }, [isOpen, createTaskInitialDate]);
 
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectId, setProjectId] = useState('');

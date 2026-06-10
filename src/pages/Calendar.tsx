@@ -5,18 +5,18 @@ import {
   eachDayOfInterval, isSameMonth, isSameDay, parseISO, addWeeks, subWeeks, isToday,
   isBefore, differenceInDays, formatDistanceToNow,
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Flag, Clock, User, GripVertical, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Flag, Clock, User, GripVertical, CheckCircle2, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import { getRelativeDueDateString } from '../lib/utils';
 import { Link } from 'react-router-dom';
-import { Badge, PageHeader, cardBase, pageShell } from '../components/ui';
-import { canEditTask as canEditTaskByRole, getVisibleTasks } from '../lib/access';
+import { Badge, PageHeader, Button, cardBase, pageShell } from '../components/ui';
+import { canEditTask as canEditTaskByRole, getVisibleTasks, canCreateTasks } from '../lib/access';
 import { getHolidaysForDate, HOLIDAY_COLORS, MalaysiaHoliday } from '../lib/malaysiaHolidays';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const Calendar: React.FC = () => {
-  const { tasks: allTasks, users, currentUser, rolePermissions, updateTaskDueDate } = useStore();
+  const { tasks: allTasks, users, currentUser, rolePermissions, updateTaskDueDate, setCreateTaskModalOpen } = useStore();
   const [currentDate, setCurrentDate]   = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode]         = useState<'month' | 'week'>('month');
@@ -33,6 +33,12 @@ const Calendar: React.FC = () => {
   const nextPeriod = () => setCurrentDate(viewMode === 'month' ? addMonths(currentDate, 1) : addWeeks(currentDate, 1));
   const prevPeriod = () => setCurrentDate(viewMode === 'month' ? subMonths(currentDate, 1) : subWeeks(currentDate, 1));
   const goToday    = () => { setCurrentDate(new Date()); setSelectedDate(new Date()); };
+  
+  const handleAddTask = () => {
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    useStore.setState({ createTaskInitialDate: dateStr });
+    setCreateTaskModalOpen(true);
+  };
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd   = endOfMonth(monthStart);
@@ -140,13 +146,13 @@ const Calendar: React.FC = () => {
             <button
               onClick={() => setShowHolidays(v => !v)}
               className={clsx(
-                'flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors',
+                'flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border transition-colors shrink-0',
                 showHolidays
                   ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
                   : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
               )}
             >
-              <Flag className="w-3.5 h-3.5" /> MY Holidays
+              <Flag className="w-3 h-3" /> MY Holidays
             </button>
 
             <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-sm p-1">
@@ -164,6 +170,12 @@ const Calendar: React.FC = () => {
               </button>
               <button onClick={nextPeriod} className="p-1.5 hover:bg-slate-100 rounded-md transition-colors text-slate-600"><ChevronRight className="w-4 h-4" /></button>
             </div>
+
+            {canCreateTasks(currentUser, rolePermissions) && (
+              <Button onClick={handleAddTask} className="flex items-center gap-1">
+                <Plus className="w-4 h-4" /> New Task
+              </Button>
+            )}
           </div>
         )}
       />
@@ -317,11 +329,22 @@ const Calendar: React.FC = () => {
 
         {/* ── Side Panel ─────────────────────────────────────── */}
         <div className={clsx(cardBase, 'w-full lg:w-72 xl:w-80 shrink-0 overflow-hidden flex flex-col')}>
-          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Selected day</p>
-            <h2 className="text-base font-bold text-slate-800 mt-0.5">
-              {format(selectedDate, 'EEEE, d MMMM yyyy')}
-            </h2>
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Selected day</p>
+              <h2 className="text-base font-bold text-slate-800 mt-0.5">
+                {format(selectedDate, 'EEEE, d MMMM yyyy')}
+              </h2>
+            </div>
+            {canCreateTasks(currentUser, rolePermissions) && (
+              <button
+                onClick={handleAddTask}
+                title="Add task for this day"
+                className="p-1 hover:bg-slate-100 rounded-md transition-colors text-indigo-600 hover:text-indigo-800 shrink-0"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -350,7 +373,12 @@ const Calendar: React.FC = () => {
               {selectedDayTasks.length === 0 ? (
                 <div className="rounded-lg border-2 border-dashed border-slate-200 py-8 flex flex-col items-center justify-center text-center gap-1">
                   <p className="text-sm text-slate-400">No tasks due</p>
-                  <p className="text-xs text-slate-300">Drag a task here to reschedule</p>
+                  <p className="text-xs text-slate-300 mb-1">Drag a task here to reschedule</p>
+                  {canCreateTasks(currentUser, rolePermissions) && (
+                    <Button onClick={handleAddTask} variant="secondary" className="h-7 px-2.5 text-xs flex items-center gap-1 font-semibold">
+                      <Plus className="w-3.5 h-3.5" /> Add Task
+                    </Button>
+                  )}
                 </div>
               ) : (
                 selectedDayTasks.map(task => {
