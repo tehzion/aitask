@@ -172,3 +172,9 @@ export const isNotificationVisible = (user: User | null | undefined, notificatio
   if (notification.targetClient && user.role === 'Client' && notification.targetClient === user.companyName) return true;
   return false;
 };
+
+export const isNotificationReadByUser = (user: User | null | undefined, notification: AppNotification) => {
+  if (!user) return Boolean(notification.isRead);
+  if (notification.readByUserIds) return notification.readByUserIds.includes(user.id);
+  return Boolean(notification.isRead);
+};

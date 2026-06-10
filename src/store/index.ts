@@ -14,12 +14,14 @@ import {
   TaskApprovalEvent,
   CustomRole,
 } from '../types';
-import { mockUsers, mockProjects, mockTasks } from '../mock';
+import { legacyDemoTaskIds, mockUsers, mockProjects, mockTasks } from '../mock';
+import { DEFAULT_USER_PASSWORD, hasDefaultPassword } from '../lib/auth';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
 import {
   loadSupabaseSnapshot,
   PersistedWorkspaceState,
   saveSupabaseSnapshot,
+  SnapshotResult,
 } from '../lib/supabaseSnapshot';
 import {
   canEditTask,
@@ -29,6 +31,8 @@ import {
   canDeleteUser,
   canManageProjects,
   canReviewTaskAsClient,
+  isNotificationReadByUser,
+  isNotificationVisible,
   isBossKoo,
 } from '../lib/access';
 
@@ -37,7 +41,13 @@ interface BackendRuntimeState {
   isConfigured: boolean;
   isLoading: boolean;
   isSaving: boolean;
+  isPulling: boolean;
   lastSyncedAt?: string;
+  lastPulledAt?: string;
+  remoteVersion?: number;
+  remoteUpdatedAt?: string;
+  hasRemoteUpdate: boolean;
+  hasLocalChanges: boolean;
   error?: string;
   message: string;
 }
@@ -54,6 +64,7 @@ interface StoreState {
 
   initializeBackend: () => Promise<void>;
   syncBackendNow: () => Promise<void>;
+  pullBackendNow: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
   login: (name: string, password?: string) => boolean;
   updateCurrentUserProfile: (data: Pick<User, 'name' | 'avatar'>) => { ok: boolean; error?: string };
   updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => { ok: boolean; error?: string };
@@ -80,6 +91,9 @@ interface StoreState {
 }
 
 const nowId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+let isApplyingRemoteSnapshot = false;
+const seededUserIds = new Set(mockUsers.map(user => user.id));
+const legacyDemoTaskIdSet = new Set<string>(legacyDemoTaskIds);
 
 const selectPersistedWorkspaceState = (state: Pick<StoreState, 'users' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions'>): PersistedWorkspaceState => ({
   users: state.users,
@@ -97,6 +111,9 @@ const makeBackendRuntimeState = (): BackendRuntimeState => {
     isConfigured: status.configured,
     isLoading: false,
     isSaving: false,
+    isPulling: false,
+    hasRemoteUpdate: false,
+    hasLocalChanges: false,
     message: status.message,
   };
 };
@@ -105,6 +122,7 @@ const makeNotification = (data: Omit<AppNotification, 'id' | 'isRead' | 'created
   ...data,
   id: nowId('N'),
   isRead: false,
+  readByUserIds: [],
   createdAt: new Date().toISOString(),
 });
 
@@ -112,6 +130,30 @@ const stripPassword = <T extends { password?: string }>(item: T): Omit<T, 'passw
   const cleanItem = { ...item };
   delete cleanItem.password;
   return cleanItem;
+};
+
+const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorkspaceState => ({
+  users: state.users || [],
+  projects: state.projects || [],
+  tasks: state.tasks || [],
+  notifications: state.notifications || [],
+  registrations: state.registrations || [],
+  rolePermissions: state.rolePermissions || [],
+});
+
+const getCurrentUserFromSnapshot = (currentUser: User | null, users: User[]) => {
+  if (!currentUser) return null;
+  const nextUser = users.find(user => user.id === currentUser.id);
+  return nextUser ? stripPassword(nextUser) as User : null;
+};
+
+const makeWorkspacePatch = (current: StoreState, snapshot: SnapshotResult) => {
+  const workspace = normalizeWorkspaceState(snapshot.state);
+  return {
+    ...workspace,
+    rolePermissions: workspace.rolePermissions || [],
+    currentUser: getCurrentUserFromSnapshot(current.currentUser, workspace.users),
+  };
 };
 
 export const useStore = create<StoreState>()(
@@ -134,6 +176,9 @@ export const useStore = create<StoreState>()(
             isConfigured: status.configured,
             isLoading: status.mode === 'supabase' && status.configured,
             isSaving: false,
+            isPulling: false,
+            hasRemoteUpdate: false,
+            hasLocalChanges: false,
             message: status.message,
             error: status.ready ? undefined : status.message,
           }
@@ -143,21 +188,26 @@ export const useStore = create<StoreState>()(
 
         try {
           const result = await loadSupabaseSnapshot(selectPersistedWorkspaceState(get()));
+          const syncedAt = new Date().toISOString();
+          isApplyingRemoteSnapshot = true;
           set((state) => ({
-            ...result.state,
-            rolePermissions: result.state.rolePermissions || [],
-            currentUser: state.currentUser
-              ? result.state.users.find(user => user.id === state.currentUser?.id) || null
-              : null,
+            ...makeWorkspacePatch(state, result),
             backend: {
               mode: 'supabase',
               isConfigured: true,
               isLoading: false,
               isSaving: false,
-              lastSyncedAt: new Date().toISOString(),
+              isPulling: false,
+              lastSyncedAt: syncedAt,
+              lastPulledAt: syncedAt,
+              remoteVersion: result.version,
+              remoteUpdatedAt: result.updatedAt,
+              hasRemoteUpdate: false,
+              hasLocalChanges: false,
               message: result.message,
             }
           }));
+          isApplyingRemoteSnapshot = false;
         } catch (error) {
           set({
             backend: {
@@ -165,6 +215,9 @@ export const useStore = create<StoreState>()(
               isConfigured: true,
               isLoading: false,
               isSaving: false,
+              isPulling: false,
+              hasRemoteUpdate: false,
+              hasLocalChanges: false,
               message: 'Supabase sync failed. Continuing with local state.',
               error: error instanceof Error ? error.message : 'Unable to load Supabase state.',
             }
@@ -175,6 +228,18 @@ export const useStore = create<StoreState>()(
       syncBackendNow: async () => {
         if (!shouldUseSupabase()) return;
 
+        const current = get();
+        if (current.backend.hasRemoteUpdate) {
+          set((state) => ({
+            backend: {
+              ...state.backend,
+              isSaving: false,
+              message: 'A newer workspace update is available. Refresh before saving.',
+            }
+          }));
+          return;
+        }
+
         set((state) => ({
           backend: {
             ...state.backend,
@@ -184,13 +249,38 @@ export const useStore = create<StoreState>()(
         }));
 
         try {
-          await saveSupabaseSnapshot(selectPersistedWorkspaceState(get()));
+          const stateToSave = get();
+          const result = await saveSupabaseSnapshot(
+            selectPersistedWorkspaceState(stateToSave),
+            stateToSave.backend.remoteVersion || 1
+          );
+
+          if (!result.saved) {
+            set((state) => ({
+              backend: {
+                ...state.backend,
+                isSaving: false,
+                remoteVersion: result.version || state.backend.remoteVersion,
+                remoteUpdatedAt: result.updatedAt || state.backend.remoteUpdatedAt,
+                hasRemoteUpdate: true,
+                message: result.message,
+              }
+            }));
+            return;
+          }
+
+          const syncedAt = new Date().toISOString();
           set((state) => ({
             backend: {
               ...state.backend,
               isSaving: false,
-              lastSyncedAt: new Date().toISOString(),
-              message: 'Workspace state synced to Supabase.',
+              lastSyncedAt: syncedAt,
+              lastPulledAt: syncedAt,
+              remoteVersion: result.version,
+              remoteUpdatedAt: result.updatedAt,
+              hasRemoteUpdate: false,
+              hasLocalChanges: false,
+              message: result.message,
             }
           }));
         } catch (error) {
@@ -205,18 +295,114 @@ export const useStore = create<StoreState>()(
         }
       },
 
+      pullBackendNow: async (options = {}) => {
+        if (!shouldUseSupabase()) return;
+        if (get().backend.isSaving && !options.force) return;
+
+        set((state) => ({
+          backend: {
+            ...state.backend,
+            isPulling: true,
+            error: undefined,
+            message: options.silent ? state.backend.message : 'Checking for the latest workspace data.',
+          }
+        }));
+
+        try {
+          const result = await loadSupabaseSnapshot(selectPersistedWorkspaceState(get()));
+          const pulledAt = new Date().toISOString();
+          const current = get();
+          const currentVersion = current.backend.remoteVersion || 0;
+          const hasUnsavedLocalChanges = current.backend.hasLocalChanges && !options.force;
+          const hasPendingRemoteUpdate = current.backend.hasRemoteUpdate && !options.force;
+          const remoteIsNewer = result.version > currentVersion || hasPendingRemoteUpdate;
+
+          if (hasUnsavedLocalChanges || hasPendingRemoteUpdate) {
+            set((state) => ({
+              backend: {
+                ...state.backend,
+                isPulling: false,
+                lastPulledAt: pulledAt,
+                remoteVersion: remoteIsNewer ? result.version : state.backend.remoteVersion,
+                remoteUpdatedAt: remoteIsNewer ? result.updatedAt : state.backend.remoteUpdatedAt,
+                hasRemoteUpdate: remoteIsNewer || state.backend.hasRemoteUpdate,
+                message: remoteIsNewer
+                  ? 'A newer workspace update is available. Refresh before saving.'
+                  : state.backend.message,
+              }
+            }));
+            return;
+          }
+
+          if (remoteIsNewer || options.force || currentVersion === 0) {
+            isApplyingRemoteSnapshot = true;
+            set((state) => ({
+              ...makeWorkspacePatch(state, result),
+              backend: {
+                ...state.backend,
+                isPulling: false,
+                lastPulledAt: pulledAt,
+                remoteVersion: result.version,
+                remoteUpdatedAt: result.updatedAt,
+                hasRemoteUpdate: false,
+                hasLocalChanges: false,
+                message: options.silent ? 'Dashboard is current.' : result.message,
+              }
+            }));
+            isApplyingRemoteSnapshot = false;
+            return;
+          }
+
+          set((state) => ({
+            backend: {
+              ...state.backend,
+              isPulling: false,
+              lastPulledAt: pulledAt,
+              remoteVersion: result.version,
+              remoteUpdatedAt: result.updatedAt,
+              hasRemoteUpdate: false,
+              message: options.silent ? state.backend.message : 'Dashboard is current.',
+            }
+          }));
+        } catch (error) {
+          isApplyingRemoteSnapshot = false;
+          set((state) => ({
+            backend: {
+              ...state.backend,
+              isPulling: false,
+              message: 'Unable to check the latest Supabase state.',
+              error: error instanceof Error ? error.message : 'Unable to load Supabase state.',
+            }
+          }));
+        }
+      },
+
       login: (name, password) => {
         // Match by name (case-insensitive) — never expose user IDs to the login UI
         const user = get().users.find(u => u.name.toLowerCase() === name.trim().toLowerCase());
         if (!user) return false;
 
-        // If the user has a password set, it must match exactly
-        if (user.password && user.password !== password) {
+        const expectedPassword = user.password || DEFAULT_USER_PASSWORD;
+        if (expectedPassword !== password) {
           return false;
         }
 
+        const mustResetPassword =
+          Boolean(user.mustResetPassword) ||
+          (!seededUserIds.has(user.id) && hasDefaultPassword(expectedPassword));
+        const nextUser = {
+          ...user,
+          password: expectedPassword,
+          mustResetPassword,
+        };
+
         // Strip sensitive fields before placing in currentUser session state
-        set({ currentUser: stripPassword(user) as User });
+        set((state) => ({
+          currentUser: stripPassword(nextUser) as User,
+          users: state.users.map(account => (
+            account.id === user.id ? nextUser : account
+          )),
+        }));
         return true;
       },
 
@@ -272,8 +458,9 @@ export const useStore = create<StoreState>()(
         const currentPassword = data.currentPassword || '';
         const newPassword = data.newPassword.trim();
         const confirmPassword = data.confirmPassword.trim();
+        const expectedCurrentPassword = account.password || DEFAULT_USER_PASSWORD;
 
-        if (account.password && account.password !== currentPassword) {
+        if (expectedCurrentPassword !== currentPassword) {
           return { ok: false, error: 'Current password is incorrect.' };
         }
         if (newPassword.length < 8) {
@@ -287,9 +474,13 @@ export const useStore = create<StoreState>()(
         }
 
         set((state) => ({
+          currentUser: {
+            ...currentUser,
+            mustResetPassword: false,
+          },
           users: state.users.map(user => (
             user.id === currentUser.id
-              ? { ...user, password: newPassword }
+              ? { ...user, password: newPassword, mustResetPassword: false }
               : user
           )),
         }));
@@ -297,11 +488,24 @@ export const useStore = create<StoreState>()(
         return { ok: true };
       },
 
-      markNotificationRead: (id) => set((state) => ({
-        notifications: (state.notifications || []).map(n =>
-          n.id === id ? { ...n, isRead: true } : n
-        )
-      })),
+      markNotificationRead: (id) => set((state) => {
+        const currentUser = state.currentUser;
+        return {
+          notifications: (state.notifications || []).map(n => {
+            if (n.id !== id) return n;
+            if (!currentUser) return { ...n, isRead: true };
+
+            const readByUserIds = Array.from(new Set([...(n.readByUserIds || []), currentUser.id]));
+            const isDirectUserNotice = n.targetUserId === currentUser.id && !n.targetRole && !n.targetClient;
+
+            return {
+              ...n,
+              readByUserIds,
+              isRead: isDirectUserNotice ? true : n.isRead,
+            };
+          })
+        };
+      }),
 
       markAllNotificationsRead: () => set((state) => {
         const currentUser = state.currentUser;
@@ -309,12 +513,17 @@ export const useStore = create<StoreState>()(
 
         return {
           notifications: (state.notifications || []).map(n => {
-            const isMine =
-              n.targetUserId === currentUser.id ||
-              n.targetRole === currentUser.role ||
-              (currentUser.role === 'Client' && n.targetClient === currentUser.companyName);
+            const isMine = isNotificationVisible(currentUser, n);
+            if (!isMine || isNotificationReadByUser(currentUser, n)) return n;
 
-            return isMine ? { ...n, isRead: true } : n;
+            const readByUserIds = Array.from(new Set([...(n.readByUserIds || []), currentUser.id]));
+            const isDirectUserNotice = n.targetUserId === currentUser.id && !n.targetRole && !n.targetClient;
+
+            return {
+              ...n,
+              readByUserIds,
+              isRead: isDirectUserNotice ? true : n.isRead,
+            };
           })
         };
       }),
@@ -678,11 +887,10 @@ export const useStore = create<StoreState>()(
 
         const name = data.name.trim();
         const email = data.email?.trim();
-        const password = data.password?.trim();
+        const password = data.password?.trim() || DEFAULT_USER_PASSWORD;
         const companyName = data.role === 'Client' ? data.companyName?.trim() : undefined;
 
         if (!name) return { ok: false, error: 'Member name is required.' };
-        if (!password) return { ok: false, error: 'Password is required.' };
         if (data.role === 'Client' && !companyName) {
           return { ok: false, error: 'Client company is required for Client users.' };
         }
@@ -706,6 +914,7 @@ export const useStore = create<StoreState>()(
           name,
           email,
           password,
+          mustResetPassword: true,
           companyName,
           isSuperAdmin: false,
           customRoleId: customRole?.id,
@@ -868,7 +1077,8 @@ export const useStore = create<StoreState>()(
         const newUser: User = {
           id: nowId('U'),
           name: reg.name,
-          password: reg.password,
+          password: DEFAULT_USER_PASSWORD,
+          mustResetPassword: true,
           role,
           department,
           companyName,
@@ -931,21 +1141,29 @@ export const useStore = create<StoreState>()(
         const usersWithProtectedOwner = state.users.map(user => {
           const isBoss = user.id === 'u-boss' || user.name === 'Boss Koo';
           const restoredPassword = mockPasswordMap.get(user.id);
+          const isSeededUser = seededUserIds.has(user.id);
+          const password = user.password || restoredPassword || DEFAULT_USER_PASSWORD;
+          const mustResetPassword = isSeededUser
+            ? user.mustResetPassword
+            : user.mustResetPassword || hasDefaultPassword(password);
+
           return {
             ...user,
-            ...(!user.password && restoredPassword ? { password: restoredPassword } : {}),
+            password,
+            mustResetPassword,
             ...(isBoss ? { isSuperAdmin: true } : {}),
           };
         });
 
         const newUsers = mockUsers.filter(mu => !usersWithProtectedOwner.some(su => su.id === mu.id));
         const newProjects = mockProjects.filter(mp => !state.projects.some(sp => sp.id === mp.id));
-        const newTasks = mockTasks.filter(mt => !state.tasks.some(st => st.id === mt.id));
+        const tasksWithoutLegacyDemo = state.tasks.filter(task => !legacyDemoTaskIdSet.has(task.id));
+        const newTasks = mockTasks.filter(mt => !tasksWithoutLegacyDemo.some(st => st.id === mt.id));
 
         return {
           users: [...usersWithProtectedOwner, ...newUsers],
           projects: [...state.projects, ...newProjects],
-          tasks: [...state.tasks, ...newTasks],
+          tasks: [...tasksWithoutLegacyDemo, ...newTasks],
         };
       })
     }),
@@ -977,7 +1195,7 @@ export const startBackendAutoSync = () => {
   backendAutoSyncStarted = true;
 
   useStore.subscribe((state, previousState) => {
-    if (!shouldUseSupabase() || state.backend.isLoading) return;
+    if (!shouldUseSupabase() || state.backend.isLoading || state.backend.isPulling || isApplyingRemoteSnapshot) return;
 
     const workspaceChanged =
       state.users !== previousState.users ||
@@ -989,9 +1207,32 @@ export const startBackendAutoSync = () => {
 
     if (!workspaceChanged) return;
 
+    if (!state.backend.hasLocalChanges) {
+      useStore.setState((current) => ({
+        backend: {
+          ...current.backend,
+          hasLocalChanges: true,
+          message: current.backend.hasRemoteUpdate
+            ? current.backend.message
+            : 'Local changes pending sync.',
+        }
+      }));
+    }
+
+    if (state.backend.hasRemoteUpdate) return;
+
     if (backendAutoSyncTimer) window.clearTimeout(backendAutoSyncTimer);
     backendAutoSyncTimer = window.setTimeout(() => {
       void useStore.getState().syncBackendNow();
     }, 800);
   });
+
+  const pullLatest = () => {
+    if (!shouldUseSupabase() || document.visibilityState !== 'visible') return;
+    void useStore.getState().pullBackendNow({ silent: true });
+  };
+
+  window.setInterval(pullLatest, 15000);
+  window.addEventListener('focus', pullLatest);
+  document.addEventListener('visibilitychange', pullLatest);
 };

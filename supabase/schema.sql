@@ -1,10 +1,16 @@
 create table if not exists public.aitask_app_state (
   id text primary key,
   state jsonb not null,
+  version bigint not null default 1,
   updated_at timestamptz not null default now()
 );
 
+alter table public.aitask_app_state
+  add column if not exists version bigint not null default 1;
+
 alter table public.aitask_app_state enable row level security;
+
+grant select, insert, update on public.aitask_app_state to anon, authenticated, service_role;
 
 -- Demo snapshot policy:
 -- The current AiTask frontend still uses mock login, so Supabase Auth is not active yet.

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { startBackendAutoSync, useStore } from './store';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -15,7 +15,12 @@ import { canAccessPath } from './lib/access';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const currentUser = useStore((state) => state.currentUser);
-  return currentUser ? <>{children}</> : <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!currentUser) return <Navigate to="/login" replace />;
+  if (currentUser.mustResetPassword && location.pathname !== '/settings') {
+    return <Navigate to="/settings" replace />;
+  }
+  return <>{children}</>;
 };
 
 const RoleRoute: React.FC<{ path: string; children: React.ReactNode }> = ({ path, children }) => {

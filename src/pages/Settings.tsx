@@ -2,9 +2,10 @@ import React from 'react';
 import { Bell, Cloud, Database, Lock, ShieldCheck, UserCircle } from 'lucide-react';
 import { useStore } from '../store';
 import { Badge, Button, MetricCard, PageHeader, cardBase, inputBase, pageShell } from '../components/ui';
-import { getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationVisible, permissionLabels } from '../lib/access';
+import { getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
+import BackendFreshness from '../components/BackendFreshness';
 
 const Settings: React.FC = () => {
   const { currentUser, tasks, projects, notifications, backend, rolePermissions, updateCurrentUserProfile, updateCurrentUserPassword } = useStore();
@@ -25,12 +26,16 @@ const Settings: React.FC = () => {
   const enabledPermissions = Object.entries(effectivePermissions)
     .filter(([, enabled]) => enabled)
     .map(([key]) => permissionLabels[key as keyof typeof permissionLabels]);
-  const unreadCount = notifications.filter(notification => !notification.isRead && isNotificationVisible(currentUser, notification)).length;
+  const unreadCount = notifications.filter(notification => (
+    isNotificationVisible(currentUser, notification) &&
+    !isNotificationReadByUser(currentUser, notification)
+  )).length;
   const scopeDescription = currentUser?.role === 'Client'
     ? `Review your profile and ${currentUser.companyName || 'client'} workspace state.`
     : 'Review your profile, workspace scope, and local app state.';
   const profileChanged = profileName.trim() !== (currentUser?.name || '') || avatarUrl.trim() !== (currentUser?.avatar || '');
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
+  const mustResetPassword = Boolean(currentUser?.mustResetPassword);
 
   React.useEffect(() => {
     setProfileName(currentUser?.name || '');
@@ -179,10 +184,20 @@ const Settings: React.FC = () => {
             <div className="mb-4 flex items-center gap-3">
               <Lock className="h-5 w-5 text-indigo-600" />
               <div>
-                <h3 className="text-base font-semibold text-slate-900">Password</h3>
-                <p className="text-sm text-slate-500">Update the login password for this user profile.</p>
+                <h3 className="text-base font-semibold text-slate-900">{mustResetPassword ? 'Reset Password' : 'Password'}</h3>
+                <p className="text-sm text-slate-500">
+                  {mustResetPassword
+                    ? 'Set your own password before continuing to the workspace.'
+                    : 'Update the login password for this user profile.'}
+                </p>
               </div>
             </div>
+
+            {mustResetPassword && (
+              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Your account is using the default password. Enter it as the current password, then choose a new password.
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div>
@@ -265,15 +280,18 @@ const Settings: React.FC = () => {
             <Cloud className="w-5 h-5 text-indigo-600" />
             <h2 className="text-lg font-semibold text-slate-800">Data Backend</h2>
           </div>
-          <Badge tone={backendStatus.ready ? 'emerald' : 'amber'}>
-            {backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <BackendFreshness compact />
+            <Badge tone={backendStatus.ready ? 'emerald' : 'amber'}>
+              {backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
+            </Badge>
+          </div>
         </div>
-        <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-4 text-sm">
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-4 gap-4 text-sm">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Status</p>
             <p className="mt-1 font-semibold text-slate-900">
-              {backend.isLoading ? 'Loading workspace...' : backend.isSaving ? 'Saving changes...' : backend.message}
+              {backend.isLoading ? 'Loading workspace...' : backend.isPulling ? 'Checking latest workspace...' : backend.isSaving ? 'Saving changes...' : backend.message}
             </p>
             {backend.error && <p className="mt-2 text-red-600">{backend.error}</p>}
           </div>
@@ -283,7 +301,16 @@ const Settings: React.FC = () => {
             <p className="mt-1 text-slate-500">Snapshot ID: {backendStatus.stateId}</p>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Last Sync</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Last Pull</p>
+            <p className="mt-1 font-semibold text-slate-900">
+              {backend.lastPulledAt ? new Date(backend.lastPulledAt).toLocaleString() : 'Not checked yet'}
+            </p>
+            {backend.remoteVersion && (
+              <p className="mt-1 text-slate-500">Remote version: {backend.remoteVersion}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Last Save</p>
             <p className="mt-1 font-semibold text-slate-900">
               {backend.lastSyncedAt ? new Date(backend.lastSyncedAt).toLocaleString() : 'Not synced yet'}
             </p>

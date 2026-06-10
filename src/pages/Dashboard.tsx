@@ -10,6 +10,7 @@ import CreateTaskModal from '../components/CreateTaskModal';
 import { Link } from 'react-router-dom';
 import { Button, ChartCard, MetricCard, PageHeader, pageShell } from '../components/ui';
 import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
+import BackendFreshness from '../components/BackendFreshness';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -45,6 +46,7 @@ const Dashboard: React.FC = () => {
 
   const tasks = useMemo(() => getVisibleTasks(currentUser, allTasks), [allTasks, currentUser]);
   const visibleProjects = useMemo(() => getVisibleProjects(currentUser, projects), [currentUser, projects]);
+  const canCreateTask = canCreateTasks(currentUser, rolePermissions);
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -106,11 +108,16 @@ const Dashboard: React.FC = () => {
       <PageHeader
         title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Admin' ? 'Admin Dashboard' : currentUser?.role === 'Client' ? 'Client Dashboard' : 'My Dashboard'}
         description={`Welcome back, ${currentUser?.name}! Here's your task overview.`}
-        action={canCreateTasks(currentUser, rolePermissions) ? (
-          <Button onClick={() => setIsModalOpen(true)}>
-            + Create New Task
-          </Button>
-        ) : null}
+        action={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <BackendFreshness />
+            {canCreateTask && (
+              <Button onClick={() => setIsModalOpen(true)}>
+                + Create New Task
+              </Button>
+            )}
+          </div>
+        )}
       />
 
       {/* Summary Cards */}

@@ -32,6 +32,8 @@ VITE_SUPABASE_STATE_ID=default
 
 The first Supabase-enabled visit creates the workspace snapshot from the app's demo data. After that, users, tasks, projects, notifications, registrations, and custom roles sync through Supabase.
 
+If the app was already live before the freshness update, run the latest `supabase/schema.sql` again before redeploying. It keeps the existing snapshot and adds the `version` column plus explicit Data API grants used for conflict-safe sync.
+
 ## Local Check Before Deploy
 
 Run these serially:

@@ -19,6 +19,8 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 The first run creates a `default` workspace snapshot from the local demo data. After that, task, project, user, registration, and notification state syncs to Supabase.
 
+Existing live projects should rerun `supabase/schema.sql` before deploying newer frontend builds. The script is idempotent and adds the snapshot `version` column and explicit Data API grants needed for live freshness and conflict-safe saves.
+
 ## Production Path
 
 The snapshot backend is meant to make integration safe without rewriting every workflow at once. Before production, replace it with normalized Supabase tables, Supabase Auth, and role-level RLS policies for:

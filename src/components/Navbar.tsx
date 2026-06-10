@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { IconButton, inputBase } from './ui';
 import { cn } from '../lib/utils';
-import { getEffectiveRoleName, isNotificationVisible } from '../lib/access';
+import { getEffectiveRoleName, isNotificationReadByUser, isNotificationVisible } from '../lib/access';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -35,7 +35,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [notifications, currentUser]);
 
-  const unreadCount = myNotifs.filter(n => !n.isRead).length;
+  const unreadCount = myNotifs.filter(n => !isNotificationReadByUser(currentUser, n)).length;
 
   const handleBellClick = () => {
     setShowNotifs(!showNotifs);
@@ -107,7 +107,9 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
           >
             <Bell className="w-6 h-6" />
             {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
             )}
           </IconButton>
 
@@ -131,16 +133,16 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
                       markNotificationRead(notif.id);
                       setShowNotifs(false);
                     }}
-                    className={`px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors flex items-start gap-3 ${!notif.isRead ? 'bg-indigo-50/30' : ''}`}
+                    className={`px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors flex items-start gap-3 ${!isNotificationReadByUser(currentUser, notif) ? 'bg-indigo-50/30' : ''}`}
                   >
                     <div className={`p-2 rounded-full shrink-0 ${getBgColor(notif.iconType)}`}>
                       {getIcon(notif.iconType)}
                     </div>
                     <div>
-                      <p className={`text-sm ${!notif.isRead ? 'text-slate-900 font-medium' : 'text-slate-700'}`}>{notif.message}</p>
+                      <p className={`text-sm ${!isNotificationReadByUser(currentUser, notif) ? 'text-slate-900 font-medium' : 'text-slate-700'}`}>{notif.message}</p>
                       <p className="text-xs text-slate-400 mt-1">{formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}</p>
                     </div>
-                    {!notif.isRead && (
+                    {!isNotificationReadByUser(currentUser, notif) && (
                       <div className="w-2 h-2 bg-indigo-500 rounded-full mt-1.5 shrink-0"></div>
                     )}
                   </Link>

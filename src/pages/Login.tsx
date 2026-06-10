@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import { Role } from '../types';
 import { Button, inputBase } from '../components/ui';
 import { cn } from '../lib/utils';
+import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 
 /** Max failed attempts before a short lockout is applied */
 const MAX_ATTEMPTS = 5;
@@ -12,11 +13,11 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 30;
 
 const DEMO_ACCOUNTS = [
-  { username: 'Boss Koo',               password: 'password123', role: 'Super Admin', badge: 'bg-purple-100 text-purple-700' },
-  { username: 'Admin Demo',             password: 'password123', role: 'Admin',       badge: 'bg-red-100 text-red-700' },
-  { username: 'Staff Demo',             password: 'password123', role: 'Staff',       badge: 'bg-blue-100 text-blue-700' },
-  { username: 'Finance Demo',           password: 'password123', role: 'Staff',       badge: 'bg-blue-100 text-blue-700' },
-  { username: 'UrbanEats Client Demo',  password: 'password123', role: 'Client',      badge: 'bg-emerald-100 text-emerald-700' },
+  { username: 'Boss Koo',               password: DEFAULT_USER_PASSWORD, role: 'Super Admin', badge: 'bg-purple-100 text-purple-700' },
+  { username: 'Admin Demo',             password: DEFAULT_USER_PASSWORD, role: 'Admin',       badge: 'bg-red-100 text-red-700' },
+  { username: 'Staff Demo',             password: DEFAULT_USER_PASSWORD, role: 'Staff',       badge: 'bg-blue-100 text-blue-700' },
+  { username: 'Finance Demo',           password: DEFAULT_USER_PASSWORD, role: 'Staff',       badge: 'bg-blue-100 text-blue-700' },
+  { username: 'UrbanEats Client Demo',  password: DEFAULT_USER_PASSWORD, role: 'Client',      badge: 'bg-emerald-100 text-emerald-700' },
 ];
 
 const Login: React.FC = () => {
@@ -34,7 +35,7 @@ const Login: React.FC = () => {
   // --- Registration state ---
   const [isRegistering, setIsRegistering] = useState(false);
   const [regData, setRegData] = useState({
-    name: '', email: '', phone: '', password: '', jobPosition: '', requestedRole: 'Staff' as Role,
+    name: '', email: '', phone: '', jobPosition: '', requestedRole: 'Staff' as Role,
   });
   const [regSuccess, setRegSuccess] = useState(false);
 
@@ -65,7 +66,8 @@ const Login: React.FC = () => {
 
     if (login(username, password)) {
       attemptsRef.current = 0;
-      setTimeout(() => navigate('/'), 50);
+      const user = useStore.getState().currentUser;
+      setTimeout(() => navigate(user?.mustResetPassword ? '/settings' : '/'), 50);
     } else {
       attemptsRef.current += 1;
       if (attemptsRef.current >= MAX_ATTEMPTS) {
@@ -84,7 +86,7 @@ const Login: React.FC = () => {
     e.preventDefault();
     registerUser(regData);
     setRegSuccess(true);
-    setRegData({ name: '', email: '', phone: '', password: '', jobPosition: '', requestedRole: 'Staff' });
+    setRegData({ name: '', email: '', phone: '', jobPosition: '', requestedRole: 'Staff' });
   };
 
   return (
@@ -229,7 +231,7 @@ const Login: React.FC = () => {
                   </div>
                   <h3 className="text-lg font-medium text-slate-900">Registration Submitted!</h3>
                   <p className="mt-2 text-sm text-slate-500">
-                    Your request has been submitted for approval. Please wait for confirmation.
+                    Your request has been submitted for approval. Once approved, sign in with the default password and update it in Settings.
                   </p>
                   <Button onClick={() => { setRegSuccess(false); setIsRegistering(false); }} className="mt-6 w-full">
                     Back to Login
@@ -248,10 +250,6 @@ const Login: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-slate-700">Phone Number</label>
                     <input type="tel" required className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.phone} onChange={e => setRegData({ ...regData, phone: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">Password</label>
-                    <input type="password" required autoComplete="new-password" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.password} onChange={e => setRegData({ ...regData, password: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700">Job Position / Department</label>

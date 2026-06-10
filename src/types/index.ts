@@ -38,12 +38,13 @@ export interface User {
   id: string;
   name: string;
   email?: string;
-  password?: string; // Optional for backward compatibility with old mock data, but required for new users
+  password?: string; // Optional for backward compatibility; new users start with a default password
   role: Role;
   department: Department;
   avatar?: string;
   companyName?: string; // Used specifically for linking Clients to their projects
   isSuperAdmin?: boolean; // System-owner flag, currently reserved for Boss Koo
+  mustResetPassword?: boolean;
   customRoleId?: string;
   customRoleName?: string;
   permissions?: RolePermissions;
@@ -58,6 +59,7 @@ export interface AppNotification {
   message: string;
   link: string;
   isRead: boolean;
+  readByUserIds?: string[];
   createdAt: string;
   iconType: 'task' | 'status' | 'success' | 'alert';
 }
@@ -82,7 +84,7 @@ export interface Registration {
   name: string;
   email: string;
   phone: string;
-  password?: string; // New registrations must provide a password
+  password?: string; // Backward compatibility only; approved users start with the default password
   jobPosition: string;
   requestedRole: Role; // What they want to apply for
   status: 'Pending' | 'Approved' | 'Rejected';

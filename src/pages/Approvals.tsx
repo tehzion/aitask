@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { Badge, Button, PageHeader, cardBase, inputBase, pageShell } from '../components/ui';
 import { cn } from '../lib/utils';
 import { canDeleteUser, defaultRolePermissions, getEffectiveRoleName, isBossKoo, permissionGroups, permissionLabels } from '../lib/access';
+import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 
 const ROLES: Role[] = ['Admin', 'Staff', 'Client'];
 const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client'];
@@ -37,7 +38,7 @@ const Approvals: React.FC = () => {
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
-    password: 'password123',
+    password: DEFAULT_USER_PASSWORD,
     role: 'Staff' as Role,
     department: 'Designer' as Department,
     companyName: '',
@@ -94,7 +95,7 @@ const Approvals: React.FC = () => {
     setNewUser({
       name: '',
       email: '',
-      password: 'password123',
+      password: DEFAULT_USER_PASSWORD,
       role: 'Staff',
       department: 'Designer',
       companyName: '',
@@ -649,7 +650,7 @@ const Approvals: React.FC = () => {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Temporary Password</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Default Password</label>
                 <input
                   type="text"
                   className={cn(inputBase, 'px-3 py-2.5')}
@@ -657,7 +658,7 @@ const Approvals: React.FC = () => {
                   onChange={e => setNewUser({ ...newUser, password: e.target.value })}
                   required
                 />
-                <p className="text-xs text-slate-500 mt-1">This remains local/mock until Supabase Auth is connected.</p>
+                <p className="text-xs text-slate-500 mt-1">The member signs in with this password first, then resets it in Settings.</p>
               </div>
 
               {addUserError && (
