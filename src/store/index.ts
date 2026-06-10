@@ -174,8 +174,8 @@ const mergeWorkspaceStates = (
     if (!localTask) return remoteTask!;
     if (!remoteTask) return localTask;
 
-    const localUpdated = new Date(localTask.updatedAt || 0).getTime();
-    const remoteUpdated = new Date(remoteTask.updatedAt || 0).getTime();
+    const localUpdated = localTask.updatedAt ? new Date(localTask.updatedAt).getTime() : 0;
+    const remoteUpdated = remoteTask.updatedAt ? new Date(remoteTask.updatedAt).getTime() : 0;
 
     const wasLocalModified = localUpdated > lastSyncedTime;
     const wasRemoteModified = remoteUpdated > lastSyncedTime;
@@ -226,8 +226,8 @@ const mergeWorkspaceStates = (
     if (!localProj) return remoteProj!;
     if (!remoteProj) return localProj;
 
-    const localUpdated = new Date(localProj.updatedAt || 0).getTime();
-    const remoteUpdated = new Date(remoteProj.updatedAt || 0).getTime();
+    const localUpdated = localProj.updatedAt ? new Date(localProj.updatedAt).getTime() : 0;
+    const remoteUpdated = remoteProj.updatedAt ? new Date(remoteProj.updatedAt).getTime() : 0;
 
     const wasLocalModified = localUpdated > lastSyncedTime;
     const wasRemoteModified = remoteUpdated > lastSyncedTime;
