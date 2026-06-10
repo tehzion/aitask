@@ -1,16 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { useStore } from '../store';
+import { SkeletonMetricCard, SkeletonChartCard } from '../components/SkeletonCard';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
-import { format, isToday, isThisWeek, isBefore, parseISO, subMonths, isSameMonth } from 'date-fns';
+import { format, isToday, isThisWeek, isBefore, parseISO, subMonths, isSameMonth, formatDistanceToNow, differenceInDays } from 'date-fns';
 import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon } from 'lucide-react';
 import CreateTaskModal from '../components/CreateTaskModal';
 import { Link } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader, pageShell } from '../components/ui';
 import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
+import { cn, getRelativeDueDateString } from '../lib/utils';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -22,27 +24,30 @@ interface StatCardProps {
   to: string;
 }
 
-const StatCard = ({ title, value, icon: Icon, colorClass, to }: StatCardProps) => (
-  <Link to={to} className="block transition hover:-translate-y-0.5 hover:shadow-md rounded-lg">
-    <MetricCard
-      title={title}
-      value={value}
-      icon={Icon}
-      tone={
-        colorClass.includes('emerald') ? 'emerald' :
-        colorClass.includes('amber') ? 'amber' :
-        colorClass.includes('red') ? 'red' :
-        colorClass.includes('blue') ? 'blue' :
-        colorClass.includes('purple') ? 'purple' :
-        'indigo'
-      }
-    />
-  </Link>
-);
+const StatCard = ({ title, value, icon: Icon, colorClass, to }: StatCardProps) => {
+  const isRedPulse = colorClass.includes('red') && value > 0;
+  return (
+    <Link to={to} className="block transition hover:-translate-y-0.5 hover:shadow-md rounded-lg">
+      <MetricCard
+        title={title}
+        value={value}
+        icon={Icon}
+        className={cn(isRedPulse && "animate-pulse ring-2 ring-red-400/40 border-red-200 shadow-red-50/25")}
+        tone={
+          colorClass.includes('emerald') ? 'emerald' :
+          colorClass.includes('amber') ? 'amber' :
+          colorClass.includes('red') ? 'red' :
+          colorClass.includes('blue') ? 'blue' :
+          colorClass.includes('purple') ? 'purple' :
+          'indigo'
+        }
+      />
+    </Link>
+  );
+};
 
 const Dashboard: React.FC = () => {
-  const { projects, tasks: allTasks, currentUser, rolePermissions } = useStore();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { projects, tasks: allTasks, currentUser, rolePermissions, backend, setCreateTaskModalOpen } = useStore();
 
   const tasks = useMemo(() => getVisibleTasks(currentUser, allTasks), [allTasks, currentUser]);
   const visibleProjects = useMemo(() => getVisibleProjects(currentUser, projects), [currentUser, projects]);
@@ -103,6 +108,64 @@ const Dashboard: React.FC = () => {
     .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
     .slice(0, 5);
 
+  const myTasks = useMemo(() => {
+    if (!currentUser) return { dueToday: [], overdue: [], actionRequired: [] };
+    const today = new Date();
+
+    const dueToday = tasks.filter(t =>
+      !t.isCompleted &&
+      t.status !== 'Cancelled' &&
+      t.assignedTo === currentUser.id &&
+      isToday(parseISO(t.dueDate))
+    );
+
+    const overdue = tasks.filter(t =>
+      !t.isCompleted &&
+      t.status !== 'Cancelled' &&
+      t.assignedTo === currentUser.id &&
+      isBefore(parseISO(t.dueDate), today) &&
+      !isToday(parseISO(t.dueDate))
+    );
+
+    const actionRequired = tasks.filter(t => {
+      if (t.isCompleted || t.status === 'Cancelled') return false;
+      if (currentUser.role === 'Client') {
+        return t.clientName === currentUser.companyName && t.status === 'Waiting Approval';
+      } else {
+        return t.assignedTo === currentUser.id && t.status === 'Waiting Approval';
+      }
+    });
+
+    return { dueToday, overdue, actionRequired };
+  }, [tasks, currentUser]);
+
+  if (backend?.isLoading) {
+    return (
+      <div className={pageShell}>
+        <PageHeader
+          title="Loading Dashboard..."
+          description="Fetching latest database state..."
+        />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => <SkeletonMetricCard key={i} />)}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SkeletonChartCard />
+          <SkeletonChartCard />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <SkeletonChartCard className="lg:col-span-2" />
+          <div className="bg-white p-5 rounded-lg border border-[#e8e3db] shadow-sm animate-pulse space-y-4">
+            <div className="h-5 bg-stone-300 rounded w-1/3"></div>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-14 bg-stone-100 rounded-xl w-full"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={pageShell}>
       <PageHeader
@@ -112,7 +175,7 @@ const Dashboard: React.FC = () => {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <BackendFreshness />
             {canCreateTask && (
-              <Button onClick={() => setIsModalOpen(true)}>
+              <Button onClick={() => setCreateTaskModalOpen(true)}>
                 + Create New Task
               </Button>
             )}
@@ -197,24 +260,39 @@ const Dashboard: React.FC = () => {
             </Link>
           </div>
           <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
-            {recentTasks.map(task => (
-              <div key={task.id} className="p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
-                <div className="flex justify-between items-start mb-1">
-                  <span className="font-semibold text-slate-800 text-sm truncate pr-2">{task.title}</span>
-                </div>
-                <div className="text-xs text-slate-500 flex justify-between items-center mt-2">
-                  <span className="font-medium text-indigo-600">{task.clientName}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap ${
-                    task.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
-                    task.status === 'In Progress' ? 'bg-blue-100 text-blue-700' :
-                    task.status === 'Pending' ? 'bg-amber-100 text-amber-700' :
-                    'bg-slate-100 text-slate-700'
-                  }`}>
-                    {task.status}
-                  </span>
-                </div>
-              </div>
-            ))}
+            {recentTasks.map(task => {
+              const dueDateParsed = parseISO(task.dueDate);
+              const isOverdue = !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed);
+
+              return (
+                <Link key={task.id} to={`/tasks?taskId=${task.id}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50 transition-colors">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className={cn("font-semibold text-stone-800 text-sm truncate pr-2", isOverdue && "text-red-700")}>{task.title}</span>
+                  </div>
+                  <div className="text-[11px] text-stone-500 flex justify-between items-center mt-1">
+                    <span
+                      className={cn(isOverdue && "text-red-600 font-bold")}
+                      title={`Due: ${format(dueDateParsed, 'yyyy-MM-dd')}`}
+                    >
+                      {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
+                    </span>
+                    <span className="truncate max-w-[120px]">{task.projectName || 'Independent'}</span>
+                  </div>
+                  <div className="text-xs text-stone-500 flex justify-between items-center mt-2.5">
+                    <span className="font-medium text-orange-700">{task.clientName}</span>
+                    <span className={cn(`text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap bg-stone-100 text-stone-700`,
+                      task.status === 'Completed' && 'bg-emerald-100 text-emerald-700',
+                      task.status === 'In Progress' && 'bg-blue-100 text-blue-700',
+                      task.status === 'Pending' && 'bg-amber-100 text-amber-700',
+                      task.status === 'Waiting Approval' && 'bg-orange-100 text-orange-700',
+                      task.status === 'Cancelled' && 'bg-red-100 text-red-700'
+                    )}>
+                      {task.status}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
             {recentTasks.length === 0 && (
               <div className="text-center text-slate-400 py-8 text-sm">
                 No recent tasks found.
@@ -222,9 +300,96 @@ const Dashboard: React.FC = () => {
             )}
           </div>
         </div>
-      </div>
+      {/* My Tasks Personal Widget */}
+      {currentUser && (
+        <div className={cn(cardBase, "p-5 mt-6")}>
+          <div className="flex justify-between items-center mb-4 border-b border-stone-100 pb-3">
+            <div>
+              <h3 className="text-lg font-bold text-stone-900">My Tasks Checklist</h3>
+              <p className="text-xs text-stone-500">Keep track of your personal priorities and required actions.</p>
+            </div>
+            <Link to="/tasks" className="text-sm font-semibold text-orange-700 hover:text-orange-850 flex items-center">
+              Go to Tasks <ArrowRight className="w-4 h-4 ml-1" />
+            </Link>
+          </div>
 
-      <CreateTaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Column: Due Today */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5 border-b border-stone-100 pb-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                Due Today ({myTasks.dueToday.length})
+              </h4>
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+                {myTasks.dueToday.map(task => (
+                  <Link key={task.id} to={`/tasks?taskId=${task.id}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50/50 bg-stone-50/30 transition-colors">
+                    <p className="text-xs font-bold text-stone-800 truncate">{task.title}</p>
+                    <div className="flex justify-between text-[10px] text-stone-500 mt-1">
+                      <span>{task.id}</span>
+                      <span className="font-semibold text-orange-700">{task.clientName}</span>
+                    </div>
+                  </Link>
+                ))}
+                {myTasks.dueToday.length === 0 && (
+                  <p className="text-xs text-stone-400 py-4 text-center">No tasks due today.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Column: Overdue */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5 border-b border-stone-100 pb-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                Overdue ({myTasks.overdue.length})
+              </h4>
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+                {myTasks.overdue.map(task => {
+                  const days = Math.max(1, differenceInDays(new Date(), parseISO(task.dueDate)));
+                  return (
+                    <Link
+                      key={task.id}
+                      to={`/tasks?taskId=${task.id}`}
+                      className="block p-3 rounded-lg border border-red-100 hover:bg-red-50/20 bg-red-50/10 transition-colors"
+                      title={`Due: ${format(parseISO(task.dueDate), 'yyyy-MM-dd')}`}
+                    >
+                      <p className="text-xs font-bold text-red-900 truncate">{task.title}</p>
+                      <div className="flex justify-between text-[10px] text-red-700/80 mt-1">
+                        <span>{days} day{days === 1 ? '' : 's'} overdue</span>
+                        <span className="font-semibold text-orange-700">{task.clientName}</span>
+                      </div>
+                    </Link>
+                  );
+                })}
+                {myTasks.overdue.length === 0 && (
+                  <p className="text-xs text-stone-400 py-4 text-center">No overdue tasks. Great job!</p>
+                )}
+              </div>
+            </div>
+
+            {/* Column: Actions Required */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5 border-b border-stone-100 pb-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                {currentUser?.role === 'Client' ? 'Waiting Your Review' : 'Waiting Approval'} ({myTasks.actionRequired.length})
+              </h4>
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
+                {myTasks.actionRequired.map(task => (
+                  <Link key={task.id} to={`/tasks?taskId=${task.id}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50/50 bg-stone-50/30 transition-colors">
+                    <p className="text-xs font-bold text-stone-800 truncate">{task.title}</p>
+                    <div className="flex justify-between text-[10px] text-stone-500 mt-1">
+                      <span>{task.status}</span>
+                      <span className="font-semibold text-orange-700">{task.clientName}</span>
+                    </div>
+                  </Link>
+                ))}
+                {myTasks.actionRequired.length === 0 && (
+                  <p className="text-xs text-stone-400 py-4 text-center">No approvals pending.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

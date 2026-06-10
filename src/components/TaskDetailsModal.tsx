@@ -11,12 +11,16 @@ interface Props {
   task: Task | null;
 }
 
-const statusColors: Record<TaskStatus, string> = {
-  'Pending': 'bg-slate-100 text-slate-700',
-  'In Progress': 'bg-blue-100 text-blue-700',
-  'Waiting Approval': 'bg-amber-100 text-amber-700',
-  'Completed': 'bg-emerald-100 text-emerald-700',
-  'Cancelled': 'bg-red-100 text-red-700',
+const statusColors: Record<string, string> = {
+  'Pending': 'bg-slate-100 text-slate-705 border border-slate-202',
+  'In Progress': 'bg-blue-100 text-blue-705 border border-blue-202',
+  'Waiting Approval': 'bg-amber-100 text-amber-705 border border-amber-202',
+  'Completed': 'bg-emerald-100 text-emerald-705 border border-emerald-202',
+  'Cancelled': 'bg-red-100 text-red-705 border border-red-202',
+};
+
+const getStatusColor = (status: string): string => {
+  return statusColors[status] || 'bg-stone-100 text-stone-705 border border-[#e8e3db]';
 };
 
 const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
@@ -29,12 +33,23 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     reviewClientApproval,
     requestRevision,
     rolePermissions,
+    taskStatuses,
   } = useStore();
   const [commentText, setCommentText] = useState('');
   const [attachmentLink, setAttachmentLink] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
   const [approvalNote, setApprovalNote] = useState('');
   const [revisionNote, setRevisionNote] = useState('');
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     setAttachmentLink(task?.attachmentLink || '');
@@ -99,16 +114,16 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Current Status</label>
                   {!canEditTask ? (
-                    <span className={`text-sm px-3 py-1 rounded-full font-semibold ${statusColors[task.status]}`}>
+                    <span className={`text-sm px-3 py-1 rounded-full font-semibold ${getStatusColor(task.status)}`}>
                       {task.status}
                     </span>
                   ) : (
                     <select
-                      className={`text-sm px-3 py-1 rounded-full font-semibold outline-none cursor-pointer border-none shadow-sm ${statusColors[task.status]}`}
+                      className={`text-sm px-3 py-1 rounded-full font-semibold outline-none cursor-pointer border-none shadow-sm ${getStatusColor(task.status)}`}
                       value={task.status}
                       onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
                     >
-                      {Object.keys(statusColors).map(status => (
+                      {taskStatuses.map(status => (
                         <option key={status} value={status} className="bg-white text-slate-900">{status}</option>
                       ))}
                     </select>

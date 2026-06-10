@@ -17,6 +17,16 @@ const RECURRENCE_OPTIONS: RecurrenceFrequency[] = ['None', 'Daily', 'Weekly', 'M
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const { users, currentUser, addTask, projects } = useStore();
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectId, setProjectId] = useState('');
   const [title, setTitle] = useState('');

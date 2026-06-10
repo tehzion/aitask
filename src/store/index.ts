@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useToastStore } from './useToastStore';
 import {
   User,
   Project,
   Task,
   TaskStatus,
+  Priority,
   AppNotification,
   TaskComment,
   Registration,
@@ -61,6 +63,9 @@ interface StoreState {
   registrations: Registration[];
   rolePermissions: CustomRole[];
   backend: BackendRuntimeState;
+  taskStatuses: string[];
+  isCreateTaskModalOpen: boolean;
+  setCreateTaskModalOpen: (open: boolean) => void;
 
   initializeBackend: () => Promise<void>;
   syncBackendNow: () => Promise<void>;
@@ -69,6 +74,8 @@ interface StoreState {
   updateCurrentUserProfile: (data: Pick<User, 'name' | 'avatar'>) => { ok: boolean; error?: string };
   updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => { ok: boolean; error?: string };
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
+  updateTaskPriority: (taskId: string, priority: Priority) => void;
+  updateTaskAssignee: (taskId: string, assignedTo: string) => void;
   updateTaskDueDate: (taskId: string, newDueDate: string) => void;
   updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => void;
   reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => void;
@@ -89,6 +96,8 @@ interface StoreState {
   rejectRegistration: (id: string) => void;
   deleteUser: (userId: string) => { ok: boolean; error?: string };
   _forceSyncMockData: () => void;
+  addTaskStatus: (status: string) => { ok: boolean; error?: string };
+  deleteTaskStatus: (status: string) => { ok: boolean; error?: string };
 }
 
 const nowId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -96,13 +105,14 @@ let isApplyingRemoteSnapshot = false;
 const seededUserIds = new Set(mockUsers.map(user => user.id));
 const legacyDemoTaskIdSet = new Set<string>(legacyDemoTaskIds);
 
-const selectPersistedWorkspaceState = (state: Pick<StoreState, 'users' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions'>): PersistedWorkspaceState => ({
+const selectPersistedWorkspaceState = (state: Pick<StoreState, 'users' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses'>): PersistedWorkspaceState => ({
   users: state.users,
   projects: state.projects,
   tasks: state.tasks,
   notifications: state.notifications || [],
   registrations: state.registrations || [],
   rolePermissions: state.rolePermissions || [],
+  taskStatuses: state.taskStatuses || [],
 });
 
 const makeBackendRuntimeState = (): BackendRuntimeState => {
@@ -140,6 +150,7 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
   notifications: state.notifications || [],
   registrations: state.registrations || [],
   rolePermissions: state.rolePermissions || [],
+  taskStatuses: state.taskStatuses || [],
 });
 
 const getCurrentUserFromSnapshot = (currentUser: User | null, users: User[]) => {
@@ -153,6 +164,9 @@ const makeWorkspacePatch = (current: StoreState, snapshot: SnapshotResult) => {
   return {
     ...workspace,
     rolePermissions: workspace.rolePermissions || [],
+    taskStatuses: workspace.taskStatuses && workspace.taskStatuses.length > 0
+      ? workspace.taskStatuses
+      : ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'],
     currentUser: getCurrentUserFromSnapshot(current.currentUser, workspace.users),
   };
 };
@@ -164,6 +178,9 @@ export const useStore = create<StoreState>()(
       users: mockUsers,
       projects: mockProjects,
       tasks: mockTasks,
+      taskStatuses: ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'],
+      isCreateTaskModalOpen: false,
+      setCreateTaskModalOpen: (open) => set({ isCreateTaskModalOpen: open }),
       notifications: [],
       registrations: [],
       rolePermissions: [],
@@ -585,6 +602,55 @@ export const useStore = create<StoreState>()(
           }));
         }
 
+        useToastStore.getState().addToast(`Status updated to "${status}"`, 'success');
+
+        return {
+          tasks: newTasks,
+          notifications: [...newNotifs, ...(state.notifications || [])]
+        };
+      }),
+
+      updateTaskPriority: (taskId, priority) => set((state) => {
+        const task = state.tasks.find(t => t.id === taskId);
+        const currentUser = state.currentUser;
+        if (!task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
+
+        const newTasks = state.tasks.map(t => {
+          if (t.id !== taskId) return t;
+          return { ...t, priority };
+        });
+
+        useToastStore.getState().addToast(`Priority updated to "${priority}"`, 'success');
+
+        return { tasks: newTasks };
+      }),
+
+      updateTaskAssignee: (taskId, assignedTo) => set((state) => {
+        const task = state.tasks.find(t => t.id === taskId);
+        const currentUser = state.currentUser;
+        if (!task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
+
+        const newTasks = state.tasks.map(t => {
+          if (t.id !== taskId) return t;
+          return { ...t, assignedTo };
+        });
+
+        const assigneeUser = state.users.find(u => u.id === assignedTo);
+        const assigneeName = assigneeUser ? assigneeUser.name : 'someone';
+
+        const newNotifs: AppNotification[] = [];
+        if (assignedTo !== task.assignedTo) {
+          newNotifs.push(makeNotification({
+            targetUserId: assignedTo,
+            title: 'Task Assigned To You',
+            message: `"${task.title}" has been assigned to you by ${currentUser?.name}.`,
+            link: `/tasks?taskId=${taskId}`,
+            iconType: 'task'
+          }));
+        }
+
+        useToastStore.getState().addToast(`Task assigned to ${assigneeName}`, 'success');
+
         return {
           tasks: newTasks,
           notifications: [...newNotifs, ...(state.notifications || [])]
@@ -606,6 +672,8 @@ export const useStore = create<StoreState>()(
           }
         }
 
+        useToastStore.getState().addToast('Attachment updated successfully', 'success');
+
         return {
           tasks: state.tasks.map(task =>
             task.id === taskId
@@ -625,6 +693,8 @@ export const useStore = create<StoreState>()(
 
         // Basic ISO date validation (YYYY-MM-DD)
         if (!/^\d{4}-\d{2}-\d{2}$/.test(newDueDate)) return state;
+
+        useToastStore.getState().addToast(`Due date updated to ${newDueDate}`, 'success');
 
         return {
           tasks: state.tasks.map(t =>
@@ -688,6 +758,11 @@ export const useStore = create<StoreState>()(
           }));
         }
 
+        useToastStore.getState().addToast(
+          status === 'Approved' ? 'Task approved successfully' : 'Revision request submitted',
+          status === 'Approved' ? 'success' : 'warning'
+        );
+
         return {
           tasks: newTasks,
           notifications: [...notifications, ...(state.notifications || [])]
@@ -722,6 +797,8 @@ export const useStore = create<StoreState>()(
           };
         });
 
+        useToastStore.getState().addToast('Revision requested successfully', 'warning');
+
         return {
           tasks: newTasks,
           notifications: [
@@ -751,6 +828,8 @@ export const useStore = create<StoreState>()(
           approvalHistory: [],
         };
 
+        useToastStore.getState().addToast(`Task "${taskData.title}" created successfully`, 'success');
+
         return {
           tasks: [...state.tasks, newTask],
           notifications: [
@@ -776,6 +855,7 @@ export const useStore = create<StoreState>()(
           id: `P-${Date.now().toString().slice(-6)}`,
         };
         set((state) => ({ projects: [...state.projects, newProject] }));
+        useToastStore.getState().addToast(`Project "${projectData.projectName}" created successfully`, 'success');
         return newProject.id;
       },
 
@@ -1180,7 +1260,44 @@ export const useStore = create<StoreState>()(
           projects: [...state.projects, ...newProjects],
           tasks: [...tasksWithoutLegacyDemo, ...newTasks],
         };
-      })
+      }),
+
+      addTaskStatus: (status) => {
+        const trimmed = status.trim();
+        if (!trimmed) {
+          return { ok: false, error: 'Status name cannot be empty.' };
+        }
+        if (trimmed.length > 50) {
+          return { ok: false, error: 'Status name must be 50 characters or less.' };
+        }
+        const exists = get().taskStatuses.some(
+          (s) => s.toLowerCase() === trimmed.toLowerCase()
+        );
+        if (exists) {
+          return { ok: false, error: 'A status with this name already exists.' };
+        }
+        set((state) => ({
+          taskStatuses: [...state.taskStatuses, trimmed]
+        }));
+        useToastStore.getState().addToast(`Status "${trimmed}" added successfully`, 'success');
+        return { ok: true };
+      },
+
+      deleteTaskStatus: (status) => {
+        const DEFAULTS = ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'];
+        if (DEFAULTS.some(d => d.toLowerCase() === status.toLowerCase())) {
+          return { ok: false, error: 'Cannot delete default system status.' };
+        }
+        const inUse = get().tasks.some(task => task.status.toLowerCase() === status.toLowerCase());
+        if (inUse) {
+          return { ok: false, error: 'Cannot delete status because it is currently assigned to tasks.' };
+        }
+        set((state) => ({
+          taskStatuses: state.taskStatuses.filter(s => s.toLowerCase() !== status.toLowerCase())
+        }));
+        useToastStore.getState().addToast(`Status "${status}" deleted successfully`, 'success');
+        return { ok: true };
+      }
     }),
     {
       name: 'market-task-storage',
@@ -1197,6 +1314,7 @@ export const useStore = create<StoreState>()(
         registrations: state.registrations.map(r => stripPassword(r)),
         notifications: state.notifications,
         rolePermissions: state.rolePermissions,
+        taskStatuses: state.taskStatuses,
       }),
     }
   )
@@ -1218,7 +1336,8 @@ export const startBackendAutoSync = () => {
       state.tasks !== previousState.tasks ||
       state.notifications !== previousState.notifications ||
       state.registrations !== previousState.registrations ||
-      state.rolePermissions !== previousState.rolePermissions;
+      state.rolePermissions !== previousState.rolePermissions ||
+      state.taskStatuses !== previousState.taskStatuses;
 
     if (!workspaceChanged) return;
 

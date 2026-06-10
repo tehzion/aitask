@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Bell, CheckCircle2, Cloud, Database, Lock, RefreshCw, ShieldCheck, UserCircle, Volume2, VolumeX } from 'lucide-react';
+import { AlertTriangle, Bell, CheckCircle2, Cloud, Database, Lock, RefreshCw, ShieldCheck, SlidersHorizontal, UserCircle, Volume2, VolumeX } from 'lucide-react';
 import { useStore } from '../store';
 import { Badge, Button, MetricCard, PageHeader, cardBase, inputBase, pageShell } from '../components/ui';
 import { getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
@@ -9,7 +9,20 @@ import BackendFreshness from '../components/BackendFreshness';
 import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 
 const Settings: React.FC = () => {
-  const { currentUser, tasks, projects, notifications, backend, rolePermissions, updateCurrentUserProfile, updateCurrentUserPassword, pullBackendNow } = useStore();
+  const {
+    currentUser,
+    tasks,
+    projects,
+    notifications,
+    backend,
+    rolePermissions,
+    updateCurrentUserProfile,
+    updateCurrentUserPassword,
+    pullBackendNow,
+    taskStatuses,
+    addTaskStatus,
+    deleteTaskStatus,
+  } = useStore();
   const isSuperAdmin = isBossKoo(currentUser);
   const [profileName, setProfileName] = React.useState(currentUser?.name || '');
   const [avatarUrl, setAvatarUrl] = React.useState(currentUser?.avatar || '');
@@ -21,6 +34,29 @@ const Settings: React.FC = () => {
     confirmPassword: '',
   });
   const [passwordMessage, setPasswordMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [newStatusInput, setNewStatusInput] = React.useState('');
+  const [statusError, setStatusError] = React.useState('');
+
+  const handleStatusAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    const result = addTaskStatus(newStatusInput);
+    if (!result.ok) {
+      setStatusError(result.error || 'Failed to add status.');
+    } else {
+      setNewStatusInput('');
+      setStatusError('');
+    }
+  };
+
+  const handleDeleteStatus = (status: string) => {
+    const result = deleteTaskStatus(status);
+    if (!result.ok) {
+      setStatusError(result.error || 'Failed to delete status.');
+    } else {
+      setStatusError('');
+    }
+  };
+
   const backendStatus = getBackendStatus();
   const visibleTasks = getVisibleTasks(currentUser, tasks);
   const visibleProjects = getVisibleProjects(currentUser, projects);
@@ -357,6 +393,97 @@ const Settings: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {(currentUser?.role === 'Admin' || isSuperAdmin) && (
+          <div className={`${cardBase} overflow-hidden`}>
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+              <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
+              <h2 className="text-lg font-semibold text-slate-800">Workflow Statuses</h2>
+            </div>
+            <div className="p-6 space-y-6">
+              <p className="text-sm text-slate-500">
+                Manage workspace task statuses. Default statuses are locked. Custom statuses can only be deleted if they are not in active use.
+              </p>
+
+              {/* Status List */}
+              <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+                {taskStatuses.map((status) => {
+                  const isDefault = ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'].includes(status);
+                  const taskCount = tasks.filter(t => t.status.toLowerCase() === status.toLowerCase()).length;
+                  
+                  return (
+                    <div key={status} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50 hover:bg-slate-100/70 transition-colors">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${
+                          status === 'Pending' ? 'bg-slate-400' :
+                          status === 'In Progress' ? 'bg-blue-500' :
+                          status === 'Waiting Approval' ? 'bg-amber-500' :
+                          status === 'Completed' ? 'bg-emerald-500' :
+                          status === 'Cancelled' ? 'bg-red-500' :
+                          'bg-stone-400'
+                        }`} />
+                        <span className="text-sm font-semibold text-slate-700 truncate">{status}</span>
+                        {isDefault ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold uppercase tracking-wider shrink-0">
+                            <Lock className="w-2.5 h-2.5" /> System
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 font-bold uppercase tracking-wider shrink-0">
+                            Custom
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-3 shrink-0">
+                        {taskCount > 0 && (
+                          <span className="text-xs text-slate-400 font-medium">
+                            {taskCount} task{taskCount === 1 ? '' : 's'}
+                          </span>
+                        )}
+                        {!isDefault && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteStatus(status)}
+                            className="text-slate-400 hover:text-red-600 p-1 rounded transition-colors hover:bg-red-50"
+                            title={`Delete ${status}`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Add Custom Status Form */}
+              <div className="pt-4 border-t border-slate-100">
+                <h3 className="text-sm font-semibold text-slate-800 mb-2">Create Custom Status</h3>
+                <form onSubmit={handleStatusAdd} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newStatusInput}
+                    onChange={(e) => {
+                      setNewStatusInput(e.target.value);
+                      setStatusError('');
+                    }}
+                    placeholder="e.g. Under QA, Draft"
+                    className={cn(inputBase, 'flex-1 px-3 py-2 text-sm')}
+                    maxLength={50}
+                  />
+                  <Button type="submit" disabled={!newStatusInput.trim()}>
+                    Add Status
+                  </Button>
+                </form>
+                {statusError && (
+                  <p className="mt-2 text-xs text-red-600">{statusError}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {isSuperAdmin && (

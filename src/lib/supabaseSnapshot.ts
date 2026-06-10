@@ -8,6 +8,7 @@ export interface PersistedWorkspaceState {
   notifications: AppNotification[];
   registrations: Registration[];
   rolePermissions?: CustomRole[];
+  taskStatuses?: string[];
 }
 
 export interface SnapshotResult {

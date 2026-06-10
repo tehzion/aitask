@@ -3,9 +3,11 @@ import { useStore } from '../store';
 import {
   format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, isSameMonth, isSameDay, parseISO, addWeeks, subWeeks, isToday,
+  isBefore, differenceInDays, formatDistanceToNow,
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Flag, Clock, User, GripVertical, CheckCircle2 } from 'lucide-react';
 import clsx from 'clsx';
+import { getRelativeDueDateString } from '../lib/utils';
 import { Link } from 'react-router-dom';
 import { Badge, PageHeader, cardBase, pageShell } from '../components/ui';
 import { canEditTask as canEditTaskByRole, getVisibleTasks } from '../lib/access';
@@ -354,6 +356,10 @@ const Calendar: React.FC = () => {
                 selectedDayTasks.map(task => {
                   const canDrag     = canDragTask(task.id);
                   const selectedStr = format(selectedDate, 'yyyy-MM-dd');
+                  const dueDateParsed = parseISO(task.dueDate);
+                  const isOverdue = !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed);
+                  const daysOverdue = Math.max(1, differenceInDays(new Date(), dueDateParsed));
+
                   return (
                     <div
                       key={task.id}
@@ -361,8 +367,11 @@ const Calendar: React.FC = () => {
                       onDragStart={canDrag ? e => handleDragStart(e, task.id, selectedStr) : undefined}
                       onDragEnd={handleDragEnd}
                       className={clsx(
-                        'rounded-lg border border-slate-200 bg-white p-3 transition-all',
-                        canDrag && 'cursor-grab active:cursor-grabbing hover:border-indigo-300 hover:shadow-sm',
+                        'rounded-lg border bg-white p-3 transition-all',
+                        isOverdue
+                          ? 'border-red-200 border-l-4 border-l-red-500 bg-red-50/20'
+                          : 'border-slate-200',
+                        canDrag && 'cursor-grab active:cursor-grabbing hover:border-orange-300 hover:shadow-sm',
                         draggingTaskId === task.id && 'opacity-40 scale-[0.97]',
                       )}
                     >
@@ -377,8 +386,9 @@ const Calendar: React.FC = () => {
                             to={`/tasks?taskId=${task.id}`}
                             onClick={e => e.stopPropagation()}
                             className={clsx(
-                              'text-sm font-semibold text-slate-800 leading-snug hover:text-indigo-600 transition-colors',
+                              'text-sm font-semibold text-slate-800 leading-snug hover:text-orange-700 transition-colors',
                               task.isCompleted && 'line-through text-slate-400',
+                              isOverdue && 'text-red-900',
                             )}
                           >
                             {task.title}
@@ -392,16 +402,26 @@ const Calendar: React.FC = () => {
                             </span>
                           </div>
                           <p className="text-[10px] text-slate-400 mt-0.5">{task.clientName}</p>
+                          <p
+                            className={clsx("text-[10px] mt-1 font-medium", isOverdue ? "text-red-700 font-bold" : "text-stone-500")}
+                            title={`Due: ${format(dueDateParsed, 'yyyy-MM-dd')}`}
+                          >
+                            {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
+                          </p>
                           {canDrag && (
                             <p className="text-[9px] text-slate-300 mt-1 flex items-center gap-0.5">
                               <GripVertical className="w-2.5 h-2.5" /> drag to reschedule
                             </p>
                           )}
                         </div>
-                        <Badge tone={task.isCompleted ? 'emerald' : task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : 'indigo'}>
+                        <Badge tone={task.isCompleted ? 'emerald' : task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : 'orange'}>
                           {task.priority}
                         </Badge>
                       </div>
+                    </div>
+                  );
+                })
+              )}
                     </div>
                   );
                 })
