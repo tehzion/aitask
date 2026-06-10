@@ -53,7 +53,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           {label}
         </Badge>
         {!compact && (
-          <span className="whitespace-nowrap text-stone-450">
+          <span className="whitespace-nowrap text-stone-400">
             {isLocal && backendStatus.isHostedRuntime
               ? 'Vercel configuration required'
               : `Synced: ${formatSyncTime(lastChecked)}`}

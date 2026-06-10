@@ -9,6 +9,9 @@ export interface PersistedWorkspaceState {
   registrations: Registration[];
   rolePermissions?: CustomRole[];
   taskStatuses?: string[];
+  deletedUserIds?: string[];
+  deletedRoleIds?: string[];
+  deletedTaskStatuses?: string[];
 }
 
 export interface SnapshotResult {

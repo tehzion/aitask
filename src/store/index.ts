@@ -64,6 +64,9 @@ interface StoreState {
   rolePermissions: CustomRole[];
   backend: BackendRuntimeState;
   taskStatuses: string[];
+  deletedUserIds: string[];
+  deletedRoleIds: string[];
+  deletedTaskStatuses: string[];
   isCreateTaskModalOpen: boolean;
   setCreateTaskModalOpen: (open: boolean) => void;
 
@@ -105,7 +108,7 @@ let isApplyingRemoteSnapshot = false;
 const seededUserIds = new Set(mockUsers.map(user => user.id));
 const legacyDemoTaskIdSet = new Set<string>(legacyDemoTaskIds);
 
-const selectPersistedWorkspaceState = (state: Pick<StoreState, 'users' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses'>): PersistedWorkspaceState => ({
+const selectPersistedWorkspaceState = (state: Pick<StoreState, 'users' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses'>): PersistedWorkspaceState => ({
   users: state.users,
   projects: state.projects,
   tasks: state.tasks,
@@ -113,6 +116,9 @@ const selectPersistedWorkspaceState = (state: Pick<StoreState, 'users' | 'projec
   registrations: state.registrations || [],
   rolePermissions: state.rolePermissions || [],
   taskStatuses: state.taskStatuses || [],
+  deletedUserIds: state.deletedUserIds || [],
+  deletedRoleIds: state.deletedRoleIds || [],
+  deletedTaskStatuses: state.deletedTaskStatuses || [],
 });
 
 const makeBackendRuntimeState = (): BackendRuntimeState => {
@@ -151,6 +157,9 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
   registrations: state.registrations || [],
   rolePermissions: state.rolePermissions || [],
   taskStatuses: state.taskStatuses || [],
+  deletedUserIds: state.deletedUserIds || [],
+  deletedRoleIds: state.deletedRoleIds || [],
+  deletedTaskStatuses: state.deletedTaskStatuses || [],
 });
 
 const mergeWorkspaceStates = (
@@ -161,6 +170,20 @@ const mergeWorkspaceStates = (
   const local = normalizeWorkspaceState(localRaw);
   const remote = normalizeWorkspaceState(remoteRaw);
   const lastSyncedTime = new Date(lastSyncedAt || 0).getTime();
+
+  // 0. Merge Tombstones
+  const mergedDeletedUserIds = Array.from(new Set([
+    ...(local.deletedUserIds || []),
+    ...(remote.deletedUserIds || [])
+  ]));
+  const mergedDeletedRoleIds = Array.from(new Set([
+    ...(local.deletedRoleIds || []),
+    ...(remote.deletedRoleIds || [])
+  ]));
+  const mergedDeletedTaskStatuses = Array.from(new Set([
+    ...(local.deletedTaskStatuses || []),
+    ...(remote.deletedTaskStatuses || [])
+  ]));
 
   // 1. Merge Tasks
   const localTasksMap = new Map(local.tasks.map(t => [t.id, t]));
@@ -246,11 +269,30 @@ const mergeWorkspaceStates = (
   const localUsersMap = new Map(local.users.map(u => [u.id, u]));
   const remoteUsersMap = new Map(remote.users.map(u => [u.id, u]));
   const allUserIds = new Set([...localUsersMap.keys(), ...remoteUsersMap.keys()]);
-  const mergedUsers: User[] = Array.from(allUserIds).map(id => {
-    const localUser = localUsersMap.get(id);
-    const remoteUser = remoteUsersMap.get(id);
-    return remoteUser || localUser!;
-  });
+  const mergedUsers: User[] = Array.from(allUserIds)
+    .filter(id => !mergedDeletedUserIds.includes(id))
+    .map(id => {
+      const localUser = localUsersMap.get(id);
+      const remoteUser = remoteUsersMap.get(id);
+
+      if (!localUser) return remoteUser!;
+      if (!remoteUser) return localUser;
+
+      const localUpdated = localUser.updatedAt ? new Date(localUser.updatedAt).getTime() : 0;
+      const remoteUpdated = remoteUser.updatedAt ? new Date(remoteUser.updatedAt).getTime() : 0;
+
+      const wasLocalModified = localUpdated > lastSyncedTime;
+      const wasRemoteModified = remoteUpdated > lastSyncedTime;
+
+      if (wasLocalModified && !wasRemoteModified) {
+        return localUser;
+      }
+      if (wasRemoteModified && !wasLocalModified) {
+        return remoteUser;
+      }
+
+      return localUpdated >= remoteUpdated ? localUser : remoteUser;
+    });
 
   // 4. Merge Registrations
   const localRegsMap = new Map(local.registrations.map(r => [r.id, r]));
@@ -280,7 +322,7 @@ const mergeWorkspaceStates = (
     ]));
     return {
       ...remoteNotif,
-      isRead: localNotif.isRead && remoteNotif.isRead,
+      isRead: localNotif.isRead || remoteNotif.isRead,
       readByUserIds,
     };
   });
@@ -289,17 +331,36 @@ const mergeWorkspaceStates = (
   const mergedTaskStatuses = Array.from(new Set([
     ...(local.taskStatuses || []),
     ...(remote.taskStatuses || [])
-  ]));
+  ])).filter(status => !mergedDeletedTaskStatuses.includes(status.toLowerCase()));
 
   // 7. Merge Custom Roles
   const localRolesMap = new Map((local.rolePermissions || []).map(r => [r.id, r]));
   const remoteRolesMap = new Map((remote.rolePermissions || []).map(r => [r.id, r]));
   const allRoleIds = new Set([...localRolesMap.keys(), ...remoteRolesMap.keys()]);
-  const mergedRolePermissions = Array.from(allRoleIds).map(id => {
-    const localRole = localRolesMap.get(id);
-    const remoteRole = remoteRolesMap.get(id);
-    return remoteRole || localRole!;
-  });
+  const mergedRolePermissions = Array.from(allRoleIds)
+    .filter(id => !mergedDeletedRoleIds.includes(id))
+    .map(id => {
+      const localRole = localRolesMap.get(id);
+      const remoteRole = remoteRolesMap.get(id);
+
+      if (!localRole) return remoteRole!;
+      if (!remoteRole) return localRole;
+
+      const localUpdated = localRole.updatedAt ? new Date(localRole.updatedAt).getTime() : 0;
+      const remoteUpdated = remoteRole.updatedAt ? new Date(remoteRole.updatedAt).getTime() : 0;
+
+      const wasLocalModified = localUpdated > lastSyncedTime;
+      const wasRemoteModified = remoteUpdated > lastSyncedTime;
+
+      if (wasLocalModified && !wasRemoteModified) {
+        return localRole;
+      }
+      if (wasRemoteModified && !wasLocalModified) {
+        return remoteRole;
+      }
+
+      return localUpdated >= remoteUpdated ? localRole : remoteRole;
+    });
 
   return {
     users: mergedUsers,
@@ -309,6 +370,9 @@ const mergeWorkspaceStates = (
     registrations: mergedRegistrations,
     rolePermissions: mergedRolePermissions,
     taskStatuses: mergedTaskStatuses,
+    deletedUserIds: mergedDeletedUserIds,
+    deletedRoleIds: mergedDeletedRoleIds,
+    deletedTaskStatuses: mergedDeletedTaskStatuses,
   };
 };
 
@@ -338,6 +402,9 @@ export const useStore = create<StoreState>()(
       projects: mockProjects,
       tasks: mockTasks,
       taskStatuses: ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'],
+      deletedUserIds: [],
+      deletedRoleIds: [],
+      deletedTaskStatuses: [],
       isCreateTaskModalOpen: false,
       setCreateTaskModalOpen: (open) => set({ isCreateTaskModalOpen: open }),
       notifications: [],
@@ -662,17 +729,19 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'Avatar must be a web image URL, data image, or app-relative path.' };
         }
 
+        const now = new Date().toISOString();
         const nextCurrentUser: User = {
           ...currentUser,
           name,
           avatar,
+          updatedAt: now,
         };
 
         set((state) => ({
           currentUser: nextCurrentUser,
           users: state.users.map(user => (
             user.id === currentUser.id
-              ? { ...user, name, avatar }
+              ? { ...user, name, avatar, updatedAt: now }
               : user
           )),
         }));
@@ -705,14 +774,16 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'New password must be different from the current password.' };
         }
 
+        const now = new Date().toISOString();
         set((state) => ({
           currentUser: {
             ...currentUser,
             mustResetPassword: false,
+            updatedAt: now,
           },
           users: state.users.map(user => (
             user.id === currentUser.id
-              ? { ...user, password: newPassword, mustResetPassword: false }
+              ? { ...user, password: newPassword, mustResetPassword: false, updatedAt: now }
               : user
           )),
         }));
@@ -1235,7 +1306,8 @@ export const useStore = create<StoreState>()(
           customRoleId: customRole?.id,
           customRoleName: customRole?.name,
           permissions: undefined,
-          avatar: `https://i.pravatar.cc/150?u=${encodeURIComponent(name.replace(/\s/g, ''))}`
+          avatar: `https://i.pravatar.cc/150?u=${encodeURIComponent(name.replace(/\s/g, ''))}`,
+          updatedAt: new Date().toISOString()
         };
 
         set((state) => ({
@@ -1338,6 +1410,7 @@ export const useStore = create<StoreState>()(
 
         set((state) => ({
           rolePermissions: state.rolePermissions.filter(role => role.id !== id),
+          deletedRoleIds: Array.from(new Set([...(state.deletedRoleIds || []), id])),
           users: state.users.map(user => (
             user.customRoleId === id
               ? { ...user, customRoleId: undefined, customRoleName: undefined, permissions: undefined }
@@ -1372,6 +1445,7 @@ export const useStore = create<StoreState>()(
                   customRoleId: customRole?.id,
                   customRoleName: customRole?.name,
                   permissions: undefined,
+                  updatedAt: new Date().toISOString(),
                 }
               : user
           )),
@@ -1399,7 +1473,8 @@ export const useStore = create<StoreState>()(
           companyName,
           customRoleId: customRole?.id,
           customRoleName: customRole?.name,
-          avatar: `https://i.pravatar.cc/150?u=${reg.name.replace(/\s/g, '')}`
+          avatar: `https://i.pravatar.cc/150?u=${reg.name.replace(/\s/g, '')}`,
+          updatedAt: new Date().toISOString()
         };
 
         return {
@@ -1432,6 +1507,7 @@ export const useStore = create<StoreState>()(
 
         set((current) => ({
           users: current.users.filter(user => user.id !== userId),
+          deletedUserIds: Array.from(new Set([...(current.deletedUserIds || []), userId])),
           notifications: [
             makeNotification({
               targetRole: 'Admin',
@@ -1497,7 +1573,8 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'A status with this name already exists.' };
         }
         set((state) => ({
-          taskStatuses: [...state.taskStatuses, trimmed]
+          taskStatuses: [...state.taskStatuses, trimmed],
+          deletedTaskStatuses: (state.deletedTaskStatuses || []).filter(s => s.toLowerCase() !== trimmed.toLowerCase())
         }));
         useToastStore.getState().addToast(`Status "${trimmed}" added successfully`, 'success');
         return { ok: true };
@@ -1513,7 +1590,8 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'Cannot delete status because it is currently assigned to tasks.' };
         }
         set((state) => ({
-          taskStatuses: state.taskStatuses.filter(s => s.toLowerCase() !== status.toLowerCase())
+          taskStatuses: state.taskStatuses.filter(s => s.toLowerCase() !== status.toLowerCase()),
+          deletedTaskStatuses: Array.from(new Set([...(state.deletedTaskStatuses || []), status.toLowerCase()]))
         }));
         useToastStore.getState().addToast(`Status "${status}" deleted successfully`, 'success');
         return { ok: true };
@@ -1535,6 +1613,9 @@ export const useStore = create<StoreState>()(
         notifications: state.notifications,
         rolePermissions: state.rolePermissions,
         taskStatuses: state.taskStatuses,
+        deletedUserIds: state.deletedUserIds || [],
+        deletedRoleIds: state.deletedRoleIds || [],
+        deletedTaskStatuses: state.deletedTaskStatuses || [],
       }),
     }
   )

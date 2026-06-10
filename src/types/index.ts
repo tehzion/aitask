@@ -48,6 +48,7 @@ export interface User {
   customRoleId?: string;
   customRoleName?: string;
   permissions?: RolePermissions;
+  updatedAt?: string;
 }
 
 export interface AppNotification {
