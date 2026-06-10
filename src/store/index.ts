@@ -69,6 +69,7 @@ interface StoreState {
   updateCurrentUserProfile: (data: Pick<User, 'name' | 'avatar'>) => { ok: boolean; error?: string };
   updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => { ok: boolean; error?: string };
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
+  updateTaskDueDate: (taskId: string, newDueDate: string) => void;
   updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => void;
   reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => void;
   requestRevision: (taskId: string, note?: string) => void;
@@ -615,6 +616,20 @@ export const useStore = create<StoreState>()(
                 }
               : task
           )
+        };
+      }),
+
+      updateTaskDueDate: (taskId, newDueDate) => set((state) => {
+        const task = state.tasks.find(t => t.id === taskId);
+        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions)) return state;
+
+        // Basic ISO date validation (YYYY-MM-DD)
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(newDueDate)) return state;
+
+        return {
+          tasks: state.tasks.map(t =>
+            t.id === taskId ? { ...t, dueDate: newDueDate } : t
+          ),
         };
       }),
 
