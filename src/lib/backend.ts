@@ -29,9 +29,19 @@ const isLocalHost = (host: string) => (
 export const SUPABASE_STATE_TABLE = env('VITE_SUPABASE_STATE_TABLE') || 'aitask_app_state';
 export const SUPABASE_STATE_ID = env('VITE_SUPABASE_STATE_ID') || 'default';
 
-export const getBackendMode = (): BackendMode => (
-  env('VITE_AITASK_BACKEND') === 'supabase' ? 'supabase' : 'local'
-);
+export const getBackendMode = (): BackendMode => {
+  const configuredMode = env('VITE_AITASK_BACKEND').toLowerCase();
+  if (configuredMode === 'local' || configuredMode === 'supabase') {
+    return configuredMode;
+  }
+
+  const hasSupabaseConfig = Boolean(env('VITE_SUPABASE_URL') && env('VITE_SUPABASE_ANON_KEY'));
+  if (hasSupabaseConfig || !isLocalHost(getRuntimeHost())) {
+    return 'supabase';
+  }
+
+  return 'local';
+};
 
 export const getSupabaseConfig = () => ({
   url: env('VITE_SUPABASE_URL').replace(/\/$/, ''),

@@ -34,9 +34,11 @@ The first Supabase-enabled visit creates the workspace snapshot from the current
 
 If the app was already live before the freshness update, run the latest `supabase/schema.sql` again before redeploying. It keeps the existing snapshot and adds the `version` column plus explicit Data API grants used for conflict-safe sync.
 
-## If Vercel Still Shows Local
+## If Vercel Does Not Show Live
 
-The dashboard badge `Local build` means the deployed Vite bundle was built without `VITE_AITASK_BACKEND=supabase`. Vite embeds `VITE_*` values at build time, so changing Vercel environment variables only takes effect after a new deployment.
+The dashboard should show `Supabase`/`Live` after the Production deployment is built with Supabase variables. If it shows `Sync issue`, Settings will list the missing variable. If it shows `Local build`, the deployed bundle was explicitly built with `VITE_AITASK_BACKEND=local`.
+
+Vite embeds `VITE_*` values at build time, so changing Vercel environment variables only takes effect after a new deployment.
 
 Check the Vercel project has these variables in the same environment you are viewing, usually Production:
 
@@ -48,7 +50,7 @@ VITE_SUPABASE_STATE_TABLE=aitask_app_state
 VITE_SUPABASE_STATE_ID=default
 ```
 
-Then redeploy from Vercel. When the build is correct, Dashboard and Settings show `Supabase`/`Live` instead of `Local build`.
+Then redeploy from Vercel. When the build is correct and `supabase/schema.sql` has been run, Dashboard and Settings show `Supabase`/`Live`.
 
 ## Local Check Before Deploy
 
