@@ -153,6 +153,165 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
   taskStatuses: state.taskStatuses || [],
 });
 
+const mergeWorkspaceStates = (
+  localRaw: PersistedWorkspaceState,
+  remoteRaw: PersistedWorkspaceState,
+  lastSyncedAt: string
+): PersistedWorkspaceState => {
+  const local = normalizeWorkspaceState(localRaw);
+  const remote = normalizeWorkspaceState(remoteRaw);
+  const lastSyncedTime = new Date(lastSyncedAt || 0).getTime();
+
+  // 1. Merge Tasks
+  const localTasksMap = new Map(local.tasks.map(t => [t.id, t]));
+  const remoteTasksMap = new Map(remote.tasks.map(t => [t.id, t]));
+  const allTaskIds = new Set([...localTasksMap.keys(), ...remoteTasksMap.keys()]);
+  
+  const mergedTasks: Task[] = Array.from(allTaskIds).map(id => {
+    const localTask = localTasksMap.get(id);
+    const remoteTask = remoteTasksMap.get(id);
+
+    if (!localTask) return remoteTask!;
+    if (!remoteTask) return localTask;
+
+    const localUpdated = new Date(localTask.updatedAt || 0).getTime();
+    const remoteUpdated = new Date(remoteTask.updatedAt || 0).getTime();
+
+    const wasLocalModified = localUpdated > lastSyncedTime;
+    const wasRemoteModified = remoteUpdated > lastSyncedTime;
+
+    if (wasLocalModified && !wasRemoteModified) {
+      return localTask;
+    }
+    if (wasRemoteModified && !wasLocalModified) {
+      return remoteTask;
+    }
+
+    // Overlapping changes or neither modified - merge comments/approval history, LWW on fields
+    const mergedCommentsMap = new Map<string, TaskComment>();
+    [...(localTask.comments || []), ...(remoteTask.comments || [])].forEach(c => {
+      mergedCommentsMap.set(c.id, c);
+    });
+    const mergedComments = Array.from(mergedCommentsMap.values()).sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    const mergedApprovalMap = new Map<string, TaskApprovalEvent>();
+    [...(localTask.approvalHistory || []), ...(remoteTask.approvalHistory || [])].forEach(h => {
+      mergedApprovalMap.set(h.id, h);
+    });
+    const mergedApprovalHistory = Array.from(mergedApprovalMap.values()).sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    const baseTask = localUpdated >= remoteUpdated ? localTask : remoteTask;
+    
+    return {
+      ...baseTask,
+      comments: mergedComments,
+      approvalHistory: mergedApprovalHistory,
+      updatedAt: new Date(Math.max(localUpdated, remoteUpdated)).toISOString(),
+    };
+  });
+
+  // 2. Merge Projects
+  const localProjMap = new Map(local.projects.map(p => [p.id, p]));
+  const remoteProjMap = new Map(remote.projects.map(p => [p.id, p]));
+  const allProjIds = new Set([...localProjMap.keys(), ...remoteProjMap.keys()]);
+
+  const mergedProjects: Project[] = Array.from(allProjIds).map(id => {
+    const localProj = localProjMap.get(id);
+    const remoteProj = remoteProjMap.get(id);
+
+    if (!localProj) return remoteProj!;
+    if (!remoteProj) return localProj;
+
+    const localUpdated = new Date(localProj.updatedAt || 0).getTime();
+    const remoteUpdated = new Date(remoteProj.updatedAt || 0).getTime();
+
+    const wasLocalModified = localUpdated > lastSyncedTime;
+    const wasRemoteModified = remoteUpdated > lastSyncedTime;
+
+    if (wasLocalModified && !wasRemoteModified) {
+      return localProj;
+    }
+    if (wasRemoteModified && !wasLocalModified) {
+      return remoteProj;
+    }
+
+    return localUpdated >= remoteUpdated ? localProj : remoteProj;
+  });
+
+  // 3. Merge Users
+  const localUsersMap = new Map(local.users.map(u => [u.id, u]));
+  const remoteUsersMap = new Map(remote.users.map(u => [u.id, u]));
+  const allUserIds = new Set([...localUsersMap.keys(), ...remoteUsersMap.keys()]);
+  const mergedUsers: User[] = Array.from(allUserIds).map(id => {
+    const localUser = localUsersMap.get(id);
+    const remoteUser = remoteUsersMap.get(id);
+    return remoteUser || localUser!;
+  });
+
+  // 4. Merge Registrations
+  const localRegsMap = new Map(local.registrations.map(r => [r.id, r]));
+  const remoteRegsMap = new Map(remote.registrations.map(r => [r.id, r]));
+  const allRegIds = new Set([...localRegsMap.keys(), ...remoteRegsMap.keys()]);
+  const mergedRegistrations: Registration[] = Array.from(allRegIds).map(id => {
+    const localReg = localRegsMap.get(id);
+    const remoteReg = remoteRegsMap.get(id);
+    if (!localReg) return remoteReg!;
+    if (!remoteReg) return localReg;
+    if (remoteReg.status !== 'Pending') return remoteReg;
+    return localReg;
+  });
+
+  // 5. Merge Notifications
+  const localNotifsMap = new Map(local.notifications.map(n => [n.id, n]));
+  const remoteNotifsMap = new Map(remote.notifications.map(n => [n.id, n]));
+  const allNotifIds = new Set([...localNotifsMap.keys(), ...remoteNotifsMap.keys()]);
+  const mergedNotifications: AppNotification[] = Array.from(allNotifIds).map(id => {
+    const localNotif = localNotifsMap.get(id);
+    const remoteNotif = remoteNotifsMap.get(id);
+    if (!localNotif) return remoteNotif!;
+    if (!remoteNotif) return localNotif;
+    const readByUserIds = Array.from(new Set([
+      ...(localNotif.readByUserIds || []),
+      ...(remoteNotif.readByUserIds || [])
+    ]));
+    return {
+      ...remoteNotif,
+      isRead: localNotif.isRead && remoteNotif.isRead,
+      readByUserIds,
+    };
+  });
+
+  // 6. Merge Task Statuses
+  const mergedTaskStatuses = Array.from(new Set([
+    ...(local.taskStatuses || []),
+    ...(remote.taskStatuses || [])
+  ]));
+
+  // 7. Merge Custom Roles
+  const localRolesMap = new Map((local.rolePermissions || []).map(r => [r.id, r]));
+  const remoteRolesMap = new Map((remote.rolePermissions || []).map(r => [r.id, r]));
+  const allRoleIds = new Set([...localRolesMap.keys(), ...remoteRolesMap.keys()]);
+  const mergedRolePermissions = Array.from(allRoleIds).map(id => {
+    const localRole = localRolesMap.get(id);
+    const remoteRole = remoteRolesMap.get(id);
+    return remoteRole || localRole!;
+  });
+
+  return {
+    users: mergedUsers,
+    projects: mergedProjects,
+    tasks: mergedTasks,
+    notifications: mergedNotifications,
+    registrations: mergedRegistrations,
+    rolePermissions: mergedRolePermissions,
+    taskStatuses: mergedTaskStatuses,
+  };
+};
+
 const getCurrentUserFromSnapshot = (currentUser: User | null, users: User[]) => {
   if (!currentUser) return null;
   const nextUser = users.find(user => user.id === currentUser.id);
@@ -248,13 +407,7 @@ export const useStore = create<StoreState>()(
 
         const current = get();
         if (current.backend.hasRemoteUpdate) {
-          set((state) => ({
-            backend: {
-              ...state.backend,
-              isSaving: false,
-              message: 'A newer workspace update is available. Refresh before saving.',
-            }
-          }));
+          get().pullBackendNow();
           return;
         }
 
@@ -274,6 +427,36 @@ export const useStore = create<StoreState>()(
           );
 
           if (!result.saved) {
+            const latest = result.latest;
+            if (latest) {
+              const merged = mergeWorkspaceStates(
+                selectPersistedWorkspaceState(current),
+                latest.state,
+                current.backend.lastSyncedAt || ''
+              );
+
+              isApplyingRemoteSnapshot = true;
+              set((state) => ({
+                ...makeWorkspacePatch(state, { ...latest, state: merged }),
+                backend: {
+                  ...state.backend,
+                  isSaving: false,
+                  remoteVersion: latest.version,
+                  remoteUpdatedAt: latest.updatedAt,
+                  hasRemoteUpdate: false,
+                  hasLocalChanges: true,
+                }
+              }));
+              isApplyingRemoteSnapshot = false;
+
+              useToastStore.getState().addToast('Sync resolved: concurrent edits merged.', 'success');
+
+              setTimeout(() => {
+                get().syncBackendNow();
+              }, 100);
+              return;
+            }
+
             set((state) => ({
               backend: {
                 ...state.backend,
@@ -334,6 +517,37 @@ export const useStore = create<StoreState>()(
           const hasUnsavedLocalChanges = current.backend.hasLocalChanges && !options.force;
           const hasPendingRemoteUpdate = current.backend.hasRemoteUpdate && !options.force;
           const remoteIsNewer = result.version > currentVersion || hasPendingRemoteUpdate;
+
+          if (hasUnsavedLocalChanges && remoteIsNewer) {
+            const merged = mergeWorkspaceStates(
+              selectPersistedWorkspaceState(current),
+              result.state,
+              current.backend.lastSyncedAt || ''
+            );
+
+            isApplyingRemoteSnapshot = true;
+            set((state) => ({
+              ...makeWorkspacePatch(state, { ...result, state: merged }),
+              backend: {
+                ...state.backend,
+                isPulling: false,
+                lastPulledAt: pulledAt,
+                remoteVersion: result.version,
+                remoteUpdatedAt: result.updatedAt,
+                hasRemoteUpdate: false,
+                hasLocalChanges: true,
+                message: 'Auto-merged concurrent updates.',
+              }
+            }));
+            isApplyingRemoteSnapshot = false;
+
+            useToastStore.getState().addToast('Sync resolved: concurrent edits merged.', 'success');
+
+            setTimeout(() => {
+              get().syncBackendNow();
+            }, 100);
+            return;
+          }
 
           if (hasUnsavedLocalChanges || hasPendingRemoteUpdate) {
             set((state) => ({
@@ -577,6 +791,7 @@ export const useStore = create<StoreState>()(
             isCompleted,
             completionPercentage,
             clientApprovalStatus,
+            updatedAt: new Date().toISOString(),
           };
         });
 
@@ -617,7 +832,7 @@ export const useStore = create<StoreState>()(
 
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
-          return { ...t, priority };
+          return { ...t, priority, updatedAt: new Date().toISOString() };
         });
 
         useToastStore.getState().addToast(`Priority updated to "${priority}"`, 'success');
@@ -632,7 +847,7 @@ export const useStore = create<StoreState>()(
 
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
-          return { ...t, assignedTo };
+          return { ...t, assignedTo, updatedAt: new Date().toISOString() };
         });
 
         const assigneeUser = state.users.find(u => u.id === assignedTo);
@@ -680,7 +895,8 @@ export const useStore = create<StoreState>()(
               ? {
                   ...task,
                   attachmentLink: trimmedLink || undefined,
-                  attachmentName: attachmentName?.trim().slice(0, 200) || undefined
+                  attachmentName: attachmentName?.trim().slice(0, 200) || undefined,
+                  updatedAt: new Date().toISOString()
                 }
               : task
           )
@@ -698,7 +914,7 @@ export const useStore = create<StoreState>()(
 
         return {
           tasks: state.tasks.map(t =>
-            t.id === taskId ? { ...t, dueDate: newDueDate } : t
+            t.id === taskId ? { ...t, dueDate: newDueDate, updatedAt: new Date().toISOString() } : t
           ),
         };
       }),
@@ -727,6 +943,7 @@ export const useStore = create<StoreState>()(
             completionPercentage: status === 'Approved' ? 100 : Math.min(t.completionPercentage, 90),
             revisionCount: status === 'Rejected' ? t.revisionCount + 1 : t.revisionCount,
             approvalHistory: [...(t.approvalHistory || []), event],
+            updatedAt: new Date().toISOString(),
           };
         });
 
@@ -794,6 +1011,7 @@ export const useStore = create<StoreState>()(
             isCompleted: false,
             completionPercentage: Math.min(t.completionPercentage, 90),
             comments: revisionComment ? [...(t.comments || []), revisionComment] : t.comments,
+            updatedAt: new Date().toISOString(),
           };
         });
 
@@ -826,6 +1044,7 @@ export const useStore = create<StoreState>()(
           clientApprovalStatus: 'Pending',
           dueReminderSent: false,
           approvalHistory: [],
+          updatedAt: new Date().toISOString(),
         };
 
         useToastStore.getState().addToast(`Task "${taskData.title}" created successfully`, 'success');
@@ -853,6 +1072,7 @@ export const useStore = create<StoreState>()(
           totalTasks: 0,
           completedTasks: 0,
           id: `P-${Date.now().toString().slice(-6)}`,
+          updatedAt: new Date().toISOString(),
         };
         set((state) => ({ projects: [...state.projects, newProject] }));
         useToastStore.getState().addToast(`Project "${projectData.projectName}" created successfully`, 'success');
@@ -877,7 +1097,7 @@ export const useStore = create<StoreState>()(
 
         const newTasks = state.tasks.map(t => {
           if (t.id === taskId) {
-            return { ...t, comments: [...(t.comments || []), newComment] };
+            return { ...t, comments: [...(t.comments || []), newComment], updatedAt: new Date().toISOString() };
           }
           return t;
         });

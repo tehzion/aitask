@@ -100,6 +100,7 @@ export interface Project {
   deadline: string;
   totalTasks: number;
   completedTasks: number;
+  updatedAt?: string;
 }
 
 export interface Task {
@@ -132,4 +133,5 @@ export interface Task {
   dueReminderSent?: boolean;
   comments?: TaskComment[];
   approvalHistory?: TaskApprovalEvent[];
+  updatedAt?: string;
 }
