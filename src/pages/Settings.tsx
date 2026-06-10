@@ -37,13 +37,18 @@ const Settings: React.FC = () => {
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
   const mustResetPassword = Boolean(currentUser?.mustResetPassword);
   const isSupabaseMode = backendStatus.mode === 'supabase';
+  const hostedLocalBuild = backendStatus.mode === 'local' && backendStatus.isHostedRuntime;
   const hasSupabaseKey = isSupabaseMode && !backendStatus.missing.includes('VITE_SUPABASE_ANON_KEY');
   const hasCheckedRemote = Boolean(backend.lastPulledAt || backend.lastSyncedAt || backend.remoteUpdatedAt);
   const backendSetupItems = [
     {
       label: 'Backend mode',
       done: isSupabaseMode,
-      detail: isSupabaseMode ? 'Supabase mode is active.' : 'Local mode is active.',
+      detail: isSupabaseMode
+        ? 'Supabase mode is active.'
+        : hostedLocalBuild
+          ? 'Hosted build is still local. Set Vercel env and redeploy.'
+          : 'Local development mode is active.',
     },
     {
       label: 'Supabase URL',
@@ -67,6 +72,8 @@ const Settings: React.FC = () => {
         ? hasCheckedRemote
           ? 'Remote snapshot has been checked.'
           : 'Use Check now after the Supabase table is ready.'
+        : hostedLocalBuild
+          ? 'Vercel must be rebuilt with Supabase env before remote checks work.'
         : 'Switch to Supabase mode before deployment.',
     },
   ];
@@ -370,7 +377,9 @@ const Settings: React.FC = () => {
             <div>
               <p className="text-sm font-semibold text-slate-900">Supabase readiness</p>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-                {isSupabaseMode
+                {hostedLocalBuild
+                  ? 'This hosted build is running with local browser storage. Add the Supabase environment variables in Vercel, then redeploy.'
+                  : isSupabaseMode
                   ? backendStatus.ready
                     ? 'The app is configured to read and write the shared Supabase snapshot.'
                     : 'Supabase mode is selected, but required environment variables are missing.'

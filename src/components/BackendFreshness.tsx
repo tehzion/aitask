@@ -34,7 +34,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
   const { backend, pullBackendNow } = useStore();
   const backendStatus = getBackendStatus();
   const isLocal = backendStatus.mode === 'local';
-  const label = getFreshnessLabel(backend, isLocal);
+  const label = isLocal && backendStatus.isHostedRuntime ? 'Local build' : getFreshnessLabel(backend, isLocal);
   const tone = isLocal ? 'slate' : getFreshnessTone(backend);
   const Icon = isLocal ? CloudOff : backend.hasRemoteUpdate || backend.error ? AlertCircle : backend.isPulling ? RefreshCw : Cloud;
   const lastChecked = backend.lastPulledAt || backend.lastSyncedAt || backend.remoteUpdatedAt;
@@ -49,7 +49,9 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
         </Badge>
         {!compact && (
           <span className="whitespace-nowrap">
-            Last checked: {formatSyncTime(lastChecked)}
+            {isLocal && backendStatus.isHostedRuntime
+              ? 'Vercel env needs Supabase mode'
+              : `Last checked: ${formatSyncTime(lastChecked)}`}
           </span>
         )}
       </div>
