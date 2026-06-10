@@ -2,7 +2,7 @@ import React from 'react';
 import { AlertTriangle, Bell, CheckCircle2, Cloud, Database, Lock, RefreshCw, ShieldCheck, UserCircle, Volume2, VolumeX } from 'lucide-react';
 import { useStore } from '../store';
 import { Badge, Button, MetricCard, PageHeader, cardBase, inputBase, pageShell } from '../components/ui';
-import { getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels } from '../lib/access';
+import { getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
 import BackendFreshness from '../components/BackendFreshness';
@@ -10,6 +10,7 @@ import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 
 const Settings: React.FC = () => {
   const { currentUser, tasks, projects, notifications, backend, rolePermissions, updateCurrentUserProfile, updateCurrentUserPassword, pullBackendNow } = useStore();
+  const isSuperAdmin = isBossKoo(currentUser);
   const [profileName, setProfileName] = React.useState(currentUser?.name || '');
   const [avatarUrl, setAvatarUrl] = React.useState(currentUser?.avatar || '');
   const [profileMessage, setProfileMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
@@ -358,113 +359,117 @@ const Settings: React.FC = () => {
         </div>
       </div>
 
-      <div className={`${cardBase} overflow-hidden`}>
-        <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <Cloud className="w-5 h-5 text-indigo-600" />
-            <h2 className="text-lg font-semibold text-slate-800">Data Backend</h2>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <BackendFreshness compact />
-            {isSupabaseMode && (
-              <Button
-                variant="secondary"
-                onClick={() => pullBackendNow({ force: backend.hasRemoteUpdate, silent: false })}
-                disabled={!backendStatus.ready || backend.isLoading || backend.isPulling || backend.isSaving}
-                className="min-h-9 px-3 py-1.5 text-xs"
-              >
-                <RefreshCw className={cn('h-3.5 w-3.5', backend.isPulling && 'animate-spin')} />
-                Check now
-              </Button>
-            )}
-            <Badge tone={backendStatus.ready ? 'emerald' : 'amber'}>
-              {backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
-            </Badge>
-          </div>
-        </div>
-        <div className="p-6 grid grid-cols-1 lg:grid-cols-4 gap-4 text-sm">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Status</p>
-            <p className="mt-1 font-semibold text-slate-900">
-              {backend.isLoading ? 'Loading workspace...' : backend.isPulling ? 'Checking latest workspace...' : backend.isSaving ? 'Saving changes...' : backend.message}
-            </p>
-            {backend.error && <p className="mt-2 text-red-600">{backend.error}</p>}
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Supabase Table</p>
-            <p className="mt-1 font-semibold text-slate-900">{backendStatus.stateTable}</p>
-            <p className="mt-1 text-slate-500">Snapshot ID: {backendStatus.stateId}</p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Last Pull</p>
-            <p className="mt-1 font-semibold text-slate-900">
-              {backend.lastPulledAt ? new Date(backend.lastPulledAt).toLocaleString() : 'Not checked yet'}
-            </p>
-            {backend.remoteVersion && (
-              <p className="mt-1 text-slate-500">Remote version: {backend.remoteVersion}</p>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Last Save</p>
-            <p className="mt-1 font-semibold text-slate-900">
-              {backend.lastSyncedAt ? new Date(backend.lastSyncedAt).toLocaleString() : 'Not synced yet'}
-            </p>
-            {backendStatus.missing.length > 0 && (
-              <p className="mt-1 text-slate-500">Missing: {backendStatus.missing.join(', ')}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="border-t border-slate-100 px-6 py-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">Supabase readiness</p>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-                {hostedLocalBuild
-                  ? 'This hosted build is running with local browser storage. Add the Supabase environment variables in Vercel, then redeploy.'
-                  : isSupabaseMode
-                  ? backendStatus.ready
-                    ? 'The app is configured to read and write the shared Supabase snapshot.'
-                    : 'Supabase mode is selected, but required environment variables are missing.'
-                  : 'The app is running locally. Set Supabase mode in deployment to share live workspace data.'}
-              </p>
+      {isSuperAdmin && (
+        <div className={`${cardBase} overflow-hidden`}>
+          <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <Cloud className="w-5 h-5 text-indigo-600" />
+              <h2 className="text-lg font-semibold text-slate-800">Data Backend</h2>
             </div>
-            {backend.error ? (
-              <div className="flex items-start gap-2 text-sm text-amber-700 lg:max-w-md">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{backend.error}</span>
-              </div>
-            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <BackendFreshness compact />
+              {isSupabaseMode && (
+                <Button
+                  variant="secondary"
+                  onClick={() => pullBackendNow({ force: backend.hasRemoteUpdate, silent: false })}
+                  disabled={!backendStatus.ready || backend.isLoading || backend.isPulling || backend.isSaving}
+                  className="min-h-9 px-3 py-1.5 text-xs"
+                >
+                  <RefreshCw className={cn('h-3.5 w-3.5', backend.isPulling && 'animate-spin')} />
+                  Check now
+                </Button>
+              )}
+              <Badge tone={backendStatus.ready ? 'emerald' : 'amber'}>
+                {backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
+              </Badge>
+            </div>
+          </div>
+          <div className="p-6 grid grid-cols-1 lg:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Status</p>
+              <p className="mt-1 font-semibold text-slate-900">
+                {backend.isLoading ? 'Loading workspace...' : backend.isPulling ? 'Checking latest workspace...' : backend.isSaving ? 'Saving changes...' : backend.message}
+              </p>
+              {backend.error && <p className="mt-2 text-red-600">{backend.error}</p>}
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Supabase Table</p>
+              <p className="mt-1 font-semibold text-slate-900">{backendStatus.stateTable}</p>
+              <p className="mt-1 text-slate-500">Snapshot ID: {backendStatus.stateId}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Last Pull</p>
+              <p className="mt-1 font-semibold text-slate-900">
+                {backend.lastPulledAt ? new Date(backend.lastPulledAt).toLocaleString() : 'Not checked yet'}
+              </p>
+              {backend.remoteVersion && (
+                <p className="mt-1 text-slate-500">Remote version: {backend.remoteVersion}</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Last Save</p>
+              <p className="mt-1 font-semibold text-slate-900">
+                {backend.lastSyncedAt ? new Date(backend.lastSyncedAt).toLocaleString() : 'Not synced yet'}
+              </p>
+              {backendStatus.missing.length > 0 && (
+                <p className="mt-1 text-slate-500">Missing: {backendStatus.missing.join(', ')}</p>
+              )}
+            </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-            {backendSetupItems.map(item => {
-              const Icon = item.done ? CheckCircle2 : AlertTriangle;
-              return (
-                <div key={item.label} className="flex items-start gap-2 border-t border-slate-100 pt-3">
-                  <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', item.done ? 'text-emerald-600' : 'text-amber-500')} />
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{item.label}</p>
-                    <p className="mt-1 break-words text-sm font-medium text-slate-800">{item.detail}</p>
-                  </div>
+          <div className="border-t border-slate-100 px-6 py-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Supabase readiness</p>
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                  {hostedLocalBuild
+                    ? 'This hosted build is running with local browser storage. Add the Supabase environment variables in Vercel, then redeploy.'
+                    : isSupabaseMode
+                    ? backendStatus.ready
+                      ? 'The app is configured to read and write the shared Supabase snapshot.'
+                      : 'Supabase mode is selected, but required environment variables are missing.'
+                    : 'The app is running locally. Set Supabase mode in deployment to share live workspace data.'}
+                </p>
+              </div>
+              {backend.error ? (
+                <div className="flex items-start gap-2 text-sm text-amber-700 lg:max-w-md">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{backend.error}</span>
                 </div>
-              );
-            })}
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+              {backendSetupItems.map(item => {
+                const Icon = item.done ? CheckCircle2 : AlertTriangle;
+                return (
+                  <div key={item.label} className="flex items-start gap-2 border-t border-slate-100 pt-3">
+                    <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', item.done ? 'text-emerald-600' : 'text-amber-500')} />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{item.label}</p>
+                      <p className="mt-1 break-words text-sm font-medium text-slate-800">{item.detail}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <MetricCard title="Visible Tasks" value={visibleTasks.length} icon={Database} tone="indigo" />
         <MetricCard title="Visible Projects" value={visibleProjects.length} icon={Database} tone="emerald" />
         <MetricCard title="Unread Notices" value={unreadCount} icon={Bell} tone="amber" />
-        <MetricCard
-          title="Backend"
-          value={backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
-          icon={Cloud}
-          tone={backendStatus.ready ? 'blue' : 'amber'}
-          footer={backendStatus.ready ? 'Configured' : 'Needs env keys'}
-        />
+        {isSuperAdmin && (
+          <MetricCard
+            title="Backend"
+            value={backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
+            icon={Cloud}
+            tone={backendStatus.ready ? 'blue' : 'amber'}
+            footer={backendStatus.ready ? 'Configured' : 'Needs env keys'}
+          />
+        )}
       </div>
     </div>
   );
