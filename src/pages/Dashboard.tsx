@@ -172,7 +172,7 @@ const Dashboard: React.FC = () => {
         title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Admin' ? 'Admin Dashboard' : currentUser?.role === 'Client' ? 'Client Dashboard' : 'My Dashboard'}
         description={`Welcome back, ${currentUser?.name}! Here's your task overview.`}
         action={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2.5">
             <BackendFreshness />
             {canCreateTask && (
               <Button onClick={() => setCreateTaskModalOpen(true)}>

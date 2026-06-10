@@ -11,8 +11,13 @@ interface BackendFreshnessProps {
 }
 
 const formatSyncTime = (value?: string) => {
-  if (!value) return 'Not checked yet';
-  return new Date(value).toLocaleString();
+  if (!value) return 'Never';
+  const date = new Date(value);
+  const isToday = new Date().toDateString() === date.toDateString();
+  if (isToday) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleDateString([], { month: 'numeric', day: 'numeric' }) + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
 const getFreshnessTone = (backend: ReturnType<typeof useStore.getState>['backend']) => {
@@ -41,17 +46,17 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
   const showRefresh = !isLocal && (backend.hasRemoteUpdate || backend.error || !compact);
 
   return (
-    <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end', className)}>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <Badge tone={tone} className="shrink-0">
-          <Icon className={cn('h-3.5 w-3.5', backend.isPulling && 'animate-spin')} />
+    <div className={cn('flex items-center gap-2', className)}>
+      <div className="flex items-center gap-1.5 text-[11px] text-stone-400 font-medium">
+        <Badge tone={tone} className="px-1.5 py-0.5 text-[10px] font-semibold gap-1 shrink-0">
+          <Icon className={cn('h-3 w-3', backend.isPulling && 'animate-spin')} />
           {label}
         </Badge>
         {!compact && (
-          <span className="whitespace-nowrap">
+          <span className="whitespace-nowrap text-stone-450">
             {isLocal && backendStatus.isHostedRuntime
-              ? 'Vercel env needs Supabase mode'
-              : `Last checked: ${formatSyncTime(lastChecked)}`}
+              ? 'Vercel configuration required'
+              : `Synced: ${formatSyncTime(lastChecked)}`}
           </span>
         )}
       </div>
@@ -60,10 +65,10 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           variant="secondary"
           onClick={() => pullBackendNow({ force: backend.hasRemoteUpdate, silent: false })}
           disabled={backend.isPulling || backend.isSaving}
-          className="min-h-9 px-3 py-1.5 text-xs"
+          className="h-7 w-7 p-0 rounded-md flex items-center justify-center shrink-0 border border-stone-200 bg-white hover:bg-stone-50 transition-colors shadow-sm"
+          title="Refresh sync status"
         >
-          <RefreshCw className={cn('h-3.5 w-3.5', backend.isPulling && 'animate-spin')} />
-          Refresh
+          <RefreshCw className={cn('h-3 w-3 text-stone-500', backend.isPulling && 'animate-spin')} />
         </Button>
       )}
     </div>
