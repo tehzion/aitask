@@ -152,6 +152,15 @@ const stripPassword = <T extends { password?: string }>(item: T): Omit<T, 'passw
   return cleanItem;
 };
 
+const ensurePasswordResetState = (user: User): User => {
+  const password = user.password || DEFAULT_USER_PASSWORD;
+  return {
+    ...user,
+    password,
+    mustResetPassword: Boolean(user.mustResetPassword) || hasDefaultPassword(password),
+  };
+};
+
 const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorkspaceState => ({
   users: state.users || [],
   projects: state.projects || [],
@@ -424,18 +433,20 @@ const mergeWorkspaceStates = (
 const getCurrentUserFromSnapshot = (currentUser: User | null, users: User[]) => {
   if (!currentUser) return null;
   const nextUser = users.find(user => user.id === currentUser.id);
-  return nextUser ? stripPassword(nextUser) as User : null;
+  return nextUser ? stripPassword(ensurePasswordResetState(nextUser)) as User : null;
 };
 
 const makeWorkspacePatch = (current: StoreState, snapshot: SnapshotResult) => {
   const workspace = normalizeWorkspaceState(snapshot.state);
+  const users = workspace.users.map(ensurePasswordResetState);
   return {
     ...workspace,
+    users,
     rolePermissions: workspace.rolePermissions || [],
     taskStatuses: workspace.taskStatuses && workspace.taskStatuses.length > 0
       ? workspace.taskStatuses
       : ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'],
-    currentUser: getCurrentUserFromSnapshot(current.currentUser, workspace.users),
+    currentUser: getCurrentUserFromSnapshot(current.currentUser, users),
   };
 };
 
@@ -753,14 +764,10 @@ export const useStore = create<StoreState>()(
           return false;
         }
 
-        const mustResetPassword =
-          Boolean(user.mustResetPassword) ||
-          (!seededUserIds.has(user.id) && hasDefaultPassword(expectedPassword));
-        const nextUser = {
+        const nextUser = ensurePasswordResetState({
           ...user,
           password: expectedPassword,
-          mustResetPassword,
-        };
+        });
 
         // Strip sensitive fields before placing in currentUser session state
         set((state) => ({
@@ -1603,27 +1610,28 @@ export const useStore = create<StoreState>()(
         const usersWithProtectedOwner = state.users.map(user => {
           const isBoss = user.id === 'u-boss' || user.name === 'Boss Koo';
           const restoredPassword = mockPasswordMap.get(user.id);
-          const isSeededUser = seededUserIds.has(user.id);
-          const password = user.password || restoredPassword || DEFAULT_USER_PASSWORD;
-          const mustResetPassword = isSeededUser
-            ? user.mustResetPassword
-            : user.mustResetPassword || hasDefaultPassword(password);
+          const normalizedUser = ensurePasswordResetState({
+            ...user,
+            password: user.password || restoredPassword || DEFAULT_USER_PASSWORD,
+          });
 
           return {
-            ...user,
-            password,
-            mustResetPassword,
+            ...normalizedUser,
             ...(isBoss ? { isSuperAdmin: true } : {}),
           };
         });
 
-        const newUsers = mockUsers.filter(mu => !usersWithProtectedOwner.some(su => su.id === mu.id));
+        const newUsers = mockUsers
+          .filter(mu => !usersWithProtectedOwner.some(su => su.id === mu.id))
+          .map(ensurePasswordResetState);
         const newProjects = mockProjects.filter(mp => !state.projects.some(sp => sp.id === mp.id));
         const tasksWithoutLegacyDemo = state.tasks.filter(task => !legacyDemoTaskIdSet.has(task.id));
         const newTasks = mockTasks.filter(mt => !tasksWithoutLegacyDemo.some(st => st.id === mt.id));
+        const nextUsers = [...usersWithProtectedOwner, ...newUsers];
 
         return {
-          users: [...usersWithProtectedOwner, ...newUsers],
+          users: nextUsers,
+          currentUser: getCurrentUserFromSnapshot(state.currentUser, nextUsers),
           projects: [...state.projects, ...newProjects],
           tasks: [...tasksWithoutLegacyDemo, ...newTasks],
         };

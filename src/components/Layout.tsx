@@ -142,7 +142,7 @@ const Layout: React.FC = () => {
         {/* Mobile Bottom Navigation Bar */}
         <div className="fixed bottom-0 left-0 right-0 h-16 bg-[#241a11] border-t border-white/10 z-40 flex items-center justify-around md:hidden shadow-lg">
           <NavLink
-            to="/dashboard"
+            to="/"
             className={({ isActive }) => cn(
               "flex flex-col items-center justify-center flex-1 h-full text-white/50 transition-colors",
               isActive && "text-orange-400 font-bold"
@@ -186,7 +186,7 @@ const Layout: React.FC = () => {
               <Bell className="w-5 h-5 mb-0.5" />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1.5 h-3.5 w-3.5 rounded-full bg-orange-500 text-[8px] font-black text-white flex items-center justify-center border border-[#241a11]">
-                  {unreadCount}
+                  {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
             </div>

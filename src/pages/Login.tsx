@@ -40,7 +40,7 @@ const Login: React.FC = () => {
   const [regSuccess, setRegSuccess] = useState(false);
 
   React.useEffect(() => {
-    if (currentUser) navigate('/');
+    if (currentUser) navigate(currentUser.mustResetPassword ? '/settings' : '/');
   }, [currentUser, navigate]);
 
   const fillDemo = (account: typeof DEMO_ACCOUNTS[0]) => {

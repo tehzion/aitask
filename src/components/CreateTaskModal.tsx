@@ -19,26 +19,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const { users, currentUser, addTask, projects, createTaskInitialDate } = useStore();
   const navigate = useNavigate();
 
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-    }
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  React.useEffect(() => {
-    if (isOpen) {
-      const today = new Date().toISOString().split('T')[0];
-      setStartDate(today);
-      setDueDate(createTaskInitialDate || today);
-      setFormError('');
-      setAssignmentError('');
-    }
-  }, [isOpen, createTaskInitialDate]);
-
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectId, setProjectId] = useState('');
   const [title, setTitle] = useState('');
@@ -60,11 +40,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [assignmentError, setAssignmentError] = useState('');
   const [formError, setFormError] = useState('');
 
-  if (!isOpen) return null;
-
   const filteredUsers = users.filter(u => u.role !== 'Client' && u.department === department);
 
-  const resetForm = () => {
+  const resetForm = React.useCallback(() => {
     setProjectId('');
     setTitle('');
     setDescription('');
@@ -84,7 +62,34 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setRecurrenceFrequency('None');
     setAssignmentError('');
     setFormError('');
-  };
+  }, []);
+
+  const closeAndReset = React.useCallback(() => {
+    resetForm();
+    onClose();
+  }, [onClose, resetForm]);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeAndReset();
+    };
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, closeAndReset]);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      const today = new Date().toISOString().split('T')[0];
+      setStartDate(today);
+      setDueDate(createTaskInitialDate || today);
+      setFormError('');
+      setAssignmentError('');
+    }
+  }, [isOpen, createTaskInitialDate]);
+
+  if (!isOpen) return null;
 
   const isValidOptionalUrl = (value: string) => {
     const trimmed = value.trim();
@@ -166,8 +171,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    onClose();
-    resetForm();
+    closeAndReset();
     navigate(`/tasks?taskId=${taskId}`);
   };
 
@@ -182,10 +186,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             <p className="text-xs text-slate-500 mt-1">Assign work to a specific department or position.</p>
           </div>
           <button 
-            onClick={() => {
-              resetForm();
-              onClose();
-            }}
+            onClick={closeAndReset}
             aria-label="Close create task modal"
             title="Close"
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -449,10 +450,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
         <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
           <button 
             type="button"
-            onClick={() => {
-              resetForm();
-              onClose();
-            }}
+            onClick={closeAndReset}
             className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
           >
             Cancel
