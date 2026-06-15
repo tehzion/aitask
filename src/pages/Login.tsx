@@ -5,7 +5,7 @@ import { useStore } from '../store';
 import { Role } from '../types';
 import { Button, inputBase } from '../components/ui';
 import { cn } from '../lib/utils';
-import { DEFAULT_USER_PASSWORD } from '../lib/auth';
+import { DEFAULT_USER_PASSWORD, shouldShowDemoLogin } from '../lib/auth';
 
 /** Max failed attempts before a short lockout is applied */
 const MAX_ATTEMPTS = 5;
@@ -31,6 +31,7 @@ const Login: React.FC = () => {
   const attemptsRef = useRef(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [showDemo, setShowDemo] = useState(false);
+  const showDemoLogin = shouldShowDemoLogin();
 
   // --- Registration state ---
   const [isRegistering, setIsRegistering] = useState(false);
@@ -154,51 +155,50 @@ const Login: React.FC = () => {
                 </Button>
               </form>
 
-              {/* ── Demo Accounts ── */}
-              <div className="mt-5">
-                <button
-                  type="button"
-                  onClick={() => setShowDemo(v => !v)}
-                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:bg-slate-100 transition-colors"
-                >
-                  <span>Demo Accounts — click to fill</span>
-                  {showDemo ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                </button>
+              {showDemoLogin && (
+                <div className="mt-5">
+                  <button
+                    type="button"
+                    onClick={() => setShowDemo(v => !v)}
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:bg-slate-100 transition-colors"
+                  >
+                    <span>Demo Accounts — click to fill</span>
+                    {showDemo ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
 
-                {showDemo && (
-                  <div className="mt-2 rounded-lg border border-slate-200 overflow-hidden">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200">
-                          <th className="text-left px-3 py-2 font-semibold text-slate-500">Username</th>
-                          <th className="text-left px-3 py-2 font-semibold text-slate-500">Password</th>
-                          <th className="text-left px-3 py-2 font-semibold text-slate-500">Role</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {DEMO_ACCOUNTS.map((account) => (
-                          <tr
-                            key={account.username}
-                            onClick={() => fillDemo(account)}
-                            className={cn(
-                              'border-b border-slate-100 last:border-0 cursor-pointer hover:bg-indigo-50 transition-colors',
-                              username === account.username ? 'bg-indigo-50' : 'bg-white'
-                            )}
-                          >
-                            <td className="px-3 py-2 font-medium text-slate-700">{account.username}</td>
-                            <td className="px-3 py-2 font-mono text-slate-500">{account.password}</td>
-                            <td className="px-3 py-2">
-                              <span className={cn('px-1.5 py-0.5 rounded text-xs font-semibold', account.badge)}>
-                                {account.role}
-                              </span>
-                            </td>
+                  {showDemo && (
+                    <div className="mt-2 rounded-lg border border-slate-200 overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="text-left px-3 py-2 font-semibold text-slate-500">Username</th>
+                            <th className="text-left px-3 py-2 font-semibold text-slate-500">Role</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                        </thead>
+                        <tbody>
+                          {DEMO_ACCOUNTS.map((account) => (
+                            <tr
+                              key={account.username}
+                              onClick={() => fillDemo(account)}
+                              className={cn(
+                                'border-b border-slate-100 last:border-0 cursor-pointer hover:bg-indigo-50 transition-colors',
+                                username === account.username ? 'bg-indigo-50' : 'bg-white'
+                              )}
+                            >
+                              <td className="px-3 py-2 font-medium text-slate-700">{account.username}</td>
+                              <td className="px-3 py-2">
+                                <span className={cn('px-1.5 py-0.5 rounded text-xs font-semibold', account.badge)}>
+                                  {account.role}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* ── Register link ── */}
               <div className="mt-5">

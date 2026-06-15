@@ -38,7 +38,7 @@ export interface User {
   id: string;
   name: string;
   email?: string;
-  password?: string; // Optional for backward compatibility; new users start with a default password
+  password?: string; // Backward compatibility only; active mock passwords are local-only
   role: Role;
   department: Department;
   avatar?: string;
@@ -85,7 +85,7 @@ export interface Registration {
   name: string;
   email: string;
   phone: string;
-  password?: string; // Backward compatibility only; approved users start with the default password
+  password?: string; // Registration passwords are not persisted to the shared snapshot
   jobPosition: string;
   requestedRole: Role; // What they want to apply for
   status: 'Pending' | 'Approved' | 'Rejected';

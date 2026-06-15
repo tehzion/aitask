@@ -58,6 +58,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/dashboard" element={<Navigate to="/" replace />} />
         
         <Route path="/" element={
           <PrivateRoute>
@@ -72,6 +73,7 @@ function App() {
           <Route path="approvals" element={<RoleRoute path="/approvals"><Approvals /></RoleRoute>} />
           <Route path="settings" element={<RoleRoute path="/settings"><Settings /></RoleRoute>} />
         </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

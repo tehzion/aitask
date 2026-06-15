@@ -9,11 +9,13 @@ The app runs in local demo mode by default and now includes an opt-in Supabase s
 1. Copy `.env.example` to `.env.local`.
 2. Run `supabase/schema.sql` in your Supabase SQL editor.
 3. Set `VITE_AITASK_BACKEND=supabase`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY`.
+   Keep `VITE_AITASK_SHOW_DEMO_LOGIN=false` for hosted/client-facing builds.
 4. Restart the Vite dev server.
 
 Settings shows the active backend, snapshot table, and last sync time.
 
 The current Supabase bridge stores the working mock app state in `public.aitask_app_state` so existing UI workflows continue to work while backend migration is staged. Before production, move to Supabase Auth, normalized tables, file storage, and stricter RLS policies. See `supabase/README.md`.
+The bridge must never store passwords or secret-like fields; `supabase/schema.sql` includes a guard trigger and `npm run verify:supabase` checks the deployed table/policies.
 
 ## Vercel Deployment
 

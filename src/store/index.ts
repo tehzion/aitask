@@ -18,6 +18,7 @@ import {
 } from '../types';
 import { legacyDemoTaskIds, mockUsers, mockProjects, mockTasks } from '../mock';
 import { DEFAULT_USER_PASSWORD, hasDefaultPassword } from '../lib/auth';
+import { resolveLocalUserPassword, setLocalUserPassword } from '../lib/localCredentials';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
 import {
   loadSupabaseSnapshot,
@@ -110,19 +111,35 @@ const seededUserIds = new Set(mockUsers.map(user => user.id));
 const seededProjectIds = new Set(mockProjects.map(project => project.id));
 const legacyDemoTaskIdSet = new Set<string>(legacyDemoTaskIds);
 const defaultTaskStatuses = ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'];
+const sensitiveSnapshotKeyPattern = /(password|secret|token|api[_-]?key|service[_-]?role)/i;
 
-const selectPersistedWorkspaceState = (state: Pick<StoreState, 'users' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses'>): PersistedWorkspaceState => ({
-  users: state.users,
+const stripSensitiveSnapshotFields = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(stripSensitiveSnapshotFields);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => !sensitiveSnapshotKeyPattern.test(key))
+      .map(([key, item]) => [key, stripSensitiveSnapshotFields(item)])
+  );
+};
+
+const sanitizeWorkspaceStateForSnapshot = (
+  state: Pick<StoreState, 'users' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses'>
+): PersistedWorkspaceState => stripSensitiveSnapshotFields({
+  users: state.users.map(user => stripPassword(user as User & { password?: string })),
   projects: state.projects,
   tasks: state.tasks,
   notifications: state.notifications || [],
-  registrations: state.registrations || [],
+  registrations: (state.registrations || []).map(registration => stripPassword(registration)),
   rolePermissions: state.rolePermissions || [],
   taskStatuses: state.taskStatuses || [],
   deletedUserIds: state.deletedUserIds || [],
   deletedRoleIds: state.deletedRoleIds || [],
   deletedTaskStatuses: state.deletedTaskStatuses || [],
-});
+}) as PersistedWorkspaceState;
+
+const selectPersistedWorkspaceState = sanitizeWorkspaceStateForSnapshot;
 
 const makeBackendRuntimeState = (): BackendRuntimeState => {
   const status = getBackendStatus();
@@ -152,11 +169,18 @@ const stripPassword = <T extends { password?: string }>(item: T): Omit<T, 'passw
   return cleanItem;
 };
 
-const ensurePasswordResetState = (user: User): User => {
-  const password = user.password || DEFAULT_USER_PASSWORD;
+const normalizeUserAccount = (user: User, options: { migrateInlinePassword?: boolean } = {}): User => {
+  const inlinePassword = user.password?.trim();
+  if (options.migrateInlinePassword && inlinePassword && !hasDefaultPassword(inlinePassword)) {
+    setLocalUserPassword(user.id, inlinePassword);
+  }
+
+  const password = inlinePassword && !hasDefaultPassword(inlinePassword)
+    ? inlinePassword
+    : resolveLocalUserPassword(user.id);
+
   return {
-    ...user,
-    password,
+    ...stripPassword(user as User & { password?: string }) as User,
     mustResetPassword: Boolean(user.mustResetPassword) || hasDefaultPassword(password),
   };
 };
@@ -433,12 +457,12 @@ const mergeWorkspaceStates = (
 const getCurrentUserFromSnapshot = (currentUser: User | null, users: User[]) => {
   if (!currentUser) return null;
   const nextUser = users.find(user => user.id === currentUser.id);
-  return nextUser ? stripPassword(ensurePasswordResetState(nextUser)) as User : null;
+  return nextUser ? stripPassword(normalizeUserAccount(nextUser)) as User : null;
 };
 
 const makeWorkspacePatch = (current: StoreState, snapshot: SnapshotResult) => {
   const workspace = normalizeWorkspaceState(snapshot.state);
-  const users = workspace.users.map(ensurePasswordResetState);
+  const users = workspace.users.map(user => normalizeUserAccount(user));
   return {
     ...workspace,
     users,
@@ -454,7 +478,7 @@ export const useStore = create<StoreState>()(
   persist(
     (set, get) => ({
       currentUser: null,
-      users: mockUsers,
+      users: mockUsers.map(user => normalizeUserAccount(user, { migrateInlinePassword: true })),
       projects: mockProjects,
       tasks: mockTasks,
       taskStatuses: ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'],
@@ -759,15 +783,16 @@ export const useStore = create<StoreState>()(
         const user = get().users.find(u => u.name.toLowerCase() === name.trim().toLowerCase());
         if (!user) return false;
 
-        const expectedPassword = user.password || DEFAULT_USER_PASSWORD;
+        const normalizedUser = normalizeUserAccount(user, { migrateInlinePassword: true });
+        const expectedPassword = resolveLocalUserPassword(normalizedUser.id);
         if (expectedPassword !== password) {
           return false;
         }
 
-        const nextUser = ensurePasswordResetState({
-          ...user,
-          password: expectedPassword,
-        });
+        const nextUser = {
+          ...normalizedUser,
+          mustResetPassword: Boolean(normalizedUser.mustResetPassword) || hasDefaultPassword(expectedPassword),
+        };
 
         // Strip sensitive fields before placing in currentUser session state
         set((state) => ({
@@ -833,7 +858,8 @@ export const useStore = create<StoreState>()(
         const currentPassword = data.currentPassword || '';
         const newPassword = data.newPassword.trim();
         const confirmPassword = data.confirmPassword.trim();
-        const expectedCurrentPassword = account.password || DEFAULT_USER_PASSWORD;
+        const normalizedAccount = normalizeUserAccount(account, { migrateInlinePassword: true });
+        const expectedCurrentPassword = resolveLocalUserPassword(normalizedAccount.id);
 
         if (expectedCurrentPassword !== currentPassword) {
           return { ok: false, error: 'Current password is incorrect.' };
@@ -844,11 +870,12 @@ export const useStore = create<StoreState>()(
         if (newPassword !== confirmPassword) {
           return { ok: false, error: 'New password and confirmation do not match.' };
         }
-        if (account.password === newPassword) {
+        if (expectedCurrentPassword === newPassword) {
           return { ok: false, error: 'New password must be different from the current password.' };
         }
 
         const now = new Date().toISOString();
+        setLocalUserPassword(currentUser.id, newPassword);
         set((state) => ({
           currentUser: {
             ...currentUser,
@@ -857,7 +884,7 @@ export const useStore = create<StoreState>()(
           },
           users: state.users.map(user => (
             user.id === currentUser.id
-              ? { ...user, password: newPassword, mustResetPassword: false, updatedAt: now }
+              ? { ...stripPassword(user as User & { password?: string }) as User, mustResetPassword: false, updatedAt: now }
               : user
           )),
         }));
@@ -1351,7 +1378,7 @@ export const useStore = create<StoreState>()(
 
         const name = data.name.trim();
         const email = data.email?.trim();
-        const password = data.password?.trim() || DEFAULT_USER_PASSWORD;
+        const initialPassword = data.password?.trim() || DEFAULT_USER_PASSWORD;
         const companyName = data.role === 'Client' ? data.companyName?.trim() : undefined;
 
         if (!name) return { ok: false, error: 'Member name is required.' };
@@ -1372,12 +1399,15 @@ export const useStore = create<StoreState>()(
           ? get().rolePermissions.find(role => role.id === data.customRoleId)
           : undefined;
 
+        const userId = nowId('U');
+        setLocalUserPassword(userId, initialPassword);
+
         const newUser: User = {
-          ...data,
-          id: nowId('U'),
+          id: userId,
           name,
           email,
-          password,
+          role: data.role,
+          department: data.role === 'Client' ? 'Client' : data.department,
           mustResetPassword: true,
           companyName,
           isSuperAdmin: false,
@@ -1544,7 +1574,6 @@ export const useStore = create<StoreState>()(
         const newUser: User = {
           id: nowId('U'),
           name: reg.name,
-          password: DEFAULT_USER_PASSWORD,
           mustResetPassword: true,
           role,
           department,
@@ -1605,15 +1634,9 @@ export const useStore = create<StoreState>()(
         // Re-apply isSuperAdmin and restore passwords for known mock accounts.
         // Passwords may be absent in older localStorage snapshots, so we
         // hydrate only missing mock passwords without overriding user changes.
-        const mockPasswordMap = new Map(mockUsers.map(u => [u.id, u.password]));
-
         const usersWithProtectedOwner = state.users.map(user => {
           const isBoss = user.id === 'u-boss' || user.name === 'Boss Koo';
-          const restoredPassword = mockPasswordMap.get(user.id);
-          const normalizedUser = ensurePasswordResetState({
-            ...user,
-            password: user.password || restoredPassword || DEFAULT_USER_PASSWORD,
-          });
+          const normalizedUser = normalizeUserAccount(user, { migrateInlinePassword: true });
 
           return {
             ...normalizedUser,
@@ -1623,7 +1646,7 @@ export const useStore = create<StoreState>()(
 
         const newUsers = mockUsers
           .filter(mu => !usersWithProtectedOwner.some(su => su.id === mu.id))
-          .map(ensurePasswordResetState);
+          .map(user => normalizeUserAccount(user, { migrateInlinePassword: true }));
         const newProjects = mockProjects.filter(mp => !state.projects.some(sp => sp.id === mp.id));
         const tasksWithoutLegacyDemo = state.tasks.filter(task => !legacyDemoTaskIdSet.has(task.id));
         const newTasks = mockTasks.filter(mt => !tasksWithoutLegacyDemo.some(st => st.id === mt.id));
@@ -1679,15 +1702,13 @@ export const useStore = create<StoreState>()(
     {
       name: 'market-task-storage',
       partialize: (state) => ({
-        // currentUser never holds a password — strip it before writing to localStorage.
-        // users[] keeps passwords so that user-changed passwords survive page reloads.
-        // Registrations strip passwords (one-time use during approval flow).
+        // Passwords live in a separate local-only credential store while mock login remains.
         currentUser: state.currentUser
           ? stripPassword(state.currentUser as User & { password?: string })
           : null,
         tasks: state.tasks,
         projects: state.projects,
-        users: state.users,
+        users: state.users.map(user => stripPassword(user as User & { password?: string })),
         registrations: state.registrations.map(r => stripPassword(r)),
         notifications: state.notifications,
         rolePermissions: state.rolePermissions,

@@ -26,6 +26,7 @@ VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 VITE_SUPABASE_STATE_TABLE=aitask_app_state
 VITE_SUPABASE_STATE_ID=default
+VITE_AITASK_SHOW_DEMO_LOGIN=false
 ```
 
 5. Redeploy the Vercel project after saving env vars.
@@ -33,6 +34,7 @@ VITE_SUPABASE_STATE_ID=default
 The first Supabase-enabled visit creates the workspace snapshot from the current app state: maintained login accounts and starter projects, with no seeded demo tasks. After that, users, tasks, projects, notifications, registrations, and custom roles sync through Supabase.
 
 If the app was already live before the freshness update, run the latest `supabase/schema.sql` again before redeploying. It keeps the existing snapshot and adds the `version` column plus explicit Data API grants used for conflict-safe sync.
+The latest schema also removes broad demo snapshot policies and installs the guard trigger that rejects password/token/secret-like JSON keys.
 
 Before redeploying, verify the frontend key can read the snapshot through the Supabase Data API:
 
@@ -56,11 +58,14 @@ VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 VITE_SUPABASE_STATE_TABLE=aitask_app_state
 VITE_SUPABASE_STATE_ID=default
+VITE_AITASK_SHOW_DEMO_LOGIN=false
 ```
 
 Then redeploy from Vercel. When the build is correct and `supabase/schema.sql` has been run, Dashboard and Settings show `Supabase`/`Live`.
 
 If clients already used the app before Supabase was live, the next hosted load now recovers browser-local workspace changes that are newer than the remote snapshot and syncs that merged state back to Supabase.
+
+Demo account shortcuts are hidden on hosted builds unless `VITE_AITASK_SHOW_DEMO_LOGIN=true` is explicitly set. Keep this disabled for client-facing deployments.
 
 ## Local Check Before Deploy
 
