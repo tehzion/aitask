@@ -34,6 +34,14 @@ The first Supabase-enabled visit creates the workspace snapshot from the current
 
 If the app was already live before the freshness update, run the latest `supabase/schema.sql` again before redeploying. It keeps the existing snapshot and adds the `version` column plus explicit Data API grants used for conflict-safe sync.
 
+Before redeploying, verify the frontend key can read the snapshot through the Supabase Data API:
+
+```bash
+npm run verify:supabase
+```
+
+That command reports the current snapshot version and `updated_at`. If it fails with `401`/`403`, check the publishable key, table grants, and RLS policies before sending clients back to the app.
+
 ## If Vercel Does Not Show Live
 
 The dashboard should show `Supabase`/`Live` after the Production deployment is built with Supabase variables. If it shows `Sync issue`, Settings will list the missing variable. If it shows `Local build`, the deployed bundle was explicitly built with `VITE_AITASK_BACKEND=local`.
@@ -52,11 +60,14 @@ VITE_SUPABASE_STATE_ID=default
 
 Then redeploy from Vercel. When the build is correct and `supabase/schema.sql` has been run, Dashboard and Settings show `Supabase`/`Live`.
 
+If clients already used the app before Supabase was live, the next hosted load now recovers browser-local workspace changes that are newer than the remote snapshot and syncs that merged state back to Supabase.
+
 ## Local Check Before Deploy
 
 Run these serially:
 
 ```bash
+npm run verify:supabase
 cmd /c npm run lint
 cmd /c npm run check
 cmd /c npm run build

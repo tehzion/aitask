@@ -107,7 +107,9 @@ interface StoreState {
 const nowId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 let isApplyingRemoteSnapshot = false;
 const seededUserIds = new Set(mockUsers.map(user => user.id));
+const seededProjectIds = new Set(mockProjects.map(project => project.id));
 const legacyDemoTaskIdSet = new Set<string>(legacyDemoTaskIds);
+const defaultTaskStatuses = ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'];
 
 const selectPersistedWorkspaceState = (state: Pick<StoreState, 'users' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses'>): PersistedWorkspaceState => ({
   users: state.users,
@@ -162,6 +164,48 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
   deletedRoleIds: state.deletedRoleIds || [],
   deletedTaskStatuses: state.deletedTaskStatuses || [],
 });
+
+const getTime = (value?: string) => value ? new Date(value).getTime() || 0 : 0;
+
+const isLocalItemWorthRecovering = <T extends { id: string; updatedAt?: string }>(
+  item: T,
+  remoteItems: Map<string, T>,
+  seededIds?: Set<string>
+) => {
+  const remoteItem = remoteItems.get(item.id);
+  if (!remoteItem) return !seededIds?.has(item.id);
+  return getTime(item.updatedAt) > getTime(remoteItem.updatedAt);
+};
+
+const hasRecoverableLocalWorkspaceContent = (
+  localRaw: PersistedWorkspaceState,
+  remoteRaw: PersistedWorkspaceState
+) => {
+  const local = normalizeWorkspaceState(localRaw);
+  const remote = normalizeWorkspaceState(remoteRaw);
+  const remoteTasks = new Map(remote.tasks.map(item => [item.id, item]));
+  const remoteProjects = new Map(remote.projects.map(item => [item.id, item]));
+  const remoteUsers = new Map(remote.users.map(item => [item.id, item]));
+  const remoteRoles = new Map(remote.rolePermissions.map(item => [item.id, item]));
+  const remoteRegistrations = new Set(remote.registrations.map(item => item.id));
+  const remoteNotifications = new Set(remote.notifications.map(item => item.id));
+  const remoteStatuses = new Set(remote.taskStatuses.map(status => status.toLowerCase()));
+  const defaultStatuses = new Set(defaultTaskStatuses.map(status => status.toLowerCase()));
+
+  return (
+    local.tasks.some(task => !legacyDemoTaskIdSet.has(task.id) && isLocalItemWorthRecovering(task, remoteTasks)) ||
+    local.projects.some(project => isLocalItemWorthRecovering(project, remoteProjects, seededProjectIds)) ||
+    local.users.some(user => isLocalItemWorthRecovering(user, remoteUsers, seededUserIds)) ||
+    local.rolePermissions.some(role => isLocalItemWorthRecovering(role, remoteRoles)) ||
+    local.registrations.some(registration => !remoteRegistrations.has(registration.id)) ||
+    local.notifications.some(notification => !remoteNotifications.has(notification.id)) ||
+    local.taskStatuses.some(status => !defaultStatuses.has(status.toLowerCase()) && !remoteStatuses.has(status.toLowerCase()))
+  );
+};
+
+const workspaceStatesEqual = (left: PersistedWorkspaceState, right: PersistedWorkspaceState) => (
+  JSON.stringify(normalizeWorkspaceState(left)) === JSON.stringify(normalizeWorkspaceState(right))
+);
 
 const mergeWorkspaceStates = (
   localRaw: PersistedWorkspaceState,
@@ -436,11 +480,26 @@ export const useStore = create<StoreState>()(
         if (!shouldUseSupabase()) return;
 
         try {
-          const result = await loadSupabaseSnapshot(selectPersistedWorkspaceState(get()));
+          const localBeforeRemote = selectPersistedWorkspaceState(get());
+          const result = await loadSupabaseSnapshot(localBeforeRemote);
+          const shouldRecoverLocal = hasRecoverableLocalWorkspaceContent(localBeforeRemote, result.state);
+          const recoveredState = shouldRecoverLocal
+            ? mergeWorkspaceStates(localBeforeRemote, result.state, result.updatedAt || '')
+            : result.state;
+          const shouldUploadRecoveredState = shouldRecoverLocal && !workspaceStatesEqual(recoveredState, result.state);
+          const snapshotToApply: SnapshotResult = shouldRecoverLocal
+            ? {
+                ...result,
+                state: recoveredState,
+                message: shouldUploadRecoveredState
+                  ? 'Recovered browser-local workspace changes. Syncing them to Supabase.'
+                  : result.message,
+              }
+            : result;
           const syncedAt = new Date().toISOString();
           isApplyingRemoteSnapshot = true;
           set((state) => ({
-            ...makeWorkspacePatch(state, result),
+            ...makeWorkspacePatch(state, snapshotToApply),
             backend: {
               mode: 'supabase',
               isConfigured: true,
@@ -452,8 +511,8 @@ export const useStore = create<StoreState>()(
               remoteVersion: result.version,
               remoteUpdatedAt: result.updatedAt,
               hasRemoteUpdate: false,
-              hasLocalChanges: false,
-              message: result.message,
+              hasLocalChanges: shouldUploadRecoveredState,
+              message: snapshotToApply.message,
             }
           }));
           isApplyingRemoteSnapshot = false;

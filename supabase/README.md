@@ -21,6 +21,14 @@ The first run creates a `default` workspace snapshot from the current app state:
 
 Existing live projects should rerun `supabase/schema.sql` before deploying newer frontend builds. The script is idempotent and adds the snapshot `version` column and explicit Data API grants needed for live freshness and conflict-safe saves.
 
+Run this after setting env vars to confirm the browser key can reach the snapshot:
+
+```bash
+npm run verify:supabase
+```
+
+The command prints the current snapshot version and `updated_at`. If it fails, fix Supabase grants/RLS or Vercel env before asking users to rely on live sync.
+
 ## Production Path
 
 The snapshot backend is meant to make integration safe without rewriting every workflow at once. Before production, replace it with normalized Supabase tables, Supabase Auth, and role-level RLS policies for:

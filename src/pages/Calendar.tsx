@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import {
   format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, isSameMonth, isSameDay, parseISO, addWeeks, subWeeks, isToday,
-  isBefore, differenceInDays, formatDistanceToNow,
+  isBefore,
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Flag, Clock, User, GripVertical, CheckCircle2, Plus } from 'lucide-react';
 import clsx from 'clsx';
@@ -386,7 +386,6 @@ const Calendar: React.FC = () => {
                   const selectedStr = format(selectedDate, 'yyyy-MM-dd');
                   const dueDateParsed = parseISO(task.dueDate);
                   const isOverdue = !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed);
-                  const daysOverdue = Math.max(1, differenceInDays(new Date(), dueDateParsed));
 
                   return (
                     <div

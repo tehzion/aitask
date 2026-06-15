@@ -20,17 +20,17 @@ drop policy if exists "allow demo snapshot read" on public.aitask_app_state;
 create policy "allow demo snapshot read"
   on public.aitask_app_state
   for select
-  using (true);
+  using (id = 'default');
 
 drop policy if exists "allow demo snapshot write" on public.aitask_app_state;
 create policy "allow demo snapshot write"
   on public.aitask_app_state
   for insert
-  with check (true);
+  with check (id = 'default');
 
 drop policy if exists "allow demo snapshot update" on public.aitask_app_state;
 create policy "allow demo snapshot update"
   on public.aitask_app_state
   for update
-  using (true)
-  with check (true);
+  using (id = 'default')
+  with check (id = 'default');

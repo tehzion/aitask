@@ -1,13 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useStore } from '../store';
 import { SkeletonMetricCard, SkeletonChartCard } from '../components/SkeletonCard';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
-import { format, isToday, isThisWeek, isBefore, parseISO, subMonths, isSameMonth, formatDistanceToNow, differenceInDays } from 'date-fns';
+import { format, isToday, isThisWeek, isBefore, parseISO, subMonths, isSameMonth, differenceInDays } from 'date-fns';
 import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon } from 'lucide-react';
-import CreateTaskModal from '../components/CreateTaskModal';
 import { Link } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader, pageShell, cardBase } from '../components/ui';
 import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';

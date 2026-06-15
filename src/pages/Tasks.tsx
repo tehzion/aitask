@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, RotateCcw, CalendarClock, SlidersHorizontal, ChevronDown } from 'lucide-react';
-import { format, parseISO, isBefore, isToday, differenceInDays, formatDistanceToNow } from 'date-fns';
+import { format, parseISO, isBefore, isToday, differenceInDays } from 'date-fns';
 import { Department, Priority, Task, TaskStatus } from '../types';
-import CreateTaskModal from '../components/CreateTaskModal';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import { useSearchParams } from 'react-router-dom';
 import { Badge, Button, PageHeader, cardBase, inputBase, pageShell } from '../components/ui';
@@ -435,7 +434,6 @@ const Tasks: React.FC = () => {
                     pagedTasks.map((task) => {
                       const dueDateParsed = parseISO(task.dueDate);
                       const isOverdue = !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed);
-                      const daysOverdue = Math.max(1, differenceInDays(new Date(), dueDateParsed));
 
                       return (
                         <tr
@@ -631,7 +629,6 @@ const Tasks: React.FC = () => {
                         columnTasks.map(task => {
                           const dueDateParsed = parseISO(task.dueDate);
                           const isOverdue = !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed);
-                          const daysOverdue = Math.max(1, differenceInDays(new Date(), dueDateParsed));
                           const canDrag = canEditTask(task);
 
                           return (

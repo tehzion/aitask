@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
+import { Outlet, NavLink, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import { ToastContainer } from './Toast';
 import CreateTaskModal from './CreateTaskModal';
 import { useStore } from '../store';
 import { isNotificationVisible, isNotificationReadByUser } from '../lib/access';
-import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle } from 'lucide-react';
+import { getBackendStatus } from '../lib/backend';
+import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
 
@@ -21,7 +22,8 @@ const Layout: React.FC = () => {
     currentUser,
     markNotificationRead,
     markAllNotificationsRead,
-    rolePermissions
+    backend,
+    pullBackendNow,
   } = useStore();
 
   // Global Keyboard Shortcuts
@@ -61,6 +63,22 @@ const Layout: React.FC = () => {
   }, [notifications, currentUser]);
 
   const unreadCount = myNotifs.filter(n => !isNotificationReadByUser(currentUser, n)).length;
+  const backendStatus = getBackendStatus();
+  const hostedLocalBuild = backendStatus.mode === 'local' && backendStatus.isHostedRuntime;
+  const missingSupabaseConfig = backendStatus.mode === 'supabase' && !backendStatus.ready;
+  const syncNeedsAttention = hostedLocalBuild || missingSupabaseConfig || Boolean(backend.error) || backend.hasRemoteUpdate;
+  const syncBannerTitle = hostedLocalBuild
+    ? 'Sync is local on this deployed build'
+    : missingSupabaseConfig
+      ? 'Supabase sync is not configured'
+      : backend.hasRemoteUpdate
+        ? 'Workspace update available'
+        : 'Supabase sync issue';
+  const syncBannerMessage = hostedLocalBuild
+    ? 'This browser is using local storage only. Set the Supabase environment variables in Vercel and redeploy before clients use the app.'
+    : missingSupabaseConfig
+      ? `Missing ${backendStatus.missing.join(', ')}. Changes will not sync between users until Vercel is rebuilt with Supabase env.`
+      : backend.error || backend.message;
 
   const getIcon = (type: string) => {
     switch(type) {
@@ -85,6 +103,38 @@ const Layout: React.FC = () => {
       <Sidebar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
       <div className="flex-1 flex flex-col overflow-hidden w-full relative">
         <Navbar onMenuClick={() => setIsMobileMenuOpen(true)} />
+        {syncNeedsAttention && (
+          <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 sm:px-6 lg:px-7">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{syncBannerTitle}</p>
+                  <p className="mt-0.5 text-sm leading-5 text-amber-800">{syncBannerMessage}</p>
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {backendStatus.mode === 'supabase' && backendStatus.ready && (
+                  <button
+                    type="button"
+                    onClick={() => pullBackendNow({ force: backend.hasRemoteUpdate, silent: false })}
+                    disabled={backend.isPulling || backend.isSaving}
+                    className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <RefreshCw className={cn('h-4 w-4', backend.isPulling && 'animate-spin')} />
+                    Refresh
+                  </button>
+                )}
+                <Link
+                  to="/settings"
+                  className="inline-flex min-h-9 items-center justify-center rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
+                >
+                  Open Settings
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-[#faf8f5] p-4 sm:p-6 lg:p-7 pb-24 md:pb-6">
           <Outlet />
         </main>
