@@ -139,12 +139,17 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
           {showNotifs && (
             <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-80 bg-white rounded-2xl shadow-xl border border-[#e8e3db] overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="px-4 py-3 border-b border-[#f0ebe2] flex justify-between items-center bg-stone-50/80">
-                <h3 className="font-bold text-stone-800">Notifications</h3>
-                {unreadCount > 0 && (
+                <div>
+                  <h3 className="font-bold text-stone-800">Notifications</h3>
+                  <p className="text-xs text-stone-500">
+                    {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+                  </p>
+                </div>
+                {unreadCount > 0 ? (
                   <span className="text-xs text-orange-700 font-medium bg-orange-100 px-2 py-1 rounded-full">
                     {unreadCount} New
                   </span>
-                )}
+                ) : null}
               </div>
               <div className="max-h-80 overflow-y-auto custom-scrollbar">
                 {myNotifs.length > 0 ? myNotifs.map(notif => (
@@ -160,8 +165,9 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
                     <div className={`p-2 rounded-full shrink-0 ${getBgColor(notif.iconType)}`}>
                       {getIcon(notif.iconType)}
                     </div>
-                    <div>
-                      <p className={`text-sm ${!isNotificationReadByUser(currentUser, notif) ? 'text-stone-900 font-medium' : 'text-stone-600'}`}>{notif.message}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-bold uppercase tracking-wide text-stone-400">{notif.title}</p>
+                      <p className={`mt-0.5 text-sm leading-5 ${!isNotificationReadByUser(currentUser, notif) ? 'text-stone-900 font-semibold' : 'text-stone-600'}`}>{notif.message}</p>
                       <p className="text-xs text-stone-400 mt-1">{formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}</p>
                     </div>
                     {!isNotificationReadByUser(currentUser, notif) && (
@@ -169,18 +175,20 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
                     )}
                   </Link>
                 )) : (
-                  <div className="px-4 py-8 text-center text-sm text-slate-500">
-                    You are all caught up!
+                  <div className="px-4 py-8 text-center">
+                    <p className="text-sm font-semibold text-stone-600">No notifications yet</p>
+                    <p className="mt-1 text-xs leading-5 text-stone-400">Task assignments, approvals, and sync notices will show here.</p>
                   </div>
                 )}
               </div>
-              {myNotifs.length > 0 && (
-                <div 
+              {unreadCount > 0 && (
+                <button
+                  type="button"
                   onClick={() => markAllNotificationsRead()}
-                  className="px-4 py-2 text-center border-t border-[#f0ebe2] bg-stone-50 hover:bg-stone-100 transition-colors cursor-pointer"
+                  className="w-full px-4 py-2 text-center border-t border-[#f0ebe2] bg-stone-50 hover:bg-stone-100 transition-colors"
                 >
                   <span className="text-xs font-semibold text-stone-500 hover:text-orange-700 transition-colors">Mark All as Read</span>
-                </div>
+                </button>
               )}
             </div>
           )}

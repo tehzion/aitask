@@ -245,8 +245,11 @@ const Layout: React.FC = () => {
                       {getIcon(notif.iconType)}
                     </div>
                     <div className="min-w-0 flex-1">
+                      <p className="truncate text-[10px] font-bold uppercase tracking-wide text-stone-400">
+                        {notif.title}
+                      </p>
                       <p className={cn(
-                        "text-sm leading-snug",
+                        "mt-0.5 text-sm leading-snug",
                         !isNotificationReadByUser(currentUser, notif)
                           ? 'text-stone-900 font-bold'
                           : 'text-stone-600 font-medium'
@@ -263,22 +266,26 @@ const Layout: React.FC = () => {
                   </Link>
                 ))
               ) : (
-                <div className="py-12 text-center text-sm text-stone-450">
-                  You are all caught up!
+                <div className="px-5 py-12 text-center">
+                  <p className="text-sm font-semibold text-stone-600">No notifications yet</p>
+                  <p className="mt-1 text-xs leading-5 text-stone-400">
+                    Task assignments, approvals, and sync notices will appear here.
+                  </p>
                 </div>
               )}
             </div>
 
             {/* Mark all as read */}
             {unreadCount > 0 && (
-              <div
+              <button
+                type="button"
                 onClick={() => {
                   markAllNotificationsRead();
                 }}
-                className="p-4 border-t border-[#f0ebe2] bg-stone-50 hover:bg-stone-100 transition-colors cursor-pointer text-center text-sm font-bold text-orange-700 shrink-0"
+                className="p-4 border-t border-[#f0ebe2] bg-stone-50 hover:bg-stone-100 transition-colors text-center text-sm font-bold text-orange-700 shrink-0"
               >
                 Mark All as Read
-              </div>
+              </button>
             )}
           </div>
         </>

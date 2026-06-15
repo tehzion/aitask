@@ -6,7 +6,7 @@ import {
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
 import { format, isToday, isThisWeek, isBefore, parseISO, subMonths, isSameMonth, differenceInDays } from 'date-fns';
-import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon, Plus, FolderKanban } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader, pageShell, cardBase } from '../components/ui';
 import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
@@ -51,6 +51,7 @@ const Dashboard: React.FC = () => {
   const tasks = useMemo(() => getVisibleTasks(currentUser, allTasks), [allTasks, currentUser]);
   const visibleProjects = useMemo(() => getVisibleProjects(currentUser, projects), [currentUser, projects]);
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
+  const hasTaskData = tasks.length > 0;
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -169,18 +170,56 @@ const Dashboard: React.FC = () => {
     <div className={pageShell}>
       <PageHeader
         title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Admin' ? 'Admin Dashboard' : currentUser?.role === 'Client' ? 'Client Dashboard' : 'My Dashboard'}
-        description={`Welcome back, ${currentUser?.name}! Here's your task overview.`}
+        description={hasTaskData ? `Welcome back, ${currentUser?.name}! Here's your task overview.` : `Welcome back, ${currentUser?.name}! Your live workspace is ready.`}
         action={(
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <BackendFreshness />
             {canCreateTask && (
               <Button onClick={() => setCreateTaskModalOpen(true)}>
-                + Create New Task
+                <Plus className="h-4 w-4" />
+                Create Task
               </Button>
             )}
           </div>
         )}
       />
+
+      {!hasTaskData && (
+        <section className={cn(cardBase, 'overflow-hidden border-orange-100 bg-gradient-to-br from-white to-orange-50/40')}>
+          <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-center">
+            <div className="flex min-w-0 gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
+                <FolderKanban className="h-6 w-6" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-stone-900">
+                  {currentUser?.role === 'Client' ? 'No visible client tasks yet' : 'Start the live workspace'}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-stone-600">
+                  {currentUser?.role === 'Client'
+                    ? 'Tasks for your company will appear here as soon as the team publishes or assigns them.'
+                    : 'Demo tasks are cleared. Create the first real task so dashboards, calendars, notifications, and reports begin filling with live data.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
+              {canCreateTask && (
+                <Button onClick={() => setCreateTaskModalOpen(true)} className="shrink-0">
+                  <Plus className="h-4 w-4" />
+                  Create first task
+                </Button>
+              )}
+              <Link
+                to="/projects"
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#e0d9cf] bg-white px-4 py-2 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50"
+              >
+                View projects
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -240,6 +279,7 @@ const Dashboard: React.FC = () => {
       {/* Charts Row 2 & Recent Tasks */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <ChartCard title="Monthly Completed Tasks" className="lg:col-span-2">
+          {hasTaskData ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={monthlyData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -249,6 +289,9 @@ const Dashboard: React.FC = () => {
                 <Line type="monotone" dataKey="completed" stroke="#10b981" strokeWidth={3} activeDot={{ r: 8 }} />
               </LineChart>
             </ResponsiveContainer>
+          ) : (
+            <ChartEmptyState>No completed task history yet</ChartEmptyState>
+          )}
         </ChartCard>
 
         <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm flex flex-col">
@@ -293,8 +336,15 @@ const Dashboard: React.FC = () => {
               );
             })}
             {recentTasks.length === 0 && (
-              <div className="text-center text-slate-400 py-8 text-sm">
-                No recent tasks found.
+              <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50/60 px-4 py-8 text-center">
+                <p className="text-sm font-semibold text-stone-600">No recent tasks yet</p>
+                <p className="mt-1 text-xs text-stone-400">Newly created work will appear here first.</p>
+                {canCreateTask && (
+                  <Button onClick={() => setCreateTaskModalOpen(true)} variant="secondary" className="mt-3 min-h-9 px-3 py-1.5 text-xs">
+                    <Plus className="h-3.5 w-3.5" />
+                    Create task
+                  </Button>
+                )}
               </div>
             )}
           </div>

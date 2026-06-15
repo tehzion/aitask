@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, Bell, CheckCircle2, Cloud, Database, Lock, RefreshCw, ShieldCheck, SlidersHorizontal, UserCircle, Volume2, VolumeX } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { Badge, Button, MetricCard, PageHeader, cardBase, inputBase, pageShell } from '../components/ui';
 import { getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
@@ -9,6 +10,7 @@ import BackendFreshness from '../components/BackendFreshness';
 import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 
 const Settings: React.FC = () => {
+  const navigate = useNavigate();
   const {
     currentUser,
     tasks,
@@ -157,21 +159,51 @@ const Settings: React.FC = () => {
 
   const handlePasswordSave = (event: React.FormEvent) => {
     event.preventDefault();
+    const wasResetRequired = mustResetPassword;
     const result = updateCurrentUserPassword(passwordForm);
 
     if (result.ok) {
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      if (wasResetRequired) {
+        window.setTimeout(() => navigate('/', { replace: true }), 900);
+      }
     }
 
     setPasswordMessage({
       tone: result.ok ? 'success' : 'error',
-      text: result.ok ? 'Password updated.' : result.error || 'Password could not be updated.',
+      text: result.ok
+        ? wasResetRequired
+          ? 'Password set. Opening your dashboard...'
+          : 'Password updated.'
+        : result.error || 'Password could not be updated.',
     });
   };
 
   return (
     <div className={pageShell}>
-      <PageHeader title="Settings" description={scopeDescription} />
+      <PageHeader
+        title={mustResetPassword ? 'Account Setup' : 'Settings'}
+        description={mustResetPassword ? 'Set your own password to unlock the workspace.' : scopeDescription}
+      />
+
+      {mustResetPassword && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-amber-700">
+                <Lock className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-bold">Password reset required</p>
+                <p className="mt-1 text-sm leading-6 text-amber-800">
+                  Use the default password once as the current password, then choose a private password with at least 8 characters.
+                </p>
+              </div>
+            </div>
+            <Badge tone="amber" className="self-start">Required</Badge>
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className={`xl:col-span-2 ${cardBase} overflow-hidden`}>
@@ -289,6 +321,7 @@ const Settings: React.FC = () => {
                   onChange={event => updatePasswordField('currentPassword', event.target.value)}
                   className={cn(inputBase, 'px-3 py-2.5')}
                   autoComplete="current-password"
+                  required
                 />
               </div>
               <div>
@@ -301,6 +334,7 @@ const Settings: React.FC = () => {
                   className={cn(inputBase, 'px-3 py-2.5')}
                   autoComplete="new-password"
                   minLength={8}
+                  required
                 />
               </div>
               <div>
@@ -313,6 +347,7 @@ const Settings: React.FC = () => {
                   className={cn(inputBase, 'px-3 py-2.5')}
                   autoComplete="new-password"
                   minLength={8}
+                  required
                 />
               </div>
             </div>
@@ -326,7 +361,7 @@ const Settings: React.FC = () => {
                 )}
               </div>
               <Button type="submit" disabled={!passwordChanged}>
-                Update password
+                {mustResetPassword ? 'Set password' : 'Update password'}
               </Button>
             </div>
           </form>

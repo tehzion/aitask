@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import { X, Plus } from 'lucide-react';
 import { Department, Priority, RecurrenceFrequency, ServiceType } from '../types';
 import CreateProjectModal from './CreateProjectModal';
+import { useNavigate } from 'react-router-dom';
 
 interface Props {
   isOpen: boolean;
@@ -16,6 +17,7 @@ const RECURRENCE_OPTIONS: RecurrenceFrequency[] = ['None', 'Daily', 'Weekly', 'M
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const { users, currentUser, addTask, projects, createTaskInitialDate } = useStore();
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -29,7 +31,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   React.useEffect(() => {
     if (isOpen) {
-      setDueDate(createTaskInitialDate || '');
+      const today = new Date().toISOString().split('T')[0];
+      setStartDate(today);
+      setDueDate(createTaskInitialDate || today);
+      setFormError('');
+      setAssignmentError('');
     }
   }, [isOpen, createTaskInitialDate]);
 
@@ -52,15 +58,75 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [notes, setNotes] = useState('');
   const [recurrenceFrequency, setRecurrenceFrequency] = useState<RecurrenceFrequency>('None');
   const [assignmentError, setAssignmentError] = useState('');
+  const [formError, setFormError] = useState('');
 
   if (!isOpen) return null;
 
   const filteredUsers = users.filter(u => u.role !== 'Client' && u.department === department);
 
+  const resetForm = () => {
+    setProjectId('');
+    setTitle('');
+    setDescription('');
+    setClientName('');
+    setCustomerDetails('');
+    setFacebookPage('');
+    setWebsite('');
+    setDepartment('Designer');
+    setAssignedTo('');
+    setServiceType('Design');
+    setPriority('Medium');
+    setStartDate('');
+    setDueDate('');
+    setAttachmentLink('');
+    setAttachmentName('');
+    setNotes('');
+    setRecurrenceFrequency('None');
+    setAssignmentError('');
+    setFormError('');
+  };
+
+  const isValidOptionalUrl = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return true;
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setAssignmentError('');
+    setFormError('');
     if (!currentUser) return;
+
+    const trimmedTitle = title.trim();
+    const trimmedClientName = clientName.trim();
+    const finalStartDate = startDate || new Date().toISOString().split('T')[0];
+    const finalDueDate = dueDate || finalStartDate;
+
+    if (!trimmedTitle) {
+      setFormError('Task title is required.');
+      return;
+    }
+
+    if (!trimmedClientName) {
+      setFormError('Client or brand name is required.');
+      return;
+    }
+
+    if (new Date(finalDueDate) < new Date(finalStartDate)) {
+      setFormError('Due date cannot be earlier than the start date.');
+      return;
+    }
+
+    if (![facebookPage, website, attachmentLink].every(isValidOptionalUrl)) {
+      setFormError('Links must start with http:// or https://.');
+      return;
+    }
 
     if (!assignedTo && filteredUsers.length === 0) {
       setAssignmentError(`No assignable team members exist in ${department}. Add a user to this department before creating the task.`);
@@ -70,46 +136,39 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     // Default to first user in department if not selected
     const finalAssignee = assignedTo || filteredUsers[0].id;
 
-    addTask({
-      title,
-      description,
+    const taskId = addTask({
+      title: trimmedTitle,
+      description: description.trim(),
       projectId: projectId || undefined,
-      clientName,
+      clientName: trimmedClientName,
       projectName: projectId ? projects.find(p => p.id === projectId)?.projectName : undefined,
-      customerDetails,
-      facebookPage,
-      website,
+      customerDetails: customerDetails.trim(),
+      facebookPage: facebookPage.trim(),
+      website: website.trim(),
       department,
       assignedTo: finalAssignee,
       serviceType,
       priority,
-      startDate: startDate || new Date().toISOString().split('T')[0],
-      dueDate: dueDate || new Date().toISOString().split('T')[0],
+      startDate: finalStartDate,
+      dueDate: finalDueDate,
       createdBy: currentUser.id,
       status: 'Pending',
       completionPercentage: 0,
-      attachmentLink: attachmentLink || undefined,
-      attachmentName: attachmentName || undefined,
-      notes: notes || undefined,
+      attachmentLink: attachmentLink.trim() || undefined,
+      attachmentName: attachmentName.trim() || undefined,
+      notes: notes.trim() || undefined,
       isRecurring: recurrenceFrequency !== 'None',
       recurrenceFrequency,
     });
 
+    if (!taskId) {
+      setFormError('You do not have permission to create tasks.');
+      return;
+    }
+
     onClose();
-    // Reset form
-    setProjectId('');
-    setTitle('');
-    setDescription('');
-    setClientName('');
-    setCustomerDetails('');
-    setFacebookPage('');
-    setWebsite('');
-    setAssignedTo('');
-    setAttachmentLink('');
-    setAttachmentName('');
-    setNotes('');
-    setRecurrenceFrequency('None');
-    setAssignmentError('');
+    resetForm();
+    navigate(`/tasks?taskId=${taskId}`);
   };
 
   return (
@@ -123,7 +182,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             <p className="text-xs text-slate-500 mt-1">Assign work to a specific department or position.</p>
           </div>
           <button 
-            onClick={onClose}
+            onClick={() => {
+              resetForm();
+              onClose();
+            }}
             aria-label="Close create task modal"
             title="Close"
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -264,11 +326,12 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     onChange={e => setAssignedTo(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm cursor-pointer"
                   >
-                    <option value="" disabled>Select team member...</option>
+                    <option value="">
+                      {filteredUsers.length > 0 ? `Auto assign: ${filteredUsers[0].name}` : 'No users in this department'}
+                    </option>
                     {filteredUsers.map(u => (
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
-                    {filteredUsers.length === 0 && <option disabled>No users in this department</option>}
                   </select>
                   {filteredUsers.length === 0 && (
                     <p className="text-xs text-red-500 mt-1">
@@ -373,6 +436,12 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 </div>
               </div>
             </div>
+
+            {formError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                {formError}
+              </div>
+            )}
           </form>
         </div>
 
@@ -380,7 +449,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
         <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
           <button 
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              resetForm();
+              onClose();
+            }}
             className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
           >
             Cancel
@@ -391,7 +463,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             disabled={filteredUsers.length === 0}
             className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Create Task
+            Create & open task
           </button>
         </div>
 

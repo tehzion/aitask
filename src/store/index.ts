@@ -84,7 +84,7 @@ interface StoreState {
   updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => void;
   reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => void;
   requestRevision: (taskId: string, note?: string) => void;
-  addTask: (task: Omit<Task, 'id' | 'isCompleted' | 'revisionCount' | 'clientApprovalStatus' | 'dueReminderSent' | 'approvalHistory'>) => void;
+  addTask: (task: Omit<Task, 'id' | 'isCompleted' | 'revisionCount' | 'clientApprovalStatus' | 'dueReminderSent' | 'approvalHistory'>) => string;
   addProject: (project: Omit<Project, 'id' | 'totalTasks' | 'completedTasks'>) => string;
   addComment: (taskId: string, text: string) => void;
   markNotificationRead: (id: string) => void;
@@ -516,6 +516,9 @@ export const useStore = create<StoreState>()(
             }
           }));
           isApplyingRemoteSnapshot = false;
+          if (shouldUploadRecoveredState) {
+            useToastStore.getState().addToast('Recovered local workspace changes and queued them for Supabase sync.', 'info');
+          }
         } catch (error) {
           set({
             backend: {
@@ -1167,37 +1170,41 @@ export const useStore = create<StoreState>()(
         };
       }),
 
-      addTask: (taskData) => set((state) => {
-        if (!canCreateTasks(state.currentUser, state.rolePermissions)) return state;
-
+      addTask: (taskData) => {
+        if (!canCreateTasks(get().currentUser, get().rolePermissions)) return '';
         const taskId = `T-${Date.now().toString().slice(-6)}`;
-        const newTask: Task = {
-          ...taskData,
-          id: taskId,
-          isCompleted: false,
-          revisionCount: 0,
-          clientApprovalStatus: 'Pending',
-          dueReminderSent: false,
-          approvalHistory: [],
-          updatedAt: new Date().toISOString(),
-        };
+        set((state) => {
+          if (!canCreateTasks(state.currentUser, state.rolePermissions)) return state;
+
+          const newTask: Task = {
+            ...taskData,
+            id: taskId,
+            isCompleted: false,
+            revisionCount: 0,
+            clientApprovalStatus: 'Pending',
+            dueReminderSent: false,
+            approvalHistory: [],
+            updatedAt: new Date().toISOString(),
+          };
+
+          return {
+            tasks: [...state.tasks, newTask],
+            notifications: [
+              makeNotification({
+                targetUserId: taskData.assignedTo,
+                title: 'New Task Assigned',
+                message: `You have been assigned a new task: "${taskData.title}".`,
+                link: `/tasks?taskId=${taskId}`,
+                iconType: 'task'
+              }),
+              ...(state.notifications || [])
+            ]
+          };
+        });
 
         useToastStore.getState().addToast(`Task "${taskData.title}" created successfully`, 'success');
-
-        return {
-          tasks: [...state.tasks, newTask],
-          notifications: [
-            makeNotification({
-              targetUserId: taskData.assignedTo,
-              title: 'New Task Assigned',
-              message: `You have been assigned a new task: "${taskData.title}".`,
-              link: `/tasks?taskId=${taskId}`,
-              iconType: 'task'
-            }),
-            ...(state.notifications || [])
-          ]
-        };
-      }),
+        return taskId;
+      },
 
       addProject: (projectData) => {
         if (!canManageProjects(get().currentUser, get().rolePermissions)) return '';
