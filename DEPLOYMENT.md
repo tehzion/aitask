@@ -65,7 +65,7 @@ Then redeploy from Vercel. When the build is correct and `supabase/schema.sql` h
 
 If clients already used the app before Supabase was live, the next hosted load now recovers browser-local workspace changes that are newer than the remote snapshot and syncs that merged state back to Supabase.
 
-Demo account shortcuts are hidden on hosted builds unless `VITE_AITASK_SHOW_DEMO_LOGIN=true` is explicitly set. Keep this disabled for client-facing deployments.
+Demo account shortcuts and demo passwords are shown by default for walkthroughs. Set `VITE_AITASK_SHOW_DEMO_LOGIN=false` to hide them for client-facing deployments.
 
 ## Local Check Before Deploy
 
