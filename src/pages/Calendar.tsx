@@ -62,7 +62,9 @@ const Calendar: React.FC = () => {
   // ── Drag handlers ─────────────────────────────────────────────────────────
 
   const handleDragStart = (e: React.DragEvent, taskId: string, originDateStr: string) => {
+    e.dataTransfer.setData('application/x-aitask-task-id', taskId);
     e.dataTransfer.setData('taskId', taskId);
+    e.dataTransfer.setData('text/plain', taskId);
     e.dataTransfer.effectAllowed = 'move';
     setDraggingTaskId(taskId);
     dragOriginDate.current = originDateStr;
@@ -80,13 +82,18 @@ const Calendar: React.FC = () => {
     setDropTargetDate(dateStr);
   };
 
-  const handleDragLeave = () => {
-    setDropTargetDate(null);
+  const handleDragLeave = (e: React.DragEvent, dateStr: string) => {
+    const nextTarget = e.relatedTarget;
+    if (nextTarget instanceof Node && e.currentTarget.contains(nextTarget)) return;
+    setDropTargetDate(current => (current === dateStr ? null : current));
   };
 
   const handleDrop = (e: React.DragEvent, targetDay: Date) => {
     e.preventDefault();
-    const taskId    = e.dataTransfer.getData('taskId');
+    const taskId =
+      e.dataTransfer.getData('application/x-aitask-task-id') ||
+      e.dataTransfer.getData('taskId') ||
+      e.dataTransfer.getData('text/plain');
     const targetStr = format(targetDay, 'yyyy-MM-dd');
     setDropTargetDate(null);
     setDraggingTaskId(null);
@@ -99,8 +106,24 @@ const Calendar: React.FC = () => {
 
     updateTaskDueDate(taskId, targetStr);
     setSelectedDate(targetDay);
+    setCurrentDate(targetDay);
 
     // Brief success flash
+    setDropSuccess(task.title);
+    setTimeout(() => setDropSuccess(null), 2500);
+  };
+
+  const handleExactDateChange = (taskId: string, nextDate: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return;
+    if (!canDragTask(taskId)) return;
+
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || task.dueDate === nextDate) return;
+
+    const targetDay = parseISO(nextDate);
+    updateTaskDueDate(taskId, nextDate);
+    setSelectedDate(targetDay);
+    setCurrentDate(targetDay);
     setDropSuccess(task.title);
     setTimeout(() => setDropSuccess(null), 2500);
   };
@@ -135,6 +158,8 @@ const Calendar: React.FC = () => {
 
   const selectedDayTasks    = getTasksForDay(selectedDate);
   const selectedDayHolidays = getHolidaysForDay(selectedDate);
+  const selectedDateStr     = format(selectedDate, 'yyyy-MM-dd');
+  const isSelectedDropTarget = dropTargetDate === selectedDateStr;
 
   return (
     <div className={pageShell}>
@@ -230,18 +255,18 @@ const Calendar: React.FC = () => {
               const dateStr    = format(day, 'yyyy-MM-dd');
               const isDropTarget = dropTargetDate === dateStr;
               const primaryHol = dayHols[0];
-              const maxDots    = 3;
+              const maxTaskChips = viewMode === 'month' ? 2 : 4;
 
               return (
                 <div
                   key={day.toString()}
                   onClick={() => setSelectedDate(day)}
                   onDragOver={e => handleDragOver(e, dateStr)}
-                  onDragLeave={handleDragLeave}
+                  onDragLeave={e => handleDragLeave(e, dateStr)}
                   onDrop={e => handleDrop(e, day)}
                   className={clsx(
                     'relative cursor-pointer transition-all select-none',
-                    viewMode === 'month' ? 'h-24' : 'h-32',
+                    viewMode === 'month' ? 'h-32' : 'h-44',
                     !inMonth && 'bg-slate-50',
                     inMonth && !primaryHol && !isDropTarget && 'bg-white hover:bg-slate-50',
                     inMonth && primaryHol && !isDropTarget && HOLIDAY_COLORS[primaryHol.category].bg + ' hover:brightness-95',
@@ -284,30 +309,35 @@ const Calendar: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Task dots (desktop) */}
+                  {/* Task chips (desktop) */}
                   {dayTasks.length > 0 && inMonth && !isDropTarget && (
-                    <div className="hidden sm:flex flex-wrap gap-0.5 px-1.5 pt-0.5">
-                      {dayTasks.slice(0, maxDots).map(t => {
+                    <div className="hidden md:flex flex-col gap-1 px-1.5 pt-0.5 overflow-hidden">
+                      {dayTasks.slice(0, maxTaskChips).map(t => {
                         const canDrag = canDragTask(t.id);
                         return (
-                          <span
+                          <Link
                             key={t.id}
+                            to={`/tasks?taskId=${t.id}`}
                             draggable={canDrag}
+                            onClick={e => e.stopPropagation()}
                             onDragStart={canDrag ? e => { e.stopPropagation(); handleDragStart(e, t.id, dateStr); } : undefined}
                             onDragEnd={handleDragEnd}
-                            title={`${t.title}${canDrag ? ' — drag to reschedule' : ''}`}
+                            title={`${t.title}${canDrag ? ' - drag to reschedule' : ''}`}
                             className={clsx(
-                              'w-2 h-2 rounded-full shrink-0 transition-transform',
-                              getDeptDot(t.department),
-                              canDrag && 'cursor-grab active:cursor-grabbing hover:scale-150',
-                              draggingTaskId === t.id && 'opacity-40 scale-110',
+                              'flex min-h-6 items-center gap-1 rounded-md border bg-white/90 px-1.5 py-1 text-[10px] font-semibold leading-none shadow-sm transition-all',
+                              canDrag ? 'cursor-grab active:cursor-grabbing hover:border-orange-300 hover:bg-orange-50' : 'cursor-pointer',
+                              draggingTaskId === t.id && 'opacity-40 scale-[0.97]',
                             )}
-                          />
+                          >
+                            {canDrag && <GripVertical className="h-3 w-3 shrink-0 text-slate-300" />}
+                            <span className={clsx('h-2 w-2 rounded-full shrink-0', getDeptDot(t.department))} />
+                            <span className="min-w-0 flex-1 truncate text-slate-700">{t.title}</span>
+                          </Link>
                         );
                       })}
-                      {dayTasks.length > maxDots && (
-                        <span className="text-[9px] font-bold text-slate-500 leading-tight">
-                          +{dayTasks.length - maxDots}
+                      {dayTasks.length > maxTaskChips && (
+                        <span className="px-1.5 text-[9px] font-bold text-slate-500 leading-tight">
+                          +{dayTasks.length - maxTaskChips} more
                         </span>
                       )}
                     </div>
@@ -315,7 +345,7 @@ const Calendar: React.FC = () => {
 
                   {/* Task count (mobile) */}
                   {dayTasks.length > 0 && inMonth && (
-                    <div className="sm:hidden absolute bottom-1 right-1">
+                    <div className="md:hidden absolute bottom-1 right-1">
                       <span className="text-[9px] font-bold bg-indigo-600 text-white rounded-full w-4 h-4 flex items-center justify-center">
                         {dayTasks.length}
                       </span>
@@ -364,16 +394,29 @@ const Calendar: React.FC = () => {
             )}
 
             {/* Tasks */}
-            <div className="space-y-2">
+            <div
+              className={clsx(
+                '-m-2 space-y-2 rounded-xl p-2 ring-2 ring-inset ring-transparent transition-all',
+                isSelectedDropTarget && 'bg-indigo-50 ring-indigo-300'
+              )}
+              onDragOver={e => handleDragOver(e, selectedDateStr)}
+              onDragLeave={e => handleDragLeave(e, selectedDateStr)}
+              onDrop={e => handleDrop(e, selectedDate)}
+            >
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                 <Clock className="w-3 h-3" />
                 {selectedDayTasks.length} Task{selectedDayTasks.length !== 1 ? 's' : ''} Due
               </p>
 
               {selectedDayTasks.length === 0 ? (
-                <div className="rounded-lg border-2 border-dashed border-slate-200 py-8 flex flex-col items-center justify-center text-center gap-1">
+                <div
+                  className={clsx(
+                    'rounded-lg border-2 border-dashed py-8 flex flex-col items-center justify-center text-center gap-1 transition-colors',
+                    isSelectedDropTarget ? 'border-indigo-300 bg-white text-indigo-700' : 'border-slate-200'
+                  )}
+                >
                   <p className="text-sm text-slate-400">No tasks due</p>
-                  <p className="text-xs text-slate-300 mb-1">Drag a task here to reschedule</p>
+                  <p className="text-xs text-slate-300 mb-1">Drop a task here</p>
                   {canCreateTasks(currentUser, rolePermissions) && (
                     <Button onClick={handleAddTask} variant="secondary" className="h-7 px-2.5 text-xs flex items-center gap-1 font-semibold">
                       <Plus className="w-3.5 h-3.5" /> Add Task
@@ -436,9 +479,21 @@ const Calendar: React.FC = () => {
                             {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                           </p>
                           {canDrag && (
-                            <p className="text-[9px] text-slate-300 mt-1 flex items-center gap-0.5">
-                              <GripVertical className="w-2.5 h-2.5" /> drag to reschedule
-                            </p>
+                            <label className="mt-2 block" onClick={e => e.stopPropagation()}>
+                              <span className="mb-1 block text-[9px] font-semibold uppercase tracking-wider text-slate-400">
+                                Due date
+                              </span>
+                              <input
+                                type="date"
+                                value={task.dueDate}
+                                draggable={false}
+                                onPointerDown={e => e.stopPropagation()}
+                                onMouseDown={e => e.stopPropagation()}
+                                onDragStart={e => e.stopPropagation()}
+                                onChange={e => handleExactDateChange(task.id, e.target.value)}
+                                className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                              />
+                            </label>
                           )}
                         </div>
                         <Badge tone={task.isCompleted ? 'emerald' : task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : 'orange'}>
