@@ -7,6 +7,7 @@ const today = new Date();
 export const mockUsers: User[] = [
   // Boss
   { id: 'u-boss', name: 'Boss Koo', password: DEFAULT_USER_PASSWORD, role: 'Admin', department: 'Management', isSuperAdmin: true, avatar: 'https://i.pravatar.cc/150?u=BossKoo' },
+  { id: 'u-adminmojo', name: 'adminmojo', password: 'Mojo2026@', role: 'Admin', department: 'Management', isSuperAdmin: true, avatar: 'https://i.pravatar.cc/150?u=adminmojo' },
   
   // Demos
   { id: 'u-admin', name: 'Admin Demo', password: DEFAULT_USER_PASSWORD, role: 'Admin', department: 'Operation', avatar: 'https://i.pravatar.cc/150?u=AdminDemo' },
