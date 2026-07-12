@@ -274,15 +274,18 @@ const Tasks: React.FC = () => {
 
   const renderStatusControl = (task: Task) => (
     canEditTask(task) ? (
-      <select
-        className={`text-xs px-2.5 py-1 rounded-full font-semibold outline-none cursor-pointer appearance-none border-none ${getStatusColor(task.status)}`}
-        value={task.status}
-        onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
-      >
-        {taskStatuses.map(status => (
-          <option key={status} value={status} className="bg-white text-slate-900">{status}</option>
-        ))}
-      </select>
+      <div className="relative inline-block">
+        <select
+          className={`text-xs pl-2.5 pr-6 py-1 rounded-full font-semibold outline-none cursor-pointer appearance-none border-none ${getStatusColor(task.status)}`}
+          value={task.status}
+          onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
+        >
+          {taskStatuses.map(status => (
+            <option key={status} value={status} className="bg-white text-slate-900">{status}</option>
+          ))}
+        </select>
+        <ChevronDown className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 text-current" />
+      </div>
     ) : (
       <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${getStatusColor(task.status)}`}>
         {task.status}
@@ -533,9 +536,9 @@ const Tasks: React.FC = () => {
                     <th className="px-4 py-3 font-semibold">Department</th>
                     <th className="px-4 py-3 font-semibold">Assignee</th>
                     <th className="px-4 py-3 font-semibold">Timeline</th>
-                    <th className="px-4 py-3 font-semibold">Priority</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 font-semibold">Workflow</th>
+                    <th className="px-4 py-3 font-semibold w-[120px]">Priority</th>
+                    <th className="px-4 py-3 font-semibold w-[150px]">Status</th>
+                    <th className="px-4 py-3 font-semibold w-[260px]">Workflow</th>
                     <th className="px-4 py-3 font-semibold text-center">Progress</th>
                     <th className="px-4 py-3 font-semibold">Actions</th>
                   </tr>
@@ -587,13 +590,13 @@ const Tasks: React.FC = () => {
                               {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 w-[120px] whitespace-nowrap">
                             <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>
                           </td>
-                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-4 py-3 w-[150px] whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             {renderStatusControl(task)}
                           </td>
-                          <td className="px-4 py-3 max-w-[220px]">
+                          <td className="px-4 py-3 w-[260px]">
                             {renderTaskBadges(task)}
                           </td>
                           <td className="px-4 py-3">
