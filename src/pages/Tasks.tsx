@@ -294,7 +294,7 @@ const Tasks: React.FC = () => {
   );
 
   const renderTaskBadges = (task: Task) => (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center justify-center gap-1.5">
       {task.isRecurring && (
         <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded-full font-semibold">
           <RotateCcw className="w-3 h-3" /> {task.recurrenceFrequency || 'Recurring'}
@@ -534,11 +534,10 @@ const Tasks: React.FC = () => {
                     <th className="px-4 py-3 font-semibold">Task Details</th>
                     <th className="px-4 py-3 font-semibold">Client / Project</th>
                     <th className="px-4 py-3 font-semibold">Department</th>
-                    <th className="px-4 py-3 font-semibold">Assignee</th>
                     <th className="px-4 py-3 font-semibold">Timeline</th>
-                    <th className="px-4 py-3 font-semibold w-[120px]">Priority</th>
-                    <th className="px-4 py-3 font-semibold w-[150px]">Status</th>
-                    <th className="px-4 py-3 font-semibold w-[260px]">Workflow</th>
+                    <th className="px-4 py-3 font-semibold w-[120px] text-center">Priority</th>
+                    <th className="px-4 py-3 font-semibold w-[150px] text-center">Status</th>
+                    <th className="px-4 py-3 font-semibold w-[260px] text-center">Workflow</th>
                     <th className="px-4 py-3 font-semibold text-center">Progress</th>
                     <th className="px-4 py-3 font-semibold">Actions</th>
                   </tr>
@@ -573,14 +572,6 @@ const Tasks: React.FC = () => {
                           <td className="px-4 py-3 whitespace-nowrap">
                             <span className="bg-stone-100 text-stone-700 text-xs px-2.5 py-1 rounded-md font-medium border border-stone-200">{task.department}</span>
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center text-xs font-bold">
-                                {getUserName(task.assignedTo).charAt(0)}
-                              </div>
-                              <span className="font-medium text-stone-700">{getUserName(task.assignedTo)}</span>
-                            </div>
-                          </td>
                           <td className="px-4 py-3 whitespace-nowrap text-xs">
                             <div className="text-stone-500 mb-0.5">Start: {startDateParsed ? format(startDateParsed, 'MMM dd') : 'No start date'}</div>
                             <div
@@ -590,13 +581,13 @@ const Tasks: React.FC = () => {
                               {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                             </div>
                           </td>
-                          <td className="px-4 py-3 w-[120px] whitespace-nowrap">
-                            <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>
+                          <td className="px-4 py-3 w-[120px] text-center whitespace-nowrap">
+                            <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>
                           </td>
-                          <td className="px-4 py-3 w-[150px] whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-4 py-3 w-[150px] text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             {renderStatusControl(task)}
                           </td>
-                          <td className="px-4 py-3 w-[260px]">
+                          <td className="px-4 py-3 w-[260px] text-center">
                             {renderTaskBadges(task)}
                           </td>
                           <td className="px-4 py-3">
@@ -608,26 +599,36 @@ const Tasks: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-4 py-3 text-stone-400">
-                            <div className="flex items-center gap-2">
-                              {task.attachmentLink && (
-                                safeHttpsUrl(task.attachmentLink) ? (
-                                  <a href={safeHttpsUrl(task.attachmentLink)!} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="hover:text-blue-600" title={task.attachmentName || 'Attachment'}>
-                                    <Paperclip className="w-4 h-4" />
-                                  </a>
-                                ) : (
-                                  <span title="Invalid attachment link" className="text-slate-400">
-                                    <Paperclip className="w-4 h-4" />
-                                  </span>
-                                )
-                              )}
-                              {task.isCompleted && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                              <button
-                                className="hover:text-stone-700 p-1 rounded-md hover:bg-stone-200 transition-colors"
-                                title="Quick Edit"
-                                onClick={(e) => handleQuickEditClick(e, task)}
-                              >
-                                <MoreHorizontal className="w-4 h-4" />
-                              </button>
+                            <div className="flex flex-col items-start gap-1.5">
+                              <div className="flex items-center gap-2">
+                                {task.attachmentLink && (
+                                  safeHttpsUrl(task.attachmentLink) ? (
+                                    <a href={safeHttpsUrl(task.attachmentLink)!} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="hover:text-blue-600" title={task.attachmentName || 'Attachment'}>
+                                      <Paperclip className="w-4 h-4" />
+                                    </a>
+                                  ) : (
+                                    <span title="Invalid attachment link" className="text-slate-400">
+                                      <Paperclip className="w-4 h-4" />
+                                    </span>
+                                  )
+                                )}
+                                {task.isCompleted && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                                <button
+                                  className="hover:text-stone-700 p-1 rounded-md hover:bg-stone-200 transition-colors"
+                                  title="Quick Edit"
+                                  onClick={(e) => handleQuickEditClick(e, task)}
+                                >
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-1.5" title={`Assigned to: ${getUserName(task.assignedTo)}`}>
+                                <div className="w-5 h-5 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center text-[10px] font-bold">
+                                  {getUserName(task.assignedTo).charAt(0)}
+                                </div>
+                                <span className="text-xs font-medium text-stone-600 truncate max-w-[85px]">
+                                  {getUserName(task.assignedTo)}
+                                </span>
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -636,7 +637,7 @@ const Tasks: React.FC = () => {
                   )}
                   {!backend?.isLoading && pagedTasks.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="px-4 py-8 text-center text-slate-500">No tasks found matching your criteria.</td>
+                      <td colSpan={9} className="px-4 py-8 text-center text-slate-500">No tasks found matching your criteria.</td>
                     </tr>
                   )}
                 </tbody>

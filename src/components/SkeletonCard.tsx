@@ -36,12 +36,11 @@ export const SkeletonTableRow: React.FC = () => (
     <td className="px-4 py-4"><div className="h-4 bg-stone-200 rounded-lg w-4/5 mb-1"></div><div className="h-3 bg-stone-100 rounded w-1/2"></div></td>
     <td className="px-4 py-4"><div className="h-4 bg-stone-200 rounded-lg w-3/4 mb-1"></div><div className="h-3 bg-stone-100 rounded w-2/3"></div></td>
     <td className="px-4 py-4"><div className="h-5 bg-stone-200 rounded-lg w-16"></div></td>
-    <td className="px-4 py-4"><div className="flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-stone-200"></div><div className="h-4 bg-stone-200 rounded w-20"></div></div></td>
     <td className="px-4 py-4"><div className="h-3 bg-stone-200 rounded w-16 mb-1"></div><div className="h-3 bg-stone-100 rounded w-14"></div></td>
-    <td className="px-4 py-4"><div className="h-5 bg-stone-200 rounded-full w-12"></div></td>
-    <td className="px-4 py-4"><div className="h-6 bg-stone-200 rounded-full w-20"></div></td>
-    <td className="px-4 py-4"><div className="h-5 bg-stone-200 rounded-full w-24"></div></td>
-    <td className="px-4 py-4"><div className="h-2 bg-stone-200 rounded-full w-24"></div></td>
+    <td className="px-4 py-4 w-[120px]"><div className="h-5 bg-stone-200 rounded-full w-12 mx-auto"></div></td>
+    <td className="px-4 py-4 w-[150px]"><div className="h-6 bg-stone-200 rounded-full w-20 mx-auto"></div></td>
+    <td className="px-4 py-4 w-[260px]"><div className="h-5 bg-stone-200 rounded-full w-24 mx-auto"></div></td>
+    <td className="px-4 py-4"><div className="h-2 bg-stone-200 rounded-full w-24 mx-auto"></div></td>
     <td className="px-4 py-4"><div className="h-4 bg-stone-200 rounded w-10"></div></td>
   </tr>
 );
