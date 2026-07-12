@@ -844,7 +844,7 @@ const Clients: React.FC = () => {
               >
                 View tasks <ArrowRight className="h-4 w-4" />
               </Link>
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className={cn(isEditingProfile ? "grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto" : "flex flex-col gap-2 sm:flex-row")}>
                 {canEditSelectedClientProfile && (
                   isEditingProfile ? (
                     <>
