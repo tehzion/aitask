@@ -17,7 +17,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { Badge, Button, PageHeader } from '../components/ui';
 import { buttonBase, cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { canCreateTasks, canManageClientProfiles, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
@@ -241,9 +241,9 @@ const Clients: React.FC = () => {
         if (!summary.website && task.website) summary.website = task.website;
         if (!summary.latestTaskId) summary.latestTaskId = task.id;
         rememberActivity(summary, task.updatedAt || task.dueDate || task.startDate);
-        rememberAdded(summary, task.createdAt || task.startDate);
+        rememberAdded(summary, task.startDate);
         if (!summary.latestTaskDate) {
-          summary.latestTaskDate = task.updatedAt || task.createdAt || task.startDate;
+          summary.latestTaskDate = task.updatedAt || task.startDate;
         }
       });
 
@@ -258,7 +258,7 @@ const Clients: React.FC = () => {
         if (service) summary.services.add(service);
       });
       rememberActivity(summary, project.updatedAt || project.deadline || project.startDate);
-      rememberAdded(summary, project.createdAt || project.startDate);
+      rememberAdded(summary, project.startDate);
     });
 
     users
@@ -276,7 +276,7 @@ const Clients: React.FC = () => {
         summary.sources.add('Account');
         if (!summary.accountUsers.includes(user.name)) summary.accountUsers.push(user.name);
         rememberActivity(summary, user.updatedAt);
-        rememberAdded(summary, user.createdAt);
+        rememberAdded(summary, user.updatedAt);
       });
 
     return Array.from(summaries.values()).sort((a, b) => a.name.localeCompare(b.name));
