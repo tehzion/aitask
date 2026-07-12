@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save } from 'lucide-react';
 import { Department, Priority, Task, TaskStatus } from '../types';
-import { format, formatDistanceToNow, parseISO } from 'date-fns';
-import { canAssignTasksToOthers, canEditTask as canEditTaskByRole, canReviewTaskAsClient } from '../lib/access';
+import { format, formatDistanceToNow } from 'date-fns';
+import { canAssignTasksToOthers, canCommentOnTask, canEditTask as canEditTaskByRole, canReviewTaskAsClient } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
+import { getTodayInputDate, parseOptionalDate } from '../lib/utils';
 
 interface Props {
   isOpen: boolean;
@@ -104,7 +105,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
         department: task.department === 'Client' ? 'Designer' : task.department,
         assignedTo: task.assignedTo,
         priority: task.priority,
-        startDate: task.startDate,
+        startDate: task.startDate || getTodayInputDate(),
         dueDate: task.dueDate,
         notes: task.notes || '',
       });
@@ -116,7 +117,9 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   const assignee = users.find(u => u.id === task.assignedTo);
   const creator = users.find(u => u.id === task.createdBy);
   const canEditTask = canEditTaskByRole(currentUser, task, rolePermissions);
+  const canAddComment = canCommentOnTask(currentUser, task, rolePermissions);
   const canClientReview = canReviewTaskAsClient(currentUser, task, rolePermissions);
+  const isClientTaskViewer = currentUser?.role === 'Client';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
   const assigneeOptions = canAssignOthers
     ? users.filter(user => user.role !== 'Client' && user.department === editForm.department)
@@ -186,6 +189,8 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
 
   const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
   const getUserAvatar = (id: string) => users.find(u => u.id === id)?.avatar;
+  const startDateValue = parseOptionalDate(task.startDate);
+  const dueDateValue = parseOptionalDate(task.dueDate);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
@@ -322,9 +327,10 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Start Date</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Start Date <span className="text-red-500">*</span></label>
                       <input
                         type="date"
+                        required
                         value={editForm.startDate}
                         onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
                         className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
@@ -392,6 +398,23 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                 </div>
               </div>
 
+              {isClientTaskViewer && (
+                <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-950">
+                  <div className="flex items-start gap-3">
+                    <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                    <div>
+                      <p className="font-semibold">Your task status and feedback</p>
+                      <p className="mt-1 leading-6 text-blue-800">
+                        This task is currently <strong>{task.status}</strong>. You can leave feedback anytime in the comments panel.
+                        {canClientReview
+                          ? ' Approval and revision actions are available below.'
+                          : ' Approval actions appear when the task is completed or waiting for your review.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1.5">Description</label>
                 <div className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">
@@ -424,14 +447,14 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                   <label className="block text-xs font-medium text-slate-500 mb-1">Start Date</label>
                   <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    {format(parseISO(task.startDate), 'MMM dd, yyyy')}
+                    {startDateValue ? format(startDateValue, 'MMM dd, yyyy') : 'No start date'}
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Due Date</label>
                   <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
                     <Clock className="w-3.5 h-3.5 text-red-400" />
-                    {format(parseISO(task.dueDate), 'MMM dd, yyyy')}
+                    {dueDateValue ? format(dueDateValue, 'MMM dd, yyyy') : 'No due date'}
                   </div>
                 </div>
               </div>
@@ -493,14 +516,19 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
               )}
 
               {canClientReview && (
-                <div className="pt-4 border-t border-slate-100 space-y-3">
-                  <label className="block text-xs font-medium text-slate-500">Client Review</label>
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 p-4 space-y-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-emerald-950">Ready for your review</label>
+                    <p className="mt-1 text-xs leading-5 text-emerald-800">
+                      Approve the task or request changes. Add a note if the team needs context.
+                    </p>
+                  </div>
                   <textarea
                     value={approvalNote}
                     onChange={(e) => setApprovalNote(e.target.value)}
                     rows={2}
                     placeholder="Optional approval or revision note..."
-                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 outline-none shadow-sm resize-none"
+                    className="w-full bg-white border border-emerald-200 text-slate-900 text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block p-3 outline-none shadow-sm resize-none"
                   />
                   <div className="flex gap-2">
                     <button onClick={() => handleClientReview('Approved')} type="button" className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg">
@@ -518,7 +546,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
           <div className="w-full md:w-1/2 flex flex-col bg-slate-50">
             <div className="p-4 border-b border-slate-200 bg-white flex items-center gap-2 shrink-0">
               <MessageSquare className="w-4 h-4 text-slate-500" />
-              <h3 className="font-semibold text-slate-800">Comments & Updates</h3>
+              <h3 className="font-semibold text-slate-800">{isClientTaskViewer ? 'Feedback & Updates' : 'Comments & Updates'}</h3>
             </div>
 
             {task.approvalHistory && task.approvalHistory.length > 0 && (
@@ -559,13 +587,13 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
               )}
             </div>
 
-            {canEditTask ? (
+            {canAddComment ? (
               <div className="p-4 bg-white border-t border-slate-200 shrink-0">
                 <form onSubmit={handleAddComment} className="relative">
                   <textarea
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Write a comment or update..."
+                    placeholder={isClientTaskViewer ? 'Share feedback for the team...' : 'Write a comment or update...'}
                     className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 pr-12 outline-none shadow-sm resize-none"
                     rows={2}
                   />
@@ -581,6 +609,10 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
             ) : currentUser?.role === 'Staff' ? (
               <div className="p-4 bg-white border-t border-slate-200 text-sm text-slate-500 shrink-0">
                 Only the assigned staff member or an admin can add updates to this task.
+              </div>
+            ) : currentUser?.role === 'Client' ? (
+              <div className="p-4 bg-white border-t border-slate-200 text-sm text-slate-500 shrink-0">
+                Feedback is only available for tasks linked to your company with client review access.
               </div>
             ) : null}
           </div>

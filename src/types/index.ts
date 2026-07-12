@@ -11,6 +11,7 @@ export type RolePermissionKey =
   | 'viewTasks'
   | 'viewCalendar'
   | 'viewProjects'
+  | 'viewAllClients'
   | 'viewReports'
   | 'viewApprovals'
   | 'viewSettings'
@@ -57,7 +58,7 @@ export interface WorkspaceMember {
 export type User = WorkspaceMember;
 
 export interface NotificationRoute {
-  page: 'dashboard' | 'tasks' | 'calendar' | 'projects' | 'reports' | 'approvals' | 'settings';
+  page: 'dashboard' | 'tasks' | 'calendar' | 'clients' | 'projects' | 'reports' | 'approvals' | 'settings';
   entityId?: string;
 }
 
@@ -102,6 +103,20 @@ export interface Registration {
   createdAt: string;
 }
 
+export interface ClientProfile {
+  id: string;
+  clientName: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  website?: string;
+  facebookPage?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Project {
   id: string;
   workspaceId?: string;
@@ -133,8 +148,8 @@ export interface Task {
   department: Department;
   assignedTo: string; // User ID
   createdBy: string; // User ID
-  startDate: string; // ISO Date String
-  dueDate: string; // ISO Date String
+  startDate: string; // ISO Date String, defaults to the current date
+  dueDate: string; // Optional ISO Date String, blank when unset
   priority: Priority;
   status: TaskStatus;
   completionPercentage: number;

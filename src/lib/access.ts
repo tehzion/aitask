@@ -1,11 +1,12 @@
 import { AppNotification, CustomRole, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
 
-export type AppPath = '/' | '/tasks' | '/calendar' | '/projects' | '/reports' | '/approvals' | '/settings';
+export type AppPath = '/' | '/tasks' | '/calendar' | '/clients' | '/projects' | '/reports' | '/approvals' | '/settings';
 
 export const appNavigation: { label: string; path: AppPath }[] = [
   { label: 'Dashboard', path: '/' },
   { label: 'Tasks', path: '/tasks' },
   { label: 'Calendar', path: '/calendar' },
+  { label: 'Clients', path: '/clients' },
   { label: 'Projects', path: '/projects' },
   { label: 'Reports', path: '/reports' },
   { label: 'Approvals', path: '/approvals' },
@@ -16,6 +17,7 @@ export const permissionLabels: Record<RolePermissionKey, string> = {
   viewTasks: 'Tasks access',
   viewCalendar: 'Calendar access',
   viewProjects: 'Projects access',
+  viewAllClients: 'View all clients',
   viewReports: 'Reports access',
   viewApprovals: 'Approvals access',
   viewSettings: 'Settings access',
@@ -30,7 +32,7 @@ export const permissionLabels: Record<RolePermissionKey, string> = {
 
 export const permissionGroups: { title: string; keys: RolePermissionKey[] }[] = [
   { title: 'Page Access', keys: ['viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects', 'viewReports', 'viewApprovals', 'viewSettings'] },
-  { title: 'Workflow Actions', keys: ['createTasks', 'editTasks', 'createProjects', 'manageUsers', 'approveRegistrations', 'deleteUsers', 'clientReview'] },
+  { title: 'Workflow Actions', keys: ['createTasks', 'editTasks', 'createProjects', 'viewAllClients', 'manageUsers', 'approveRegistrations', 'deleteUsers', 'clientReview'] },
 ];
 
 const makePermissions = (enabled: RolePermissionKey[]): RolePermissions => {
@@ -49,6 +51,7 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewTasks',
     'viewCalendar',
     'viewProjects',
+    'viewAllClients',
     'viewReports',
     'viewSettings',
     'createTasks',
@@ -79,6 +82,7 @@ const routePermission: Record<AppPath, RolePermissionKey> = {
   '/': 'viewDashboard',
   '/tasks': 'viewTasks',
   '/calendar': 'viewCalendar',
+  '/clients': 'viewProjects',
   '/projects': 'viewProjects',
   '/reports': 'viewReports',
   '/approvals': 'viewApprovals',
@@ -128,6 +132,61 @@ export const canManageTasks = (user: User | null | undefined, customRoles: Custo
   hasPermission(user, 'createTasks', customRoles) || hasPermission(user, 'editTasks', customRoles)
 );
 export const canManageProjects = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'createProjects', customRoles);
+export const canManageClientProfiles = (user: User | null | undefined) => Boolean(user && (isBossKoo(user) || user.role === 'Admin'));
+export const getClientKey = (value: string | null | undefined) => value?.trim().toLowerCase() || '';
+export const canViewAllClients = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
+  Boolean(user && user.role !== 'Client' && (isBossKoo(user) || user.role === 'Admin' || hasPermission(user, 'viewAllClients', customRoles)))
+);
+export const getVisibleClientNames = (
+  user: User | null | undefined,
+  tasks: Task[] = [],
+  projects: Project[] = [],
+  customRoles: CustomRole[] = []
+) => {
+  if (!user) return [];
+  if (user.role === 'Client') return user.companyName ? [user.companyName] : [];
+
+  if (canViewAllClients(user, customRoles)) {
+    return Array.from(new Map(
+      [
+        ...tasks.map(task => task.clientName),
+        ...projects.map(project => project.clientName),
+      ]
+        .map(name => name.trim())
+        .filter(Boolean)
+        .map(name => [getClientKey(name), name])
+    ).values()).sort((a, b) => a.localeCompare(b));
+  }
+
+  if (user.role !== 'Staff') return [];
+
+  const assignedTasks = tasks.filter(task => task.assignedTo === user.id || task.createdBy === user.id);
+  const assignedProjectIds = new Set(assignedTasks.map(task => task.projectId).filter((id): id is string => Boolean(id)));
+  return Array.from(new Map(
+    [
+      ...assignedTasks.map(task => task.clientName),
+      ...projects
+        .filter(project => assignedProjectIds.has(project.id))
+        .map(project => project.clientName),
+    ]
+      .map(name => name.trim())
+      .filter(Boolean)
+      .map(name => [getClientKey(name), name])
+  ).values()).sort((a, b) => a.localeCompare(b));
+};
+export const canRenameClient = (
+  user: User | null | undefined,
+  clientName: string,
+  tasks: Task[] = [],
+  projects: Project[] = [],
+  customRoles: CustomRole[] = []
+) => {
+  if (!user || user.role === 'Client') return false;
+  if (canManageClientProfiles(user) || canViewAllClients(user, customRoles)) return true;
+  if (user.role !== 'Staff') return false;
+  const key = getClientKey(clientName);
+  return getVisibleClientNames(user, tasks, projects, customRoles).some(name => getClientKey(name) === key);
+};
 export const canAssignTasksToOthers = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   hasPermission(user, 'editTasks', customRoles)
 );
@@ -159,6 +218,15 @@ export const canReviewTaskAsClient = (user: User | null | undefined, task: Task,
   user.companyName === task.clientName &&
   (task.isCompleted || task.status === 'Waiting Approval') &&
   task.clientApprovalStatus !== 'Approved'
+);
+export const canCommentOnTask = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
+  canEditTask(user, task, customRoles) ||
+  (
+    user?.role === 'Client' &&
+    Boolean(user.companyName) &&
+    user.companyName === task.clientName &&
+    hasPermission(user, 'clientReview', customRoles)
+  )
 );
 
 export const canAccessPath = (user: User | null | undefined, path: string, customRoles: CustomRole[] = []) => {

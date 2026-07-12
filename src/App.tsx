@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Tasks from './pages/Tasks';
 import Calendar from './pages/Calendar';
+import Clients from './pages/Clients';
 import Projects from './pages/Projects';
 import Reports from './pages/Reports';
 import Login from './pages/Login';
@@ -87,6 +88,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="tasks" element={<RoleRoute path="/tasks"><Tasks /></RoleRoute>} />
             <Route path="calendar" element={<RoleRoute path="/calendar"><Calendar /></RoleRoute>} />
+            <Route path="clients" element={<RoleRoute path="/clients"><Clients /></RoleRoute>} />
             <Route path="projects" element={<RoleRoute path="/projects"><Projects /></RoleRoute>} />
             <Route path="reports" element={<RoleRoute path="/reports"><Reports /></RoleRoute>} />
             <Route path="approvals" element={<RoleRoute path="/approvals"><Approvals /></RoleRoute>} />

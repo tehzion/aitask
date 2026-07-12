@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { getClientOptions, getServiceOptions, hasChoice } from '../lib/choiceOptions';
 import { canManageProjects, getVisibleProjects } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
+import { getTodayInputDate } from '../lib/utils';
 
 interface Props {
   isOpen: boolean;
@@ -79,7 +80,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setCustomServiceInput('');
     setCustomServiceError('');
     setPriority('Medium');
-    setStartDate('');
+    setStartDate(getTodayInputDate());
     setDueDate('');
     setAttachmentLink('');
     setAttachmentName('');
@@ -106,9 +107,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   React.useEffect(() => {
     if (isOpen) {
-      const today = new Date().toISOString().split('T')[0];
-      setStartDate(today);
-      setDueDate(createTaskInitialDate || today);
+      setStartDate(createTaskInitialDate || getTodayInputDate());
+      setDueDate(createTaskInitialDate || '');
       setFormError('');
       setAssignmentError('');
     }
@@ -226,8 +226,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     const trimmedTitle = title.trim();
     const trimmedClientName = clientName.trim();
     const trimmedServiceType = serviceType.trim();
-    const finalStartDate = startDate || new Date().toISOString().split('T')[0];
-    const finalDueDate = dueDate || finalStartDate;
+    const finalStartDate = startDate.trim() || getTodayInputDate();
+    const finalDueDate = dueDate.trim();
 
     if (!trimmedTitle) {
       setFormError('Task title is required.');
@@ -244,7 +244,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    if (new Date(finalDueDate) < new Date(finalStartDate)) {
+    if (finalStartDate && finalDueDate && new Date(finalDueDate) < new Date(finalStartDate)) {
       setFormError('Due date cannot be earlier than the start date.');
       return;
     }
@@ -568,9 +568,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Due Date <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label>
                   <input 
-                    type="date" required
+                    type="date"
                     value={dueDate} onChange={e => setDueDate(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                   />

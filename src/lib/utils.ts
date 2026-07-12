@@ -6,9 +6,23 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function getRelativeDueDateString(dueDateStr: string, isCompleted: boolean, status: string): string {
+export function parseOptionalDate(dateStr?: string): Date | null {
+  if (!dateStr) return null;
+  const parsed = parseISO(dateStr);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function getTodayInputDate(date = new Date()): string {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 10);
+}
+
+export function getRelativeDueDateString(dueDateStr: string | undefined, isCompleted: boolean, status: string): string {
+  const parsedDueDate = parseOptionalDate(dueDateStr);
+  if (!parsedDueDate) return 'No due date';
+
   const today = startOfDay(new Date());
-  const dueDate = startOfDay(parseISO(dueDateStr));
+  const dueDate = startOfDay(parsedDueDate);
   const diff = differenceInDays(dueDate, today);
 
   if (diff === 0) {

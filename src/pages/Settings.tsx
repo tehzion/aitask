@@ -82,7 +82,9 @@ const Settings: React.FC = () => {
     deleteTaskStatus,
   } = useStore();
   const isSuperAdmin = isBossKoo(currentUser);
+  const isClientUser = currentUser?.role === 'Client';
   const [profileName, setProfileName] = React.useState(currentUser?.name || '');
+  const [profileEmail, setProfileEmail] = React.useState(currentUser?.email || '');
   const [avatarUrl, setAvatarUrl] = React.useState(currentUser?.avatar || '');
   const [profileMessage, setProfileMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [avatarUploadMessage, setAvatarUploadMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
@@ -131,9 +133,13 @@ const Settings: React.FC = () => {
     !isNotificationReadByUser(currentUser, notification)
   )).length;
   const scopeDescription = currentUser?.role === 'Client'
-    ? `Review your profile and ${currentUser.companyName || 'client'} workspace state.`
+    ? `Manage your login details and review ${currentUser.companyName || 'your company'} account access.`
     : 'Review your profile, workspace scope, and backend sync state.';
-  const profileChanged = profileName.trim() !== (currentUser?.name || '') || avatarUrl.trim() !== (currentUser?.avatar || '');
+  const profileChanged = (
+    profileName.trim() !== (currentUser?.name || '') ||
+    profileEmail.trim() !== (currentUser?.email || '') ||
+    avatarUrl.trim() !== (currentUser?.avatar || '')
+  );
   const isUploadedAvatar = avatarUrl.startsWith('data:image/');
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
   const mustResetPassword = Boolean(currentUser?.mustResetPassword);
@@ -182,17 +188,19 @@ const Settings: React.FC = () => {
 
   React.useEffect(() => {
     setProfileName(currentUser?.name || '');
+    setProfileEmail(currentUser?.email || '');
     setAvatarUrl(currentUser?.avatar || '');
     setProfileMessage(null);
     setAvatarUploadMessage(null);
     setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setPasswordMessage(null);
-  }, [currentUser?.id, currentUser?.name, currentUser?.avatar]);
+  }, [currentUser?.id, currentUser?.name, currentUser?.email, currentUser?.avatar]);
 
   const handleProfileSave = (event: React.FormEvent) => {
     event.preventDefault();
     const result = updateCurrentUserProfile({
       name: profileName,
+      email: profileEmail,
       avatar: avatarUrl,
     });
 
@@ -205,6 +213,7 @@ const Settings: React.FC = () => {
 
   const resetProfileForm = () => {
     setProfileName(currentUser?.name || '');
+    setProfileEmail(currentUser?.email || '');
     setAvatarUrl(currentUser?.avatar || '');
     setProfileMessage(null);
     setAvatarUploadMessage(null);
@@ -406,7 +415,7 @@ const Settings: React.FC = () => {
               </div>
 
               <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
+                <div>
                   <label htmlFor="profile-name" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Name</label>
                   <input
                     id="profile-name"
@@ -418,6 +427,22 @@ const Settings: React.FC = () => {
                     className={cn(inputBase, 'px-3 py-2.5')}
                     autoComplete="name"
                     maxLength={80}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="profile-email" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Email</label>
+                  <input
+                    id="profile-email"
+                    type="email"
+                    value={profileEmail}
+                    onChange={event => {
+                      setProfileEmail(event.target.value);
+                      setProfileMessage(null);
+                    }}
+                    className={cn(inputBase, 'px-3 py-2.5')}
+                    placeholder="name@company.com"
+                    autoComplete="email"
+                    maxLength={320}
                   />
                 </div>
                 <div className="sm:col-span-2">
@@ -554,26 +579,58 @@ const Settings: React.FC = () => {
           </form>
         </div>
 
-        <div className={`${cardBase} overflow-hidden`}>
-          <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
-            <ShieldCheck className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-slate-800">Permissions</h2>
+        {isClientUser ? (
+          <div className={`${cardBase} overflow-hidden`}>
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+              <ShieldCheck className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-slate-800">Client Access</h2>
+            </div>
+            <div className="p-6 space-y-4 text-sm text-slate-600">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Company</p>
+                <p className="mt-1 text-base font-semibold text-slate-900">{currentUser?.companyName || 'Not linked'}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tasks</p>
+                  <p className="mt-1 text-xl font-bold text-slate-900">{visibleTasks.length}</p>
+                </div>
+                <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Projects</p>
+                  <p className="mt-1 text-xl font-bold text-slate-900">{visibleProjects.length}</p>
+                </div>
+              </div>
+              <p className="leading-6">
+                You can check task progress, leave feedback on your company tasks, and approve or request revisions when work is ready for review.
+              </p>
+              <Button type="button" variant="secondary" onClick={() => navigate('/tasks')} className="w-full justify-center">
+                View company tasks
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="p-6 space-y-3 text-sm text-slate-600">
-            <p><strong className="text-slate-800">Boss Koo:</strong> has super admin access to add members, manage users, approve registrations, projects, and all task workflows.</p>
-            <p><strong className="text-slate-800">Admin:</strong> can create and edit all tasks and projects.</p>
-            <p><strong className="text-slate-800">Staff and Finance:</strong> can create tasks for internal teammates, update tasks they created or are assigned to, and see companies they participate in.</p>
-            <p><strong className="text-slate-800">Client:</strong> can view company tasks, calendar, reports, and review completed or waiting-approval work.</p>
-            <div className="pt-3 border-t border-slate-100">
-              <p className="font-semibold text-slate-800 mb-2">Your effective permissions</p>
-              <div className="flex flex-wrap gap-2">
-                {enabledPermissions.map(permission => (
-                  <Badge key={permission} tone="indigo">{permission}</Badge>
-                ))}
+        ) : (
+          <div className={`${cardBase} overflow-hidden`}>
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+              <ShieldCheck className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-slate-800">Permissions</h2>
+            </div>
+            <div className="p-6 space-y-3 text-sm text-slate-600">
+              <p><strong className="text-slate-800">Boss Koo:</strong> has super admin access to add members, manage users, approve registrations, projects, and all task workflows.</p>
+              <p><strong className="text-slate-800">Admin:</strong> can create and edit all tasks and projects.</p>
+              <p><strong className="text-slate-800">Staff and Finance:</strong> can create tasks for internal teammates, update tasks they created or are assigned to, and see companies they participate in.</p>
+              <p><strong className="text-slate-800">Client:</strong> can view company tasks, calendar, reports, and review completed or waiting-approval work.</p>
+              <div className="pt-3 border-t border-slate-100">
+                <p className="font-semibold text-slate-800 mb-2">Your effective permissions</p>
+                <div className="flex flex-wrap gap-2">
+                  {enabledPermissions.map(permission => (
+                    <Badge key={permission} tone="indigo">{permission}</Badge>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Sound Notifications */}
         <div className={`${cardBase} overflow-hidden`}>
@@ -806,20 +863,22 @@ const Settings: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <MetricCard title="Visible Tasks" value={visibleTasks.length} icon={Database} tone="indigo" />
-        <MetricCard title="Visible Projects" value={visibleProjects.length} icon={Database} tone="emerald" />
-        <MetricCard title="Unread Notices" value={unreadCount} icon={Bell} tone="amber" />
-        {isSuperAdmin && (
-          <MetricCard
-            title="Backend"
-            value={backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
-            icon={Cloud}
-            tone={backendStatus.ready ? 'blue' : 'amber'}
-            footer={backendStatus.ready ? 'Configured' : 'Needs env keys'}
-          />
-        )}
-      </div>
+      {!isClientUser && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <MetricCard title="Visible Tasks" value={visibleTasks.length} icon={Database} tone="indigo" />
+          <MetricCard title="Visible Projects" value={visibleProjects.length} icon={Database} tone="emerald" />
+          <MetricCard title="Unread Notices" value={unreadCount} icon={Bell} tone="amber" />
+          {isSuperAdmin && (
+            <MetricCard
+              title="Backend"
+              value={backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
+              icon={Cloud}
+              tone={backendStatus.ready ? 'blue' : 'amber'}
+              footer={backendStatus.ready ? 'Configured' : 'Needs env keys'}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 };

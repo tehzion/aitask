@@ -5,14 +5,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
-import { format, isToday, isThisWeek, isBefore, parseISO, subMonths, isSameMonth, differenceInDays } from 'date-fns';
+import { format, isToday, isThisWeek, isBefore, subMonths, isSameMonth, differenceInDays } from 'date-fns';
 import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon, Plus, FolderKanban } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
 import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
-import { cn, getRelativeDueDateString } from '../lib/utils';
+import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 
 const COLORS = ['#2563eb', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#db2777'];
 
@@ -62,17 +62,20 @@ const Dashboard: React.FC = () => {
     const pendingTasks = tasks.filter(t => !t.isCompleted).length;
     const completedTasks = tasks.filter(t => t.isCompleted).length;
     
-    const overdueTasks = tasks.filter(t => 
-      !t.isCompleted && isBefore(parseISO(t.dueDate), today) && !isToday(parseISO(t.dueDate))
-    ).length;
+    const overdueTasks = tasks.filter(t => {
+      const dueDate = parseOptionalDate(t.dueDate);
+      return Boolean(dueDate && !t.isCompleted && isBefore(dueDate, today) && !isToday(dueDate));
+    }).length;
     
-    const dueTodayTasks = tasks.filter(t => 
-      !t.isCompleted && isToday(parseISO(t.dueDate))
-    ).length;
+    const dueTodayTasks = tasks.filter(t => {
+      const dueDate = parseOptionalDate(t.dueDate);
+      return Boolean(dueDate && !t.isCompleted && isToday(dueDate));
+    }).length;
     
-    const dueThisWeekTasks = tasks.filter(t => 
-      !t.isCompleted && isThisWeek(parseISO(t.dueDate))
-    ).length;
+    const dueThisWeekTasks = tasks.filter(t => {
+      const dueDate = parseOptionalDate(t.dueDate);
+      return Boolean(dueDate && !t.isCompleted && isThisWeek(dueDate));
+    }).length;
 
     return { activeProjects, pendingTasks, completedTasks, overdueTasks, dueTodayTasks, dueThisWeekTasks };
   }, [tasks, visibleProjects]);
@@ -99,33 +102,46 @@ const Dashboard: React.FC = () => {
       const month = subMonths(currentMonth, offset);
       return {
         name: format(month, 'MMM'),
-        completed: tasks.filter(task => task.isCompleted && isSameMonth(parseISO(task.dueDate), month)).length,
+        completed: tasks.filter(task => {
+          const dueDate = parseOptionalDate(task.dueDate);
+          return Boolean(dueDate && task.isCompleted && isSameMonth(dueDate, month));
+        }).length,
       };
     });
   }, [tasks]);
 
   // Get top 5 recent tasks
   const recentTasks = [...tasks]
-    .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
+    .sort((a, b) => (parseOptionalDate(b.startDate)?.getTime() || 0) - (parseOptionalDate(a.startDate)?.getTime() || 0))
     .slice(0, 5);
 
   const myTasks = useMemo(() => {
     if (!currentUser) return { dueToday: [], overdue: [], actionRequired: [] };
     const today = new Date();
 
-    const dueToday = tasks.filter(t =>
-      !t.isCompleted &&
-      t.status !== 'Cancelled' &&
-      t.assignedTo === currentUser.id &&
-      isToday(parseISO(t.dueDate))
-    );
+    const dueToday = tasks.filter(t => {
+      const dueDate = parseOptionalDate(t.dueDate);
+      return Boolean(
+        dueDate &&
+        !t.isCompleted &&
+        t.status !== 'Cancelled' &&
+        t.assignedTo === currentUser.id &&
+        isToday(dueDate)
+      );
+    });
 
     const overdue = tasks.filter(t =>
-      !t.isCompleted &&
-      t.status !== 'Cancelled' &&
-      t.assignedTo === currentUser.id &&
-      isBefore(parseISO(t.dueDate), today) &&
-      !isToday(parseISO(t.dueDate))
+      {
+        const dueDate = parseOptionalDate(t.dueDate);
+        return Boolean(
+          dueDate &&
+          !t.isCompleted &&
+          t.status !== 'Cancelled' &&
+          t.assignedTo === currentUser.id &&
+          isBefore(dueDate, today) &&
+          !isToday(dueDate)
+        );
+      }
     );
 
     const actionRequired = tasks.filter(t => {
@@ -304,8 +320,8 @@ const Dashboard: React.FC = () => {
           </div>
           <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
             {recentTasks.map(task => {
-              const dueDateParsed = parseISO(task.dueDate);
-              const isOverdue = !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed);
+              const dueDateParsed = parseOptionalDate(task.dueDate);
+              const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
 
               return (
                 <Link key={task.id} to={`/tasks?taskId=${task.id}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50 transition-colors">
@@ -315,7 +331,7 @@ const Dashboard: React.FC = () => {
                   <div className="text-[11px] text-stone-500 flex justify-between items-center mt-1">
                     <span
                       className={cn(isOverdue && "text-red-600 font-bold")}
-                      title={`Due: ${format(dueDateParsed, 'yyyy-MM-dd')}`}
+                      title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
                     >
                       {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                     </span>
@@ -395,13 +411,14 @@ const Dashboard: React.FC = () => {
               </h4>
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
                 {myTasks.overdue.map(task => {
-                  const days = Math.max(1, differenceInDays(new Date(), parseISO(task.dueDate)));
+                  const dueDate = parseOptionalDate(task.dueDate);
+                  const days = dueDate ? Math.max(1, differenceInDays(new Date(), dueDate)) : 0;
                   return (
                     <Link
                       key={task.id}
                       to={`/tasks?taskId=${task.id}`}
                       className="block p-3 rounded-lg border border-red-100 hover:bg-red-50/20 bg-red-50/10 transition-colors"
-                      title={`Due: ${format(parseISO(task.dueDate), 'yyyy-MM-dd')}`}
+                      title={dueDate ? `Due: ${format(dueDate, 'yyyy-MM-dd')}` : 'No due date'}
                     >
                       <p className="text-xs font-bold text-red-900 truncate">{task.title}</p>
                       <div className="flex justify-between text-[10px] text-red-700/80 mt-1">

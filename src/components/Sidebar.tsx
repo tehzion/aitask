@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, CalendarDays, FolderKanban, BarChart3, Settings, LogOut, UserPlus } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarDays, FolderKanban, BarChart3, Settings, LogOut, UserPlus, Users } from 'lucide-react';
 import { useStore } from '../store';
 import clsx from 'clsx';
 import { canAccessPath, getVisibleNavigation } from '../lib/access';
@@ -9,6 +9,7 @@ const navIcons = {
   Dashboard: LayoutDashboard,
   Tasks: CheckSquare,
   Calendar: CalendarDays,
+  Clients: Users,
   Projects: FolderKanban,
   Reports: BarChart3,
   Approvals: UserPlus,

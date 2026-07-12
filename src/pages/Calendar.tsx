@@ -7,7 +7,7 @@ import {
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Flag, Clock, User, GripVertical, CheckCircle2, Plus } from 'lucide-react';
 import clsx from 'clsx';
-import { getRelativeDueDateString } from '../lib/utils';
+import { getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { Link } from 'react-router-dom';
 import { Badge, PageHeader, Button } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
@@ -54,7 +54,10 @@ const Calendar: React.FC = () => {
   const days       = eachDayOfInterval({ start: startDate, end: endDate });
 
   const getUserName       = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
-  const getTasksForDay    = (day: Date) => tasks.filter(t => isSameDay(parseISO(t.dueDate), day));
+  const getTasksForDay    = (day: Date) => tasks.filter(t => {
+    const dueDate = parseOptionalDate(t.dueDate);
+    return dueDate ? isSameDay(dueDate, day) : false;
+  });
   const getHolidaysForDay = (day: Date): MalaysiaHoliday[] =>
     showHolidays ? getHolidaysForDate(format(day, 'yyyy-MM-dd')) : [];
 
@@ -449,8 +452,8 @@ const Calendar: React.FC = () => {
                 selectedDayTasks.map(task => {
                   const canDrag     = canDragTask(task.id);
                   const selectedStr = format(selectedDate, 'yyyy-MM-dd');
-                  const dueDateParsed = parseISO(task.dueDate);
-                  const isOverdue = !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed);
+                  const dueDateParsed = parseOptionalDate(task.dueDate);
+                  const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
 
                   return (
                     <div
@@ -496,7 +499,7 @@ const Calendar: React.FC = () => {
                           <p className="text-[10px] text-slate-400 mt-0.5">{task.clientName}</p>
                           <p
                             className={clsx("text-[10px] mt-1 font-medium", isOverdue ? "text-red-700 font-bold" : "text-stone-500")}
-                            title={`Due: ${format(dueDateParsed, 'yyyy-MM-dd')}`}
+                            title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
                           >
                             {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                           </p>

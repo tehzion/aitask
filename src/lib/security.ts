@@ -1,5 +1,6 @@
 import type {
   AppNotification,
+  ClientProfile,
   ClientApprovalStatus,
   CustomRole,
   Department,
@@ -14,6 +15,7 @@ import type {
   TaskComment,
   User,
 } from '../types';
+import { getTodayInputDate } from './utils';
 
 const roles = new Set<Role>(['Admin', 'Staff', 'Client']);
 const departments = new Set<Department>([
@@ -33,6 +35,7 @@ const routePages = new Set<NotificationRoute['page']>([
   'dashboard',
   'tasks',
   'calendar',
+  'clients',
   'projects',
   'reports',
   'approvals',
@@ -45,6 +48,7 @@ type UnknownRecord = Record<string, unknown>;
 
 export interface SafeWorkspaceState {
   users: User[];
+  clients: ClientProfile[];
   projects: Project[];
   tasks: Task[];
   notifications: AppNotification[];
@@ -54,6 +58,7 @@ export interface SafeWorkspaceState {
   deletedUserIds: string[];
   deletedRoleIds: string[];
   deletedTaskStatuses: string[];
+  deletedClientIds: string[];
 }
 
 const isRecord = (value: unknown): value is UnknownRecord => (
@@ -146,6 +151,7 @@ export const legacyLinkToNotificationRoute = (value: unknown): NotificationRoute
       '/dashboard': 'dashboard',
       '/tasks': 'tasks',
       '/calendar': 'calendar',
+      '/clients': 'clients',
       '/projects': 'projects',
       '/reports': 'reports',
       '/approvals': 'approvals',
@@ -154,7 +160,7 @@ export const legacyLinkToNotificationRoute = (value: unknown): NotificationRoute
     const page = routeMap[parsed.pathname];
     if (!page) return null;
 
-    const allowedQuery = page === 'tasks' ? new Set(['taskId']) : new Set<string>();
+    const allowedQuery = page === 'tasks' ? new Set(['taskId', 'client']) : new Set<string>();
     if ([...parsed.searchParams.keys()].some(key => !allowedQuery.has(key))) return null;
     const entityId = page === 'tasks' ? optionalText(parsed.searchParams.get('taskId'), 160) : undefined;
     return entityId ? { page, entityId } : { page };
@@ -171,6 +177,7 @@ export const notificationRouteToPath = (route: unknown): string => {
     dashboard: '/',
     tasks: '/tasks',
     calendar: '/calendar',
+    clients: '/clients',
     projects: '/projects',
     reports: '/reports',
     approvals: '/approvals',
@@ -228,13 +235,37 @@ const parseUser = (value: unknown): User | null => {
   };
 };
 
+const parseClientProfile = (value: unknown): ClientProfile | null => {
+  if (!isRecord(value)) return null;
+  const clientName = cleanText(value.clientName, 240);
+  if (!clientName) return null;
+
+  const now = new Date().toISOString();
+  const id = cleanText(value.id, 160) || `CL-${clientName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'client'}`;
+  const createdAt = safeIsoTimestamp(value.createdAt) || safeIsoTimestamp(value.updatedAt) || now;
+
+  return {
+    id,
+    clientName,
+    contactPerson: optionalText(value.contactPerson, 160),
+    email: optionalText(value.email, 320),
+    phone: optionalText(value.phone, 80),
+    address: optionalText(value.address, 1000),
+    website: safeHttpsUrl(value.website) || undefined,
+    facebookPage: safeHttpsUrl(value.facebookPage) || undefined,
+    notes: optionalText(value.notes, 5000),
+    createdAt,
+    updatedAt: safeIsoTimestamp(value.updatedAt) || createdAt,
+  };
+};
+
 const parseProject = (value: unknown): Project | null => {
   if (!isRecord(value)) return null;
   const id = cleanText(value.id, 160);
   const clientName = cleanText(value.clientName, 240);
   const projectName = cleanText(value.projectName, 240);
   if (!id || !clientName || !projectName) return null;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayInputDate();
 
   return {
     id,
@@ -266,8 +297,8 @@ export const parseTask = (value: unknown): Task | null => {
   const clientApprovalStatus = cleanText(value.clientApprovalStatus, 20) as ClientApprovalStatus;
   const recurrenceFrequency = cleanText(value.recurrenceFrequency, 20) as RecurrenceFrequency;
   if (!id || !clientName || !serviceType || !title || !departments.has(department) || !assignedTo || !createdBy || !priorities.has(priority) || !status) return null;
+  const today = getTodayInputDate();
 
-  const today = new Date().toISOString().slice(0, 10);
   return {
     id,
     workspaceId: optionalText(value.workspaceId, 160),
@@ -285,7 +316,7 @@ export const parseTask = (value: unknown): Task | null => {
     assignedTo,
     createdBy,
     startDate: safeIsoDate(value.startDate, today),
-    dueDate: safeIsoDate(value.dueDate, today),
+    dueDate: cleanText(value.dueDate, 10) ? safeIsoDate(value.dueDate, '') : '',
     priority,
     status,
     completionPercentage: Math.min(100, Math.max(0, Number(value.completionPercentage) || 0)),
@@ -358,6 +389,7 @@ export const parseWorkspaceSnapshot = (value: unknown): SafeWorkspaceState => {
 
   return {
     users: mapValid(record.users, parseUser),
+    clients: mapValid(record.clients, parseClientProfile),
     projects: mapValid(record.projects, parseProject),
     tasks: mapValid(record.tasks, parseTask),
     notifications: mapValid(record.notifications, parseNotification),
@@ -367,5 +399,6 @@ export const parseWorkspaceSnapshot = (value: unknown): SafeWorkspaceState => {
     deletedUserIds: safeStringArray(record.deletedUserIds, 2000, 160),
     deletedRoleIds: safeStringArray(record.deletedRoleIds, 2000, 160),
     deletedTaskStatuses: safeStringArray(record.deletedTaskStatuses, 2000, 80),
+    deletedClientIds: safeStringArray(record.deletedClientIds, 2000, 160),
   };
 };

@@ -3,10 +3,11 @@ import { useStore } from '../store';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
 import { Department } from '../types';
 import { Users, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
-import { endOfWeek, format, isWithinInterval, parseISO, startOfWeek, subWeeks } from 'date-fns';
+import { endOfWeek, format, isWithinInterval, startOfWeek, subWeeks } from 'date-fns';
 import { ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
 import { getVisibleTasks } from '../lib/access';
+import { parseOptionalDate } from '../lib/utils';
 
 const Reports: React.FC = () => {
   const { tasks: allTasks, currentUser } = useStore();
@@ -21,8 +22,8 @@ const Reports: React.FC = () => {
       const weekStart = subWeeks(currentWeek, offset);
       const weekEnd = endOfWeek(weekStart);
       const weekTasks = tasks.filter(task => {
-        const dueDate = parseISO(task.dueDate);
-        return isWithinInterval(dueDate, { start: weekStart, end: weekEnd });
+        const dueDate = parseOptionalDate(task.dueDate);
+        return dueDate ? isWithinInterval(dueDate, { start: weekStart, end: weekEnd }) : false;
       });
 
       return {
@@ -37,7 +38,7 @@ const Reports: React.FC = () => {
     const today = new Date().toISOString().split('T')[0];
     const completed = tasks.filter(task => task.isCompleted).length;
     const pending = tasks.filter(task => !task.isCompleted).length;
-    const overdue = tasks.filter(task => !task.isCompleted && task.dueDate < today).length;
+    const overdue = tasks.filter(task => !task.isCompleted && task.dueDate && task.dueDate < today).length;
     const activeUsers = new Set(tasks.map(task => task.assignedTo)).size;
 
     return { completed, pending, overdue, activeUsers };
@@ -63,7 +64,7 @@ const Reports: React.FC = () => {
           stats[dept].completed += 1;
         } else {
           stats[dept].pending += 1;
-          if (task.dueDate < today) {
+          if (task.dueDate && task.dueDate < today) {
             stats[dept].overdue += 1;
           }
         }

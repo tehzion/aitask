@@ -1,8 +1,9 @@
-import { AppNotification, CustomRole, Project, Registration, Task, User } from '../types';
+import { AppNotification, ClientProfile, CustomRole, Project, Registration, Task, User } from '../types';
 import { getSupabaseConfig, shouldUseSupabase } from './backend';
 
 export interface PersistedWorkspaceState {
   users: User[];
+  clients?: ClientProfile[];
   projects: Project[];
   tasks: Task[];
   notifications: AppNotification[];
@@ -12,6 +13,7 @@ export interface PersistedWorkspaceState {
   deletedUserIds?: string[];
   deletedRoleIds?: string[];
   deletedTaskStatuses?: string[];
+  deletedClientIds?: string[];
 }
 
 export interface SnapshotResult {

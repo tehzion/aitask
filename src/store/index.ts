@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { useToastStore } from './useToastStore';
 import {
   User,
+  ClientProfile,
   Project,
   Task,
   TaskStatus,
@@ -18,7 +19,7 @@ import {
 } from '../types';
 import { legacyDemoTaskIds, mockUsers, mockProjects, mockTasks } from '../mock';
 import { DEFAULT_USER_PASSWORD, hasDefaultPassword } from '../lib/auth';
-import { resolveLocalUserPassword, setLocalUserPassword } from '../lib/localCredentials';
+import { getLocalUserPassword, setLocalUserPassword, verifyLocalUserPassword } from '../lib/localCredentials';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
 import {
   loadSupabaseSnapshot,
@@ -28,6 +29,7 @@ import {
 } from '../lib/supabaseSnapshot';
 import {
   canAssignTasksToOthers,
+  canRenameClient,
   canDeleteProject,
   canDeleteTask,
   canEditTask,
@@ -35,8 +37,10 @@ import {
   canApproveRegistrations,
   canCreateTasks,
   canCreateUsers,
+  canManageClientProfiles,
   canDeleteUser,
   canManageProjects,
+  canCommentOnTask,
   canReviewTaskAsClient,
   getVisibleProjects,
   isNotificationReadByUser,
@@ -44,6 +48,7 @@ import {
   isBossKoo,
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
+import { getTodayInputDate } from '../lib/utils';
 
 interface BackendRuntimeState {
   mode: 'local' | 'supabase';
@@ -87,10 +92,12 @@ type TaskUpdateInput = Partial<Pick<
 >>;
 
 type ProjectUpdateInput = Partial<Pick<Project, 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline'>>;
+type ClientProfileInput = Partial<Pick<ClientProfile, 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes'>>;
 
 interface StoreState {
   currentUser: User | null;
   users: User[];
+  clients: ClientProfile[];
   projects: Project[];
   tasks: Task[];
   notifications: AppNotification[];
@@ -101,6 +108,7 @@ interface StoreState {
   deletedUserIds: string[];
   deletedRoleIds: string[];
   deletedTaskStatuses: string[];
+  deletedClientIds: string[];
   isCreateTaskModalOpen: boolean;
   setCreateTaskModalOpen: (open: boolean) => void;
   createTaskInitialDate?: string;
@@ -109,7 +117,7 @@ interface StoreState {
   syncBackendNow: () => Promise<void>;
   pullBackendNow: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
   login: (name: string, password?: string) => boolean;
-  updateCurrentUserProfile: (data: Pick<User, 'name' | 'avatar'>) => { ok: boolean; error?: string };
+  updateCurrentUserProfile: (data: Pick<User, 'name' | 'email' | 'avatar'>) => { ok: boolean; error?: string };
   updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => { ok: boolean; error?: string };
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
   updateTaskPriority: (taskId: string, priority: Priority) => void;
@@ -124,6 +132,9 @@ interface StoreState {
   addProject: (project: Omit<Project, 'id' | 'totalTasks' | 'completedTasks'>) => string;
   updateProject: (projectId: string, data: ProjectUpdateInput) => { ok: boolean; error?: string };
   deleteProject: (projectId: string) => { ok: boolean; error?: string };
+  upsertClientProfile: (clientName: string, data: ClientProfileInput) => { ok: boolean; id?: string; error?: string };
+  renameClient: (oldClientName: string, newClientName: string) => { ok: boolean; error?: string };
+  deleteClientProfile: (clientId: string) => { ok: boolean; error?: string };
   addComment: (taskId: string, text: string) => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
@@ -151,12 +162,19 @@ const defaultTaskStatuses = ['Pending', 'In Progress', 'Waiting Approval', 'Comp
 const allowedDepartments = new Set<Department>(['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client']);
 const allowedPriorities = new Set<Priority>(['Low', 'Medium', 'High', 'Urgent']);
 const sensitiveSnapshotKeyPattern = /(password|secret|token|api[_-]?key|service[_-]?role)/i;
+const normalizeClientKey = (value?: string | null) => value?.trim().toLowerCase() || '';
+const profileEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const isValidIsoDate = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 };
+
+const normalizeOptionalIsoDate = (value?: string) => value?.trim() || '';
+const normalizeRequiredStartDate = (value?: string) => normalizeOptionalIsoDate(value) || getTodayInputDate();
+const cleanProfileText = (value?: string, maxLength = 5000) => value?.trim().slice(0, maxLength) || undefined;
+const cleanAccountEmail = (value?: string) => value?.trim().toLowerCase().slice(0, 320) || undefined;
 
 const resolveTaskStatus = (status: string, statuses: string[]) => {
   const trimmed = status.trim();
@@ -176,9 +194,10 @@ const stripSensitiveSnapshotFields = (value: unknown): unknown => {
 };
 
 const sanitizeWorkspaceStateForSnapshot = (
-  state: Pick<StoreState, 'users' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses'>
+  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds'>
 ): PersistedWorkspaceState => stripSensitiveSnapshotFields({
   users: state.users.map(user => stripPassword(user as User & { password?: string })),
+  clients: state.clients || [],
   projects: state.projects,
   tasks: state.tasks,
   notifications: state.notifications || [],
@@ -188,6 +207,7 @@ const sanitizeWorkspaceStateForSnapshot = (
   deletedUserIds: state.deletedUserIds || [],
   deletedRoleIds: state.deletedRoleIds || [],
   deletedTaskStatuses: state.deletedTaskStatuses || [],
+  deletedClientIds: state.deletedClientIds || [],
 }) as PersistedWorkspaceState;
 
 const selectPersistedWorkspaceState = sanitizeWorkspaceStateForSnapshot;
@@ -226,13 +246,11 @@ const normalizeUserAccount = (user: User, options: { migrateInlinePassword?: boo
     setLocalUserPassword(user.id, inlinePassword);
   }
 
-  const password = inlinePassword && !hasDefaultPassword(inlinePassword)
-    ? inlinePassword
-    : resolveLocalUserPassword(user.id);
+  const hasCustomPassword = Boolean(getLocalUserPassword(user.id));
 
   return {
     ...stripPassword(user as User & { password?: string }) as User,
-    mustResetPassword: Boolean(user.mustResetPassword) || hasDefaultPassword(password),
+    mustResetPassword: Boolean(user.mustResetPassword) || !hasCustomPassword,
   };
 };
 
@@ -259,6 +277,7 @@ const hasRecoverableLocalWorkspaceContent = (
   const local = normalizeWorkspaceState(localRaw);
   const remote = normalizeWorkspaceState(remoteRaw);
   const remoteTasks = new Map(remote.tasks.map(item => [item.id, item]));
+  const remoteClients = new Map((remote.clients || []).map(item => [item.id, item]));
   const remoteProjects = new Map(remote.projects.map(item => [item.id, item]));
   const remoteUsers = new Map(remote.users.map(item => [item.id, item]));
   const remoteRoles = new Map(remote.rolePermissions.map(item => [item.id, item]));
@@ -266,9 +285,11 @@ const hasRecoverableLocalWorkspaceContent = (
   const remoteNotifications = new Set(remote.notifications.map(item => item.id));
   const remoteStatuses = new Set(remote.taskStatuses.map(status => status.toLowerCase()));
   const defaultStatuses = new Set(defaultTaskStatuses.map(status => status.toLowerCase()));
+  const remoteDeletedClientIds = new Set(remote.deletedClientIds || []);
 
   return (
     local.tasks.some(task => !legacyDemoTaskIdSet.has(task.id) && isLocalItemWorthRecovering(task, remoteTasks)) ||
+    (local.clients || []).some(client => !remoteDeletedClientIds.has(client.id) && isLocalItemWorthRecovering(client, remoteClients)) ||
     local.projects.some(project => isLocalItemWorthRecovering(project, remoteProjects, seededProjectIds)) ||
     local.users.some(user => isLocalItemWorthRecovering(user, remoteUsers, seededUserIds)) ||
     local.rolePermissions.some(role => isLocalItemWorthRecovering(role, remoteRoles)) ||
@@ -303,6 +324,10 @@ const mergeWorkspaceStates = (
   const mergedDeletedTaskStatuses = Array.from(new Set([
     ...(local.deletedTaskStatuses || []),
     ...(remote.deletedTaskStatuses || [])
+  ]));
+  const mergedDeletedClientIds = Array.from(new Set([
+    ...(local.deletedClientIds || []),
+    ...(remote.deletedClientIds || [])
   ]));
 
   // 1. Merge Tasks
@@ -357,7 +382,31 @@ const mergeWorkspaceStates = (
     };
   });
 
-  // 2. Merge Projects
+  // 2. Merge Client Profiles
+  const localClientsMap = new Map((local.clients || []).map(client => [client.id, client]));
+  const remoteClientsMap = new Map((remote.clients || []).map(client => [client.id, client]));
+  const allClientIds = new Set([...localClientsMap.keys(), ...remoteClientsMap.keys()]);
+  const mergedClients: ClientProfile[] = Array.from(allClientIds)
+    .filter(id => !mergedDeletedClientIds.includes(id))
+    .map(id => {
+      const localClient = localClientsMap.get(id);
+      const remoteClient = remoteClientsMap.get(id);
+
+      if (!localClient) return remoteClient!;
+      if (!remoteClient) return localClient;
+
+      const localUpdated = localClient.updatedAt ? new Date(localClient.updatedAt).getTime() : 0;
+      const remoteUpdated = remoteClient.updatedAt ? new Date(remoteClient.updatedAt).getTime() : 0;
+
+      const wasLocalModified = localUpdated > lastSyncedTime;
+      const wasRemoteModified = remoteUpdated > lastSyncedTime;
+
+      if (wasLocalModified && !wasRemoteModified) return localClient;
+      if (wasRemoteModified && !wasLocalModified) return remoteClient;
+      return localUpdated >= remoteUpdated ? localClient : remoteClient;
+    });
+
+  // 3. Merge Projects
   const localProjMap = new Map(local.projects.map(p => [p.id, p]));
   const remoteProjMap = new Map(remote.projects.map(p => [p.id, p]));
   const allProjIds = new Set([...localProjMap.keys(), ...remoteProjMap.keys()]);
@@ -385,7 +434,7 @@ const mergeWorkspaceStates = (
     return localUpdated >= remoteUpdated ? localProj : remoteProj;
   });
 
-  // 3. Merge Users
+  // 4. Merge Users
   const localUsersMap = new Map(local.users.map(u => [u.id, u]));
   const remoteUsersMap = new Map(remote.users.map(u => [u.id, u]));
   const allUserIds = new Set([...localUsersMap.keys(), ...remoteUsersMap.keys()]);
@@ -414,7 +463,7 @@ const mergeWorkspaceStates = (
       return localUpdated >= remoteUpdated ? localUser : remoteUser;
     });
 
-  // 4. Merge Registrations
+  // 5. Merge Registrations
   const localRegsMap = new Map(local.registrations.map(r => [r.id, r]));
   const remoteRegsMap = new Map(remote.registrations.map(r => [r.id, r]));
   const allRegIds = new Set([...localRegsMap.keys(), ...remoteRegsMap.keys()]);
@@ -427,7 +476,7 @@ const mergeWorkspaceStates = (
     return localReg;
   });
 
-  // 5. Merge Notifications
+  // 6. Merge Notifications
   const localNotifsMap = new Map(local.notifications.map(n => [n.id, n]));
   const remoteNotifsMap = new Map(remote.notifications.map(n => [n.id, n]));
   const allNotifIds = new Set([...localNotifsMap.keys(), ...remoteNotifsMap.keys()]);
@@ -447,13 +496,13 @@ const mergeWorkspaceStates = (
     };
   });
 
-  // 6. Merge Task Statuses
+  // 7. Merge Task Statuses
   const mergedTaskStatuses = Array.from(new Set([
     ...(local.taskStatuses || []),
     ...(remote.taskStatuses || [])
   ])).filter(status => !mergedDeletedTaskStatuses.includes(status.toLowerCase()));
 
-  // 7. Merge Custom Roles
+  // 8. Merge Custom Roles
   const localRolesMap = new Map((local.rolePermissions || []).map(r => [r.id, r]));
   const remoteRolesMap = new Map((remote.rolePermissions || []).map(r => [r.id, r]));
   const allRoleIds = new Set([...localRolesMap.keys(), ...remoteRolesMap.keys()]);
@@ -484,6 +533,7 @@ const mergeWorkspaceStates = (
 
   return {
     users: mergedUsers,
+    clients: mergedClients,
     projects: mergedProjects,
     tasks: mergedTasks,
     notifications: mergedNotifications,
@@ -493,6 +543,7 @@ const mergeWorkspaceStates = (
     deletedUserIds: mergedDeletedUserIds,
     deletedRoleIds: mergedDeletedRoleIds,
     deletedTaskStatuses: mergedDeletedTaskStatuses,
+    deletedClientIds: mergedDeletedClientIds,
   };
 };
 
@@ -521,12 +572,14 @@ export const useStore = create<StoreState>()(
     (set, get) => ({
       currentUser: null,
       users: mockUsers.map(user => normalizeUserAccount(user, { migrateInlinePassword: true })),
+      clients: [],
       projects: mockProjects,
       tasks: mockTasks,
       taskStatuses: ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'],
       deletedUserIds: [],
       deletedRoleIds: [],
       deletedTaskStatuses: [],
+      deletedClientIds: [],
       isCreateTaskModalOpen: false,
       setCreateTaskModalOpen: (open) => set((state) => ({
         isCreateTaskModalOpen: open,
@@ -826,14 +879,14 @@ export const useStore = create<StoreState>()(
         if (!user) return false;
 
         const normalizedUser = normalizeUserAccount(user, { migrateInlinePassword: true });
-        const expectedPassword = resolveLocalUserPassword(normalizedUser.id);
-        if (expectedPassword !== password) {
+        const isValid = verifyLocalUserPassword(normalizedUser.id, password || '');
+        if (!isValid) {
           return false;
         }
 
         const nextUser = {
           ...normalizedUser,
-          mustResetPassword: Boolean(normalizedUser.mustResetPassword) || hasDefaultPassword(expectedPassword),
+          mustResetPassword: Boolean(normalizedUser.mustResetPassword),
         };
 
         // Strip sensitive fields before placing in currentUser session state
@@ -851,15 +904,22 @@ export const useStore = create<StoreState>()(
         if (!currentUser) return { ok: false, error: 'You must be logged in to update your profile.' };
 
         const name = data.name.trim();
+        const email = cleanAccountEmail(data.email);
         const avatar = data.avatar?.trim() ? safeAvatarSource(data.avatar) : undefined;
 
         if (!name) return { ok: false, error: 'Name is required.' };
+        if (email && !profileEmailPattern.test(email)) {
+          return { ok: false, error: 'Enter a valid email address.' };
+        }
 
         const duplicate = get().users.some(user => (
           user.id !== currentUser.id &&
-          user.name.toLowerCase() === name.toLowerCase()
+          (
+            user.name.toLowerCase() === name.toLowerCase() ||
+            (email && user.email?.trim().toLowerCase() === email)
+          )
         ));
-        if (duplicate) return { ok: false, error: 'Another user already uses this name.' };
+        if (duplicate) return { ok: false, error: 'Another user already uses that name or email.' };
 
         if (data.avatar?.trim() && !avatar) {
           return { ok: false, error: 'Avatar must be an uploaded photo, app image, generated avatar, or Supabase image URL.' };
@@ -869,6 +929,7 @@ export const useStore = create<StoreState>()(
         const nextCurrentUser: User = {
           ...currentUser,
           name,
+          email,
           avatar,
           updatedAt: now,
         };
@@ -877,7 +938,7 @@ export const useStore = create<StoreState>()(
           currentUser: nextCurrentUser,
           users: state.users.map(user => (
             user.id === currentUser.id
-              ? { ...user, name, avatar, updatedAt: now }
+              ? { ...user, name, email, avatar, updatedAt: now }
               : user
           )),
         }));
@@ -896,9 +957,9 @@ export const useStore = create<StoreState>()(
         const newPassword = data.newPassword.trim();
         const confirmPassword = data.confirmPassword.trim();
         const normalizedAccount = normalizeUserAccount(account, { migrateInlinePassword: true });
-        const expectedCurrentPassword = resolveLocalUserPassword(normalizedAccount.id);
-
-        if (expectedCurrentPassword !== currentPassword) {
+        
+        const isCurrentValid = verifyLocalUserPassword(normalizedAccount.id, currentPassword);
+        if (!isCurrentValid) {
           return { ok: false, error: 'Current password is incorrect.' };
         }
         if (newPassword.length < 8) {
@@ -907,7 +968,8 @@ export const useStore = create<StoreState>()(
         if (newPassword !== confirmPassword) {
           return { ok: false, error: 'New password and confirmation do not match.' };
         }
-        if (expectedCurrentPassword === newPassword) {
+        const isNewSameAsCurrent = verifyLocalUserPassword(normalizedAccount.id, newPassword);
+        if (isNewSameAsCurrent) {
           return { ok: false, error: 'New password must be different from the current password.' };
         }
 
@@ -1121,22 +1183,23 @@ export const useStore = create<StoreState>()(
       updateTaskDueDate: (taskId, newDueDate) => set((state) => {
         const task = state.tasks.find(t => t.id === taskId);
         if (!task || !canEditTask(state.currentUser, task, state.rolePermissions)) return state;
+        const nextDueDate = normalizeOptionalIsoDate(newDueDate);
 
-        if (!isValidIsoDate(newDueDate)) {
+        if (nextDueDate && !isValidIsoDate(nextDueDate)) {
           useToastStore.getState().addToast('Choose a valid due date.', 'warning');
           return state;
         }
 
-        if (isValidIsoDate(task.startDate) && new Date(newDueDate) < new Date(task.startDate)) {
+        if (nextDueDate && isValidIsoDate(task.startDate) && new Date(nextDueDate) < new Date(task.startDate)) {
           useToastStore.getState().addToast('Due date cannot be earlier than the start date.', 'warning');
           return state;
         }
 
-        useToastStore.getState().addToast(`Due date updated to ${newDueDate}`, 'success');
+        useToastStore.getState().addToast(nextDueDate ? `Due date updated to ${nextDueDate}` : 'Due date cleared', 'success');
 
         return {
           tasks: state.tasks.map(t =>
-            t.id === taskId ? { ...t, dueDate: newDueDate, updatedAt: new Date().toISOString() } : t
+            t.id === taskId ? { ...t, dueDate: nextDueDate, updatedAt: new Date().toISOString() } : t
           ),
         };
       }),
@@ -1182,8 +1245,8 @@ export const useStore = create<StoreState>()(
             ? data.clientName.trim()
             : task.clientName;
         const serviceType = data.serviceType !== undefined ? data.serviceType.trim() : task.serviceType;
-        const startDate = data.startDate || task.startDate;
-        const dueDate = data.dueDate || task.dueDate;
+        const startDate = data.startDate !== undefined ? normalizeRequiredStartDate(data.startDate) : normalizeRequiredStartDate(task.startDate);
+        const dueDate = data.dueDate !== undefined ? normalizeOptionalIsoDate(data.dueDate) : task.dueDate;
         const status = data.status !== undefined
           ? resolveTaskStatus(data.status, state.taskStatuses)
           : task.status;
@@ -1191,10 +1254,10 @@ export const useStore = create<StoreState>()(
         if (!title) return { ok: false, error: 'Task title is required.' };
         if (!clientName) return { ok: false, error: 'Client or brand name is required.' };
         if (!serviceType) return { ok: false, error: 'Service type is required.' };
-        if (!isValidIsoDate(startDate) || !isValidIsoDate(dueDate)) {
-          return { ok: false, error: 'Start and due dates must be valid dates.' };
+        if (!isValidIsoDate(startDate) || (dueDate && !isValidIsoDate(dueDate))) {
+          return { ok: false, error: 'Start date must be valid. Due date must be valid when provided.' };
         }
-        if (new Date(dueDate) < new Date(startDate)) {
+        if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) {
           return { ok: false, error: 'Due date cannot be earlier than the start date.' };
         }
         if (data.status !== undefined && !status) return { ok: false, error: 'Choose a valid task status.' };
@@ -1422,16 +1485,16 @@ export const useStore = create<StoreState>()(
         const title = taskData.title.trim();
         const clientName = project ? project.clientName : taskData.clientName.trim();
         const serviceType = taskData.serviceType.trim();
-        const startDate = taskData.startDate;
-        const dueDate = taskData.dueDate;
+        const startDate = normalizeRequiredStartDate(taskData.startDate);
+        const dueDate = normalizeOptionalIsoDate(taskData.dueDate);
         const status = resolveTaskStatus(taskData.status, state.taskStatuses);
 
         if (!title || !clientName || !serviceType) return '';
         if (!allowedDepartments.has(taskData.department) || taskData.department === 'Client') return '';
         if (!allowedPriorities.has(taskData.priority)) return '';
         if (!status) return '';
-        if (!isValidIsoDate(startDate) || !isValidIsoDate(dueDate)) return '';
-        if (new Date(dueDate) < new Date(startDate)) return '';
+        if (!isValidIsoDate(startDate) || (dueDate && !isValidIsoDate(dueDate))) return '';
+        if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) return '';
 
         const taskId = `T-${Date.now().toString().slice(-6)}`;
         set((state) => {
@@ -1483,7 +1546,7 @@ export const useStore = create<StoreState>()(
         const services = Array.from(new Map(
           projectData.services.map(service => [service.trim().toLowerCase(), service.trim()])
         ).values()).filter(Boolean);
-        const startDate = projectData.startDate || new Date().toISOString().slice(0, 10);
+        const startDate = projectData.startDate || getTodayInputDate();
         const deadline = projectData.deadline?.trim() || '';
 
         if (!clientName || !projectName || services.length === 0) return '';
@@ -1521,7 +1584,7 @@ export const useStore = create<StoreState>()(
         const services = data.services !== undefined
           ? Array.from(new Map(data.services.map(service => [service.trim().toLowerCase(), service.trim()])).values()).filter(Boolean)
           : project.services;
-        const startDate = data.startDate || project.startDate || new Date().toISOString().slice(0, 10);
+        const startDate = data.startDate || project.startDate || getTodayInputDate();
         const deadline = data.deadline !== undefined ? data.deadline.trim() : project.deadline;
 
         if (!clientName) return { ok: false, error: 'Company or brand name is required.' };
@@ -1572,10 +1635,156 @@ export const useStore = create<StoreState>()(
         return { ok: true };
       },
 
+      upsertClientProfile: (clientName, data) => {
+        const state = get();
+        const currentUser = state.currentUser;
+        if (!canManageClientProfiles(currentUser)) {
+          return { ok: false, error: 'Only admins can edit client details.' };
+        }
+
+        const name = clientName.trim();
+        if (!name) return { ok: false, error: 'Client or brand name is required.' };
+        if (name.length > 240) return { ok: false, error: 'Client or brand name must be 240 characters or less.' };
+
+        const website = data.website?.trim() ? safeHttpsUrl(data.website) : undefined;
+        const facebookPage = data.facebookPage?.trim() ? safeHttpsUrl(data.facebookPage) : undefined;
+        if (data.website?.trim() && !website) return { ok: false, error: 'Website must be a valid HTTPS URL.' };
+        if (data.facebookPage?.trim() && !facebookPage) return { ok: false, error: 'Facebook page must be a valid HTTPS URL.' };
+
+        const existing = state.clients.find(client => normalizeClientKey(client.clientName) === normalizeClientKey(name));
+        const now = new Date().toISOString();
+        const profile: ClientProfile = {
+          id: existing?.id || nowId('CL'),
+          clientName: existing?.clientName || name,
+          contactPerson: cleanProfileText(data.contactPerson, 160),
+          email: cleanProfileText(data.email, 320),
+          phone: cleanProfileText(data.phone, 80),
+          address: cleanProfileText(data.address, 1000),
+          website,
+          facebookPage,
+          notes: cleanProfileText(data.notes, 5000),
+          createdAt: existing?.createdAt || now,
+          updatedAt: now,
+        };
+
+        set((current) => ({
+          clients: existing
+            ? current.clients.map(client => client.id === existing.id ? profile : client)
+            : [...current.clients, profile],
+        }));
+
+        useToastStore.getState().addToast(`Client details saved for "${profile.clientName}".`, 'success');
+        return { ok: true, id: profile.id };
+      },
+
+      renameClient: (oldClientName, newClientName) => {
+        const state = get();
+        const currentUser = state.currentUser;
+        const oldName = oldClientName.trim();
+        const nextName = newClientName.trim();
+        const oldKey = normalizeClientKey(oldName);
+        const nextKey = normalizeClientKey(nextName);
+
+        if (!oldName) return { ok: false, error: 'Choose a client to rename.' };
+        if (!nextName) return { ok: false, error: 'New client name is required.' };
+        if (nextName.length > 240) return { ok: false, error: 'Client name must be 240 characters or less.' };
+        if (oldKey === nextKey) return { ok: false, error: 'New client name must be different.' };
+        if (!canRenameClient(currentUser, oldName, state.tasks, state.projects, state.rolePermissions)) {
+          return { ok: false, error: 'You do not have permission to rename this client.' };
+        }
+
+        const duplicateExists = [
+          ...state.clients.map(client => client.clientName),
+          ...state.tasks.map(task => task.clientName),
+          ...state.projects.map(project => project.clientName),
+          ...state.users.filter(user => user.role === 'Client').map(user => user.companyName || ''),
+        ].some(name => normalizeClientKey(name) === nextKey);
+        if (duplicateExists) {
+          return { ok: false, error: 'Another client already uses that name.' };
+        }
+
+        const hasOldClient = [
+          ...state.clients.map(client => client.clientName),
+          ...state.tasks.map(task => task.clientName),
+          ...state.projects.map(project => project.clientName),
+          ...state.users.filter(user => user.role === 'Client').map(user => user.companyName || ''),
+        ].some(name => normalizeClientKey(name) === oldKey);
+        if (!hasOldClient) return { ok: false, error: 'Client was not found.' };
+
+        const now = new Date().toISOString();
+        const renamedProjectIds = new Set(
+          state.projects
+            .filter(project => normalizeClientKey(project.clientName) === oldKey)
+            .map(project => project.id)
+        );
+
+        set((current) => ({
+          clients: current.clients.map(client => (
+            normalizeClientKey(client.clientName) === oldKey
+              ? { ...client, clientName: nextName, updatedAt: now }
+              : client
+          )),
+          tasks: current.tasks.map(task => {
+            const matchesClient = normalizeClientKey(task.clientName) === oldKey;
+            const matchesRenamedProject = Boolean(task.projectId && renamedProjectIds.has(task.projectId));
+            if (!matchesClient && !matchesRenamedProject) return task;
+
+            return {
+              ...task,
+              clientName: nextName,
+              projectName: matchesRenamedProject || normalizeClientKey(task.projectName) === oldKey
+                ? nextName
+                : task.projectName,
+              updatedAt: now,
+            };
+          }),
+          projects: current.projects.map(project => (
+            normalizeClientKey(project.clientName) === oldKey
+              ? { ...project, clientName: nextName, projectName: nextName, updatedAt: now }
+              : project
+          )),
+          users: current.users.map(user => (
+            user.role === 'Client' && normalizeClientKey(user.companyName) === oldKey
+              ? { ...user, companyName: nextName, updatedAt: now }
+              : user
+          )),
+          currentUser: current.currentUser?.role === 'Client' && normalizeClientKey(current.currentUser.companyName) === oldKey
+            ? { ...current.currentUser, companyName: nextName, updatedAt: now }
+            : current.currentUser,
+          notifications: current.notifications.map(notification => (
+            normalizeClientKey(notification.targetClient) === oldKey
+              ? { ...notification, targetClient: nextName }
+              : notification
+          )),
+        }));
+
+        useToastStore.getState().addToast(`Client renamed to "${nextName}".`, 'success');
+        return { ok: true };
+      },
+
+      deleteClientProfile: (clientId) => {
+        const state = get();
+        const currentUser = state.currentUser;
+        if (!canManageClientProfiles(currentUser)) {
+          return { ok: false, error: 'Only admins can delete client profiles.' };
+        }
+
+        const client = state.clients.find(c => c.id === clientId);
+        if (!client) return { ok: false, error: 'Client profile not found.' };
+
+        set(current => ({
+          clients: current.clients.filter(c => c.id !== clientId),
+          deletedClientIds: Array.from(new Set([...(current.deletedClientIds || []), clientId])),
+        }));
+
+        useToastStore.getState().addToast(`Client profile for "${client.clientName}" deleted.`, 'success');
+        return { ok: true };
+      },
+
       addComment: (taskId, text) => set((state) => {
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
+        if (!currentUser || !task || !canCommentOnTask(currentUser, task, state.rolePermissions)) return state;
 
         // Enforce a reasonable length cap to prevent storage abuse
         const safeText = text.trim().slice(0, 2000);
@@ -1599,15 +1808,17 @@ export const useStore = create<StoreState>()(
         if (currentUser.role !== 'Admin') {
           newNotifs.push(makeNotification({
             targetRole: 'Admin',
-            title: 'New Comment',
+            title: currentUser.role === 'Client' ? 'Client Feedback' : 'New Comment',
             message: `${currentUser.name} commented on "${task.title}".`,
             route: { page: 'tasks', entityId: taskId },
             iconType: 'status'
           }));
-        } else if (task.assignedTo !== currentUser.id) {
+        }
+
+        if (task.assignedTo !== currentUser.id) {
           newNotifs.push(makeNotification({
             targetUserId: task.assignedTo,
-            title: 'New Comment',
+            title: currentUser.role === 'Client' ? 'Client Feedback' : 'New Comment',
             message: `${currentUser.name} commented on your task "${task.title}".`,
             route: { page: 'tasks', entityId: taskId },
             iconType: 'status'
@@ -1629,6 +1840,7 @@ export const useStore = create<StoreState>()(
         const newNotifs: AppNotification[] = [];
         const tasks = state.tasks.map(task => {
           if (task.isCompleted || task.dueReminderSent) return task;
+          if (!task.dueDate || !isValidIsoDate(task.dueDate)) return task;
           const dueDate = new Date(`${task.dueDate}T00:00:00`);
           const isApproaching = dueDate.getTime() === today.getTime() || dueDate.getTime() === tomorrow.getTime();
           if (!isApproaching) return task;
@@ -2025,6 +2237,7 @@ export const useStore = create<StoreState>()(
           : null,
         tasks: state.tasks,
         projects: state.projects,
+        clients: state.clients,
         users: state.users.map(user => stripPassword(user as User & { password?: string })),
         registrations: state.registrations.map(r => stripPassword(r)),
         notifications: state.notifications,
@@ -2033,6 +2246,7 @@ export const useStore = create<StoreState>()(
         deletedUserIds: state.deletedUserIds || [],
         deletedRoleIds: state.deletedRoleIds || [],
         deletedTaskStatuses: state.deletedTaskStatuses || [],
+        deletedClientIds: state.deletedClientIds || [],
       }),
     }
   )
@@ -2050,12 +2264,17 @@ export const startBackendAutoSync = () => {
 
     const workspaceChanged =
       state.users !== previousState.users ||
+      state.clients !== previousState.clients ||
       state.projects !== previousState.projects ||
       state.tasks !== previousState.tasks ||
       state.notifications !== previousState.notifications ||
       state.registrations !== previousState.registrations ||
       state.rolePermissions !== previousState.rolePermissions ||
-      state.taskStatuses !== previousState.taskStatuses;
+      state.taskStatuses !== previousState.taskStatuses ||
+      state.deletedUserIds !== previousState.deletedUserIds ||
+      state.deletedRoleIds !== previousState.deletedRoleIds ||
+      state.deletedTaskStatuses !== previousState.deletedTaskStatuses ||
+      state.deletedClientIds !== previousState.deletedClientIds;
 
     if (!workspaceChanged) return;
 

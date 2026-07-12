@@ -13,6 +13,20 @@ export default defineConfig(({ mode }) => ({
   build: {
     // Never emit source maps in production — they expose internal logic & file paths
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Core React runtime — changes rarely, long cache life
+          vendor: ['react', 'react-dom'],
+          // Router — separate so navigation code doesn't bust the app chunk
+          router: ['react-router-dom'],
+          // Recharts is the heaviest single dependency (~400 kB minified)
+          charts: ['recharts'],
+          // Icon library — large registry, isolate from business logic
+          icons: ['lucide-react'],
+        },
+      },
+    },
   },
   plugins: [
     react({

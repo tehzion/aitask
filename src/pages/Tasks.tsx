@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
-import { Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, RotateCcw, CalendarClock, SlidersHorizontal, ChevronDown } from 'lucide-react';
-import { format, parseISO, isBefore, isToday, differenceInDays } from 'date-fns';
+import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, RotateCcw, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone } from 'lucide-react';
+import { format, isBefore, isToday } from 'date-fns';
 import { Department, Priority, Task, TaskStatus } from '../types';
 import TaskDetailsModal from '../components/TaskDetailsModal';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
-import { cn, getRelativeDueDateString } from '../lib/utils';
+import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { canAssignTasksToOthers, canCreateTasks, canEditTask as canEditTaskByRole, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { SkeletonTableRow, SkeletonMobileCard } from '../components/SkeletonCard';
 import { safeHttpsUrl } from '../lib/security';
@@ -15,6 +15,7 @@ import { safeHttpsUrl } from '../lib/security';
 const PRIORITY_OPTIONS: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client'];
 const PAGE_SIZE = 8;
+const normalizeClientName = (value: string) => value.trim().toLowerCase();
 
 const statusColors: Record<string, string> = {
   'Pending': 'bg-slate-100 text-slate-700 border border-slate-200',
@@ -42,7 +43,7 @@ const approvalColors = {
 };
 
 const Tasks: React.FC = () => {
-  const { tasks: allTasks, users, projects, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen } = useStore();
+  const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen } = useStore();
   const [viewType, setViewType] = useState<'table' | 'board'>('table');
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [activeQuickEdit, setActiveQuickEdit] = useState<{ taskId: string; x: number; y: number } | null>(null);
@@ -114,6 +115,7 @@ const Tasks: React.FC = () => {
   };
   const [searchParams, setSearchParams] = useSearchParams();
   const projectIdFilter = searchParams.get('projectId');
+  const clientRouteFilter = searchParams.get('client') || '';
   const taskIdFilter = searchParams.get('taskId');
   const routeSearch = searchParams.get('search') || '';
 
@@ -155,14 +157,19 @@ const Tasks: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority, dateFrom, dateTo, projectIdFilter, taskIdFilter]);
+  }, [searchTerm, filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority, dateFrom, dateTo, projectIdFilter, clientRouteFilter, taskIdFilter]);
 
   const tasks = useMemo(() => getVisibleTasks(currentUser, allTasks), [allTasks, currentUser]);
 
   const visibleProjects = useMemo(() => getVisibleProjects(currentUser, projects, allTasks), [allTasks, currentUser, projects]);
 
   const clientOptions = useMemo(() => (
-    [...new Set([...tasks.map(t => t.clientName), ...visibleProjects.map(p => p.clientName)])].sort()
+    Array.from(new Map(
+      [...tasks.map(t => t.clientName), ...visibleProjects.map(p => p.clientName)]
+        .map(value => value.trim())
+        .filter(Boolean)
+        .map(value => [normalizeClientName(value), value])
+    ).values()).sort((a, b) => a.localeCompare(b))
   ), [tasks, visibleProjects]);
 
   const departmentOptions = useMemo(() => (
@@ -194,33 +201,51 @@ const Tasks: React.FC = () => {
       const matchesSearch = !normalizedSearch || searchable.includes(normalizedSearch);
       const matchesDept = filterDepartment === 'All' || task.department === filterDepartment;
       const matchesAssignee = filterAssignee === 'All' || task.assignedTo === filterAssignee;
-      const matchesClient = filterClient === 'All' || task.clientName === filterClient;
+      const matchesClient = clientRouteFilter
+        ? normalizeClientName(task.clientName) === normalizeClientName(clientRouteFilter)
+        : filterClient === 'All' || normalizeClientName(task.clientName) === normalizeClientName(filterClient);
       const matchesStatus = filterStatus === 'All' || task.status === filterStatus;
       const matchesPriority = filterPriority === 'All' || task.priority === filterPriority;
-      const matchesDateFrom = !dateFrom || task.dueDate >= dateFrom;
-      const matchesDateTo = !dateTo || task.dueDate <= dateTo;
+      const matchesDateFrom = !dateFrom || (task.dueDate && task.dueDate >= dateFrom);
+      const matchesDateTo = !dateTo || (task.dueDate && task.dueDate <= dateTo);
       const matchesProject = projectIdFilter ? task.projectId === projectIdFilter : true;
       const matchesTask = taskIdFilter ? task.id === taskIdFilter : true;
 
       return matchesSearch && matchesDept && matchesAssignee && matchesClient && matchesStatus && matchesPriority && matchesDateFrom && matchesDateTo && matchesProject && matchesTask;
     });
-  }, [dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, projectIdFilter, searchTerm, taskIdFilter, tasks, users]);
+  }, [clientRouteFilter, dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, projectIdFilter, searchTerm, taskIdFilter, tasks, users]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTasks.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pagedTasks = filteredTasks.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const activeProject = projectIdFilter ? visibleProjects.find(p => p.id === projectIdFilter) : null;
+  const activeClient = clientRouteFilter || '';
+  const activeClientKey = normalizeClientName(activeClient);
+  const activeClientProfile = activeClient
+    ? clientProfiles.find(client => normalizeClientName(client.clientName) === activeClientKey)
+    : undefined;
+  const activeClientTasks = activeClient
+    ? tasks.filter(task => normalizeClientName(task.clientName) === activeClientKey)
+    : [];
+  const activeClientProjects = activeClient
+    ? visibleProjects.filter(project => normalizeClientName(project.clientName) === activeClientKey)
+    : [];
+  const activeClientOpenTasks = activeClientTasks.filter(task => !task.isCompleted && task.status !== 'Completed').length;
+  const activeClientCompletedTasks = activeClientTasks.filter(task => task.isCompleted || task.status === 'Completed').length;
+  const activeClientFallbackDetails = activeClientTasks.find(task => task.customerDetails)?.customerDetails;
+  const activeClientWebsite = safeHttpsUrl(activeClientProfile?.website || activeClientTasks.find(task => task.website)?.website);
+  const activeClientFacebook = safeHttpsUrl(activeClientProfile?.facebookPage || activeClientTasks.find(task => task.facebookPage)?.facebookPage);
   const selectedLiveTask = allTasks.find(t => t.id === selectedTask?.id) || null;
 
   const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
   const canEditTask = (task: Task) => canEditTaskByRole(currentUser, task, rolePermissions);
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
-  const hasAnyFilter = [searchTerm, dateFrom, dateTo].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
+  const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
   const activeFilterLabels = [
     searchTerm && `Search: ${searchTerm}`,
     filterDepartment !== 'All' && filterDepartment,
     filterAssignee !== 'All' && `Assignee: ${getUserName(filterAssignee)}`,
-    filterClient !== 'All' && filterClient,
+    activeClient ? `Client: ${activeClient}` : filterClient !== 'All' && filterClient,
     filterStatus !== 'All' && filterStatus,
     filterPriority !== 'All' && filterPriority,
     dateFrom && `From ${dateFrom}`,
@@ -308,6 +333,91 @@ const Tasks: React.FC = () => {
           <button onClick={() => clearRouteFilter('taskId')} className="p-1.5 hover:bg-amber-200/50 rounded-md transition-colors" title="Clear task filter">
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {activeClient && (
+        <div className={`${cardBase} overflow-hidden border-blue-100 bg-white`}>
+          <div className="border-b border-blue-100 bg-blue-50/70 px-5 py-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <Link to="/clients" className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-700 hover:text-blue-800">
+                  <ArrowLeft className="h-4 w-4" /> Back to Clients
+                </Link>
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
+                    <Building2 className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Client task view</p>
+                    <h2 className="mt-1 truncate text-xl font-bold text-slate-950">{activeClient}</h2>
+                    <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                      {activeClientProfile?.contactPerson || activeClientFallbackDetails || 'No saved contact person yet.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => clearRouteFilter('client')}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm transition-colors hover:bg-blue-100"
+              >
+                <X className="h-4 w-4" /> Clear client filter
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 px-5 py-4 lg:grid-cols-[1.1fr_1fr]">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tasks</p>
+                <p className="mt-1 text-xl font-bold text-slate-950">{activeClientTasks.length}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Open</p>
+                <p className="mt-1 text-xl font-bold text-slate-950">{activeClientOpenTasks}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Done</p>
+                <p className="mt-1 text-xl font-bold text-slate-950">{activeClientCompletedTasks}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
+              {activeClientProfile?.email && (
+                <span className="inline-flex items-center gap-2 truncate">
+                  <Mail className="h-4 w-4 shrink-0 text-slate-400" /> {activeClientProfile.email}
+                </span>
+              )}
+              {activeClientProfile?.phone && (
+                <span className="inline-flex items-center gap-2 truncate">
+                  <Phone className="h-4 w-4 shrink-0 text-slate-400" /> {activeClientProfile.phone}
+                </span>
+              )}
+              {activeClientProfile?.address && (
+                <span className="inline-flex items-center gap-2 sm:col-span-2">
+                  <MapPin className="h-4 w-4 shrink-0 text-slate-400" /> <span className="line-clamp-2">{activeClientProfile.address}</span>
+                </span>
+              )}
+              <span className="inline-flex items-center gap-2">
+                <Building2 className="h-4 w-4 shrink-0 text-slate-400" /> {activeClientProjects.length} company record{activeClientProjects.length === 1 ? '' : 's'}
+              </span>
+              {(activeClientWebsite || activeClientFacebook) && (
+                <span className="inline-flex items-center gap-3">
+                  {activeClientWebsite && (
+                    <a href={activeClientWebsite} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-700">
+                      Website <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                  {activeClientFacebook && (
+                    <a href={activeClientFacebook} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-700">
+                      Facebook <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -435,8 +545,9 @@ const Tasks: React.FC = () => {
                     Array.from({ length: PAGE_SIZE }).map((_, i) => <SkeletonTableRow key={i} />)
                   ) : (
                     pagedTasks.map((task) => {
-                      const dueDateParsed = parseISO(task.dueDate);
-                      const isOverdue = !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed);
+                      const startDateParsed = parseOptionalDate(task.startDate);
+                      const dueDateParsed = parseOptionalDate(task.dueDate);
+                      const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
 
                       return (
                         <tr
@@ -468,10 +579,10 @@ const Tasks: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-xs">
-                            <div className="text-stone-500 mb-0.5">Start: {format(parseISO(task.startDate), 'MMM dd')}</div>
+                            <div className="text-stone-500 mb-0.5">Start: {startDateParsed ? format(startDateParsed, 'MMM dd') : 'No start date'}</div>
                             <div
                               className={cn("font-medium", isOverdue ? "text-red-700 font-bold" : "text-stone-800")}
-                              title={`Due: ${format(dueDateParsed, 'yyyy-MM-dd')}`}
+                              title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
                             >
                               {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                             </div>
@@ -534,9 +645,8 @@ const Tasks: React.FC = () => {
                 Array.from({ length: 4 }).map((_, i) => <SkeletonMobileCard key={i} />)
               ) : (
                 pagedTasks.map(task => {
-                  const dueDateParsed = parseISO(task.dueDate);
-                  const isOverdue = !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed);
-                  const daysOverdue = Math.max(1, differenceInDays(new Date(), dueDateParsed));
+                  const dueDateParsed = parseOptionalDate(task.dueDate);
+                  const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
 
                   return (
                     <button
@@ -559,7 +669,7 @@ const Tasks: React.FC = () => {
                       <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-stone-600">
                         <span
                           className={cn("inline-flex items-center gap-1", isOverdue ? "text-red-700 font-bold" : "text-stone-600")}
-                          title={`Due: ${format(dueDateParsed, 'yyyy-MM-dd')}`}
+                          title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
                         >
                           <CalendarClock className="w-3.5 h-3.5" />
                           {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
@@ -574,7 +684,7 @@ const Tasks: React.FC = () => {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
                           </span>
-                          {daysOverdue} day{daysOverdue === 1 ? '' : 's'} overdue
+                          {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                         </div>
                       )}
                       <div className="mt-3 flex items-center justify-between gap-3">
@@ -636,8 +746,8 @@ const Tasks: React.FC = () => {
                         ))
                       ) : (
                         columnTasks.map(task => {
-                          const dueDateParsed = parseISO(task.dueDate);
-                          const isOverdue = !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed);
+                          const dueDateParsed = parseOptionalDate(task.dueDate);
+                          const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
                           const canDrag = canEditTask(task);
 
                           return (
@@ -683,7 +793,7 @@ const Tasks: React.FC = () => {
                               <div className="mt-3 flex items-center justify-between text-[10px]">
                                 <span
                                   className={cn("font-medium", isOverdue ? "text-red-600 font-extrabold" : "text-stone-500")}
-                                  title={`Due: ${format(dueDateParsed, 'yyyy-MM-dd')}`}
+                                  title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
                                 >
                                   {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                                 </span>
