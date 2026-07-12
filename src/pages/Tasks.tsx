@@ -500,26 +500,41 @@ const Tasks: React.FC = () => {
           )}
 
           <div className={cn('grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 gap-3', filtersOpen ? 'grid' : 'hidden lg:grid')}>
-            <select value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')}>
-              <option value="All">All departments</option>
-              {departmentOptions.map(dept => <option key={dept} value={dept}>{dept}</option>)}
-            </select>
-            <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')}>
-              <option value="All">All assignees</option>
-              {assigneeOptions.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
-            </select>
-            <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')}>
-              <option value="All">All clients</option>
-              {clientOptions.map(client => <option key={client} value={client}>{client}</option>)}
-            </select>
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')}>
-              <option value="All">All statuses</option>
-              {taskStatuses.map(status => <option key={status} value={status}>{status}</option>)}
-            </select>
-            <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')}>
-              <option value="All">All priorities</option>
-              {PRIORITY_OPTIONS.map(priority => <option key={priority} value={priority}>{priority}</option>)}
-            </select>
+            <div className="relative">
+              <select value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                <option value="All">All departments</option>
+                {departmentOptions.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+            </div>
+            <div className="relative">
+              <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                <option value="All">All assignees</option>
+                {assigneeOptions.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+            </div>
+            <div className="relative">
+              <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                <option value="All">All clients</option>
+                {clientOptions.map(client => <option key={client} value={client}>{client}</option>)}
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+            </div>
+            <div className="relative">
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                <option value="All">All statuses</option>
+                {taskStatuses.map(status => <option key={status} value={status}>{status}</option>)}
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+            </div>
+            <div className="relative">
+              <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                <option value="All">All priorities</option>
+                {PRIORITY_OPTIONS.map(priority => <option key={priority} value={priority}>{priority}</option>)}
+              </select>
+              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+            </div>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label="Due from" />
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label="Due to" />
           </div>
@@ -891,53 +906,62 @@ const Tasks: React.FC = () => {
               {/* Status */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Status</label>
-                <select
-                  className={cn(inputBase, "w-full text-xs py-1.5 px-2 bg-white")}
-                  value={currentTask.status}
-                  onChange={(e) => {
-                    updateTaskStatus(currentTask.id, e.target.value as TaskStatus);
-                    setActiveQuickEdit(null);
-                  }}
-                >
-                  {taskStatuses.map(status => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white appearance-none cursor-pointer")}
+                    value={currentTask.status}
+                    onChange={(e) => {
+                      updateTaskStatus(currentTask.id, e.target.value as TaskStatus);
+                      setActiveQuickEdit(null);
+                    }}
+                  >
+                    {taskStatuses.map(status => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>
               </div>
 
               {/* Priority */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Priority</label>
-                <select
-                  className={cn(inputBase, "w-full text-xs py-1.5 px-2 bg-white")}
-                  value={currentTask.priority}
-                  onChange={(e) => {
-                    updateTaskPriority(currentTask.id, e.target.value as Priority);
-                    setActiveQuickEdit(null);
-                  }}
-                >
-                  {PRIORITY_OPTIONS.map(prio => (
-                    <option key={prio} value={prio}>{prio}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white appearance-none cursor-pointer")}
+                    value={currentTask.priority}
+                    onChange={(e) => {
+                      updateTaskPriority(currentTask.id, e.target.value as Priority);
+                      setActiveQuickEdit(null);
+                    }}
+                  >
+                    {PRIORITY_OPTIONS.map(prio => (
+                      <option key={prio} value={prio}>{prio}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>
               </div>
 
               {/* Assignee */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Assignee</label>
-                <select
-                  className={cn(inputBase, "w-full text-xs py-1.5 px-2 bg-white disabled:bg-stone-50 disabled:text-stone-400")}
-                  value={currentTask.assignedTo}
-                  disabled={!canAssignOthers}
-                  onChange={(e) => {
-                    updateTaskAssignee(currentTask.id, e.target.value);
-                    setActiveQuickEdit(null);
-                  }}
-                >
-                  {(canAssignOthers ? users.filter(u => u.role !== 'Client') : users.filter(u => u.id === currentTask.assignedTo)).map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white disabled:bg-stone-50 disabled:text-stone-400 appearance-none cursor-pointer")}
+                    value={currentTask.assignedTo}
+                    disabled={!canAssignOthers}
+                    onChange={(e) => {
+                      updateTaskAssignee(currentTask.id, e.target.value);
+                      setActiveQuickEdit(null);
+                    }}
+                  >
+                    {(canAssignOthers ? users.filter(u => u.role !== 'Client') : users.filter(u => u.id === currentTask.assignedTo)).map(u => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>
                 {!canAssignOthers && (
                   <p className="mt-1 text-[10px] text-stone-400">Only admins can reassign tasks.</p>
                 )}
