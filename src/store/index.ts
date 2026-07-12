@@ -27,17 +27,23 @@ import {
   SnapshotResult,
 } from '../lib/supabaseSnapshot';
 import {
+  canAssignTasksToOthers,
+  canDeleteProject,
+  canDeleteTask,
   canEditTask,
+  canEditProject,
   canApproveRegistrations,
   canCreateTasks,
   canCreateUsers,
   canDeleteUser,
   canManageProjects,
   canReviewTaskAsClient,
+  getVisibleProjects,
   isNotificationReadByUser,
   isNotificationVisible,
   isBossKoo,
 } from '../lib/access';
+import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
 
 interface BackendRuntimeState {
   mode: 'local' | 'supabase';
@@ -54,6 +60,33 @@ interface BackendRuntimeState {
   error?: string;
   message: string;
 }
+
+type TaskUpdateInput = Partial<Pick<
+  Task,
+  | 'projectId'
+  | 'clientName'
+  | 'customerDetails'
+  | 'facebookPage'
+  | 'website'
+  | 'projectName'
+  | 'serviceType'
+  | 'title'
+  | 'description'
+  | 'department'
+  | 'assignedTo'
+  | 'startDate'
+  | 'dueDate'
+  | 'priority'
+  | 'status'
+  | 'completionPercentage'
+  | 'attachmentLink'
+  | 'attachmentName'
+  | 'notes'
+  | 'isRecurring'
+  | 'recurrenceFrequency'
+>>;
+
+type ProjectUpdateInput = Partial<Pick<Project, 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline'>>;
 
 interface StoreState {
   currentUser: User | null;
@@ -83,10 +116,14 @@ interface StoreState {
   updateTaskAssignee: (taskId: string, assignedTo: string) => void;
   updateTaskDueDate: (taskId: string, newDueDate: string) => void;
   updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => void;
+  updateTask: (taskId: string, data: TaskUpdateInput) => { ok: boolean; error?: string };
+  deleteTask: (taskId: string) => { ok: boolean; error?: string };
   reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => void;
   requestRevision: (taskId: string, note?: string) => void;
   addTask: (task: Omit<Task, 'id' | 'isCompleted' | 'revisionCount' | 'clientApprovalStatus' | 'dueReminderSent' | 'approvalHistory'>) => string;
   addProject: (project: Omit<Project, 'id' | 'totalTasks' | 'completedTasks'>) => string;
+  updateProject: (projectId: string, data: ProjectUpdateInput) => { ok: boolean; error?: string };
+  deleteProject: (projectId: string) => { ok: boolean; error?: string };
   addComment: (taskId: string, text: string) => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
@@ -111,7 +148,21 @@ const seededUserIds = new Set(mockUsers.map(user => user.id));
 const seededProjectIds = new Set(mockProjects.map(project => project.id));
 const legacyDemoTaskIdSet = new Set<string>(legacyDemoTaskIds);
 const defaultTaskStatuses = ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'];
+const allowedDepartments = new Set<Department>(['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client']);
+const allowedPriorities = new Set<Priority>(['Low', 'Medium', 'High', 'Urgent']);
 const sensitiveSnapshotKeyPattern = /(password|secret|token|api[_-]?key|service[_-]?role)/i;
+
+const isValidIsoDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+};
+
+const resolveTaskStatus = (status: string, statuses: string[]) => {
+  const trimmed = status.trim();
+  if (!trimmed) return '';
+  return statuses.find(item => item.toLowerCase() === trimmed.toLowerCase()) || '';
+};
 
 const stripSensitiveSnapshotFields = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(stripSensitiveSnapshotFields);
@@ -185,18 +236,9 @@ const normalizeUserAccount = (user: User, options: { migrateInlinePassword?: boo
   };
 };
 
-const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorkspaceState => ({
-  users: state.users || [],
-  projects: state.projects || [],
-  tasks: state.tasks || [],
-  notifications: state.notifications || [],
-  registrations: state.registrations || [],
-  rolePermissions: state.rolePermissions || [],
-  taskStatuses: state.taskStatuses || [],
-  deletedUserIds: state.deletedUserIds || [],
-  deletedRoleIds: state.deletedRoleIds || [],
-  deletedTaskStatuses: state.deletedTaskStatuses || [],
-});
+const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorkspaceState => (
+  parseWorkspaceSnapshot(state)
+);
 
 const getTime = (value?: string) => value ? new Date(value).getTime() || 0 : 0;
 
@@ -809,7 +851,7 @@ export const useStore = create<StoreState>()(
         if (!currentUser) return { ok: false, error: 'You must be logged in to update your profile.' };
 
         const name = data.name.trim();
-        const avatar = data.avatar?.trim() || undefined;
+        const avatar = data.avatar?.trim() ? safeAvatarSource(data.avatar) : undefined;
 
         if (!name) return { ok: false, error: 'Name is required.' };
 
@@ -819,13 +861,8 @@ export const useStore = create<StoreState>()(
         ));
         if (duplicate) return { ok: false, error: 'Another user already uses this name.' };
 
-        const isAllowedAvatar =
-          !avatar ||
-          avatar.startsWith('/') ||
-          avatar.startsWith('data:image/') ||
-          /^https?:\/\//i.test(avatar);
-        if (!isAllowedAvatar) {
-          return { ok: false, error: 'Avatar must be a web image URL, data image, or app-relative path.' };
+        if (data.avatar?.trim() && !avatar) {
+          return { ok: false, error: 'Avatar must be an uploaded photo, app image, generated avatar, or Supabase image URL.' };
         }
 
         const now = new Date().toISOString();
@@ -937,8 +974,14 @@ export const useStore = create<StoreState>()(
         const currentUser = state.currentUser;
         if (!task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
 
-        const isCompleted = status === 'Completed';
-        const isWaitingApproval = status === 'Waiting Approval';
+        const nextStatus = resolveTaskStatus(status, state.taskStatuses);
+        if (!nextStatus) {
+          useToastStore.getState().addToast('Choose a valid task status.', 'warning');
+          return state;
+        }
+
+        const isCompleted = nextStatus === 'Completed';
+        const isWaitingApproval = nextStatus === 'Waiting Approval';
         const isReadyForClientReview = isCompleted || isWaitingApproval;
         const wasCompleted = task.isCompleted || task.status === 'Completed';
 
@@ -959,7 +1002,7 @@ export const useStore = create<StoreState>()(
 
           return {
             ...t,
-            status,
+            status: nextStatus,
             isCompleted,
             completionPercentage,
             clientApprovalStatus,
@@ -973,8 +1016,8 @@ export const useStore = create<StoreState>()(
           newNotifs.push(makeNotification({
             targetRole: 'Admin',
             title: 'Task Status Updated',
-            message: `"${task.title}" was moved to ${status} by ${currentUser?.name}.`,
-            link: `/tasks?taskId=${taskId}`,
+            message: `"${task.title}" was moved to ${nextStatus} by ${currentUser?.name}.`,
+            route: { page: 'tasks', entityId: taskId },
             iconType: 'status'
           }));
         }
@@ -984,12 +1027,12 @@ export const useStore = create<StoreState>()(
             targetClient: task.clientName,
             title: isCompleted ? 'Task Completed' : 'Task Ready for Approval',
             message: `"${task.title}" is ready for client review.`,
-            link: `/tasks?taskId=${taskId}`,
+            route: { page: 'tasks', entityId: taskId },
             iconType: 'success'
           }));
         }
 
-        useToastStore.getState().addToast(`Status updated to "${status}"`, 'success');
+        useToastStore.getState().addToast(`Status updated to "${nextStatus}"`, 'success');
 
         return {
           tasks: newTasks,
@@ -1001,6 +1044,10 @@ export const useStore = create<StoreState>()(
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
         if (!task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
+        if (!allowedPriorities.has(priority)) {
+          useToastStore.getState().addToast('Choose a valid priority.', 'warning');
+          return state;
+        }
 
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
@@ -1016,14 +1063,16 @@ export const useStore = create<StoreState>()(
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
         if (!task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
+        if (assignedTo === task.assignedTo) return state;
+        if (!canAssignTasksToOthers(currentUser, state.rolePermissions)) return state;
+
+        const assigneeUser = state.users.find(u => u.id === assignedTo && u.role !== 'Client');
+        if (!assigneeUser) return state;
 
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
           return { ...t, assignedTo, updatedAt: new Date().toISOString() };
         });
-
-        const assigneeUser = state.users.find(u => u.id === assignedTo);
-        const assigneeName = assigneeUser ? assigneeUser.name : 'someone';
 
         const newNotifs: AppNotification[] = [];
         if (assignedTo !== task.assignedTo) {
@@ -1031,12 +1080,12 @@ export const useStore = create<StoreState>()(
             targetUserId: assignedTo,
             title: 'Task Assigned To You',
             message: `"${task.title}" has been assigned to you by ${currentUser?.name}.`,
-            link: `/tasks?taskId=${taskId}`,
+            route: { page: 'tasks', entityId: taskId },
             iconType: 'task'
           }));
         }
 
-        useToastStore.getState().addToast(`Task assigned to ${assigneeName}`, 'success');
+        useToastStore.getState().addToast(`Task assigned to ${assigneeUser.name}`, 'success');
 
         return {
           tasks: newTasks,
@@ -1050,14 +1099,8 @@ export const useStore = create<StoreState>()(
 
         // Validate that the attachment link is a safe http(s) URL
         const trimmedLink = attachmentLink.trim();
-        if (trimmedLink) {
-          try {
-            const parsed = new URL(trimmedLink);
-            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return state;
-          } catch {
-            return state; // Invalid URL — reject silently
-          }
-        }
+        const validatedLink = trimmedLink ? safeHttpsUrl(trimmedLink) : null;
+        if (trimmedLink && !validatedLink) return state;
 
         useToastStore.getState().addToast('Attachment updated successfully', 'success');
 
@@ -1066,7 +1109,7 @@ export const useStore = create<StoreState>()(
             task.id === taskId
               ? {
                   ...task,
-                  attachmentLink: trimmedLink || undefined,
+                  attachmentLink: validatedLink || undefined,
                   attachmentName: attachmentName?.trim().slice(0, 200) || undefined,
                   updatedAt: new Date().toISOString()
                 }
@@ -1079,8 +1122,15 @@ export const useStore = create<StoreState>()(
         const task = state.tasks.find(t => t.id === taskId);
         if (!task || !canEditTask(state.currentUser, task, state.rolePermissions)) return state;
 
-        // Basic ISO date validation (YYYY-MM-DD)
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(newDueDate)) return state;
+        if (!isValidIsoDate(newDueDate)) {
+          useToastStore.getState().addToast('Choose a valid due date.', 'warning');
+          return state;
+        }
+
+        if (isValidIsoDate(task.startDate) && new Date(newDueDate) < new Date(task.startDate)) {
+          useToastStore.getState().addToast('Due date cannot be earlier than the start date.', 'warning');
+          return state;
+        }
 
         useToastStore.getState().addToast(`Due date updated to ${newDueDate}`, 'success');
 
@@ -1090,6 +1140,156 @@ export const useStore = create<StoreState>()(
           ),
         };
       }),
+
+      updateTask: (taskId, data) => {
+        const state = get();
+        const currentUser = state.currentUser;
+        const task = state.tasks.find(t => t.id === taskId);
+        if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions)) {
+          return { ok: false, error: 'You do not have permission to edit this task.' };
+        }
+
+        const canAssignOthers = canAssignTasksToOthers(currentUser, state.rolePermissions);
+        const nextAssigneeId = data.assignedTo ?? task.assignedTo;
+        if (!canAssignOthers && nextAssigneeId !== task.assignedTo) {
+          return { ok: false, error: 'You do not have permission to reassign this task.' };
+        }
+
+        const assignee = state.users.find(user => user.id === nextAssigneeId && user.role !== 'Client');
+        if (!assignee) return { ok: false, error: 'Choose a valid internal assignee.' };
+
+        const hasProjectInput = Object.prototype.hasOwnProperty.call(data, 'projectId');
+        const requestedProjectId = hasProjectInput ? data.projectId?.trim() || undefined : task.projectId;
+        const project = requestedProjectId
+          ? state.projects.find(item => item.id === requestedProjectId)
+          : undefined;
+
+        if (requestedProjectId && !project) {
+          return { ok: false, error: 'Selected company or project was not found.' };
+        }
+
+        if (requestedProjectId) {
+          const visibleProjectIds = new Set(getVisibleProjects(currentUser, state.projects, state.tasks).map(item => item.id));
+          if (!visibleProjectIds.has(requestedProjectId)) {
+            return { ok: false, error: 'You can only link tasks to projects you can access.' };
+          }
+        }
+
+        const title = data.title !== undefined ? data.title.trim() : task.title;
+        const clientName = project
+          ? project.clientName
+          : data.clientName !== undefined
+            ? data.clientName.trim()
+            : task.clientName;
+        const serviceType = data.serviceType !== undefined ? data.serviceType.trim() : task.serviceType;
+        const startDate = data.startDate || task.startDate;
+        const dueDate = data.dueDate || task.dueDate;
+        const status = data.status !== undefined
+          ? resolveTaskStatus(data.status, state.taskStatuses)
+          : task.status;
+
+        if (!title) return { ok: false, error: 'Task title is required.' };
+        if (!clientName) return { ok: false, error: 'Client or brand name is required.' };
+        if (!serviceType) return { ok: false, error: 'Service type is required.' };
+        if (!isValidIsoDate(startDate) || !isValidIsoDate(dueDate)) {
+          return { ok: false, error: 'Start and due dates must be valid dates.' };
+        }
+        if (new Date(dueDate) < new Date(startDate)) {
+          return { ok: false, error: 'Due date cannot be earlier than the start date.' };
+        }
+        if (data.status !== undefined && !status) return { ok: false, error: 'Choose a valid task status.' };
+        if (data.priority !== undefined && !allowedPriorities.has(data.priority)) {
+          return { ok: false, error: 'Choose a valid priority.' };
+        }
+
+        const safeFacebookPage = data.facebookPage !== undefined
+          ? (data.facebookPage.trim() ? safeHttpsUrl(data.facebookPage) : undefined)
+          : task.facebookPage;
+        const safeWebsite = data.website !== undefined
+          ? (data.website.trim() ? safeHttpsUrl(data.website) : undefined)
+          : task.website;
+        const safeAttachmentLink = data.attachmentLink !== undefined
+          ? (data.attachmentLink.trim() ? safeHttpsUrl(data.attachmentLink) : undefined)
+          : task.attachmentLink;
+
+        if ((data.facebookPage?.trim() && !safeFacebookPage) || (data.website?.trim() && !safeWebsite) || (data.attachmentLink?.trim() && !safeAttachmentLink)) {
+          return { ok: false, error: 'Links must be valid HTTPS URLs.' };
+        }
+
+        const updatedTask: Task = {
+          ...task,
+          ...data,
+          projectId: requestedProjectId,
+          projectName: project
+            ? project.projectName
+            : data.projectName !== undefined
+              ? data.projectName.trim() || undefined
+              : task.projectName,
+          clientName,
+          serviceType,
+          title,
+          description: data.description !== undefined ? data.description.trim() : task.description,
+          customerDetails: data.customerDetails !== undefined ? data.customerDetails.trim() : task.customerDetails,
+          facebookPage: safeFacebookPage || undefined,
+          website: safeWebsite || undefined,
+          assignedTo: nextAssigneeId,
+          startDate,
+          dueDate,
+          status,
+          completionPercentage: data.completionPercentage !== undefined
+            ? Math.max(0, Math.min(100, Number(data.completionPercentage) || 0))
+            : task.completionPercentage,
+          attachmentLink: safeAttachmentLink || undefined,
+          attachmentName: data.attachmentName !== undefined ? data.attachmentName.trim() || undefined : task.attachmentName,
+          notes: data.notes !== undefined ? data.notes.trim() || undefined : task.notes,
+          updatedAt: new Date().toISOString(),
+        };
+
+        const notifications: AppNotification[] = [];
+        if (updatedTask.assignedTo !== task.assignedTo) {
+          notifications.push(makeNotification({
+            targetUserId: updatedTask.assignedTo,
+            title: 'Task Assigned To You',
+            message: `"${updatedTask.title}" has been assigned to you by ${currentUser.name}.`,
+            route: { page: 'tasks', entityId: taskId },
+            iconType: 'task'
+          }));
+        }
+
+        set(current => ({
+          tasks: current.tasks.map(item => item.id === taskId ? updatedTask : item),
+          notifications: [...notifications, ...(current.notifications || [])],
+        }));
+
+        useToastStore.getState().addToast(`Task "${updatedTask.title}" updated successfully`, 'success');
+        return { ok: true };
+      },
+
+      deleteTask: (taskId) => {
+        const state = get();
+        const currentUser = state.currentUser;
+        const task = state.tasks.find(item => item.id === taskId);
+        if (!currentUser || !task || !canDeleteTask(currentUser, task, state.rolePermissions)) {
+          return { ok: false, error: 'You do not have permission to delete this task.' };
+        }
+
+        const notifications = currentUser.role !== 'Admin'
+          ? [makeNotification({
+              targetRole: 'Admin' as Role,
+              title: 'Task Deleted',
+              message: `${currentUser.name} deleted "${task.title}".`,
+              route: { page: 'tasks' },
+              iconType: 'alert' as const
+            })]
+          : [];
+
+        set(current => ({
+          tasks: current.tasks.filter(item => item.id !== taskId),
+          notifications: [...notifications, ...(current.notifications || [])],
+        }));
+        useToastStore.getState().addToast(`Task "${task.title}" deleted`, 'success');
+        return { ok: true };
+      },
 
       reviewClientApproval: (taskId, status, note) => set((state) => {
         const currentUser = state.currentUser;
@@ -1124,7 +1324,7 @@ export const useStore = create<StoreState>()(
             targetRole: 'Admin',
             title: status === 'Approved' ? 'Client Approved Task' : 'Client Requested Revision',
             message: `${currentUser.name} ${status === 'Approved' ? 'approved' : 'rejected'} "${task.title}"${note ? `: ${note}` : '.'}`,
-            link: `/tasks?taskId=${taskId}`,
+            route: { page: 'tasks', entityId: taskId },
             iconType: status === 'Approved' ? 'success' : 'alert'
           }),
         ];
@@ -1134,7 +1334,7 @@ export const useStore = create<StoreState>()(
             targetUserId: task.assignedTo,
             title: 'Client Requested Revision',
             message: `${currentUser.name} requested changes on "${task.title}"${note ? `: ${note}` : '.'}`,
-            link: `/tasks?taskId=${taskId}`,
+            route: { page: 'tasks', entityId: taskId },
             iconType: 'alert'
           }));
         } else {
@@ -1142,7 +1342,7 @@ export const useStore = create<StoreState>()(
             targetUserId: task.assignedTo,
             title: 'Client Approved Task',
             message: `${currentUser.name} approved "${task.title}".`,
-            link: `/tasks?taskId=${taskId}`,
+            route: { page: 'tasks', entityId: taskId },
             iconType: 'success'
           }));
         }
@@ -1196,7 +1396,7 @@ export const useStore = create<StoreState>()(
               targetUserId: task.assignedTo,
               title: 'Revision Requested',
               message: `${currentUser.name} requested a revision on "${task.title}".`,
-              link: `/tasks?taskId=${taskId}`,
+              route: { page: 'tasks', entityId: taskId },
               iconType: 'alert'
             }),
             ...(state.notifications || [])
@@ -1205,7 +1405,34 @@ export const useStore = create<StoreState>()(
       }),
 
       addTask: (taskData) => {
-        if (!canCreateTasks(get().currentUser, get().rolePermissions)) return '';
+        const state = get();
+        const currentUser = state.currentUser;
+        if (!currentUser || !canCreateTasks(currentUser, state.rolePermissions)) return '';
+        if (!state.users.some(user => user.id === taskData.assignedTo && user.role !== 'Client')) return '';
+
+        const project = taskData.projectId
+          ? state.projects.find(item => item.id === taskData.projectId)
+          : undefined;
+        if (taskData.projectId) {
+          if (!project) return '';
+          const visibleProjectIds = new Set(getVisibleProjects(currentUser, state.projects, state.tasks).map(project => project.id));
+          if (!visibleProjectIds.has(taskData.projectId)) return '';
+        }
+
+        const title = taskData.title.trim();
+        const clientName = project ? project.clientName : taskData.clientName.trim();
+        const serviceType = taskData.serviceType.trim();
+        const startDate = taskData.startDate;
+        const dueDate = taskData.dueDate;
+        const status = resolveTaskStatus(taskData.status, state.taskStatuses);
+
+        if (!title || !clientName || !serviceType) return '';
+        if (!allowedDepartments.has(taskData.department) || taskData.department === 'Client') return '';
+        if (!allowedPriorities.has(taskData.priority)) return '';
+        if (!status) return '';
+        if (!isValidIsoDate(startDate) || !isValidIsoDate(dueDate)) return '';
+        if (new Date(dueDate) < new Date(startDate)) return '';
+
         const taskId = `T-${Date.now().toString().slice(-6)}`;
         set((state) => {
           if (!canCreateTasks(state.currentUser, state.rolePermissions)) return state;
@@ -1213,6 +1440,13 @@ export const useStore = create<StoreState>()(
           const newTask: Task = {
             ...taskData,
             id: taskId,
+            title,
+            clientName,
+            projectName: project ? project.projectName : taskData.projectName,
+            serviceType,
+            startDate,
+            dueDate,
+            status,
             isCompleted: false,
             revisionCount: 0,
             clientApprovalStatus: 'Pending',
@@ -1228,7 +1462,7 @@ export const useStore = create<StoreState>()(
                 targetUserId: taskData.assignedTo,
                 title: 'New Task Assigned',
                 message: `You have been assigned a new task: "${taskData.title}".`,
-                link: `/tasks?taskId=${taskId}`,
+                route: { page: 'tasks', entityId: taskId },
                 iconType: 'task'
               }),
               ...(state.notifications || [])
@@ -1241,18 +1475,101 @@ export const useStore = create<StoreState>()(
       },
 
       addProject: (projectData) => {
-        if (!canManageProjects(get().currentUser, get().rolePermissions)) return '';
+        const currentUser = get().currentUser;
+        if (!currentUser || !canManageProjects(currentUser, get().rolePermissions)) return '';
+
+        const clientName = projectData.clientName.trim();
+        const projectName = projectData.projectName.trim() || clientName;
+        const services = Array.from(new Map(
+          projectData.services.map(service => [service.trim().toLowerCase(), service.trim()])
+        ).values()).filter(Boolean);
+        const startDate = projectData.startDate || new Date().toISOString().slice(0, 10);
+        const deadline = projectData.deadline?.trim() || '';
+
+        if (!clientName || !projectName || services.length === 0) return '';
+        if (!isValidIsoDate(startDate)) return '';
+        if (deadline && (!isValidIsoDate(deadline) || new Date(deadline) < new Date(startDate))) return '';
 
         const newProject: Project = {
           ...projectData,
+          clientName,
+          projectName,
+          services,
+          startDate,
+          deadline,
+          createdBy: currentUser.id,
           totalTasks: 0,
           completedTasks: 0,
           id: `P-${Date.now().toString().slice(-6)}`,
           updatedAt: new Date().toISOString(),
         };
         set((state) => ({ projects: [...state.projects, newProject] }));
-        useToastStore.getState().addToast(`Project "${projectData.projectName}" created successfully`, 'success');
+        useToastStore.getState().addToast(`Company "${clientName}" created successfully`, 'success');
         return newProject.id;
+      },
+
+      updateProject: (projectId, data) => {
+        const state = get();
+        const currentUser = state.currentUser;
+        const project = state.projects.find(item => item.id === projectId);
+        if (!currentUser || !project || !canEditProject(currentUser, project, state.rolePermissions)) {
+          return { ok: false, error: 'You do not have permission to edit this company.' };
+        }
+
+        const clientName = data.clientName !== undefined ? data.clientName.trim() : project.clientName;
+        const projectName = data.projectName !== undefined ? data.projectName.trim() : clientName;
+        const services = data.services !== undefined
+          ? Array.from(new Map(data.services.map(service => [service.trim().toLowerCase(), service.trim()])).values()).filter(Boolean)
+          : project.services;
+        const startDate = data.startDate || project.startDate || new Date().toISOString().slice(0, 10);
+        const deadline = data.deadline !== undefined ? data.deadline.trim() : project.deadline;
+
+        if (!clientName) return { ok: false, error: 'Company or brand name is required.' };
+        if (!projectName) return { ok: false, error: 'Project name is required.' };
+        if (services.length === 0) return { ok: false, error: 'Select or add at least one service.' };
+        if (!isValidIsoDate(startDate)) return { ok: false, error: 'Start date must be a valid date.' };
+        if (deadline && (!isValidIsoDate(deadline) || new Date(deadline) < new Date(startDate))) {
+          return { ok: false, error: 'Deadline cannot be earlier than the start date.' };
+        }
+
+        const updatedProject: Project = {
+          ...project,
+          clientName,
+          projectName,
+          services,
+          startDate,
+          deadline,
+          updatedAt: new Date().toISOString(),
+        };
+
+        set(current => ({
+          projects: current.projects.map(item => item.id === projectId ? updatedProject : item),
+          tasks: current.tasks.map(task => task.projectId === projectId
+            ? { ...task, clientName, projectName, updatedAt: new Date().toISOString() }
+            : task
+          ),
+        }));
+        useToastStore.getState().addToast(`Company "${clientName}" updated successfully`, 'success');
+        return { ok: true };
+      },
+
+      deleteProject: (projectId) => {
+        const state = get();
+        const currentUser = state.currentUser;
+        const project = state.projects.find(item => item.id === projectId);
+        if (!currentUser || !project || !canDeleteProject(currentUser, project, state.rolePermissions)) {
+          return { ok: false, error: 'You do not have permission to delete this company.' };
+        }
+
+        set(current => ({
+          projects: current.projects.filter(item => item.id !== projectId),
+          tasks: current.tasks.map(task => task.projectId === projectId
+            ? { ...task, projectId: undefined, projectName: undefined, updatedAt: new Date().toISOString() }
+            : task
+          ),
+        }));
+        useToastStore.getState().addToast(`Company "${project.clientName}" deleted. Existing tasks were kept.`, 'success');
+        return { ok: true };
       },
 
       addComment: (taskId, text) => set((state) => {
@@ -1284,7 +1601,7 @@ export const useStore = create<StoreState>()(
             targetRole: 'Admin',
             title: 'New Comment',
             message: `${currentUser.name} commented on "${task.title}".`,
-            link: `/tasks?taskId=${taskId}`,
+            route: { page: 'tasks', entityId: taskId },
             iconType: 'status'
           }));
         } else if (task.assignedTo !== currentUser.id) {
@@ -1292,7 +1609,7 @@ export const useStore = create<StoreState>()(
             targetUserId: task.assignedTo,
             title: 'New Comment',
             message: `${currentUser.name} commented on your task "${task.title}".`,
-            link: `/tasks?taskId=${taskId}`,
+            route: { page: 'tasks', entityId: taskId },
             iconType: 'status'
           }));
         }
@@ -1321,14 +1638,14 @@ export const useStore = create<StoreState>()(
             targetUserId: task.assignedTo,
             title: 'Task Deadline Approaching',
             message: `"${task.title}" is due ${when}.`,
-            link: `/tasks?taskId=${task.id}`,
+            route: { page: 'tasks', entityId: task.id },
             iconType: 'alert'
           }));
           newNotifs.push(makeNotification({
             targetRole: 'Admin',
             title: 'Task Deadline Approaching',
             message: `"${task.title}" for ${task.clientName} is due ${when}.`,
-            link: `/tasks?taskId=${task.id}`,
+            route: { page: 'tasks', entityId: task.id },
             iconType: 'alert'
           }));
 
@@ -1359,7 +1676,7 @@ export const useStore = create<StoreState>()(
             targetUserId: bossKoo.id,
             title: 'New Registration',
             message: `${data.name} has registered and is waiting for your approval.`,
-            link: '/approvals',
+            route: { page: 'approvals' },
             iconType: 'status'
           }));
         }
@@ -1425,7 +1742,7 @@ export const useStore = create<StoreState>()(
               targetRole: 'Admin',
               title: 'Member Added',
               message: `${currentUser.name} added ${name} as ${data.role}.`,
-              link: '/approvals',
+              route: { page: 'approvals' },
               iconType: 'success'
             }),
             ...(state.notifications || [])
@@ -1620,7 +1937,7 @@ export const useStore = create<StoreState>()(
               targetRole: 'Admin',
               title: 'Member Removed',
               message: `${state.currentUser?.name || 'Super admin'} removed ${targetUser?.name}.`,
-              link: '/approvals',
+              route: { page: 'approvals' },
               iconType: 'alert'
             }),
             ...(current.notifications || [])

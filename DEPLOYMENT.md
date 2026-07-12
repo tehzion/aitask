@@ -23,7 +23,7 @@ The included `vercel.json` sends all routes to `index.html` so React Router dire
 ```env
 VITE_AITASK_BACKEND=supabase
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 VITE_SUPABASE_STATE_TABLE=aitask_app_state
 VITE_SUPABASE_STATE_ID=default
 VITE_AITASK_SHOW_DEMO_LOGIN=false
@@ -55,7 +55,7 @@ Check the Vercel project has these variables in the same environment you are vie
 ```env
 VITE_AITASK_BACKEND=supabase
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 VITE_SUPABASE_STATE_TABLE=aitask_app_state
 VITE_SUPABASE_STATE_ID=default
 VITE_AITASK_SHOW_DEMO_LOGIN=false

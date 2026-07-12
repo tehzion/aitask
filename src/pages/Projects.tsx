@@ -1,19 +1,46 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
 import { format, parseISO, differenceInDays } from 'date-fns';
-import { FolderKanban, Users, CheckCircle2, Clock, CalendarDays, ArrowRight } from 'lucide-react';
+import { FolderKanban, Users, CheckCircle2, Clock, CalendarDays, ArrowRight, Pencil, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import CreateProjectModal from '../components/CreateProjectModal';
 import { Link } from 'react-router-dom';
-import { Badge, Button, PageHeader, cardBase, pageShell } from '../components/ui';
-import { canManageProjects, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { Badge, Button, PageHeader } from '../components/ui';
+import { cardBase, pageShell } from '../components/uiTokens';
+import { canDeleteProject, canEditProject, canManageProjects, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { Project } from '../types';
 
 const Projects: React.FC = () => {
-  const { projects: allProjects, tasks: allTasks, users, currentUser, rolePermissions } = useStore();
+  const { projects: allProjects, tasks: allTasks, users, currentUser, rolePermissions, deleteProject } = useStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   const tasks = React.useMemo(() => getVisibleTasks(currentUser, allTasks), [allTasks, currentUser]);
-  const projects = React.useMemo(() => getVisibleProjects(currentUser, allProjects), [allProjects, currentUser]);
+  const projects = React.useMemo(() => getVisibleProjects(currentUser, allProjects, allTasks), [allProjects, allTasks, currentUser]);
+
+  const openCreateCompany = () => {
+    setEditingProject(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditCompany = (project: Project) => {
+    setEditingProject(project);
+    setIsModalOpen(true);
+  };
+
+  const closeCompanyModal = () => {
+    setIsModalOpen(false);
+    setEditingProject(null);
+  };
+
+  const handleDeleteProject = (project: Project) => {
+    const confirmed = window.confirm(`Delete "${project.clientName}"? Existing tasks will be kept and unlinked from this company.`);
+    if (!confirmed) return;
+    const result = deleteProject(project.id);
+    if (!result.ok) {
+      window.alert(result.error || 'Unable to delete this company.');
+    }
+  };
 
   const getProjectStats = (projectId: string) => {
     const projectTasks = tasks.filter(t => t.projectId === projectId);
@@ -55,9 +82,9 @@ const Projects: React.FC = () => {
   return (
     <div className={`${pageShell} flex flex-col h-full`}>
       <PageHeader
-        title="Active Projects"
-        description="Monitor client projects, team assignments, and overall progress."
-        action={canManageProjects(currentUser, rolePermissions) ? <Button onClick={() => setIsModalOpen(true)}>+ New Project</Button> : null}
+        title="Companies / Brands"
+        description="Monitor owned client companies, task participation, and service scope."
+        action={canManageProjects(currentUser, rolePermissions) ? <Button onClick={openCreateCompany}>+ New Company / Brand</Button> : null}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -65,23 +92,54 @@ const Projects: React.FC = () => {
           const stats = getProjectStats(project.id);
           const deadlineStatus = getDeadlineStatus(project.deadline);
           const progress = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
+          const canEdit = canEditProject(currentUser, project, rolePermissions);
+          const canDelete = canDeleteProject(currentUser, project, rolePermissions);
+          const hasLegacyProjectName = project.projectName && project.projectName !== project.clientName;
 
           return (
             <div key={project.id} className={`${cardBase} hover:shadow-md transition-shadow overflow-hidden flex flex-col`}>
               <div className="p-5 border-b border-slate-100">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
                       <FolderKanban className="w-5 h-5" />
                     </div>
                     <div>
                       <h3 className="font-bold text-lg text-slate-900 leading-tight">{project.clientName}</h3>
-                      <p className="text-sm text-slate-500 font-medium">{project.projectName}</p>
+                      <p className="text-sm text-slate-500 font-medium">{hasLegacyProjectName ? project.projectName : 'Company / Brand'}</p>
                     </div>
                   </div>
-                  <span className={clsx("text-xs px-2.5 py-1 rounded-full font-semibold border shrink-0", deadlineStatus.color)}>
-                    {deadlineStatus.text}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={clsx("text-xs px-2.5 py-1 rounded-full font-semibold border shrink-0", deadlineStatus.color)}>
+                      {deadlineStatus.text}
+                    </span>
+                    {(canEdit || canDelete) && (
+                      <div className="flex items-center gap-1">
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => openEditCompany(project)}
+                            className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                            title="Edit company"
+                            aria-label={`Edit ${project.clientName}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProject(project)}
+                            className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                            title="Delete company"
+                            aria-label={`Delete ${project.clientName}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2 mb-4">
@@ -94,12 +152,12 @@ const Projects: React.FC = () => {
 
                 <div className="space-y-3">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500 font-medium">Project Progress</span>
+                    <span className="text-slate-500 font-medium">Task Progress</span>
                     <span className="font-bold text-slate-800">{progress}%</span>
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                    <div 
-                      className={clsx("h-2.5 rounded-full transition-all duration-500", progress === 100 ? "bg-emerald-500" : "bg-indigo-500")} 
+                    <div
+                      className={clsx("h-2.5 rounded-full transition-all duration-500", progress === 100 ? "bg-emerald-500" : "bg-blue-500")}
                       style={{ width: `${progress}%` }}
                     ></div>
                   </div>
@@ -127,13 +185,13 @@ const Projects: React.FC = () => {
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-1.5 text-slate-600">
-                      <Clock className="w-4 h-4 text-indigo-500" />
+                      <Clock className="w-4 h-4 text-blue-500" />
                       <span className="font-medium">End: {safeFormatDate(project.deadline)}</span>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-2 text-slate-600 pt-2 border-t border-slate-200">
-                    <Users className="w-4 h-4 text-indigo-500" />
+                    <Users className="w-4 h-4 text-blue-500" />
                     <div className="flex -space-x-2">
                       {stats.teamMembers.slice(0, 3).map((user) => (
                         user ? (
@@ -157,8 +215,8 @@ const Projects: React.FC = () => {
               </div>
 
               <div className="border-t border-slate-200 p-4 bg-white flex justify-center">
-                <Link to={`/tasks?projectId=${project.id}`} className="text-indigo-600 hover:text-indigo-800 text-sm font-semibold flex items-center gap-1 transition-colors group">
-                  View Details <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                <Link to={`/tasks?projectId=${project.id}`} className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1 transition-colors group">
+                  View Tasks <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
               </div>
             </div>
@@ -166,7 +224,7 @@ const Projects: React.FC = () => {
         })}
       </div>
       
-      <CreateProjectModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <CreateProjectModal isOpen={isModalOpen} project={editingProject} onClose={closeCompanyModal} />
     </div>
   );
 };

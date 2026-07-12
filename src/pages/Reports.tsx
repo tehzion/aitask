@@ -4,7 +4,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Department } from '../types';
 import { Users, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { endOfWeek, format, isWithinInterval, parseISO, startOfWeek, subWeeks } from 'date-fns';
-import { ChartCard, ChartEmptyState, MetricCard, PageHeader, cardBase, pageShell } from '../components/ui';
+import { ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
+import { cardBase, pageShell } from '../components/uiTokens';
 import { getVisibleTasks } from '../lib/access';
 
 const Reports: React.FC = () => {
@@ -155,7 +156,7 @@ const Reports: React.FC = () => {
                 <tr key={dept.name} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-indigo-500" />
+                      <Users className="w-4 h-4 text-blue-500" />
                       <span className="font-semibold text-slate-800 text-sm">{dept.name}</span>
                     </div>
                   </td>

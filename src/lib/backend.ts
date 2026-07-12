@@ -28,6 +28,7 @@ const isLocalHost = (host: string) => (
 
 export const SUPABASE_STATE_TABLE = env('VITE_SUPABASE_STATE_TABLE') || 'aitask_app_state';
 export const SUPABASE_STATE_ID = env('VITE_SUPABASE_STATE_ID') || 'default';
+const getSupabasePublishableKey = () => env('VITE_SUPABASE_PUBLISHABLE_KEY') || env('VITE_SUPABASE_ANON_KEY');
 
 export const getBackendMode = (): BackendMode => {
   const configuredMode = env('VITE_AITASK_BACKEND').toLowerCase();
@@ -35,7 +36,7 @@ export const getBackendMode = (): BackendMode => {
     return configuredMode;
   }
 
-  const hasSupabaseConfig = Boolean(env('VITE_SUPABASE_URL') && env('VITE_SUPABASE_ANON_KEY'));
+  const hasSupabaseConfig = Boolean(env('VITE_SUPABASE_URL') && getSupabasePublishableKey());
   if (hasSupabaseConfig || !isLocalHost(getRuntimeHost())) {
     return 'supabase';
   }
@@ -45,7 +46,7 @@ export const getBackendMode = (): BackendMode => {
 
 export const getSupabaseConfig = () => ({
   url: env('VITE_SUPABASE_URL').replace(/\/$/, ''),
-  anonKey: env('VITE_SUPABASE_ANON_KEY'),
+  anonKey: getSupabasePublishableKey(),
   table: SUPABASE_STATE_TABLE,
   stateId: SUPABASE_STATE_ID,
 });
@@ -57,7 +58,7 @@ export const getBackendStatus = (): BackendStatus => {
   const isHostedRuntime = !isLocalHost(runtimeHost);
   const missing = [
     !config.url ? 'VITE_SUPABASE_URL' : '',
-    !config.anonKey ? 'VITE_SUPABASE_ANON_KEY' : '',
+    !config.anonKey ? 'VITE_SUPABASE_PUBLISHABLE_KEY' : '',
   ].filter(Boolean);
 
   if (mode === 'local') {

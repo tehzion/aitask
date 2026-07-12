@@ -1,5 +1,5 @@
 import React from 'react';
-import { cardBase } from './ui';
+import { cardBase } from './uiTokens';
 import { cn } from '../lib/utils';
 
 // Metric Card Skeleton
@@ -9,7 +9,7 @@ export const SkeletonMetricCard: React.FC = () => (
       <div className="h-4 bg-stone-200 rounded-lg w-2/3"></div>
       <div className="h-8 bg-stone-300 rounded-lg w-1/2 mt-1"></div>
     </div>
-    <div className="h-10 w-10 bg-stone-200 rounded-xl shrink-0"></div>
+    <div className="h-10 w-10 bg-stone-200 rounded-lg shrink-0"></div>
   </div>
 );
 
@@ -20,7 +20,7 @@ export const SkeletonChartCard: React.FC<{ className?: string }> = ({ className 
       <div className="h-5 bg-stone-300 rounded-lg w-1/3"></div>
       <div className="h-4 bg-stone-200 rounded-lg w-1/2"></div>
     </div>
-    <div className="h-64 bg-stone-100 rounded-xl w-full flex items-end justify-between p-4 gap-2">
+    <div className="h-64 bg-stone-100 rounded-lg w-full flex items-end justify-between p-4 gap-2">
       <div className="bg-stone-200/60 rounded-t w-full" style={{ height: '30%' }}></div>
       <div className="bg-stone-200/60 rounded-t w-full" style={{ height: '70%' }}></div>
       <div className="bg-stone-200/60 rounded-t w-full" style={{ height: '45%' }}></div>

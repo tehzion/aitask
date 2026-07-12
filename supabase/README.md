@@ -12,7 +12,7 @@ This project now supports an opt-in Supabase snapshot backend while keeping the 
 ```env
 VITE_AITASK_BACKEND=supabase
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 VITE_AITASK_SHOW_DEMO_LOGIN=false
 ```
 

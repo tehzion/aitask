@@ -1,28 +1,50 @@
 import React, { useState, useRef } from 'react';
 import { useStore } from '../store';
 import { X, Plus } from 'lucide-react';
-import { ServiceType } from '../types';
+import { Project, ServiceType } from '../types';
+import { getClientOptions, getServiceOptions, hasChoice, PRESET_SERVICES } from '../lib/choiceOptions';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  project?: Project | null;
   onProjectCreated?: (projectId: string) => void;
+  onProjectUpdated?: (projectId: string) => void;
 }
 
-const PRESET_SERVICES: ServiceType[] = ['Social Media', 'Design', 'Video', 'Website', 'SEO', 'Ads', 'Branding'];
-
-const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onProjectCreated }) => {
-  const { addProject } = useStore();
+const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProjectCreated, onProjectUpdated }) => {
+  const { addProject, updateProject, projects, tasks, users } = useStore();
+  const clientListId = React.useId();
+  const isEditing = Boolean(project);
 
   const [clientName, setClientName]         = useState('');
-  const [projectName, setProjectName]       = useState('');
-  const [startDate, setStartDate]           = useState('');
-  const [deadline, setDeadline]             = useState('');
+  const [isAddingCustomClient, setIsAddingCustomClient] = useState(false);
+  const [customClientInput, setCustomClientInput] = useState('');
+  const [customClientError, setCustomClientError] = useState('');
   const [selectedServices, setSelectedServices] = useState<ServiceType[]>([]);
   const [customServices, setCustomServices] = useState<string[]>([]);
   const [customInput, setCustomInput]       = useState('');
   const [customError, setCustomError]       = useState('');
+  const [formError, setFormError]           = useState('');
   const customInputRef = useRef<HTMLInputElement>(null);
+  const clientOptions = React.useMemo(() => getClientOptions(projects, tasks, users), [projects, tasks, users]);
+  const serviceOptions = React.useMemo(() => getServiceOptions(projects, tasks), [projects, tasks]);
+  const savedCustomServices = React.useMemo(
+    () => serviceOptions.filter(service => !hasChoice(PRESET_SERVICES, service)),
+    [serviceOptions]
+  );
+  const allServices = React.useMemo(() => {
+    const services = new Map<string, ServiceType>();
+
+    [...selectedServices, ...customServices].forEach(service => {
+      const trimmed = service.trim();
+      if (!trimmed) return;
+      const key = trimmed.toLowerCase();
+      if (!services.has(key)) services.set(key, trimmed);
+    });
+
+    return Array.from(services.values());
+  }, [selectedServices, customServices]);
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -34,9 +56,56 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onProjectCreated
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    setFormError('');
+    setCustomError('');
+    setCustomClientError('');
+    setIsAddingCustomClient(false);
+    setCustomClientInput('');
+    setCustomInput('');
+    setCustomServices([]);
+
+    if (project) {
+      setClientName(project.clientName);
+      setSelectedServices(project.services || []);
+    } else {
+      setClientName('');
+      setSelectedServices([]);
+    }
+  }, [isOpen, project]);
+
   if (!isOpen) return null;
 
-  const allServices = [...selectedServices, ...customServices];
+  const addCustomClient = () => {
+    const trimmed = customClientInput.trim();
+    if (!trimmed) return;
+
+    if (trimmed.length > 80) {
+      setCustomClientError('Client or brand name must be 80 characters or less.');
+      return;
+    }
+
+    const existingClient = clientOptions.find(choice => choice.toLowerCase() === trimmed.toLowerCase());
+    setClientName(existingClient || trimmed);
+    setIsAddingCustomClient(false);
+    setCustomClientInput('');
+    setCustomClientError('');
+    setFormError('');
+  };
+
+  const handleCustomClientKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomClient();
+    }
+
+    if (e.key === 'Escape') {
+      setIsAddingCustomClient(false);
+      setCustomClientInput('');
+      setCustomClientError('');
+    }
+  };
 
   const togglePreset = (service: ServiceType) => {
     setSelectedServices(prev =>
@@ -50,7 +119,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onProjectCreated
 
     // Duplicate check (case-insensitive, across both preset and custom)
     const allLower = [
-      ...PRESET_SERVICES.map(s => s.toLowerCase()),
+      ...serviceOptions.map(s => s.toLowerCase()),
       ...customServices.map(s => s.toLowerCase()),
     ];
     if (allLower.includes(trimmed.toLowerCase())) {
@@ -79,29 +148,70 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onProjectCreated
 
   const resetForm = () => {
     setClientName('');
-    setProjectName('');
-    setStartDate('');
-    setDeadline('');
+    setIsAddingCustomClient(false);
+    setCustomClientInput('');
+    setCustomClientError('');
     setSelectedServices([]);
     setCustomServices([]);
     setCustomInput('');
     setCustomError('');
+    setFormError('');
   };
 
   const handleClose = () => { resetForm(); onClose(); };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (allServices.length === 0) return;
+    setFormError('');
+    setCustomError('');
+    setCustomClientError('');
 
-    const services: ServiceType[] = allServices as ServiceType[];
+    const trimmedClientName = clientName.trim();
+    const today = new Date().toISOString().split('T')[0];
+    const finalStartDate = project?.startDate || today;
+    const finalDeadline = project?.deadline || '';
+
+    if (!trimmedClientName) {
+      setFormError('Company or brand name is required.');
+      return;
+    }
+
+    if (allServices.length === 0) {
+      setFormError('Select or add at least one service.');
+      return;
+    }
+
+    if (project) {
+      const result = updateProject(project.id, {
+        clientName: trimmedClientName,
+        projectName: trimmedClientName,
+        startDate: finalStartDate,
+        deadline: finalDeadline,
+        services: allServices,
+      });
+
+      if (!result.ok) {
+        setFormError(result.error || 'Unable to update this company.');
+        return;
+      }
+
+      if (onProjectUpdated) onProjectUpdated(project.id);
+      handleClose();
+      return;
+    }
+
     const newProjectId = addProject({
-      clientName,
-      projectName,
-      startDate: startDate || new Date().toISOString().split('T')[0],
-      deadline:  deadline  || new Date().toISOString().split('T')[0],
-      services,
+      clientName: trimmedClientName,
+      projectName: trimmedClientName,
+      startDate: finalStartDate,
+      deadline: finalDeadline,
+      services: allServices,
     });
+
+    if (!newProjectId) {
+      setFormError('You do not have permission to create projects.');
+      return;
+    }
 
     if (onProjectCreated) onProjectCreated(newProjectId);
     handleClose();
@@ -109,13 +219,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onProjectCreated
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh]">
+      <div className="bg-white rounded-lg shadow-xl shadow-slate-950/10 w-full max-w-md flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">Create New Project</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Start a new project for a client.</p>
+            <h2 className="text-xl font-bold text-slate-800">{isEditing ? 'Edit Company / Brand' : 'Create Company / Brand'}</h2>
+            <p className="text-xs text-slate-500 mt-0.5">{isEditing ? 'Update the company name and service scope.' : 'Add a company or brand for task assignment.'}</p>
           </div>
           <button
             onClick={handleClose}
@@ -131,51 +241,58 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onProjectCreated
           <form id="create-project-form" onSubmit={handleSubmit} className="space-y-5">
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                Client Name <span className="text-red-500">*</span>
-              </label>
+              <div className="mb-1.5 flex items-center justify-between gap-3">
+                <label className="block text-sm font-semibold text-slate-700">
+                  Company / Brand Name <span className="text-red-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingCustomClient(true);
+                    setCustomClientInput('');
+                    setCustomClientError('');
+                  }}
+                  className="flex items-center text-xs font-semibold text-teal-700 transition-colors hover:text-teal-800"
+                >
+                  <Plus className="mr-0.5 h-3 w-3" /> New Company / Brand
+                </button>
+              </div>
               <input
                 type="text" required
-                value={clientName} onChange={e => setClientName(e.target.value)}
-                className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
+                value={clientName} onChange={e => { setClientName(e.target.value); setFormError(''); }}
+                list={clientListId}
+                maxLength={80}
+                className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                 placeholder="e.g., TechNova, EcoLife"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                Project Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text" required
-                value={projectName} onChange={e => setProjectName(e.target.value)}
-                className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
-                placeholder="e.g., Q3 Marketing Campaign"
-              />
-            </div>
-
-            {/* Dates */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                  Start Date <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date" required value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                  Deadline <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date" required value={deadline}
-                  onChange={e => setDeadline(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
-                />
-              </div>
+              <datalist id={clientListId}>
+                {clientOptions.map(option => <option key={option} value={option} />)}
+              </datalist>
+              {isAddingCustomClient && (
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={customClientInput}
+                    onChange={e => { setCustomClientInput(e.target.value); setCustomClientError(''); }}
+                    onKeyDown={handleCustomClientKeyDown}
+                    maxLength={80}
+                    autoFocus
+                    className="min-w-0 flex-1 bg-white border border-dashed border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-teal-500 focus:border-teal-500 block px-3 py-2 outline-none shadow-sm"
+                    placeholder="New company or brand"
+                  />
+                  <button
+                    type="button"
+                    onClick={addCustomClient}
+                    disabled={!customClientInput.trim()}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Plus className="h-4 w-4" /> Add
+                  </button>
+                </div>
+              )}
+              {customClientError && (
+                <p className="mt-1.5 text-xs text-red-500">{customClientError}</p>
+              )}
             </div>
 
             {/* Required Services */}
@@ -195,8 +312,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onProjectCreated
                       onClick={() => togglePreset(service)}
                       className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
                         isSelected
-                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                          : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
+                          ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                          : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
                       }`}
                     >
                       {isSelected && <span className="mr-1">✓</span>}{service}
@@ -205,19 +322,41 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onProjectCreated
                 })}
               </div>
 
+              {savedCustomServices.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {savedCustomServices.map(service => {
+                    const isSelected = selectedServices.includes(service);
+                    return (
+                      <button
+                        key={service}
+                        type="button"
+                        onClick={() => togglePreset(service)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                          isSelected
+                            ? 'bg-teal-600 border-teal-600 text-white shadow-sm'
+                            : 'bg-white border-slate-200 text-slate-600 hover:border-teal-300 hover:text-teal-700'
+                        }`}
+                      >
+                        {isSelected && <span className="mr-1">✓</span>}{service}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* Custom services tags */}
               {customServices.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-3">
                   {customServices.map(name => (
                     <span
                       key={name}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-100 border border-violet-300 text-violet-700"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-teal-50 border border-teal-200 text-teal-700"
                     >
                       {name}
                       <button
                         type="button"
                         onClick={() => removeCustomService(name)}
-                        className="ml-0.5 text-violet-400 hover:text-violet-700 transition-colors rounded"
+                        className="ml-0.5 text-teal-500 hover:text-teal-700 transition-colors rounded"
                         aria-label={`Remove ${name}`}
                       >
                         <X className="w-3 h-3" />
@@ -238,14 +377,14 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onProjectCreated
                     onKeyDown={handleCustomKeyDown}
                     placeholder="Add custom service…"
                     maxLength={40}
-                    className="w-full bg-white border border-dashed border-slate-300 text-slate-800 text-sm rounded-lg focus:ring-2 focus:ring-violet-400 focus:border-violet-400 block px-3 py-2 outline-none placeholder:text-slate-400"
+                    className="w-full bg-white border border-dashed border-slate-300 text-slate-800 text-sm rounded-lg focus:ring-2 focus:ring-teal-400 focus:border-teal-400 block px-3 py-2 outline-none placeholder:text-slate-400"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={addCustomService}
                   disabled={!customInput.trim()}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
                 >
                   <Plus className="w-4 h-4" /> Add
                 </button>
@@ -271,6 +410,12 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onProjectCreated
               )}
             </div>
 
+            {formError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                {formError}
+              </div>
+            )}
+
           </form>
         </div>
 
@@ -285,9 +430,9 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, onProjectCreated
           <button
             type="submit" form="create-project-form"
             disabled={allServices.length === 0}
-            className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Create Project
+            {isEditing ? 'Save Changes' : 'Create Company'}
           </button>
         </div>
       </div>

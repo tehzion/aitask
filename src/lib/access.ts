@@ -62,6 +62,7 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewProjects',
     'viewReports',
     'viewSettings',
+    'createTasks',
   ]),
   Client: makePermissions([
     'viewDashboard',
@@ -127,9 +128,31 @@ export const canManageTasks = (user: User | null | undefined, customRoles: Custo
   hasPermission(user, 'createTasks', customRoles) || hasPermission(user, 'editTasks', customRoles)
 );
 export const canManageProjects = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'createProjects', customRoles);
-export const canEditTask = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
-  hasPermission(user, 'editTasks', customRoles) || (user?.role === 'Staff' && task.assignedTo === user.id)
+export const canAssignTasksToOthers = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
+  hasPermission(user, 'editTasks', customRoles)
 );
+export const canEditTask = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
+  hasPermission(user, 'editTasks', customRoles) ||
+  (user?.role === 'Staff' && (task.assignedTo === user.id || task.createdBy === user.id))
+);
+export const canDeleteTask = canEditTask;
+export const isProjectParticipant = (user: User | null | undefined, project: Project, tasks: Task[] = []) => {
+  if (!user) return false;
+  if (project.createdBy === user.id) return true;
+  return tasks.some(task => (
+    task.projectId === project.id &&
+    (task.assignedTo === user.id || task.createdBy === user.id)
+  ));
+};
+export const canEditProject = (
+  user: User | null | undefined,
+  project: Project,
+  customRoles: CustomRole[] = []
+) => (
+  hasPermission(user, 'createProjects', customRoles) ||
+  (user?.role === 'Staff' && project.createdBy === user.id)
+);
+export const canDeleteProject = canEditProject;
 export const canReviewTaskAsClient = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
   user?.role === 'Client' &&
   hasPermission(user, 'clientReview', customRoles) &&
@@ -157,9 +180,10 @@ export const getVisibleTasks = (user: User | null | undefined, tasks: Task[]) =>
   return tasks;
 };
 
-export const getVisibleProjects = (user: User | null | undefined, projects: Project[]) => {
+export const getVisibleProjects = (user: User | null | undefined, projects: Project[], tasks: Task[] = []) => {
   if (!user) return [];
   if (user.role === 'Client') return projects.filter(project => project.clientName === user.companyName);
+  if (user.role === 'Staff') return projects.filter(project => isProjectParticipant(user, project, tasks));
   return projects;
 };
 

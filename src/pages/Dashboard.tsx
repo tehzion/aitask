@@ -8,12 +8,13 @@ import {
 import { format, isToday, isThisWeek, isBefore, parseISO, subMonths, isSameMonth, differenceInDays } from 'date-fns';
 import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon, Plus, FolderKanban } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader, pageShell, cardBase } from '../components/ui';
+import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
+import { cardBase, pageShell } from '../components/uiTokens';
 import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString } from '../lib/utils';
 
-const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+const COLORS = ['#2563eb', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#db2777'];
 
 interface StatCardProps {
   title: string;
@@ -49,7 +50,7 @@ const Dashboard: React.FC = () => {
   const { projects, tasks: allTasks, currentUser, rolePermissions, backend, setCreateTaskModalOpen } = useStore();
 
   const tasks = useMemo(() => getVisibleTasks(currentUser, allTasks), [allTasks, currentUser]);
-  const visibleProjects = useMemo(() => getVisibleProjects(currentUser, projects), [currentUser, projects]);
+  const visibleProjects = useMemo(() => getVisibleProjects(currentUser, projects, allTasks), [allTasks, currentUser, projects]);
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
   const hasTaskData = tasks.length > 0;
 
@@ -155,10 +156,10 @@ const Dashboard: React.FC = () => {
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <SkeletonChartCard className="lg:col-span-2" />
-          <div className="bg-white p-5 rounded-lg border border-[#e8e3db] shadow-sm animate-pulse space-y-4">
+          <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm animate-pulse space-y-4">
             <div className="h-5 bg-stone-300 rounded w-1/3"></div>
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-14 bg-stone-100 rounded-xl w-full"></div>
+              <div key={i} className="h-14 bg-stone-100 rounded-lg w-full"></div>
             ))}
           </div>
         </div>
@@ -185,17 +186,17 @@ const Dashboard: React.FC = () => {
       />
 
       {!hasTaskData && (
-        <section className={cn(cardBase, 'overflow-hidden border-orange-100 bg-gradient-to-br from-white to-orange-50/40')}>
+        <section className={cn(cardBase, 'overflow-hidden border-blue-100 bg-blue-50/35')}>
           <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-center">
             <div className="flex min-w-0 gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
                 <FolderKanban className="h-6 w-6" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-lg font-bold text-stone-900">
+                <h2 className="text-lg font-bold text-slate-950">
                   {currentUser?.role === 'Client' ? 'No visible client tasks yet' : 'Start the live workspace'}
                 </h2>
-                <p className="mt-1 max-w-3xl text-sm leading-6 text-stone-600">
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
                   {currentUser?.role === 'Client'
                     ? 'Tasks for your company will appear here as soon as the team publishes or assigns them.'
                     : 'Demo tasks are cleared. Create the first real task so dashboards, calendars, notifications, and reports begin filling with live data.'}
@@ -211,7 +212,7 @@ const Dashboard: React.FC = () => {
               )}
               <Link
                 to="/projects"
-                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#e0d9cf] bg-white px-4 py-2 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50"
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
                 View projects
                 <ArrowRight className="h-4 w-4" />
@@ -223,7 +224,7 @@ const Dashboard: React.FC = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard title="Active Projects" value={stats.activeProjects} icon={LayoutList} colorClass="text-indigo-600" to="/projects" />
+        <StatCard title="Active Projects" value={stats.activeProjects} icon={LayoutList} colorClass="text-blue-600" to="/projects" />
         <StatCard title="Pending Tasks" value={stats.pendingTasks} icon={Clock} colorClass="text-amber-500" to="/tasks" />
         <StatCard title="Completed Tasks" value={stats.completedTasks} icon={CheckCircle2} colorClass="text-emerald-500" to="/tasks" />
         <StatCard title="Overdue Tasks" value={stats.overdueTasks} icon={AlertCircle} colorClass="text-red-500" to="/tasks" />
@@ -297,7 +298,7 @@ const Dashboard: React.FC = () => {
         <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm flex flex-col">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-base font-semibold text-slate-900">Recent Tasks</h3>
-            <Link to="/tasks" className="text-sm font-medium text-indigo-600 hover:text-indigo-800 flex items-center">
+            <Link to="/tasks" className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
               View All <ArrowRight className="w-4 h-4 ml-1" />
             </Link>
           </div>
@@ -321,12 +322,12 @@ const Dashboard: React.FC = () => {
                     <span className="truncate max-w-[120px]">{task.projectName || 'Independent'}</span>
                   </div>
                   <div className="text-xs text-stone-500 flex justify-between items-center mt-2.5">
-                    <span className="font-medium text-orange-700">{task.clientName}</span>
+                    <span className="font-medium text-teal-700">{task.clientName}</span>
                     <span className={cn(`text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap bg-stone-100 text-stone-700`,
                       task.status === 'Completed' && 'bg-emerald-100 text-emerald-700',
                       task.status === 'In Progress' && 'bg-blue-100 text-blue-700',
                       task.status === 'Pending' && 'bg-amber-100 text-amber-700',
-                      task.status === 'Waiting Approval' && 'bg-orange-100 text-orange-700',
+                      task.status === 'Waiting Approval' && 'bg-amber-100 text-amber-700',
                       task.status === 'Cancelled' && 'bg-red-100 text-red-700'
                     )}>
                       {task.status}
@@ -358,7 +359,7 @@ const Dashboard: React.FC = () => {
               <h3 className="text-lg font-bold text-stone-900">My Tasks Checklist</h3>
               <p className="text-xs text-stone-500">Keep track of your personal priorities and required actions.</p>
             </div>
-            <Link to="/tasks" className="text-sm font-semibold text-orange-700 hover:text-orange-850 flex items-center">
+            <Link to="/tasks" className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
               Go to Tasks <ArrowRight className="w-4 h-4 ml-1" />
             </Link>
           </div>
@@ -376,7 +377,7 @@ const Dashboard: React.FC = () => {
                     <p className="text-xs font-bold text-stone-800 truncate">{task.title}</p>
                     <div className="flex justify-between text-[10px] text-stone-500 mt-1">
                       <span>{task.id}</span>
-                      <span className="font-semibold text-orange-700">{task.clientName}</span>
+                      <span className="font-semibold text-teal-700">{task.clientName}</span>
                     </div>
                   </Link>
                 ))}
@@ -405,7 +406,7 @@ const Dashboard: React.FC = () => {
                       <p className="text-xs font-bold text-red-900 truncate">{task.title}</p>
                       <div className="flex justify-between text-[10px] text-red-700/80 mt-1">
                         <span>{days} day{days === 1 ? '' : 's'} overdue</span>
-                        <span className="font-semibold text-orange-700">{task.clientName}</span>
+                        <span className="font-semibold text-teal-700">{task.clientName}</span>
                       </div>
                     </Link>
                   );
@@ -428,7 +429,7 @@ const Dashboard: React.FC = () => {
                     <p className="text-xs font-bold text-stone-800 truncate">{task.title}</p>
                     <div className="flex justify-between text-[10px] text-stone-500 mt-1">
                       <span>{task.status}</span>
-                      <span className="font-semibold text-orange-700">{task.clientName}</span>
+                      <span className="font-semibold text-teal-700">{task.clientName}</span>
                     </div>
                   </Link>
                 ))}

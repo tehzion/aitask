@@ -1,6 +1,7 @@
 export type Role = 'Admin' | 'Staff' | 'Client';
 export type Department = 'Operation' | 'Management' | 'Videoshooting' | 'Ads Management' | 'Account & Finance' | 'Designer' | 'Editor' | 'Client';
-export type ServiceType = 'Social Media' | 'Design' | 'Video' | 'Website' | 'SEO' | 'Ads' | 'Branding';
+export type PresetServiceType = 'Social Media' | 'Design' | 'Video' | 'Website' | 'SEO' | 'Ads' | 'Branding';
+export type ServiceType = PresetServiceType | (string & {});
 export type Priority = 'Low' | 'Medium' | 'High' | 'Urgent';
 export type TaskStatus = string;
 export type ClientApprovalStatus = 'Pending' | 'Approved' | 'Rejected';
@@ -34,8 +35,10 @@ export interface CustomRole {
   updatedAt: string;
 }
 
-export interface User {
+export interface WorkspaceMember {
   id: string;
+  authUserId?: string;
+  workspaceId?: string;
   name: string;
   email?: string;
   password?: string; // Backward compatibility only; active mock passwords are local-only
@@ -51,6 +54,13 @@ export interface User {
   updatedAt?: string;
 }
 
+export type User = WorkspaceMember;
+
+export interface NotificationRoute {
+  page: 'dashboard' | 'tasks' | 'calendar' | 'projects' | 'reports' | 'approvals' | 'settings';
+  entityId?: string;
+}
+
 export interface AppNotification {
   id: string;
   targetUserId?: string; // e.g., assignee
@@ -58,7 +68,7 @@ export interface AppNotification {
   targetClient?: string; // e.g., 'TechNova'
   title: string;
   message: string;
-  link: string;
+  route: NotificationRoute;
   isRead: boolean;
   readByUserIds?: string[];
   createdAt: string;
@@ -94,6 +104,9 @@ export interface Registration {
 
 export interface Project {
   id: string;
+  workspaceId?: string;
+  clientId?: string;
+  createdBy?: string;
   clientName: string;
   projectName: string;
   services: ServiceType[];
@@ -106,6 +119,8 @@ export interface Project {
 
 export interface Task {
   id: string;
+  workspaceId?: string;
+  clientId?: string;
   projectId?: string;
   clientName: string;
   customerDetails?: string;

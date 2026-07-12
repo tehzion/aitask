@@ -8,7 +8,7 @@ The app runs in local demo mode by default and now includes an opt-in Supabase s
 
 1. Copy `.env.example` to `.env.local`.
 2. Run `supabase/schema.sql` in your Supabase SQL editor.
-3. Set `VITE_AITASK_BACKEND=supabase`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY`.
+3. Set `VITE_AITASK_BACKEND=supabase`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_PUBLISHABLE_KEY`.
    Keep `VITE_AITASK_SHOW_DEMO_LOGIN=false` for hosted/client-facing builds.
 4. Restart the Vite dev server.
 

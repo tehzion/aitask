@@ -7,14 +7,14 @@ const iconMap = {
   success: <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />,
   warning: <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />,
   error: <XCircle className="w-5 h-5 text-red-600 shrink-0" />,
-  info: <Info className="w-5 h-5 text-orange-700 shrink-0" />,
+  info: <Info className="w-5 h-5 text-blue-700 shrink-0" />,
 };
 
 const bgClasses = {
   success: 'bg-white border border-emerald-100 shadow-emerald-50/40 text-stone-800',
   warning: 'bg-white border border-amber-100 shadow-amber-50/40 text-stone-800',
   error: 'bg-white border border-red-100 shadow-red-50/40 text-stone-800',
-  info: 'bg-white border border-orange-100 shadow-orange-50/40 text-stone-800',
+  info: 'bg-white border border-blue-100 shadow-blue-50/40 text-slate-800',
 };
 
 const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
@@ -23,7 +23,7 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
   return (
     <div
       className={cn(
-        'flex items-center gap-3 p-4 rounded-xl shadow-lg min-w-[300px] max-w-sm backdrop-blur-sm pointer-events-auto transition-all duration-300',
+        'flex items-center gap-3 p-4 rounded-lg shadow-lg min-w-[300px] max-w-sm backdrop-blur-sm pointer-events-auto transition-all duration-300',
         'animate-in fade-in slide-in-from-right-5 slide-in-from-bottom-2',
         bgClasses[toast.type]
       )}

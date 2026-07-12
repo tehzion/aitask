@@ -1,13 +1,69 @@
 import React from 'react';
-import { AlertTriangle, Bell, CheckCircle2, Cloud, Database, Lock, RefreshCw, ShieldCheck, SlidersHorizontal, UserCircle, Volume2, VolumeX } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Bell, CheckCircle2, Cloud, Database, Lock, RefreshCw, ShieldCheck, SlidersHorizontal, Upload, UserCircle, Volume2, VolumeX, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { Badge, Button, MetricCard, PageHeader, cardBase, inputBase, pageShell } from '../components/ui';
+import { Badge, Button, MetricCard, PageHeader } from '../components/ui';
+import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
 import BackendFreshness from '../components/BackendFreshness';
 import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
+import { canUsePasswordResetBypass, enablePasswordResetBypass } from '../lib/auth';
+
+const AVATAR_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+const AVATAR_UPLOAD_SIZE = 320;
+const AVATAR_UPLOAD_QUALITY = 0.86;
+const AVATAR_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => {
+    if (typeof reader.result === 'string') resolve(reader.result);
+    else reject(new Error('Could not read the selected image.'));
+  };
+  reader.onerror = () => reject(new Error('Could not read the selected image.'));
+  reader.readAsDataURL(file);
+});
+
+const loadImage = (src: string) => new Promise<HTMLImageElement>((resolve, reject) => {
+  const image = new Image();
+  image.onload = () => resolve(image);
+  image.onerror = () => reject(new Error('The selected file is not a readable image.'));
+  image.src = src;
+});
+
+const resizeAvatarImage = async (file: File) => {
+  const dataUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(dataUrl);
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+
+  if (!context) throw new Error('This browser cannot prepare the avatar image.');
+
+  canvas.width = AVATAR_UPLOAD_SIZE;
+  canvas.height = AVATAR_UPLOAD_SIZE;
+
+  const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
+  const sourceX = Math.max(0, (image.naturalWidth - sourceSize) / 2);
+  const sourceY = Math.max(0, (image.naturalHeight - sourceSize) / 2);
+
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, AVATAR_UPLOAD_SIZE, AVATAR_UPLOAD_SIZE);
+  context.drawImage(
+    image,
+    sourceX,
+    sourceY,
+    sourceSize,
+    sourceSize,
+    0,
+    0,
+    AVATAR_UPLOAD_SIZE,
+    AVATAR_UPLOAD_SIZE,
+  );
+
+  return canvas.toDataURL('image/jpeg', AVATAR_UPLOAD_QUALITY);
+};
 
 const Settings: React.FC = () => {
   const navigate = useNavigate();
@@ -29,6 +85,9 @@ const Settings: React.FC = () => {
   const [profileName, setProfileName] = React.useState(currentUser?.name || '');
   const [avatarUrl, setAvatarUrl] = React.useState(currentUser?.avatar || '');
   const [profileMessage, setProfileMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [avatarUploadMessage, setAvatarUploadMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [isPreparingAvatar, setIsPreparingAvatar] = React.useState(false);
+  const avatarFileInputRef = React.useRef<HTMLInputElement>(null);
   const [soundEnabled, setSoundEnabledState] = React.useState(getSoundEnabled);
   const [passwordForm, setPasswordForm] = React.useState({
     currentPassword: '',
@@ -61,7 +120,7 @@ const Settings: React.FC = () => {
 
   const backendStatus = getBackendStatus();
   const visibleTasks = getVisibleTasks(currentUser, tasks);
-  const visibleProjects = getVisibleProjects(currentUser, projects);
+  const visibleProjects = getVisibleProjects(currentUser, projects, tasks);
   const effectivePermissions = getEffectivePermissions(currentUser, rolePermissions);
   const effectiveRoleName = getEffectiveRoleName(currentUser, rolePermissions);
   const enabledPermissions = Object.entries(effectivePermissions)
@@ -75,11 +134,13 @@ const Settings: React.FC = () => {
     ? `Review your profile and ${currentUser.companyName || 'client'} workspace state.`
     : 'Review your profile, workspace scope, and backend sync state.';
   const profileChanged = profileName.trim() !== (currentUser?.name || '') || avatarUrl.trim() !== (currentUser?.avatar || '');
+  const isUploadedAvatar = avatarUrl.startsWith('data:image/');
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
   const mustResetPassword = Boolean(currentUser?.mustResetPassword);
+  const canBypassPasswordReset = mustResetPassword && canUsePasswordResetBypass();
   const isSupabaseMode = backendStatus.mode === 'supabase';
   const hostedLocalBuild = backendStatus.mode === 'local' && backendStatus.isHostedRuntime;
-  const hasSupabaseKey = isSupabaseMode && !backendStatus.missing.includes('VITE_SUPABASE_ANON_KEY');
+  const hasSupabaseKey = isSupabaseMode && !backendStatus.missing.includes('VITE_SUPABASE_PUBLISHABLE_KEY');
   const hasCheckedRemote = Boolean(backend.lastPulledAt || backend.lastSyncedAt || backend.remoteUpdatedAt);
   const backendSetupItems = [
     {
@@ -99,7 +160,7 @@ const Settings: React.FC = () => {
     {
       label: 'Publishable key',
       done: hasSupabaseKey,
-      detail: hasSupabaseKey ? 'Client key is configured.' : 'Set VITE_SUPABASE_ANON_KEY.',
+      detail: hasSupabaseKey ? 'Client key is configured.' : 'Set VITE_SUPABASE_PUBLISHABLE_KEY.',
     },
     {
       label: 'Snapshot target',
@@ -123,6 +184,7 @@ const Settings: React.FC = () => {
     setProfileName(currentUser?.name || '');
     setAvatarUrl(currentUser?.avatar || '');
     setProfileMessage(null);
+    setAvatarUploadMessage(null);
     setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setPasswordMessage(null);
   }, [currentUser?.id, currentUser?.name, currentUser?.avatar]);
@@ -138,18 +200,70 @@ const Settings: React.FC = () => {
       tone: result.ok ? 'success' : 'error',
       text: result.ok ? 'Profile updated.' : result.error || 'Profile could not be updated.',
     });
+    if (result.ok) setAvatarUploadMessage(null);
   };
 
   const resetProfileForm = () => {
     setProfileName(currentUser?.name || '');
     setAvatarUrl(currentUser?.avatar || '');
     setProfileMessage(null);
+    setAvatarUploadMessage(null);
   };
 
   const useGeneratedAvatar = () => {
     const seed = encodeURIComponent((profileName || currentUser?.name || 'AiTask User').replace(/\s/g, ''));
     setAvatarUrl(`https://i.pravatar.cc/150?u=${seed}`);
     setProfileMessage(null);
+    setAvatarUploadMessage(null);
+  };
+
+  const clearAvatar = () => {
+    setAvatarUrl('');
+    setProfileMessage(null);
+    setAvatarUploadMessage(null);
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    setProfileMessage(null);
+    setAvatarUploadMessage(null);
+
+    if (!AVATAR_ALLOWED_TYPES.has(file.type)) {
+      setAvatarUploadMessage({
+        tone: 'error',
+        text: 'Choose a JPG, PNG, WebP, or GIF image.',
+      });
+      return;
+    }
+
+    if (file.size > AVATAR_UPLOAD_MAX_BYTES) {
+      setAvatarUploadMessage({
+        tone: 'error',
+        text: 'Photo must be 5 MB or smaller.',
+      });
+      return;
+    }
+
+    try {
+      setIsPreparingAvatar(true);
+      const resizedAvatar = await resizeAvatarImage(file);
+      setAvatarUrl(resizedAvatar);
+      setAvatarUploadMessage({
+        tone: 'success',
+        text: 'Photo ready. Save profile to apply it.',
+      });
+    } catch (error) {
+      setAvatarUploadMessage({
+        tone: 'error',
+        text: error instanceof Error ? error.message : 'Could not prepare that photo.',
+      });
+    } finally {
+      setIsPreparingAvatar(false);
+    }
   };
 
   const updatePasswordField = (field: keyof typeof passwordForm, value: string) => {
@@ -179,6 +293,25 @@ const Settings: React.FC = () => {
     });
   };
 
+  const handlePasswordResetBypass = () => {
+    if (!currentUser) return;
+
+    const bypassEnabled = enablePasswordResetBypass(currentUser.id);
+    if (!bypassEnabled) {
+      setPasswordMessage({
+        tone: 'error',
+        text: 'Temporary access is not enabled for this environment.',
+      });
+      return;
+    }
+
+    setPasswordMessage({
+      tone: 'success',
+      text: 'Opening the workspace for this browser session...',
+    });
+    navigate('/', { replace: true });
+  };
+
   return (
     <div className={pageShell}>
       <PageHeader
@@ -187,10 +320,10 @@ const Settings: React.FC = () => {
       />
 
       {mustResetPassword && (
-        <section className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900 shadow-sm">
+        <section className="rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-amber-700">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700">
                 <Lock className="h-5 w-5" />
               </div>
               <div>
@@ -200,7 +333,15 @@ const Settings: React.FC = () => {
                 </p>
               </div>
             </div>
-            <Badge tone="amber" className="self-start">Required</Badge>
+            <div className="flex flex-col gap-2 sm:items-end">
+              <Badge tone="amber" className="self-start sm:self-end">Required</Badge>
+              {canBypassPasswordReset && (
+                <Button type="button" variant="secondary" onClick={handlePasswordResetBypass} className="min-h-9 px-3 py-1.5 text-xs">
+                  Continue for now
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           </div>
         </section>
       )}
@@ -208,7 +349,7 @@ const Settings: React.FC = () => {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className={`xl:col-span-2 ${cardBase} overflow-hidden`}>
           <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
-            <UserCircle className="w-5 h-5 text-indigo-600" />
+            <UserCircle className="w-5 h-5 text-blue-600" />
             <h2 className="text-lg font-semibold text-slate-800">Profile</h2>
           </div>
           <form onSubmit={handleProfileSave} className="p-6 space-y-5">
@@ -223,9 +364,45 @@ const Settings: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <Button type="button" variant="secondary" onClick={useGeneratedAvatar} className="min-h-9 px-3 py-1.5">
-                  Generate avatar
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    ref={avatarFileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={handleAvatarUpload}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => avatarFileInputRef.current?.click()}
+                    disabled={isPreparingAvatar}
+                    className="min-h-9 px-3 py-1.5"
+                  >
+                    <Upload className="h-4 w-4" />
+                    {isPreparingAvatar ? 'Preparing...' : 'Upload photo'}
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={useGeneratedAvatar} className="min-h-9 px-3 py-1.5">
+                    Generate
+                  </Button>
+                  {avatarUrl && (
+                    <Button type="button" variant="ghost" onClick={clearAvatar} className="min-h-9 px-3 py-1.5 text-red-600 hover:bg-red-50 hover:text-red-700">
+                      <X className="h-4 w-4" />
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs leading-5 text-slate-500">
+                  JPG, PNG, WebP, or GIF. Photos are resized before saving.
+                </p>
+                {avatarUploadMessage && (
+                  <p className={cn(
+                    'text-xs font-medium leading-5',
+                    avatarUploadMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-600'
+                  )}>
+                    {avatarUploadMessage.text}
+                  </p>
+                )}
               </div>
 
               <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
@@ -244,18 +421,27 @@ const Settings: React.FC = () => {
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label htmlFor="profile-avatar" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Avatar URL</label>
+                  <label htmlFor="profile-avatar" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                    {isUploadedAvatar ? 'Avatar source' : 'Avatar URL'}
+                  </label>
                   <input
                     id="profile-avatar"
-                    value={avatarUrl}
+                    value={isUploadedAvatar ? 'Uploaded photo stored with profile' : avatarUrl}
                     onChange={event => {
                       setAvatarUrl(event.target.value);
                       setProfileMessage(null);
+                      setAvatarUploadMessage(null);
                     }}
+                    readOnly={isUploadedAvatar}
                     className={cn(inputBase, 'px-3 py-2.5')}
-                    placeholder="https://example.com/avatar.jpg"
+                    placeholder="Upload a photo, generate an avatar, or use a Supabase image URL"
                     autoComplete="url"
                   />
+                  {isUploadedAvatar && (
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Remove the uploaded photo if you want to paste a web image URL instead.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Role</label>
@@ -294,7 +480,7 @@ const Settings: React.FC = () => {
 
           <form onSubmit={handlePasswordSave} className="border-t border-slate-100 p-6">
             <div className="mb-4 flex items-center gap-3">
-              <Lock className="h-5 w-5 text-indigo-600" />
+              <Lock className="h-5 w-5 text-blue-600" />
               <div>
                 <h3 className="text-base font-semibold text-slate-900">{mustResetPassword ? 'Reset Password' : 'Password'}</h3>
                 <p className="text-sm text-slate-500">
@@ -370,13 +556,13 @@ const Settings: React.FC = () => {
 
         <div className={`${cardBase} overflow-hidden`}>
           <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
-            <ShieldCheck className="w-5 h-5 text-indigo-600" />
+            <ShieldCheck className="w-5 h-5 text-blue-600" />
             <h2 className="text-lg font-semibold text-slate-800">Permissions</h2>
           </div>
           <div className="p-6 space-y-3 text-sm text-slate-600">
             <p><strong className="text-slate-800">Boss Koo:</strong> has super admin access to add members, manage users, approve registrations, projects, and all task workflows.</p>
             <p><strong className="text-slate-800">Admin:</strong> can create and edit all tasks and projects.</p>
-            <p><strong className="text-slate-800">Staff and Finance:</strong> can view workspace tasks and update assigned tasks only.</p>
+            <p><strong className="text-slate-800">Staff and Finance:</strong> can create tasks for internal teammates, update tasks they created or are assigned to, and see companies they participate in.</p>
             <p><strong className="text-slate-800">Client:</strong> can view company tasks, calendar, reports, and review completed or waiting-approval work.</p>
             <div className="pt-3 border-t border-slate-100">
               <p className="font-semibold text-slate-800 mb-2">Your effective permissions</p>
@@ -392,7 +578,7 @@ const Settings: React.FC = () => {
         {/* Sound Notifications */}
         <div className={`${cardBase} overflow-hidden`}>
           <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
-            {soundEnabled ? <Volume2 className="w-5 h-5 text-indigo-600" /> : <VolumeX className="w-5 h-5 text-slate-400" />}
+            {soundEnabled ? <Volume2 className="w-5 h-5 text-blue-600" /> : <VolumeX className="w-5 h-5 text-slate-400" />}
             <h2 className="text-lg font-semibold text-slate-800">Sound Notifications</h2>
           </div>
           <div className="p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -413,8 +599,8 @@ const Settings: React.FC = () => {
                 setSoundEnabled(next);
               }}
               className={cn(
-                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
-                soundEnabled ? 'bg-indigo-600' : 'bg-slate-200'
+                'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+                soundEnabled ? 'bg-blue-600' : 'bg-slate-200'
               )}
               role="switch"
               aria-checked={soundEnabled}
@@ -433,7 +619,7 @@ const Settings: React.FC = () => {
         {(currentUser?.role === 'Admin' || isSuperAdmin) && (
           <div className={`${cardBase} overflow-hidden`}>
             <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
-              <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
+              <SlidersHorizontal className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-slate-800">Workflow Statuses</h2>
             </div>
             <div className="p-6 space-y-6">
@@ -464,7 +650,7 @@ const Settings: React.FC = () => {
                             <Lock className="w-2.5 h-2.5" /> System
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 font-bold uppercase tracking-wider shrink-0">
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 font-bold uppercase tracking-wider shrink-0">
                             Custom
                           </span>
                         )}
@@ -526,7 +712,7 @@ const Settings: React.FC = () => {
         <div className={`${cardBase} overflow-hidden`}>
           <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <Cloud className="w-5 h-5 text-indigo-600" />
+              <Cloud className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-slate-800">Data Backend</h2>
             </div>
             <div className="flex flex-wrap items-center gap-2">

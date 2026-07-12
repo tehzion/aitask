@@ -5,11 +5,12 @@ import Navbar from './Navbar';
 import { ToastContainer } from './Toast';
 import CreateTaskModal from './CreateTaskModal';
 import { useStore } from '../store';
-import { isNotificationVisible, isNotificationReadByUser } from '../lib/access';
+import { canCreateTasks, isNotificationVisible, isNotificationReadByUser } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
+import { notificationRouteToPath } from '../lib/security';
 
 const Layout: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -24,6 +25,7 @@ const Layout: React.FC = () => {
     markAllNotificationsRead,
     backend,
     pullBackendNow,
+    rolePermissions,
   } = useStore();
 
   // Global Keyboard Shortcuts
@@ -40,6 +42,7 @@ const Layout: React.FC = () => {
       }
 
       if (e.key === 'n' || e.key === 'N') {
+        if (!canCreateTasks(currentUser, rolePermissions)) return;
         e.preventDefault();
         setCreateTaskModalOpen(true);
       } else if (e.key === '/') {
@@ -53,7 +56,7 @@ const Layout: React.FC = () => {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [setCreateTaskModalOpen]);
+  }, [currentUser, rolePermissions, setCreateTaskModalOpen]);
 
   // Mobile Notification Calculations
   const myNotifs = useMemo(() => {
@@ -85,7 +88,7 @@ const Layout: React.FC = () => {
       case 'task': return <FileText className="w-4 h-4 text-blue-500" />;
       case 'success': return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
       case 'status': return <Info className="w-4 h-4 text-amber-500" />;
-      default: return <AlertCircle className="w-4 h-4 text-indigo-500" />;
+      default: return <AlertCircle className="w-4 h-4 text-teal-600" />;
     }
   };
 
@@ -94,12 +97,12 @@ const Layout: React.FC = () => {
       case 'task': return 'bg-blue-50';
       case 'success': return 'bg-emerald-50';
       case 'status': return 'bg-amber-50';
-      default: return 'bg-indigo-50';
+      default: return 'bg-teal-50';
     }
   };
 
   return (
-    <div className="flex h-screen bg-[#faf8f5] text-stone-900 font-sans overflow-hidden relative">
+    <div className="relative flex h-screen overflow-hidden bg-slate-100 font-sans text-slate-950">
       <Sidebar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
       <div className="flex-1 flex flex-col overflow-hidden w-full relative">
         <Navbar onMenuClick={() => setIsMobileMenuOpen(true)} />
@@ -135,17 +138,17 @@ const Layout: React.FC = () => {
             </div>
           </div>
         )}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-[#faf8f5] p-4 sm:p-6 lg:p-7 pb-24 md:pb-6">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-100 p-4 pb-24 sm:p-6 md:pb-6 lg:p-7">
           <Outlet />
         </main>
 
         {/* Mobile Bottom Navigation Bar */}
-        <div className="fixed bottom-0 left-0 right-0 h-16 bg-[#241a11] border-t border-white/10 z-40 flex items-center justify-around md:hidden shadow-lg">
+        <div className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-slate-200 bg-white shadow-lg shadow-slate-950/10 md:hidden">
           <NavLink
             to="/"
             className={({ isActive }) => cn(
-              "flex flex-col items-center justify-center flex-1 h-full text-white/50 transition-colors",
-              isActive && "text-orange-400 font-bold"
+              "flex h-full flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
+              isActive && "font-bold text-blue-600"
             )}
           >
             <LayoutDashboard className="w-5 h-5 mb-0.5" />
@@ -155,8 +158,8 @@ const Layout: React.FC = () => {
           <NavLink
             to="/tasks"
             className={({ isActive }) => cn(
-              "flex flex-col items-center justify-center flex-1 h-full text-white/50 transition-colors",
-              isActive && "text-orange-400 font-bold"
+              "flex h-full flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
+              isActive && "font-bold text-blue-600"
             )}
           >
             <CheckSquare className="w-5 h-5 mb-0.5" />
@@ -166,8 +169,8 @@ const Layout: React.FC = () => {
           <NavLink
             to="/calendar"
             className={({ isActive }) => cn(
-              "flex flex-col items-center justify-center flex-1 h-full text-white/50 transition-colors",
-              isActive && "text-orange-400 font-bold"
+              "flex h-full flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
+              isActive && "font-bold text-blue-600"
             )}
           >
             <CalendarDays className="w-5 h-5 mb-0.5" />
@@ -178,14 +181,14 @@ const Layout: React.FC = () => {
             type="button"
             onClick={() => setIsMobileNotifOpen(true)}
             className={cn(
-              "flex flex-col items-center justify-center flex-1 h-full text-white/50 transition-colors relative",
-              isMobileNotifOpen && "text-orange-400 font-bold"
+              "relative flex h-full flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
+              isMobileNotifOpen && "font-bold text-blue-600"
             )}
           >
             <div className="relative">
               <Bell className="w-5 h-5 mb-0.5" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1.5 h-3.5 w-3.5 rounded-full bg-orange-500 text-[8px] font-black text-white flex items-center justify-center border border-[#241a11]">
+                <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white bg-blue-600 text-[8px] font-black text-white">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
@@ -199,17 +202,17 @@ const Layout: React.FC = () => {
       {isMobileNotifOpen && (
         <>
           <div
-            className="fixed inset-0 bg-stone-900/60 z-50 md:hidden backdrop-blur-sm animate-fade-in"
+            className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-sm animate-fade-in md:hidden"
             onClick={() => setIsMobileNotifOpen(false)}
           />
-          <div className="fixed inset-x-0 bottom-0 max-h-[75vh] bg-white rounded-t-3xl shadow-2xl border-t border-[#e8e3db] z-50 flex flex-col md:hidden animate-slide-up">
+          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[75vh] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-2xl shadow-slate-950/20 animate-slide-up md:hidden">
             {/* Header */}
-            <div className="px-5 py-4 border-b border-[#f0ebe2] flex justify-between items-center bg-stone-50/80 rounded-t-3xl shrink-0">
+            <div className="flex shrink-0 items-center justify-between rounded-t-2xl border-b border-slate-200 bg-slate-50/80 px-5 py-4">
               <div className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-bold text-stone-850 text-base">Notifications</h3>
+                <Bell className="h-5 w-5 text-blue-600" />
+                <h3 className="text-base font-bold text-slate-900">Notifications</h3>
                 {unreadCount > 0 && (
-                  <span className="text-xs text-orange-700 font-extrabold bg-orange-100 px-2 py-0.5 rounded-full">
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-extrabold text-blue-700">
                     {unreadCount} new
                   </span>
                 )}
@@ -217,7 +220,7 @@ const Layout: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsMobileNotifOpen(false)}
-                className="text-stone-400 hover:text-stone-600 p-1.5 hover:bg-stone-100 rounded-lg transition-colors"
+                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -229,46 +232,46 @@ const Layout: React.FC = () => {
                 myNotifs.map(notif => (
                   <Link
                     key={notif.id}
-                    to={notif.link}
+                    to={notificationRouteToPath(notif.route ?? (notif as typeof notif & { link?: string }).link)}
                     onClick={() => {
                       markNotificationRead(notif.id);
                       setIsMobileNotifOpen(false);
                     }}
                     className={cn(
-                      "px-4 py-3 rounded-xl border flex items-start gap-3 transition-colors",
+                      "px-4 py-3 rounded-lg border flex items-start gap-3 transition-colors",
                       !isNotificationReadByUser(currentUser, notif)
-                        ? 'bg-orange-50/30 border-orange-100/50'
-                        : 'bg-white border-stone-100/80'
+                        ? 'border-blue-100/70 bg-blue-50/45'
+                        : 'border-slate-100/80 bg-white'
                     )}
                   >
                     <div className={cn("p-2 rounded-full shrink-0", getBgColor(notif.iconType))}>
                       {getIcon(notif.iconType)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[10px] font-bold uppercase tracking-wide text-stone-400">
+                      <p className="truncate text-[10px] font-bold uppercase tracking-wide text-slate-400">
                         {notif.title}
                       </p>
                       <p className={cn(
                         "mt-0.5 text-sm leading-snug",
                         !isNotificationReadByUser(currentUser, notif)
-                          ? 'text-stone-900 font-bold'
-                          : 'text-stone-600 font-medium'
+                          ? 'font-bold text-slate-950'
+                          : 'font-medium text-slate-600'
                       )}>
                         {notif.message}
                       </p>
-                      <p className="text-[10px] text-stone-400 mt-1">
+                      <p className="mt-1 text-[10px] text-slate-400">
                         {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}
                       </p>
                     </div>
                     {!isNotificationReadByUser(currentUser, notif) && (
-                      <div className="w-2.5 h-2.5 bg-orange-500 rounded-full mt-1.5 shrink-0"></div>
+                      <div className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500"></div>
                     )}
                   </Link>
                 ))
               ) : (
                 <div className="px-5 py-12 text-center">
-                  <p className="text-sm font-semibold text-stone-600">No notifications yet</p>
-                  <p className="mt-1 text-xs leading-5 text-stone-400">
+                  <p className="text-sm font-semibold text-slate-600">No notifications yet</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">
                     Task assignments, approvals, and sync notices will appear here.
                   </p>
                 </div>
@@ -282,7 +285,7 @@ const Layout: React.FC = () => {
                 onClick={() => {
                   markAllNotificationsRead();
                 }}
-                className="p-4 border-t border-[#f0ebe2] bg-stone-50 hover:bg-stone-100 transition-colors text-center text-sm font-bold text-orange-700 shrink-0"
+                className="shrink-0 border-t border-slate-200 bg-slate-50 p-4 text-center text-sm font-bold text-blue-700 transition-colors hover:bg-slate-100"
               >
                 Mark All as Read
               </button>

@@ -33,8 +33,11 @@ const loadEnvFile = (file) => {
 
 envFiles.forEach(loadEnvFile);
 
-const required = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'];
-const missing = required.filter(key => !process.env[key]);
+const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const missing = [
+  !process.env.VITE_SUPABASE_URL ? 'VITE_SUPABASE_URL' : '',
+  !supabaseKey ? 'VITE_SUPABASE_PUBLISHABLE_KEY' : '',
+].filter(Boolean);
 const table = process.env.VITE_SUPABASE_STATE_TABLE || 'aitask_app_state';
 const stateId = process.env.VITE_SUPABASE_STATE_ID || 'default';
 const verifyOrigin = process.env.AITASK_VERIFY_ORIGIN ||
@@ -62,8 +65,8 @@ url.searchParams.set('select', 'version,updated_at,state');
 url.searchParams.set('limit', '1');
 
 const headers = {
-  apikey: process.env.VITE_SUPABASE_ANON_KEY,
-  Authorization: `Bearer ${process.env.VITE_SUPABASE_ANON_KEY}`,
+  apikey: supabaseKey,
+  Authorization: `Bearer ${supabaseKey}`,
   Origin: verifyOrigin,
 };
 

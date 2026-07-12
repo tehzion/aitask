@@ -40,46 +40,47 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       {/* Mobile Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-stone-900/50 z-20 md:hidden backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 z-20 bg-slate-950/35 backdrop-blur-sm transition-opacity md:hidden"
           onClick={onClose}
         />
       )}
 
-      {/* Sidebar — warm dark wood #2d1e14 */}
       <div className={clsx(
-        'fixed inset-y-0 left-0 z-30 w-64 flex flex-col transition-transform duration-300 ease-in-out md:static md:translate-x-0 shadow-2xl md:shadow-none',
-        'bg-[#241a11] text-white',
+        'fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-slate-200 transition-transform duration-300 ease-in-out md:static md:translate-x-0',
+        'bg-white text-slate-900 shadow-xl shadow-slate-950/10 md:shadow-none',
         isOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         {/* Logo */}
-        <div className="h-16 flex flex-col justify-center px-6 border-b border-white/10 shrink-0">
-          <div className="flex items-baseline font-sans gap-0.5">
-            <span className="text-2xl font-black text-orange-400 tracking-tighter">Ai</span>
-            <span className="text-xl font-extrabold text-white tracking-tight">Task</span>
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 px-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white shadow-sm">
+            AT
           </div>
-          <p className="text-[10px] text-white/30 tracking-widest uppercase mt-0.5 font-medium">Agency Hub</p>
+          <div className="min-w-0">
+            <div className="font-sans text-lg font-bold tracking-tight text-slate-950">AiTask</div>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Agency Hub</p>
+          </div>
         </div>
 
         {/* Nav items */}
-        <div className="flex-1 py-5 px-3 space-y-0.5 overflow-y-auto custom-scrollbar">
-          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-3 px-3">Menu</p>
+        <div className="custom-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-5">
+          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Menu</p>
           {filteredNavItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               onClick={onClose}
               className={({ isActive }) => clsx(
-                'flex items-center px-3 py-2.5 rounded-xl transition-all duration-200 group',
+                'group flex items-center rounded-lg px-3 py-2.5 transition-colors duration-200',
                 isActive
-                  ? 'bg-orange-600/20 text-orange-300 font-semibold'
-                  : 'text-white/60 hover:bg-white/8 hover:text-white/90'
+                  ? 'border border-blue-100 bg-blue-50 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
               )}
             >
               {({ isActive }) => (
                 <>
-                  <item.icon className={clsx('w-4.5 h-4.5 mr-3 transition-colors', isActive ? 'text-orange-400' : 'text-white/40 group-hover:text-white/70')} />
+                  <item.icon className={clsx('mr-3 h-[18px] w-[18px] transition-colors', isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-700')} />
                   <span className="font-medium text-sm">{item.label}</span>
-                  {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-orange-400" />}
+                  {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-500" />}
                 </>
               )}
             </NavLink>
@@ -87,32 +88,32 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="p-3 border-t border-white/10 space-y-0.5">
+        <div className="space-y-1 border-t border-slate-200 p-3">
           {canViewSettings && (
             <NavLink
               to="/settings"
               onClick={onClose}
               className={({ isActive }) => clsx(
-                'flex items-center px-3 py-2.5 rounded-xl w-full transition-all duration-200 group',
+                'group flex w-full items-center rounded-lg px-3 py-2.5 transition-colors duration-200',
                 isActive
-                  ? 'bg-orange-600/20 text-orange-300 font-semibold'
-                  : 'text-white/60 hover:bg-white/8 hover:text-white/90'
+                  ? 'border border-blue-100 bg-blue-50 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
               )}
             >
               {({ isActive }) => (
                 <>
-                  <Settings className={clsx('w-4.5 h-4.5 mr-3', isActive ? 'text-orange-400' : 'text-white/40')} />
+                  <Settings className={clsx('mr-3 h-[18px] w-[18px]', isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-700')} />
                   <span className="font-medium text-sm">Settings</span>
-                  {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-orange-400" />}
+                  {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-500" />}
                 </>
               )}
             </NavLink>
           )}
           <button
             onClick={handleLogout}
-            className="flex items-center px-3 py-2.5 rounded-xl text-red-400/80 hover:bg-red-500/15 hover:text-red-300 w-full transition-all duration-200"
+            className="flex w-full items-center rounded-lg px-3 py-2.5 text-red-600/80 transition-colors duration-200 hover:bg-red-50 hover:text-red-700"
           >
-            <LogOut className="w-4.5 h-4.5 mr-3" />
+            <LogOut className="mr-3 h-[18px] w-[18px]" />
             <span className="font-medium text-sm">Logout</span>
           </button>
         </div>

@@ -4,6 +4,9 @@ import { X, Plus } from 'lucide-react';
 import { Department, Priority, RecurrenceFrequency, ServiceType } from '../types';
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
+import { getClientOptions, getServiceOptions, hasChoice } from '../lib/choiceOptions';
+import { canManageProjects, getVisibleProjects } from '../lib/access';
+import { safeHttpsUrl } from '../lib/security';
 
 interface Props {
   isOpen: boolean;
@@ -11,25 +14,32 @@ interface Props {
 }
 
 const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor'];
-const SERVICES: ServiceType[] = ['Social Media', 'Design', 'Video', 'Website', 'SEO', 'Ads', 'Branding'];
 const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const RECURRENCE_OPTIONS: RecurrenceFrequency[] = ['None', 'Daily', 'Weekly', 'Monthly'];
+const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { users, currentUser, addTask, projects, createTaskInitialDate } = useStore();
+  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, rolePermissions } = useStore();
   const navigate = useNavigate();
+  const clientListId = React.useId();
 
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectId, setProjectId] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [clientName, setClientName] = useState('');
+  const [isAddingCustomClient, setIsAddingCustomClient] = useState(false);
+  const [customClientInput, setCustomClientInput] = useState('');
+  const [customClientError, setCustomClientError] = useState('');
   const [customerDetails, setCustomerDetails] = useState('');
   const [facebookPage, setFacebookPage] = useState('');
   const [website, setWebsite] = useState('');
   const [department, setDepartment] = useState<Department>('Designer');
   const [assignedTo, setAssignedTo] = useState('');
   const [serviceType, setServiceType] = useState<ServiceType>('Design');
+  const [isAddingCustomService, setIsAddingCustomService] = useState(false);
+  const [customServiceInput, setCustomServiceInput] = useState('');
+  const [customServiceError, setCustomServiceError] = useState('');
   const [priority, setPriority] = useState<Priority>('Medium');
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -41,18 +51,33 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [formError, setFormError] = useState('');
 
   const filteredUsers = users.filter(u => u.role !== 'Client' && u.department === department);
+  const canCreateProjects = canManageProjects(currentUser, rolePermissions);
+  const visibleProjects = React.useMemo(() => getVisibleProjects(currentUser, projects, tasks), [currentUser, projects, tasks]);
+  const selectedProject = projectId ? visibleProjects.find(project => project.id === projectId) : undefined;
+  const clientOptions = React.useMemo(() => getClientOptions(projects, tasks, users), [projects, tasks, users]);
+  const serviceOptions = React.useMemo(() => getServiceOptions(projects, tasks), [projects, tasks]);
+  const serviceChoices = React.useMemo(() => {
+    if (!serviceType || hasChoice(serviceOptions, serviceType)) return serviceOptions;
+    return [...serviceOptions, serviceType];
+  }, [serviceOptions, serviceType]);
 
   const resetForm = React.useCallback(() => {
     setProjectId('');
     setTitle('');
     setDescription('');
     setClientName('');
+    setIsAddingCustomClient(false);
+    setCustomClientInput('');
+    setCustomClientError('');
     setCustomerDetails('');
     setFacebookPage('');
     setWebsite('');
     setDepartment('Designer');
     setAssignedTo('');
     setServiceType('Design');
+    setIsAddingCustomService(false);
+    setCustomServiceInput('');
+    setCustomServiceError('');
     setPriority('Medium');
     setStartDate('');
     setDueDate('');
@@ -87,7 +112,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       setFormError('');
       setAssignmentError('');
     }
-  }, [isOpen, createTaskInitialDate]);
+  }, [createTaskInitialDate, isOpen]);
 
   if (!isOpen) return null;
 
@@ -95,10 +120,100 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     const trimmed = value.trim();
     if (!trimmed) return true;
     try {
-      const parsed = new URL(trimmed);
-      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      return Boolean(safeHttpsUrl(trimmed));
     } catch {
       return false;
+    }
+  };
+
+  const selectProject = (id: string) => {
+    setProjectId(id);
+    setIsAddingCustomClient(false);
+    setCustomClientInput('');
+    setCustomClientError('');
+    if (!id) return;
+
+    const project = visibleProjects.find(item => item.id === id);
+    if (project) setClientName(project.clientName);
+  };
+
+  const addCustomClient = () => {
+    const trimmed = customClientInput.trim();
+    if (!trimmed) return;
+
+    if (trimmed.length > 80) {
+      setCustomClientError('Client or brand name must be 80 characters or less.');
+      return;
+    }
+
+    const existingClient = clientOptions.find(choice => choice.toLowerCase() === trimmed.toLowerCase());
+    setClientName(existingClient || trimmed);
+    setIsAddingCustomClient(false);
+    setCustomClientInput('');
+    setCustomClientError('');
+  };
+
+  const handleCustomClientKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomClient();
+    }
+
+    if (e.key === 'Escape') {
+      setIsAddingCustomClient(false);
+      setCustomClientInput('');
+      setCustomClientError('');
+    }
+  };
+
+  const selectService = (value: string) => {
+    if (value === CUSTOM_SERVICE_VALUE) {
+      setIsAddingCustomService(true);
+      setCustomServiceInput('');
+      setCustomServiceError('');
+      return;
+    }
+
+    setServiceType(value);
+    setIsAddingCustomService(false);
+    setCustomServiceInput('');
+    setCustomServiceError('');
+  };
+
+  const addCustomService = () => {
+    const trimmed = customServiceInput.trim();
+    if (!trimmed) return;
+
+    if (trimmed.length > 40) {
+      setCustomServiceError('Service name must be 40 characters or less.');
+      return;
+    }
+
+    const existingService = serviceChoices.find(choice => choice.toLowerCase() === trimmed.toLowerCase());
+    if (existingService) {
+      setServiceType(existingService);
+      setIsAddingCustomService(false);
+      setCustomServiceInput('');
+      setCustomServiceError('');
+      return;
+    }
+
+    setServiceType(trimmed);
+    setIsAddingCustomService(false);
+    setCustomServiceInput('');
+    setCustomServiceError('');
+  };
+
+  const handleCustomServiceKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomService();
+    }
+
+    if (e.key === 'Escape') {
+      setIsAddingCustomService(false);
+      setCustomServiceInput('');
+      setCustomServiceError('');
     }
   };
 
@@ -110,6 +225,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     const trimmedTitle = title.trim();
     const trimmedClientName = clientName.trim();
+    const trimmedServiceType = serviceType.trim();
     const finalStartDate = startDate || new Date().toISOString().split('T')[0];
     const finalDueDate = dueDate || finalStartDate;
 
@@ -123,13 +239,18 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
+    if (!trimmedServiceType) {
+      setFormError('Service type is required.');
+      return;
+    }
+
     if (new Date(finalDueDate) < new Date(finalStartDate)) {
       setFormError('Due date cannot be earlier than the start date.');
       return;
     }
 
     if (![facebookPage, website, attachmentLink].every(isValidOptionalUrl)) {
-      setFormError('Links must start with http:// or https://.');
+      setFormError('Links must be valid HTTPS URLs.');
       return;
     }
 
@@ -146,20 +267,20 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       description: description.trim(),
       projectId: projectId || undefined,
       clientName: trimmedClientName,
-      projectName: projectId ? projects.find(p => p.id === projectId)?.projectName : undefined,
+      projectName: projectId ? visibleProjects.find(p => p.id === projectId)?.projectName : undefined,
       customerDetails: customerDetails.trim(),
-      facebookPage: facebookPage.trim(),
-      website: website.trim(),
+      facebookPage: safeHttpsUrl(facebookPage) || undefined,
+      website: safeHttpsUrl(website) || undefined,
       department,
       assignedTo: finalAssignee,
-      serviceType,
+      serviceType: trimmedServiceType,
       priority,
       startDate: finalStartDate,
       dueDate: finalDueDate,
       createdBy: currentUser.id,
       status: 'Pending',
       completionPercentage: 0,
-      attachmentLink: attachmentLink.trim() || undefined,
+      attachmentLink: safeHttpsUrl(attachmentLink) || undefined,
       attachmentName: attachmentName.trim() || undefined,
       notes: notes.trim() || undefined,
       isRecurring: recurrenceFrequency !== 'None',
@@ -177,7 +298,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-lg shadow-xl shadow-slate-950/10 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
@@ -201,33 +322,28 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             
             {/* Task Basic Info */}
             <div className="space-y-4">
-              <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-wider">1. Task Details</h3>
+              <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wider">1. Task Details</h3>
               
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="block text-sm font-medium text-slate-700">Link to Project (Optional)</label>
-                  <button 
-                    type="button"
-                    onClick={() => setIsProjectModalOpen(true)}
-                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center transition-colors"
-                  >
-                    <Plus className="w-3 h-3 mr-0.5" /> New Project
-                  </button>
+                  <label className="block text-sm font-medium text-slate-700">Link to Company / Brand (Optional)</label>
+                  {canCreateProjects && (
+                    <button
+                      type="button"
+                      onClick={() => setIsProjectModalOpen(true)}
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center transition-colors"
+                    >
+                      <Plus className="w-3 h-3 mr-0.5" /> New Company / Brand
+                    </button>
+                  )}
                 </div>
-                <select 
+                  <select
                   value={projectId} 
-                  onChange={e => {
-                    const id = e.target.value;
-                    setProjectId(id);
-                    if (id) {
-                      const proj = projects.find(p => p.id === id);
-                      if (proj) setClientName(proj.clientName);
-                    }
-                  }}
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm cursor-pointer"
+                  onChange={e => selectProject(e.target.value)}
+                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm cursor-pointer"
                 >
-                  <option value="">No Project / Independent Task</option>
-                  {projects.map(p => (
+                  <option value="">No Company Link / Independent Task</option>
+                  {visibleProjects.map(p => (
                     <option key={p.id} value={p.id}>{p.projectName} ({p.clientName})</option>
                   ))}
                 </select>
@@ -238,7 +354,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 <input 
                   type="text" required
                   value={title} onChange={e => setTitle(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
+                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                   placeholder="e.g., Design Facebook Banners"
                 />
               </div>
@@ -248,7 +364,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 <textarea 
                   rows={3}
                   value={description} onChange={e => setDescription(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm resize-none"
+                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm resize-none"
                   placeholder="Describe the task requirements..."
                 />
               </div>
@@ -256,24 +372,74 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
             {/* Client & Customer Info */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-wider">2. Client & Assets</h3>
+              <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wider">2. Client & Assets</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Client / Brand Name <span className="text-red-500">*</span></label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-sm font-medium text-slate-700">Client / Brand Name <span className="text-red-500">*</span></label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAddingCustomClient(true);
+                        setCustomClientInput('');
+                        setCustomClientError('');
+                      }}
+                      disabled={Boolean(selectedProject)}
+                      className="text-xs font-semibold text-teal-700 hover:text-teal-800 flex items-center transition-colors disabled:text-slate-300 disabled:cursor-not-allowed"
+                    >
+                      <Plus className="w-3 h-3 mr-0.5" /> New Client / Brand
+                    </button>
+                  </div>
                   <input 
                     type="text" required
+                    list={selectedProject ? undefined : clientListId}
+                    disabled={Boolean(selectedProject)}
                     value={clientName} onChange={e => setClientName(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
+                    maxLength={80}
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
                     placeholder="e.g., EcoLife"
                   />
+                  <datalist id={clientListId}>
+                    {clientOptions.map(option => <option key={option} value={option} />)}
+                  </datalist>
+                  {selectedProject && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      Company follows {selectedProject.projectName}. Clear the company link to edit it.
+                    </p>
+                  )}
+                  {isAddingCustomClient && !selectedProject && (
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        value={customClientInput}
+                        onChange={e => { setCustomClientInput(e.target.value); setCustomClientError(''); }}
+                        onKeyDown={handleCustomClientKeyDown}
+                        maxLength={80}
+                        autoFocus
+                        className="min-w-0 flex-1 bg-white border border-dashed border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-teal-500 focus:border-teal-500 block px-3 py-2 outline-none shadow-sm"
+                        placeholder="New client or brand"
+                      />
+                      <button
+                        type="button"
+                        onClick={addCustomClient}
+                        disabled={!customClientInput.trim()}
+                        className="inline-flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
+                      >
+                        <Plus className="w-4 h-4" /> Add
+                      </button>
+                    </div>
+                  )}
+                  {customClientError && (
+                    <p className="text-xs text-red-500 mt-1">{customClientError}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Customer Details</label>
                   <input 
                     type="text"
                     value={customerDetails} onChange={e => setCustomerDetails(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                     placeholder="Contact person, phone, etc."
                   />
                 </div>
@@ -285,7 +451,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   <input 
                     type="url"
                     value={facebookPage} onChange={e => setFacebookPage(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                     placeholder="https://facebook.com/..."
                   />
                 </div>
@@ -294,7 +460,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   <input 
                     type="url"
                     value={website} onChange={e => setWebsite(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                     placeholder="https://..."
                   />
                 </div>
@@ -303,7 +469,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
             {/* Assignment & Scheduling */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-wider">3. Assignment & Timeline</h3>
+              <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wider">3. Assignment & Timeline</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -315,7 +481,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       setAssignedTo(''); // Reset assignee when department changes
                       setAssignmentError('');
                     }}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm cursor-pointer"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm cursor-pointer"
                   >
                     {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
@@ -325,7 +491,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   <select 
                     value={assignedTo} 
                     onChange={e => setAssignedTo(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm cursor-pointer"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm cursor-pointer"
                   >
                     <option value="">
                       {filteredUsers.length > 0 ? `Auto assign: ${filteredUsers[0].name}` : 'No users in this department'}
@@ -349,17 +515,43 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Service Type</label>
                   <select 
-                    value={serviceType} onChange={e => setServiceType(e.target.value as ServiceType)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm cursor-pointer"
+                    value={serviceType} onChange={e => selectService(e.target.value)}
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm cursor-pointer"
                   >
-                    {SERVICES.map(s => <option key={s} value={s}>{s}</option>)}
+                    {serviceChoices.map(s => <option key={s} value={s}>{s}</option>)}
+                    <option value={CUSTOM_SERVICE_VALUE}>+ Add custom service</option>
                   </select>
+                  {isAddingCustomService && (
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        value={customServiceInput}
+                        onChange={e => { setCustomServiceInput(e.target.value); setCustomServiceError(''); }}
+                        onKeyDown={handleCustomServiceKeyDown}
+                        maxLength={40}
+                        autoFocus
+                        className="min-w-0 flex-1 bg-white border border-dashed border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-teal-500 focus:border-teal-500 block px-3 py-2 outline-none shadow-sm"
+                        placeholder="Custom service"
+                      />
+                      <button
+                        type="button"
+                        onClick={addCustomService}
+                        disabled={!customServiceInput.trim()}
+                        className="inline-flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
+                      >
+                        <Plus className="w-4 h-4" /> Add
+                      </button>
+                    </div>
+                  )}
+                  {customServiceError && (
+                    <p className="text-xs text-red-500 mt-1">{customServiceError}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
                   <select 
                     value={priority} onChange={e => setPriority(e.target.value as Priority)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm cursor-pointer"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm cursor-pointer"
                   >
                     {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
@@ -372,7 +564,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   <input 
                     type="date" required
                     value={startDate} onChange={e => setStartDate(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                   />
                 </div>
                 <div>
@@ -380,7 +572,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   <input 
                     type="date" required
                     value={dueDate} onChange={e => setDueDate(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                   />
                 </div>
               </div>
@@ -389,7 +581,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
             {/* Files, Notes & Recurrence */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-wider">4. Files & Recurrence</h3>
+              <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wider">4. Files & Recurrence</h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -398,7 +590,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     type="url"
                     value={attachmentLink}
                     onChange={e => setAttachmentLink(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                     placeholder="https://drive.google.com/..."
                   />
                 </div>
@@ -408,7 +600,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     type="text"
                     value={attachmentName}
                     onChange={e => setAttachmentName(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                     placeholder="Brief, artwork, source folder..."
                   />
                 </div>
@@ -420,7 +612,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   <select
                     value={recurrenceFrequency}
                     onChange={e => setRecurrenceFrequency(e.target.value as RecurrenceFrequency)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm cursor-pointer"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm cursor-pointer"
                   >
                     {RECURRENCE_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
                   </select>
@@ -431,7 +623,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     type="text"
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5 outline-none shadow-sm"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                     placeholder="Any context the team should keep visible"
                   />
                 </div>
@@ -459,7 +651,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             type="submit"
             form="create-task-form"
             disabled={filteredUsers.length === 0}
-            className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Create & open task
           </button>

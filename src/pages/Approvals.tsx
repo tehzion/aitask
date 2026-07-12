@@ -3,7 +3,8 @@ import { useStore } from '../store';
 import { CheckCircle2, XCircle, UserPlus, Users, Trash2, AlertTriangle, ShieldCheck, Save } from 'lucide-react';
 import { Department, Role, Registration, RolePermissionKey, RolePermissions } from '../types';
 import { format } from 'date-fns';
-import { Badge, Button, PageHeader, cardBase, inputBase, pageShell } from '../components/ui';
+import { Badge, Button, PageHeader } from '../components/ui';
+import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { canDeleteUser, defaultRolePermissions, getEffectiveRoleName, isBossKoo, permissionGroups, permissionLabels } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
@@ -239,7 +240,7 @@ const Approvals: React.FC = () => {
       {/* Pending Approvals */}
       <div className={`${cardBase} overflow-hidden`}>
         <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
-          <UserPlus className="w-5 h-5 text-indigo-600" />
+          <UserPlus className="w-5 h-5 text-blue-600" />
           <h3 className="text-lg font-semibold text-slate-800">Pending Registrations ({pendingRegs.length})</h3>
         </div>
         
@@ -308,7 +309,7 @@ const Approvals: React.FC = () => {
       {/* Roles & Permissions */}
       <div className={`${cardBase} overflow-hidden`}>
         <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
-          <ShieldCheck className="w-5 h-5 text-indigo-600" />
+          <ShieldCheck className="w-5 h-5 text-blue-600" />
           <div>
             <h3 className="text-lg font-semibold text-slate-800">Roles & Permissions</h3>
             <p className="text-sm text-slate-500">Create named roles with core app permissions. Super admin access stays protected.</p>
@@ -361,7 +362,7 @@ const Approvals: React.FC = () => {
                           type="checkbox"
                           checked={roleForm.permissions[key]}
                           onChange={() => togglePermission(key)}
-                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                         />
                         {permissionLabels[key]}
                       </label>
@@ -455,7 +456,7 @@ const Approvals: React.FC = () => {
       <div className={`${cardBase} overflow-hidden mt-8`}>
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Users className="w-5 h-5 text-indigo-600" />
+            <Users className="w-5 h-5 text-blue-600" />
             <h3 className="text-lg font-semibold text-slate-800">Active System Users</h3>
           </div>
           <Button variant="secondary" onClick={() => setIsAddUserOpen(true)}>
@@ -698,7 +699,7 @@ const Approvals: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">System Role</label>
                 <select 
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5"
+                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
                   value={role} onChange={e => setRole(e.target.value as Role)}
                 >
                   {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
@@ -708,7 +709,7 @@ const Approvals: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Department</label>
                 <select 
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5"
+                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
                   value={department} onChange={e => setDepartment(e.target.value as Department)}
                 >
                   {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
@@ -718,7 +719,7 @@ const Approvals: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Custom Role</label>
                 <select
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5"
+                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
                   value={approvalCustomRoleId}
                   onChange={e => setApprovalCustomRoleId(e.target.value)}
                 >
@@ -733,7 +734,7 @@ const Approvals: React.FC = () => {
                   <input 
                     type="text" required
                     placeholder="e.g. TechNova"
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2.5"
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
                     value={companyName} onChange={e => setCompanyName(e.target.value)}
                   />
                   <p className="text-xs text-slate-500 mt-1">This links the client to their specific projects.</p>
@@ -749,7 +750,7 @@ const Approvals: React.FC = () => {
                 </button>
                 <button 
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
                 >
                   Confirm & Approve
                 </button>

@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
 import { useStore } from '../store';
 import { Role } from '../types';
-import { Button, inputBase } from '../components/ui';
+import { Button } from '../components/ui';
+import { inputBase } from '../components/uiTokens';
 import { cn } from '../lib/utils';
-import { DEFAULT_USER_PASSWORD, shouldShowDemoLogin } from '../lib/auth';
+import { DEFAULT_USER_PASSWORD, hasPasswordResetBypass, shouldShowDemoLogin } from '../lib/auth';
 
 /** Max failed attempts before a short lockout is applied */
 const MAX_ATTEMPTS = 5;
@@ -41,7 +42,7 @@ const Login: React.FC = () => {
   const [regSuccess, setRegSuccess] = useState(false);
 
   React.useEffect(() => {
-    if (currentUser) navigate(currentUser.mustResetPassword ? '/settings' : '/');
+    if (currentUser) navigate(currentUser.mustResetPassword && !hasPasswordResetBypass(currentUser.id) ? '/settings' : '/');
   }, [currentUser, navigate]);
 
   const fillDemo = (account: typeof DEMO_ACCOUNTS[0]) => {
@@ -68,7 +69,7 @@ const Login: React.FC = () => {
     if (login(username, password)) {
       attemptsRef.current = 0;
       const user = useStore.getState().currentUser;
-      setTimeout(() => navigate(user?.mustResetPassword ? '/settings' : '/'), 50);
+      setTimeout(() => navigate(user?.mustResetPassword && !hasPasswordResetBypass(user.id) ? '/settings' : '/'), 50);
     } else {
       attemptsRef.current += 1;
       if (attemptsRef.current >= MAX_ATTEMPTS) {
@@ -182,8 +183,8 @@ const Login: React.FC = () => {
                               key={account.username}
                               onClick={() => fillDemo(account)}
                               className={cn(
-                                'border-b border-slate-100 last:border-0 cursor-pointer hover:bg-indigo-50 transition-colors',
-                                username === account.username ? 'bg-indigo-50' : 'bg-white'
+                                'border-b border-slate-100 last:border-0 cursor-pointer hover:bg-blue-50 transition-colors',
+                                username === account.username ? 'bg-blue-50' : 'bg-white'
                               )}
                             >
                               <td className="px-3 py-2 font-medium text-slate-700">{account.username}</td>
@@ -215,7 +216,7 @@ const Login: React.FC = () => {
                 <Button
                   onClick={() => setIsRegistering(true)}
                   variant="secondary"
-                  className="mt-5 w-full border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                  className="mt-5 w-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
                 >
                   <UserPlus className="w-4 h-4" />
                   Register for Access
@@ -266,7 +267,7 @@ const Login: React.FC = () => {
                   </div>
                   <Button type="submit" className="w-full py-3">Submit Registration</Button>
                   <div className="text-center mt-4">
-                    <button type="button" onClick={() => setIsRegistering(false)} className="text-sm font-medium text-indigo-600 hover:text-indigo-500">
+                    <button type="button" onClick={() => setIsRegistering(false)} className="text-sm font-medium text-blue-600 hover:text-blue-500">
                       Already have an account? Sign in
                     </button>
                   </div>
