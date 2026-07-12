@@ -44,6 +44,8 @@ type ClientSummary = {
   website?: string;
   latestTaskId?: string;
   lastActivity?: string;
+  addedAt?: string;
+  latestTaskDate?: string;
 };
 
 type ClientProfileForm = {
@@ -123,6 +125,7 @@ const Clients: React.FC = () => {
   } = useStore();
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedClientName, setSelectedClientName] = React.useState('');
+  const [editClientName, setEditClientName] = React.useState('');
   const [isEditingProfile, setIsEditingProfile] = React.useState(false);
   const [isRenamingClient, setIsRenamingClient] = React.useState(false);
   const [profileForm, setProfileForm] = React.useState<ClientProfileForm>(emptyProfileForm);
@@ -151,6 +154,14 @@ const Clients: React.FC = () => {
   }, [allProjects, allTasks, canSeeAllClients, currentUser, tasks, visibleClientKeys]);
   const canAddTasks = canCreateTasks(currentUser, rolePermissions);
   const canEditClientProfiles = canManageClientProfiles(currentUser);
+  const canEditSelectedClientProfile = React.useMemo(() => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'Admin') return true;
+    if (currentUser.role === 'Staff') {
+      return tasks.some(task => getClientKey(task.clientName) === getClientKey(selectedClientName) && task.assignedTo === currentUser.id);
+    }
+    return false;
+  }, [currentUser, selectedClientName, tasks]);
 
   const clients = React.useMemo(() => {
     const summaries = new Map<string, ClientSummary>();
@@ -189,6 +200,16 @@ const Clients: React.FC = () => {
       }
     };
 
+    const rememberAdded = (summary: ClientSummary, value?: string) => {
+      if (!value) return;
+      const t = getActivityTime(value);
+      if (!t) return;
+      const currentT = summary.addedAt ? getActivityTime(summary.addedAt) : Infinity;
+      if (t < currentT) {
+        summary.addedAt = value;
+      }
+    };
+
     clientProfiles.filter(canSeeProfile).forEach(profile => {
       const summary = ensureClient(profile.clientName);
       if (!summary) return;
@@ -196,6 +217,7 @@ const Clients: React.FC = () => {
       summary.profile = profile;
       summary.sources.add('Profile');
       rememberActivity(summary, profile.updatedAt || profile.createdAt);
+      rememberAdded(summary, profile.createdAt);
     });
 
     [...tasks]
@@ -219,6 +241,10 @@ const Clients: React.FC = () => {
         if (!summary.website && task.website) summary.website = task.website;
         if (!summary.latestTaskId) summary.latestTaskId = task.id;
         rememberActivity(summary, task.updatedAt || task.dueDate || task.startDate);
+        rememberAdded(summary, task.createdAt || task.startDate);
+        if (!summary.latestTaskDate) {
+          summary.latestTaskDate = task.updatedAt || task.createdAt || task.startDate;
+        }
       });
 
     projects.forEach(project => {
@@ -232,6 +258,7 @@ const Clients: React.FC = () => {
         if (service) summary.services.add(service);
       });
       rememberActivity(summary, project.updatedAt || project.deadline || project.startDate);
+      rememberAdded(summary, project.createdAt || project.startDate);
     });
 
     users
@@ -249,6 +276,7 @@ const Clients: React.FC = () => {
         summary.sources.add('Account');
         if (!summary.accountUsers.includes(user.name)) summary.accountUsers.push(user.name);
         rememberActivity(summary, user.updatedAt);
+        rememberAdded(summary, user.createdAt);
       });
 
     return Array.from(summaries.values()).sort((a, b) => a.name.localeCompare(b.name));
@@ -292,6 +320,7 @@ const Clients: React.FC = () => {
   const openClientPanel = (client: ClientSummary, edit = false) => {
     setSelectedClientName(client.name);
     setProfileForm(getProfileForm(client));
+    setEditClientName(client.name);
     setProfileError('');
     setRenameValue(client.name);
     setRenameError('');
@@ -305,6 +334,39 @@ const Clients: React.FC = () => {
     setIsRenamingClient(false);
     setProfileError('');
     setRenameError('');
+  };
+
+  const handleInlineProfileSave = () => {
+    if (!selectedClient) return;
+
+    const trimmedNewName = editClientName.trim();
+    if (!trimmedNewName) {
+      setProfileError('Client name cannot be empty.');
+      return;
+    }
+
+    let activeClientName = selectedClient.name;
+
+    // 1. Rename if client name has changed
+    if (trimmedNewName !== selectedClient.name) {
+      const renameResult = renameClient(selectedClient.name, trimmedNewName);
+      if (!renameResult.ok) {
+        setProfileError(renameResult.error || 'Unable to rename client.');
+        return;
+      }
+      activeClientName = trimmedNewName;
+      setSelectedClientName(trimmedNewName);
+    }
+
+    // 2. Save profile details under the active client name
+    const profileResult = upsertClientProfile(activeClientName, profileForm);
+    if (!profileResult.ok) {
+      setProfileError(profileResult.error || 'Unable to save client details.');
+      return;
+    }
+
+    setIsEditingProfile(false);
+    setProfileError('');
   };
 
   const handleProfileSave = (event: React.FormEvent) => {
@@ -637,96 +699,141 @@ const Clients: React.FC = () => {
             </div>
 
             <div className="custom-scrollbar flex-1 overflow-y-auto p-6">
-              {isRenamingClient ? (
-                <form id="client-rename-form" onSubmit={handleRenameSave} className="space-y-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-semibold text-slate-700">Client / Brand Name</label>
-                    <input
-                      className={cn(inputBase, 'p-2.5')}
-                      value={renameValue}
-                      onChange={event => { setRenameValue(event.target.value); setRenameError(''); }}
-                      maxLength={240}
-                      autoFocus
-                    />
-                    <p className="mt-2 text-xs leading-5 text-slate-500">
-                      This renames the client across matching tasks, company records, client accounts, and notifications.
-                    </p>
+              {profileError && (
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                  {profileError}
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <section className="rounded-lg border border-slate-200 bg-white p-4">
+                  <h3 className="text-sm font-bold text-slate-900">Contact</h3>
+                  <div className="mt-3">
+                    {isEditingProfile ? (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Client Name</label>
+                          <input
+                            type="text"
+                            className={cn(inputBase, 'p-2 text-xs')}
+                            value={editClientName}
+                            onChange={e => { setEditClientName(e.target.value); setProfileError(''); }}
+                            placeholder="Client / Brand Name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Contact Person</label>
+                          <input
+                            type="text"
+                            className={cn(inputBase, 'p-2 text-xs')}
+                            value={profileForm.contactPerson}
+                            onChange={e => setProfileForm({ ...profileForm, contactPerson: e.target.value })}
+                            placeholder="e.g. John Doe"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Email</label>
+                            <input
+                              type="email"
+                              className={cn(inputBase, 'p-2 text-xs')}
+                              value={profileForm.email}
+                              onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                              placeholder="john@brand.com"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Phone</label>
+                            <input
+                              type="text"
+                              className={cn(inputBase, 'p-2 text-xs')}
+                              value={profileForm.phone}
+                              onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
+                              placeholder="Phone number"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Website</label>
+                            <input
+                              type="url"
+                              className={cn(inputBase, 'p-2 text-xs')}
+                              value={profileForm.website}
+                              onChange={e => setProfileForm({ ...profileForm, website: e.target.value })}
+                              placeholder="https://..."
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Facebook Page</label>
+                            <input
+                              type="url"
+                              className={cn(inputBase, 'p-2 text-xs')}
+                              value={profileForm.facebookPage}
+                              onChange={e => setProfileForm({ ...profileForm, facebookPage: e.target.value })}
+                              placeholder="Facebook URL"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Address</label>
+                          <textarea
+                            rows={2}
+                            className={cn(inputBase, 'resize-none p-2 text-xs')}
+                            value={profileForm.address}
+                            onChange={e => setProfileForm({ ...profileForm, address: e.target.value })}
+                            placeholder="Business address..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Note / Details</label>
+                          <textarea
+                            rows={3}
+                            className={cn(inputBase, 'resize-none p-2 text-xs')}
+                            value={profileForm.notes}
+                            onChange={e => setProfileForm({ ...profileForm, notes: e.target.value })}
+                            placeholder="Notes about contact or client details..."
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      renderContactSummary(selectedClient)
+                    )}
                   </div>
-                  {renameError && (
-                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
-                      {renameError}
-                    </div>
-                  )}
-                </form>
-              ) : isEditingProfile ? (
-                <form id="client-profile-form" onSubmit={handleProfileSave} className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Contact Person</label>
-                      <input className={cn(inputBase, 'p-2.5')} value={profileForm.contactPerson} onChange={event => setProfileForm({ ...profileForm, contactPerson: event.target.value })} />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Email</label>
-                      <input type="email" className={cn(inputBase, 'p-2.5')} value={profileForm.email} onChange={event => setProfileForm({ ...profileForm, email: event.target.value })} />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Phone</label>
-                      <input className={cn(inputBase, 'p-2.5')} value={profileForm.phone} onChange={event => setProfileForm({ ...profileForm, phone: event.target.value })} />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Website</label>
-                      <input type="url" placeholder="https://..." className={cn(inputBase, 'p-2.5')} value={profileForm.website} onChange={event => setProfileForm({ ...profileForm, website: event.target.value })} />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Facebook Page</label>
-                      <input type="url" placeholder="https://facebook.com/..." className={cn(inputBase, 'p-2.5')} value={profileForm.facebookPage} onChange={event => setProfileForm({ ...profileForm, facebookPage: event.target.value })} />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Address</label>
-                      <textarea rows={3} className={cn(inputBase, 'resize-none p-2.5')} value={profileForm.address} onChange={event => setProfileForm({ ...profileForm, address: event.target.value })} />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Internal Notes</label>
-                      <textarea rows={3} className={cn(inputBase, 'resize-none p-2.5')} value={profileForm.notes} onChange={event => setProfileForm({ ...profileForm, notes: event.target.value })} />
-                    </div>
-                  </div>
-                  {profileError && (
-                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
-                      {profileError}
-                    </div>
-                  )}
-                </form>
-              ) : (
-                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                  <section className="rounded-lg border border-slate-200 bg-white p-4">
-                    <h3 className="text-sm font-bold text-slate-900">Contact</h3>
-                    <div className="mt-3">{renderContactSummary(selectedClient)}</div>
-                  </section>
+                </section>
+                {canEditSelectedClientProfile && (
                   <section className="rounded-lg border border-slate-200 bg-white p-4">
                     <h3 className="text-sm font-bold text-slate-900">Work Summary</h3>
                     <div className="mt-3 space-y-2 text-sm text-slate-600">
-                      <p><strong className="text-slate-950">{selectedClient.taskCount}</strong> linked tasks</p>
-                      <p><strong className="text-slate-950">{selectedClient.openTaskCount}</strong> open, <strong className="text-slate-950">{selectedClient.completedTaskCount}</strong> completed</p>
-                      <p><strong className="text-slate-950">{selectedClient.projectIds.size}</strong> company records</p>
-                      {selectedClient.accountUsers.length > 0 && <p>Accounts: {selectedClient.accountUsers.join(', ')}</p>}
+                      <p>
+                        <span className="font-semibold text-slate-500">Client Added:</span>{' '}
+                        <strong className="text-slate-950">
+                          {selectedClient.addedAt ? format(new Date(getActivityTime(selectedClient.addedAt)), 'MMM dd, yyyy') : 'No date recorded'}
+                        </strong>
+                      </p>
+                      <p>
+                        <span className="font-semibold text-slate-500">Last Task Date:</span>{' '}
+                        <strong className="text-slate-950">
+                          {selectedClient.latestTaskDate ? format(new Date(getActivityTime(selectedClient.latestTaskDate)), 'MMM dd, yyyy') : 'No tasks recorded'}
+                        </strong>
+                      </p>
                     </div>
                   </section>
-                  <section className="rounded-lg border border-slate-200 bg-white p-4 md:col-span-2">
-                    <h3 className="text-sm font-bold text-slate-900">Services & Notes</h3>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {Array.from(selectedClient.services).map(service => (
-                        <Badge key={service} tone="slate" className="rounded-md text-[10px] uppercase tracking-wide">
-                          {service}
-                        </Badge>
-                      ))}
-                      {selectedClient.services.size === 0 && <span className="text-sm text-slate-400">No services recorded yet.</span>}
-                    </div>
-                    {getClientContact(selectedClient).notes && (
-                      <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{getClientContact(selectedClient).notes}</p>
-                    )}
-                  </section>
-                </div>
-              )}
+                )}
+                <section className="rounded-lg border border-slate-200 bg-white p-4 md:col-span-2">
+                  <h3 className="text-sm font-bold text-slate-900">Services & Notes</h3>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {Array.from(selectedClient.services).map(service => (
+                      <Badge key={service} tone="slate" className="rounded-md text-[10px] uppercase tracking-wide">
+                        {service}
+                      </Badge>
+                    ))}
+                    {selectedClient.services.size === 0 && <span className="text-sm text-slate-400">No services recorded yet.</span>}
+                  </div>
+                  {!isEditingProfile && getClientContact(selectedClient).notes && (
+                    <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{getClientContact(selectedClient).notes}</p>
+                  )}
+                </section>
+              </div>
             </div>
 
             <div className="flex flex-col gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4 sm:flex-row sm:justify-between">
@@ -738,37 +845,38 @@ const Clients: React.FC = () => {
                 View tasks <ArrowRight className="h-4 w-4" />
               </Link>
               <div className="flex flex-col gap-2 sm:flex-row">
-                {isRenamingClient ? (
-                  <>
-                    <button type="button" onClick={() => { setIsRenamingClient(false); setRenameValue(selectedClient.name); setRenameError(''); }} className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}>
-                      Cancel
-                    </button>
-                    <button type="submit" form="client-rename-form" className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-blue-700')}>
-                      <RotateCcw className="h-4 w-4" /> Rename client
-                    </button>
-                  </>
-                ) : isEditingProfile ? (
-                  <>
-                    <button type="button" onClick={() => setIsEditingProfile(false)} className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}>
-                      Cancel
-                    </button>
-                    <button type="submit" form="client-profile-form" className={cn(buttonBase, 'min-h-10 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-emerald-700')}>
-                      <Save className="h-4 w-4" /> Save details
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {selectedClientCanRename && (
-                      <button type="button" onClick={() => { setRenameValue(selectedClient.name); setRenameError(''); setIsRenamingClient(true); }} className={cn(buttonBase, 'min-h-10 rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm text-blue-700 shadow-sm hover:bg-blue-50')}>
-                        <RotateCcw className="h-4 w-4" /> Rename
+                {canEditSelectedClientProfile && (
+                  isEditingProfile ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => { setIsEditingProfile(false); setProfileError(''); }}
+                        className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
+                      >
+                        Cancel
                       </button>
-                    )}
-                    {canEditClientProfiles && (
-                      <button type="button" onClick={() => { setProfileForm(getProfileForm(selectedClient)); setProfileError(''); setIsEditingProfile(true); }} className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}>
-                        <Pencil className="h-4 w-4" /> Edit details
+                      <button
+                        type="button"
+                        onClick={handleInlineProfileSave}
+                        className={cn(buttonBase, 'min-h-10 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-emerald-700')}
+                      >
+                        <Save className="h-4 w-4" /> Save
                       </button>
-                    )}
-                  </>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProfileForm(getProfileForm(selectedClient));
+                        setEditClientName(selectedClient.name);
+                        setProfileError('');
+                        setIsEditingProfile(true);
+                      }}
+                      className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
+                    >
+                      <Pencil className="h-4 w-4" /> Edit details
+                    </button>
+                  )
                 )}
               </div>
             </div>
