@@ -499,7 +499,7 @@ const Tasks: React.FC = () => {
             </div>
           )}
 
-          <div className={cn('grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 gap-3', filtersOpen ? 'grid' : 'hidden lg:grid')}>
+          <div className={cn('grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3', filtersOpen ? 'grid' : 'hidden lg:grid')}>
             <div className="relative">
               <select value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All departments</option>
