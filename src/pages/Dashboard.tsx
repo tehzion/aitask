@@ -49,8 +49,14 @@ const StatCard = ({ title, value, icon: Icon, colorClass, to }: StatCardProps) =
 const Dashboard: React.FC = () => {
   const { projects, tasks: allTasks, currentUser, rolePermissions, backend, setCreateTaskModalOpen } = useStore();
 
-  const tasks = useMemo(() => getVisibleTasks(currentUser, allTasks), [allTasks, currentUser]);
-  const visibleProjects = useMemo(() => getVisibleProjects(currentUser, projects, allTasks), [allTasks, currentUser, projects]);
+  const tasks = useMemo(
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
+    [allTasks, currentUser, rolePermissions]
+  );
+  const visibleProjects = useMemo(
+    () => getVisibleProjects(currentUser, projects, allTasks, rolePermissions),
+    [allTasks, currentUser, projects, rolePermissions]
+  );
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
   const hasTaskData = tasks.length > 0;
 

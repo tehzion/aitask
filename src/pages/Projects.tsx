@@ -15,8 +15,14 @@ const Projects: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
-  const tasks = React.useMemo(() => getVisibleTasks(currentUser, allTasks), [allTasks, currentUser]);
-  const projects = React.useMemo(() => getVisibleProjects(currentUser, allProjects, allTasks), [allProjects, allTasks, currentUser]);
+  const tasks = React.useMemo(
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
+    [allTasks, currentUser, rolePermissions]
+  );
+  const projects = React.useMemo(
+    () => getVisibleProjects(currentUser, allProjects, allTasks, rolePermissions),
+    [allProjects, allTasks, currentUser, rolePermissions]
+  );
 
   const openCreateCompany = () => {
     setEditingProject(null);

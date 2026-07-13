@@ -53,7 +53,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const filteredUsers = users.filter(u => u.role !== 'Client' && u.department === department);
   const canCreateProjects = canManageProjects(currentUser, rolePermissions);
-  const visibleProjects = React.useMemo(() => getVisibleProjects(currentUser, projects, tasks), [currentUser, projects, tasks]);
+  const visibleProjects = React.useMemo(
+    () => getVisibleProjects(currentUser, projects, tasks, rolePermissions),
+    [currentUser, projects, rolePermissions, tasks]
+  );
   const selectedProject = projectId ? visibleProjects.find(project => project.id === projectId) : undefined;
   const clientOptions = React.useMemo(() => getClientOptions(projects, tasks, users), [projects, tasks, users]);
   const serviceOptions = React.useMemo(() => getServiceOptions(projects, tasks), [projects, tasks]);

@@ -159,9 +159,15 @@ const Tasks: React.FC = () => {
     setPage(1);
   }, [searchTerm, filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority, dateFrom, dateTo, projectIdFilter, clientRouteFilter, taskIdFilter]);
 
-  const tasks = useMemo(() => getVisibleTasks(currentUser, allTasks), [allTasks, currentUser]);
+  const tasks = useMemo(
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
+    [allTasks, currentUser, rolePermissions]
+  );
 
-  const visibleProjects = useMemo(() => getVisibleProjects(currentUser, projects, allTasks), [allTasks, currentUser, projects]);
+  const visibleProjects = useMemo(
+    () => getVisibleProjects(currentUser, projects, allTasks, rolePermissions),
+    [allTasks, currentUser, projects, rolePermissions]
+  );
 
   const clientOptions = useMemo(() => (
     Array.from(new Map(

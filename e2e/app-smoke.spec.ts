@@ -33,6 +33,8 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page).toHaveURL(/\/approvals$/);
   await expect(page.getByRole('heading', { name: 'Roles & Permissions' })).toBeVisible();
   await expect(page.getByText('Client Access', { exact: true })).toBeVisible();
+  await expect(page.getByText('Task Access', { exact: true })).toBeVisible();
+  await expect(page.getByText('View all tasks', { exact: true })).toBeVisible();
   await expect(page.getByText('View all clients', { exact: true })).toBeVisible();
   await expect(page.getByText('Manage assigned clients', { exact: true })).toBeVisible();
 

@@ -135,21 +135,14 @@ const Clients: React.FC = () => {
   const visibleClientKeys = React.useMemo(() => new Set(
     getVisibleClientNames(currentUser, allTasks, allProjects, rolePermissions).map(getClientKey)
   ), [allProjects, allTasks, currentUser, rolePermissions]);
-  const tasks = React.useMemo(() => {
-    if (!currentUser) return [];
-    if (currentUser.role === 'Client' || canSeeAllClients) return getVisibleTasks(currentUser, allTasks);
-    return allTasks.filter(task => (
-      visibleClientKeys.has(getClientKey(task.clientName)) &&
-      (task.assignedTo === currentUser.id || task.createdBy === currentUser.id)
-    ));
-  }, [allTasks, canSeeAllClients, currentUser, visibleClientKeys]);
-  const projects = React.useMemo(() => {
-    if (!currentUser) return [];
-    if (canSeeAllClients) return allProjects;
-    if (currentUser.role === 'Client') return getVisibleProjects(currentUser, allProjects, allTasks);
-    const connectedProjectIds = new Set(tasks.map(task => task.projectId).filter((id): id is string => Boolean(id)));
-    return allProjects.filter(project => connectedProjectIds.has(project.id) && visibleClientKeys.has(getClientKey(project.clientName)));
-  }, [allProjects, allTasks, canSeeAllClients, currentUser, tasks, visibleClientKeys]);
+  const tasks = React.useMemo(
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
+    [allTasks, currentUser, rolePermissions]
+  );
+  const projects = React.useMemo(
+    () => getVisibleProjects(currentUser, allProjects, allTasks, rolePermissions),
+    [allProjects, allTasks, currentUser, rolePermissions]
+  );
   const canAddTasks = canCreateTasks(currentUser, rolePermissions);
 
   const clients = React.useMemo(() => {

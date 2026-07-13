@@ -29,7 +29,10 @@ const Calendar: React.FC = () => {
   const [dropSuccess, setDropSuccess]       = useState<string | null>(null); // task title for flash
   const dragOriginDate = useRef<string | null>(null);
 
-  const tasks = useMemo(() => getVisibleTasks(currentUser, allTasks), [allTasks, currentUser]);
+  const tasks = useMemo(
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
+    [allTasks, currentUser, rolePermissions]
+  );
 
   const nextPeriod = () => setCurrentDate(viewMode === 'month' ? addMonths(currentDate, 1) : addWeeks(currentDate, 1));
   const prevPeriod = () => setCurrentDate(viewMode === 'month' ? subMonths(currentDate, 1) : subWeeks(currentDate, 1));

@@ -157,7 +157,10 @@ as $$
   select coalesce((
     select case private.aitask_member_role(p_workspace_id)
       when 'Admin' then true
-      when 'Staff' then true
+      when 'Staff' then
+        private.aitask_has_permission(p_workspace_id, 'viewAllTasks')
+        or private.aitask_has_permission(p_workspace_id, 'editTasks')
+        or task.assigned_to = private.aitask_member_id(p_workspace_id)
       when 'Client' then task.client_key = private.aitask_member_client_key(p_workspace_id)
       else false
     end
@@ -180,7 +183,10 @@ as $$
     select private.aitask_is_admin(p_workspace_id)
       or (
         private.aitask_member_role(p_workspace_id) = 'Staff'
-        and private.aitask_member_id(p_workspace_id) in (task.assigned_to, task.created_by)
+        and (
+          private.aitask_has_permission(p_workspace_id, 'editTasks')
+          or task.assigned_to = private.aitask_member_id(p_workspace_id)
+        )
       )
     from public.aitask_entities task
     where task.workspace_id = p_workspace_id
@@ -206,7 +212,7 @@ as $$
       where task.workspace_id = p_workspace_id
         and task.entity_type = 'task'
         and task.client_key = p_client_key
-        and private.aitask_member_id(p_workspace_id) in (task.assigned_to, task.created_by)
+        and private.aitask_can_view_task(p_workspace_id, task.entity_id)
     )
     else false
   end;
@@ -244,13 +250,13 @@ as $$
     select case private.aitask_member_role(p_workspace_id)
       when 'Admin' then true
       when 'Client' then project.client_key = private.aitask_member_client_key(p_workspace_id)
-      when 'Staff' then project.created_by = private.aitask_member_id(p_workspace_id) or exists (
+      when 'Staff' then exists (
         select 1
         from public.aitask_entities task
         where task.workspace_id = p_workspace_id
           and task.entity_type = 'task'
           and task.parent_id = p_project_id
-          and private.aitask_member_id(p_workspace_id) in (task.assigned_to, task.created_by)
+          and private.aitask_can_view_task(p_workspace_id, task.entity_id)
       )
       else false
     end
@@ -445,8 +451,12 @@ create policy "members can update authorized entities" on public.aitask_entities
   )
   with check (
     private.aitask_is_admin(workspace_id)
-    or (entity_type = 'task' and private.aitask_member_role(workspace_id) = 'Staff'
-      and private.aitask_member_id(workspace_id) in (assigned_to, created_by))
+    or (entity_type = 'task'
+      and private.aitask_member_role(workspace_id) = 'Staff'
+      and (
+        private.aitask_has_permission(workspace_id, 'editTasks')
+        or assigned_to = private.aitask_member_id(workspace_id)
+      ))
     or (entity_type = 'client' and private.aitask_can_edit_client(workspace_id, client_key))
     or (entity_type = 'project' and created_by = private.aitask_member_id(workspace_id))
     or (entity_type in ('comment', 'approval') and created_by = private.aitask_member_id(workspace_id))

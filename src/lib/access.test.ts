@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CustomRole, Project, Task, User } from '../types';
+import type { CustomRole, Project, RolePermissions, Task, User } from '../types';
 import {
   canAssignTasksToOthers,
   canCommentOnTask,
@@ -9,6 +9,7 @@ import {
   canReviewTaskAsClient,
   canViewAllClients,
   defaultRolePermissions,
+  getEffectivePermissions,
   getVisibleClientNames,
   getVisibleProjects,
   getVisibleTasks,
@@ -72,6 +73,7 @@ const tasks = [
 
 describe('staff permission matrix', () => {
   it('lets staff manage assigned work without delegating or editing unrelated work', () => {
+    expect(getVisibleTasks(staff, tasks).map(task => task.id)).toEqual(['task-1']);
     expect(canEditTask(staff, tasks[0])).toBe(true);
     expect(canEditTask(staff, tasks[1])).toBe(false);
     expect(canAssignTasksToOthers(staff)).toBe(false);
@@ -102,6 +104,9 @@ describe('staff permission matrix', () => {
     expect(canEditClientProfile(permittedStaff, 'Acme', tasks)).toBe(true);
     expect(canEditClientProfile(permittedStaff, 'Beta', tasks)).toBe(false);
     expect(canEditClientProfile(permittedStaff, 'Created Co', [creatorOnlyTask])).toBe(false);
+    expect(getVisibleTasks(permittedStaff, [creatorOnlyTask])).toEqual([]);
+    expect(getVisibleClientNames(permittedStaff, [creatorOnlyTask])).toEqual([]);
+    expect(canEditTask(permittedStaff, creatorOnlyTask)).toBe(false);
     expect(canEditClientProfile(acmeClient, 'Acme', tasks)).toBe(false);
   });
 
@@ -132,6 +137,52 @@ describe('staff permission matrix', () => {
     expect(getVisibleClientNames(elevatedStaff, tasks, projects)).toEqual(['Acme', 'Beta']);
     expect(canEditClientProfile(elevatedStaff, 'Acme', tasks)).toBe(false);
     expect(canRenameClient(elevatedStaff)).toBe(false);
+  });
+
+  it('grants broad reads without broad edits through View all tasks', () => {
+    const viewingStaff: User = {
+      ...staff,
+      permissions: { ...defaultRolePermissions.Staff, viewAllTasks: true },
+    };
+
+    expect(getVisibleTasks(viewingStaff, tasks).map(task => task.id)).toEqual(['task-1', 'task-2']);
+    expect(getVisibleClientNames(viewingStaff, tasks, projects)).toEqual(['Acme', 'Beta']);
+    expect(getVisibleProjects(viewingStaff, projects, tasks).map(project => project.id)).toEqual(['project-acme', 'project-beta']);
+    expect(canEditTask(viewingStaff, tasks[1])).toBe(false);
+  });
+
+  it('treats Edit all tasks as broad task visibility and editing', () => {
+    const editingStaff: User = {
+      ...staff,
+      permissions: { ...defaultRolePermissions.Staff, editTasks: true },
+    };
+
+    expect(getVisibleTasks(editingStaff, tasks).map(task => task.id)).toEqual(['task-1', 'task-2']);
+    expect(canEditTask(editingStaff, tasks[1])).toBe(true);
+  });
+
+  it('keeps missing permissions disabled for existing persisted roles', () => {
+    const legacyPermissions: Partial<RolePermissions> = { ...defaultRolePermissions.Staff };
+    delete legacyPermissions.viewAllTasks;
+    const legacyStaff: User = {
+      ...staff,
+      permissions: legacyPermissions as User['permissions'],
+    };
+
+    expect(getEffectivePermissions(legacyStaff).viewAllTasks).toBe(false);
+    expect(getVisibleTasks(legacyStaff, tasks).map(task => task.id)).toEqual(['task-1']);
+  });
+
+  it('shows only projects linked to assigned tasks and hides empty projects', () => {
+    const projectSet: Project[] = [
+      ...projects,
+      { ...projects[0], id: 'project-owned-empty', clientName: 'Owned', projectName: 'Owned', createdBy: staff.id },
+      { ...projects[0], id: 'project-unrelated-empty', clientName: 'Hidden', projectName: 'Hidden', createdBy: otherStaff.id },
+    ];
+
+    expect(getVisibleProjects(staff, projectSet, tasks).map(project => project.id)).toEqual([
+      'project-acme',
+    ]);
   });
 });
 

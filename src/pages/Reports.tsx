@@ -10,8 +10,11 @@ import { getVisibleTasks } from '../lib/access';
 import { parseOptionalDate } from '../lib/utils';
 
 const Reports: React.FC = () => {
-  const { tasks: allTasks, currentUser } = useStore();
-  const tasks = useMemo(() => getVisibleTasks(currentUser, allTasks), [allTasks, currentUser]);
+  const { tasks: allTasks, currentUser, rolePermissions } = useStore();
+  const tasks = useMemo(
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
+    [allTasks, currentUser, rolePermissions]
+  );
   const scopeLabel = currentUser?.role === 'Client'
     ? `${currentUser.companyName || 'your company'} tasks`
     : 'your accessible workspace tasks';

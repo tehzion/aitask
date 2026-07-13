@@ -123,8 +123,8 @@ const Settings: React.FC = () => {
   };
 
   const backendStatus = getBackendStatus();
-  const visibleTasks = getVisibleTasks(currentUser, tasks);
-  const visibleProjects = getVisibleProjects(currentUser, projects, tasks);
+  const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions);
+  const visibleProjects = getVisibleProjects(currentUser, projects, tasks, rolePermissions);
   const effectivePermissions = getEffectivePermissions(currentUser, rolePermissions);
   const effectiveRoleName = getEffectiveRoleName(currentUser, rolePermissions);
   const enabledPermissions = Object.entries(effectivePermissions)
