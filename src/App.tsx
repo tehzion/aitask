@@ -2,24 +2,37 @@ import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { startBackendAutoSync, useStore } from './store';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import Tasks from './pages/Tasks';
-import Calendar from './pages/Calendar';
-import Clients from './pages/Clients';
-import Projects from './pages/Projects';
-import Reports from './pages/Reports';
 import Login from './pages/Login';
-import Approvals from './pages/Approvals';
-import Settings from './pages/Settings';
 import AccessDenied from './components/AccessDenied';
 import { canAccessPath } from './lib/access';
 import { hasPasswordResetBypass } from './lib/auth';
 import { WifiOff } from 'lucide-react';
+import { shouldUseSecureSupabase, supabase } from './lib/supabaseClient';
+
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Tasks = React.lazy(() => import('./pages/Tasks'));
+const Calendar = React.lazy(() => import('./pages/Calendar'));
+const Clients = React.lazy(() => import('./pages/Clients'));
+const Projects = React.lazy(() => import('./pages/Projects'));
+const Reports = React.lazy(() => import('./pages/Reports'));
+const Approvals = React.lazy(() => import('./pages/Approvals'));
+const Settings = React.lazy(() => import('./pages/Settings'));
+
+const RouteLoading = () => (
+  <div className="flex min-h-[40vh] items-center justify-center px-4 text-sm font-medium text-slate-500" role="status">
+    Loading AiTask...
+  </div>
+);
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const currentUser = useStore((state) => state.currentUser);
+  const backend = useStore((state) => state.backend);
   const location = useLocation();
-  if (!currentUser) return <Navigate to="/login" replace />;
+  if (backend.isLoading) return <RouteLoading />;
+  if (!currentUser) {
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to="/login" replace state={{ returnTo }} />;
+  }
   if (currentUser.mustResetPassword && !hasPasswordResetBypass(currentUser.id) && location.pathname !== '/settings') {
     return <Navigate to="/settings" replace />;
   }
@@ -37,7 +50,6 @@ function App() {
     typeof navigator === 'undefined' ? true : navigator.onLine
   ));
   const initializeBackend = useStore(state => state.initializeBackend);
-  const syncBackendNow = useStore(state => state.syncBackendNow);
   const forceSyncMockData = useStore(state => state._forceSyncMockData);
   const sendDueDateReminders = useStore(state => state.sendDueDateReminders);
 
@@ -55,15 +67,28 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!shouldUseSecureSupabase()) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        useStore.setState({ currentUser: null });
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
     let isMounted = true;
 
     const boot = async () => {
       await initializeBackend();
       if (!isMounted) return;
+      startBackendAutoSync();
       forceSyncMockData();
       sendDueDateReminders();
-      startBackendAutoSync();
-      await syncBackendNow();
+      const store = useStore.getState();
+      if (store.backend.hasLocalChanges && !store.backend.hasRemoteUpdate) {
+        await store.syncBackendNow();
+      }
     };
 
     void boot();
@@ -71,31 +96,33 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, [forceSyncMockData, initializeBackend, sendDueDateReminders, syncBackendNow]);
+  }, [forceSyncMockData, initializeBackend, sendDueDateReminders]);
 
   return (
     <>
       <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/dashboard" element={<Navigate to="/" replace />} />
+        <React.Suspense fallback={<RouteLoading />}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/dashboard" element={<Navigate to="/" replace />} />
 
-          <Route path="/" element={
-            <PrivateRoute>
-              <Layout />
-            </PrivateRoute>
-          }>
-            <Route index element={<Dashboard />} />
-            <Route path="tasks" element={<RoleRoute path="/tasks"><Tasks /></RoleRoute>} />
-            <Route path="calendar" element={<RoleRoute path="/calendar"><Calendar /></RoleRoute>} />
-            <Route path="clients" element={<RoleRoute path="/clients"><Clients /></RoleRoute>} />
-            <Route path="projects" element={<RoleRoute path="/projects"><Projects /></RoleRoute>} />
-            <Route path="reports" element={<RoleRoute path="/reports"><Reports /></RoleRoute>} />
-            <Route path="approvals" element={<RoleRoute path="/approvals"><Approvals /></RoleRoute>} />
-            <Route path="settings" element={<RoleRoute path="/settings"><Settings /></RoleRoute>} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route path="/" element={
+              <PrivateRoute>
+                <Layout />
+              </PrivateRoute>
+            }>
+              <Route index element={<Dashboard />} />
+              <Route path="tasks" element={<RoleRoute path="/tasks"><Tasks /></RoleRoute>} />
+              <Route path="calendar" element={<RoleRoute path="/calendar"><Calendar /></RoleRoute>} />
+              <Route path="clients" element={<RoleRoute path="/clients"><Clients /></RoleRoute>} />
+              <Route path="projects" element={<RoleRoute path="/projects"><Projects /></RoleRoute>} />
+              <Route path="reports" element={<RoleRoute path="/reports"><Reports /></RoleRoute>} />
+              <Route path="approvals" element={<RoleRoute path="/approvals"><Approvals /></RoleRoute>} />
+              <Route path="settings" element={<RoleRoute path="/settings"><Settings /></RoleRoute>} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </React.Suspense>
       </BrowserRouter>
 
       {!isOnline && (

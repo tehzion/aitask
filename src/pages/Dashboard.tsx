@@ -254,7 +254,7 @@ const Dashboard: React.FC = () => {
           {tasksByTeamData.length === 0 ? (
             <ChartEmptyState>No task data yet</ChartEmptyState>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
               <BarChart data={tasksByTeamData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
@@ -270,7 +270,7 @@ const Dashboard: React.FC = () => {
           {tasksByStatusData.length === 0 ? (
             <ChartEmptyState>No status data yet</ChartEmptyState>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
               <PieChart>
                 <Pie
                   data={tasksByStatusData}
@@ -297,7 +297,7 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <ChartCard title="Monthly Completed Tasks" className="lg:col-span-2">
           {hasTaskData ? (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
               <LineChart data={monthlyData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
@@ -324,7 +324,7 @@ const Dashboard: React.FC = () => {
               const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
 
               return (
-                <Link key={task.id} to={`/tasks?taskId=${task.id}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50 transition-colors">
+                <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50 transition-colors">
                   <div className="flex justify-between items-start mb-1">
                     <span className={cn("font-semibold text-stone-800 text-sm truncate pr-2", isOverdue && "text-red-700")}>{task.title}</span>
                   </div>
@@ -389,7 +389,7 @@ const Dashboard: React.FC = () => {
               </h4>
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
                 {myTasks.dueToday.map(task => (
-                  <Link key={task.id} to={`/tasks?taskId=${task.id}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50/50 bg-stone-50/30 transition-colors">
+                  <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50/50 bg-stone-50/30 transition-colors">
                     <p className="text-xs font-bold text-stone-800 truncate">{task.title}</p>
                     <div className="flex justify-between text-[10px] text-stone-500 mt-1">
                       <span>{task.id}</span>
@@ -416,7 +416,7 @@ const Dashboard: React.FC = () => {
                   return (
                     <Link
                       key={task.id}
-                      to={`/tasks?taskId=${task.id}`}
+                      to={`/tasks?taskId=${encodeURIComponent(task.id)}`}
                       className="block p-3 rounded-lg border border-red-100 hover:bg-red-50/20 bg-red-50/10 transition-colors"
                       title={dueDate ? `Due: ${format(dueDate, 'yyyy-MM-dd')}` : 'No due date'}
                     >
@@ -442,7 +442,7 @@ const Dashboard: React.FC = () => {
               </h4>
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
                 {myTasks.actionRequired.map(task => (
-                  <Link key={task.id} to={`/tasks?taskId=${task.id}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50/50 bg-stone-50/30 transition-colors">
+                  <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50/50 bg-stone-50/30 transition-colors">
                     <p className="text-xs font-bold text-stone-800 truncate">{task.title}</p>
                     <div className="flex justify-between text-[10px] text-stone-500 mt-1">
                       <span>{task.status}</span>

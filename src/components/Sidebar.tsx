@@ -4,6 +4,7 @@ import { LayoutDashboard, CheckSquare, CalendarDays, FolderKanban, BarChart3, Se
 import { useStore } from '../store';
 import clsx from 'clsx';
 import { canAccessPath, getVisibleNavigation } from '../lib/access';
+import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
 
 const navIcons = {
   Dashboard: LayoutDashboard,
@@ -22,9 +23,10 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (shouldUseSecureSupabase()) await signOutSecureSession();
     useStore.setState({ currentUser: null });
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   const currentUser     = useStore((state) => state.currentUser);

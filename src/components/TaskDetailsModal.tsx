@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../store';
-import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save } from 'lucide-react';
+import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save, ChevronDown } from 'lucide-react';
 import { Department, Priority, Task, TaskStatus } from '../types';
 import { format, formatDistanceToNow } from 'date-fns';
 import { canAssignTasksToOthers, canCommentOnTask, canEditTask as canEditTaskByRole, canReviewTaskAsClient } from '../lib/access';
@@ -239,15 +239,18 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                       {task.status}
                     </span>
                   ) : (
-                    <select
-                      className={`text-sm px-3 py-1 rounded-full font-semibold outline-none cursor-pointer border-none shadow-sm ${getStatusColor(task.status)}`}
-                      value={task.status}
-                      onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
-                    >
-                      {taskStatuses.map(status => (
-                        <option key={status} value={status} className="bg-white text-slate-900">{status}</option>
-                      ))}
-                    </select>
+                    <div className="relative inline-block">
+                      <select
+                        className={`text-sm pl-3 pr-7 py-1 rounded-full font-semibold outline-none cursor-pointer appearance-none border-none shadow-sm ${getStatusColor(task.status)}`}
+                        value={task.status}
+                        onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
+                      >
+                        {taskStatuses.map(status => (
+                          <option key={status} value={status} className="bg-white text-slate-900">{status}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 text-current" />
+                    </div>
                   )}
                 </div>
                 <div className="text-right">
@@ -288,43 +291,52 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Department</label>
-                      <select
-                        value={editForm.department}
-                        disabled={!canAssignOthers}
-                        onChange={(e) => {
-                          const nextDepartment = e.target.value as Department;
-                          const firstUser = users.find(user => user.role !== 'Client' && user.department === nextDepartment);
-                          setEditForm({
-                            ...editForm,
-                            department: nextDepartment,
-                            assignedTo: firstUser?.id || editForm.assignedTo,
-                          });
-                        }}
-                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500"
-                      >
-                        {DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}
-                      </select>
+                      <div className="relative">
+                        <select
+                          value={editForm.department}
+                          disabled={!canAssignOthers}
+                          onChange={(e) => {
+                            const nextDepartment = e.target.value as Department;
+                            const firstUser = users.find(user => user.role !== 'Client' && user.department === nextDepartment);
+                            setEditForm({
+                              ...editForm,
+                              department: nextDepartment,
+                              assignedTo: firstUser?.id || editForm.assignedTo,
+                            });
+                          }}
+                          className="w-full rounded-lg border border-slate-300 bg-white p-2.5 pr-10 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500 appearance-none cursor-pointer"
+                        >
+                          {DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}
+                        </select>
+                        <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Assignee</label>
-                      <select
-                        value={editForm.assignedTo}
-                        disabled={!canAssignOthers}
-                        onChange={(e) => setEditForm({ ...editForm, assignedTo: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500"
-                      >
-                        {assigneeOptions.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
-                      </select>
+                      <div className="relative">
+                        <select
+                          value={editForm.assignedTo}
+                          disabled={!canAssignOthers}
+                          onChange={(e) => setEditForm({ ...editForm, assignedTo: e.target.value })}
+                          className="w-full rounded-lg border border-slate-300 bg-white p-2.5 pr-10 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500 appearance-none cursor-pointer"
+                        >
+                          {assigneeOptions.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                        </select>
+                        <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Priority</label>
-                      <select
-                        value={editForm.priority}
-                        onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as Priority })}
-                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      >
-                        {PRIORITIES.map(priority => <option key={priority} value={priority}>{priority}</option>)}
-                      </select>
+                      <div className="relative">
+                        <select
+                          value={editForm.priority}
+                          onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as Priority })}
+                          className="w-full rounded-lg border border-slate-300 bg-white p-2.5 pr-10 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 appearance-none cursor-pointer"
+                        >
+                          {PRIORITIES.map(priority => <option key={priority} value={priority}>{priority}</option>)}
+                        </select>
+                        <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Start Date <span className="text-red-500">*</span></label>

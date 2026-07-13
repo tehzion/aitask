@@ -18,6 +18,7 @@ export const permissionLabels: Record<RolePermissionKey, string> = {
   viewCalendar: 'Calendar access',
   viewProjects: 'Projects access',
   viewAllClients: 'View all clients',
+  manageAssignedClients: 'Manage assigned clients',
   viewReports: 'Reports access',
   viewApprovals: 'Approvals access',
   viewSettings: 'Settings access',
@@ -32,7 +33,8 @@ export const permissionLabels: Record<RolePermissionKey, string> = {
 
 export const permissionGroups: { title: string; keys: RolePermissionKey[] }[] = [
   { title: 'Page Access', keys: ['viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects', 'viewReports', 'viewApprovals', 'viewSettings'] },
-  { title: 'Workflow Actions', keys: ['createTasks', 'editTasks', 'createProjects', 'viewAllClients', 'manageUsers', 'approveRegistrations', 'deleteUsers', 'clientReview'] },
+  { title: 'Client Access', keys: ['viewAllClients', 'manageAssignedClients'] },
+  { title: 'Workflow Actions', keys: ['createTasks', 'editTasks', 'createProjects', 'manageUsers', 'approveRegistrations', 'deleteUsers', 'clientReview'] },
 ];
 
 const makePermissions = (enabled: RolePermissionKey[]): RolePermissions => {
@@ -52,6 +54,7 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewCalendar',
     'viewProjects',
     'viewAllClients',
+    'manageAssignedClients',
     'viewReports',
     'viewSettings',
     'createTasks',
@@ -103,7 +106,13 @@ export const getEffectivePermissions = (
     ? customRoles.find(role => role.id === user.customRoleId)
     : undefined;
 
-  return user.permissions || customRole?.permissions || defaultRolePermissions[user.role];
+  const directPermissions = user.permissions && Object.keys(user.permissions).length > 0
+    ? user.permissions
+    : undefined;
+  const source = directPermissions || customRole?.permissions || defaultRolePermissions[user.role];
+  return makePermissions(
+    (Object.keys(permissionLabels) as RolePermissionKey[]).filter(key => source[key] === true)
+  );
 };
 
 export const getEffectiveRoleName = (user: User | null | undefined, customRoles: CustomRole[] = []) => {
@@ -134,6 +143,20 @@ export const canManageTasks = (user: User | null | undefined, customRoles: Custo
 export const canManageProjects = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'createProjects', customRoles);
 export const canManageClientProfiles = (user: User | null | undefined) => Boolean(user && (isBossKoo(user) || user.role === 'Admin'));
 export const getClientKey = (value: string | null | undefined) => value?.trim().toLowerCase() || '';
+export const canEditClientProfile = (
+  user: User | null | undefined,
+  clientName: string,
+  tasks: Task[] = [],
+  customRoles: CustomRole[] = []
+) => {
+  if (canManageClientProfiles(user)) return true;
+  if (user?.role !== 'Staff' || !hasPermission(user, 'manageAssignedClients', customRoles)) return false;
+
+  const clientKey = getClientKey(clientName);
+  return Boolean(clientKey) && tasks.some(task => (
+    task.assignedTo === user.id && getClientKey(task.clientName) === clientKey
+  ));
+};
 export const canViewAllClients = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   Boolean(user && user.role !== 'Client' && (isBossKoo(user) || user.role === 'Admin' || hasPermission(user, 'viewAllClients', customRoles)))
 );
@@ -175,18 +198,8 @@ export const getVisibleClientNames = (
   ).values()).sort((a, b) => a.localeCompare(b));
 };
 export const canRenameClient = (
-  user: User | null | undefined,
-  clientName: string,
-  tasks: Task[] = [],
-  projects: Project[] = [],
-  customRoles: CustomRole[] = []
-) => {
-  if (!user || user.role === 'Client') return false;
-  if (canManageClientProfiles(user) || canViewAllClients(user, customRoles)) return true;
-  if (user.role !== 'Staff') return false;
-  const key = getClientKey(clientName);
-  return getVisibleClientNames(user, tasks, projects, customRoles).some(name => getClientKey(name) === key);
-};
+  user: User | null | undefined
+) => canManageClientProfiles(user);
 export const canAssignTasksToOthers = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   hasPermission(user, 'editTasks', customRoles)
 );

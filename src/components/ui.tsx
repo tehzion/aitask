@@ -113,7 +113,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({ title, description, childr
       <h2 className="text-base font-semibold text-slate-900">{title}</h2>
       {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
     </div>
-    <div className={cn('relative w-full min-w-0 overflow-hidden shrink-0', heightClassName)}>
+    <div className={cn('relative w-full min-h-0 min-w-0 overflow-hidden shrink-0', heightClassName)}>
       {children}
     </div>
   </section>

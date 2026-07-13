@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, ChevronDown } from 'lucide-react';
 import { Department, Priority, RecurrenceFrequency, ServiceType } from '../types';
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
@@ -337,16 +337,19 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     </button>
                   )}
                 </div>
+                <div className="relative">
                   <select
-                  value={projectId} 
-                  onChange={e => selectProject(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm cursor-pointer"
-                >
-                  <option value="">No Company Link / Independent Task</option>
-                  {visibleProjects.map(p => (
-                    <option key={p.id} value={p.id}>{p.projectName} ({p.clientName})</option>
-                  ))}
-                </select>
+                    value={projectId}
+                    onChange={e => selectProject(e.target.value)}
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                  >
+                    <option value="">No Company Link / Independent Task</option>
+                    {visibleProjects.map(p => (
+                      <option key={p.id} value={p.id}>{p.projectName} ({p.clientName})</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>
               </div>
 
               <div>
@@ -434,15 +437,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     <p className="text-xs text-red-500 mt-1">{customClientError}</p>
                   )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Customer Details</label>
-                  <input 
-                    type="text"
-                    value={customerDetails} onChange={e => setCustomerDetails(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
-                    placeholder="Contact person, phone, etc."
-                  />
-                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -474,32 +468,38 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Assign to Position/Department <span className="text-red-500">*</span></label>
-                  <select 
-                    value={department} 
-                    onChange={e => {
-                      setDepartment(e.target.value as Department);
-                      setAssignedTo(''); // Reset assignee when department changes
-                      setAssignmentError('');
-                    }}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm cursor-pointer"
-                  >
-                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={department}
+                      onChange={e => {
+                        setDepartment(e.target.value as Department);
+                        setAssignedTo(''); // Reset assignee when department changes
+                        setAssignmentError('');
+                      }}
+                      className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                    >
+                      {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Assignee</label>
-                  <select 
-                    value={assignedTo} 
-                    onChange={e => setAssignedTo(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm cursor-pointer"
-                  >
-                    <option value="">
-                      {filteredUsers.length > 0 ? `Auto assign: ${filteredUsers[0].name}` : 'No users in this department'}
-                    </option>
-                    {filteredUsers.map(u => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={assignedTo}
+                      onChange={e => setAssignedTo(e.target.value)}
+                      className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                    >
+                      <option value="">
+                        {filteredUsers.length > 0 ? `Auto assign: ${filteredUsers[0].name}` : 'No users in this department'}
+                      </option>
+                      {filteredUsers.map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                  </div>
                   {filteredUsers.length === 0 && (
                     <p className="text-xs text-red-500 mt-1">
                       No assignable team members in this department.
@@ -514,13 +514,16 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Service Type</label>
-                  <select 
-                    value={serviceType} onChange={e => selectService(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm cursor-pointer"
-                  >
-                    {serviceChoices.map(s => <option key={s} value={s}>{s}</option>)}
-                    <option value={CUSTOM_SERVICE_VALUE}>+ Add custom service</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={serviceType} onChange={e => selectService(e.target.value)}
+                      className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                    >
+                      {serviceChoices.map(s => <option key={s} value={s}>{s}</option>)}
+                      <option value={CUSTOM_SERVICE_VALUE}>+ Add custom service</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                  </div>
                   {isAddingCustomService && (
                     <div className="mt-2 flex gap-2">
                       <input
@@ -549,12 +552,15 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
-                  <select 
-                    value={priority} onChange={e => setPriority(e.target.value as Priority)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm cursor-pointer"
-                  >
-                    {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={priority} onChange={e => setPriority(e.target.value as Priority)}
+                      className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                    >
+                      {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                  </div>
                 </div>
               </div>
 
@@ -609,13 +615,16 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Recurrence</label>
-                  <select
-                    value={recurrenceFrequency}
-                    onChange={e => setRecurrenceFrequency(e.target.value as RecurrenceFrequency)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm cursor-pointer"
-                  >
-                    {RECURRENCE_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={recurrenceFrequency}
+                      onChange={e => setRecurrenceFrequency(e.target.value as RecurrenceFrequency)}
+                      className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                    >
+                      {RECURRENCE_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Internal Notes</label>

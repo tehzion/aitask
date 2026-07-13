@@ -196,14 +196,14 @@ const Calendar: React.FC = () => {
             </div>
 
             <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-sm p-1">
-              <button onClick={prevPeriod} className="p-1.5 hover:bg-slate-100 rounded-md transition-colors text-slate-600"><ChevronLeft className="w-4 h-4" /></button>
-              <button onClick={goToday} className="px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 rounded-md transition-colors flex items-center gap-1.5">
+              <button type="button" onClick={prevPeriod} aria-label={`Previous ${viewMode}`} title={`Previous ${viewMode}`} className="p-1.5 hover:bg-slate-100 rounded-md transition-colors text-slate-600"><ChevronLeft className="w-4 h-4" /></button>
+              <button type="button" onClick={goToday} className="px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 rounded-md transition-colors flex items-center gap-1.5">
                 <CalendarIcon className="w-4 h-4" />
                 {viewMode === 'month'
                   ? format(currentDate, 'MMMM yyyy')
                   : `${format(startDate, 'MMM d')} – ${format(endDate, 'MMM d, yyyy')}`}
               </button>
-              <button onClick={nextPeriod} className="p-1.5 hover:bg-slate-100 rounded-md transition-colors text-slate-600"><ChevronRight className="w-4 h-4" /></button>
+              <button type="button" onClick={nextPeriod} aria-label={`Next ${viewMode}`} title={`Next ${viewMode}`} className="p-1.5 hover:bg-slate-100 rounded-md transition-colors text-slate-600"><ChevronRight className="w-4 h-4" /></button>
             </div>
 
             {canCreateTasks(currentUser, rolePermissions) && (
@@ -342,7 +342,7 @@ const Calendar: React.FC = () => {
                         return (
                           <Link
                             key={t.id}
-                            to={`/tasks?taskId=${t.id}`}
+                            to={`/tasks?taskId=${encodeURIComponent(t.id)}`}
                             draggable={canDrag}
                             onClick={e => e.stopPropagation()}
                             onDragStart={canDrag ? e => { e.stopPropagation(); handleDragStart(e, t.id, dateStr); } : undefined}
@@ -478,7 +478,7 @@ const Calendar: React.FC = () => {
                         <span className={clsx('w-2 h-2 rounded-full mt-1.5 shrink-0', getDeptDot(task.department))} />
                         <div className="min-w-0 flex-1">
                           <Link
-                            to={`/tasks?taskId=${task.id}`}
+                            to={`/tasks?taskId=${encodeURIComponent(task.id)}`}
                             onClick={e => e.stopPropagation()}
                             className={clsx(
                               'text-sm font-semibold text-slate-800 leading-snug hover:text-blue-700 transition-colors',

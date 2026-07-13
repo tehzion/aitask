@@ -10,7 +10,6 @@ import {
   MapPin,
   Pencil,
   Phone,
-  RotateCcw,
   Search,
   Save,
   UserRound,
@@ -20,7 +19,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { Badge, Button, PageHeader } from '../components/ui';
 import { buttonBase, cardBase, inputBase, pageShell } from '../components/uiTokens';
-import { canCreateTasks, canManageClientProfiles, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { canCreateTasks, canEditClientProfile, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
@@ -125,7 +124,6 @@ const Clients: React.FC = () => {
   } = useStore();
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedClientName, setSelectedClientName] = React.useState('');
-  const [editClientName, setEditClientName] = React.useState('');
   const [isEditingProfile, setIsEditingProfile] = React.useState(false);
   const [isRenamingClient, setIsRenamingClient] = React.useState(false);
   const [profileForm, setProfileForm] = React.useState<ClientProfileForm>(emptyProfileForm);
@@ -153,15 +151,6 @@ const Clients: React.FC = () => {
     return allProjects.filter(project => connectedProjectIds.has(project.id) && visibleClientKeys.has(getClientKey(project.clientName)));
   }, [allProjects, allTasks, canSeeAllClients, currentUser, tasks, visibleClientKeys]);
   const canAddTasks = canCreateTasks(currentUser, rolePermissions);
-  const canEditClientProfiles = canManageClientProfiles(currentUser);
-  const canEditSelectedClientProfile = React.useMemo(() => {
-    if (!currentUser) return false;
-    if (currentUser.role === 'Admin') return true;
-    if (currentUser.role === 'Staff') {
-      return tasks.some(task => getClientKey(task.clientName) === getClientKey(selectedClientName) && task.assignedTo === currentUser.id);
-    }
-    return false;
-  }, [currentUser, selectedClientName, tasks]);
 
   const clients = React.useMemo(() => {
     const summaries = new Map<string, ClientSummary>();
@@ -314,18 +303,20 @@ const Clients: React.FC = () => {
   const linkedAccounts = clients.reduce((sum, client) => sum + client.accountUsers.length, 0);
   const savedProfiles = clients.filter(client => Boolean(client.profile)).length;
   const selectedClientCanRename = selectedClient
-    ? canRenameClient(currentUser, selectedClient.name, allTasks, allProjects, rolePermissions)
+    ? canRenameClient(currentUser)
+    : false;
+  const selectedClientCanEditProfile = selectedClient
+    ? canEditClientProfile(currentUser, selectedClient.name, allTasks, rolePermissions)
     : false;
 
   const openClientPanel = (client: ClientSummary, edit = false) => {
     setSelectedClientName(client.name);
     setProfileForm(getProfileForm(client));
-    setEditClientName(client.name);
     setProfileError('');
     setRenameValue(client.name);
     setRenameError('');
     setIsRenamingClient(false);
-    setIsEditingProfile(Boolean(edit && canEditClientProfiles));
+    setIsEditingProfile(Boolean(edit && canEditClientProfile(currentUser, client.name, allTasks, rolePermissions)));
   };
 
   const closeClientPanel = () => {
@@ -336,41 +327,7 @@ const Clients: React.FC = () => {
     setRenameError('');
   };
 
-  const handleInlineProfileSave = () => {
-    if (!selectedClient) return;
-
-    const trimmedNewName = editClientName.trim();
-    if (!trimmedNewName) {
-      setProfileError('Client name cannot be empty.');
-      return;
-    }
-
-    let activeClientName = selectedClient.name;
-
-    // 1. Rename if client name has changed
-    if (trimmedNewName !== selectedClient.name) {
-      const renameResult = renameClient(selectedClient.name, trimmedNewName);
-      if (!renameResult.ok) {
-        setProfileError(renameResult.error || 'Unable to rename client.');
-        return;
-      }
-      activeClientName = trimmedNewName;
-      setSelectedClientName(trimmedNewName);
-    }
-
-    // 2. Save profile details under the active client name
-    const profileResult = upsertClientProfile(activeClientName, profileForm);
-    if (!profileResult.ok) {
-      setProfileError(profileResult.error || 'Unable to save client details.');
-      return;
-    }
-
-    setIsEditingProfile(false);
-    setProfileError('');
-  };
-
-  const handleProfileSave = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleProfileSave = () => {
     if (!selectedClient) return;
 
     const result = upsertClientProfile(selectedClient.name, profileForm);
@@ -383,8 +340,7 @@ const Clients: React.FC = () => {
     setProfileError('');
   };
 
-  const handleRenameSave = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleRenameSave = () => {
     if (!selectedClient) return;
 
     const result = renameClient(selectedClient.name, renameValue);
@@ -704,22 +660,34 @@ const Clients: React.FC = () => {
                   {profileError}
                 </div>
               )}
+              {isRenamingClient && (
+                <section className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                  <label htmlFor="client-rename" className="block text-xs font-bold uppercase tracking-wide text-blue-700">
+                    Rename client / brand
+                  </label>
+                  <p className="mt-1 text-xs leading-5 text-blue-700/80">
+                    This updates the client name across linked tasks, companies, client accounts, and notifications.
+                  </p>
+                  <input
+                    id="client-rename"
+                    type="text"
+                    className={cn(inputBase, 'mt-3 bg-white')}
+                    value={renameValue}
+                    onChange={(event) => {
+                      setRenameValue(event.target.value);
+                      setRenameError('');
+                    }}
+                    autoFocus
+                  />
+                  {renameError && <p className="mt-2 text-sm font-semibold text-red-700">{renameError}</p>}
+                </section>
+              )}
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <section className="rounded-lg border border-slate-200 bg-white p-4">
                   <h3 className="text-sm font-bold text-slate-900">Contact</h3>
                   <div className="mt-3">
                     {isEditingProfile ? (
                       <div className="space-y-3">
-                        <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Client Name</label>
-                          <input
-                            type="text"
-                            className={cn(inputBase, 'p-2 text-xs')}
-                            value={editClientName}
-                            onChange={e => { setEditClientName(e.target.value); setProfileError(''); }}
-                            placeholder="Client / Brand Name"
-                          />
-                        </div>
                         <div>
                           <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Contact Person</label>
                           <input
@@ -800,25 +768,23 @@ const Clients: React.FC = () => {
                     )}
                   </div>
                 </section>
-                {canEditSelectedClientProfile && (
-                  <section className="rounded-lg border border-slate-200 bg-white p-4">
-                    <h3 className="text-sm font-bold text-slate-900">Work Summary</h3>
-                    <div className="mt-3 space-y-2 text-sm text-slate-600">
-                      <p>
-                        <span className="font-semibold text-slate-500">Client Added:</span>{' '}
-                        <strong className="text-slate-950">
-                          {selectedClient.addedAt ? format(new Date(getActivityTime(selectedClient.addedAt)), 'MMM dd, yyyy') : 'No date recorded'}
-                        </strong>
-                      </p>
-                      <p>
-                        <span className="font-semibold text-slate-500">Last Task Date:</span>{' '}
-                        <strong className="text-slate-950">
-                          {selectedClient.latestTaskDate ? format(new Date(getActivityTime(selectedClient.latestTaskDate)), 'MMM dd, yyyy') : 'No tasks recorded'}
-                        </strong>
-                      </p>
-                    </div>
-                  </section>
-                )}
+                <section className="rounded-lg border border-slate-200 bg-white p-4">
+                  <h3 className="text-sm font-bold text-slate-900">Work Summary</h3>
+                  <div className="mt-3 space-y-2 text-sm text-slate-600">
+                    <p>
+                      <span className="font-semibold text-slate-500">Client Added:</span>{' '}
+                      <strong className="text-slate-950">
+                        {selectedClient.addedAt ? format(new Date(getActivityTime(selectedClient.addedAt)), 'MMM dd, yyyy') : 'No date recorded'}
+                      </strong>
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-500">Last Task Date:</span>{' '}
+                      <strong className="text-slate-950">
+                        {selectedClient.latestTaskDate ? format(new Date(getActivityTime(selectedClient.latestTaskDate)), 'MMM dd, yyyy') : 'No tasks recorded'}
+                      </strong>
+                    </p>
+                  </div>
+                </section>
                 <section className="rounded-lg border border-slate-200 bg-white p-4 md:col-span-2">
                   <h3 className="text-sm font-bold text-slate-900">Services & Notes</h3>
                   <div className="mt-3 flex flex-wrap gap-1.5">
@@ -844,9 +810,25 @@ const Clients: React.FC = () => {
               >
                 View tasks <ArrowRight className="h-4 w-4" />
               </Link>
-              <div className={cn(isEditingProfile ? "grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto" : "flex flex-col gap-2 sm:flex-row")}>
-                {canEditSelectedClientProfile && (
-                  isEditingProfile ? (
+              <div className={cn(isEditingProfile || isRenamingClient ? 'grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto' : 'flex flex-col gap-2 sm:flex-row')}>
+                {isRenamingClient ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { setIsRenamingClient(false); setRenameError(''); }}
+                      className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRenameSave}
+                      className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-blue-700')}
+                    >
+                      <Save className="h-4 w-4" /> Rename
+                    </button>
+                  </>
+                ) : isEditingProfile ? (
                     <>
                       <button
                         type="button"
@@ -857,26 +839,41 @@ const Clients: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={handleInlineProfileSave}
+                        onClick={handleProfileSave}
                         className={cn(buttonBase, 'min-h-10 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-emerald-700')}
                       >
                         <Save className="h-4 w-4" /> Save
                       </button>
                     </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setProfileForm(getProfileForm(selectedClient));
-                        setEditClientName(selectedClient.name);
-                        setProfileError('');
-                        setIsEditingProfile(true);
-                      }}
-                      className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
-                    >
-                      <Pencil className="h-4 w-4" /> Edit details
-                    </button>
-                  )
+                ) : (
+                  <>
+                    {selectedClientCanRename && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRenameValue(selectedClient.name);
+                          setRenameError('');
+                          setIsRenamingClient(true);
+                        }}
+                        className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
+                      >
+                        <Pencil className="h-4 w-4" /> Rename
+                      </button>
+                    )}
+                    {selectedClientCanEditProfile && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileForm(getProfileForm(selectedClient));
+                          setProfileError('');
+                          setIsEditingProfile(true);
+                        }}
+                        className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
+                      >
+                        <Pencil className="h-4 w-4" /> Edit details
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>

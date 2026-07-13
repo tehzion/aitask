@@ -221,6 +221,8 @@ const Layout: React.FC = () => {
                 type="button"
                 onClick={() => setIsMobileNotifOpen(false)}
                 className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Close notifications"
+                title="Close notifications"
               >
                 <X className="w-5 h-5" />
               </button>

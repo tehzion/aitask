@@ -18,7 +18,7 @@ import {
   CustomRole,
 } from '../types';
 import { legacyDemoTaskIds, mockUsers, mockProjects, mockTasks } from '../mock';
-import { DEFAULT_USER_PASSWORD, hasDefaultPassword } from '../lib/auth';
+import { canLoginWithSeedAccount, DEFAULT_USER_PASSWORD, shouldShowDemoLogin } from '../lib/auth';
 import { getLocalUserPassword, setLocalUserPassword, verifyLocalUserPassword } from '../lib/localCredentials';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
 import {
@@ -32,6 +32,7 @@ import {
   canRenameClient,
   canDeleteProject,
   canDeleteTask,
+  canEditClientProfile,
   canEditTask,
   canEditProject,
   canApproveRegistrations,
@@ -49,6 +50,8 @@ import {
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
+import { loadSecureWorkspace, saveSecureWorkspace } from '../lib/secureWorkspace';
+import { resolveAuthEmail, shouldUseSecureSupabase, supabase } from '../lib/supabaseClient';
 
 interface BackendRuntimeState {
   mode: 'local' | 'supabase';
@@ -116,9 +119,9 @@ interface StoreState {
   initializeBackend: () => Promise<void>;
   syncBackendNow: () => Promise<void>;
   pullBackendNow: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
-  login: (name: string, password?: string) => boolean;
+  login: (name: string, password?: string) => Promise<boolean>;
   updateCurrentUserProfile: (data: Pick<User, 'name' | 'email' | 'avatar'>) => { ok: boolean; error?: string };
-  updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => { ok: boolean; error?: string };
+  updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
   updateTaskPriority: (taskId: string, priority: Priority) => void;
   updateTaskAssignee: (taskId: string, assignedTo: string) => void;
@@ -140,7 +143,7 @@ interface StoreState {
   markAllNotificationsRead: () => void;
   sendDueDateReminders: () => void;
   registerUser: (data: Omit<Registration, 'id' | 'status' | 'createdAt'>) => void;
-  addUserBySuperAdmin: (data: Omit<User, 'id' | 'avatar' | 'isSuperAdmin'>) => { ok: boolean; error?: string };
+  addUserBySuperAdmin: (data: Omit<User, 'id' | 'avatar' | 'isSuperAdmin'>) => Promise<{ ok: boolean; error?: string }>;
   addCustomRole: (data: Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt' | 'isProtected'>) => { ok: boolean; id?: string; error?: string };
   updateCustomRole: (id: string, data: Partial<Pick<CustomRole, 'name' | 'description' | 'baseRole' | 'permissions'>>) => { ok: boolean; error?: string };
   deleteCustomRole: (id: string) => { ok: boolean; error?: string };
@@ -217,7 +220,7 @@ const makeBackendRuntimeState = (): BackendRuntimeState => {
   return {
     mode: status.mode,
     isConfigured: status.configured,
-    isLoading: false,
+    isLoading: status.mode === 'supabase' && status.configured,
     isSaving: false,
     isPulling: false,
     hasRemoteUpdate: false,
@@ -240,17 +243,12 @@ const stripPassword = <T extends { password?: string }>(item: T): Omit<T, 'passw
   return cleanItem;
 };
 
-const normalizeUserAccount = (user: User, options: { migrateInlinePassword?: boolean } = {}): User => {
-  const inlinePassword = user.password?.trim();
-  if (options.migrateInlinePassword && inlinePassword && !hasDefaultPassword(inlinePassword)) {
-    setLocalUserPassword(user.id, inlinePassword);
-  }
-
+const normalizeUserAccount = (user: User): User => {
   const hasCustomPassword = Boolean(getLocalUserPassword(user.id));
 
   return {
     ...stripPassword(user as User & { password?: string }) as User,
-    mustResetPassword: Boolean(user.mustResetPassword) || !hasCustomPassword,
+    mustResetPassword: Boolean(user.mustResetPassword) || (!user.authUserId && !hasCustomPassword),
   };
 };
 
@@ -571,7 +569,7 @@ export const useStore = create<StoreState>()(
   persist(
     (set, get) => ({
       currentUser: null,
-      users: mockUsers.map(user => normalizeUserAccount(user, { migrateInlinePassword: true })),
+      users: mockUsers.map(user => normalizeUserAccount(user)),
       clients: [],
       projects: mockProjects,
       tasks: mockTasks,
@@ -610,6 +608,46 @@ export const useStore = create<StoreState>()(
         if (!shouldUseSupabase()) return;
 
         try {
+          if (shouldUseSecureSupabase()) {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError) throw sessionError;
+            if (!session?.user) {
+              set((state) => ({
+                currentUser: null,
+                backend: {
+                  ...state.backend,
+                  isLoading: false,
+                  message: 'Sign in to load your secure workspace.',
+                },
+              }));
+              return;
+            }
+
+            const secure = await loadSecureWorkspace(session.user);
+            const loadedAt = new Date().toISOString();
+            isApplyingRemoteSnapshot = true;
+            set((state) => ({
+              ...makeWorkspacePatch(state, {
+                state: secure.state,
+                source: 'supabase',
+                version: 1,
+                message: 'Secure workspace loaded.',
+                updatedAt: loadedAt,
+              }),
+              currentUser: secure.currentUser,
+              backend: {
+                ...state.backend,
+                isLoading: false,
+                lastSyncedAt: loadedAt,
+                lastPulledAt: loadedAt,
+                hasLocalChanges: false,
+                message: 'Secure Supabase session is active.',
+              },
+            }));
+            isApplyingRemoteSnapshot = false;
+            return;
+          }
+
           const localBeforeRemote = selectPersistedWorkspaceState(get());
           const result = await loadSupabaseSnapshot(localBeforeRemote);
           const shouldRecoverLocal = hasRecoverableLocalWorkspaceContent(localBeforeRemote, result.state);
@@ -670,8 +708,11 @@ export const useStore = create<StoreState>()(
         if (!shouldUseSupabase()) return;
 
         const current = get();
+        if (current.backend.isLoading || current.backend.isPulling || current.backend.isSaving || !current.backend.hasLocalChanges) {
+          return;
+        }
         if (current.backend.hasRemoteUpdate) {
-          get().pullBackendNow();
+          await get().pullBackendNow();
           return;
         }
 
@@ -685,6 +726,23 @@ export const useStore = create<StoreState>()(
 
         try {
           const stateToSave = get();
+          if (shouldUseSecureSupabase()) {
+            await saveSecureWorkspace(selectPersistedWorkspaceState(stateToSave));
+            const syncedAt = new Date().toISOString();
+            set((state) => ({
+              backend: {
+                ...state.backend,
+                isSaving: false,
+                lastSyncedAt: syncedAt,
+                lastPulledAt: syncedAt,
+                hasRemoteUpdate: false,
+                hasLocalChanges: false,
+                message: 'Secure workspace changes saved.',
+              },
+            }));
+            return;
+          }
+
           const result = await saveSupabaseSnapshot(
             selectPersistedWorkspaceState(stateToSave),
             stateToSave.backend.remoteVersion || 1
@@ -774,6 +832,36 @@ export const useStore = create<StoreState>()(
         }));
 
         try {
+          if (shouldUseSecureSupabase()) {
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            if (userError) throw userError;
+            if (!user) throw new Error('Your session has expired. Sign in again.');
+            const secure = await loadSecureWorkspace(user);
+            const pulledAt = new Date().toISOString();
+            isApplyingRemoteSnapshot = true;
+            set((state) => ({
+              ...makeWorkspacePatch(state, {
+                state: secure.state,
+                source: 'supabase',
+                version: 1,
+                message: 'Secure workspace refreshed.',
+                updatedAt: pulledAt,
+              }),
+              currentUser: secure.currentUser,
+              backend: {
+                ...state.backend,
+                isPulling: false,
+                lastPulledAt: pulledAt,
+                lastSyncedAt: pulledAt,
+                hasRemoteUpdate: false,
+                hasLocalChanges: false,
+                message: 'Secure workspace is current.',
+              },
+            }));
+            isApplyingRemoteSnapshot = false;
+            return;
+          }
+
           const result = await loadSupabaseSnapshot(selectPersistedWorkspaceState(get()));
           const pulledAt = new Date().toISOString();
           const current = get();
@@ -873,13 +961,53 @@ export const useStore = create<StoreState>()(
         }
       },
 
-      login: (name, password) => {
+      login: async (name, password) => {
+        if (shouldUseSecureSupabase()) {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: resolveAuthEmail(name),
+            password: password || '',
+          });
+          if (error || !data.user) return false;
+
+          try {
+            const secure = await loadSecureWorkspace(data.user);
+            isApplyingRemoteSnapshot = true;
+            set((state) => ({
+              ...makeWorkspacePatch(state, {
+                state: secure.state,
+                source: 'supabase',
+                version: 1,
+                message: 'Secure workspace loaded.',
+              }),
+              currentUser: secure.currentUser,
+              backend: {
+                ...state.backend,
+                isLoading: false,
+                message: 'Secure Supabase session is active.',
+              },
+            }));
+            isApplyingRemoteSnapshot = false;
+            return true;
+          } catch {
+            await supabase.auth.signOut({ scope: 'local' });
+            return false;
+          }
+        }
+
         // Match by name (case-insensitive) — never expose user IDs to the login UI
         const user = get().users.find(u => u.name.toLowerCase() === name.trim().toLowerCase());
         if (!user) return false;
+        if (!canLoginWithSeedAccount(user.id)) return false;
 
-        const normalizedUser = normalizeUserAccount(user, { migrateInlinePassword: true });
-        const isValid = verifyLocalUserPassword(normalizedUser.id, password || '');
+        const normalizedUser = normalizeUserAccount(user);
+        let isValid = false;
+        try {
+          isValid = await verifyLocalUserPassword(normalizedUser.id, password || '', {
+            allowDefaultPassword: shouldShowDemoLogin() && !getBackendStatus().isHostedRuntime,
+          });
+        } catch {
+          return false;
+        }
         if (!isValid) {
           return false;
         }
@@ -946,9 +1074,40 @@ export const useStore = create<StoreState>()(
         return { ok: true };
       },
 
-      updateCurrentUserPassword: (data) => {
+      updateCurrentUserPassword: async (data) => {
         const currentUser = get().currentUser;
         if (!currentUser) return { ok: false, error: 'You must be logged in to update your password.' };
+
+        if (shouldUseSecureSupabase()) {
+          const currentPassword = data.currentPassword || '';
+          const newPassword = data.newPassword.trim();
+          if (newPassword.length < 12) return { ok: false, error: 'New password must be at least 12 characters.' };
+          if (newPassword !== data.confirmPassword.trim()) {
+            return { ok: false, error: 'New password and confirmation do not match.' };
+          }
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          if (userError || !user?.email) return { ok: false, error: 'Your secure session has expired.' };
+          const { error: reauthError } = await supabase.auth.signInWithPassword({
+            email: user.email,
+            password: currentPassword,
+          });
+          if (reauthError) return { ok: false, error: 'Current password is incorrect.' };
+          const { error: passwordError } = await supabase.auth.updateUser({ password: newPassword });
+          if (passwordError) return { ok: false, error: passwordError.message };
+          const now = new Date().toISOString();
+          const { error: memberError } = await supabase.from('aitask_members')
+            .update({ must_reset_password: false, updated_at: now })
+            .eq('workspace_id', 'aitask-main')
+            .eq('auth_user_id', user.id);
+          if (memberError) return { ok: false, error: memberError.message };
+          set((state) => ({
+            currentUser: state.currentUser ? { ...state.currentUser, mustResetPassword: false, updatedAt: now } : null,
+            users: state.users.map(member => member.id === currentUser.id
+              ? { ...member, mustResetPassword: false, updatedAt: now }
+              : member),
+          }));
+          return { ok: true };
+        }
 
         const account = get().users.find(user => user.id === currentUser.id);
         if (!account) return { ok: false, error: 'User account was not found.' };
@@ -956,25 +1115,38 @@ export const useStore = create<StoreState>()(
         const currentPassword = data.currentPassword || '';
         const newPassword = data.newPassword.trim();
         const confirmPassword = data.confirmPassword.trim();
-        const normalizedAccount = normalizeUserAccount(account, { migrateInlinePassword: true });
-        
-        const isCurrentValid = verifyLocalUserPassword(normalizedAccount.id, currentPassword);
+        const normalizedAccount = normalizeUserAccount(account);
+
+        let isCurrentValid = false;
+        try {
+          isCurrentValid = await verifyLocalUserPassword(normalizedAccount.id, currentPassword, {
+            allowDefaultPassword: shouldShowDemoLogin() && !getBackendStatus().isHostedRuntime,
+          });
+        } catch {
+          return { ok: false, error: 'This browser could not verify the current password.' };
+        }
         if (!isCurrentValid) {
           return { ok: false, error: 'Current password is incorrect.' };
         }
-        if (newPassword.length < 8) {
-          return { ok: false, error: 'New password must be at least 8 characters.' };
+        if (newPassword.length < 12) {
+          return { ok: false, error: 'New password must be at least 12 characters.' };
         }
         if (newPassword !== confirmPassword) {
           return { ok: false, error: 'New password and confirmation do not match.' };
         }
-        const isNewSameAsCurrent = verifyLocalUserPassword(normalizedAccount.id, newPassword);
+        const isNewSameAsCurrent = await verifyLocalUserPassword(normalizedAccount.id, newPassword, {
+          allowDefaultPassword: shouldShowDemoLogin() && !getBackendStatus().isHostedRuntime,
+        });
         if (isNewSameAsCurrent) {
           return { ok: false, error: 'New password must be different from the current password.' };
         }
 
         const now = new Date().toISOString();
-        setLocalUserPassword(currentUser.id, newPassword);
+        try {
+          await setLocalUserPassword(currentUser.id, newPassword);
+        } catch {
+          return { ok: false, error: 'This browser could not save the new password.' };
+        }
         set((state) => ({
           currentUser: {
             ...currentUser,
@@ -1638,8 +1810,8 @@ export const useStore = create<StoreState>()(
       upsertClientProfile: (clientName, data) => {
         const state = get();
         const currentUser = state.currentUser;
-        if (!canManageClientProfiles(currentUser)) {
-          return { ok: false, error: 'Only admins can edit client details.' };
+        if (!canEditClientProfile(currentUser, clientName, state.tasks, state.rolePermissions)) {
+          return { ok: false, error: 'You need Manage assigned clients permission and a direct task assignment to edit this client.' };
         }
 
         const name = clientName.trim();
@@ -1689,8 +1861,8 @@ export const useStore = create<StoreState>()(
         if (!nextName) return { ok: false, error: 'New client name is required.' };
         if (nextName.length > 240) return { ok: false, error: 'Client name must be 240 characters or less.' };
         if (oldKey === nextKey) return { ok: false, error: 'New client name must be different.' };
-        if (!canRenameClient(currentUser, oldName, state.tasks, state.projects, state.rolePermissions)) {
-          return { ok: false, error: 'You do not have permission to rename this client.' };
+        if (!canRenameClient(currentUser)) {
+          return { ok: false, error: 'Only admins can rename clients.' };
         }
 
         const duplicateExists = [
@@ -1899,7 +2071,7 @@ export const useStore = create<StoreState>()(
         };
       }),
 
-      addUserBySuperAdmin: (data) => {
+      addUserBySuperAdmin: async (data) => {
         const currentUser = get().currentUser;
         if (!canCreateUsers(currentUser, get().rolePermissions)) {
           return { ok: false, error: 'Only Boss Koo can add members directly.' };
@@ -1911,6 +2083,9 @@ export const useStore = create<StoreState>()(
         const companyName = data.role === 'Client' ? data.companyName?.trim() : undefined;
 
         if (!name) return { ok: false, error: 'Member name is required.' };
+        if (initialPassword !== DEFAULT_USER_PASSWORD && initialPassword.length < 12) {
+          return { ok: false, error: 'Custom initial passwords must be at least 12 characters.' };
+        }
         if (data.role === 'Client' && !companyName) {
           return { ok: false, error: 'Client company is required for Client users.' };
         }
@@ -1924,12 +2099,34 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'A member with that name or email already exists.' };
         }
 
+        if (shouldUseSecureSupabase()) {
+          if (!email || !profileEmailPattern.test(email)) {
+            return { ok: false, error: 'A valid email is required for a secure invitation.' };
+          }
+          const { error } = await supabase.functions.invoke('invite-aitask-member', {
+            body: {
+              name,
+              email,
+              role: data.role,
+              department: data.department,
+              companyName,
+            },
+          });
+          if (error) return { ok: false, error: error.message || 'Unable to send the invitation.' };
+          await get().pullBackendNow({ force: true });
+          return { ok: true };
+        }
+
         const customRole = data.customRoleId
           ? get().rolePermissions.find(role => role.id === data.customRoleId)
           : undefined;
 
         const userId = nowId('U');
-        setLocalUserPassword(userId, initialPassword);
+        try {
+          await setLocalUserPassword(userId, initialPassword);
+        } catch {
+          return { ok: false, error: 'This browser could not save the member credential.' };
+        }
 
         const newUser: User = {
           id: userId,
@@ -2159,35 +2356,53 @@ export const useStore = create<StoreState>()(
         return { ok: true };
       },
 
-      _forceSyncMockData: () => set((state) => {
-        // Re-apply isSuperAdmin and restore passwords for known mock accounts.
-        // Passwords may be absent in older localStorage snapshots, so we
-        // hydrate only missing mock passwords without overriding user changes.
-        const usersWithProtectedOwner = state.users.map(user => {
-          const isBoss = user.id === 'u-boss' || user.name === 'Boss Koo';
-          const normalizedUser = normalizeUserAccount(user, { migrateInlinePassword: true });
+      _forceSyncMockData: () => {
+        if (!shouldShowDemoLogin() || get().backend.mode === 'supabase') return;
+
+        set((state) => {
+          // Keep local development seeds compatible without touching hosted workspaces.
+          const usersWithProtectedOwner = state.users.map(user => {
+            const isBoss = user.id === 'u-boss' || user.name === 'Boss Koo';
+            const normalizedUser = normalizeUserAccount(user);
+
+            return {
+              ...normalizedUser,
+              ...(isBoss ? { isSuperAdmin: true } : {}),
+            };
+          });
+
+          const newUsers = mockUsers
+            .filter(mu => !usersWithProtectedOwner.some(su => su.id === mu.id))
+            .map(user => normalizeUserAccount(user));
+          const newProjects = mockProjects.filter(mp => !state.projects.some(sp => sp.id === mp.id));
+          const tasksWithoutLegacyDemo = state.tasks.filter(task => !legacyDemoTaskIdSet.has(task.id));
+          const newTasks = mockTasks.filter(mt => !tasksWithoutLegacyDemo.some(st => st.id === mt.id));
+          const nextUsers = [...usersWithProtectedOwner, ...newUsers];
+          const normalizedUsersChanged = usersWithProtectedOwner.some((user, index) => {
+            const previous = state.users[index];
+            return Boolean(previous.password) ||
+              previous.mustResetPassword !== user.mustResetPassword ||
+              previous.isSuperAdmin !== user.isSuperAdmin;
+          });
+
+          if (
+            !normalizedUsersChanged &&
+            newUsers.length === 0 &&
+            newProjects.length === 0 &&
+            newTasks.length === 0 &&
+            tasksWithoutLegacyDemo.length === state.tasks.length
+          ) {
+            return state;
+          }
 
           return {
-            ...normalizedUser,
-            ...(isBoss ? { isSuperAdmin: true } : {}),
+            users: nextUsers,
+            currentUser: getCurrentUserFromSnapshot(state.currentUser, nextUsers),
+            projects: [...state.projects, ...newProjects],
+            tasks: [...tasksWithoutLegacyDemo, ...newTasks],
           };
         });
-
-        const newUsers = mockUsers
-          .filter(mu => !usersWithProtectedOwner.some(su => su.id === mu.id))
-          .map(user => normalizeUserAccount(user, { migrateInlinePassword: true }));
-        const newProjects = mockProjects.filter(mp => !state.projects.some(sp => sp.id === mp.id));
-        const tasksWithoutLegacyDemo = state.tasks.filter(task => !legacyDemoTaskIdSet.has(task.id));
-        const newTasks = mockTasks.filter(mt => !tasksWithoutLegacyDemo.some(st => st.id === mt.id));
-        const nextUsers = [...usersWithProtectedOwner, ...newUsers];
-
-        return {
-          users: nextUsers,
-          currentUser: getCurrentUserFromSnapshot(state.currentUser, nextUsers),
-          projects: [...state.projects, ...newProjects],
-          tasks: [...tasksWithoutLegacyDemo, ...newTasks],
-        };
-      }),
+      },
 
       addTaskStatus: (status) => {
         const trimmed = status.trim();
@@ -2230,24 +2445,30 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: 'market-task-storage',
-      partialize: (state) => ({
-        // Passwords live in a separate local-only credential store while mock login remains.
-        currentUser: state.currentUser
-          ? stripPassword(state.currentUser as User & { password?: string })
-          : null,
-        tasks: state.tasks,
-        projects: state.projects,
-        clients: state.clients,
-        users: state.users.map(user => stripPassword(user as User & { password?: string })),
-        registrations: state.registrations.map(r => stripPassword(r)),
-        notifications: state.notifications,
-        rolePermissions: state.rolePermissions,
-        taskStatuses: state.taskStatuses,
-        deletedUserIds: state.deletedUserIds || [],
-        deletedRoleIds: state.deletedRoleIds || [],
-        deletedTaskStatuses: state.deletedTaskStatuses || [],
-        deletedClientIds: state.deletedClientIds || [],
-      }),
+      version: 2,
+      migrate: (persistedState) => shouldUseSupabase() ? {} : persistedState as StoreState,
+      partialize: (state) => {
+        if (shouldUseSupabase()) return {};
+
+        return {
+          // Local-only development keeps its browser workspace; Supabase mode persists nothing here.
+          currentUser: state.currentUser
+            ? stripPassword(state.currentUser as User & { password?: string })
+            : null,
+          tasks: state.tasks,
+          projects: state.projects,
+          clients: state.clients,
+          users: state.users.map(user => stripPassword(user as User & { password?: string })),
+          registrations: state.registrations.map(r => stripPassword(r)),
+          notifications: state.notifications,
+          rolePermissions: state.rolePermissions,
+          taskStatuses: state.taskStatuses,
+          deletedUserIds: state.deletedUserIds || [],
+          deletedRoleIds: state.deletedRoleIds || [],
+          deletedTaskStatuses: state.deletedTaskStatuses || [],
+          deletedClientIds: state.deletedClientIds || [],
+        };
+      },
     }
   )
 );

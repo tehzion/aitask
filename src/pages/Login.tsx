@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
 import { useStore } from '../store';
 import { Role } from '../types';
@@ -21,14 +21,25 @@ const DEMO_ACCOUNTS = [
   { username: 'UrbanEats Client Demo',  password: DEFAULT_USER_PASSWORD, role: 'Client',      badge: 'bg-emerald-100 text-emerald-700' },
 ];
 
+const getLoginDestination = (mustResetPassword: boolean, userId: string, requestedPath: string) => (
+  mustResetPassword && !hasPasswordResetBypass(userId) ? '/settings' : requestedPath
+);
+
 const Login: React.FC = () => {
   const { login, currentUser, registerUser } = useStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const requestedPath = typeof location.state?.returnTo === 'string'
+    && location.state.returnTo.startsWith('/')
+    && !location.state.returnTo.startsWith('//')
+    ? location.state.returnTo
+    : '/';
 
   // --- Login state ---
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const attemptsRef = useRef(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [showDemo, setShowDemo] = useState(true);
@@ -42,8 +53,8 @@ const Login: React.FC = () => {
   const [regSuccess, setRegSuccess] = useState(false);
 
   React.useEffect(() => {
-    if (currentUser) navigate(currentUser.mustResetPassword && !hasPasswordResetBypass(currentUser.id) ? '/settings' : '/');
-  }, [currentUser, navigate]);
+    if (currentUser) navigate(getLoginDestination(Boolean(currentUser.mustResetPassword), currentUser.id, requestedPath), { replace: true });
+  }, [currentUser, navigate, requestedPath]);
 
   const fillDemo = (account: typeof DEMO_ACCOUNTS[0]) => {
     setUsername(account.username);
@@ -51,7 +62,7 @@ const Login: React.FC = () => {
     setLoginError('');
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
 
@@ -62,14 +73,27 @@ const Login: React.FC = () => {
     }
 
     if (!username.trim()) {
-      setLoginError('Please enter your username.');
+      setLoginError('Please enter your email or username.');
       return;
     }
 
-    if (login(username, password)) {
+    setIsLoggingIn(true);
+    let loginSucceeded = false;
+    try {
+      loginSucceeded = await login(username, password);
+    } catch {
+      setLoginError('This browser could not verify the account. Please try again.');
+      return;
+    } finally {
+      setIsLoggingIn(false);
+    }
+
+    if (loginSucceeded) {
       attemptsRef.current = 0;
       const user = useStore.getState().currentUser;
-      setTimeout(() => navigate(user?.mustResetPassword && !hasPasswordResetBypass(user.id) ? '/settings' : '/'), 50);
+      if (user) {
+        setTimeout(() => navigate(getLoginDestination(Boolean(user.mustResetPassword), user.id, requestedPath), { replace: true }), 50);
+      }
     } else {
       attemptsRef.current += 1;
       if (attemptsRef.current >= MAX_ATTEMPTS) {
@@ -120,14 +144,14 @@ const Login: React.FC = () => {
             <>
               <form className="space-y-5" onSubmit={handleLogin}>
                 <div>
-                  <label htmlFor="username" className="block text-sm font-medium text-slate-700">Username</label>
+                  <label htmlFor="username" className="block text-sm font-medium text-slate-700">Email or username</label>
                   <input
                     id="username"
                     name="username"
                     type="text"
                     autoComplete="username"
                     required
-                    placeholder="Enter your username"
+                    placeholder="Enter your account email"
                     className={cn(inputBase, 'mt-2 py-3 px-4')}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -150,9 +174,9 @@ const Login: React.FC = () => {
                   {loginError && <p className="mt-2 text-sm text-red-600">{loginError}</p>}
                 </div>
 
-                <Button type="submit" className="w-full py-3">
+                <Button type="submit" className="w-full py-3" disabled={isLoggingIn}>
                   <LayoutDashboard className="w-4 h-4" />
-                  Access Dashboard
+                  {isLoggingIn ? 'Checking account...' : 'Access Dashboard'}
                 </Button>
               </form>
 

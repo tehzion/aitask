@@ -12,6 +12,7 @@ export type RolePermissionKey =
   | 'viewCalendar'
   | 'viewProjects'
   | 'viewAllClients'
+  | 'manageAssignedClients'
   | 'viewReports'
   | 'viewApprovals'
   | 'viewSettings'

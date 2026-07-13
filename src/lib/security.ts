@@ -227,7 +227,7 @@ const parseUser = (value: unknown): User | null => {
     avatar: safeAvatarSource(value.avatar),
     companyName: optionalText(value.companyName, 240),
     isSuperAdmin: value.isSuperAdmin === true,
-    mustResetPassword: false,
+    mustResetPassword: value.mustResetPassword === true,
     customRoleId: optionalText(value.customRoleId, 160),
     customRoleName: optionalText(value.customRoleName, 160),
     permissions: isRecord(value.permissions) ? value.permissions as User['permissions'] : undefined,

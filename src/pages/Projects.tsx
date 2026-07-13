@@ -215,7 +215,7 @@ const Projects: React.FC = () => {
               </div>
 
               <div className="border-t border-slate-200 p-4 bg-white flex justify-center">
-                <Link to={`/tasks?projectId=${project.id}`} className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1 transition-colors group">
+                <Link to={`/tasks?projectId=${encodeURIComponent(project.id)}`} className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1 transition-colors group">
                   View Tasks <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Link>
               </div>

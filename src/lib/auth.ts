@@ -13,6 +13,15 @@ const isLocalHost = () => {
   return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
 };
 
+const HOSTED_BLOCKED_SEED_USER_IDS = new Set([
+  'u-boss',
+  'u-adminmojo',
+  'u-admin',
+  'u-staff',
+  'u-finance',
+  'u-client-urban',
+]);
+
 export const shouldShowDemoLogin = () => {
   const configured = env('VITE_AITASK_SHOW_DEMO_LOGIN');
   if (configured) {
@@ -22,6 +31,10 @@ export const shouldShowDemoLogin = () => {
 
   return isLocalHost();
 };
+
+export const canLoginWithSeedAccount = (userId: string) => (
+  shouldShowDemoLogin() || !HOSTED_BLOCKED_SEED_USER_IDS.has(userId)
+);
 
 export const canUsePasswordResetBypass = () => {
   const configured = env('VITE_AITASK_ALLOW_PASSWORD_RESET_BYPASS');

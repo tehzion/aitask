@@ -8,6 +8,7 @@ import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { canDeleteUser, defaultRolePermissions, getEffectiveRoleName, isBossKoo, permissionGroups, permissionLabels } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
+import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 
 const ROLES: Role[] = ['Admin', 'Staff', 'Client'];
 const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client'];
@@ -15,6 +16,7 @@ const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', '
 const clonePermissions = (permissions: RolePermissions): RolePermissions => ({ ...permissions });
 
 const Approvals: React.FC = () => {
+  const secureAccounts = shouldUseSecureSupabase();
   const {
     registrations,
     approveRegistration,
@@ -187,11 +189,11 @@ const Approvals: React.FC = () => {
     if (!result.ok) setAssignmentError(result.error || 'Unable to assign role.');
   };
 
-  const handleAddUser = (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddUserError('');
 
-    const result = addUserBySuperAdmin({
+    const result = await addUserBySuperAdmin({
       name: newUser.name,
       email: newUser.email || undefined,
       password: newUser.password,
@@ -650,17 +652,23 @@ const Approvals: React.FC = () => {
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Default Password</label>
-                <input
-                  type="text"
-                  className={cn(inputBase, 'px-3 py-2.5')}
-                  value={newUser.password}
-                  onChange={e => setNewUser({ ...newUser, password: e.target.value })}
-                  required
-                />
-                <p className="text-xs text-slate-500 mt-1">The member signs in with this password first, then resets it in Settings.</p>
-              </div>
+              {secureAccounts ? (
+                <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                  Supabase will email a verified invitation. No password is shared or stored by AiTask.
+                </p>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Default Password</label>
+                  <input
+                    type="text"
+                    className={cn(inputBase, 'px-3 py-2.5')}
+                    value={newUser.password}
+                    onChange={e => setNewUser({ ...newUser, password: e.target.value })}
+                    required
+                  />
+                  <p className="text-xs text-slate-500 mt-1">The member signs in with this password first, then resets it in Settings.</p>
+                </div>
+              )}
 
               {addUserError && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

@@ -7,6 +7,8 @@ import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
+import MfaSettings from '../components/MfaSettings';
+import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import BackendFreshness from '../components/BackendFreshness';
 import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 import { canUsePasswordResetBypass, enablePasswordResetBypass } from '../lib/auth';
@@ -280,10 +282,10 @@ const Settings: React.FC = () => {
     setPasswordMessage(null);
   };
 
-  const handlePasswordSave = (event: React.FormEvent) => {
+  const handlePasswordSave = async (event: React.FormEvent) => {
     event.preventDefault();
     const wasResetRequired = mustResetPassword;
-    const result = updateCurrentUserPassword(passwordForm);
+    const result = await updateCurrentUserPassword(passwordForm);
 
     if (result.ok) {
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -338,7 +340,7 @@ const Settings: React.FC = () => {
               <div>
                 <p className="font-bold">Password reset required</p>
                 <p className="mt-1 text-sm leading-6 text-amber-800">
-                  Use the default password once as the current password, then choose a private password with at least 8 characters.
+                  Use the default password once as the current password, then choose a private password with at least 12 characters.
                 </p>
               </div>
             </div>
@@ -518,8 +520,7 @@ const Settings: React.FC = () => {
 
             {mustResetPassword && (
               <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                Your account is using the default password. Enter it as the current password, then choose a new password.
-                Password changes are stored on this browser until Supabase Auth is added.
+                Your account requires a password change. Enter the current password, then choose a new private password.
               </div>
             )}
 
@@ -545,7 +546,7 @@ const Settings: React.FC = () => {
                   onChange={event => updatePasswordField('newPassword', event.target.value)}
                   className={cn(inputBase, 'px-3 py-2.5')}
                   autoComplete="new-password"
-                  minLength={8}
+                  minLength={12}
                   required
                 />
               </div>
@@ -558,7 +559,7 @@ const Settings: React.FC = () => {
                   onChange={event => updatePasswordField('confirmPassword', event.target.value)}
                   className={cn(inputBase, 'px-3 py-2.5')}
                   autoComplete="new-password"
-                  minLength={8}
+                  minLength={12}
                   required
                 />
               </div>
@@ -577,9 +578,11 @@ const Settings: React.FC = () => {
               </Button>
             </div>
           </form>
-        </div>
+      </div>
 
-        {isClientUser ? (
+      {shouldUseSecureSupabase() && (currentUser?.role === 'Admin' || currentUser?.isSuperAdmin) && <MfaSettings />}
+
+      {isClientUser ? (
           <div className={`${cardBase} overflow-hidden`}>
             <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
               <ShieldCheck className="w-5 h-5 text-blue-600" />

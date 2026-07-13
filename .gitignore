@@ -14,6 +14,8 @@ dist
 dist-ssr
 *.zip
 .tmp-responsive-profile
+playwright-report
+test-results
 
 # Environment / secrets — NEVER commit real keys
 .env
