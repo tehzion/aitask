@@ -8,6 +8,7 @@ import { inputBase } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { DEFAULT_USER_PASSWORD, hasPasswordResetBypass, shouldShowDemoLogin } from '../lib/auth';
 import { APP_BUILD_LABEL } from '../lib/appVersion';
+import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 
 /** Max failed attempts before a short lockout is applied */
 const MAX_ATTEMPTS = 5;
@@ -45,6 +46,7 @@ const Login: React.FC = () => {
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [showDemo, setShowDemo] = useState(true);
   const showDemoLogin = shouldShowDemoLogin();
+  const secureAccounts = shouldUseSecureSupabase();
 
   // --- Registration state ---
   const [isRegistering, setIsRegistering] = useState(false);
@@ -238,14 +240,20 @@ const Login: React.FC = () => {
                     <span className="px-2 bg-white text-slate-500">Need an account?</span>
                   </div>
                 </div>
-                <Button
-                  onClick={() => setIsRegistering(true)}
-                  variant="secondary"
-                  className="mt-5 w-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  Register for Access
-                </Button>
+                {secureAccounts ? (
+                  <p className="mt-5 text-center text-sm leading-6 text-slate-500">
+                    Contact your AiTask administrator for a verified email invitation.
+                  </p>
+                ) : (
+                  <Button
+                    onClick={() => setIsRegistering(true)}
+                    variant="secondary"
+                    className="mt-5 w-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    Register for Access
+                  </Button>
+                )}
               </div>
             </>
           ) : (

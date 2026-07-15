@@ -43,10 +43,24 @@ const approvalColors = {
 };
 
 const Tasks: React.FC = () => {
-  const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen } = useStore();
+  const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore();
   const [viewType, setViewType] = useState<'table' | 'board'>('table');
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [activeQuickEdit, setActiveQuickEdit] = useState<{ taskId: string; x: number; y: number } | null>(null);
+  const [quickSyncError, setQuickSyncError] = useState('');
+
+  const persistQuickChange = async (previousTask: Task) => {
+    const result = await commitPendingMutation();
+    if (result.ok) {
+      setQuickSyncError('');
+      return true;
+    }
+    useStore.setState(state => ({
+      tasks: state.tasks.map(task => task.id === previousTask.id ? previousTask : task),
+    }));
+    setQuickSyncError(result.error || 'The quick change was rolled back. Use Retry required to confirm it safely.');
+    return false;
+  };
 
   const handleQuickEditClick = (e: React.MouseEvent, task: Task) => {
     e.preventDefault();
@@ -88,7 +102,7 @@ const Tasks: React.FC = () => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = (e: React.DragEvent, targetStatus: TaskStatus) => {
+  const handleDrop = async (e: React.DragEvent, targetStatus: TaskStatus) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData('text/plain');
     setDraggingTaskId(null);
@@ -99,6 +113,7 @@ const Tasks: React.FC = () => {
     if (!canEditTask(task)) return;
 
     updateTaskStatus(taskId, targetStatus);
+    await persistQuickChange(task);
   };
 
   const getDeptBadge = (dept: string) => {
@@ -284,7 +299,11 @@ const Tasks: React.FC = () => {
         <select
           className={`text-xs pl-2.5 pr-6 py-1 rounded-full font-semibold outline-none cursor-pointer appearance-none border-none ${getStatusColor(task.status)}`}
           value={task.status}
-          onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
+          disabled={backend.isSaving}
+          onChange={async (e) => {
+            updateTaskStatus(task.id, e.target.value as TaskStatus);
+            await persistQuickChange(task);
+          }}
         >
           {taskStatuses.map(status => (
             <option key={status} value={status} className="bg-white text-slate-900">{status}</option>
@@ -324,6 +343,12 @@ const Tasks: React.FC = () => {
         description="Manage assignments, approvals, revisions, files, and recurring work."
         action={canCreateTasks(currentUser, rolePermissions) ? <Button onClick={() => setCreateTaskModalOpen(true)}>+ New Task</Button> : null}
       />
+
+      {quickSyncError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800" role="alert">
+          {quickSyncError}
+        </div>
+      )}
 
       {activeProject && (
         <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-100 text-blue-700 rounded-lg shadow-sm">
@@ -918,6 +943,7 @@ const Tasks: React.FC = () => {
                     value={currentTask.status}
                     onChange={(e) => {
                       updateTaskStatus(currentTask.id, e.target.value as TaskStatus);
+                      void persistQuickChange(currentTask);
                       setActiveQuickEdit(null);
                     }}
                   >
@@ -938,6 +964,7 @@ const Tasks: React.FC = () => {
                     value={currentTask.priority}
                     onChange={(e) => {
                       updateTaskPriority(currentTask.id, e.target.value as Priority);
+                      void persistQuickChange(currentTask);
                       setActiveQuickEdit(null);
                     }}
                   >
@@ -959,6 +986,7 @@ const Tasks: React.FC = () => {
                     disabled={!canAssignOthers}
                     onChange={(e) => {
                       updateTaskAssignee(currentTask.id, e.target.value);
+                      void persistQuickChange(currentTask);
                       setActiveQuickEdit(null);
                     }}
                   >

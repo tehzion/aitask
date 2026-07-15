@@ -121,6 +121,7 @@ const Clients: React.FC = () => {
     setCreateTaskModalOpen,
     upsertClientProfile,
     renameClient,
+    commitPendingMutation,
   } = useStore();
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedClientName, setSelectedClientName] = React.useState('');
@@ -130,6 +131,7 @@ const Clients: React.FC = () => {
   const [profileError, setProfileError] = React.useState('');
   const [renameValue, setRenameValue] = React.useState('');
   const [renameError, setRenameError] = React.useState('');
+  const [isSavingClient, setIsSavingClient] = React.useState(false);
 
   const canSeeAllClients = canViewAllClients(currentUser, rolePermissions);
   const visibleClientKeys = React.useMemo(() => new Set(
@@ -320,7 +322,7 @@ const Clients: React.FC = () => {
     setRenameError('');
   };
 
-  const handleProfileSave = () => {
+  const handleProfileSave = async () => {
     if (!selectedClient) return;
 
     const result = upsertClientProfile(selectedClient.name, profileForm);
@@ -329,16 +331,33 @@ const Clients: React.FC = () => {
       return;
     }
 
+    setIsSavingClient(true);
+    const saveResult = await commitPendingMutation();
+    setIsSavingClient(false);
+    if (!saveResult.ok) {
+      setProfileError(saveResult.error || 'The client details are waiting to be saved.');
+      return;
+    }
+
     setIsEditingProfile(false);
     setProfileError('');
   };
 
-  const handleRenameSave = () => {
+  const handleRenameSave = async () => {
     if (!selectedClient) return;
 
     const result = renameClient(selectedClient.name, renameValue);
     if (!result.ok) {
       setRenameError(result.error || 'Unable to rename this client.');
+      return;
+    }
+
+
+    setIsSavingClient(true);
+    const saveResult = await commitPendingMutation();
+    setIsSavingClient(false);
+    if (!saveResult.ok) {
+      setRenameError(saveResult.error || 'The client rename is waiting to be saved.');
       return;
     }
 
@@ -815,7 +834,8 @@ const Clients: React.FC = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={handleRenameSave}
+                      onClick={() => void handleRenameSave()}
+                      disabled={isSavingClient}
                       className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-blue-700')}
                     >
                       <Save className="h-4 w-4" /> Rename
@@ -832,7 +852,8 @@ const Clients: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={handleProfileSave}
+                        onClick={() => void handleProfileSave()}
+                        disabled={isSavingClient}
                         className={cn(buttonBase, 'min-h-10 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-emerald-700')}
                       >
                         <Save className="h-4 w-4" /> Save

@@ -1,13 +1,15 @@
 # AiTask Supabase Integration
 
-This project now supports an opt-in Supabase snapshot backend while keeping the local demo mode intact.
+Production AiTask uses Supabase Auth and the authenticated, row-scoped workspace tables in `secure-auth-schema.sql`. The legacy JSON snapshot exists only as a temporary migration source and must not remain available to browser roles after the v1.6.0 cutover.
 
-## Quick Setup
+## New Project Setup
 
-1. Create a Supabase project.
-2. Open the SQL editor and run `supabase/schema.sql`.
-3. Copy `.env.example` to `.env.local`.
-4. Set:
+1. Create a Supabase project and configure verified email invitations.
+2. Run `supabase/schema.sql` only when importing a legacy snapshot.
+3. Run `supabase/secure-auth-schema.sql` to create the authenticated workspace model and migrate legacy data.
+4. Apply every file under `supabase/migrations/` in timestamp order.
+5. Deploy the `invite-aitask-member` Edge Function with JWT verification enabled.
+6. Configure the frontend:
 
 ```env
 VITE_AITASK_BACKEND=supabase
@@ -16,31 +18,24 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 VITE_AITASK_SHOW_DEMO_LOGIN=false
 ```
 
-5. Restart the Vite dev server.
+## v1.6.0 Command Cutover
 
-The first run creates a `default` workspace snapshot from the current app state: maintained login accounts and starter projects, with no seeded demo tasks. After that, task, project, user, registration, and notification state syncs to Supabase.
+`20260715090000_reliable_workspace_commands.sql` is additive. It installs row versions, workspace revisions, idempotent command receipts, immutable audit events, and the transactional command RPC without interrupting an older frontend.
 
-Existing live projects should rerun `supabase/schema.sql` before deploying newer frontend builds. The script is idempotent and adds the snapshot `version` column and explicit Data API grants needed for live freshness and conflict-safe saves.
-It also removes the broad demo snapshot policies and installs a JSON guard trigger that rejects password, token, secret, API-key, and service-role fields.
+Use this order for production:
 
-Run this after setting env vars to confirm the browser key can reach the snapshot:
+1. Apply the additive command migration.
+2. Deploy and verify the v1.6.0 frontend against the command RPC.
+3. Apply `20260715090100_reliable_workspace_command_cutover.sql`.
+4. Confirm anonymous requests cannot read the legacy snapshot or secure workspace tables.
+5. Run `pnpm verify:supabase`, Supabase Security Advisor, and the RLS test matrix.
 
-```bash
-npm run verify:supabase
-```
+The cutover revokes direct authenticated writes to members and entities. All browser mutations must pass through `aitask_execute_command`; the service role remains available to the invitation function and controlled administration jobs.
 
-The command prints the current snapshot version and `updated_at`. If it fails, fix Supabase grants/RLS or Vercel env before asking users to rely on live sync.
-It also verifies that demo policies are gone, the guard trigger exists, and the current snapshot contains no forbidden secret-like keys.
+## Operational Rules
 
-## Production Path
-
-The snapshot backend is meant to make integration safe without rewriting every workflow at once. Before production, replace it with normalized Supabase tables, Supabase Auth, and role-level RLS policies for:
-
-- profiles
-- projects
-- tasks
-- task_comments
-- task_approval_events
-- notifications
-- registrations
-- storage attachments
+- Never expose a service-role or secret key in Vite environment variables.
+- Never restore anonymous snapshot access as a sync fallback.
+- Apply schema changes through timestamped migrations and keep live migration history aligned with the repository.
+- Audit events contain identifiers and changed field names only, not comments, approval notes, contact details, descriptions, avatars, or credentials.
+- The PWA service worker may cache the app shell, but it must not cache Supabase REST, Auth, or RPC responses.

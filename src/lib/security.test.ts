@@ -88,6 +88,26 @@ describe('remote snapshot validation', () => {
     expect(parsed?.attachmentLink).toBeUndefined();
   });
 
+  it('preserves server row versions and timestamps for conflict checks', () => {
+    const parsed = parseTask({
+      ...taskFixture,
+      version: 7,
+      updatedAt: '2026-07-15T01:02:03.000Z',
+      comments: [{
+        id: 'comment-1',
+        userId: 'staff-1',
+        text: 'Ready for review',
+        createdAt: '2026-07-15T01:00:00.000Z',
+        version: 3,
+        updatedAt: '2026-07-15T01:01:00.000Z',
+      }],
+    });
+
+    expect(parsed?.version).toBe(7);
+    expect(parsed?.updatedAt).toBe('2026-07-15T01:02:03.000Z');
+    expect(parsed?.comments?.[0].version).toBe(3);
+  });
+
   it('does not carry password or token fields into users', () => {
     const parsed = parseWorkspaceSnapshot({
       users: [{

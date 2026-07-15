@@ -56,6 +56,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     updateTaskAttachment,
     reviewClientApproval,
     requestRevision,
+    commitPendingMutation,
     rolePermissions,
     taskStatuses,
   } = useStore();
@@ -66,6 +67,8 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   const [revisionNote, setRevisionNote] = useState('');
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [editError, setEditError] = useState('');
+  const [mutationError, setMutationError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editForm, setEditForm] = useState({
     title: '',
     description: '',
@@ -125,30 +128,43 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     ? users.filter(user => user.role !== 'Client' && user.department === editForm.department)
     : users.filter(user => user.id === editForm.assignedTo);
 
-  const handleAddComment = (e: React.FormEvent) => {
+  const confirmPendingMutation = async () => {
+    setIsSubmitting(true);
+    const result = await commitPendingMutation();
+    setIsSubmitting(false);
+    if (!result.ok) {
+      setMutationError(result.error || 'The change is waiting to be saved.');
+      return false;
+    }
+    setMutationError('');
+    return true;
+  };
+
+  const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim()) return;
     addComment(task.id, commentText);
-    setCommentText('');
+    if (await confirmPendingMutation()) setCommentText('');
   };
 
-  const handleAttachmentSave = (e: React.FormEvent) => {
+  const handleAttachmentSave = async (e: React.FormEvent) => {
     e.preventDefault();
     updateTaskAttachment(task.id, attachmentLink, attachmentName);
+    await confirmPendingMutation();
   };
 
-  const handleClientReview = (status: 'Approved' | 'Rejected') => {
+  const handleClientReview = async (status: 'Approved' | 'Rejected') => {
     reviewClientApproval(task.id, status, approvalNote);
-    setApprovalNote('');
+    if (await confirmPendingMutation()) setApprovalNote('');
   };
 
-  const handleRevisionRequest = (e: React.FormEvent) => {
+  const handleRevisionRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     requestRevision(task.id, revisionNote);
-    setRevisionNote('');
+    if (await confirmPendingMutation()) setRevisionNote('');
   };
 
-  const handleDetailsSave = (e: React.FormEvent) => {
+  const handleDetailsSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setEditError('');
 
@@ -170,10 +186,15 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
       return;
     }
 
+    const saveResult = await commitPendingMutation();
+    if (!saveResult.ok) {
+      setEditError(saveResult.error || 'The task update is waiting to be saved.');
+      return;
+    }
     setIsEditingDetails(false);
   };
 
-  const handleDeleteTask = () => {
+  const handleDeleteTask = async () => {
     const confirmed = window.confirm(`Delete "${task.title}"? This removes the task from the workspace.`);
     if (!confirmed) return;
 
@@ -184,6 +205,12 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
       return;
     }
 
+    const saveResult = await commitPendingMutation();
+    if (!saveResult.ok) {
+      setEditError(saveResult.error || 'The task deletion is waiting to be saved.');
+      setIsEditingDetails(true);
+      return;
+    }
     onClose();
   };
 
@@ -228,6 +255,12 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
           </div>
         </div>
 
+        {mutationError && (
+          <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm font-medium text-amber-800" role="alert">
+            {mutationError}
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
           <div className="w-full md:w-1/2 p-6 border-r border-slate-100 overflow-y-auto custom-scrollbar bg-white">
             <div className="space-y-6">
@@ -243,7 +276,10 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                       <select
                         className={`text-sm pl-3 pr-7 py-1 rounded-full font-semibold outline-none cursor-pointer appearance-none border-none shadow-sm ${getStatusColor(task.status)}`}
                         value={task.status}
-                        onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
+                        onChange={async (e) => {
+                          updateTaskStatus(task.id, e.target.value as TaskStatus);
+                          await confirmPendingMutation();
+                        }}
                       >
                         {taskStatuses.map(status => (
                           <option key={status} value={status} className="bg-white text-slate-900">{status}</option>
@@ -382,8 +418,8 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                     </div>
                   )}
                   <div className="flex justify-end">
-                    <button type="submit" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700">
-                      <Save className="h-4 w-4" /> Save Changes
+                    <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
+                      <Save className="h-4 w-4" /> {isSubmitting ? 'Saving...' : 'Save Changes'}
                     </button>
                   </div>
                 </form>

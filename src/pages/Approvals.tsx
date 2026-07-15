@@ -30,6 +30,8 @@ const Approvals: React.FC = () => {
     updateCustomRole,
     deleteCustomRole,
     assignCustomRoleToUser,
+    backend,
+    commitPendingMutation,
   } = useStore();
   const [selectedReg, setSelectedReg] = useState<Registration | null>(null);
   
@@ -51,6 +53,8 @@ const Approvals: React.FC = () => {
   const [roleEditorId, setRoleEditorId] = useState<string | null>(null);
   const [roleError, setRoleError] = useState('');
   const [assignmentError, setAssignmentError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [isActionSaving, setIsActionSaving] = useState(false);
   const [roleForm, setRoleForm] = useState({
     name: '',
     description: '',
@@ -81,10 +85,34 @@ const Approvals: React.FC = () => {
     setApprovalCustomRoleId('');
   };
 
-  const handleApprove = (e: React.FormEvent) => {
+  const handleApprove = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedReg) {
+      setActionError('');
+      setIsActionSaving(true);
+      if (secureAccounts) {
+        const inviteResult = await addUserBySuperAdmin({
+          name: selectedReg.name,
+          email: selectedReg.email,
+          password: DEFAULT_USER_PASSWORD,
+          role,
+          department: role === 'Client' ? 'Client' : department,
+          companyName: role === 'Client' ? companyName : undefined,
+          customRoleId: approvalCustomRoleId || undefined,
+        });
+        if (!inviteResult.ok) {
+          setIsActionSaving(false);
+          setActionError(inviteResult.error || 'Unable to invite this member.');
+          return;
+        }
+      }
       approveRegistration(selectedReg.id, role, department, role === 'Client' ? companyName : undefined, approvalCustomRoleId || undefined);
+      const saved = await commitPendingMutation();
+      setIsActionSaving(false);
+      if (!saved.ok) {
+        setActionError(saved.error || 'The approval is waiting to be saved. Use Retry required to continue.');
+        return;
+      }
       setSelectedReg(null);
       // Reset form
       setRole('Staff');
@@ -136,7 +164,7 @@ const Approvals: React.FC = () => {
     });
   };
 
-  const handleSaveRole = (e: React.FormEvent) => {
+  const handleSaveRole = async (e: React.FormEvent) => {
     e.preventDefault();
     setRoleError('');
 
@@ -153,6 +181,14 @@ const Approvals: React.FC = () => {
 
     if (!result.ok) {
       setRoleError(result.error || 'Unable to save role.');
+      return;
+    }
+
+    setIsActionSaving(true);
+    const saved = await commitPendingMutation();
+    setIsActionSaving(false);
+    if (!saved.ok) {
+      setRoleError(saved.error || 'The role is waiting to be saved. Use Retry required to continue.');
       return;
     }
 
@@ -173,20 +209,42 @@ const Approvals: React.FC = () => {
     setRoleError('');
   };
 
-  const handleDeleteRole = (customRoleId: string) => {
+  const handleDeleteRole = async (customRoleId: string) => {
+    const previousRoles = useStore.getState().rolePermissions;
+    const previousUsers = useStore.getState().users;
     const result = deleteCustomRole(customRoleId);
     if (!result.ok) {
       setRoleError(result.error || 'Unable to delete role.');
       return;
     }
 
+    setIsActionSaving(true);
+    const saved = await commitPendingMutation();
+    setIsActionSaving(false);
+    if (!saved.ok) {
+      useStore.setState({ rolePermissions: previousRoles, users: previousUsers });
+      setRoleError(saved.error || 'The role deletion was rolled back. Use Retry required to confirm it.');
+      return;
+    }
+
     if (roleEditorId === customRoleId) resetRoleForm();
   };
 
-  const handleAssignRole = (userId: string, customRoleId: string) => {
+  const handleAssignRole = async (userId: string, customRoleId: string) => {
     setAssignmentError('');
+    const previousUsers = useStore.getState().users;
     const result = assignCustomRoleToUser(userId, customRoleId || undefined);
-    if (!result.ok) setAssignmentError(result.error || 'Unable to assign role.');
+    if (!result.ok) {
+      setAssignmentError(result.error || 'Unable to assign role.');
+      return;
+    }
+    setIsActionSaving(true);
+    const saved = await commitPendingMutation();
+    setIsActionSaving(false);
+    if (!saved.ok) {
+      useStore.setState({ users: previousUsers });
+      setAssignmentError(saved.error || 'The role assignment was rolled back. Use Retry required to confirm it.');
+    }
   };
 
   const handleAddUser = async (e: React.FormEvent) => {
@@ -208,17 +266,37 @@ const Approvals: React.FC = () => {
       return;
     }
 
+    const saved = await commitPendingMutation();
+    if (!saved.ok) {
+      setAddUserError(saved.error || 'The member is waiting to be saved.');
+      return;
+    }
+
     resetNewUser();
     setIsAddUserOpen(false);
   };
 
-  const handleDeleteUser = () => {
+  const handleDeleteUser = async () => {
     if (!userToDelete) return;
 
+    const previous = useStore.getState();
     const result = deleteUser(userToDelete);
     if (!result.ok) {
       setDeleteUserError(result.error || 'Unable to delete this user.');
       setUserToDelete(null);
+      return;
+    }
+
+    setIsActionSaving(true);
+    const saved = await commitPendingMutation();
+    setIsActionSaving(false);
+    if (!saved.ok) {
+      useStore.setState({
+        users: previous.users,
+        notifications: previous.notifications,
+        deletedUserIds: previous.deletedUserIds,
+      });
+      setDeleteUserError(saved.error || 'The member deletion was rolled back. Use Retry required to confirm it.');
       return;
     }
 
@@ -238,6 +316,12 @@ const Approvals: React.FC = () => {
           </Button>
         )}
       />
+
+      {actionError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert">
+          {actionError}
+        </div>
+      )}
 
       {/* Pending Approvals */}
       <div className={`${cardBase} overflow-hidden`}>
@@ -294,7 +378,18 @@ const Approvals: React.FC = () => {
                         <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
                       </button>
                       <button 
-                        onClick={() => rejectRegistration(reg.id)}
+                        onClick={async () => {
+                          const previousRegistrations = useStore.getState().registrations;
+                          rejectRegistration(reg.id);
+                          setIsActionSaving(true);
+                          const saved = await commitPendingMutation();
+                          setIsActionSaving(false);
+                          if (!saved.ok) {
+                            useStore.setState({ registrations: previousRegistrations });
+                            setActionError(saved.error || 'The rejection was rolled back. Use Retry required to confirm it.');
+                          }
+                        }}
+                        disabled={isActionSaving || backend.isSaving}
                         className="inline-flex items-center px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg text-sm font-medium transition-colors"
                       >
                         <XCircle className="w-4 h-4 mr-1.5" /> Reject
@@ -410,7 +505,7 @@ const Approvals: React.FC = () => {
                   </div>
                   <div className="flex gap-2">
                     <Button type="button" variant="secondary" onClick={() => handleEditRole(customRole.id)}>Edit</Button>
-                    <Button type="button" variant="danger" onClick={() => handleDeleteRole(customRole.id)}>Delete</Button>
+                    <Button type="button" variant="danger" onClick={() => void handleDeleteRole(customRole.id)} disabled={isActionSaving}>Delete</Button>
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -523,7 +618,8 @@ const Approvals: React.FC = () => {
                       <select
                         className={cn(inputBase, 'px-3 py-2 text-sm')}
                         value={u.customRoleId || ''}
-                        onChange={e => handleAssignRole(u.id, e.target.value)}
+                        onChange={e => void handleAssignRole(u.id, e.target.value)}
+                        disabled={isActionSaving}
                       >
                         <option value="">Base role only ({getEffectiveRoleName(u, rolePermissions)})</option>
                         {rolePermissions.map(customRole => (
@@ -788,7 +884,8 @@ const Approvals: React.FC = () => {
                 Cancel
               </button>
               <button 
-                onClick={handleDeleteUser}
+                onClick={() => void handleDeleteUser()}
+                disabled={isActionSaving}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
               >
                 Yes, Delete User

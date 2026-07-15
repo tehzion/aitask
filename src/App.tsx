@@ -84,10 +84,13 @@ function App() {
       if (!isMounted) return;
       startBackendAutoSync();
       forceSyncMockData();
-      sendDueDateReminders();
-      const store = useStore.getState();
+      let store = useStore.getState();
+      if (!shouldUseSecureSupabase() || (store.currentUser && store.currentUser.role !== 'Client')) {
+        sendDueDateReminders();
+        store = useStore.getState();
+      }
       if (store.backend.hasLocalChanges && !store.backend.hasRemoteUpdate) {
-        await store.syncBackendNow();
+        await store.commitPendingMutation();
       }
     };
 

@@ -1,0 +1,2 @@
+[functions.invite-aitask-member]
+verify_jwt = true

@@ -16,7 +16,15 @@ interface NavbarProps {
 }
 
 const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
-  const { currentUser, notifications, markNotificationRead, markAllNotificationsRead, rolePermissions } = useStore();
+  const {
+    currentUser,
+    notifications,
+    markNotificationRead,
+    markAllNotificationsRead,
+    commitPendingMutation,
+    discardMutation,
+    rolePermissions,
+  } = useStore();
   const [showNotifs, setShowNotifs] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -53,6 +61,16 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
 
   const handleBellClick = () => {
     setShowNotifs(!showNotifs);
+  };
+
+  const persistNotificationChange = async (change: () => void) => {
+    const previousNotifications = useStore.getState().notifications;
+    change();
+    const result = await commitPendingMutation();
+    if (result.ok) return;
+
+    useStore.setState({ notifications: previousNotifications });
+    await discardMutation({ reload: false });
   };
 
   const handleGlobalSearch = (event: React.FormEvent) => {
@@ -159,7 +177,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
                     key={notif.id} 
                     to={notificationRouteToPath(notif.route ?? (notif as typeof notif & { link?: string }).link)}
                     onClick={() => {
-                      markNotificationRead(notif.id);
+                      void persistNotificationChange(() => markNotificationRead(notif.id));
                       setShowNotifs(false);
                     }}
                     className={`flex items-start gap-3 border-b border-slate-100 px-4 py-3 transition-colors hover:bg-slate-50 ${!isNotificationReadByUser(currentUser, notif) ? 'bg-blue-50/45' : ''}`}
@@ -186,7 +204,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
               {unreadCount > 0 && (
                 <button
                   type="button"
-                  onClick={() => markAllNotificationsRead()}
+                  onClick={() => void persistNotificationChange(markAllNotificationsRead)}
                   className="w-full border-t border-slate-200 bg-slate-50 px-4 py-2 text-center transition-colors hover:bg-slate-100"
                 >
                   <span className="text-xs font-semibold text-slate-500 transition-colors hover:text-blue-700">Mark All as Read</span>

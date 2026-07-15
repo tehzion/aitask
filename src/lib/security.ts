@@ -195,7 +195,14 @@ const parseComment = (value: unknown): TaskComment | null => {
   const userId = cleanText(value.userId, 160);
   const text = cleanText(value.text, 10_000);
   const createdAt = safeIsoTimestamp(value.createdAt);
-  return id && userId && text && createdAt ? { id, userId, text, createdAt } : null;
+  return id && userId && text && createdAt ? {
+    id,
+    userId,
+    text,
+    createdAt,
+    version: Math.max(1, Number(value.version) || 1),
+    updatedAt: safeIsoTimestamp(value.updatedAt),
+  } : null;
 };
 
 const parseApprovalEvent = (value: unknown): TaskApprovalEvent | null => {
@@ -205,7 +212,15 @@ const parseApprovalEvent = (value: unknown): TaskApprovalEvent | null => {
   const status = cleanText(value.status, 20) as ClientApprovalStatus;
   const createdAt = safeIsoTimestamp(value.createdAt);
   if (!id || !userId || !approvalStatuses.has(status) || !createdAt) return null;
-  return { id, userId, status, note: optionalText(value.note, 5000), createdAt };
+  return {
+    id,
+    userId,
+    status,
+    note: optionalText(value.note, 5000),
+    createdAt,
+    version: Math.max(1, Number(value.version) || 1),
+    updatedAt: safeIsoTimestamp(value.updatedAt),
+  };
 };
 
 const parseUser = (value: unknown): User | null => {
@@ -218,6 +233,7 @@ const parseUser = (value: unknown): User | null => {
 
   return {
     id,
+    version: Math.max(1, Number(value.version) || 1),
     authUserId: optionalText(value.authUserId, 160),
     workspaceId: optionalText(value.workspaceId, 160),
     name,
@@ -246,6 +262,7 @@ const parseClientProfile = (value: unknown): ClientProfile | null => {
 
   return {
     id,
+    version: Math.max(1, Number(value.version) || 1),
     clientName,
     contactPerson: optionalText(value.contactPerson, 160),
     email: optionalText(value.email, 320),
@@ -269,6 +286,7 @@ const parseProject = (value: unknown): Project | null => {
 
   return {
     id,
+    version: Math.max(1, Number(value.version) || 1),
     clientId: optionalText(value.clientId, 160),
     workspaceId: optionalText(value.workspaceId, 160),
     createdBy: optionalText(value.createdBy, 160),
@@ -301,6 +319,7 @@ export const parseTask = (value: unknown): Task | null => {
 
   return {
     id,
+    version: Math.max(1, Number(value.version) || 1),
     workspaceId: optionalText(value.workspaceId, 160),
     clientId: optionalText(value.clientId, 160),
     projectId: optionalText(value.projectId, 160),
@@ -347,6 +366,7 @@ export const parseNotification = (value: unknown): AppNotification | null => {
 
   return {
     id,
+    version: Math.max(1, Number(value.version) || 1),
     targetUserId: optionalText(value.targetUserId, 160),
     targetRole: roles.has(value.targetRole as Role) ? value.targetRole as Role : undefined,
     targetClient: optionalText(value.targetClient, 240),
@@ -371,6 +391,7 @@ const parseRegistration = (value: unknown): Registration | null => {
   if (!id || !name || !email || !roles.has(requestedRole) || !['Pending', 'Approved', 'Rejected'].includes(status) || !createdAt) return null;
   return {
     id,
+    version: Math.max(1, Number(value.version) || 1),
     name,
     email,
     phone: cleanText(value.phone, 80),
@@ -378,6 +399,7 @@ const parseRegistration = (value: unknown): Registration | null => {
     requestedRole,
     status,
     createdAt,
+    updatedAt: safeIsoTimestamp(value.updatedAt),
   };
 };
 

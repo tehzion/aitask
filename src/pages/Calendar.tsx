@@ -17,7 +17,7 @@ import { getHolidaysForDate, HOLIDAY_COLORS, MalaysiaHoliday } from '../lib/mala
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const Calendar: React.FC = () => {
-  const { tasks: allTasks, users, currentUser, rolePermissions, updateTaskDueDate, setCreateTaskModalOpen } = useStore();
+  const { tasks: allTasks, users, currentUser, rolePermissions, updateTaskDueDate, setCreateTaskModalOpen, commitPendingMutation } = useStore();
   const [currentDate, setCurrentDate]   = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode]         = useState<'month' | 'week'>('month');
@@ -27,6 +27,7 @@ const Calendar: React.FC = () => {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null); // 'YYYY-MM-DD'
   const [dropSuccess, setDropSuccess]       = useState<string | null>(null); // task title for flash
+  const [syncError, setSyncError]           = useState('');
   const dragOriginDate = useRef<string | null>(null);
 
   const tasks = useMemo(
@@ -101,7 +102,7 @@ const Calendar: React.FC = () => {
     setDropTargetDate(current => (current === dateStr ? null : current));
   };
 
-  const handleDrop = (e: React.DragEvent, targetDay: Date) => {
+  const handleDrop = async (e: React.DragEvent, targetDay: Date) => {
     e.preventDefault();
     const taskId =
       e.dataTransfer.getData('application/x-aitask-task-id') ||
@@ -124,9 +125,19 @@ const Calendar: React.FC = () => {
     // Brief success flash
     setDropSuccess(task.title);
     setTimeout(() => setDropSuccess(null), 2500);
+    const result = await commitPendingMutation();
+    if (!result.ok) {
+      useStore.setState(state => ({
+        tasks: state.tasks.map(item => item.id === taskId ? { ...item, dueDate: task.dueDate } : item),
+      }));
+      setDropSuccess(null);
+      setSyncError(result.error || 'The date change was rolled back. Use Retry required to confirm it safely.');
+    } else {
+      setSyncError('');
+    }
   };
 
-  const handleExactDateChange = (taskId: string, nextDate: string) => {
+  const handleExactDateChange = async (taskId: string, nextDate: string) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return;
     if (!canDragTask(taskId)) return;
 
@@ -139,6 +150,16 @@ const Calendar: React.FC = () => {
     setCurrentDate(targetDay);
     setDropSuccess(task.title);
     setTimeout(() => setDropSuccess(null), 2500);
+    const result = await commitPendingMutation();
+    if (!result.ok) {
+      useStore.setState(state => ({
+        tasks: state.tasks.map(item => item.id === taskId ? { ...item, dueDate: task.dueDate } : item),
+      }));
+      setDropSuccess(null);
+      setSyncError(result.error || 'The date change was rolled back. Use Retry required to confirm it safely.');
+    } else {
+      setSyncError('');
+    }
   };
 
   // ── Colour helpers ────────────────────────────────────────────────────────
@@ -242,6 +263,11 @@ const Calendar: React.FC = () => {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-emerald-600 text-white text-sm font-medium px-4 py-2.5 rounded-full shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span className="max-w-xs truncate">"{dropSuccess}" rescheduled</span>
+        </div>
+      )}
+      {syncError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800" role="alert">
+          {syncError}
         </div>
       )}
 

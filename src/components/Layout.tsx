@@ -7,7 +7,7 @@ import CreateTaskModal from './CreateTaskModal';
 import { useStore } from '../store';
 import { canCreateTasks, isNotificationVisible, isNotificationReadByUser } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
-import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
 import { notificationRouteToPath } from '../lib/security';
@@ -23,8 +23,11 @@ const Layout: React.FC = () => {
     currentUser,
     markNotificationRead,
     markAllNotificationsRead,
+    commitPendingMutation,
     backend,
     pullBackendNow,
+    retryMutation,
+    discardMutation,
     rolePermissions,
   } = useStore();
 
@@ -66,14 +69,31 @@ const Layout: React.FC = () => {
   }, [notifications, currentUser]);
 
   const unreadCount = myNotifs.filter(n => !isNotificationReadByUser(currentUser, n)).length;
+
+  const persistNotificationChange = async (change: () => void) => {
+    const previousNotifications = useStore.getState().notifications;
+    change();
+    const result = await commitPendingMutation();
+    if (result.ok) return;
+
+    useStore.setState({ notifications: previousNotifications });
+    await discardMutation({ reload: false });
+  };
   const backendStatus = getBackendStatus();
   const hostedLocalBuild = backendStatus.mode === 'local' && backendStatus.isHostedRuntime;
   const missingSupabaseConfig = backendStatus.mode === 'supabase' && !backendStatus.ready;
-  const syncNeedsAttention = hostedLocalBuild || missingSupabaseConfig || Boolean(backend.error) || backend.hasRemoteUpdate;
+  const pendingResolution = backend.status === 'conflict' || backend.status === 'retry_required' || (backend.status === 'offline' && backend.hasLocalChanges);
+  const syncNeedsAttention = hostedLocalBuild || missingSupabaseConfig || Boolean(backend.error) || backend.hasRemoteUpdate || pendingResolution;
   const syncBannerTitle = hostedLocalBuild
     ? 'Sync is local on this deployed build'
     : missingSupabaseConfig
       ? 'Supabase sync is not configured'
+      : backend.status === 'conflict'
+        ? 'Sync conflict needs review'
+        : backend.status === 'retry_required'
+          ? 'A change needs to be retried'
+          : backend.status === 'offline'
+            ? 'AiTask is offline'
       : backend.hasRemoteUpdate
         ? 'Workspace update available'
         : 'Supabase sync issue';
@@ -117,16 +137,38 @@ const Layout: React.FC = () => {
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
-                {backendStatus.mode === 'supabase' && backendStatus.ready && (
+                {backendStatus.mode === 'supabase' && backendStatus.ready && !pendingResolution && (
                   <button
                     type="button"
-                    onClick={() => pullBackendNow({ force: backend.hasRemoteUpdate, silent: false })}
+                    onClick={() => pullBackendNow({ silent: false })}
                     disabled={backend.isPulling || backend.isSaving}
                     className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <RefreshCw className={cn('h-4 w-4', backend.isPulling && 'animate-spin')} />
                     Refresh
                   </button>
+                )}
+                {pendingResolution && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void retryMutation()}
+                      disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
+                      className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Retry my changes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void discardMutation()}
+                      disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
+                      className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <X className="h-4 w-4" />
+                      Use latest
+                    </button>
+                  </>
                 )}
                 <Link
                   to="/settings"
@@ -236,7 +278,7 @@ const Layout: React.FC = () => {
                     key={notif.id}
                     to={notificationRouteToPath(notif.route ?? (notif as typeof notif & { link?: string }).link)}
                     onClick={() => {
-                      markNotificationRead(notif.id);
+                      void persistNotificationChange(() => markNotificationRead(notif.id));
                       setIsMobileNotifOpen(false);
                     }}
                     className={cn(
@@ -284,9 +326,7 @@ const Layout: React.FC = () => {
             {unreadCount > 0 && (
               <button
                 type="button"
-                onClick={() => {
-                  markAllNotificationsRead();
-                }}
+                onClick={() => void persistNotificationChange(markAllNotificationsRead)}
                 className="shrink-0 border-t border-slate-200 bg-slate-50 p-4 text-center text-sm font-bold text-blue-700 transition-colors hover:bg-slate-100"
               >
                 Mark All as Read

@@ -20,7 +20,7 @@ const RECURRENCE_OPTIONS: RecurrenceFrequency[] = ['None', 'Daily', 'Weekly', 'M
 const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, rolePermissions } = useStore();
+  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, rolePermissions, commitPendingMutation } = useStore();
   const navigate = useNavigate();
   const clientListId = React.useId();
 
@@ -50,6 +50,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [recurrenceFrequency, setRecurrenceFrequency] = useState<RecurrenceFrequency>('None');
   const [assignmentError, setAssignmentError] = useState('');
   const [formError, setFormError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingTaskId, setPendingTaskId] = useState('');
 
   const filteredUsers = users.filter(u => u.role !== 'Client' && u.department === department);
   const canCreateProjects = canManageProjects(currentUser, rolePermissions);
@@ -91,6 +93,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setRecurrenceFrequency('None');
     setAssignmentError('');
     setFormError('');
+    setIsSubmitting(false);
+    setPendingTaskId('');
   }, []);
 
   const closeAndReset = React.useCallback(() => {
@@ -220,11 +224,25 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAssignmentError('');
     setFormError('');
     if (!currentUser) return;
+
+    if (pendingTaskId) {
+      setIsSubmitting(true);
+      const pendingResult = await commitPendingMutation();
+      setIsSubmitting(false);
+      if (!pendingResult.ok) {
+        setFormError(pendingResult.error || 'The task is still waiting to be saved.');
+        return;
+      }
+      const savedTaskId = pendingTaskId;
+      closeAndReset();
+      navigate(`/tasks?taskId=${savedTaskId}`);
+      return;
+    }
 
     const trimmedTitle = title.trim();
     const trimmedClientName = clientName.trim();
@@ -265,6 +283,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     // Default to first user in department if not selected
     const finalAssignee = assignedTo || filteredUsers[0].id;
 
+    setIsSubmitting(true);
     const taskId = addTask({
       title: trimmedTitle,
       description: description.trim(),
@@ -291,7 +310,16 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     });
 
     if (!taskId) {
+      setIsSubmitting(false);
       setFormError('You do not have permission to create tasks.');
+      return;
+    }
+
+    const saveResult = await commitPendingMutation();
+    setIsSubmitting(false);
+    if (!saveResult.ok) {
+      setPendingTaskId(taskId);
+      setFormError(saveResult.error || 'The task is waiting to be saved. Review the sync status and retry.');
       return;
     }
 
@@ -662,10 +690,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
           <button 
             type="submit"
             form="create-task-form"
-            disabled={filteredUsers.length === 0}
+            disabled={filteredUsers.length === 0 || isSubmitting}
             className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Create & open task
+            {isSubmitting ? 'Saving task...' : pendingTaskId ? 'Retry saving task' : 'Create & open task'}
           </button>
         </div>
 

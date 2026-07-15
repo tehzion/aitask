@@ -83,6 +83,7 @@ const Settings: React.FC = () => {
     taskStatuses,
     addTaskStatus,
     deleteTaskStatus,
+    commitPendingMutation,
   } = useStore();
   const isSuperAdmin = isBossKoo(currentUser);
   const isClientUser = currentUser?.role === 'Client';
@@ -102,25 +103,52 @@ const Settings: React.FC = () => {
   const [passwordMessage, setPasswordMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [newStatusInput, setNewStatusInput] = React.useState('');
   const [statusError, setStatusError] = React.useState('');
+  const [isProfileSaving, setIsProfileSaving] = React.useState(false);
+  const [isStatusSaving, setIsStatusSaving] = React.useState(false);
+  const [hasPendingStatusAdd, setHasPendingStatusAdd] = React.useState(false);
 
-  const handleStatusAdd = (e: React.FormEvent) => {
+  const handleStatusAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = addTaskStatus(newStatusInput);
-    if (!result.ok) {
-      setStatusError(result.error || 'Failed to add status.');
-    } else {
-      setNewStatusInput('');
-      setStatusError('');
+    if (!hasPendingStatusAdd) {
+      const result = addTaskStatus(newStatusInput);
+      if (!result.ok) {
+        setStatusError(result.error || 'Failed to add status.');
+        return;
+      }
     }
+
+    setIsStatusSaving(true);
+    const saved = await commitPendingMutation();
+    setIsStatusSaving(false);
+    if (!saved.ok) {
+      setHasPendingStatusAdd(true);
+      setStatusError(saved.error || 'The status is waiting to be saved. Use Retry required to try again.');
+      return;
+    }
+
+    setHasPendingStatusAdd(false);
+    setNewStatusInput('');
+    setStatusError('');
   };
 
-  const handleDeleteStatus = (status: string) => {
+  const handleDeleteStatus = async (status: string) => {
+    const previousStatuses = useStore.getState().taskStatuses;
     const result = deleteTaskStatus(status);
     if (!result.ok) {
       setStatusError(result.error || 'Failed to delete status.');
-    } else {
-      setStatusError('');
+      return;
     }
+
+    setIsStatusSaving(true);
+    const saved = await commitPendingMutation();
+    setIsStatusSaving(false);
+    if (!saved.ok) {
+      useStore.setState({ taskStatuses: previousStatuses });
+      setStatusError(saved.error || 'The status could not be deleted.');
+      return;
+    }
+
+    setStatusError('');
   };
 
   const backendStatus = getBackendStatus();
@@ -199,7 +227,7 @@ const Settings: React.FC = () => {
     setPasswordMessage(null);
   }, [currentUser?.id, currentUser?.name, currentUser?.email, currentUser?.avatar]);
 
-  const handleProfileSave = (event: React.FormEvent) => {
+  const handleProfileSave = async (event: React.FormEvent) => {
     event.preventDefault();
     const result = updateCurrentUserProfile({
       name: profileName,
@@ -207,11 +235,19 @@ const Settings: React.FC = () => {
       avatar: avatarUrl,
     });
 
+    if (!result.ok) {
+      setProfileMessage({ tone: 'error', text: result.error || 'Profile could not be updated.' });
+      return;
+    }
+
+    setIsProfileSaving(true);
+    const saved = await commitPendingMutation();
+    setIsProfileSaving(false);
     setProfileMessage({
-      tone: result.ok ? 'success' : 'error',
-      text: result.ok ? 'Profile updated.' : result.error || 'Profile could not be updated.',
+      tone: saved.ok ? 'success' : 'error',
+      text: saved.ok ? 'Profile updated.' : saved.error || 'Profile is waiting to be saved. Use Retry required to try again.',
     });
-    if (result.ok) setAvatarUploadMessage(null);
+    if (saved.ok) setAvatarUploadMessage(null);
   };
 
   const resetProfileForm = () => {
@@ -496,11 +532,11 @@ const Settings: React.FC = () => {
                 )}
               </div>
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <Button type="button" variant="secondary" onClick={resetProfileForm} disabled={!profileChanged}>
+                <Button type="button" variant="secondary" onClick={resetProfileForm} disabled={!profileChanged || isProfileSaving}>
                   Reset
                 </Button>
-                <Button type="submit" disabled={!profileChanged}>
-                  Save profile
+                <Button type="submit" disabled={!profileChanged || isProfileSaving}>
+                  {isProfileSaving ? 'Saving...' : 'Save profile'}
                 </Button>
               </div>
             </div>
@@ -726,7 +762,8 @@ const Settings: React.FC = () => {
                         {!isDefault && (
                           <button
                             type="button"
-                            onClick={() => handleDeleteStatus(status)}
+                            onClick={() => void handleDeleteStatus(status)}
+                            disabled={isStatusSaving}
                             className="text-slate-400 hover:text-red-600 p-1 rounded transition-colors hover:bg-red-50"
                             title={`Delete ${status}`}
                           >
@@ -756,8 +793,8 @@ const Settings: React.FC = () => {
                     className={cn(inputBase, 'flex-1 px-3 py-2 text-sm')}
                     maxLength={50}
                   />
-                  <Button type="submit" disabled={!newStatusInput.trim()}>
-                    Add Status
+                  <Button type="submit" disabled={!newStatusInput.trim() || isStatusSaving}>
+                    {isStatusSaving ? 'Saving...' : 'Add Status'}
                   </Button>
                 </form>
                 {statusError && (
@@ -781,7 +818,7 @@ const Settings: React.FC = () => {
               {isSupabaseMode && (
                 <Button
                   variant="secondary"
-                  onClick={() => pullBackendNow({ force: backend.hasRemoteUpdate, silent: false })}
+                  onClick={() => pullBackendNow({ silent: false })}
                   disabled={!backendStatus.ready || backend.isLoading || backend.isPulling || backend.isSaving}
                   className="min-h-9 px-3 py-1.5 text-xs"
                 >
@@ -798,7 +835,7 @@ const Settings: React.FC = () => {
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Status</p>
               <p className="mt-1 font-semibold text-slate-900">
-                {backend.isLoading ? 'Loading workspace...' : backend.isPulling ? 'Checking latest workspace...' : backend.isSaving ? 'Saving changes...' : backend.message}
+                {backend.status === 'loading' ? 'Checking latest workspace...' : backend.status === 'saving' ? 'Saving changes...' : backend.message}
               </p>
               {backend.error && <p className="mt-2 text-red-600">{backend.error}</p>}
             </div>
@@ -819,7 +856,9 @@ const Settings: React.FC = () => {
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Last Save</p>
               <p className="mt-1 font-semibold text-slate-900">
-                {backend.lastSyncedAt ? new Date(backend.lastSyncedAt).toLocaleString() : 'Not synced yet'}
+                {backend.lastSavedAt || backend.lastSyncedAt
+                  ? new Date(backend.lastSavedAt || backend.lastSyncedAt || '').toLocaleString()
+                  : 'Not synced yet'}
               </p>
               {backendStatus.missing.length > 0 && (
                 <p className="mt-1 text-slate-500">Missing: {backendStatus.missing.join(', ')}</p>
@@ -836,7 +875,7 @@ const Settings: React.FC = () => {
                     ? 'This hosted build is running with local browser storage. Add the Supabase environment variables in Vercel, then redeploy.'
                     : isSupabaseMode
                     ? backendStatus.ready
-                      ? 'The app is configured to read and write the shared Supabase snapshot.'
+                      ? 'The app is using versioned Supabase workspace commands with row-scoped access.'
                       : 'Supabase mode is selected, but required environment variables are missing.'
                     : 'The app is running locally. Set Supabase mode in deployment to share live workspace data.'}
                 </p>

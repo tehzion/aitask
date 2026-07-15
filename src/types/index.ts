@@ -29,6 +29,7 @@ export type RolePermissions = Record<RolePermissionKey, boolean>;
 
 export interface CustomRole {
   id: string;
+  version?: number;
   name: string;
   description?: string;
   baseRole: Role;
@@ -40,6 +41,7 @@ export interface CustomRole {
 
 export interface WorkspaceMember {
   id: string;
+  version?: number;
   authUserId?: string;
   workspaceId?: string;
   name: string;
@@ -66,6 +68,7 @@ export interface NotificationRoute {
 
 export interface AppNotification {
   id: string;
+  version?: number;
   targetUserId?: string; // e.g., assignee
   targetRole?: Role;     // e.g., 'Admin'
   targetClient?: string; // e.g., 'TechNova'
@@ -80,6 +83,8 @@ export interface AppNotification {
 
 export interface TaskComment {
   id: string;
+  version?: number;
+  updatedAt?: string;
   userId: string;
   text: string;
   createdAt: string;
@@ -87,6 +92,8 @@ export interface TaskComment {
 
 export interface TaskApprovalEvent {
   id: string;
+  version?: number;
+  updatedAt?: string;
   userId: string;
   status: ClientApprovalStatus;
   note?: string;
@@ -95,6 +102,8 @@ export interface TaskApprovalEvent {
 
 export interface Registration {
   id: string;
+  version?: number;
+  updatedAt?: string;
   name: string;
   email: string;
   phone: string;
@@ -107,6 +116,7 @@ export interface Registration {
 
 export interface ClientProfile {
   id: string;
+  version?: number;
   clientName: string;
   contactPerson?: string;
   email?: string;
@@ -121,6 +131,7 @@ export interface ClientProfile {
 
 export interface Project {
   id: string;
+  version?: number;
   workspaceId?: string;
   clientId?: string;
   createdBy?: string;
@@ -136,6 +147,7 @@ export interface Project {
 
 export interface Task {
   id: string;
+  version?: number;
   workspaceId?: string;
   clientId?: string;
   projectId?: string;

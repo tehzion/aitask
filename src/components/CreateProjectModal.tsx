@@ -13,7 +13,7 @@ interface Props {
 }
 
 const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProjectCreated, onProjectUpdated }) => {
-  const { addProject, updateProject, projects, tasks, users } = useStore();
+  const { addProject, updateProject, projects, tasks, users, commitPendingMutation } = useStore();
   const clientListId = React.useId();
   const isEditing = Boolean(project);
 
@@ -26,6 +26,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
   const [customInput, setCustomInput]       = useState('');
   const [customError, setCustomError]       = useState('');
   const [formError, setFormError]           = useState('');
+  const [isSubmitting, setIsSubmitting]     = useState(false);
+  const [pendingProjectId, setPendingProjectId] = useState('');
   const customInputRef = useRef<HTMLInputElement>(null);
   const clientOptions = React.useMemo(() => getClientOptions(projects, tasks, users), [projects, tasks, users]);
   const serviceOptions = React.useMemo(() => getServiceOptions(projects, tasks), [projects, tasks]);
@@ -59,6 +61,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
   React.useEffect(() => {
     if (!isOpen) return;
     setFormError('');
+    setIsSubmitting(false);
+    setPendingProjectId('');
     setCustomError('');
     setCustomClientError('');
     setIsAddingCustomClient(false);
@@ -160,11 +164,25 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
 
   const handleClose = () => { resetForm(); onClose(); };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
     setCustomError('');
     setCustomClientError('');
+
+    if (pendingProjectId) {
+      setIsSubmitting(true);
+      const pendingResult = await commitPendingMutation();
+      setIsSubmitting(false);
+      if (!pendingResult.ok) {
+        setFormError(pendingResult.error || 'The company is still waiting to be saved.');
+        return;
+      }
+      if (project) onProjectUpdated?.(pendingProjectId);
+      else onProjectCreated?.(pendingProjectId);
+      handleClose();
+      return;
+    }
 
     const trimmedClientName = clientName.trim();
     const today = new Date().toISOString().split('T')[0];
@@ -195,6 +213,15 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
         return;
       }
 
+      setIsSubmitting(true);
+      const saveResult = await commitPendingMutation();
+      setIsSubmitting(false);
+      if (!saveResult.ok) {
+        setPendingProjectId(project.id);
+        setFormError(saveResult.error || 'The company update is waiting to be saved.');
+        return;
+      }
+
       if (onProjectUpdated) onProjectUpdated(project.id);
       handleClose();
       return;
@@ -210,6 +237,15 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
 
     if (!newProjectId) {
       setFormError('You do not have permission to create projects.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    const saveResult = await commitPendingMutation();
+    setIsSubmitting(false);
+    if (!saveResult.ok) {
+      setPendingProjectId(newProjectId);
+      setFormError(saveResult.error || 'The company is waiting to be saved.');
       return;
     }
 
@@ -429,10 +465,10 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
           </button>
           <button
             type="submit" form="create-project-form"
-            disabled={allServices.length === 0}
+            disabled={allServices.length === 0 || isSubmitting}
             className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isEditing ? 'Save Changes' : 'Create Company'}
+            {isSubmitting ? 'Saving...' : pendingProjectId ? 'Retry saving' : isEditing ? 'Save Changes' : 'Create Company'}
           </button>
         </div>
       </div>
