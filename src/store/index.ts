@@ -272,6 +272,12 @@ const normalizeUserAccount = (user: User): User => {
   };
 };
 
+export const normalizeWorkspaceUserForBackend = (user: User, secureAuth: boolean): User => (
+  secureAuth
+    ? stripPassword(user as User & { password?: string }) as User
+    : normalizeUserAccount(user)
+);
+
 const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorkspaceState => (
   parseWorkspaceSnapshot(state)
 );
@@ -573,7 +579,8 @@ const getCurrentUserFromSnapshot = (currentUser: User | null, users: User[]) => 
 
 const makeWorkspacePatch = (current: StoreState, snapshot: SnapshotResult) => {
   const workspace = normalizeWorkspaceState(snapshot.state);
-  const users = workspace.users.map(user => normalizeUserAccount(user));
+  const secureAuth = shouldUseSecureSupabase();
+  const users = workspace.users.map(user => normalizeWorkspaceUserForBackend(user, secureAuth));
   return {
     ...workspace,
     users,
