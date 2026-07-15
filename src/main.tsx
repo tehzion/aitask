@@ -1,15 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { registerSW } from 'virtual:pwa-register'
 import App from './App'
+import { registerPwaUpdates } from './lib/pwaUpdates'
 import './index.css'
 
-registerSW({
-  immediate: true,
-  onRegisterError(error) {
-    console.error('AiTask service worker registration failed:', error)
-  },
-})
+registerPwaUpdates()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

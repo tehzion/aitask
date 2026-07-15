@@ -64,6 +64,9 @@ export default defineConfig(({ mode }) => ({
     }),
     tsconfigPaths(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
       includeAssets: ['apple-touch-icon.png'],
       manifest: {
@@ -97,8 +100,7 @@ export default defineConfig(({ mode }) => ({
           },
         ],
       },
-      workbox: {
-        cleanupOutdatedCaches: true,
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,svg,png}'],
         globIgnores: [
           '**/Dashboard-*.js',
@@ -111,24 +113,6 @@ export default defineConfig(({ mode }) => ({
           '**/Settings-*.js',
           '**/charts-*.js',
           '**/supabase-*.js',
-        ],
-        navigateFallback: '/index.html',
-        runtimeCaching: [
-          {
-            urlPattern: ({ request, url }) => (
-              request.destination === 'script' &&
-              url.origin === self.location.origin &&
-              url.pathname.startsWith('/assets/')
-            ),
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'aitask-route-assets',
-              expiration: {
-                maxEntries: 40,
-                maxAgeSeconds: 30 * 24 * 60 * 60,
-              },
-            },
-          },
         ],
       },
     }),

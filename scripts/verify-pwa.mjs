@@ -3,10 +3,11 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../dist/${path}`, import.meta.url), 'utf8');
 
-const [manifestSource, indexHtml, serviceWorker] = await Promise.all([
+const [manifestSource, indexHtml, serviceWorker, serviceWorkerSource] = await Promise.all([
   read('manifest.webmanifest'),
   read('index.html'),
   read('sw.js'),
+  readFile(new URL('../src/sw.ts', import.meta.url), 'utf8'),
 ]);
 
 const manifest = JSON.parse(manifestSource);
@@ -39,6 +40,18 @@ for (const asset of [
 
 assert(!/supabase[.]co|aitask_app_state/i.test(serviceWorker), 'Supabase data must not be cached by the service worker.');
 assert(serviceWorker.includes('aitask-route-assets'), 'Lazy route scripts must be cached after first use.');
+assert(serviceWorker.includes('aitask-navigation'), 'Page navigation must use its own network-first cache.');
+assert(serviceWorker.includes('navigationPreload'), 'Network-first navigation preload must be enabled.');
+assert.match(serviceWorkerSource, /new NetworkFirst\s*\(/, 'Page navigation must prefer the deployed app over a cached shell.');
+assert.doesNotMatch(
+  serviceWorkerSource,
+  /networkTimeoutSeconds/,
+  'A slow production response must not fall back to stale HTML before the network fails.',
+);
+assert(
+  serviceWorker.indexOf('aitask-navigation') < serviceWorker.indexOf('manifest.webmanifest'),
+  'The network-first navigation route must be registered before the precache route.',
+);
 assert(!/Dashboard-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'Dashboard route must not be in the install-time precache.');
 assert(!/charts-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'Charts must not be in the install-time precache.');
 console.log('PWA verification passed: manifest, app shell, icons, and cache boundaries are valid.');

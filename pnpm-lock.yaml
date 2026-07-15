@@ -107,6 +107,27 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@22.19.17)(vite@6.4.3(@types/node@22.19.17)(jiti@1.21.7)(terser@5.48.0))
+      workbox-cacheable-response:
+        specifier: 7.4.1
+        version: 7.4.1
+      workbox-core:
+        specifier: 7.4.1
+        version: 7.4.1
+      workbox-expiration:
+        specifier: 7.4.1
+        version: 7.4.1
+      workbox-navigation-preload:
+        specifier: 7.4.1
+        version: 7.4.1
+      workbox-precaching:
+        specifier: 7.4.1
+        version: 7.4.1
+      workbox-routing:
+        specifier: 7.4.1
+        version: 7.4.1
+      workbox-strategies:
+        specifier: 7.4.1
+        version: 7.4.1
       workbox-window:
         specifier: ^7.4.1
         version: 7.4.1

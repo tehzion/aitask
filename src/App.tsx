@@ -6,8 +6,9 @@ import Login from './pages/Login';
 import AccessDenied from './components/AccessDenied';
 import { canAccessPath } from './lib/access';
 import { hasPasswordResetBypass } from './lib/auth';
-import { WifiOff } from 'lucide-react';
+import { RefreshCw, WifiOff } from 'lucide-react';
 import { shouldUseSecureSupabase, supabase } from './lib/supabaseClient';
+import { isPwaUpdateReady, PWA_UPDATE_READY_EVENT } from './lib/pwaUpdates';
 
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Tasks = React.lazy(() => import('./pages/Tasks'));
@@ -49,6 +50,7 @@ function App() {
   const [isOnline, setIsOnline] = React.useState(() => (
     typeof navigator === 'undefined' ? true : navigator.onLine
   ));
+  const [isUpdateReady, setIsUpdateReady] = React.useState(isPwaUpdateReady);
   const initializeBackend = useStore(state => state.initializeBackend);
   const forceSyncMockData = useStore(state => state._forceSyncMockData);
   const sendDueDateReminders = useStore(state => state.sendDueDateReminders);
@@ -64,6 +66,12 @@ function App() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }, []);
+
+  useEffect(() => {
+    const handleUpdateReady = () => setIsUpdateReady(true);
+    window.addEventListener(PWA_UPDATE_READY_EVENT, handleUpdateReady);
+    return () => window.removeEventListener(PWA_UPDATE_READY_EVENT, handleUpdateReady);
   }, []);
 
   useEffect(() => {
@@ -141,6 +149,27 @@ function App() {
               The cached app shell is available. Live workspace sync will resume when you are back online.
             </p>
           </div>
+        </div>
+      )}
+
+      {isUpdateReady && isOnline && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-20 left-4 right-4 z-[70] mx-auto flex max-w-xl items-center gap-3 rounded-lg border border-blue-200 bg-white px-4 py-3 text-slate-900 shadow-xl shadow-slate-950/10 md:bottom-5 md:left-auto md:right-5"
+        >
+          <RefreshCw className="h-5 w-5 shrink-0 text-blue-600" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">New version ready</p>
+            <p className="mt-0.5 text-xs leading-5 text-slate-500">Refresh to use the latest AiTask fixes.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="shrink-0 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          >
+            Refresh now
+          </button>
         </div>
       )}
     </>
