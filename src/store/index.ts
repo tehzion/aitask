@@ -183,6 +183,7 @@ const defaultTaskStatuses = ['Pending', 'In Progress', 'Waiting Approval', 'Comp
 const allowedDepartments = new Set<Department>(['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client']);
 const allowedPriorities = new Set<Priority>(['Low', 'Medium', 'High', 'Urgent']);
 const sensitiveSnapshotKeyPattern = /(password|secret|token|api[_-]?key|service[_-]?role)/i;
+const safePasswordMetadataKeys = new Set(['mustResetPassword', 'must_reset_password']);
 const normalizeClientKey = (value?: string | null) => value?.trim().toLowerCase() || '';
 const profileEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -203,20 +204,20 @@ const resolveTaskStatus = (status: string, statuses: string[]) => {
   return statuses.find(item => item.toLowerCase() === trimmed.toLowerCase()) || '';
 };
 
-const stripSensitiveSnapshotFields = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(stripSensitiveSnapshotFields);
+export const stripSensitiveWorkspaceFields = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(stripSensitiveWorkspaceFields);
   if (!value || typeof value !== 'object') return value;
 
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
-      .filter(([key]) => !sensitiveSnapshotKeyPattern.test(key))
-      .map(([key, item]) => [key, stripSensitiveSnapshotFields(item)])
+      .filter(([key]) => safePasswordMetadataKeys.has(key) || !sensitiveSnapshotKeyPattern.test(key))
+      .map(([key, item]) => [key, stripSensitiveWorkspaceFields(item)])
   );
 };
 
 const sanitizeWorkspaceStateForSnapshot = (
   state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds'>
-): PersistedWorkspaceState => stripSensitiveSnapshotFields({
+): PersistedWorkspaceState => stripSensitiveWorkspaceFields({
   users: state.users.map(user => stripPassword(user as User & { password?: string })),
   clients: state.clients || [],
   projects: state.projects,

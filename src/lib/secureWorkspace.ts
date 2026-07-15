@@ -139,6 +139,22 @@ const refreshSecureSession = async () => {
   return !error && Boolean(data.session);
 };
 
+const commandDiagnostic = (command: SecureCommand) => ({
+  commandId: command.id,
+  commandType: command.type,
+  operations: command.operations.map(operation => ({
+    kind: operation.kind,
+    action: operation.action,
+    entityType: operation.entityType,
+    entityId: operation.entityId,
+    expectedVersion: operation.expectedVersion,
+    changedFields: changedFieldsForConflict(
+      operation,
+      baseline.get(entityKey(operation.entityType, operation.entityId))?.data,
+    ),
+  })),
+});
+
 const stripRuntimeFields = <T extends Record<string, unknown>>(value: T) => {
   const copy = { ...value };
   delete copy.version;
@@ -398,6 +414,7 @@ const executeCommand = async (command: SecureCommand): Promise<MutationResult<Co
 
   if (error) {
     retryableCommand = command;
+    console.error('[AiTask sync] Supabase RPC failed.', JSON.stringify({ ...commandDiagnostic(command), code: error.code }));
     return isAuthError(error)
       ? { ok: false, code: 'FORBIDDEN', error: 'Your session expired. Sign in again, then retry the retained change.' }
       : { ok: false, code: 'RETRY_REQUIRED', error: error.message || 'The command could not be confirmed.' };
@@ -405,6 +422,7 @@ const executeCommand = async (command: SecureCommand): Promise<MutationResult<Co
 
   const response = data as CommandResponse;
   if (!response?.ok) {
+    console.error('[AiTask sync] Command rejected.', JSON.stringify({ ...commandDiagnostic(command), code: response?.code }));
     const operation = command.operations.find(item => (
       item.entityType === response.conflict?.entityType && item.entityId === response.conflict?.entityId
     ));
