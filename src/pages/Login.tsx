@@ -23,6 +23,12 @@ const DEMO_ACCOUNTS = [
   { username: 'UrbanEats Client Demo',  password: DEFAULT_USER_PASSWORD, role: 'Client',      badge: 'bg-emerald-100 text-emerald-700' },
 ];
 
+const HOSTED_DEMO_USERNAMES = new Set([
+  'Admin Demo',
+  'Finance Demo',
+  'UrbanEats Client Demo',
+]);
+
 const getLoginDestination = (mustResetPassword: boolean, userId: string, requestedPath: string) => (
   mustResetPassword && !hasPasswordResetBypass(userId) ? '/settings' : requestedPath
 );
@@ -47,6 +53,9 @@ const Login: React.FC = () => {
   const [showDemo, setShowDemo] = useState(true);
   const showDemoLogin = shouldShowDemoLogin();
   const secureAccounts = shouldUseSecureSupabase();
+  const visibleDemoAccounts = secureAccounts
+    ? DEMO_ACCOUNTS.filter(account => HOSTED_DEMO_USERNAMES.has(account.username))
+    : DEMO_ACCOUNTS;
 
   // --- Registration state ---
   const [isRegistering, setIsRegistering] = useState(false);
@@ -205,7 +214,7 @@ const Login: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {DEMO_ACCOUNTS.map((account) => (
+                          {visibleDemoAccounts.map((account) => (
                             <tr
                               key={account.username}
                               onClick={() => fillDemo(account)}
