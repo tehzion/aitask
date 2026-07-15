@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-const envFiles = ['.env.local', '.env.production.local', '.env'];
+const envFiles = ['.env.local', '.env.production.local', '.env.production', '.env'];
 
 const stripQuotes = (value) => {
   const trimmed = value.trim();
