@@ -32,6 +32,24 @@ npm run check
 npm run build
 ```
 
+## Release Versioning
+
+The semantic release number is stored in `package.json`. Every build appends the
+current Git commit, producing an identifier such as `v1.5.1+d9494d6`; a dirty local
+workspace is marked with `.dev`.
+
+Use one of these commands before a release, then update `CHANGELOG.md`:
+
+```bash
+pnpm release:patch
+pnpm release:minor
+pnpm release:major
+```
+
+- Patch: fixes and small polish (`1.0.0` to `1.0.1`).
+- Minor: backward-compatible features (`1.0.0` to `1.1.0`).
+- Major: breaking data, API, or workflow changes (`1.0.0` to `2.0.0`).
+
 ## Original Vite Notes
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

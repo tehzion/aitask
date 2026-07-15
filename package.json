@@ -1,7 +1,7 @@
 {
   "name": "workspace",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.5.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,10 @@
     "test": "vitest run src",
     "test:e2e": "playwright test",
     "verify:pwa": "node scripts/verify-pwa.mjs",
-    "verify:supabase": "node scripts/verify-supabase.mjs"
+    "verify:supabase": "node scripts/verify-supabase.mjs",
+    "release:patch": "pnpm version patch --no-git-tag-version",
+    "release:minor": "pnpm version minor --no-git-tag-version",
+    "release:major": "pnpm version major --no-git-tag-version"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.89.0",

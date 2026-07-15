@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, ArrowRight, Bell, CheckCircle2, Cloud, Database, Lock, RefreshCw, ShieldCheck, SlidersHorizontal, Upload, UserCircle, Volume2, VolumeX, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Bell, CheckCircle2, Cloud, Database, Lock, PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Upload, UserCircle, Volume2, VolumeX, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { Badge, Button, MetricCard, PageHeader } from '../components/ui';
@@ -12,6 +12,7 @@ import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import BackendFreshness from '../components/BackendFreshness';
 import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 import { canUsePasswordResetBypass, enablePasswordResetBypass } from '../lib/auth';
+import { APP_BUILD_CHANNEL, APP_BUILD_LABEL, APP_BUILD_TIME, APP_COMMIT, APP_VERSION_LABEL } from '../lib/appVersion';
 
 const AVATAR_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 const AVATAR_UPLOAD_SIZE = 320;
@@ -882,6 +883,34 @@ const Settings: React.FC = () => {
           )}
         </div>
       )}
+
+      <section className={`${cardBase} overflow-hidden`}>
+        <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-5">
+          <PackageCheck className="h-5 w-5 text-blue-600" />
+          <h2 className="text-lg font-semibold text-slate-800">Application Release</h2>
+        </div>
+        <div className="grid grid-cols-1 gap-4 p-6 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Release</p>
+            <p className="mt-1 font-semibold text-slate-900">{APP_VERSION_LABEL}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Build</p>
+            <p className="mt-1 font-mono font-semibold text-slate-900">{APP_COMMIT}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Channel</p>
+            <p className="mt-1 font-semibold capitalize text-slate-900">{APP_BUILD_CHANNEL}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Built</p>
+            <p className="mt-1 font-semibold text-slate-900">{new Date(APP_BUILD_TIME).toLocaleString()}</p>
+          </div>
+        </div>
+        <div className="border-t border-slate-100 px-6 py-3">
+          <p className="font-mono text-[11px] text-slate-400">{APP_BUILD_LABEL}</p>
+        </div>
+      </section>
     </div>
   );
 };

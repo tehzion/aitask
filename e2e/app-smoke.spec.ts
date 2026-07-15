@@ -4,6 +4,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Sign in to AiTask' })).toBeVisible();
   await expect(page.getByText('Demo Credentials')).toBeVisible();
+  await expect(page.getByText(/^v\d+\.\d+\.\d+\+[a-z0-9]+(?:\.dev)?$/)).toBeVisible();
 
   await page.getByLabel('Email or username').fill('Boss Koo');
   await page.getByLabel('Password').fill('password123');

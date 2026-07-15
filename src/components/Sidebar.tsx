@@ -5,6 +5,7 @@ import { useStore } from '../store';
 import clsx from 'clsx';
 import { canAccessPath, getVisibleNavigation } from '../lib/access';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
+import { APP_VERSION_LABEL, APP_COMMIT } from '../lib/appVersion';
 
 const navIcons = {
   Dashboard: LayoutDashboard,
@@ -119,6 +120,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             <LogOut className="mr-3 h-[18px] w-[18px]" />
             <span className="font-medium text-sm">Logout</span>
           </button>
+          <p className="px-3 pt-2 font-mono text-[10px] text-slate-400" title="AiTask application version and build commit">
+            {APP_VERSION_LABEL} · {APP_COMMIT}
+          </p>
         </div>
       </div>
     </>

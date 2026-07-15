@@ -2,9 +2,34 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tsconfigPaths from "vite-tsconfig-paths";
 import { VitePWA } from 'vite-plugin-pwa';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+
+const packageJson = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
+) as { version: string };
+
+const readGitValue = (args: string[]) => {
+  try {
+    return execFileSync('git', args, { encoding: 'utf8' }).trim();
+  } catch {
+    return '';
+  }
+};
+
+const fullCommit = process.env.VERCEL_GIT_COMMIT_SHA || readGitValue(['rev-parse', 'HEAD']);
+const shortCommit = fullCommit.slice(0, 7) || 'local';
+const hasLocalChanges = !process.env.VERCEL && Boolean(readGitValue(['status', '--porcelain']));
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: {
+    __APP_VERSION__: JSON.stringify(packageJson.version),
+    __APP_COMMIT__: JSON.stringify(shortCommit),
+    __APP_BUILD_ID__: JSON.stringify(`${packageJson.version}+${shortCommit}${hasLocalChanges ? '.dev' : ''}`),
+    __APP_BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    __APP_BUILD_CHANNEL__: JSON.stringify(process.env.VERCEL_ENV || mode),
+  },
   server: {
     watch: {
       usePolling: true,

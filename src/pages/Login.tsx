@@ -7,6 +7,7 @@ import { Button } from '../components/ui';
 import { inputBase } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { DEFAULT_USER_PASSWORD, hasPasswordResetBypass, shouldShowDemoLogin } from '../lib/auth';
+import { APP_BUILD_LABEL } from '../lib/appVersion';
 
 /** Max failed attempts before a short lockout is applied */
 const MAX_ATTEMPTS = 5;
@@ -300,6 +301,9 @@ const Login: React.FC = () => {
             </>
           )}
         </div>
+        <p className="mt-4 text-center font-mono text-[11px] text-slate-400">
+          {APP_BUILD_LABEL}
+        </p>
       </div>
     </div>
   );
