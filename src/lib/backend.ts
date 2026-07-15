@@ -83,7 +83,7 @@ export const getBackendStatus = (): BackendStatus => {
     ready: missing.length === 0,
     missing,
     message: missing.length === 0
-      ? 'Supabase snapshot sync is enabled.'
+      ? 'Secure Supabase command sync is enabled.'
       : `Supabase mode is selected but missing ${missing.join(', ')}.`,
     supabaseUrl: config.url || undefined,
     runtimeHost: runtimeHost || undefined,

@@ -6,7 +6,10 @@ create schema if not exists private;
 create table if not exists public.aitask_workspaces (
   id text primary key,
   name text not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  version bigint not null default 1,
+  sync_protocol_version integer not null default 1
 );
 
 create table if not exists public.aitask_members (
@@ -24,6 +27,7 @@ create table if not exists public.aitask_members (
   custom_role_id text,
   custom_role_name text,
   permissions jsonb not null default '{}'::jsonb,
+  version bigint not null default 1,
   updated_at timestamptz not null default now()
 );
 
@@ -45,6 +49,7 @@ create table if not exists public.aitask_entities (
   target_role text,
   target_client_key text,
   data jsonb not null,
+  version bigint not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   primary key (workspace_id, entity_type, entity_id)

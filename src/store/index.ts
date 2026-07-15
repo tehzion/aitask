@@ -646,7 +646,11 @@ export const useStore = create<StoreState>()(
               return;
             }
 
-            const secure = await loadSecureWorkspace(session.user);
+            const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser();
+            if (userError) throw userError;
+            if (!verifiedUser) throw new Error('Your session has expired. Sign in again.');
+
+            const secure = await loadSecureWorkspace(verifiedUser);
             const loadedAt = new Date().toISOString();
             isApplyingRemoteSnapshot = true;
             set((state) => ({
@@ -878,11 +882,11 @@ export const useStore = create<StoreState>()(
           set((state) => ({
             backend: {
               ...state.backend,
-              status: 'live',
+              status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
               isSaving: false,
               pendingMutations: state.backend.hasLocalChanges ? 1 : 0,
-              message: 'Supabase save failed. Local state is still available.',
-              error: error instanceof Error ? error.message : 'Unable to save Supabase state.',
+              message: 'Save was not confirmed. Your pending change is retained for retry.',
+              error: error instanceof Error ? error.message : 'Supabase could not confirm the save.',
             }
           }));
         }

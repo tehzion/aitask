@@ -49,5 +49,10 @@ jobs:
       - name: Verify PWA output
         run: pnpm verify:pwa
 
+      - name: Verify Supabase secure cutover
+        run: pnpm verify:supabase
+        env:
+          AITASK_EXPECT_SECURE_CUTOVER: 'true'
+
       - name: Browser smoke test
         run: pnpm test:e2e

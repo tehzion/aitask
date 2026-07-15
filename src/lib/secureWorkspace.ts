@@ -13,6 +13,8 @@ import { parseWorkspaceSnapshot } from './security';
 import { supabase } from './supabaseClient';
 
 export const SECURE_WORKSPACE_ID = 'aitask-main';
+export const SECURE_SYNC_PROTOCOL_VERSION = 1;
+const SYNC_REQUEST_TIMEOUT_MS = 20_000;
 
 export type MutationErrorCode = 'OFFLINE' | 'CONFLICT' | 'FORBIDDEN' | 'VALIDATION' | 'NOT_FOUND' | 'RETRY_REQUIRED';
 
@@ -104,6 +106,38 @@ let retryableCommand: SecureCommand | null = null;
 const entityKey = (type: string, id: string) => `${type}:${id}`;
 const stable = (value: unknown) => JSON.stringify(value);
 const commandId = () => crypto.randomUUID();
+
+class SyncRequestTimeoutError extends Error {
+  constructor() {
+    super('Supabase did not confirm the request within 20 seconds.');
+    this.name = 'SyncRequestTimeoutError';
+  }
+}
+
+const withSyncTimeout = async <T>(request: PromiseLike<T>): Promise<T> => {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(request),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new SyncRequestTimeoutError()), SYNC_REQUEST_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+};
+
+const isAuthError = (error: { code?: string; message?: string; details?: string } | null) => {
+  if (!error) return false;
+  const detail = `${error.code || ''} ${error.message || ''} ${error.details || ''}`;
+  return /PGRST301|JWT|token.*expired|not authenticated|authentication required|\b401\b/i.test(detail);
+};
+
+const refreshSecureSession = async () => {
+  const { data, error } = await supabase.auth.refreshSession();
+  return !error && Boolean(data.session);
+};
 
 const stripRuntimeFields = <T extends Record<string, unknown>>(value: T) => {
   const copy = { ...value };
@@ -333,16 +367,40 @@ const executeCommand = async (command: SecureCommand): Promise<MutationResult<Co
     return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before retrying this change.' };
   }
 
-  const { data, error } = await supabase.rpc('aitask_execute_command', {
+  const invoke = () => withSyncTimeout(supabase.rpc('aitask_execute_command', {
     p_workspace_id: SECURE_WORKSPACE_ID,
     p_command_id: command.id,
     p_command_type: command.type,
     p_operations: command.operations,
-  });
+  }));
+
+  let rpcResult: Awaited<ReturnType<typeof invoke>>;
+  try {
+    rpcResult = await invoke();
+    if (isAuthError(rpcResult.error) && await refreshSecureSession()) {
+      rpcResult = await invoke();
+    }
+  } catch (error) {
+    retryableCommand = command;
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    return {
+      ok: false,
+      code: offline ? 'OFFLINE' : 'RETRY_REQUIRED',
+      error: offline
+        ? 'You are offline. Reconnect before retrying this change.'
+        : error instanceof SyncRequestTimeoutError
+          ? 'Save confirmation timed out. Your change is retained; retrying with the same command will not duplicate it.'
+          : 'Supabase could not be reached. Your change is retained for retry.',
+    };
+  }
+
+  const { data, error } = rpcResult;
 
   if (error) {
     retryableCommand = command;
-    return { ok: false, code: 'RETRY_REQUIRED', error: error.message || 'The command could not be confirmed.' };
+    return isAuthError(error)
+      ? { ok: false, code: 'FORBIDDEN', error: 'Your session expired. Sign in again, then retry the retained change.' }
+      : { ok: false, code: 'RETRY_REQUIRED', error: error.message || 'The command could not be confirmed.' };
   }
 
   const response = data as CommandResponse;
@@ -374,13 +432,23 @@ const executeCommand = async (command: SecureCommand): Promise<MutationResult<Co
 };
 
 export const loadSecureWorkspaceRevision = async () => {
-  const { data, error } = await supabase
+  const load = () => withSyncTimeout(supabase
     .from('aitask_workspaces')
-    .select('version,updated_at')
+    .select('version,updated_at,sync_protocol_version')
     .eq('id', SECURE_WORKSPACE_ID)
-    .single();
+    .single());
+  let { data, error } = await load();
+  if (isAuthError(error) && await refreshSecureSession()) {
+    ({ data, error } = await load());
+  }
   if (error) throw error;
-  return { version: Number(data.version) || 1, updatedAt: String(data.updated_at) };
+  const syncProtocolVersion = Number(data.sync_protocol_version);
+  if (syncProtocolVersion !== SECURE_SYNC_PROTOCOL_VERSION) {
+    throw new Error(
+      `AiTask sync protocol mismatch: app requires ${SECURE_SYNC_PROTOCOL_VERSION}, backend provides ${syncProtocolVersion || 'none'}.`,
+    );
+  }
+  return { version: Number(data.version) || 1, updatedAt: String(data.updated_at), syncProtocolVersion };
 };
 
 export const loadSecureWorkspace = async (authUser: User) => {
