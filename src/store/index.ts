@@ -2752,7 +2752,9 @@ export const startBackendAutoSync = () => {
 
   const pullLatest = () => {
     if (!shouldUseSupabase() || document.visibilityState !== 'visible') return;
-    void useStore.getState().pullBackendNow({ silent: true });
+    const state = useStore.getState();
+    if (shouldUseSecureSupabase() && !state.currentUser) return;
+    void state.pullBackendNow({ silent: true });
   };
 
   window.setInterval(pullLatest, 15000);
@@ -2779,6 +2781,9 @@ export const startBackendAutoSync = () => {
           : 'Back online. Checking the latest workspace.',
       },
     }));
-    void useStore.getState().pullBackendNow({ silent: true });
+    const state = useStore.getState();
+    if (!shouldUseSecureSupabase() || state.currentUser) {
+      void state.pullBackendNow({ silent: true });
+    }
   });
 };
