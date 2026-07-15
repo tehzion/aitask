@@ -3,14 +3,16 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../dist/${path}`, import.meta.url), 'utf8');
 
-const [manifestSource, indexHtml, serviceWorker, serviceWorkerSource] = await Promise.all([
+const [manifestSource, indexHtml, serviceWorker, serviceWorkerSource, vercelSource] = await Promise.all([
   read('manifest.webmanifest'),
   read('index.html'),
   read('sw.js'),
   readFile(new URL('../src/sw.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../vercel.json', import.meta.url), 'utf8'),
 ]);
 
 const manifest = JSON.parse(manifestSource);
+const vercelConfig = JSON.parse(vercelSource);
 assert.equal(manifest.name, 'AiTask - Marketing Agency Task Management');
 assert.equal(manifest.short_name, 'AiTask');
 assert.equal(manifest.start_url, '/');
@@ -54,4 +56,11 @@ assert(
 );
 assert(!/Dashboard-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'Dashboard route must not be in the install-time precache.');
 assert(!/charts-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'Charts must not be in the install-time precache.');
+
+const headersFor = (source) => new Map(
+  vercelConfig.headers.find(rule => rule.source === source)?.headers.map(header => [header.key, header.value]) || [],
+);
+assert.match(headersFor('/(.*)').get('Cache-Control') || '', /no-store/, 'HTML routes must not be browser-cached.');
+assert.match(headersFor('/sw.js').get('Cache-Control') || '', /no-store/, 'The service worker must not be browser-cached.');
+assert.match(headersFor('/assets/(.*)').get('Cache-Control') || '', /immutable/, 'Hashed assets should remain immutable.');
 console.log('PWA verification passed: manifest, app shell, icons, and cache boundaries are valid.');
