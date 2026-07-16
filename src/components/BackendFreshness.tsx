@@ -57,13 +57,13 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
 
   return (
     <div className={cn('flex flex-wrap items-center gap-2', className)} aria-live="polite">
-      <div className="flex items-center gap-1.5 text-[11px] text-stone-400 font-medium">
+      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
         <Badge tone={tone} className="px-1.5 py-0.5 text-[10px] font-semibold gap-1 shrink-0">
           <Icon className={cn('h-3 w-3', backend.status === 'loading' && 'animate-spin')} />
           {label}
         </Badge>
         {!compact && (
-          <span className="whitespace-nowrap text-stone-400">
+          <span className="whitespace-nowrap text-slate-500">
             {isLocal && backendStatus.isHostedRuntime
               ? 'Vercel configuration required'
               : `Synced: ${formatSyncTime(lastChecked)}`}
@@ -75,10 +75,11 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           variant="secondary"
           onClick={() => pullBackendNow({ silent: false })}
           disabled={backend.isPulling || backend.isSaving}
-          className="h-7 w-7 p-0 rounded-md flex items-center justify-center shrink-0 border border-stone-200 bg-white hover:bg-stone-50 transition-colors shadow-sm"
+          className="h-7 w-7 p-0 rounded-md flex items-center justify-center shrink-0 border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm"
           title="Refresh sync status"
+          aria-label="Refresh sync status"
         >
-          <RefreshCw className={cn('h-3 w-3 text-stone-500', backend.isPulling && 'animate-spin')} />
+          <RefreshCw className={cn('h-3 w-3 text-slate-500', backend.isPulling && 'animate-spin')} />
         </Button>
       )}
       {needsResolution && (

@@ -131,16 +131,17 @@ const Login: React.FC = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center px-4 py-10 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="flex flex-col items-center justify-center">
-            <div className="flex items-baseline font-sans">
-              <span className="text-5xl font-bold text-red-500 tracking-tighter">A</span>
-              <span className="text-5xl font-bold text-red-500 tracking-tighter">i</span>
-              <span className="text-4xl font-extrabold text-slate-800 tracking-tight ml-1">Task</span>
+          <div className="flex items-center gap-3">
+            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-blue-600 text-xl font-bold text-white shadow-sm">
+              AT
             </div>
-            <span className="text-xs text-slate-500 font-medium tracking-widest mt-1 uppercase">Marketing Agency</span>
+            <div>
+              <div className="text-2xl font-bold text-slate-950">AiTask</div>
+              <span className="mt-0.5 block text-xs font-semibold uppercase text-slate-500">Marketing Agency</span>
+            </div>
           </div>
         </div>
-        <h2 className="mt-8 text-center text-3xl font-extrabold text-slate-900">
+        <h2 className="mt-8 text-center text-2xl font-semibold text-slate-950">
           {isRegistering ? 'Register for Access' : 'Sign in to AiTask'}
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
@@ -151,7 +152,7 @@ const Login: React.FC = () => {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow-lg sm:rounded-lg sm:px-10 border border-slate-200">
+        <div className="border border-slate-200 bg-white px-4 py-8 shadow-[0_8px_30px_rgba(15,23,42,0.08)] sm:rounded-lg sm:px-10">
           {!isRegistering ? (
             <>
               <form className="space-y-5" onSubmit={handleLogin}>
@@ -183,7 +184,7 @@ const Login: React.FC = () => {
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                   />
-                  {loginError && <p className="mt-2 text-sm text-red-600">{loginError}</p>}
+                  {loginError && <p className="mt-2 text-sm text-red-600" role="alert" aria-live="polite">{loginError}</p>}
                 </div>
 
                 <Button type="submit" className="w-full py-3" disabled={isLoggingIn}>
@@ -199,7 +200,7 @@ const Login: React.FC = () => {
                     onClick={() => setShowDemo(v => !v)}
                     className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:bg-slate-100 transition-colors"
                   >
-                    <span>Demo Credentials — click to fill</span>
+                    <span>Demo credentials - click to fill</span>
                     {showDemo ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   </button>
 

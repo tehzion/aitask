@@ -12,7 +12,7 @@ const navIcons = {
   Tasks: CheckSquare,
   Calendar: CalendarDays,
   Clients: Users,
-  Projects: FolderKanban,
+  Companies: FolderKanban,
   Reports: BarChart3,
   Approvals: UserPlus,
 };
@@ -60,14 +60,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             AT
           </div>
           <div className="min-w-0">
-            <div className="font-sans text-lg font-bold tracking-tight text-slate-950">AiTask</div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Agency Hub</p>
+            <div className="font-sans text-lg font-bold text-slate-950">AiTask</div>
+            <p className="text-[10px] font-semibold uppercase text-slate-400">Agency Hub</p>
           </div>
         </div>
 
         {/* Nav items */}
         <div className="custom-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-5">
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Menu</p>
+          <p className="mb-3 px-3 text-[10px] font-bold uppercase text-slate-400">Menu</p>
           {filteredNavItems.map((item) => (
             <NavLink
               key={item.path}

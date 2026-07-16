@@ -10,6 +10,7 @@ import {
   MapPin,
   Pencil,
   Phone,
+  Plus,
   Search,
   Save,
   UserRound,
@@ -24,6 +25,7 @@ import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
 import { ClientProfile } from '../types';
+import ModalShell from '../components/ModalShell';
 
 type ClientSource = 'Profile' | 'Task' | 'Company' | 'Account';
 
@@ -132,6 +134,7 @@ const Clients: React.FC = () => {
   const [renameValue, setRenameValue] = React.useState('');
   const [renameError, setRenameError] = React.useState('');
   const [isSavingClient, setIsSavingClient] = React.useState(false);
+  const clientDialogTitleId = React.useId();
 
   const canSeeAllClients = canViewAllClients(currentUser, rolePermissions);
   const visibleClientKeys = React.useMemo(() => new Set(
@@ -406,10 +409,13 @@ const Clients: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title="Clients / Brands"
-        description="Manage client contacts, addresses, brand links, account coverage, and linked work."
+        title="Clients"
+        description="Manage contact profiles, account details, and linked work."
         action={canAddTasks ? (
-          <Button onClick={() => setCreateTaskModalOpen(true)}>+ New Task</Button>
+          <Button onClick={() => setCreateTaskModalOpen(true)}>
+            <Plus className="h-4 w-4" />
+            New task
+          </Button>
         ) : null}
       />
 
@@ -417,7 +423,7 @@ const Clients: React.FC = () => {
         <div className={`${cardBase} p-4`}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-slate-500">Clients / Brands</p>
+              <p className="text-sm font-medium text-slate-500">Clients</p>
               <p className="mt-1 text-2xl font-bold text-slate-950">{clients.length}</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
@@ -482,7 +488,7 @@ const Clients: React.FC = () => {
           </p>
         </div>
 
-        <div className="hidden overflow-x-auto lg:block">
+        <div className="hidden overflow-x-auto 2xl:block">
           <table className="w-full min-w-[1180px] text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
@@ -506,7 +512,7 @@ const Clients: React.FC = () => {
                       <div className="font-semibold text-slate-950">{client.name}</div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {Array.from(client.sources).map(source => (
-                          <span key={source} className={cn('rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', sourceClasses[source])}>
+                          <span key={source} className={cn('rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', sourceClasses[source])}>
                             {source}
                           </span>
                         ))}
@@ -582,7 +588,7 @@ const Clients: React.FC = () => {
           </table>
         </div>
 
-        <div className="divide-y divide-slate-100 lg:hidden">
+        <div className="grid grid-cols-1 gap-px bg-slate-200 md:grid-cols-2 2xl:hidden">
           {filteredClients.map(client => {
             const contact = getClientContact(client);
             const website = safeHttpsUrl(contact.website);
@@ -595,7 +601,7 @@ const Clients: React.FC = () => {
                     <h2 className="truncate font-semibold text-slate-950">{client.name}</h2>
                     <p className="mt-1 text-xs text-slate-500">Updated {formatLastActivity(client.lastActivity)}</p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+                  <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
                     {client.taskCount} tasks
                   </span>
                 </div>
@@ -645,12 +651,15 @@ const Clients: React.FC = () => {
       </div>
 
       {selectedClient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl shadow-slate-950/20">
+        <ModalShell
+          labelledBy={clientDialogTitleId}
+          onClose={closeClientPanel}
+          panelClassName="max-w-3xl"
+        >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50/80 px-6 py-4">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Client profile</p>
-                <h2 className="mt-1 truncate text-xl font-bold text-slate-950">{selectedClient.name}</h2>
+                <h2 id={clientDialogTitleId} className="mt-1 truncate text-xl font-semibold text-slate-950">{selectedClient.name}</h2>
                 <p className="mt-1 text-sm text-slate-500">
                   {selectedClient.taskCount} linked task{selectedClient.taskCount === 1 ? '' : 's'} · {selectedClient.projectIds.size} company record{selectedClient.projectIds.size === 1 ? '' : 's'}
                 </p>
@@ -668,7 +677,7 @@ const Clients: React.FC = () => {
 
             <div className="custom-scrollbar flex-1 overflow-y-auto p-6">
               {profileError && (
-                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert" aria-live="polite">
                   {profileError}
                 </div>
               )}
@@ -691,7 +700,7 @@ const Clients: React.FC = () => {
                     }}
                     autoFocus
                   />
-                  {renameError && <p className="mt-2 text-sm font-semibold text-red-700">{renameError}</p>}
+                  {renameError && <p className="mt-2 text-sm font-semibold text-red-700" role="alert" aria-live="polite">{renameError}</p>}
                 </section>
               )}
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -891,8 +900,7 @@ const Clients: React.FC = () => {
                 )}
               </div>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </div>
   );

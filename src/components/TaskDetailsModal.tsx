@@ -6,6 +6,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { canAssignTasksToOthers, canCommentOnTask, canEditTask as canEditTaskByRole, canReviewTaskAsClient } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate, parseOptionalDate } from '../lib/utils';
+import ModalShell from './ModalShell';
 
 interface Props {
   isOpen: boolean;
@@ -69,6 +70,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   const [editError, setEditError] = useState('');
   const [mutationError, setMutationError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const titleId = React.useId();
   const [editForm, setEditForm] = useState({
     title: '',
     description: '',
@@ -81,16 +83,6 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     dueDate: '',
     notes: '',
   });
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-    }
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
 
   useEffect(() => {
     setAttachmentLink(task?.attachmentLink || '');
@@ -220,17 +212,20 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   const dueDateValue = parseOptionalDate(task.dueDate);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg shadow-xl shadow-slate-950/10 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
-          <div>
+    <ModalShell
+      labelledBy={titleId}
+      onClose={onClose}
+      panelClassName="max-w-4xl animate-in fade-in zoom-in-95 duration-200"
+    >
+        <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 bg-slate-50/50 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+          <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">{task.id}</span>
+              <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">{task.id}</span>
               <span className="text-xs font-medium text-slate-500">{task.clientName}</span>
             </div>
-            <h2 className="text-xl font-bold text-slate-800">{task.title}</h2>
+            <h2 id={titleId} className="break-words text-xl font-semibold text-slate-950">{task.title}</h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {canEditTask && (
               <>
                 <button
@@ -256,7 +251,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
         </div>
 
         {mutationError && (
-          <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm font-medium text-amber-800" role="alert">
+          <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm font-medium text-amber-800" role="alert" aria-live="assertive">
             {mutationError}
           </div>
         )}
@@ -268,13 +263,13 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Current Status</label>
                   {!canEditTask ? (
-                    <span className={`text-sm px-3 py-1 rounded-full font-semibold ${getStatusColor(task.status)}`}>
+                    <span className={`text-sm px-3 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
                       {task.status}
                     </span>
                   ) : (
                     <div className="relative inline-block">
                       <select
-                        className={`text-sm pl-3 pr-7 py-1 rounded-full font-semibold outline-none cursor-pointer appearance-none border-none shadow-sm ${getStatusColor(task.status)}`}
+                        className={`text-sm pl-3 pr-7 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none shadow-sm ${getStatusColor(task.status)}`}
                         value={task.status}
                         onChange={async (e) => {
                           updateTaskStatus(task.id, e.target.value as TaskStatus);
@@ -413,7 +408,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                     </div>
                   </div>
                   {editError && (
-                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert" aria-live="polite">
                       {editError}
                     </div>
                   )}
@@ -428,7 +423,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
                   <label className="block text-xs font-medium text-slate-500 mb-1">Client Approval</label>
-                  <span className={`inline-flex text-xs px-2 py-1 rounded-full font-semibold ${
+                  <span className={`inline-flex text-xs px-2 py-1 rounded-md font-semibold ${
                     task.clientApprovalStatus === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
                     task.clientApprovalStatus === 'Rejected' ? 'bg-red-100 text-red-700' :
                     'bg-slate-100 text-slate-700'
@@ -648,6 +643,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                   <button
                     type="submit"
                     disabled={!commentText.trim()}
+                    aria-label="Send comment"
                     className="absolute bottom-2.5 right-2.5 p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Send className="w-4 h-4" />
@@ -665,8 +661,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
             ) : null}
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };
 

@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { useStore } from '../store';
-import { X, Plus } from 'lucide-react';
+import { Check, X, Plus } from 'lucide-react';
 import { Project, ServiceType } from '../types';
 import { getClientOptions, getServiceOptions, hasChoice, PRESET_SERVICES } from '../lib/choiceOptions';
+import ModalShell from './ModalShell';
+import { fieldLabel, modalFooter } from './uiTokens';
 
 interface Props {
   isOpen: boolean;
@@ -15,12 +17,11 @@ interface Props {
 const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProjectCreated, onProjectUpdated }) => {
   const { addProject, updateProject, projects, tasks, users, commitPendingMutation } = useStore();
   const clientListId = React.useId();
+  const titleId = React.useId();
+  const descriptionId = React.useId();
   const isEditing = Boolean(project);
 
   const [clientName, setClientName]         = useState('');
-  const [isAddingCustomClient, setIsAddingCustomClient] = useState(false);
-  const [customClientInput, setCustomClientInput] = useState('');
-  const [customClientError, setCustomClientError] = useState('');
   const [selectedServices, setSelectedServices] = useState<ServiceType[]>([]);
   const [customServices, setCustomServices] = useState<string[]>([]);
   const [customInput, setCustomInput]       = useState('');
@@ -49,24 +50,11 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
   }, [selectedServices, customServices]);
 
   React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-    }
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  React.useEffect(() => {
     if (!isOpen) return;
     setFormError('');
     setIsSubmitting(false);
     setPendingProjectId('');
     setCustomError('');
-    setCustomClientError('');
-    setIsAddingCustomClient(false);
-    setCustomClientInput('');
     setCustomInput('');
     setCustomServices([]);
 
@@ -80,36 +68,6 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
   }, [isOpen, project]);
 
   if (!isOpen) return null;
-
-  const addCustomClient = () => {
-    const trimmed = customClientInput.trim();
-    if (!trimmed) return;
-
-    if (trimmed.length > 80) {
-      setCustomClientError('Client or brand name must be 80 characters or less.');
-      return;
-    }
-
-    const existingClient = clientOptions.find(choice => choice.toLowerCase() === trimmed.toLowerCase());
-    setClientName(existingClient || trimmed);
-    setIsAddingCustomClient(false);
-    setCustomClientInput('');
-    setCustomClientError('');
-    setFormError('');
-  };
-
-  const handleCustomClientKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addCustomClient();
-    }
-
-    if (e.key === 'Escape') {
-      setIsAddingCustomClient(false);
-      setCustomClientInput('');
-      setCustomClientError('');
-    }
-  };
 
   const togglePreset = (service: ServiceType) => {
     setSelectedServices(prev =>
@@ -152,9 +110,6 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
 
   const resetForm = () => {
     setClientName('');
-    setIsAddingCustomClient(false);
-    setCustomClientInput('');
-    setCustomClientError('');
     setSelectedServices([]);
     setCustomServices([]);
     setCustomInput('');
@@ -168,7 +123,6 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
     e.preventDefault();
     setFormError('');
     setCustomError('');
-    setCustomClientError('');
 
     if (pendingProjectId) {
       setIsSubmitting(true);
@@ -236,7 +190,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
     });
 
     if (!newProjectId) {
-      setFormError('You do not have permission to create projects.');
+      setFormError('You do not have permission to create companies.');
       return;
     }
 
@@ -254,14 +208,19 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg shadow-xl shadow-slate-950/10 w-full max-w-md flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh]">
+    <ModalShell
+      labelledBy={titleId}
+      describedBy={descriptionId}
+      onClose={handleClose}
+      overlayClassName="z-[60]"
+      panelClassName="max-w-md animate-in fade-in zoom-in-95 duration-200"
+    >
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">{isEditing ? 'Edit Company / Brand' : 'Create Company / Brand'}</h2>
-            <p className="text-xs text-slate-500 mt-0.5">{isEditing ? 'Update the company name and service scope.' : 'Add a company or brand for task assignment.'}</p>
+            <h2 id={titleId} className="text-xl font-semibold text-slate-950">{isEditing ? 'Edit company' : 'Create company'}</h2>
+            <p id={descriptionId} className="mt-0.5 text-xs text-slate-500">{isEditing ? 'Update the company name and service scope.' : 'Add a company for task assignment.'}</p>
           </div>
           <button
             onClick={handleClose}
@@ -277,58 +236,20 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
           <form id="create-project-form" onSubmit={handleSubmit} className="space-y-5">
 
             <div>
-              <div className="mb-1.5 flex items-center justify-between gap-3">
-                <label className="block text-sm font-semibold text-slate-700">
-                  Company / Brand Name <span className="text-red-500">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAddingCustomClient(true);
-                    setCustomClientInput('');
-                    setCustomClientError('');
-                  }}
-                  className="flex items-center text-xs font-semibold text-teal-700 transition-colors hover:text-teal-800"
-                >
-                  <Plus className="mr-0.5 h-3 w-3" /> New Company / Brand
-                </button>
-              </div>
+              <label className={fieldLabel}>
+                Company name <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text" required
                 value={clientName} onChange={e => { setClientName(e.target.value); setFormError(''); }}
                 list={clientListId}
                 maxLength={80}
                 className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
-                placeholder="e.g., TechNova, EcoLife"
+                placeholder="e.g., TechNova"
               />
               <datalist id={clientListId}>
                 {clientOptions.map(option => <option key={option} value={option} />)}
               </datalist>
-              {isAddingCustomClient && (
-                <div className="mt-2 flex gap-2">
-                  <input
-                    type="text"
-                    value={customClientInput}
-                    onChange={e => { setCustomClientInput(e.target.value); setCustomClientError(''); }}
-                    onKeyDown={handleCustomClientKeyDown}
-                    maxLength={80}
-                    autoFocus
-                    className="min-w-0 flex-1 bg-white border border-dashed border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-teal-500 focus:border-teal-500 block px-3 py-2 outline-none shadow-sm"
-                    placeholder="New company or brand"
-                  />
-                  <button
-                    type="button"
-                    onClick={addCustomClient}
-                    disabled={!customClientInput.trim()}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <Plus className="h-4 w-4" /> Add
-                  </button>
-                </div>
-              )}
-              {customClientError && (
-                <p className="mt-1.5 text-xs text-red-500">{customClientError}</p>
-              )}
             </div>
 
             {/* Required Services */}
@@ -352,7 +273,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
                           : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
                       }`}
                     >
-                      {isSelected && <span className="mr-1">✓</span>}{service}
+                      {isSelected && <Check className="mr-1 inline h-3 w-3" />}{service}
                     </button>
                   );
                 })}
@@ -369,11 +290,11 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
                         onClick={() => togglePreset(service)}
                         className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
                           isSelected
-                            ? 'bg-teal-600 border-teal-600 text-white shadow-sm'
-                            : 'bg-white border-slate-200 text-slate-600 hover:border-teal-300 hover:text-teal-700'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                            : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700'
                         }`}
                       >
-                        {isSelected && <span className="mr-1">✓</span>}{service}
+                        {isSelected && <Check className="mr-1 inline h-3 w-3" />}{service}
                       </button>
                     );
                   })}
@@ -386,13 +307,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
                   {customServices.map(name => (
                     <span
                       key={name}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-teal-50 border border-teal-200 text-teal-700"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 border border-blue-200 text-blue-700"
                     >
                       {name}
                       <button
                         type="button"
                         onClick={() => removeCustomService(name)}
-                        className="ml-0.5 text-teal-500 hover:text-teal-700 transition-colors rounded"
+                        className="ml-0.5 text-blue-500 hover:text-blue-700 transition-colors rounded"
                         aria-label={`Remove ${name}`}
                       >
                         <X className="w-3 h-3" />
@@ -413,14 +334,14 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
                     onKeyDown={handleCustomKeyDown}
                     placeholder="Add custom service…"
                     maxLength={40}
-                    className="w-full bg-white border border-dashed border-slate-300 text-slate-800 text-sm rounded-lg focus:ring-2 focus:ring-teal-400 focus:border-teal-400 block px-3 py-2 outline-none placeholder:text-slate-400"
+                    className="w-full bg-white border border-dashed border-slate-300 text-slate-800 text-sm rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 block px-3 py-2 outline-none placeholder:text-slate-400"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={addCustomService}
                   disabled={!customInput.trim()}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
                 >
                   <Plus className="w-4 h-4" /> Add
                 </button>
@@ -434,10 +355,6 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
                 <p className="text-xs text-slate-400 mt-1.5">Press Enter or click Add</p>
               )}
 
-              {allServices.length === 0 && !customInput && (
-                <p className="text-xs text-red-500 mt-2">Please select at least one service.</p>
-              )}
-
               {/* Selected summary */}
               {allServices.length > 0 && (
                 <p className="text-xs text-slate-500 mt-2">
@@ -447,7 +364,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
             </div>
 
             {formError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
                 {formError}
               </div>
             )}
@@ -456,7 +373,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
+        <div className={modalFooter}>
           <button
             type="button" onClick={handleClose}
             className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
@@ -465,14 +382,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
           </button>
           <button
             type="submit" form="create-project-form"
-            disabled={allServices.length === 0 || isSubmitting}
+            disabled={isSubmitting}
             className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? 'Saving...' : pendingProjectId ? 'Retry saving' : isEditing ? 'Save Changes' : 'Create Company'}
+            {isSubmitting ? 'Saving...' : pendingProjectId ? 'Retry saving' : isEditing ? 'Save changes' : 'Create company'}
           </button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };
 

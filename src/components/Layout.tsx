@@ -108,7 +108,7 @@ const Layout: React.FC = () => {
       case 'task': return <FileText className="w-4 h-4 text-blue-500" />;
       case 'success': return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
       case 'status': return <Info className="w-4 h-4 text-amber-500" />;
-      default: return <AlertCircle className="w-4 h-4 text-teal-600" />;
+      default: return <AlertCircle className="w-4 h-4 text-blue-600" />;
     }
   };
 
@@ -117,12 +117,12 @@ const Layout: React.FC = () => {
       case 'task': return 'bg-blue-50';
       case 'success': return 'bg-emerald-50';
       case 'status': return 'bg-amber-50';
-      default: return 'bg-teal-50';
+      default: return 'bg-blue-50';
     }
   };
 
   return (
-    <div className="relative flex h-screen overflow-hidden bg-slate-100 font-sans text-slate-950">
+    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-100 font-sans text-slate-950">
       <Sidebar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
       <div className="flex-1 flex flex-col overflow-hidden w-full relative">
         <Navbar onMenuClick={() => setIsMobileMenuOpen(true)} />
@@ -180,16 +180,16 @@ const Layout: React.FC = () => {
             </div>
           </div>
         )}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-100 p-4 pb-24 sm:p-6 md:pb-6 lg:p-7">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-100 p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-6 lg:p-7">
           <Outlet />
         </main>
 
         {/* Mobile Bottom Navigation Bar */}
-        <div className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-slate-200 bg-white shadow-lg shadow-slate-950/10 md:hidden">
+        <nav aria-label="Mobile navigation" className="fixed bottom-0 left-0 right-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-start justify-around border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-lg shadow-slate-950/10 md:hidden">
           <NavLink
             to="/"
             className={({ isActive }) => cn(
-              "flex h-full flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
+              "flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
               isActive && "font-bold text-blue-600"
             )}
           >
@@ -200,7 +200,7 @@ const Layout: React.FC = () => {
           <NavLink
             to="/tasks"
             className={({ isActive }) => cn(
-              "flex h-full flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
+              "flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
               isActive && "font-bold text-blue-600"
             )}
           >
@@ -211,7 +211,7 @@ const Layout: React.FC = () => {
           <NavLink
             to="/calendar"
             className={({ isActive }) => cn(
-              "flex h-full flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
+              "flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
               isActive && "font-bold text-blue-600"
             )}
           >
@@ -223,7 +223,7 @@ const Layout: React.FC = () => {
             type="button"
             onClick={() => setIsMobileNotifOpen(true)}
             className={cn(
-              "relative flex h-full flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
+              "relative flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
               isMobileNotifOpen && "font-bold text-blue-600"
             )}
           >
@@ -237,7 +237,7 @@ const Layout: React.FC = () => {
             </div>
             <span className="text-[10px]">Notifications</span>
           </button>
-        </div>
+        </nav>
       </div>
 
       {/* Mobile Slide-Up Notification Sheet */}
@@ -247,7 +247,7 @@ const Layout: React.FC = () => {
             className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-sm animate-fade-in md:hidden"
             onClick={() => setIsMobileNotifOpen(false)}
           />
-          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[75vh] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-2xl shadow-slate-950/20 animate-slide-up md:hidden">
+          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[75dvh] flex-col rounded-t-2xl border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-slate-950/20 animate-slide-up md:hidden">
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between rounded-t-2xl border-b border-slate-200 bg-slate-50/80 px-5 py-4">
               <div className="flex items-center gap-2">

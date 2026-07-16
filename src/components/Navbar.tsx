@@ -86,7 +86,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
       case 'task': return <FileText className="w-4 h-4 text-blue-500" />;
       case 'success': return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
       case 'status': return <Info className="w-4 h-4 text-amber-500" />;
-      default: return <AlertCircle className="w-4 h-4 text-teal-600" />;
+      default: return <AlertCircle className="w-4 h-4 text-blue-600" />;
     }
   };
 
@@ -95,7 +95,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
       case 'task': return 'bg-blue-50';
       case 'success': return 'bg-emerald-50';
       case 'status': return 'bg-amber-50';
-      default: return 'bg-teal-50';
+      default: return 'bg-blue-50';
     }
   };
 
@@ -116,14 +116,14 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
           <input 
             type="text" 
             className={cn(inputBase, 'border-transparent bg-slate-100 py-2.5 pl-10 pr-3 shadow-none focus:bg-white')}
-            placeholder="Search tasks, projects..." 
+            placeholder="Search tasks..."
             value={globalSearch}
             onChange={(event) => setGlobalSearch(event.target.value)}
           />
         </form>
       </div>
       
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center gap-1 sm:gap-2">
         <IconButton
           label="Search"
           onClick={() => setShowMobileSearch(value => !value)}
@@ -217,7 +217,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
         <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
           <div className="hidden md:flex flex-col items-end">
             <span className="text-sm font-semibold leading-tight text-slate-950">{currentUser.name}</span>
-            <span className="text-xs text-slate-500">{getEffectiveRoleName(currentUser, rolePermissions)} • {currentUser.department}</span>
+            <span className="text-xs text-slate-500">{getEffectiveRoleName(currentUser, rolePermissions)} - {currentUser.department}</span>
           </div>
           <img 
             src={currentUser.avatar} 
@@ -234,7 +234,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
               type="text"
               autoFocus
               className={cn(inputBase, 'py-2.5 pl-10 pr-3')}
-              placeholder="Search tasks or projects..."
+              placeholder="Search tasks..."
               value={globalSearch}
               onChange={(event) => setGlobalSearch(event.target.value)}
             />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, ArrowRight, Bell, CheckCircle2, Cloud, Database, Lock, PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Upload, UserCircle, Volume2, VolumeX, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Bell, CheckCircle2, Cloud, Database, Lock, PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserCircle, Volume2, VolumeX, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { Badge, Button, MetricCard, PageHeader } from '../components/ui';
@@ -369,7 +369,7 @@ const Settings: React.FC = () => {
 
       {mustResetPassword && (
         <section className="rounded-lg border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700">
                 <Lock className="h-5 w-5" />
@@ -381,10 +381,10 @@ const Settings: React.FC = () => {
                 </p>
               </div>
             </div>
-            <div className="flex flex-col gap-2 sm:items-end">
-              <Badge tone="amber" className="self-start sm:self-end">Required</Badge>
+            <div className="flex flex-col gap-2 lg:items-end">
+              <Badge tone="amber" className="self-start lg:self-end">Required</Badge>
               {canBypassPasswordReset && (
-                <Button type="button" variant="secondary" onClick={handlePasswordResetBypass} className="min-h-9 px-3 py-1.5 text-xs">
+                <Button type="button" variant="secondary" onClick={handlePasswordResetBypass} className="min-h-9 whitespace-nowrap px-3 py-1.5 text-xs">
                   Continue for now
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
@@ -395,14 +395,18 @@ const Settings: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-3">
+          <h2 className="text-lg font-semibold text-slate-950">Account</h2>
+          <p className="mt-1 text-sm text-slate-500">Profile, sign-in security, and your current access.</p>
+        </div>
         <div className={`xl:col-span-2 ${cardBase} overflow-hidden`}>
           <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
             <UserCircle className="w-5 h-5 text-blue-600" />
             <h2 className="text-lg font-semibold text-slate-800">Profile</h2>
           </div>
           <form onSubmit={handleProfileSave} className="p-6 space-y-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <div className="flex items-center gap-4 sm:w-64 sm:flex-col sm:items-start">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+              <div className="flex flex-col items-start gap-3 lg:w-64 lg:shrink-0">
                 <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
                   {avatarUrl ? (
                     <img src={avatarUrl} alt={`${profileName || currentUser?.name || 'User'} avatar preview`} className="h-full w-full object-cover" />
@@ -447,13 +451,13 @@ const Settings: React.FC = () => {
                   <p className={cn(
                     'text-xs font-medium leading-5',
                     avatarUploadMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-600'
-                  )}>
+                  )} role={avatarUploadMessage.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
                     {avatarUploadMessage.text}
                   </p>
                 )}
               </div>
 
-              <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
                   <label htmlFor="profile-name" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Name</label>
                   <input
@@ -484,7 +488,7 @@ const Settings: React.FC = () => {
                     maxLength={320}
                   />
                 </div>
-                <div className="sm:col-span-2">
+                <div className="lg:col-span-2">
                   <label htmlFor="profile-avatar" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
                     {isUploadedAvatar ? 'Avatar source' : 'Avatar URL'}
                   </label>
@@ -516,7 +520,7 @@ const Settings: React.FC = () => {
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Department</label>
                   <p className="font-semibold text-slate-900">{currentUser?.department}</p>
                 </div>
-                <div className="sm:col-span-2">
+                <div className="lg:col-span-2">
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Client Company</label>
                   <p className="font-semibold text-slate-900">{currentUser?.companyName || 'Not linked'}</p>
                 </div>
@@ -526,7 +530,7 @@ const Settings: React.FC = () => {
             <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-h-5 text-sm">
                 {profileMessage && (
-                  <p className={profileMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-600'}>
+                  <p className={profileMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-600'} role={profileMessage.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
                     {profileMessage.text}
                   </p>
                 )}
@@ -554,12 +558,6 @@ const Settings: React.FC = () => {
                 </p>
               </div>
             </div>
-
-            {mustResetPassword && (
-              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                Your account requires a password change. Enter the current password, then choose a new private password.
-              </div>
-            )}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div>
@@ -605,7 +603,7 @@ const Settings: React.FC = () => {
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-h-5 text-sm">
                 {passwordMessage && (
-                  <p className={passwordMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-600'}>
+                  <p className={passwordMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-600'} role={passwordMessage.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
                     {passwordMessage.text}
                   </p>
                 )}
@@ -636,7 +634,7 @@ const Settings: React.FC = () => {
                   <p className="mt-1 text-xl font-bold text-slate-900">{visibleTasks.length}</p>
                 </div>
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Projects</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Companies</p>
                   <p className="mt-1 text-xl font-bold text-slate-900">{visibleProjects.length}</p>
                 </div>
               </div>
@@ -656,8 +654,8 @@ const Settings: React.FC = () => {
               <h2 className="text-lg font-semibold text-slate-800">Permissions</h2>
             </div>
             <div className="p-6 space-y-3 text-sm text-slate-600">
-              <p><strong className="text-slate-800">Boss Koo:</strong> has super admin access to add members, manage users, approve registrations, projects, and all task workflows.</p>
-              <p><strong className="text-slate-800">Admin:</strong> can create and edit all tasks and projects.</p>
+              <p><strong className="text-slate-800">Boss Koo:</strong> has super admin access to add members, manage users, approve registrations, companies, and all task workflows.</p>
+              <p><strong className="text-slate-800">Admin:</strong> can create and edit all tasks and companies.</p>
               <p><strong className="text-slate-800">Staff and Finance:</strong> can create tasks for internal teammates, update tasks they created or are assigned to, and see companies they participate in.</p>
               <p><strong className="text-slate-800">Client:</strong> can view company tasks, calendar, reports, and review completed or waiting-approval work.</p>
               <div className="pt-3 border-t border-slate-100">
@@ -671,6 +669,11 @@ const Settings: React.FC = () => {
             </div>
           </div>
         )}
+
+        <div className="border-t border-slate-200 pt-6 xl:col-span-3">
+          <h2 className="text-lg font-semibold text-slate-950">Workspace</h2>
+          <p className="mt-1 text-sm text-slate-500">Notifications, workflow preferences, and operational status.</p>
+        </div>
 
         {/* Sound Notifications */}
         <div className={`${cardBase} overflow-hidden`}>
@@ -739,7 +742,7 @@ const Settings: React.FC = () => {
                           status === 'Waiting Approval' ? 'bg-amber-500' :
                           status === 'Completed' ? 'bg-emerald-500' :
                           status === 'Cancelled' ? 'bg-red-500' :
-                          'bg-stone-400'
+                          'bg-slate-400'
                         }`} />
                         <span className="text-sm font-semibold text-slate-700 truncate">{status}</span>
                         {isDefault ? (
@@ -766,10 +769,9 @@ const Settings: React.FC = () => {
                             disabled={isStatusSaving}
                             className="text-slate-400 hover:text-red-600 p-1 rounded transition-colors hover:bg-red-50"
                             title={`Delete ${status}`}
+                            aria-label={`Delete ${status}`}
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         )}
                       </div>
@@ -798,7 +800,7 @@ const Settings: React.FC = () => {
                   </Button>
                 </form>
                 {statusError && (
-                  <p className="mt-2 text-xs text-red-600">{statusError}</p>
+                  <p className="mt-2 text-xs text-red-600" role="alert" aria-live="polite">{statusError}</p>
                 )}
               </div>
             </div>
@@ -837,7 +839,7 @@ const Settings: React.FC = () => {
               <p className="mt-1 font-semibold text-slate-900">
                 {backend.status === 'loading' ? 'Checking latest workspace...' : backend.status === 'saving' ? 'Saving changes...' : backend.message}
               </p>
-              {backend.error && <p className="mt-2 text-red-600">{backend.error}</p>}
+              {backend.error && <p className="mt-2 text-red-600" role="alert" aria-live="polite">{backend.error}</p>}
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Supabase Table</p>
@@ -909,7 +911,7 @@ const Settings: React.FC = () => {
       {!isClientUser && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <MetricCard title="Visible Tasks" value={visibleTasks.length} icon={Database} tone="indigo" />
-          <MetricCard title="Visible Projects" value={visibleProjects.length} icon={Database} tone="emerald" />
+          <MetricCard title="Visible Companies" value={visibleProjects.length} icon={Database} tone="emerald" />
           <MetricCard title="Unread Notices" value={unreadCount} icon={Bell} tone="amber" />
           {isSuperAdmin && (
             <MetricCard
@@ -924,11 +926,11 @@ const Settings: React.FC = () => {
       )}
 
       <section className={`${cardBase} overflow-hidden`}>
-        <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-5">
+        <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
           <PackageCheck className="h-5 w-5 text-blue-600" />
-          <h2 className="text-lg font-semibold text-slate-800">Application Release</h2>
+          <h2 className="text-base font-semibold text-slate-900">Application release</h2>
         </div>
-        <div className="grid grid-cols-1 gap-4 p-6 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 px-5 py-4 text-sm lg:grid-cols-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Release</p>
             <p className="mt-1 font-semibold text-slate-900">{APP_VERSION_LABEL}</p>
@@ -946,7 +948,7 @@ const Settings: React.FC = () => {
             <p className="mt-1 font-semibold text-slate-900">{new Date(APP_BUILD_TIME).toLocaleString()}</p>
           </div>
         </div>
-        <div className="border-t border-slate-100 px-6 py-3">
+        <div className="border-t border-slate-100 px-5 py-2.5">
           <p className="font-mono text-[11px] text-slate-400">{APP_BUILD_LABEL}</p>
         </div>
       </section>

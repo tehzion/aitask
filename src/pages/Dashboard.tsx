@@ -20,31 +20,15 @@ interface StatCardProps {
   title: string;
   value: number;
   icon: LucideIcon;
-  colorClass: string;
+  tone: 'emerald' | 'amber' | 'red' | 'blue' | 'slate';
   to: string;
 }
 
-const StatCard = ({ title, value, icon: Icon, colorClass, to }: StatCardProps) => {
-  const isRedPulse = colorClass.includes('red') && value > 0;
-  return (
-    <Link to={to} className="block transition hover:-translate-y-0.5 hover:shadow-md rounded-lg">
-      <MetricCard
-        title={title}
-        value={value}
-        icon={Icon}
-        className={cn(isRedPulse && "animate-pulse ring-2 ring-red-400/40 border-red-200 shadow-red-50/25")}
-        tone={
-          colorClass.includes('emerald') ? 'emerald' :
-          colorClass.includes('amber') ? 'amber' :
-          colorClass.includes('red') ? 'red' :
-          colorClass.includes('blue') ? 'blue' :
-          colorClass.includes('purple') ? 'purple' :
-          'indigo'
-        }
-      />
-    </Link>
-  );
-};
+const StatCard = ({ title, value, icon: Icon, tone, to }: StatCardProps) => (
+  <Link to={to} className="block rounded-lg transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-200">
+    <MetricCard title={title} value={value} icon={Icon} tone={tone} />
+  </Link>
+);
 
 const Dashboard: React.FC = () => {
   const { projects, tasks: allTasks, currentUser, rolePermissions, backend, setCreateTaskModalOpen } = useStore();
@@ -59,6 +43,7 @@ const Dashboard: React.FC = () => {
   );
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
   const hasTaskData = tasks.length > 0;
+  const prioritizePersonalWork = currentUser?.role === 'Staff' || currentUser?.role === 'Client';
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -116,14 +101,19 @@ const Dashboard: React.FC = () => {
     });
   }, [tasks]);
 
-  // Get top 5 recent tasks
-  const recentTasks = [...tasks]
-    .sort((a, b) => (parseOptionalDate(b.startDate)?.getTime() || 0) - (parseOptionalDate(a.startDate)?.getTime() || 0))
-    .slice(0, 5);
+  const recentTasks = useMemo(
+    () => [...tasks]
+      .sort((a, b) => (parseOptionalDate(b.startDate)?.getTime() || 0) - (parseOptionalDate(a.startDate)?.getTime() || 0))
+      .slice(0, 5),
+    [tasks]
+  );
 
   const myTasks = useMemo(() => {
     if (!currentUser) return { dueToday: [], overdue: [], actionRequired: [] };
     const today = new Date();
+    const isPersonalTask = (task: (typeof tasks)[number]) => currentUser.role === 'Client'
+      ? task.clientName === currentUser.companyName
+      : task.assignedTo === currentUser.id;
 
     const dueToday = tasks.filter(t => {
       const dueDate = parseOptionalDate(t.dueDate);
@@ -131,7 +121,7 @@ const Dashboard: React.FC = () => {
         dueDate &&
         !t.isCompleted &&
         t.status !== 'Cancelled' &&
-        t.assignedTo === currentUser.id &&
+        isPersonalTask(t) &&
         isToday(dueDate)
       );
     });
@@ -143,7 +133,7 @@ const Dashboard: React.FC = () => {
           dueDate &&
           !t.isCompleted &&
           t.status !== 'Cancelled' &&
-          t.assignedTo === currentUser.id &&
+          isPersonalTask(t) &&
           isBefore(dueDate, today) &&
           !isToday(dueDate)
         );
@@ -179,9 +169,9 @@ const Dashboard: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <SkeletonChartCard className="lg:col-span-2" />
           <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm animate-pulse space-y-4">
-            <div className="h-5 bg-stone-300 rounded w-1/3"></div>
+            <div className="h-5 bg-slate-300 rounded w-1/3"></div>
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-14 bg-stone-100 rounded-lg w-full"></div>
+              <div key={i} className="h-14 bg-slate-100 rounded-lg w-full"></div>
             ))}
           </div>
         </div>
@@ -236,7 +226,7 @@ const Dashboard: React.FC = () => {
                 to="/projects"
                 className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
-                View projects
+                View companies
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
@@ -244,113 +234,105 @@ const Dashboard: React.FC = () => {
         </section>
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard title="Active Projects" value={stats.activeProjects} icon={LayoutList} colorClass="text-blue-600" to="/projects" />
-        <StatCard title="Pending Tasks" value={stats.pendingTasks} icon={Clock} colorClass="text-amber-500" to="/tasks" />
-        <StatCard title="Completed Tasks" value={stats.completedTasks} icon={CheckCircle2} colorClass="text-emerald-500" to="/tasks" />
-        <StatCard title="Overdue Tasks" value={stats.overdueTasks} icon={AlertCircle} colorClass="text-red-500" to="/tasks" />
-        <StatCard title="Due Today" value={stats.dueTodayTasks} icon={Calendar} colorClass="text-blue-500" to="/calendar" />
-        <StatCard title="Due This Week" value={stats.dueThisWeekTasks} icon={CalendarDays} colorClass="text-purple-500" to="/calendar" />
-      </div>
+      <div className="flex flex-col gap-6">
+        <section className={cn('grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6', prioritizePersonalWork ? 'order-2' : 'order-1')} aria-label="Workspace metrics">
+          <StatCard title="Active Companies" value={stats.activeProjects} icon={LayoutList} tone="blue" to="/projects" />
+          <StatCard title="Pending Tasks" value={stats.pendingTasks} icon={Clock} tone="amber" to="/tasks" />
+          <StatCard title="Completed Tasks" value={stats.completedTasks} icon={CheckCircle2} tone="emerald" to="/tasks" />
+          <StatCard title="Overdue Tasks" value={stats.overdueTasks} icon={AlertCircle} tone="red" to="/tasks" />
+          <StatCard title="Due Today" value={stats.dueTodayTasks} icon={Calendar} tone="blue" to="/calendar" />
+          <StatCard title="Due This Week" value={stats.dueThisWeekTasks} icon={CalendarDays} tone="slate" to="/calendar" />
+        </section>
 
-      {/* Charts Row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard title="Tasks by Department">
-          {tasksByTeamData.length === 0 ? (
-            <ChartEmptyState>No task data yet</ChartEmptyState>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
-              <BarChart data={tasksByTeamData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
-                <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
+        <section className={cn('space-y-6', prioritizePersonalWork ? 'order-4' : 'order-2')} aria-labelledby="workspace-analytics-title">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 id="workspace-analytics-title" className="text-lg font-semibold text-slate-950">Workspace analytics</h2>
+              <p className="mt-1 text-sm text-slate-500">Current workload distribution and completion trend.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <ChartCard title="Tasks by Department">
+              {tasksByTeamData.length === 0 ? (
+                <ChartEmptyState>No task data yet</ChartEmptyState>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 256 }}>
+                  <BarChart data={tasksByTeamData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                    <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
+                    <Bar dataKey="value" fill="#2563eb" radius={[4, 4, 0, 0]} barSize={36} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
 
-        <ChartCard title="Tasks by Status">
-          {tasksByStatusData.length === 0 ? (
-            <ChartEmptyState>No status data yet</ChartEmptyState>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
-              <PieChart>
-                <Pie
-                  data={tasksByStatusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {tasksByStatusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
-                <Legend iconType="circle" wrapperStyle={{fontSize: '12px'}} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-        </ChartCard>
-      </div>
+            <ChartCard title="Tasks by Status">
+              {tasksByStatusData.length === 0 ? (
+                <ChartEmptyState>No status data yet</ChartEmptyState>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 256 }}>
+                  <PieChart>
+                    <Pie data={tasksByStatusData} cx="50%" cy="50%" innerRadius={56} outerRadius={82} paddingAngle={4} dataKey="value">
+                      {tasksByStatusData.map((entry, index) => (
+                        <Cell key={`cell-${entry.name}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+          </div>
 
-      {/* Charts Row 2 & Recent Tasks */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <ChartCard title="Monthly Completed Tasks" className="lg:col-span-2">
-          {hasTaskData ? (
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
-              <LineChart data={monthlyData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
-                <Line type="monotone" dataKey="completed" stroke="#10b981" strokeWidth={3} activeDot={{ r: 8 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <ChartEmptyState>No completed task history yet</ChartEmptyState>
-          )}
-        </ChartCard>
+          <ChartCard title="Monthly Completed Tasks">
+            {hasTaskData ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 960, height: 256 }}>
+                <LineChart data={monthlyData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
+                  <Line type="monotone" dataKey="completed" stroke="#2563eb" strokeWidth={2.5} activeDot={{ r: 5 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <ChartEmptyState>No completed task history yet</ChartEmptyState>
+            )}
+          </ChartCard>
+        </section>
 
-        <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm flex flex-col">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-base font-semibold text-slate-900">Recent Tasks</h3>
-            <Link to="/tasks" className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
-              View All <ArrowRight className="w-4 h-4 ml-1" />
+        <section className={cn(cardBase, 'order-3 p-4 sm:p-5')} aria-labelledby="recent-activity-title">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 id="recent-activity-title" className="text-base font-semibold text-slate-950">Recent workspace activity</h2>
+              <p className="mt-1 text-sm text-slate-500">Latest tasks across the work you can access.</p>
+            </div>
+            <Link to="/tasks" className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
+              View tasks <ArrowRight className="ml-1 h-4 w-4" />
             </Link>
           </div>
-          <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             {recentTasks.map(task => {
               const dueDateParsed = parseOptionalDate(task.dueDate);
               const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
 
               return (
-                <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50 transition-colors">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className={cn("font-semibold text-stone-800 text-sm truncate pr-2", isOverdue && "text-red-700")}>{task.title}</span>
-                  </div>
-                  <div className="text-[11px] text-stone-500 flex justify-between items-center mt-1">
-                    <span
-                      className={cn(isOverdue && "text-red-600 font-bold")}
-                      title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
-                    >
+                <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="min-w-0 rounded-lg border border-slate-200 bg-white p-3 transition-colors hover:bg-slate-50">
+                  <p className={cn('truncate text-sm font-semibold text-slate-900', isOverdue && 'text-red-700')}>{task.title}</p>
+                  <p className="mt-1 truncate text-xs text-slate-500">{task.clientName} - {task.projectName || 'Independent'}</p>
+                  <div className="mt-3 flex items-center justify-between gap-2 text-[11px]">
+                    <span className={cn('truncate text-slate-500', isOverdue && 'font-semibold text-red-600')}>
                       {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                     </span>
-                    <span className="truncate max-w-[120px]">{task.projectName || 'Independent'}</span>
-                  </div>
-                  <div className="text-xs text-stone-500 flex justify-between items-center mt-2.5">
-                    <span className="font-medium text-teal-700">{task.clientName}</span>
-                    <span className={cn(`text-[10px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap bg-stone-100 text-stone-700`,
-                      task.status === 'Completed' && 'bg-emerald-100 text-emerald-700',
-                      task.status === 'In Progress' && 'bg-blue-100 text-blue-700',
-                      task.status === 'Pending' && 'bg-amber-100 text-amber-700',
-                      task.status === 'Waiting Approval' && 'bg-amber-100 text-amber-700',
-                      task.status === 'Cancelled' && 'bg-red-100 text-red-700'
+                    <span className={cn(
+                      'shrink-0 rounded-md bg-slate-100 px-2 py-1 font-semibold text-slate-700',
+                      task.status === 'Completed' && 'bg-emerald-50 text-emerald-700',
+                      task.status === 'In Progress' && 'bg-blue-50 text-blue-700',
+                      (task.status === 'Pending' || task.status === 'Waiting Approval') && 'bg-amber-50 text-amber-700',
+                      task.status === 'Cancelled' && 'bg-red-50 text-red-700'
                     )}>
                       {task.status}
                     </span>
@@ -359,9 +341,9 @@ const Dashboard: React.FC = () => {
               );
             })}
             {recentTasks.length === 0 && (
-              <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50/60 px-4 py-8 text-center">
-                <p className="text-sm font-semibold text-stone-600">No recent tasks yet</p>
-                <p className="mt-1 text-xs text-stone-400">Newly created work will appear here first.</p>
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center md:col-span-2 xl:col-span-5">
+                <p className="text-sm font-semibold text-slate-600">No recent tasks yet</p>
+                <p className="mt-1 text-xs text-slate-500">Newly created work will appear here first.</p>
                 {canCreateTask && (
                   <Button onClick={() => setCreateTaskModalOpen(true)} variant="secondary" className="mt-3 min-h-9 px-3 py-1.5 text-xs">
                     <Plus className="h-3.5 w-3.5" />
@@ -371,99 +353,87 @@ const Dashboard: React.FC = () => {
               </div>
             )}
           </div>
-        </div>
-      </div>
-      {/* My Tasks Personal Widget */}
-      {currentUser && (
-        <div className={cn(cardBase, "p-5 mt-6")}>
-          <div className="flex justify-between items-center mb-4 border-b border-stone-100 pb-3">
-            <div>
-              <h3 className="text-lg font-bold text-stone-900">My Tasks Checklist</h3>
-              <p className="text-xs text-stone-500">Keep track of your personal priorities and required actions.</p>
-            </div>
-            <Link to="/tasks" className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
-              Go to Tasks <ArrowRight className="w-4 h-4 ml-1" />
-            </Link>
-          </div>
+        </section>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Column: Due Today */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5 border-b border-stone-100 pb-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-                Due Today ({myTasks.dueToday.length})
-              </h4>
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
-                {myTasks.dueToday.map(task => (
-                  <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50/50 bg-stone-50/30 transition-colors">
-                    <p className="text-xs font-bold text-stone-800 truncate">{task.title}</p>
-                    <div className="flex justify-between text-[10px] text-stone-500 mt-1">
-                      <span>{task.id}</span>
-                      <span className="font-semibold text-teal-700">{task.clientName}</span>
-                    </div>
-                  </Link>
-                ))}
-                {myTasks.dueToday.length === 0 && (
-                  <p className="text-xs text-stone-400 py-4 text-center">No tasks due today.</p>
-                )}
+        {currentUser && (
+          <section className={cn(cardBase, 'p-4 sm:p-5', prioritizePersonalWork ? 'order-1' : 'order-4')} aria-labelledby="personal-work-title">
+            <div className="mb-4 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 id="personal-work-title" className="text-lg font-semibold text-slate-950">
+                  {currentUser.role === 'Client' ? 'Your review work' : 'My work'}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">Due work, overdue items, and actions requiring attention.</p>
               </div>
+              <Link to="/tasks" className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
+                Go to tasks <ArrowRight className="ml-1 h-4 w-4" />
+              </Link>
             </div>
 
-            {/* Column: Overdue */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5 border-b border-stone-100 pb-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
-                Overdue ({myTasks.overdue.length})
-              </h4>
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
-                {myTasks.overdue.map(task => {
-                  const dueDate = parseOptionalDate(task.dueDate);
-                  const days = dueDate ? Math.max(1, differenceInDays(new Date(), dueDate)) : 0;
-                  return (
-                    <Link
-                      key={task.id}
-                      to={`/tasks?taskId=${encodeURIComponent(task.id)}`}
-                      className="block p-3 rounded-lg border border-red-100 hover:bg-red-50/20 bg-red-50/10 transition-colors"
-                      title={dueDate ? `Due: ${format(dueDate, 'yyyy-MM-dd')}` : 'No due date'}
-                    >
-                      <p className="text-xs font-bold text-red-900 truncate">{task.title}</p>
-                      <div className="flex justify-between text-[10px] text-red-700/80 mt-1">
-                        <span>{days} day{days === 1 ? '' : 's'} overdue</span>
-                        <span className="font-semibold text-teal-700">{task.clientName}</span>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              <div className="space-y-3">
+                <h3 className="flex items-center gap-2 border-b border-slate-100 pb-2 text-sm font-semibold text-slate-700">
+                  <span className="h-2 w-2 rounded-full bg-blue-500" />
+                  Due today <span className="text-slate-400">{myTasks.dueToday.length}</span>
+                </h3>
+                <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                  {myTasks.dueToday.map(task => (
+                    <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-lg border border-slate-200 bg-slate-50/40 p-3 transition-colors hover:bg-slate-50">
+                      <p className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
+                      <div className="mt-1 flex justify-between gap-2 text-xs text-slate-500">
+                        <span>{task.id}</span>
+                        <span className="truncate font-medium">{task.clientName}</span>
                       </div>
                     </Link>
-                  );
-                })}
-                {myTasks.overdue.length === 0 && (
-                  <p className="text-xs text-stone-400 py-4 text-center">No overdue tasks. Great job!</p>
-                )}
+                  ))}
+                  {myTasks.dueToday.length === 0 && <p className="py-4 text-center text-xs text-slate-500">No tasks due today.</p>}
+                </div>
               </div>
-            </div>
 
-            {/* Column: Actions Required */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5 border-b border-stone-100 pb-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                {currentUser?.role === 'Client' ? 'Waiting Your Review' : 'Waiting Approval'} ({myTasks.actionRequired.length})
-              </h4>
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
-                {myTasks.actionRequired.map(task => (
-                  <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block p-3 rounded-lg border border-stone-100 hover:bg-stone-50/50 bg-stone-50/30 transition-colors">
-                    <p className="text-xs font-bold text-stone-800 truncate">{task.title}</p>
-                    <div className="flex justify-between text-[10px] text-stone-500 mt-1">
-                      <span>{task.status}</span>
-                      <span className="font-semibold text-teal-700">{task.clientName}</span>
-                    </div>
-                  </Link>
-                ))}
-                {myTasks.actionRequired.length === 0 && (
-                  <p className="text-xs text-stone-400 py-4 text-center">No approvals pending.</p>
-                )}
+              <div className="space-y-3">
+                <h3 className="flex items-center gap-2 border-b border-slate-100 pb-2 text-sm font-semibold text-slate-700">
+                  <span className="h-2 w-2 rounded-full bg-red-500" />
+                  Overdue <span className="text-slate-400">{myTasks.overdue.length}</span>
+                </h3>
+                <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                  {myTasks.overdue.map(task => {
+                    const dueDate = parseOptionalDate(task.dueDate);
+                    const days = dueDate ? Math.max(1, differenceInDays(new Date(), dueDate)) : 0;
+                    return (
+                      <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-lg border border-red-100 bg-red-50/30 p-3 transition-colors hover:bg-red-50/60" title={dueDate ? `Due: ${format(dueDate, 'yyyy-MM-dd')}` : 'No due date'}>
+                        <p className="truncate text-sm font-semibold text-red-900">{task.title}</p>
+                        <div className="mt-1 flex justify-between gap-2 text-xs text-red-700">
+                          <span>{days} day{days === 1 ? '' : 's'} overdue</span>
+                          <span className="truncate font-medium">{task.clientName}</span>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                  {myTasks.overdue.length === 0 && <p className="py-4 text-center text-xs text-slate-500">No overdue tasks.</p>}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="flex items-center gap-2 border-b border-slate-100 pb-2 text-sm font-semibold text-slate-700">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  {currentUser.role === 'Client' ? 'Waiting for your review' : 'Waiting approval'} <span className="text-slate-400">{myTasks.actionRequired.length}</span>
+                </h3>
+                <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                  {myTasks.actionRequired.map(task => (
+                    <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-lg border border-slate-200 bg-slate-50/40 p-3 transition-colors hover:bg-slate-50">
+                      <p className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
+                      <div className="mt-1 flex justify-between gap-2 text-xs text-slate-500">
+                        <span>{task.status}</span>
+                        <span className="truncate font-medium">{task.clientName}</span>
+                      </div>
+                    </Link>
+                  ))}
+                  {myTasks.actionRequired.length === 0 && <p className="py-4 text-center text-xs text-slate-500">No reviews pending.</p>}
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </section>
+        )}
+      </div>
     </div>
   );
 };

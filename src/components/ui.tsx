@@ -13,7 +13,7 @@ interface PageHeaderProps {
 export const PageHeader: React.FC<PageHeaderProps> = ({ title, description, action }) => (
   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
     <div className="min-w-0">
-      <h1 className="text-2xl font-bold tracking-tight text-slate-950">{title}</h1>
+      <h1 className="text-2xl font-semibold text-slate-950">{title}</h1>
       {description && <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>}
     </div>
     {action && <div className="shrink-0">{action}</div>}
@@ -73,13 +73,13 @@ interface MetricCardProps {
 }
 
 const toneClasses: Record<string, string> = {
-  indigo:  'bg-blue-50    text-blue-600',
+  indigo:  'bg-slate-100  text-blue-600',
   emerald: 'bg-emerald-50 text-emerald-600',
   amber:   'bg-amber-50   text-amber-600',
-  orange:  'bg-teal-50    text-teal-700',
+  orange:  'bg-slate-100  text-slate-600',
   red:     'bg-red-50     text-red-600',
   blue:    'bg-sky-50     text-sky-600',
-  purple:  'bg-violet-50  text-violet-600',
+  purple:  'bg-slate-100  text-blue-600',
   slate:   'bg-slate-100  text-slate-600',
 };
 
@@ -107,7 +107,7 @@ interface ChartCardProps {
   heightClassName?: string;
 }
 
-export const ChartCard: React.FC<ChartCardProps> = ({ title, description, children, className, heightClassName = 'h-72' }) => (
+export const ChartCard: React.FC<ChartCardProps> = ({ title, description, children, className, heightClassName = 'h-64' }) => (
   <section className={cn(cardBase, 'flex flex-col p-4 sm:p-5', className)}>
     <div className="mb-4">
       <h2 className="text-base font-semibold text-slate-900">{title}</h2>
@@ -136,7 +136,7 @@ const badgeTones: Record<string, string> = {
   emerald: 'bg-emerald-50 text-emerald-700 border-emerald-100',
   amber:   'bg-amber-50   text-amber-700  border-amber-100',
   red:     'bg-red-50     text-red-700    border-red-100',
-  orange:  'bg-teal-50    text-teal-700   border-teal-100',
+  orange:  'bg-amber-50   text-amber-700  border-amber-100',
   purple:  'bg-violet-50  text-violet-700 border-violet-100',
   pink:    'bg-pink-50    text-pink-700   border-pink-100',
   indigo:  'bg-blue-50    text-blue-700   border-blue-100',
@@ -145,7 +145,7 @@ const badgeTones: Record<string, string> = {
 export const Badge: React.FC<BadgeProps> = ({ className, tone = 'slate', ...props }) => (
   <span
     className={cn(
-      'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold leading-none',
+      'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold leading-none',
       badgeTones[tone],
       className
     )}

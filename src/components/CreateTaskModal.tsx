@@ -8,6 +8,8 @@ import { getClientOptions, getServiceOptions, hasChoice } from '../lib/choiceOpt
 import { canManageProjects, getVisibleProjects } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
+import ModalShell from './ModalShell';
+import { modalFooter } from './uiTokens';
 
 interface Props {
   isOpen: boolean;
@@ -23,6 +25,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, rolePermissions, commitPendingMutation } = useStore();
   const navigate = useNavigate();
   const clientListId = React.useId();
+  const titleId = React.useId();
+  const descriptionId = React.useId();
 
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectId, setProjectId] = useState('');
@@ -103,16 +107,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   }, [onClose, resetForm]);
 
   React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeAndReset();
-    };
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-    }
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, closeAndReset]);
-
-  React.useEffect(() => {
     if (isOpen) {
       setStartDate(createTaskInitialDate || getTodayInputDate());
       setDueDate(createTaskInitialDate || '');
@@ -167,6 +161,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     }
 
     if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
       setIsAddingCustomClient(false);
       setCustomClientInput('');
       setCustomClientError('');
@@ -218,6 +214,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     }
 
     if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
       setIsAddingCustomService(false);
       setCustomServiceInput('');
       setCustomServiceError('');
@@ -328,14 +326,19 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-lg shadow-xl shadow-slate-950/10 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <>
+      <ModalShell
+        labelledBy={titleId}
+        describedBy={descriptionId}
+        onClose={closeAndReset}
+        panelClassName="max-w-2xl animate-in fade-in zoom-in-95 duration-200"
+      >
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">Create New Task</h2>
-            <p className="text-xs text-slate-500 mt-1">Assign work to a specific department or position.</p>
+            <h2 id={titleId} className="text-xl font-semibold text-slate-950">Create task</h2>
+            <p id={descriptionId} className="mt-1 text-xs text-slate-500">Assign work to a specific department or position.</p>
           </div>
           <button 
             onClick={closeAndReset}
@@ -353,18 +356,18 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             
             {/* Task Basic Info */}
             <div className="space-y-4">
-              <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wider">1. Task Details</h3>
+              <h3 className="text-sm font-bold uppercase text-blue-600">1. Task details</h3>
               
               <div>
-                <div className="flex justify-between items-center mb-1">
+                <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                   <label className="block text-sm font-medium text-slate-700">Link to Company / Brand (Optional)</label>
                   {canCreateProjects && (
                     <button
                       type="button"
                       onClick={() => setIsProjectModalOpen(true)}
-                      className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center transition-colors"
+                      className="flex items-center whitespace-nowrap text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
                     >
-                      <Plus className="w-3 h-3 mr-0.5" /> New Company / Brand
+                      <Plus className="mr-0.5 h-3 w-3" /> New company
                     </button>
                   )}
                 </div>
@@ -406,11 +409,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
             {/* Client & Customer Info */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wider">2. Client & Assets</h3>
+              <h3 className="text-sm font-bold uppercase text-blue-600">2. Client and assets</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
                 <div>
-                  <div className="flex justify-between items-center mb-1">
+                  <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                     <label className="block text-sm font-medium text-slate-700">Client / Brand Name <span className="text-red-500">*</span></label>
                     <button
                       type="button"
@@ -420,7 +423,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         setCustomClientError('');
                       }}
                       disabled={Boolean(selectedProject)}
-                      className="text-xs font-semibold text-teal-700 hover:text-teal-800 flex items-center transition-colors disabled:text-slate-300 disabled:cursor-not-allowed"
+                      className="flex items-center whitespace-nowrap text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300"
                     >
                       <Plus className="w-3 h-3 mr-0.5" /> New Client / Brand
                     </button>
@@ -451,14 +454,14 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         onKeyDown={handleCustomClientKeyDown}
                         maxLength={80}
                         autoFocus
-                        className="min-w-0 flex-1 bg-white border border-dashed border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-teal-500 focus:border-teal-500 block px-3 py-2 outline-none shadow-sm"
+                        className="min-w-0 flex-1 bg-white border border-dashed border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block px-3 py-2 outline-none shadow-sm"
                         placeholder="New client or brand"
                       />
                       <button
                         type="button"
                         onClick={addCustomClient}
                         disabled={!customClientInput.trim()}
-                        className="inline-flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
+                        className="inline-flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
                       >
                         <Plus className="w-4 h-4" /> Add
                       </button>
@@ -494,7 +497,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
             {/* Assignment & Scheduling */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wider">3. Assignment & Timeline</h3>
+              <h3 className="text-sm font-bold uppercase text-blue-600">3. Assignment and timeline</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -564,14 +567,14 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         onKeyDown={handleCustomServiceKeyDown}
                         maxLength={40}
                         autoFocus
-                        className="min-w-0 flex-1 bg-white border border-dashed border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-teal-500 focus:border-teal-500 block px-3 py-2 outline-none shadow-sm"
+                        className="min-w-0 flex-1 bg-white border border-dashed border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block px-3 py-2 outline-none shadow-sm"
                         placeholder="Custom service"
                       />
                       <button
                         type="button"
                         onClick={addCustomService}
                         disabled={!customServiceInput.trim()}
-                        className="inline-flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
+                        className="inline-flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
                       >
                         <Plus className="w-4 h-4" /> Add
                       </button>
@@ -618,7 +621,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
             {/* Files, Notes & Recurrence */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wider">4. Files & Recurrence</h3>
+              <h3 className="text-sm font-bold uppercase text-blue-600">4. Files and recurrence</h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -671,7 +674,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             </div>
 
             {formError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
                 {formError}
               </div>
             )}
@@ -679,7 +682,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
+        <div className={modalFooter}>
           <button 
             type="button"
             onClick={closeAndReset}
@@ -697,7 +700,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-      </div>
+      </ModalShell>
       
       {/* Nested Create Project Modal */}
       <CreateProjectModal 
@@ -711,7 +714,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
           setIsProjectModalOpen(false);
         }}
       />
-    </div>
+    </>
   );
 };
 

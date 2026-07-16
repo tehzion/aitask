@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 import { canDeleteUser, defaultRolePermissions, getEffectiveRoleName, isBossKoo, permissionGroups, permissionLabels } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
+import ModalShell from '../components/ModalShell';
 
 const ROLES: Role[] = ['Admin', 'Staff', 'Client'];
 const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client'];
@@ -16,6 +17,9 @@ const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', '
 const clonePermissions = (permissions: RolePermissions): RolePermissions => ({ ...permissions });
 
 const Approvals: React.FC = () => {
+  const addMemberTitleId = React.useId();
+  const approvalTitleId = React.useId();
+  const deleteMemberTitleId = React.useId();
   const secureAccounts = shouldUseSecureSupabase();
   const {
     registrations,
@@ -535,7 +539,7 @@ const Approvals: React.FC = () => {
                     <td className="px-6 py-3 font-medium text-slate-700">{reg.name}</td>
                     <td className="px-6 py-3 text-slate-500">{reg.email}</td>
                     <td className="px-6 py-3">
-                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
+                      <span className={`inline-flex px-2 py-1 rounded-md text-xs font-semibold ${
                         reg.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
                       }`}>
                         {reg.status}
@@ -640,11 +644,12 @@ const Approvals: React.FC = () => {
                         }}
                         className="inline-flex items-center px-3 py-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors"
                         title="Remove User"
+                        aria-label={`Remove ${u.name}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     ) : isBossKoo(u) || u.id === currentUser?.id ? (
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-xs font-semibold text-slate-500">
+                      <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
                         Protected account
                       </span>
                     ) : (
@@ -660,10 +665,16 @@ const Approvals: React.FC = () => {
 
       {/* Add Member Modal */}
       {isAddUserOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <ModalShell
+          labelledBy={addMemberTitleId}
+          onClose={() => {
+            resetNewUser();
+            setIsAddUserOpen(false);
+          }}
+          panelClassName="max-w-lg animate-in fade-in zoom-in-95 duration-200"
+        >
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
-              <h2 className="text-lg font-bold text-slate-800">Add New Member</h2>
+              <h2 id={addMemberTitleId} className="text-lg font-semibold text-slate-950">Add new member</h2>
               <p className="text-sm text-slate-500 mt-1">Create an account directly with Boss Koo super admin permission.</p>
             </div>
 
@@ -767,7 +778,7 @@ const Approvals: React.FC = () => {
               )}
 
               {addUserError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert" aria-live="assertive">
                   {addUserError}
                 </div>
               )}
@@ -783,19 +794,21 @@ const Approvals: React.FC = () => {
                 >
                   Cancel
                 </Button>
-                <Button type="submit">Create Member</Button>
+                <Button type="submit">Create member</Button>
               </div>
             </form>
-          </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* Approval Modal */}
       {selectedReg && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <ModalShell
+          labelledBy={approvalTitleId}
+          onClose={() => setSelectedReg(null)}
+          panelClassName="max-w-md animate-in fade-in zoom-in-95 duration-200"
+        >
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
-              <h2 className="text-lg font-bold text-slate-800">Assign Role & Department</h2>
+              <h2 id={approvalTitleId} className="text-lg font-semibold text-slate-950">Assign role and department</h2>
               <p className="text-sm text-slate-500 mt-1">Configure system access for {selectedReg.name}.</p>
             </div>
             
@@ -841,7 +854,7 @@ const Approvals: React.FC = () => {
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
                     value={companyName} onChange={e => setCompanyName(e.target.value)}
                   />
-                  <p className="text-xs text-slate-500 mt-1">This links the client to their specific projects.</p>
+                  <p className="text-xs text-slate-500 mt-1">This links the client to their specific companies.</p>
                 </div>
               )}
 
@@ -860,18 +873,21 @@ const Approvals: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </ModalShell>
       )}
       {/* Delete User Modal */}
       {userToDelete && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <ModalShell
+          labelledBy={deleteMemberTitleId}
+          onClose={() => setUserToDelete(null)}
+          overlayClassName="z-[60]"
+          panelClassName="max-w-sm animate-in fade-in zoom-in-95 duration-200"
+        >
             <div className="p-6 text-center">
               <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-2">Delete User Account</h3>
+              <h3 id={deleteMemberTitleId} className="mb-2 text-lg font-semibold text-slate-950">Delete user account</h3>
               <p className="text-sm text-slate-500">
                 Are you sure you want to permanently delete this user? They will immediately lose access to the system. This action cannot be undone.
               </p>
@@ -888,11 +904,10 @@ const Approvals: React.FC = () => {
                 disabled={isActionSaving}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
               >
-                Yes, Delete User
+                Delete user
               </button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
-import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, RotateCcw, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone } from 'lucide-react';
+import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, RotateCcw, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone, Plus } from 'lucide-react';
 import { format, isBefore, isToday } from 'date-fns';
 import { Department, Priority, Task, TaskStatus } from '../types';
 import TaskDetailsModal from '../components/TaskDetailsModal';
@@ -297,7 +297,7 @@ const Tasks: React.FC = () => {
     canEditTask(task) ? (
       <div className="relative inline-block">
         <select
-          className={`text-xs pl-2.5 pr-6 py-1 rounded-full font-semibold outline-none cursor-pointer appearance-none border-none ${getStatusColor(task.status)}`}
+          className={`text-xs pl-2.5 pr-6 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none ${getStatusColor(task.status)}`}
           value={task.status}
           disabled={backend.isSaving}
           onChange={async (e) => {
@@ -312,7 +312,7 @@ const Tasks: React.FC = () => {
         <ChevronDown className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 text-current" />
       </div>
     ) : (
-      <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${getStatusColor(task.status)}`}>
+      <span className={`text-xs px-2.5 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
         {task.status}
       </span>
     )
@@ -321,15 +321,15 @@ const Tasks: React.FC = () => {
   const renderTaskBadges = (task: Task) => (
     <div className="flex flex-wrap items-center justify-center gap-1.5">
       {task.isRecurring && (
-        <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded-full font-semibold">
+        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
           <RotateCcw className="w-3 h-3" /> {task.recurrenceFrequency || 'Recurring'}
         </span>
       )}
-      <span className={`text-xs px-2 py-1 rounded-full font-semibold ${approvalColors[task.clientApprovalStatus]}`}>
+      <span className={`rounded-md px-2 py-1 text-xs font-semibold ${approvalColors[task.clientApprovalStatus]}`}>
         Client: {task.clientApprovalStatus}
       </span>
       {task.revisionCount > 0 && (
-        <span className="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full font-semibold">
+        <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
           {task.revisionCount} revision{task.revisionCount === 1 ? '' : 's'}
         </span>
       )}
@@ -341,7 +341,12 @@ const Tasks: React.FC = () => {
       <PageHeader
         title="Tasks Management"
         description="Manage assignments, approvals, revisions, files, and recurring work."
-        action={canCreateTasks(currentUser, rolePermissions) ? <Button onClick={() => setCreateTaskModalOpen(true)}>+ New Task</Button> : null}
+        action={canCreateTasks(currentUser, rolePermissions) ? (
+          <Button onClick={() => setCreateTaskModalOpen(true)}>
+            <Plus className="h-4 w-4" />
+            New task
+          </Button>
+        ) : null}
       />
 
       {quickSyncError && (
@@ -355,7 +360,7 @@ const Tasks: React.FC = () => {
           <span className="text-sm font-medium flex-1">
             Viewing tasks for <strong className="font-bold">{activeProject.projectName}</strong> ({activeProject.clientName})
           </span>
-          <button onClick={() => clearRouteFilter('projectId')} className="p-1.5 hover:bg-blue-200/50 rounded-md transition-colors" title="Clear project filter">
+          <button onClick={() => clearRouteFilter('projectId')} className="p-1.5 hover:bg-blue-200/50 rounded-md transition-colors" title="Clear project filter" aria-label="Clear project filter">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -364,7 +369,7 @@ const Tasks: React.FC = () => {
       {taskIdFilter && (
         <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-100 text-amber-700 rounded-lg shadow-sm">
           <span className="text-sm font-medium flex-1">Viewing specific task: <strong className="font-bold">{taskIdFilter}</strong></span>
-          <button onClick={() => clearRouteFilter('taskId')} className="p-1.5 hover:bg-amber-200/50 rounded-md transition-colors" title="Clear task filter">
+          <button onClick={() => clearRouteFilter('taskId')} className="p-1.5 hover:bg-amber-200/50 rounded-md transition-colors" title="Clear task filter" aria-label="Clear task filter">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -485,7 +490,7 @@ const Tasks: React.FC = () => {
                   "px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
                   viewType === 'table'
                     ? "bg-blue-600 text-white shadow-sm"
-                    : "text-stone-600 hover:bg-stone-50"
+                    : "text-slate-600 hover:bg-slate-50"
                 )}
               >
                 Table
@@ -497,10 +502,10 @@ const Tasks: React.FC = () => {
                   "px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
                   viewType === 'board'
                     ? "bg-blue-600 text-white shadow-sm"
-                    : "text-stone-600 hover:bg-stone-50"
+                    : "text-slate-600 hover:bg-slate-50"
                 )}
               >
-                Kanban Board
+                Board
               </button>
             </div>
 
@@ -530,7 +535,7 @@ const Tasks: React.FC = () => {
             </div>
           )}
 
-          <div className={cn('grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3', filtersOpen ? 'grid' : 'hidden lg:grid')}>
+          <div className={cn('grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4', filtersOpen ? 'grid' : 'hidden lg:grid')}>
             <div className="relative">
               <select value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All departments</option>
@@ -573,19 +578,19 @@ const Tasks: React.FC = () => {
 
         {viewType === 'table' ? (
           <>
-            <div className="hidden lg:block overflow-x-auto">
-              <table className="w-full text-sm text-left text-slate-500 min-w-[1280px]">
+            <div className="hidden overflow-x-auto 2xl:block">
+              <table className="w-full min-w-[1160px] text-left text-sm text-slate-500">
                 <thead className="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-3 font-semibold">Task Details</th>
-                    <th className="px-4 py-3 font-semibold">Client / Project</th>
-                    <th className="px-4 py-3 font-semibold">Department</th>
-                    <th className="px-4 py-3 font-semibold">Timeline</th>
-                    <th className="px-4 py-3 font-semibold w-[120px] text-center">Priority</th>
-                    <th className="px-4 py-3 font-semibold w-[150px] text-center">Status</th>
-                    <th className="px-4 py-3 font-semibold w-[260px] text-center">Workflow</th>
-                    <th className="px-4 py-3 font-semibold text-center">Progress</th>
-                    <th className="px-4 py-3 font-semibold">Actions</th>
+                    <th className="px-3 py-3 font-semibold">Task Details</th>
+                    <th className="px-3 py-3 font-semibold">Client / Company</th>
+                    <th className="px-3 py-3 font-semibold">Department</th>
+                    <th className="px-3 py-3 font-semibold">Timeline</th>
+                    <th className="w-[100px] px-3 py-3 text-center font-semibold">Priority</th>
+                    <th className="w-[130px] px-3 py-3 text-center font-semibold">Status</th>
+                    <th className="w-[180px] px-3 py-3 text-center font-semibold">Workflow</th>
+                    <th className="px-3 py-3 text-center font-semibold">Progress</th>
+                    <th className="px-3 py-3 font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -601,50 +606,50 @@ const Tasks: React.FC = () => {
                         <tr
                           key={task.id}
                           className={cn(
-                            "border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer text-stone-700",
+                            "border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer text-slate-700",
                             isOverdue ? "bg-red-50/50 hover:bg-red-100/50 border-red-100/70" : "bg-white"
                           )}
                           onClick={() => setSelectedTask(task)}
                           onContextMenu={(e) => handleRowContextMenu(e, task)}
                         >
-                          <td className="px-4 py-3 max-w-[220px]">
+                          <td className="max-w-[200px] px-3 py-3">
                             <div className={cn("font-semibold truncate", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
-                            <div className="text-xs text-stone-500 mt-0.5">{task.id} - {task.serviceType}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">{task.id} - {task.serviceType}</div>
                           </td>
-                          <td className="px-4 py-3 max-w-[170px]">
-                            <div className="font-medium text-stone-800 truncate">{task.clientName}</div>
-                            <div className="text-xs text-stone-500 truncate mt-0.5">{task.projectName || 'Independent task'}</div>
+                          <td className="max-w-[150px] px-3 py-3">
+                            <div className="font-medium text-slate-800 truncate">{task.clientName}</div>
+                            <div className="text-xs text-slate-500 truncate mt-0.5">{task.projectName || 'Independent task'}</div>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <span className="bg-stone-100 text-stone-700 text-xs px-2.5 py-1 rounded-md font-medium border border-stone-200">{task.department}</span>
+                          <td className="whitespace-nowrap px-3 py-3">
+                            <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-md font-medium border border-slate-200">{task.department}</span>
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-xs">
-                            <div className="text-stone-500 mb-0.5">Start: {startDateParsed ? format(startDateParsed, 'MMM dd') : 'No start date'}</div>
+                          <td className="whitespace-nowrap px-3 py-3 text-xs">
+                            <div className="text-slate-500 mb-0.5">Start: {startDateParsed ? format(startDateParsed, 'MMM dd') : 'No start date'}</div>
                             <div
-                              className={cn("font-medium", isOverdue ? "text-red-700 font-bold" : "text-stone-800")}
+                              className={cn("font-medium", isOverdue ? "text-red-700 font-bold" : "text-slate-800")}
                               title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
                             >
                               {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                             </div>
                           </td>
-                          <td className="px-4 py-3 w-[120px] text-center whitespace-nowrap">
-                            <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>
+                          <td className="w-[100px] whitespace-nowrap px-3 py-3 text-center">
+                            <span className={`inline-block text-xs px-2.5 py-1 rounded-md font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>
                           </td>
-                          <td className="px-4 py-3 w-[150px] text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <td className="w-[130px] whitespace-nowrap px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                             {renderStatusControl(task)}
                           </td>
-                          <td className="px-4 py-3 w-[260px] text-center">
+                          <td className="w-[180px] px-3 py-3 text-center">
                             {renderTaskBadges(task)}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-3">
                             <div className="flex items-center justify-center gap-2">
-                              <div className="w-16 bg-stone-200 rounded-full h-2 overflow-hidden">
+                              <div className="w-16 bg-slate-200 rounded-full h-2 overflow-hidden">
                                 <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
                               </div>
-                              <span className="text-xs font-semibold text-stone-700 w-8">{task.completionPercentage}%</span>
+                              <span className="text-xs font-semibold text-slate-700 w-8">{task.completionPercentage}%</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-stone-400">
+                          <td className="px-3 py-3 text-slate-400">
                             <div className="flex flex-col items-start gap-1.5">
                               <div className="flex items-center gap-2">
                                 {task.attachmentLink && (
@@ -660,18 +665,19 @@ const Tasks: React.FC = () => {
                                 )}
                                 {task.isCompleted && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                                 <button
-                                  className="hover:text-stone-700 p-1 rounded-md hover:bg-stone-200 transition-colors"
+                                  className="rounded-md p-1 transition-colors hover:bg-slate-200 hover:text-slate-700"
                                   title="Quick Edit"
+                                  aria-label={`Quick edit ${task.title}`}
                                   onClick={(e) => handleQuickEditClick(e, task)}
                                 >
                                   <MoreHorizontal className="w-4 h-4" />
                                 </button>
                               </div>
                               <div className="flex items-center gap-1.5" title={`Assigned to: ${getUserName(task.assignedTo)}`}>
-                                <div className="w-5 h-5 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center text-[10px] font-bold">
+                                <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center text-[10px] font-bold">
                                   {getUserName(task.assignedTo).charAt(0)}
                                 </div>
-                                <span className="text-xs font-medium text-stone-600 truncate max-w-[85px]">
+                                <span className="text-xs font-medium text-slate-600 truncate max-w-[85px]">
                                   {getUserName(task.assignedTo)}
                                 </span>
                               </div>
@@ -690,7 +696,7 @@ const Tasks: React.FC = () => {
               </table>
             </div>
 
-            <div className="lg:hidden divide-y divide-slate-100">
+            <div className="grid grid-cols-1 gap-px bg-slate-200 md:grid-cols-2 2xl:hidden">
               {backend?.isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => <SkeletonMobileCard key={i} />)
               ) : (
@@ -703,22 +709,22 @@ const Tasks: React.FC = () => {
                       key={task.id}
                       onClick={() => setSelectedTask(task)}
                       className={cn(
-                        "w-full text-left p-4 hover:bg-stone-50 transition-colors relative border-l-4",
+                        "relative w-full border-l-4 p-4 text-left transition-colors hover:bg-slate-50",
                         isOverdue
-                          ? "bg-red-50/30 hover:bg-red-100/30 border-l-red-500 border-b border-stone-100"
-                          : "bg-white border-l-transparent border-b border-stone-100"
+                          ? "border-l-red-500 bg-red-50/30 hover:bg-red-100/30"
+                          : "border-l-transparent bg-white"
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className={cn("font-semibold leading-5", isOverdue ? "text-red-900" : "text-stone-900")}>{task.title}</div>
-                          <div className="text-xs text-stone-500 mt-1 leading-5">{task.id} - {task.clientName} - {task.projectName || 'Independent task'}</div>
+                          <div className={cn("font-semibold leading-5", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
+                          <div className="text-xs text-slate-500 mt-1 leading-5">{task.id} - {task.clientName} - {task.projectName || 'Independent task'}</div>
                         </div>
-                        <span className={`text-xs px-2.5 py-1 rounded-full font-semibold shrink-0 ${priorityColors[task.priority]}`}>{task.priority}</span>
+                        <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>
                       </div>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-stone-600">
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
                         <span
-                          className={cn("inline-flex items-center gap-1", isOverdue ? "text-red-700 font-bold" : "text-stone-600")}
+                          className={cn("inline-flex items-center gap-1", isOverdue ? "text-red-700 font-bold" : "text-slate-600")}
                           title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
                         >
                           <CalendarClock className="w-3.5 h-3.5" />
@@ -730,20 +736,17 @@ const Tasks: React.FC = () => {
                       </div>
                       {isOverdue && (
                         <div className="mt-2 text-[10px] text-red-500 font-extrabold flex items-center gap-1.5">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                          </span>
+                          <span className="h-2 w-2 rounded-full bg-red-500" />
                           {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                         </div>
                       )}
                       <div className="mt-3 flex items-center justify-between gap-3">
                         <div onClick={(e) => e.stopPropagation()}>{renderStatusControl(task)}</div>
                         <div className="flex items-center gap-2">
-                          <div className="w-20 bg-stone-200 rounded-full h-2 overflow-hidden">
+                          <div className="w-20 bg-slate-200 rounded-full h-2 overflow-hidden">
                             <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
                           </div>
-                          <span className="text-xs font-semibold text-stone-700">{task.completionPercentage}%</span>
+                          <span className="text-xs font-semibold text-slate-700">{task.completionPercentage}%</span>
                         </div>
                       </div>
                       <div className="mt-3">{renderTaskBadges(task)}</div>
@@ -780,18 +783,18 @@ const Tasks: React.FC = () => {
                   >
                     {/* Column Header */}
                     <div className="flex justify-between items-center mb-3 pb-2 border-b border-[#e0d9cf] shrink-0">
-                      <span className="text-xs font-bold uppercase tracking-wider text-stone-600">{status}</span>
-                      <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-stone-200/80 text-stone-700">{columnTasks.length}</span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-600">{status}</span>
+                      <span className="rounded-md bg-slate-200/80 px-2 py-0.5 text-xs font-bold text-slate-700">{columnTasks.length}</span>
                     </div>
 
                     {/* Column Content */}
                     <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar min-h-[300px]">
                       {backend?.isLoading ? (
                         Array.from({ length: 3 }).map((_, i) => (
-                          <div key={i} className="bg-white rounded-lg border border-stone-200/60 p-3.5 space-y-2 animate-pulse">
-                            <div className="h-4 bg-stone-200 rounded w-4/5"></div>
-                            <div className="h-3 bg-stone-100 rounded w-1/2"></div>
-                            <div className="h-3 bg-stone-100 rounded w-2/3"></div>
+                          <div key={i} className="bg-white rounded-lg border border-slate-200/60 p-3.5 space-y-2 animate-pulse">
+                            <div className="h-4 bg-slate-200 rounded w-4/5"></div>
+                            <div className="h-3 bg-slate-100 rounded w-1/2"></div>
+                            <div className="h-3 bg-slate-100 rounded w-2/3"></div>
                           </div>
                         ))
                       ) : (
@@ -815,11 +818,11 @@ const Tasks: React.FC = () => {
                               )}
                             >
                               {isOverdue && (
-                                <div className="absolute top-0 left-0 right-0 h-1 bg-red-500 rounded-t-lg animate-pulse"></div>
+                                <div className="absolute top-0 left-0 right-0 h-1 bg-red-500 rounded-t-lg"></div>
                               )}
 
                               <div className="flex justify-between items-start gap-1">
-                                <h4 className={cn("text-xs font-bold leading-5 truncate flex-1", isOverdue ? "text-red-900" : "text-stone-800")}>
+                                <h4 className={cn("text-xs font-bold leading-5 truncate flex-1", isOverdue ? "text-red-900" : "text-slate-800")}>
                                   {task.title}
                                 </h4>
                                 <Badge tone={task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : task.priority === 'Medium' ? 'blue' : 'slate'} className="text-[9px] px-1.5 py-0 shrink-0">
@@ -827,7 +830,7 @@ const Tasks: React.FC = () => {
                                 </Badge>
                               </div>
 
-                              <div className="text-[10px] text-stone-500 mt-1.5 truncate">
+                              <div className="text-[10px] text-slate-500 mt-1.5 truncate">
                                 {task.id} · {task.clientName}
                               </div>
 
@@ -835,38 +838,38 @@ const Tasks: React.FC = () => {
                                 <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-md", getDeptBadge(task.department))}>
                                   {task.department}
                                 </span>
-                                <span className="text-[9px] text-stone-500 font-medium">
+                                <span className="text-[9px] text-slate-500 font-medium">
                                   {task.serviceType}
                                 </span>
                               </div>
 
                               <div className="mt-3 flex items-center justify-between text-[10px]">
                                 <span
-                                  className={cn("font-medium", isOverdue ? "text-red-600 font-extrabold" : "text-stone-500")}
+                                  className={cn("font-medium", isOverdue ? "text-red-600 font-extrabold" : "text-slate-500")}
                                   title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
                                 >
                                   {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                                 </span>
-                                <div className="flex items-center gap-1 bg-stone-50 px-1.5 py-0.5 rounded border border-stone-200">
-                                  <div className="w-4 h-4 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center text-[9px] font-bold">
+                                <div className="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                                  <div className="w-4 h-4 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center text-[9px] font-bold">
                                     {getUserName(task.assignedTo).charAt(0)}
                                   </div>
-                                  <span className="text-stone-600 font-semibold text-[9px] max-w-[50px] truncate">{getUserName(task.assignedTo)}</span>
+                                  <span className="text-slate-600 font-semibold text-[9px] max-w-[50px] truncate">{getUserName(task.assignedTo)}</span>
                                 </div>
                               </div>
 
                               {/* Progress bar */}
                               <div className="mt-2.5 flex items-center gap-1.5">
-                                <div className="flex-1 bg-stone-100 h-1.5 rounded-full overflow-hidden border border-stone-200/40">
+                                <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-200/40">
                                   <div className="bg-blue-600 h-full rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
                                 </div>
-                                <span className="text-[9px] font-bold text-stone-600 shrink-0">{task.completionPercentage}%</span>
+                                <span className="text-[9px] font-bold text-slate-600 shrink-0">{task.completionPercentage}%</span>
                               </div>
 
                               {/* Action Badges in Card */}
                               {(task.attachmentLink || task.revisionCount > 0 || task.clientApprovalStatus !== 'Pending') && (
-                                <div className="mt-2.5 pt-2 border-t border-stone-100 flex items-center gap-2 text-[9px] text-stone-500">
-                                  {task.attachmentLink && <Paperclip className="w-3 h-3 text-stone-400" />}
+                                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-2 text-[9px] text-slate-500">
+                                  {task.attachmentLink && <Paperclip className="w-3 h-3 text-slate-400" />}
                                   {task.revisionCount > 0 && <span className="text-amber-700 font-bold">{task.revisionCount} rev</span>}
                                   {task.clientApprovalStatus !== 'Pending' && (
                                     <span className={cn("font-bold", task.clientApprovalStatus === 'Approved' ? "text-emerald-600" : "text-red-600")}>
@@ -880,7 +883,7 @@ const Tasks: React.FC = () => {
                         })
                       )}
                       {!backend?.isLoading && columnTasks.length === 0 && (
-                        <div className="text-center py-6 text-[11px] text-stone-400 border border-dashed border-stone-200 rounded-lg bg-stone-50/30">
+                        <div className="text-center py-6 text-[11px] text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50/30">
                           No tasks in this status
                         </div>
                       )}
@@ -915,20 +918,22 @@ const Tasks: React.FC = () => {
               }}
             />
             <div
-              className="fixed z-50 bg-white border border-stone-200 rounded-lg shadow-xl p-4 w-64 space-y-4 text-stone-700 animate-in fade-in zoom-in-95 duration-100"
+              className="fixed z-50 bg-white border border-slate-200 rounded-lg shadow-xl p-4 w-64 space-y-4 text-slate-700 animate-in fade-in zoom-in-95 duration-100"
               style={{
                 top: Math.min(activeQuickEdit.y, window.innerHeight - 280),
                 left: Math.max(10, Math.min(activeQuickEdit.x, window.innerWidth - 270)),
               }}
             >
-              <div className="flex justify-between items-center border-b border-stone-100 pb-2">
-                <span className="text-xs font-bold text-stone-800 truncate pr-2" title={currentTask.title}>
+              <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                <span className="text-xs font-bold text-slate-800 truncate pr-2" title={currentTask.title}>
                   Quick Edit: {currentTask.title}
                 </span>
                 <button
                   type="button"
                   onClick={() => setActiveQuickEdit(null)}
-                  className="text-stone-400 hover:text-stone-600 rounded p-0.5 hover:bg-stone-50"
+                  className="text-slate-400 hover:text-slate-600 rounded p-0.5 hover:bg-slate-50"
+                  aria-label="Close quick edit"
+                  title="Close quick edit"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -936,7 +941,7 @@ const Tasks: React.FC = () => {
 
               {/* Status */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Status</label>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Status</label>
                 <div className="relative">
                   <select
                     className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white appearance-none cursor-pointer")}
@@ -957,7 +962,7 @@ const Tasks: React.FC = () => {
 
               {/* Priority */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Priority</label>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Priority</label>
                 <div className="relative">
                   <select
                     className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white appearance-none cursor-pointer")}
@@ -978,10 +983,10 @@ const Tasks: React.FC = () => {
 
               {/* Assignee */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1">Assignee</label>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Assignee</label>
                 <div className="relative">
                   <select
-                    className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white disabled:bg-stone-50 disabled:text-stone-400 appearance-none cursor-pointer")}
+                    className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white disabled:bg-slate-50 disabled:text-slate-400 appearance-none cursor-pointer")}
                     value={currentTask.assignedTo}
                     disabled={!canAssignOthers}
                     onChange={(e) => {
@@ -997,7 +1002,7 @@ const Tasks: React.FC = () => {
                   <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                 </div>
                 {!canAssignOthers && (
-                  <p className="mt-1 text-[10px] text-stone-400">Only admins can reassign tasks.</p>
+                  <p className="mt-1 text-[10px] text-slate-400">Only admins can reassign tasks.</p>
                 )}
               </div>
             </div>

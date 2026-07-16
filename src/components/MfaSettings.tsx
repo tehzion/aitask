@@ -67,7 +67,7 @@ const MfaSettings: React.FC = () => {
     : '';
 
   return (
-    <section className={`${cardBase} overflow-hidden`}>
+    <section className={`${cardBase} self-start overflow-hidden`}>
       <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-5">
         <ShieldCheck className="h-5 w-5 text-blue-600" />
         <div>

@@ -68,8 +68,6 @@ export default defineConfig(({ mode }) => {
         manualChunks: {
           // Router — separate so navigation code doesn't bust the app chunk
           router: ['react-router-dom'],
-          // Recharts is the heaviest single dependency (~400 kB minified)
-          charts: ['recharts'],
           // Icon library — large registry, isolate from business logic
           icons: ['lucide-react'],
           // Auth/data client is loaded on demand and should not inflate the offline shell.
@@ -136,7 +134,7 @@ export default defineConfig(({ mode }) => {
           '**/Reports-*.js',
           '**/Approvals-*.js',
           '**/Settings-*.js',
-          '**/charts-*.js',
+          '**/BarChart-*.js',
           '**/supabase-*.js',
         ],
       },

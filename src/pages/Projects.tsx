@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { format, parseISO, differenceInDays } from 'date-fns';
-import { FolderKanban, Users, CheckCircle2, Clock, CalendarDays, ArrowRight, Pencil, Trash2 } from 'lucide-react';
+import { FolderKanban, Users, CheckCircle2, Clock, ArrowRight, Pencil, Trash2, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import CreateProjectModal from '../components/CreateProjectModal';
 import { Link } from 'react-router-dom';
@@ -64,42 +63,22 @@ const Projects: React.FC = () => {
     return { total, completed, pending, teamMembers };
   };
 
-  const getDeadlineStatus = (deadline: string) => {
-    if (!deadline) return { text: 'No Deadline', color: 'text-slate-600 bg-slate-100 border-slate-200' };
-    try {
-      const today = new Date();
-      const dueDate = parseISO(deadline);
-      const diff = differenceInDays(dueDate, today);
-
-      if (diff < 0) return { text: 'Overdue', color: 'text-red-600 bg-red-100 border-red-200' };
-      if (diff <= 3) return { text: 'At Risk', color: 'text-amber-600 bg-amber-100 border-amber-200' };
-      return { text: 'On Track', color: 'text-emerald-600 bg-emerald-100 border-emerald-200' };
-    } catch {
-      return { text: 'Invalid Date', color: 'text-slate-600 bg-slate-100 border-slate-200' };
-    }
-  };
-
-  const safeFormatDate = (dateStr: string | undefined) => {
-    if (!dateStr) return 'N/A';
-    try {
-      return format(parseISO(dateStr), 'MMM dd, yyyy');
-    } catch {
-      return 'Invalid Date';
-    }
-  };
-
   return (
     <div className={`${pageShell} flex flex-col h-full`}>
       <PageHeader
-        title="Companies / Brands"
-        description="Monitor owned client companies, task participation, and service scope."
-        action={canManageProjects(currentUser, rolePermissions) ? <Button onClick={openCreateCompany}>+ New Company / Brand</Button> : null}
+        title="Companies"
+        description="Review company task groupings, service scope, and assigned team members."
+        action={canManageProjects(currentUser, rolePermissions) ? (
+          <Button onClick={openCreateCompany}>
+            <Plus className="h-4 w-4" />
+            New company
+          </Button>
+        ) : null}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 2xl:grid-cols-3">
         {projects.map(project => {
           const stats = getProjectStats(project.id);
-          const deadlineStatus = getDeadlineStatus(project.deadline);
           const progress = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
           const canEdit = canEditProject(currentUser, project, rolePermissions);
           const canDelete = canDeleteProject(currentUser, project, rolePermissions);
@@ -115,13 +94,10 @@ const Projects: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="font-bold text-lg text-slate-900 leading-tight">{project.clientName}</h3>
-                      <p className="text-sm text-slate-500 font-medium">{hasLegacyProjectName ? project.projectName : 'Company / Brand'}</p>
+                      <p className="text-sm font-medium text-slate-500">{hasLegacyProjectName ? project.projectName : 'Company'}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={clsx("text-xs px-2.5 py-1 rounded-full font-semibold border shrink-0", deadlineStatus.color)}>
-                      {deadlineStatus.text}
-                    </span>
                     {(canEdit || canDelete) && (
                       <div className="flex items-center gap-1">
                         {canEdit && (
@@ -173,8 +149,12 @@ const Projects: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-5 bg-slate-50 flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid flex-1 grid-cols-2 gap-4 bg-slate-50 p-5">
                 <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <FolderKanban className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm"><strong className="text-slate-900">{stats.total}</strong> Total tasks</span>
+                  </div>
                   <div className="flex items-center gap-2 text-slate-600">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                     <span className="text-sm"><strong className="text-slate-900">{stats.completed}</strong> Completed</span>
@@ -186,20 +166,8 @@ const Projects: React.FC = () => {
                 </div>
                 
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-1.5 text-slate-600">
-                      <CalendarDays className="w-4 h-4 text-emerald-500" />
-                      <span className="font-medium">Start: {safeFormatDate(project.startDate)}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-1.5 text-slate-600">
-                      <Clock className="w-4 h-4 text-blue-500" />
-                      <span className="font-medium">End: {safeFormatDate(project.deadline)}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-slate-600 pt-2 border-t border-slate-200">
+                  <p className="text-xs font-semibold uppercase text-slate-500">Assigned team</p>
+                  <div className="flex items-center gap-2 text-slate-600">
                     <Users className="w-4 h-4 text-blue-500" />
                     <div className="flex -space-x-2">
                       {stats.teamMembers.slice(0, 3).map((user) => (
@@ -218,6 +186,9 @@ const Projects: React.FC = () => {
                           +{stats.teamMembers.length - 3}
                         </div>
                       )}
+                      {stats.teamMembers.length === 0 && (
+                        <span className="ml-2 text-xs text-slate-500">No assignees yet</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -231,6 +202,15 @@ const Projects: React.FC = () => {
             </div>
           );
         })}
+        {projects.length === 0 && (
+          <div className={clsx(cardBase, 'flex flex-col items-center justify-center border-dashed px-6 py-14 text-center md:col-span-2 2xl:col-span-3')}>
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+              <FolderKanban className="h-5 w-5" />
+            </div>
+            <h2 className="mt-4 text-base font-semibold text-slate-900">No companies yet</h2>
+            <p className="mt-1 max-w-md text-sm leading-6 text-slate-500">Companies will appear here when they are created or linked to visible task work.</p>
+          </div>
+        )}
       </div>
       
       <CreateProjectModal isOpen={isModalOpen} project={editingProject} onClose={closeCompanyModal} />

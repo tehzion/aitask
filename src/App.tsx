@@ -140,7 +140,7 @@ function App() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-20 left-4 right-4 z-[70] mx-auto flex max-w-xl items-start gap-3 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white shadow-xl shadow-slate-950/20 md:bottom-auto md:left-auto md:right-5 md:top-20"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 right-4 z-[70] mx-auto flex max-w-xl items-start gap-3 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white shadow-xl shadow-slate-950/20 md:bottom-auto md:left-auto md:right-5 md:top-20"
         >
           <WifiOff className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
           <div>
@@ -156,7 +156,7 @@ function App() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-20 left-4 right-4 z-[70] mx-auto flex max-w-xl items-center gap-3 rounded-lg border border-blue-200 bg-white px-4 py-3 text-slate-900 shadow-xl shadow-slate-950/10 md:bottom-5 md:left-auto md:right-5"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 right-4 z-[70] mx-auto flex max-w-xl items-center gap-3 rounded-lg border border-blue-200 bg-white px-4 py-3 text-slate-900 shadow-xl shadow-slate-950/10 md:bottom-5 md:left-auto md:right-5"
         >
           <RefreshCw className="h-5 w-5 shrink-0 text-blue-600" />
           <div className="min-w-0 flex-1">

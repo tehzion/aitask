@@ -169,7 +169,7 @@ const Reports: React.FC = () => {
                   <td className="px-6 py-4 text-center text-amber-500 font-medium">{dept.pending}</td>
                   <td className="px-6 py-4 text-center">
                     {dept.overdue > 0 ? (
-                      <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                      <span className="inline-flex items-center justify-center rounded-md bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700">
                         {dept.overdue}
                       </span>
                     ) : (
