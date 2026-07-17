@@ -63,6 +63,10 @@ const Login: React.FC = () => {
     name: '', email: '', phone: '', jobPosition: '', requestedRole: 'Staff' as Role,
   });
   const [regSuccess, setRegSuccess] = useState(false);
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [regError, setRegError] = useState('');
+  const [isSubmittingRegistration, setIsSubmittingRegistration] = useState(false);
 
   React.useEffect(() => {
     if (currentUser) navigate(getLoginDestination(Boolean(currentUser.mustResetPassword), currentUser.id, requestedPath), { replace: true });
@@ -120,11 +124,28 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    registerUser(regData);
+    setRegError('');
+    if (secureAccounts && regPassword !== regConfirmPassword) {
+      setRegError('Passwords do not match.');
+      return;
+    }
+    setIsSubmittingRegistration(true);
+    const result = await registerUser({
+      ...regData,
+      requestedRole: 'Staff',
+      password: secureAccounts ? regPassword : undefined,
+    });
+    setIsSubmittingRegistration(false);
+    if (!result.ok) {
+      setRegError(result.error || 'Unable to submit your registration.');
+      return;
+    }
     setRegSuccess(true);
     setRegData({ name: '', email: '', phone: '', jobPosition: '', requestedRole: 'Staff' });
+    setRegPassword('');
+    setRegConfirmPassword('');
   };
 
   return (
@@ -250,20 +271,14 @@ const Login: React.FC = () => {
                     <span className="px-2 bg-white text-slate-500">Need an account?</span>
                   </div>
                 </div>
-                {secureAccounts ? (
-                  <p className="mt-5 text-center text-sm leading-6 text-slate-500">
-                    Contact your AiTask administrator for a verified email invitation.
-                  </p>
-                ) : (
-                  <Button
-                    onClick={() => setIsRegistering(true)}
-                    variant="secondary"
-                    className="mt-5 w-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    Register for Access
-                  </Button>
-                )}
+                <Button
+                  onClick={() => setIsRegistering(true)}
+                  variant="secondary"
+                  className="mt-5 w-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Register as Staff
+                </Button>
               </div>
             </>
           ) : (
@@ -277,7 +292,9 @@ const Login: React.FC = () => {
                   </div>
                   <h3 className="text-lg font-medium text-slate-900">Registration Submitted!</h3>
                   <p className="mt-2 text-sm text-slate-500">
-                    Your request has been submitted for approval. Once approved, sign in with the default password and update it in Settings.
+                    {secureAccounts
+                      ? 'Verify your email, then wait for the Super Admin to approve your Staff access.'
+                      : 'Your Staff access request has been submitted for Super Admin approval.'}
                   </p>
                   <Button onClick={() => { setRegSuccess(false); setIsRegistering(false); }} className="mt-6 w-full">
                     Back to Login
@@ -301,14 +318,27 @@ const Login: React.FC = () => {
                     <label className="block text-sm font-medium text-slate-700">Job Position / Department</label>
                     <input type="text" required placeholder="e.g. Designer, Ads Manager" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.jobPosition} onChange={e => setRegData({ ...regData, jobPosition: e.target.value })} />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">Requested Access Role</label>
-                    <select className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.requestedRole} onChange={e => setRegData({ ...regData, requestedRole: e.target.value as Role })}>
-                      <option value="Staff">Staff (Internal Team Member)</option>
-                      <option value="Client">Client (External Customer)</option>
-                    </select>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <p className="text-xs font-semibold uppercase text-slate-500">Access role</p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-800">Staff</p>
                   </div>
-                  <Button type="submit" className="w-full py-3">Submit Registration</Button>
+                  {secureAccounts && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Password</label>
+                        <input type="password" required minLength={12} autoComplete="new-password" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regPassword} onChange={e => setRegPassword(e.target.value)} />
+                        <p className="mt-1 text-xs text-slate-500">Use at least 12 characters.</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Confirm Password</label>
+                        <input type="password" required minLength={12} autoComplete="new-password" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regConfirmPassword} onChange={e => setRegConfirmPassword(e.target.value)} />
+                      </div>
+                    </>
+                  )}
+                  {regError && <p className="text-sm font-medium text-red-600" role="alert" aria-live="polite">{regError}</p>}
+                  <Button type="submit" className="w-full py-3" disabled={isSubmittingRegistration}>
+                    {isSubmittingRegistration ? 'Submitting...' : 'Submit Staff Registration'}
+                  </Button>
                   <div className="text-center mt-4">
                     <button type="button" onClick={() => setIsRegistering(false)} className="text-sm font-medium text-blue-600 hover:text-blue-500">
                       Already have an account? Sign in

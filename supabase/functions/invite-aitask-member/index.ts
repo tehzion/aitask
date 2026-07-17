@@ -12,6 +12,8 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 });
 
+const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -29,58 +31,94 @@ Deno.serve(async (request) => {
     adminClient.auth.getUser(token),
     adminClient.auth.getClaims(token),
   ]);
-
   if (authError || !authData.user || claimsError) return json({ error: 'Invalid session' }, 401);
   if (claimsData.claims.aal !== 'aal2') return json({ error: 'MFA verification required' }, 403);
 
   const { data: actor, error: actorError } = await adminClient
     .from('aitask_members')
-    .select('id,workspace_id,role,is_super_admin')
+    .select('id,workspace_id,is_super_admin')
     .eq('auth_user_id', authData.user.id)
+    .eq('is_super_admin', true)
     .maybeSingle();
-  if (actorError || !actor || (actor.role !== 'Admin' && !actor.is_super_admin)) {
-    return json({ error: 'Admin permission required' }, 403);
-  }
+  if (actorError || !actor) return json({ error: 'Super Admin permission required' }, 403);
 
   const body = await request.json().catch(() => ({}));
-  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-  const name = typeof body.name === 'string' ? body.name.trim() : '';
-  const role = ['Admin', 'Staff', 'Client'].includes(body.role) ? body.role : 'Staff';
+  const registrationId = typeof body.registrationId === 'string' ? body.registrationId.trim() : '';
+  const memberId = typeof body.memberId === 'string' ? body.memberId.trim() : '';
+  let name = typeof body.name === 'string' ? body.name.trim() : '';
+  let email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  let role = ['Admin', 'Staff', 'Client'].includes(body.role) ? body.role : 'Staff';
   const department = typeof body.department === 'string' ? body.department.trim() : 'Designer';
   const companyName = role === 'Client' && typeof body.companyName === 'string' ? body.companyName.trim() : null;
+  const customRoleId = typeof body.customRoleId === 'string' && body.customRoleId.trim() ? body.customRoleId.trim() : null;
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !name) {
-    return json({ error: 'A valid email and name are required' }, 400);
+  if (registrationId) {
+    const { data: registration, error } = await adminClient
+      .from('aitask_entities')
+      .select('data')
+      .eq('workspace_id', actor.workspace_id)
+      .eq('entity_type', 'registration')
+      .eq('entity_id', registrationId)
+      .maybeSingle();
+    if (error || !registration || registration.data?.status !== 'Pending' || registration.data?.requestedRole !== 'Staff') {
+      return json({ error: 'Pending Staff registration not found' }, 404);
+    }
+    name = typeof registration.data.name === 'string' ? registration.data.name.trim() : '';
+    email = typeof registration.data.email === 'string' ? registration.data.email.trim().toLowerCase() : '';
+    role = 'Staff';
   }
+
+  if (!name || !validEmail(email)) return json({ error: 'A valid email and name are required' }, 400);
   if (role === 'Client' && !companyName) return json({ error: 'Client company is required' }, 400);
 
-  const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-    data: { name, department, company_name: companyName },
-  });
-  if (inviteError || !invited.user) return json({ error: inviteError?.message || 'Invitation failed' }, 400);
-
-  const member = {
-    id: crypto.randomUUID(),
-    workspace_id: actor.workspace_id,
-    auth_user_id: invited.user.id,
-    name,
-    email,
-    role,
-    department: role === 'Client' ? 'Client' : department,
-    client_name: companyName,
-    must_reset_password: false,
-    permissions: {},
-  };
-  const { data: created, error: memberError } = await adminClient
-    .from('aitask_members')
-    .insert(member)
-    .select('*')
-    .single();
-
-  if (memberError) {
-    await adminClient.auth.admin.deleteUser(invited.user.id);
-    return json({ error: memberError.message }, 400);
+  let customRoleName: string | null = null;
+  if (customRoleId) {
+    const { data: customRole, error } = await adminClient
+      .from('aitask_entities')
+      .select('data')
+      .eq('workspace_id', actor.workspace_id)
+      .eq('entity_type', 'custom_role')
+      .eq('entity_id', customRoleId)
+      .maybeSingle();
+    if (error || !customRole) return json({ error: 'Custom role not found' }, 400);
+    customRoleName = typeof customRole.data?.name === 'string' ? customRole.data.name : null;
   }
 
-  return json({ member: created }, 201);
+  const { data: authUsers, error: listError } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (listError) return json({ error: 'Unable to verify the Auth user' }, 500);
+  let authUser = authUsers.users.find(user => user.email?.toLowerCase() === email);
+  let createdAuthUser = false;
+
+  if (registrationId) {
+    if (!authUser) return json({ error: 'The Staff member must verify their signup email before approval' }, 409);
+    if (!authUser.email_confirmed_at) return json({ error: 'The Staff member has not verified their email yet' }, 409);
+  } else if (!authUser) {
+    const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+      data: { name, department, company_name: companyName },
+    });
+    if (inviteError || !invited.user) return json({ error: inviteError?.message || 'Invitation failed' }, 400);
+    authUser = invited.user;
+    createdAuthUser = true;
+  }
+
+  const { data: result, error: finalizeError } = await adminClient.rpc('aitask_finalize_member_invitation', {
+    p_actor_member_id: actor.id,
+    p_auth_user_id: authUser.id,
+    p_name: name,
+    p_email: email,
+    p_role: role,
+    p_department: role === 'Client' ? 'Client' : department,
+    p_client_name: companyName,
+    p_custom_role_id: customRoleId,
+    p_custom_role_name: customRoleName,
+    p_member_id: memberId || null,
+    p_registration_id: registrationId || null,
+  });
+
+  if (finalizeError) {
+    if (createdAuthUser) await adminClient.auth.admin.deleteUser(authUser.id);
+    return json({ error: finalizeError.message }, 400);
+  }
+
+  return json(result, createdAuthUser ? 201 : 200);
 });

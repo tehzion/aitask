@@ -10,6 +10,7 @@ import { canDeleteUser, defaultRolePermissions, getEffectiveRoleName, isBossKoo,
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import ModalShell from '../components/ModalShell';
+import MfaSettings from '../components/MfaSettings';
 
 const ROLES: Role[] = ['Admin', 'Staff', 'Client'];
 const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client'];
@@ -59,6 +60,7 @@ const Approvals: React.FC = () => {
   const [assignmentError, setAssignmentError] = useState('');
   const [actionError, setActionError] = useState('');
   const [isActionSaving, setIsActionSaving] = useState(false);
+  const superAdmin = isBossKoo(currentUser);
   const [roleForm, setRoleForm] = useState({
     name: '',
     description: '',
@@ -103,12 +105,20 @@ const Approvals: React.FC = () => {
           department: role === 'Client' ? 'Client' : department,
           companyName: role === 'Client' ? companyName : undefined,
           customRoleId: approvalCustomRoleId || undefined,
+          registrationId: selectedReg.id,
         });
         if (!inviteResult.ok) {
           setIsActionSaving(false);
           setActionError(inviteResult.error || 'Unable to invite this member.');
           return;
         }
+        setIsActionSaving(false);
+        setSelectedReg(null);
+        setRole('Staff');
+        setDepartment('Designer');
+        setCompanyName('');
+        setApprovalCustomRoleId('');
+        return;
       }
       approveRegistration(selectedReg.id, role, department, role === 'Client' ? companyName : undefined, approvalCustomRoleId || undefined);
       const saved = await commitPendingMutation();
@@ -254,7 +264,7 @@ const Approvals: React.FC = () => {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddUserError('');
-
+    setIsActionSaving(true);
     const result = await addUserBySuperAdmin({
       name: newUser.name,
       email: newUser.email || undefined,
@@ -264,9 +274,16 @@ const Approvals: React.FC = () => {
       companyName: newUser.role === 'Client' ? newUser.companyName : undefined,
       customRoleId: newUser.customRoleId || undefined,
     });
+    setIsActionSaving(false);
 
     if (!result.ok) {
       setAddUserError(result.error || 'Unable to add member.');
+      return;
+    }
+
+    if (secureAccounts) {
+      resetNewUser();
+      setIsAddUserOpen(false);
       return;
     }
 
@@ -313,13 +330,15 @@ const Approvals: React.FC = () => {
       <PageHeader
         title="User Approvals"
         description="Boss Koo super admin controls for registrations, direct member creation, and active users."
-        action={(
-          <Button onClick={() => setIsAddUserOpen(true)}>
+        action={superAdmin ? (
+          <Button onClick={() => setIsAddUserOpen(true)} disabled={isActionSaving || backend.isSaving}>
             <UserPlus className="w-4 h-4" />
             Add Member
           </Button>
-        )}
+        ) : undefined}
       />
+
+      {secureAccounts && superAdmin && <MfaSettings />}
 
       {actionError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert">
@@ -375,29 +394,36 @@ const Approvals: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right space-x-2">
-                      <button 
-                        onClick={() => handleOpenApproval(reg)}
-                        className="inline-flex items-center px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
-                      </button>
-                      <button 
-                        onClick={async () => {
-                          const previousRegistrations = useStore.getState().registrations;
-                          rejectRegistration(reg.id);
-                          setIsActionSaving(true);
-                          const saved = await commitPendingMutation();
-                          setIsActionSaving(false);
-                          if (!saved.ok) {
-                            useStore.setState({ registrations: previousRegistrations });
-                            setActionError(saved.error || 'The rejection was rolled back. Use Retry required to confirm it.');
-                          }
-                        }}
-                        disabled={isActionSaving || backend.isSaving}
-                        className="inline-flex items-center px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        <XCircle className="w-4 h-4 mr-1.5" /> Reject
-                      </button>
+                      {superAdmin ? (
+                        <>
+                          <button
+                            onClick={() => handleOpenApproval(reg)}
+                            disabled={isActionSaving || backend.isSaving}
+                            className="inline-flex items-center px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const previousRegistrations = useStore.getState().registrations;
+                              rejectRegistration(reg.id);
+                              setIsActionSaving(true);
+                              const saved = await commitPendingMutation();
+                              setIsActionSaving(false);
+                              if (!saved.ok) {
+                                useStore.setState({ registrations: previousRegistrations });
+                                setActionError(saved.error || 'The rejection was rolled back. Use Retry required to confirm it.');
+                              }
+                            }}
+                            disabled={isActionSaving || backend.isSaving}
+                            className="inline-flex items-center px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <XCircle className="w-4 h-4 mr-1.5" /> Reject
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-xs font-medium text-slate-500">Super Admin approval required</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -794,7 +820,9 @@ const Approvals: React.FC = () => {
                 >
                   Cancel
                 </Button>
-                <Button type="submit">Create member</Button>
+                <Button type="submit" disabled={isActionSaving || backend.isSaving}>
+                  {isActionSaving ? 'Sending invitation...' : 'Create member'}
+                </Button>
               </div>
             </form>
         </ModalShell>
@@ -817,10 +845,13 @@ const Approvals: React.FC = () => {
                 <label className="block text-sm font-medium text-slate-700 mb-1">System Role</label>
                 <select 
                   className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
-                  value={role} onChange={e => setRole(e.target.value as Role)}
+                  value={secureAccounts ? 'Staff' : role}
+                  disabled={secureAccounts}
+                  onChange={e => setRole(e.target.value as Role)}
                 >
                   {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
+                {secureAccounts && <p className="mt-1 text-xs text-slate-500">Verified registrations are approved as Staff.</p>}
               </div>
 
               <div>

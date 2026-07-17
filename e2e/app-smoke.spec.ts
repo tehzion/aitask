@@ -6,6 +6,12 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByRole('button', { name: 'Demo credentials - click to fill' })).toBeVisible();
   await expect(page.getByText(/^v\d+\.\d+\.\d+\+[a-z0-9]+(?:\.dev)?$/)).toBeVisible();
 
+  await page.getByRole('button', { name: 'Register as Staff' }).click();
+  await expect(page.getByRole('heading', { name: 'Register for Access' })).toBeVisible();
+  await expect(page.getByText('Staff', { exact: true })).toBeVisible();
+  await expect(page.getByText('Client (External Customer)', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Already have an account? Sign in' }).click();
+
   await page.getByLabel('Email or username').fill('Boss Koo');
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Access Dashboard' }).click();

@@ -111,6 +111,10 @@ type TaskUpdateInput = Partial<Pick<
 
 type ProjectUpdateInput = Partial<Pick<Project, 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline'>>;
 type ClientProfileInput = Partial<Pick<ClientProfile, 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes'>>;
+type AddMemberInput = Omit<User, 'id' | 'avatar' | 'isSuperAdmin'> & {
+  registrationId?: string;
+  memberId?: string;
+};
 
 interface StoreState {
   currentUser: User | null;
@@ -160,8 +164,8 @@ interface StoreState {
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   sendDueDateReminders: () => void;
-  registerUser: (data: Omit<Registration, 'id' | 'status' | 'createdAt'>) => void;
-  addUserBySuperAdmin: (data: Omit<User, 'id' | 'avatar' | 'isSuperAdmin'>) => Promise<{ ok: boolean; error?: string }>;
+  registerUser: (data: Omit<Registration, 'id' | 'status' | 'createdAt'>) => Promise<{ ok: boolean; error?: string }>;
+  addUserBySuperAdmin: (data: AddMemberInput) => Promise<{ ok: boolean; error?: string }>;
   addCustomRole: (data: Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt' | 'isProtected'>) => { ok: boolean; id?: string; error?: string };
   updateCustomRole: (id: string, data: Partial<Pick<CustomRole, 'name' | 'description' | 'baseRole' | 'permissions'>>) => { ok: boolean; error?: string };
   deleteCustomRole: (id: string) => { ok: boolean; error?: string };
@@ -186,6 +190,17 @@ const sensitiveSnapshotKeyPattern = /(password|secret|token|api[_-]?key|service[
 const safePasswordMetadataKeys = new Set(['mustResetPassword', 'must_reset_password']);
 const normalizeClientKey = (value?: string | null) => value?.trim().toLowerCase() || '';
 const profileEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const getFunctionErrorMessage = async (error: unknown, fallback: string) => {
+  if (!error || typeof error !== 'object') return fallback;
+  const context = (error as { context?: unknown }).context;
+  if (typeof Response !== 'undefined' && context instanceof Response) {
+    const payload = await context.clone().json().catch(() => null) as { error?: unknown } | null;
+    if (typeof payload?.error === 'string' && payload.error.trim()) return payload.error;
+  }
+  const message = (error as { message?: unknown }).message;
+  return typeof message === 'string' && message.trim() ? message : fallback;
+};
 
 const isValidIsoDate = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -2283,32 +2298,70 @@ export const useStore = create<StoreState>()(
         };
       }),
 
-      registerUser: (data) => set((state) => {
-        const newReg: Registration = {
-          ...data,
-          id: nowId('R'),
-          status: 'Pending',
-          createdAt: new Date().toISOString()
-        };
+      registerUser: async (data) => {
+        const name = data.name.trim();
+        const email = data.email.trim().toLowerCase();
+        const phone = data.phone.trim();
+        const jobPosition = data.jobPosition.trim();
 
-        const bossKoo = state.users.find(u => u.name === 'Boss Koo');
-        const newNotifs = [...(state.notifications || [])];
-
-        if (bossKoo) {
-          newNotifs.unshift(makeNotification({
-            targetUserId: bossKoo.id,
-            title: 'New Registration',
-            message: `${data.name} has registered and is waiting for your approval.`,
-            route: { page: 'approvals' },
-            iconType: 'status'
-          }));
+        if (!name || !email || !phone || !jobPosition || !profileEmailPattern.test(email)) {
+          return { ok: false, error: 'Complete all fields with a valid email address.' };
         }
 
-        return {
-          registrations: [...(state.registrations || []), newReg],
-          notifications: newNotifs
-        };
-      }),
+        if (shouldUseSecureSupabase()) {
+          const password = data.password?.trim() || '';
+          if (password.length < 12) {
+            return { ok: false, error: 'Use a password with at least 12 characters.' };
+          }
+          const { data: signUpData, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                aitask_registration_source: 'staff_signup',
+                name,
+                phone,
+                job_position: jobPosition,
+              },
+            },
+          });
+          if (error) return { ok: false, error: error.message };
+          if (signUpData.session) await supabase.auth.signOut({ scope: 'local' });
+          return { ok: true };
+        }
+
+        set((state) => {
+          const newReg: Registration = {
+            name,
+            email,
+            phone,
+            jobPosition,
+            requestedRole: 'Staff',
+            id: nowId('R'),
+            status: 'Pending',
+            createdAt: new Date().toISOString()
+          };
+
+          const bossKoo = state.users.find(u => u.name === 'Boss Koo');
+          const newNotifs = [...(state.notifications || [])];
+
+          if (bossKoo) {
+            newNotifs.unshift(makeNotification({
+              targetUserId: bossKoo.id,
+              title: 'New Registration',
+              message: `${name} has registered and is waiting for your approval.`,
+              route: { page: 'approvals' },
+              iconType: 'status'
+            }));
+          }
+
+          return {
+            registrations: [...(state.registrations || []), newReg],
+            notifications: newNotifs
+          };
+        });
+        return { ok: true };
+      },
 
       addUserBySuperAdmin: async (data) => {
         const currentUser = get().currentUser;
@@ -2329,7 +2382,7 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'Client company is required for Client users.' };
         }
 
-        const duplicate = get().users.some(user => (
+        const duplicate = !data.memberId && !data.registrationId && get().users.some(user => (
           user.name.toLowerCase() === name.toLowerCase() ||
           (email && user.email?.toLowerCase() === email.toLowerCase())
         ));
@@ -2342,6 +2395,22 @@ export const useStore = create<StoreState>()(
           if (!email || !profileEmailPattern.test(email)) {
             return { ok: false, error: 'A valid email is required for a secure invitation.' };
           }
+          const [{ data: assurance, error: assuranceError }, { data: factors, error: factorsError }] = await Promise.all([
+            supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+            supabase.auth.mfa.listFactors(),
+          ]);
+          if (assuranceError || factorsError) {
+            return { ok: false, error: 'Unable to verify administrative MFA. Sign in again and retry.' };
+          }
+          if (assurance.currentLevel !== 'aal2') {
+            const hasVerifiedFactor = factors.totp.some(factor => factor.status === 'verified');
+            return {
+              ok: false,
+              error: hasVerifiedFactor
+                ? 'Verify MFA in User Approvals before adding or approving members.'
+                : 'Set up MFA in User Approvals before adding or approving members.',
+            };
+          }
           const { error } = await supabase.functions.invoke('invite-aitask-member', {
             body: {
               name,
@@ -2349,9 +2418,12 @@ export const useStore = create<StoreState>()(
               role: data.role,
               department: data.department,
               companyName,
+              customRoleId: data.customRoleId,
+              registrationId: data.registrationId,
+              memberId: data.memberId,
             },
           });
-          if (error) return { ok: false, error: error.message || 'Unable to send the invitation.' };
+          if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to send the invitation.') };
           await get().pullBackendNow({ force: true });
           return { ok: true };
         }

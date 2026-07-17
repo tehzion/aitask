@@ -134,8 +134,14 @@ export const hasPermission = (
 ) => getEffectivePermissions(user, customRoles)[permission];
 
 export const canManageUsers = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'manageUsers', customRoles);
-export const canCreateUsers = (user: User | null | undefined, customRoles: CustomRole[] = []) => canManageUsers(user, customRoles);
-export const canApproveRegistrations = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'approveRegistrations', customRoles);
+export const canCreateUsers = (user: User | null | undefined, customRoles: CustomRole[] = []) => {
+  void customRoles;
+  return isBossKoo(user);
+};
+export const canApproveRegistrations = (user: User | null | undefined, customRoles: CustomRole[] = []) => {
+  void customRoles;
+  return isBossKoo(user);
+};
 export const canDeleteUser = (actor: User | null | undefined, target: User | null | undefined, customRoles: CustomRole[] = []) => (
   Boolean(actor && target && hasPermission(actor, 'deleteUsers', customRoles) && actor.id !== target.id && !isBossKoo(target))
 );

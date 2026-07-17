@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { CustomRole, Project, RolePermissions, Task, User } from '../types';
 import {
   canAssignTasksToOthers,
+  canApproveRegistrations,
   canCommentOnTask,
+  canCreateUsers,
   canEditClientProfile,
   canEditTask,
   canRenameClient,
@@ -17,6 +19,7 @@ import {
 } from './access';
 
 const admin: User = { id: 'admin-1', name: 'Admin', role: 'Admin', department: 'Management' };
+const superAdmin: User = { ...admin, id: 'boss-1', name: 'Boss Koo', isSuperAdmin: true };
 const staff: User = { id: 'staff-1', name: 'Staff', role: 'Staff', department: 'Designer' };
 const otherStaff: User = { id: 'staff-2', name: 'Other Staff', role: 'Staff', department: 'Editor' };
 const acmeClient: User = { id: 'client-1', name: 'Acme Client', role: 'Client', department: 'Client', companyName: 'Acme' };
@@ -72,6 +75,14 @@ const tasks = [
 ];
 
 describe('staff permission matrix', () => {
+  it('reserves member creation and registration approval for the Super Admin', () => {
+    expect(canCreateUsers(superAdmin)).toBe(true);
+    expect(canApproveRegistrations(superAdmin)).toBe(true);
+    expect(canCreateUsers(admin)).toBe(false);
+    expect(canApproveRegistrations(admin)).toBe(false);
+    expect(canCreateUsers(staff)).toBe(false);
+  });
+
   it('lets staff manage assigned work without delegating or editing unrelated work', () => {
     expect(getVisibleTasks(staff, tasks).map(task => task.id)).toEqual(['task-1']);
     expect(canEditTask(staff, tasks[0])).toBe(true);
