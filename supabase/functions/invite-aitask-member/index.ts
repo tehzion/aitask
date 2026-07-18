@@ -63,12 +63,101 @@ Deno.serve(async (request) => {
     console.warn('Invitation denied for unlinked Auth user', { authUserId: authData.user.id });
     return json({ error: 'This signed-in account is not linked to an AiTask member. Sign out and sign in again.' }, 403);
   }
+
+  const body = await request.json().catch(() => ({}));
+  const action = typeof body.action === 'string' ? body.action.trim() : 'invite_member';
+
+  if (action === 'update_self_email') {
+    const nextEmail = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+    const oldEmail = authData.user.email?.trim().toLowerCase() || '';
+
+    if (!validEmail(nextEmail) || nextEmail.length > 320) return json({ error: 'Enter a valid email address' }, 400);
+    if (!currentPassword) return json({ error: 'Current password is required' }, 400);
+    if (!oldEmail) return json({ error: 'The Auth account does not have an email address' }, 409);
+    if (nextEmail === oldEmail) return json({ ok: true, unchanged: true });
+
+    const verifier = createClient(url, anonKey, { auth: { persistSession: false } });
+    const { error: passwordError } = await verifier.auth.signInWithPassword({
+      email: oldEmail,
+      password: currentPassword,
+    });
+    if (passwordError) return json({ error: 'Current password is incorrect' }, 403);
+
+    const { data: authUsers, error: listError } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (listError) return json({ error: 'Unable to verify the new email address' }, 500);
+    const duplicate = authUsers.users.some(user => user.id !== authData.user.id && user.email?.toLowerCase() === nextEmail);
+    if (duplicate) return json({ error: 'Another account already uses this email address' }, 409);
+
+    const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(authData.user.id, {
+      email: nextEmail,
+      email_confirm: true,
+    });
+    if (updateAuthError) return json({ error: updateAuthError.message || 'Unable to update the login email' }, 400);
+
+    const { data: result, error: memberError } = await adminClient.rpc('aitask_update_member_email', {
+      p_actor_member_id: actor.id,
+      p_email: nextEmail,
+    });
+    if (memberError) {
+      const { error: rollbackError } = await adminClient.auth.admin.updateUserById(authData.user.id, {
+        email: oldEmail,
+        email_confirm: true,
+      });
+      if (rollbackError) console.error('Auth email rollback failed', { memberId: actor.id, message: rollbackError.message });
+      return json({ error: memberError.message || 'Unable to update the workspace email' }, 400);
+    }
+
+    return json(result);
+  }
+
   if (!actor.is_super_admin) {
-    console.warn('Invitation denied for non-Super-Admin member', { memberId: actor.id });
+    console.warn('Account management denied for non-Super-Admin member', { memberId: actor.id, action });
     return json({ error: 'Boss Koo Super Admin access is required. Sign in with the Boss Koo account.' }, 403);
   }
 
-  const body = await request.json().catch(() => ({}));
+  if (action === 'delete_member') {
+    const targetMemberId = typeof body.memberId === 'string' ? body.memberId.trim() : '';
+    if (!targetMemberId || targetMemberId === actor.id) return json({ error: 'A different member account is required' }, 400);
+
+    const { data: target, error: targetError } = await adminClient
+      .from('aitask_members')
+      .select('id,auth_user_id,is_super_admin')
+      .eq('workspace_id', actor.workspace_id)
+      .eq('id', targetMemberId)
+      .maybeSingle();
+    if (targetError) return json({ error: 'Unable to verify the member account' }, 500);
+    if (!target) return json({ error: 'Member account not found' }, 404);
+    if (target.is_super_admin) return json({ error: 'Protected Super Admin accounts cannot be deleted' }, 403);
+
+    const { count: assignedCount, error: assignedError } = await adminClient
+      .from('aitask_entities')
+      .select('entity_id', { count: 'exact', head: true })
+      .eq('workspace_id', actor.workspace_id)
+      .eq('entity_type', 'task')
+      .eq('assigned_to', targetMemberId);
+    if (assignedError) return json({ error: 'Unable to check assigned tasks' }, 500);
+    if ((assignedCount || 0) > 0) return json({ error: 'Reassign this member\'s tasks before deleting the account' }, 409);
+
+    if (target.auth_user_id) {
+      const { error: deleteAuthError } = await adminClient.auth.admin.deleteUser(target.auth_user_id);
+      if (deleteAuthError && !/not found/i.test(deleteAuthError.message)) {
+        return json({ error: deleteAuthError.message || 'Unable to delete the Auth account' }, 400);
+      }
+    }
+
+    const { data: result, error: deleteMemberError } = await adminClient.rpc('aitask_delete_member_account', {
+      p_actor_member_id: actor.id,
+      p_member_id: targetMemberId,
+    });
+    if (deleteMemberError) {
+      return json({ error: `${deleteMemberError.message}. The login is already disabled; retry member removal.` }, 409);
+    }
+    return json(result);
+  }
+
+  if (action !== 'invite_member') return json({ error: 'Unsupported account action' }, 400);
+
   const registrationId = typeof body.registrationId === 'string' ? body.registrationId.trim() : '';
   const memberId = typeof body.memberId === 'string' ? body.memberId.trim() : '';
   let name = typeof body.name === 'string' ? body.name.trim() : '';

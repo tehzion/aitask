@@ -312,15 +312,15 @@ const Approvals: React.FC = () => {
     if (!userToDelete) return;
 
     const previous = useStore.getState();
-    const result = deleteUser(userToDelete);
+    setIsActionSaving(true);
+    const result = await deleteUser(userToDelete);
     if (!result.ok) {
+      setIsActionSaving(false);
       setDeleteUserError(result.error || 'Unable to delete this user.');
-      setUserToDelete(null);
       return;
     }
 
-    setIsActionSaving(true);
-    const saved = await commitPendingMutation();
+    const saved = secureAccounts ? { ok: true } : await commitPendingMutation();
     setIsActionSaving(false);
     if (!saved.ok) {
       useStore.setState({

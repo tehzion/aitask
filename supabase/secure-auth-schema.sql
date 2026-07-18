@@ -145,6 +145,22 @@ as $$
   ), false);
 $$;
 
+create or replace function private.aitask_is_super_admin(p_workspace_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce((
+    select is_super_admin
+    from public.aitask_members
+    where workspace_id = p_workspace_id
+      and auth_user_id = (select auth.uid())
+    limit 1
+  ), false);
+$$;
+
 create or replace function private.aitask_has_permission(p_workspace_id text, p_permission text)
 returns boolean
 language sql
@@ -153,15 +169,25 @@ security definer
 set search_path = ''
 as $$
   select coalesce((
-    select member.is_super_admin
-      or member.role = 'Admin'
-      or coalesce((
-        case
-          when member.permissions <> '{}'::jsonb
-            then member.permissions ->> p_permission
-          else custom_role.data -> 'permissions' ->> p_permission
-        end
-      ) = 'true', false)
+    select case
+      when member.is_super_admin then true
+      when member.permissions <> '{}'::jsonb then coalesce(member.permissions ->> p_permission = 'true', false)
+      when custom_role.data is not null then coalesce(custom_role.data -> 'permissions' ->> p_permission = 'true', false)
+      when member.role = 'Admin' then p_permission = any(array[
+        'viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects', 'viewAllTasks',
+        'viewAllClients', 'manageAssignedClients', 'viewReports', 'viewSettings',
+        'createTasks', 'editTasks', 'createProjects'
+      ]::text[])
+      when member.role = 'Staff' then p_permission = any(array[
+        'viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects',
+        'viewReports', 'viewSettings', 'createTasks'
+      ]::text[])
+      when member.role = 'Client' then p_permission = any(array[
+        'viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects',
+        'viewReports', 'viewSettings', 'clientReview'
+      ]::text[])
+      else false
+    end
     from public.aitask_members member
     left join lateral (
       select entity.data
@@ -302,6 +328,7 @@ revoke all on function private.aitask_member_id(text) from public;
 revoke all on function private.aitask_member_role(text) from public;
 revoke all on function private.aitask_member_client_key(text) from public;
 revoke all on function private.aitask_is_admin(text) from public;
+revoke all on function private.aitask_is_super_admin(text) from public;
 revoke all on function private.aitask_has_permission(text, text) from public;
 revoke all on function private.aitask_can_view_task(text, text) from public;
 revoke all on function private.aitask_can_edit_task(text, text) from public;
@@ -314,6 +341,7 @@ grant execute on function private.aitask_member_id(text) to authenticated;
 grant execute on function private.aitask_member_role(text) to authenticated;
 grant execute on function private.aitask_member_client_key(text) to authenticated;
 grant execute on function private.aitask_is_admin(text) to authenticated;
+grant execute on function private.aitask_is_super_admin(text) to authenticated;
 grant execute on function private.aitask_has_permission(text, text) to authenticated;
 grant execute on function private.aitask_can_view_task(text, text) to authenticated;
 grant execute on function private.aitask_can_edit_task(text, text) to authenticated;
@@ -329,9 +357,10 @@ set search_path = ''
 as $$
 begin
   new.updated_at := now();
-  if (select auth.uid()) = old.auth_user_id and not private.aitask_is_admin(old.workspace_id) then
+  if (select auth.uid()) = old.auth_user_id and not private.aitask_is_super_admin(old.workspace_id) then
     if new.workspace_id is distinct from old.workspace_id
       or new.auth_user_id is distinct from old.auth_user_id
+      or new.email is distinct from old.email
       or new.role is distinct from old.role
       or new.department is distinct from old.department
       or new.client_name is distinct from old.client_name
@@ -415,27 +444,26 @@ create policy "workspace members can read directory" on public.aitask_members
   using (private.aitask_member_id(workspace_id) is not null);
 
 drop policy if exists "admins can insert members" on public.aitask_members;
-create policy "admins can insert members" on public.aitask_members
+create policy "super admins can insert members" on public.aitask_members
   for insert to authenticated
-  with check (private.aitask_is_admin(workspace_id));
+  with check (private.aitask_is_super_admin(workspace_id));
 
 drop policy if exists "admins or self can update members" on public.aitask_members;
-create policy "admins or self can update members" on public.aitask_members
+create policy "super admins or self can update members" on public.aitask_members
   for update to authenticated
-  using (private.aitask_is_admin(workspace_id) or auth_user_id = (select auth.uid()))
-  with check (private.aitask_is_admin(workspace_id) or auth_user_id = (select auth.uid()));
+  using (private.aitask_is_super_admin(workspace_id) or auth_user_id = (select auth.uid()))
+  with check (private.aitask_is_super_admin(workspace_id) or auth_user_id = (select auth.uid()));
 
 drop policy if exists "admins can delete members" on public.aitask_members;
-create policy "admins can delete members" on public.aitask_members
+create policy "super admins can delete members" on public.aitask_members
   for delete to authenticated
-  using (private.aitask_is_admin(workspace_id) and auth_user_id is distinct from (select auth.uid()));
+  using (private.aitask_is_super_admin(workspace_id) and auth_user_id is distinct from (select auth.uid()));
 
 drop policy if exists "members can read scoped entities" on public.aitask_entities;
 create policy "members can read scoped entities" on public.aitask_entities
   for select to authenticated
   using (
-    private.aitask_is_admin(workspace_id)
-    or (entity_type = 'task' and private.aitask_can_view_task(workspace_id, entity_id))
+    (entity_type = 'task' and private.aitask_can_view_task(workspace_id, entity_id))
     or (entity_type in ('comment', 'approval') and private.aitask_can_view_task(workspace_id, parent_id))
     or (entity_type = 'client' and private.aitask_can_view_client(workspace_id, client_key))
     or (entity_type = 'project' and private.aitask_can_view_project(workspace_id, entity_id))

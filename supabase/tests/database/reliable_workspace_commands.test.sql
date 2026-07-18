@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(20);
+select plan(23);
 
 select has_column('public', 'aitask_workspaces', 'version', 'workspaces expose an invalidation revision');
 select has_column('public', 'aitask_workspaces', 'updated_at', 'workspace revision has a server timestamp');
@@ -15,6 +15,12 @@ select has_function(
   'aitask_execute_command',
   array['text', 'uuid', 'text', 'jsonb'],
   'transactional command RPC exists'
+);
+select has_function(
+  'private',
+  'aitask_is_super_admin',
+  array['text'],
+  'Super Admin authorization is distinct from the Admin business role'
 );
 select is(
   (select prosecdef from pg_proc where oid = 'public.aitask_execute_command(text,uuid,text,jsonb)'::regprocedure),
@@ -33,6 +39,14 @@ select ok(
 select ok(
   not has_function_privilege('anon', 'public.aitask_execute_command(text,uuid,text,jsonb)', 'EXECUTE'),
   'anonymous users cannot execute commands'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.aitask_execute_command_legacy(text,uuid,text,jsonb)', 'EXECUTE'),
+  'authenticated users cannot bypass the command authorization wrapper'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.aitask_delete_member_account(text,text)', 'EXECUTE'),
+  'member account deletion is service-role only'
 );
 select ok(
   not has_table_privilege('anon', 'public.aitask_members', 'SELECT'),
@@ -65,8 +79,8 @@ select ok(
 select policies_are(
   'public',
   'aitask_audit_events',
-  array['admins can read audit events'],
-  'audit events expose only the Admin read policy'
+  array['super admins can read audit events'],
+  'audit events expose only the Super Admin read policy'
 );
 select is(
   (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'aitask_command_receipts'),

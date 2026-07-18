@@ -142,9 +142,10 @@ export const canApproveRegistrations = (user: User | null | undefined, customRol
   void customRoles;
   return isBossKoo(user);
 };
-export const canDeleteUser = (actor: User | null | undefined, target: User | null | undefined, customRoles: CustomRole[] = []) => (
-  Boolean(actor && target && hasPermission(actor, 'deleteUsers', customRoles) && actor.id !== target.id && !isBossKoo(target))
-);
+export const canDeleteUser = (actor: User | null | undefined, target: User | null | undefined, customRoles: CustomRole[] = []) => {
+  void customRoles;
+  return Boolean(actor && target && isBossKoo(actor) && actor.id !== target.id && !isBossKoo(target));
+};
 export const canCreateTasks = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'createTasks', customRoles);
 export const canViewAllTasks = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   hasPermission(user, 'viewAllTasks', customRoles) || hasPermission(user, 'editTasks', customRoles)

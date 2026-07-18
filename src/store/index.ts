@@ -151,6 +151,7 @@ interface StoreState {
   requestPasswordRecovery: (identifier: string) => Promise<{ ok: boolean; error?: string }>;
   completePasswordSetup: (data: { newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
   updateCurrentUserProfile: (data: Pick<User, 'name' | 'email' | 'avatar'>) => { ok: boolean; error?: string };
+  updateCurrentUserEmail: (email: string, currentPassword: string) => Promise<{ ok: boolean; error?: string }>;
   updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
   updateTaskPriority: (taskId: string, priority: Priority) => void;
@@ -180,13 +181,19 @@ interface StoreState {
   assignCustomRoleToUser: (userId: string, customRoleId?: string) => { ok: boolean; error?: string };
   approveRegistration: (id: string, role: Role, department: Department, companyName?: string, customRoleId?: string) => void;
   rejectRegistration: (id: string) => void;
-  deleteUser: (userId: string) => { ok: boolean; error?: string };
+  deleteUser: (userId: string) => Promise<{ ok: boolean; error?: string }>;
   _forceSyncMockData: () => void;
   addTaskStatus: (status: string) => { ok: boolean; error?: string };
   deleteTaskStatus: (status: string) => { ok: boolean; error?: string };
 }
 
 const nowId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+const pendingMutationMessage = 'Resolve the pending Supabase change with Retry or Discard before editing another record.';
+const isWorkspaceMutationLocked = (state: StoreState) => (
+  shouldUseSecureSupabase()
+  && state.backend.pendingMutations > 0
+  && ['offline', 'conflict', 'retry_required'].includes(state.backend.status)
+);
 let isApplyingRemoteSnapshot = false;
 const seededUserIds = new Set(mockUsers.map(user => user.id));
 const seededProjectIds = new Set(mockProjects.map(project => project.id));
@@ -1200,7 +1207,10 @@ export const useStore = create<StoreState>()(
           before.hasLocalChanges &&
           (before.status === 'conflict' || before.status === 'retry_required' || before.status === 'offline')
         ) {
-          return get().retryMutation();
+          return {
+            ok: false,
+            error: pendingMutationMessage,
+          };
         }
         await get().syncBackendNow(commandType);
         const backend = get().backend;
@@ -1368,6 +1378,7 @@ export const useStore = create<StoreState>()(
       updateCurrentUserProfile: (data) => {
         const currentUser = get().currentUser;
         if (!currentUser) return { ok: false, error: 'You must be logged in to update your profile.' };
+        if (isWorkspaceMutationLocked(get())) return { ok: false, error: pendingMutationMessage };
 
         const name = data.name.trim();
         const email = cleanAccountEmail(data.email);
@@ -1389,6 +1400,9 @@ export const useStore = create<StoreState>()(
 
         if (data.avatar?.trim() && !avatar) {
           return { ok: false, error: 'Avatar must be an uploaded photo, app image, generated avatar, or Supabase image URL.' };
+        }
+        if (shouldUseSecureSupabase() && email !== cleanAccountEmail(currentUser.email)) {
+          return { ok: false, error: 'Confirm the login email change with your current password first.' };
         }
 
         const now = new Date().toISOString();
@@ -1412,9 +1426,48 @@ export const useStore = create<StoreState>()(
         return { ok: true };
       },
 
+      updateCurrentUserEmail: async (nextEmail, currentPassword) => {
+        const currentUser = get().currentUser;
+        if (!currentUser) return { ok: false, error: 'You must be logged in to update your email.' };
+        if (isWorkspaceMutationLocked(get())) return { ok: false, error: pendingMutationMessage };
+
+        const email = cleanAccountEmail(nextEmail);
+        if (!email || !profileEmailPattern.test(email)) return { ok: false, error: 'Enter a valid email address.' };
+        if (!currentPassword) return { ok: false, error: 'Enter your current password to change the login email.' };
+        if (email === cleanAccountEmail(currentUser.email)) return { ok: true };
+        if (get().users.some(user => user.id !== currentUser.id && cleanAccountEmail(user.email) === email)) {
+          return { ok: false, error: 'Another user already uses that email.' };
+        }
+
+        if (!shouldUseSecureSupabase()) {
+          const result = get().updateCurrentUserProfile({
+            name: currentUser.name,
+            email,
+            avatar: currentUser.avatar,
+          });
+          return result;
+        }
+
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session?.access_token) {
+          return { ok: false, error: 'Your secure session has expired. Sign out, then sign in again.' };
+        }
+
+        const { error } = await supabase.functions.invoke('invite-aitask-member', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          body: { action: 'update_self_email', email, currentPassword },
+        });
+        if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to update the login email.') };
+
+        await supabase.auth.refreshSession();
+        await get().pullBackendNow({ force: true, silent: true });
+        return { ok: true };
+      },
+
       updateCurrentUserPassword: async (data) => {
         const currentUser = get().currentUser;
         if (!currentUser) return { ok: false, error: 'You must be logged in to update your password.' };
+        if (isWorkspaceMutationLocked(get())) return { ok: false, error: pendingMutationMessage };
 
         if (shouldUseSecureSupabase()) {
           const currentPassword = data.currentPassword || '';
@@ -1504,6 +1557,7 @@ export const useStore = create<StoreState>()(
       },
 
       markNotificationRead: (id) => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
         const currentUser = state.currentUser;
         return {
           notifications: (state.notifications || []).map(n => {
@@ -1523,6 +1577,7 @@ export const useStore = create<StoreState>()(
       }),
 
       markAllNotificationsRead: () => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
         const currentUser = state.currentUser;
         if (!currentUser) return state;
 
@@ -1544,6 +1599,7 @@ export const useStore = create<StoreState>()(
       }),
 
       updateTaskStatus: (taskId, status) => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
         if (!task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
@@ -1615,6 +1671,7 @@ export const useStore = create<StoreState>()(
       }),
 
       updateTaskPriority: (taskId, priority) => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
         if (!task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
@@ -1634,6 +1691,7 @@ export const useStore = create<StoreState>()(
       }),
 
       updateTaskAssignee: (taskId, assignedTo) => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
         if (!task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
@@ -1668,6 +1726,7 @@ export const useStore = create<StoreState>()(
       }),
 
       updateTaskAttachment: (taskId, attachmentLink, attachmentName) => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
         const task = state.tasks.find(t => t.id === taskId);
         if (!task || !canEditTask(state.currentUser, task, state.rolePermissions)) return state;
 
@@ -1693,6 +1752,7 @@ export const useStore = create<StoreState>()(
       }),
 
       updateTaskDueDate: (taskId, newDueDate) => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
         const task = state.tasks.find(t => t.id === taskId);
         if (!task || !canEditTask(state.currentUser, task, state.rolePermissions)) return state;
         const nextDueDate = normalizeOptionalIsoDate(newDueDate);
@@ -1718,6 +1778,7 @@ export const useStore = create<StoreState>()(
 
       updateTask: (taskId, data) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
         if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions)) {
@@ -1844,6 +1905,7 @@ export const useStore = create<StoreState>()(
 
       deleteTask: (taskId) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         const task = state.tasks.find(item => item.id === taskId);
         if (!currentUser || !task || !canDeleteTask(currentUser, task, state.rolePermissions)) {
@@ -1869,6 +1931,7 @@ export const useStore = create<StoreState>()(
       },
 
       reviewClientApproval: (taskId, status, note) => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
         if (!currentUser || !task || !canReviewTaskAsClient(currentUser, task, state.rolePermissions)) return state;
@@ -1896,32 +1959,33 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        const notifications = [
-          makeNotification({
+        const notifications: AppNotification[] = [];
+        if (!shouldUseSecureSupabase()) {
+          notifications.push(makeNotification({
             targetRole: 'Admin',
             title: status === 'Approved' ? 'Client Approved Task' : 'Client Requested Revision',
             message: `${currentUser.name} ${status === 'Approved' ? 'approved' : 'rejected'} "${task.title}"${note ? `: ${note}` : '.'}`,
             route: { page: 'tasks', entityId: taskId },
             iconType: status === 'Approved' ? 'success' : 'alert'
-          }),
-        ];
+          }));
 
-        if (status === 'Rejected') {
-          notifications.push(makeNotification({
-            targetUserId: task.assignedTo,
-            title: 'Client Requested Revision',
-            message: `${currentUser.name} requested changes on "${task.title}"${note ? `: ${note}` : '.'}`,
-            route: { page: 'tasks', entityId: taskId },
-            iconType: 'alert'
-          }));
-        } else {
-          notifications.push(makeNotification({
-            targetUserId: task.assignedTo,
-            title: 'Client Approved Task',
-            message: `${currentUser.name} approved "${task.title}".`,
-            route: { page: 'tasks', entityId: taskId },
-            iconType: 'success'
-          }));
+          if (status === 'Rejected') {
+            notifications.push(makeNotification({
+              targetUserId: task.assignedTo,
+              title: 'Client Requested Revision',
+              message: `${currentUser.name} requested changes on "${task.title}"${note ? `: ${note}` : '.'}`,
+              route: { page: 'tasks', entityId: taskId },
+              iconType: 'alert'
+            }));
+          } else {
+            notifications.push(makeNotification({
+              targetUserId: task.assignedTo,
+              title: 'Client Approved Task',
+              message: `${currentUser.name} approved "${task.title}".`,
+              route: { page: 'tasks', entityId: taskId },
+              iconType: 'success'
+            }));
+          }
         }
 
         useToastStore.getState().addToast(
@@ -1936,6 +2000,7 @@ export const useStore = create<StoreState>()(
       }),
 
       requestRevision: (taskId, note) => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
         if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
@@ -1983,6 +2048,10 @@ export const useStore = create<StoreState>()(
 
       addTask: (taskData) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) {
+          useToastStore.getState().addToast(pendingMutationMessage, 'warning');
+          return '';
+        }
         const currentUser = state.currentUser;
         if (!currentUser || !canCreateTasks(currentUser, state.rolePermissions)) return '';
         if (!state.users.some(user => user.id === taskData.assignedTo && user.role !== 'Client')) return '';
@@ -2054,8 +2123,13 @@ export const useStore = create<StoreState>()(
       },
 
       addProject: (projectData) => {
-        const currentUser = get().currentUser;
-        if (!currentUser || !canManageProjects(currentUser, get().rolePermissions)) return '';
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) {
+          useToastStore.getState().addToast(pendingMutationMessage, 'warning');
+          return '';
+        }
+        const currentUser = state.currentUser;
+        if (!currentUser || !canManageProjects(currentUser, state.rolePermissions)) return '';
 
         const clientName = projectData.clientName.trim();
         const projectName = projectData.projectName.trim() || clientName;
@@ -2089,6 +2163,7 @@ export const useStore = create<StoreState>()(
 
       updateProject: (projectId, data) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         const project = state.projects.find(item => item.id === projectId);
         if (!currentUser || !project || !canEditProject(currentUser, project, state.rolePermissions)) {
@@ -2134,6 +2209,7 @@ export const useStore = create<StoreState>()(
 
       deleteProject: (projectId) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         const project = state.projects.find(item => item.id === projectId);
         if (!currentUser || !project || !canDeleteProject(currentUser, project, state.rolePermissions)) {
@@ -2153,6 +2229,7 @@ export const useStore = create<StoreState>()(
 
       upsertClientProfile: (clientName, data) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         if (!canEditClientProfile(currentUser, clientName, state.tasks, state.rolePermissions)) {
           return { ok: false, error: 'You need Manage assigned clients permission and a direct task assignment to edit this client.' };
@@ -2195,6 +2272,7 @@ export const useStore = create<StoreState>()(
 
       renameClient: (oldClientName, newClientName) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         const oldName = oldClientName.trim();
         const nextName = newClientName.trim();
@@ -2280,6 +2358,7 @@ export const useStore = create<StoreState>()(
 
       deleteClientProfile: (clientId) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         if (!canManageClientProfiles(currentUser)) {
           return { ok: false, error: 'Only admins can delete client profiles.' };
@@ -2298,6 +2377,7 @@ export const useStore = create<StoreState>()(
       },
 
       addComment: (taskId, text) => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
         if (!currentUser || !task || !canCommentOnTask(currentUser, task, state.rolePermissions)) return state;
@@ -2321,7 +2401,8 @@ export const useStore = create<StoreState>()(
         });
 
         const newNotifs: AppNotification[] = [];
-        if (currentUser.role !== 'Admin') {
+        const serverGeneratesClientNotifications = shouldUseSecureSupabase() && currentUser.role === 'Client';
+        if (!serverGeneratesClientNotifications && currentUser.role !== 'Admin') {
           newNotifs.push(makeNotification({
             targetRole: 'Admin',
             title: currentUser.role === 'Client' ? 'Client Feedback' : 'New Comment',
@@ -2331,7 +2412,7 @@ export const useStore = create<StoreState>()(
           }));
         }
 
-        if (task.assignedTo !== currentUser.id) {
+        if (!serverGeneratesClientNotifications && task.assignedTo !== currentUser.id) {
           newNotifs.push(makeNotification({
             targetUserId: task.assignedTo,
             title: currentUser.role === 'Client' ? 'Client Feedback' : 'New Comment',
@@ -2348,6 +2429,7 @@ export const useStore = create<StoreState>()(
       }),
 
       sendDueDateReminders: () => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const tomorrow = new Date(today);
@@ -2455,8 +2537,10 @@ export const useStore = create<StoreState>()(
       },
 
       addUserBySuperAdmin: async (data) => {
-        const currentUser = get().currentUser;
-        if (!canCreateUsers(currentUser, get().rolePermissions)) {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const currentUser = state.currentUser;
+        if (!canCreateUsers(currentUser, state.rolePermissions)) {
           return { ok: false, error: 'Only Boss Koo can add members directly.' };
         }
 
@@ -2590,8 +2674,10 @@ export const useStore = create<StoreState>()(
       },
 
       addCustomRole: (data) => {
-        const currentUser = get().currentUser;
-        if (!canCreateUsers(currentUser, get().rolePermissions)) {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const currentUser = state.currentUser;
+        if (!canCreateUsers(currentUser, state.rolePermissions)) {
           return { ok: false, error: 'Only Boss Koo can create custom roles.' };
         }
 
@@ -2621,8 +2707,10 @@ export const useStore = create<StoreState>()(
       },
 
       updateCustomRole: (id, data) => {
-        const currentUser = get().currentUser;
-        if (!canCreateUsers(currentUser, get().rolePermissions)) {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const currentUser = state.currentUser;
+        if (!canCreateUsers(currentUser, state.rolePermissions)) {
           return { ok: false, error: 'Only Boss Koo can update custom roles.' };
         }
 
@@ -2661,8 +2749,10 @@ export const useStore = create<StoreState>()(
       },
 
       deleteCustomRole: (id) => {
-        const currentUser = get().currentUser;
-        if (!canCreateUsers(currentUser, get().rolePermissions)) {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const currentUser = state.currentUser;
+        if (!canCreateUsers(currentUser, state.rolePermissions)) {
           return { ok: false, error: 'Only Boss Koo can delete custom roles.' };
         }
 
@@ -2684,8 +2774,10 @@ export const useStore = create<StoreState>()(
       },
 
       assignCustomRoleToUser: (userId, customRoleId) => {
-        const currentUser = get().currentUser;
-        if (!canCreateUsers(currentUser, get().rolePermissions)) {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const currentUser = state.currentUser;
+        if (!canCreateUsers(currentUser, state.rolePermissions)) {
           return { ok: false, error: 'Only Boss Koo can assign custom roles.' };
         }
 
@@ -2717,6 +2809,7 @@ export const useStore = create<StoreState>()(
       },
 
       approveRegistration: (id, role, department, companyName, customRoleId) => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
         if (!canApproveRegistrations(state.currentUser, state.rolePermissions)) return state;
 
         const reg = state.registrations.find(r => r.id === id);
@@ -2749,13 +2842,16 @@ export const useStore = create<StoreState>()(
         };
       }),
 
-      rejectRegistration: (id) => set((state) => ({
-        registrations: canApproveRegistrations(state.currentUser, state.rolePermissions)
-          ? state.registrations.map(r => r.id === id ? { ...r, status: 'Rejected' } : r)
-          : state.registrations
-      })),
+      rejectRegistration: (id) => set((state) => {
+        if (isWorkspaceMutationLocked(state)) return state;
+        return {
+          registrations: canApproveRegistrations(state.currentUser, state.rolePermissions)
+            ? state.registrations.map(r => r.id === id ? { ...r, status: 'Rejected' } : r)
+            : state.registrations
+        };
+      }),
 
-      deleteUser: (userId) => {
+      deleteUser: async (userId) => {
         const state = get();
         const targetUser = state.users.find(user => user.id === userId);
 
@@ -2769,6 +2865,22 @@ export const useStore = create<StoreState>()(
                 : 'Only Boss Koo can delete members.';
 
           return { ok: false, error };
+        }
+
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+
+        if (shouldUseSecureSupabase()) {
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          if (sessionError || !session?.access_token) {
+            return { ok: false, error: 'Your secure session has expired. Sign out, then sign in again.' };
+          }
+          const { error } = await supabase.functions.invoke('invite-aitask-member', {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            body: { action: 'delete_member', memberId: userId },
+          });
+          if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to delete the member account.') };
+          await get().pullBackendNow({ force: true, silent: true });
+          return { ok: true };
         }
 
         set((current) => ({
@@ -2838,6 +2950,8 @@ export const useStore = create<StoreState>()(
       },
 
       addTaskStatus: (status) => {
+        if (isWorkspaceMutationLocked(get())) return { ok: false, error: pendingMutationMessage };
+        if (!isBossKoo(get().currentUser)) return { ok: false, error: 'Only Boss Koo can manage task statuses.' };
         const trimmed = status.trim();
         if (!trimmed) {
           return { ok: false, error: 'Status name cannot be empty.' };
@@ -2860,6 +2974,8 @@ export const useStore = create<StoreState>()(
       },
 
       deleteTaskStatus: (status) => {
+        if (isWorkspaceMutationLocked(get())) return { ok: false, error: pendingMutationMessage };
+        if (!isBossKoo(get().currentUser)) return { ok: false, error: 'Only Boss Koo can manage task statuses.' };
         const DEFAULTS = ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'];
         if (DEFAULTS.some(d => d.toLowerCase() === status.toLowerCase())) {
           return { ok: false, error: 'Cannot delete default system status.' };

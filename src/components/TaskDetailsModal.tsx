@@ -120,9 +120,9 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     ? users.filter(user => user.role !== 'Client' && user.department === editForm.department)
     : users.filter(user => user.id === editForm.assignedTo);
 
-  const confirmPendingMutation = async () => {
+  const confirmPendingMutation = async (commandType?: string) => {
     setIsSubmitting(true);
-    const result = await commitPendingMutation();
+    const result = await commitPendingMutation(commandType);
     setIsSubmitting(false);
     if (!result.ok) {
       setMutationError(result.error || 'The change is waiting to be saved.');
@@ -136,7 +136,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     e.preventDefault();
     if (!commentText.trim()) return;
     addComment(task.id, commentText);
-    if (await confirmPendingMutation()) setCommentText('');
+    if (await confirmPendingMutation('comment.add')) setCommentText('');
   };
 
   const handleAttachmentSave = async (e: React.FormEvent) => {
@@ -147,13 +147,13 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
 
   const handleClientReview = async (status: 'Approved' | 'Rejected') => {
     reviewClientApproval(task.id, status, approvalNote);
-    if (await confirmPendingMutation()) setApprovalNote('');
+    if (await confirmPendingMutation('approval.review')) setApprovalNote('');
   };
 
   const handleRevisionRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     requestRevision(task.id, revisionNote);
-    if (await confirmPendingMutation()) setRevisionNote('');
+    if (await confirmPendingMutation('approval.revision')) setRevisionNote('');
   };
 
   const handleDetailsSave = async (e: React.FormEvent) => {

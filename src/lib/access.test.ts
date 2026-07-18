@@ -5,6 +5,7 @@ import {
   canApproveRegistrations,
   canCommentOnTask,
   canCreateUsers,
+  canDeleteUser,
   canEditClientProfile,
   canEditTask,
   canRenameClient,
@@ -81,6 +82,9 @@ describe('staff permission matrix', () => {
     expect(canCreateUsers(admin)).toBe(false);
     expect(canApproveRegistrations(admin)).toBe(false);
     expect(canCreateUsers(staff)).toBe(false);
+    expect(canDeleteUser(superAdmin, staff)).toBe(true);
+    expect(canDeleteUser(admin, staff)).toBe(false);
+    expect(canDeleteUser({ ...staff, permissions: { ...defaultRolePermissions.Staff, deleteUsers: true } }, admin)).toBe(false);
   });
 
   it('lets staff manage assigned work without delegating or editing unrelated work', () => {

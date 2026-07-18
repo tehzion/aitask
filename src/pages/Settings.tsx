@@ -76,6 +76,7 @@ const Settings: React.FC = () => {
     backend,
     rolePermissions,
     updateCurrentUserProfile,
+    updateCurrentUserEmail,
     updateCurrentUserPassword,
     pullBackendNow,
     taskStatuses,
@@ -87,6 +88,7 @@ const Settings: React.FC = () => {
   const isClientUser = currentUser?.role === 'Client';
   const [profileName, setProfileName] = React.useState(currentUser?.name || '');
   const [profileEmail, setProfileEmail] = React.useState(currentUser?.email || '');
+  const [profileCurrentPassword, setProfileCurrentPassword] = React.useState('');
   const [avatarUrl, setAvatarUrl] = React.useState(currentUser?.avatar || '');
   const [profileMessage, setProfileMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [avatarUploadMessage, setAvatarUploadMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
@@ -169,6 +171,7 @@ const Settings: React.FC = () => {
     profileEmail.trim() !== (currentUser?.email || '') ||
     avatarUrl.trim() !== (currentUser?.avatar || '')
   );
+  const profileEmailChanged = profileEmail.trim().toLowerCase() !== (currentUser?.email || '').trim().toLowerCase();
   const isUploadedAvatar = avatarUrl.startsWith('data:image/');
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
   const mustResetPassword = Boolean(currentUser?.mustResetPassword);
@@ -218,6 +221,7 @@ const Settings: React.FC = () => {
   React.useEffect(() => {
     setProfileName(currentUser?.name || '');
     setProfileEmail(currentUser?.email || '');
+    setProfileCurrentPassword('');
     setAvatarUrl(currentUser?.avatar || '');
     setProfileMessage(null);
     setAvatarUploadMessage(null);
@@ -227,6 +231,19 @@ const Settings: React.FC = () => {
 
   const handleProfileSave = async (event: React.FormEvent) => {
     event.preventDefault();
+    setIsProfileSaving(true);
+
+    const emailChanged = profileEmail.trim().toLowerCase() !== (currentUser?.email || '').trim().toLowerCase();
+    if (backend.mode === 'supabase' && emailChanged) {
+      const emailResult = await updateCurrentUserEmail(profileEmail, profileCurrentPassword);
+      if (!emailResult.ok) {
+        setIsProfileSaving(false);
+        setProfileMessage({ tone: 'error', text: emailResult.error || 'Login email could not be updated.' });
+        return;
+      }
+      setProfileCurrentPassword('');
+    }
+
     const result = updateCurrentUserProfile({
       name: profileName,
       email: profileEmail,
@@ -234,11 +251,11 @@ const Settings: React.FC = () => {
     });
 
     if (!result.ok) {
+      setIsProfileSaving(false);
       setProfileMessage({ tone: 'error', text: result.error || 'Profile could not be updated.' });
       return;
     }
 
-    setIsProfileSaving(true);
     const saved = await commitPendingMutation();
     setIsProfileSaving(false);
     setProfileMessage({
@@ -251,6 +268,7 @@ const Settings: React.FC = () => {
   const resetProfileForm = () => {
     setProfileName(currentUser?.name || '');
     setProfileEmail(currentUser?.email || '');
+    setProfileCurrentPassword('');
     setAvatarUrl(currentUser?.avatar || '');
     setProfileMessage(null);
     setAvatarUploadMessage(null);
@@ -486,6 +504,28 @@ const Settings: React.FC = () => {
                     maxLength={320}
                   />
                 </div>
+                {backend.mode === 'supabase' && profileEmailChanged && (
+                  <div className="lg:col-span-2">
+                    <label htmlFor="profile-current-password" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                      Current password
+                    </label>
+                    <input
+                      id="profile-current-password"
+                      type="password"
+                      value={profileCurrentPassword}
+                      onChange={event => {
+                        setProfileCurrentPassword(event.target.value);
+                        setProfileMessage(null);
+                      }}
+                      className={cn(inputBase, 'px-3 py-2.5')}
+                      autoComplete="current-password"
+                      required
+                    />
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      This changes both your Supabase login email and AiTask profile email.
+                    </p>
+                  </div>
+                )}
                 <div className="lg:col-span-2">
                   <label htmlFor="profile-avatar" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
                     {isUploadedAvatar ? 'Avatar source' : 'Avatar URL'}
