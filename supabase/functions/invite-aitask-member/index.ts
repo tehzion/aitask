@@ -77,6 +77,8 @@ Deno.serve(async (request) => {
   const department = typeof body.department === 'string' ? body.department.trim() : 'Designer';
   const companyName = role === 'Client' && typeof body.companyName === 'string' ? body.companyName.trim() : null;
   const customRoleId = typeof body.customRoleId === 'string' && body.customRoleId.trim() ? body.customRoleId.trim() : null;
+  const sendInvitation = body.sendInvitation !== false;
+  const temporaryPassword = typeof body.password === 'string' ? body.password.trim() : '';
   let onboardingMode: 'self_signup' | 'legacy_invite' | 'direct_invite' = 'direct_invite';
 
   if (registrationId) {
@@ -122,27 +124,58 @@ Deno.serve(async (request) => {
 
   if (registrationId) {
     if (!authUser && onboardingMode === 'legacy_invite') {
-      const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-        data: { name, department, aitask_registration_source: 'legacy_invite' },
-        redirectTo: passwordSetupUrl,
-      });
-      if (inviteError || !invited.user) return json({ error: inviteError?.message || 'Invitation failed' }, 400);
-      authUser = invited.user;
+      if (sendInvitation) {
+        const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+          data: { name, department, aitask_registration_source: 'legacy_invite' },
+          redirectTo: passwordSetupUrl,
+        });
+        if (inviteError || !invited.user) return json({ error: inviteError?.message || 'Invitation failed' }, 400);
+        authUser = invited.user;
+      } else {
+        if (temporaryPassword.length < 12) return json({ error: 'A temporary password of at least 12 characters is required' }, 400);
+        const { data: created, error: createError } = await adminClient.auth.admin.createUser({
+          email,
+          password: temporaryPassword,
+          email_confirm: true,
+          user_metadata: { name, department, aitask_registration_source: 'legacy_invite' },
+        });
+        if (createError || !created.user) return json({ error: createError?.message || 'Account creation failed' }, 400);
+        authUser = created.user;
+      }
       createdAuthUser = true;
     } else if (!authUser) {
       return json({ error: 'The Staff member must verify their signup email before approval' }, 409);
     }
     if (onboardingMode === 'self_signup' && !authUser.email_confirmed_at) {
-      return json({ error: 'The Staff member has not verified their email yet' }, 409);
+      if (sendInvitation) return json({ error: 'The Staff member has not verified their email yet' }, 409);
+      const { data: confirmed, error: confirmError } = await adminClient.auth.admin.updateUserById(authUser.id, {
+        email_confirm: true,
+      });
+      if (confirmError || !confirmed.user) return json({ error: confirmError?.message || 'Unable to activate the Staff login' }, 400);
+      authUser = confirmed.user;
     }
   } else if (!authUser) {
-    const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-      data: { name, department, company_name: companyName },
-      redirectTo: passwordSetupUrl,
-    });
-    if (inviteError || !invited.user) return json({ error: inviteError?.message || 'Invitation failed' }, 400);
-    authUser = invited.user;
+    if (sendInvitation) {
+      const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+        data: { name, department, company_name: companyName },
+        redirectTo: passwordSetupUrl,
+      });
+      if (inviteError || !invited.user) return json({ error: inviteError?.message || 'Invitation failed' }, 400);
+      authUser = invited.user;
+    } else {
+      if (temporaryPassword.length < 12) return json({ error: 'A temporary password of at least 12 characters is required' }, 400);
+      const { data: created, error: createError } = await adminClient.auth.admin.createUser({
+        email,
+        password: temporaryPassword,
+        email_confirm: true,
+        user_metadata: { name, department, company_name: companyName },
+      });
+      if (createError || !created.user) return json({ error: createError?.message || 'Account creation failed' }, 400);
+      authUser = created.user;
+    }
     createdAuthUser = true;
+  } else if (!registrationId) {
+    return json({ error: 'An Auth account already exists for this email. Use its pending registration instead.' }, 409);
   }
 
   if (!authUser) return json({ error: 'Unable to prepare the Auth user' }, 500);

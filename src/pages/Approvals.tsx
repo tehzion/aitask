@@ -44,16 +44,19 @@ const Approvals: React.FC = () => {
   const [companyName, setCompanyName] = useState('');
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [addUserError, setAddUserError] = useState('');
+  const [sendNewUserInvitation, setSendNewUserInvitation] = useState(false);
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
-    password: DEFAULT_USER_PASSWORD,
+    password: secureAccounts ? '' : DEFAULT_USER_PASSWORD,
     role: 'Staff' as Role,
     department: 'Designer' as Department,
     companyName: '',
     customRoleId: '',
   });
   const [approvalCustomRoleId, setApprovalCustomRoleId] = useState('');
+  const [sendApprovalInvitation, setSendApprovalInvitation] = useState(false);
+  const [approvalTemporaryPassword, setApprovalTemporaryPassword] = useState('');
   const [roleEditorId, setRoleEditorId] = useState<string | null>(null);
   const [roleError, setRoleError] = useState('');
   const [assignmentError, setAssignmentError] = useState('');
@@ -88,6 +91,8 @@ const Approvals: React.FC = () => {
       setDepartment('Designer'); // Default for staff
     }
     setApprovalCustomRoleId('');
+    setSendApprovalInvitation(false);
+    setApprovalTemporaryPassword('');
   };
 
   const handleApprove = async (e: React.FormEvent) => {
@@ -99,16 +104,19 @@ const Approvals: React.FC = () => {
         const inviteResult = await addUserBySuperAdmin({
           name: selectedReg.name,
           email: selectedReg.email,
-          password: DEFAULT_USER_PASSWORD,
           role,
           department: role === 'Client' ? 'Client' : department,
           companyName: role === 'Client' ? companyName : undefined,
           customRoleId: approvalCustomRoleId || undefined,
           registrationId: selectedReg.id,
+          sendInvitation: sendApprovalInvitation,
+          password: selectedReg.onboardingMode === 'legacy_invite' && !sendApprovalInvitation
+            ? approvalTemporaryPassword
+            : undefined,
         });
         if (!inviteResult.ok) {
           setIsActionSaving(false);
-          setActionError(inviteResult.error || 'Unable to invite this member.');
+          setActionError(inviteResult.error || 'Unable to approve this member.');
           return;
         }
         setIsActionSaving(false);
@@ -117,6 +125,8 @@ const Approvals: React.FC = () => {
         setDepartment('Designer');
         setCompanyName('');
         setApprovalCustomRoleId('');
+        setSendApprovalInvitation(false);
+        setApprovalTemporaryPassword('');
         return;
       }
       approveRegistration(selectedReg.id, role, department, role === 'Client' ? companyName : undefined, approvalCustomRoleId || undefined);
@@ -139,12 +149,13 @@ const Approvals: React.FC = () => {
     setNewUser({
       name: '',
       email: '',
-      password: DEFAULT_USER_PASSWORD,
       role: 'Staff',
       department: 'Designer',
       companyName: '',
       customRoleId: '',
+      password: secureAccounts ? '' : DEFAULT_USER_PASSWORD,
     });
+    setSendNewUserInvitation(false);
     setAddUserError('');
   };
 
@@ -272,6 +283,7 @@ const Approvals: React.FC = () => {
       department: newUser.role === 'Client' ? 'Client' : newUser.department,
       companyName: newUser.role === 'Client' ? newUser.companyName : undefined,
       customRoleId: newUser.customRoleId || undefined,
+      sendInvitation: sendNewUserInvitation,
     });
     setIsActionSaving(false);
 
@@ -783,9 +795,35 @@ const Approvals: React.FC = () => {
               )}
 
               {secureAccounts ? (
-                <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
-                  Supabase will email a verified invitation. No password is shared or stored by AiTask.
-                </p>
+                <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                  <label className="flex items-start gap-3 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      checked={sendNewUserInvitation}
+                      onChange={event => setSendNewUserInvitation(event.target.checked)}
+                    />
+                    <span>
+                      <span className="block font-medium text-slate-900">Send email invitation</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">Enable this after SMTP is configured.</span>
+                    </span>
+                  </label>
+                  {!sendNewUserInvitation && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Temporary Password</label>
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={12}
+                        className={cn(inputBase, 'px-3 py-2.5')}
+                        value={newUser.password}
+                        onChange={event => setNewUser({ ...newUser, password: event.target.value })}
+                        required
+                      />
+                      <p className="mt-1 text-xs text-slate-500">At least 12 characters. The member must change it after login.</p>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Default Password</label>
@@ -818,7 +856,9 @@ const Approvals: React.FC = () => {
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isActionSaving || backend.isSaving}>
-                  {isActionSaving ? 'Sending invitation...' : 'Create member'}
+                  {isActionSaving
+                    ? sendNewUserInvitation ? 'Sending invitation...' : 'Creating account...'
+                    : 'Create member'}
                 </Button>
               </div>
             </form>
@@ -848,7 +888,7 @@ const Approvals: React.FC = () => {
                 >
                   {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
-                {secureAccounts && <p className="mt-1 text-xs text-slate-500">Verified registrations are approved as Staff.</p>}
+                {secureAccounts && <p className="mt-1 text-xs text-slate-500">Registrations are approved as Staff.</p>}
               </div>
 
               <div>
@@ -883,6 +923,44 @@ const Approvals: React.FC = () => {
                     value={companyName} onChange={e => setCompanyName(e.target.value)}
                   />
                   <p className="text-xs text-slate-500 mt-1">This links the client to their specific companies.</p>
+                </div>
+              )}
+
+              {secureAccounts && (
+                <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                  <label className="flex items-start gap-3 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      checked={sendApprovalInvitation}
+                      onChange={event => setSendApprovalInvitation(event.target.checked)}
+                    />
+                    <span>
+                      <span className="block font-medium text-slate-900">
+                        {selectedReg.onboardingMode === 'legacy_invite' ? 'Send email invitation' : 'Require verified email'}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-slate-500">
+                        {sendApprovalInvitation
+                          ? 'Approval waits for email delivery or verification.'
+                          : 'Approve without SMTP using the member\'s existing password.'}
+                      </span>
+                    </span>
+                  </label>
+                  {selectedReg.onboardingMode === 'legacy_invite' && !sendApprovalInvitation && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Temporary Password</label>
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={12}
+                        className={cn(inputBase, 'px-3 py-2.5')}
+                        value={approvalTemporaryPassword}
+                        onChange={event => setApprovalTemporaryPassword(event.target.value)}
+                        required
+                      />
+                      <p className="mt-1 text-xs text-slate-500">Share it privately. AiTask does not store the password.</p>
+                    </div>
+                  )}
                 </div>
               )}
 

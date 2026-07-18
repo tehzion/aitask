@@ -23,6 +23,8 @@ VITE_AITASK_SHOW_DEMO_LOGIN=false
 
 For the current production workspace, `AITASK_PUBLIC_URL` is `https://aitask-virid.vercel.app`. Invitation and recovery redirects must allow `/account/password`. Do not store SMTP credentials, generated passwords, service-role keys, or invitation tokens in this repository.
 
+Until production SMTP is configured, Super Admin onboarding may skip email delivery. Existing Staff signups keep their chosen password and are administratively confirmed during approval; directly created or legacy accounts use a temporary password of at least 12 characters and must change it after first login. Passwords are sent only to Supabase Auth and are never stored in AiTask workspace data.
+
 ## Launch Feedback
 
 The public checklist is available at `/feedback`; role-specific links use `?role=Staff`, `?role=Client`, `?role=Admin`, or `?role=Super%20Admin`. Responses close operationally on 30 July 2026, with later responses retained and marked late.

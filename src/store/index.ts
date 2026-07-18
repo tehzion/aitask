@@ -119,6 +119,7 @@ type ClientProfileInput = Partial<Pick<ClientProfile, 'contactPerson' | 'email' 
 type AddMemberInput = Omit<User, 'id' | 'avatar' | 'isSuperAdmin'> & {
   registrationId?: string;
   memberId?: string;
+  sendInvitation?: boolean;
 };
 
 interface StoreState {
@@ -2462,6 +2463,7 @@ export const useStore = create<StoreState>()(
         const name = data.name.trim();
         const email = data.email?.trim();
         const initialPassword = data.password?.trim() || DEFAULT_USER_PASSWORD;
+        const sendInvitation = data.sendInvitation !== false;
         const companyName = data.role === 'Client' ? data.companyName?.trim() : undefined;
 
         if (!name) return { ok: false, error: 'Member name is required.' };
@@ -2497,6 +2499,15 @@ export const useStore = create<StoreState>()(
           if (!email || !profileEmailPattern.test(email)) {
             return { ok: false, error: 'A valid email is required for a secure invitation.' };
           }
+          const registration = data.registrationId
+            ? get().registrations.find(item => item.id === data.registrationId)
+            : undefined;
+          const needsTemporaryPassword = !sendInvitation && (
+            !data.registrationId || registration?.onboardingMode === 'legacy_invite'
+          );
+          if (needsTemporaryPassword && initialPassword.length < 12) {
+            return { ok: false, error: 'Temporary passwords must be at least 12 characters.' };
+          }
 
           const { data: authData, error: authError } = await supabase.auth.getUser();
           if (authError || !authData.user) {
@@ -2525,6 +2536,8 @@ export const useStore = create<StoreState>()(
               customRoleId: data.customRoleId,
               registrationId: data.registrationId,
               memberId: data.memberId,
+              sendInvitation,
+              password: needsTemporaryPassword ? initialPassword : undefined,
             },
           });
           if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to send the invitation.') };
