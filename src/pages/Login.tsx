@@ -6,7 +6,7 @@ import { Role } from '../types';
 import { Button } from '../components/ui';
 import { inputBase } from '../components/uiTokens';
 import { cn } from '../lib/utils';
-import { DEFAULT_USER_PASSWORD, hasPasswordResetBypass, shouldShowDemoLogin } from '../lib/auth';
+import { DEFAULT_USER_PASSWORD, hasPasswordResetBypass, shouldShowDemoLogin, validateStaffSignupPassword } from '../lib/auth';
 import { APP_BUILD_LABEL } from '../lib/appVersion';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 
@@ -16,7 +16,6 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 30;
 
 const DEMO_ACCOUNTS = [
-  { username: 'Boss Koo',              role: 'Super Admin', badge: 'bg-purple-100 text-purple-700' },
   { username: 'Admin Demo',            role: 'Admin',       badge: 'bg-red-100 text-red-700' },
   { username: 'UrbanEats Client Demo', role: 'Client',      badge: 'bg-emerald-100 text-emerald-700' },
 ];
@@ -134,9 +133,12 @@ const Login: React.FC = () => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError('');
-    if (secureAccounts && regPassword !== regConfirmPassword) {
-      setRegError('Passwords do not match.');
-      return;
+    if (secureAccounts) {
+      const passwordError = validateStaffSignupPassword(regPassword, regConfirmPassword);
+      if (passwordError) {
+        setRegError(passwordError);
+        return;
+      }
     }
     setIsSubmittingRegistration(true);
     const result = await registerUser({
@@ -374,7 +376,7 @@ const Login: React.FC = () => {
                   <h3 className="text-lg font-medium text-slate-900">Registration Submitted!</h3>
                   <p className="mt-2 text-sm text-slate-500">
                     {secureAccounts
-                      ? 'Verify your email, then wait for the Super Admin to approve your Staff access.'
+                      ? 'Your Staff registration is waiting for approval. After approval, sign in with the password you chose. Email setup is optional.'
                       : 'Your Staff access request has been submitted for Super Admin approval.'}
                   </p>
                   <Button onClick={() => { setRegSuccess(false); setIsRegistering(false); }} className="mt-6 w-full">
@@ -384,20 +386,20 @@ const Login: React.FC = () => {
               ) : (
                 <form className="space-y-4" onSubmit={handleRegister}>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Full Name</label>
-                    <input type="text" required className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.name} onChange={e => setRegData({ ...regData, name: e.target.value })} />
+                    <label htmlFor="registration-name" className="block text-sm font-medium text-slate-700">Full Name</label>
+                    <input id="registration-name" type="text" required className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.name} onChange={e => setRegData({ ...regData, name: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Email</label>
-                    <input type="email" required className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.email} onChange={e => setRegData({ ...regData, email: e.target.value })} />
+                    <label htmlFor="registration-email" className="block text-sm font-medium text-slate-700">Email</label>
+                    <input id="registration-email" type="email" required className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.email} onChange={e => setRegData({ ...regData, email: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Phone Number</label>
-                    <input type="tel" required className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.phone} onChange={e => setRegData({ ...regData, phone: e.target.value })} />
+                    <label htmlFor="registration-phone" className="block text-sm font-medium text-slate-700">Phone Number</label>
+                    <input id="registration-phone" type="tel" required className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.phone} onChange={e => setRegData({ ...regData, phone: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700">Job Position / Department</label>
-                    <input type="text" required placeholder="e.g. Designer, Ads Manager" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.jobPosition} onChange={e => setRegData({ ...regData, jobPosition: e.target.value })} />
+                    <label htmlFor="registration-position" className="block text-sm font-medium text-slate-700">Job Position / Department</label>
+                    <input id="registration-position" type="text" required placeholder="e.g. Designer, Ads Manager" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.jobPosition} onChange={e => setRegData({ ...regData, jobPosition: e.target.value })} />
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <p className="text-xs font-semibold uppercase text-slate-500">Access role</p>
@@ -406,13 +408,13 @@ const Login: React.FC = () => {
                   {secureAccounts && (
                     <>
                       <div>
-                        <label className="block text-sm font-medium text-slate-700">Password</label>
-                        <input type="password" required minLength={12} autoComplete="new-password" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regPassword} onChange={e => setRegPassword(e.target.value)} />
+                        <label htmlFor="registration-password" className="block text-sm font-medium text-slate-700">Password</label>
+                        <input id="registration-password" type="password" required minLength={12} autoComplete="new-password" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regPassword} onChange={e => setRegPassword(e.target.value)} />
                         <p className="mt-1 text-xs text-slate-500">Use at least 12 characters.</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-700">Confirm Password</label>
-                        <input type="password" required minLength={12} autoComplete="new-password" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regConfirmPassword} onChange={e => setRegConfirmPassword(e.target.value)} />
+                        <label htmlFor="registration-password-confirmation" className="block text-sm font-medium text-slate-700">Confirm Password</label>
+                        <input id="registration-password-confirmation" type="password" required minLength={12} autoComplete="new-password" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regConfirmPassword} onChange={e => setRegConfirmPassword(e.target.value)} />
                       </div>
                     </>
                   )}

@@ -12,6 +12,7 @@ import {
   canRenameClient,
   canReviewTaskAsClient,
   canViewAllClients,
+  allPermissions,
   defaultRolePermissions,
   getEffectivePermissions,
   getAssignableProjects,
@@ -81,11 +82,16 @@ const tasks = [
 
 describe('staff permission matrix', () => {
   it('reserves member creation and registration approval for the Super Admin', () => {
+    expect(getEffectivePermissions(superAdmin)).toEqual(allPermissions);
+    expect(Object.values(getEffectivePermissions(superAdmin)).every(Boolean)).toBe(true);
     expect(canCreateUsers(superAdmin)).toBe(true);
     expect(canApproveRegistrations(superAdmin)).toBe(true);
     expect(canCreateUsers(admin)).toBe(false);
     expect(canApproveRegistrations(admin)).toBe(false);
     expect(canCreateUsers(staff)).toBe(false);
+    expect(canApproveRegistrations(staff)).toBe(false);
+    expect(canCreateUsers(acmeClient)).toBe(false);
+    expect(canApproveRegistrations(acmeClient)).toBe(false);
     expect(canDeleteUser(superAdmin, staff)).toBe(true);
     expect(canDeleteUser(admin, staff)).toBe(false);
     expect(canDeleteUser({ ...staff, permissions: { ...defaultRolePermissions.Staff, deleteUsers: true } }, admin)).toBe(false);

@@ -8,6 +8,12 @@ export const PASSWORD_RESET_BYPASS_SESSION_PREFIX = 'aitask:password-reset-bypas
 
 export const hasDefaultPassword = (password?: string) => password === DEFAULT_USER_PASSWORD;
 
+export const validateStaffSignupPassword = (password: string, confirmation: string) => {
+  if (password.length < 12) return 'Use a password with at least 12 characters.';
+  if (password !== confirmation) return 'Passwords do not match.';
+  return '';
+};
+
 const isEnabled = (value: string) => ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
 const isDisabled = (value: string) => ['0', 'false', 'no', 'off'].includes(value.toLowerCase());
 

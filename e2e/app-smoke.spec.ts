@@ -31,19 +31,28 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Sign in to AiTask' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Demo accounts - select username' })).toBeVisible();
+  await expect(page.getByText('Boss Koo', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Super Admin', { exact: true })).toHaveCount(0);
   await expect(page.getByText(/^v\d+\.\d+\.\d+\+[a-z0-9]+(?:\.dev)?$/)).toBeVisible();
 
   await page.getByRole('button', { name: 'Register as Staff' }).click();
   await expect(page.getByRole('heading', { name: 'Register for Access' })).toBeVisible();
   await expect(page.getByText('Staff', { exact: true })).toBeVisible();
   await expect(page.getByText('Client (External Customer)', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Already have an account? Sign in' }).click();
+  await page.getByLabel('Full Name').fill('QA Staff Applicant');
+  await page.getByLabel('Email', { exact: true }).fill('qa.staff@example.com');
+  await page.getByLabel('Phone Number').fill('+60120000000');
+  await page.getByLabel('Job Position / Department').fill('Designer');
+  await page.getByRole('button', { name: 'Submit Staff Registration' }).click();
+  await expect(page.getByRole('heading', { name: 'Registration Submitted!' })).toBeVisible();
+  await expect(page.getByText('Your Staff access request has been submitted for Super Admin approval.')).toBeVisible();
+  await page.getByRole('button', { name: 'Back to Login' }).click();
 
   await page.goto('/account/password');
   await expect(page.getByRole('heading', { name: 'Link unavailable' })).toBeVisible();
   await page.getByRole('button', { name: 'Return to Login' }).click();
 
-  await expect(page.getByRole('button', { name: 'Use Boss Koo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use Boss Koo' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Use Admin Demo' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use Staff Demo' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Use Finance Demo' })).toHaveCount(0);

@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(23);
+select plan(29);
 
 select has_column('public', 'aitask_workspaces', 'version', 'workspaces expose an invalidation revision');
 select has_column('public', 'aitask_workspaces', 'updated_at', 'workspace revision has a server timestamp');
@@ -21,6 +21,36 @@ select has_function(
   'aitask_is_super_admin',
   array['text'],
   'Super Admin authorization is distinct from the Admin business role'
+);
+select has_function(
+  'private',
+  'aitask_create_staff_registration',
+  array[]::text[],
+  'Staff signup creates a registration through a protected trigger function'
+);
+select has_trigger(
+  'auth',
+  'users',
+  'aitask_create_staff_registration',
+  'Auth users have the Staff registration trigger'
+);
+select is(
+  (
+    select tgenabled::text
+    from pg_trigger
+    where tgrelid = 'auth.users'::regclass
+      and tgname = 'aitask_create_staff_registration'
+      and not tgisinternal
+  ),
+  'O',
+  'Staff registration trigger is enabled'
+);
+select ok(
+  position(
+    'when member.is_super_admin then true'
+    in pg_get_functiondef('private.aitask_has_permission(text,text)'::regprocedure)
+  ) > 0,
+  'Super Admin receives every effective database permission'
 );
 select is(
   (select prosecdef from pg_proc where oid = 'public.aitask_execute_command(text,uuid,text,jsonb)'::regprocedure),
@@ -47,6 +77,14 @@ select ok(
 select ok(
   not has_function_privilege('authenticated', 'public.aitask_delete_member_account(text,text)', 'EXECUTE'),
   'member account deletion is service-role only'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.aitask_finalize_member_invitation(text,uuid,text,text,text,text,text,text,text,text,text)', 'EXECUTE'),
+  'authenticated users cannot finalize member invitations directly'
+);
+select ok(
+  has_function_privilege('service_role', 'public.aitask_finalize_member_invitation(text,uuid,text,text,text,text,text,text,text,text,text)', 'EXECUTE'),
+  'member invitation finalization is service-role only'
 );
 select ok(
   not has_table_privilege('anon', 'public.aitask_members', 'SELECT'),

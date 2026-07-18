@@ -961,6 +961,11 @@ const Approvals: React.FC = () => {
                       <p className="mt-1 text-xs text-slate-500">Share it privately. AiTask does not store the password.</p>
                     </div>
                   )}
+                  {!sendApprovalInvitation && selectedReg.onboardingMode !== 'legacy_invite' && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800" role="note">
+                      Confirm the applicant's identity before approving. Without email verification, approval activates the password chosen during signup.
+                    </div>
+                  )}
                 </div>
               )}
 
