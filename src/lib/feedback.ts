@@ -67,7 +67,6 @@ export const feedbackQuestions: FeedbackQuestion[] = [
   { id: 'save_status', section: 'reliability', en: 'Saving shows a clear status and changes remain after refresh.', zh: '保存状态清楚，刷新后更改仍然存在。' },
   { id: 'sync', section: 'reliability', en: 'Another user can see saved updates without unexpected sync errors.', zh: '其他用户可以看到已保存的更新，而且不会出现异常同步错误。' },
   { id: 'offline_pwa', section: 'reliability', en: 'Offline messaging, reconnection, and the installed PWA behave clearly.', zh: '离线提示、重新连接和已安装的 PWA 表现清楚正常。' },
-  { id: 'mfa', section: 'super_admin', roles: ['Super Admin'], en: 'MFA is enrolled and required for sensitive actions.', zh: 'MFA 已启用，敏感操作必须完成验证。' },
   { id: 'registration_approval', section: 'super_admin', roles: ['Super Admin'], en: 'Pending Staff registrations and invitation approval work correctly.', zh: '等待批准的员工注册和邀请批准功能正确。' },
   { id: 'permissions', section: 'super_admin', roles: ['Super Admin'], en: 'Role and permission changes take effect after refresh.', zh: '角色和权限更改在刷新后生效。' },
   { id: 'audit', section: 'super_admin', roles: ['Super Admin'], en: 'Sensitive administrative actions create an audit record.', zh: '敏感管理操作会产生审计记录。' },
@@ -87,4 +86,3 @@ export const parseFeedbackRole = (value: string | null | undefined): FeedbackRol
 };
 
 export const isFeedbackLate = (submittedAt = new Date()) => submittedAt.getTime() > new Date(FEEDBACK_DEADLINE_ISO).getTime();
-

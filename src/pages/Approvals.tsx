@@ -10,7 +10,6 @@ import { canDeleteUser, defaultRolePermissions, getEffectiveRoleName, isBossKoo,
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import ModalShell from '../components/ModalShell';
-import MfaSettings from '../components/MfaSettings';
 
 const ROLES: Role[] = ['Admin', 'Staff', 'Client'];
 const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client'];
@@ -337,8 +336,6 @@ const Approvals: React.FC = () => {
           </Button>
         ) : undefined}
       />
-
-      {secureAccounts && superAdmin && <MfaSettings />}
 
       {actionError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert">

@@ -88,9 +88,7 @@ Complete one checklist per user after using AiTask for one week. Tick `Pass`, `I
 
 | Check / 检查项目 | Pass / 通过 | Issue / 有问题 | N/A / 不适用 |
 |---|:---:|:---:|:---:|
-| MFA is enrolled and verified. / MFA 已启用并完成验证。 | [ ] | [ ] | [ ] |
 | Pending Staff registrations are visible. / 可以看到等待批准的员工注册。 | [ ] | [ ] | [ ] |
-| Approval is blocked without verified MFA. / 未完成 MFA 验证时不能批准用户。 | [ ] | [ ] | [ ] |
 | Approving a user sends the correct invitation. / 批准用户后会发送正确的邀请邮件。 | [ ] | [ ] | [ ] |
 | Department, role, and permissions save correctly. / 部门、角色和权限可以正确保存。 | [ ] | [ ] | [ ] |
 | Removing a permission takes effect after refresh. / 移除权限后，刷新页面即会生效。 | [ ] | [ ] | [ ] |

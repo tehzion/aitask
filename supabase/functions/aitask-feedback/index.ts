@@ -16,7 +16,7 @@ const baseQuestionIds = [
   'task_scope', 'task_actions', 'task_fields', 'calendar', 'client_scope', 'client_details',
   'client_actions', 'comments', 'approvals', 'save_status', 'sync', 'offline_pwa',
 ];
-const superAdminQuestionIds = ['mfa', 'registration_approval', 'permissions', 'audit', 'developer_scope'];
+const superAdminQuestionIds = ['registration_approval', 'permissions', 'audit', 'developer_scope'];
 const feedbackDeadline = new Date('2026-07-30T15:59:59.999Z').getTime();
 
 const corsHeaders = (origin: string | null) => ({
@@ -128,10 +128,7 @@ Deno.serve(async request => {
   const authorization = request.headers.get('Authorization');
   if (!authorization?.startsWith('Bearer ')) return json(origin, { error: 'Reviewer login required' }, 401);
   const token = authorization.slice('Bearer '.length);
-  const [{ data: authData, error: authError }, { data: claimsData }] = await Promise.all([
-    admin.auth.getUser(token),
-    admin.auth.getClaims(token),
-  ]);
+  const { data: authData, error: authError } = await admin.auth.getUser(token);
   if (authError || !authData.user) return json(origin, { error: 'Reviewer session is invalid' }, 401);
 
   const email = authData.user.email?.trim().toLowerCase() || '';
@@ -145,7 +142,6 @@ Deno.serve(async request => {
   const isBoss = Boolean(boss);
   const isDeveloper = reviewerEmails.has(email);
   if (!isBoss && !isDeveloper) return json(origin, { error: 'Feedback reviewer access required' }, 403);
-  if (isBoss && claimsData?.claims?.aal !== 'aal2') return json(origin, { error: 'MFA verification required' }, 403);
 
   const { data, error } = await admin.from('aitask_feedback_submissions')
     .select('id,name,email,role,organization,device,language,answers,issue_details,ratings,most_useful,most_confusing,recommendation,is_late,submitted_at')

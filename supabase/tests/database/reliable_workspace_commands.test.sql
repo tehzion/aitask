@@ -65,8 +65,8 @@ select ok(
 select policies_are(
   'public',
   'aitask_audit_events',
-  array['mfa admins can read audit events'],
-  'audit events expose only the MFA admin read policy'
+  array['admins can read audit events'],
+  'audit events expose only the Admin read policy'
 );
 select is(
   (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'aitask_command_receipts'),

@@ -7,8 +7,6 @@ import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
-import MfaSettings from '../components/MfaSettings';
-import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import BackendFreshness from '../components/BackendFreshness';
 import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 import { canUsePasswordResetBypass, enablePasswordResetBypass } from '../lib/auth';
@@ -614,8 +612,6 @@ const Settings: React.FC = () => {
             </div>
           </form>
       </div>
-
-      {shouldUseSecureSupabase() && (currentUser?.role === 'Admin' || currentUser?.isSuperAdmin) && <MfaSettings />}
 
       {isClientUser ? (
           <div className={`${cardBase} overflow-hidden`}>

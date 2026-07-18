@@ -2485,22 +2485,6 @@ export const useStore = create<StoreState>()(
           if (!email || !profileEmailPattern.test(email)) {
             return { ok: false, error: 'A valid email is required for a secure invitation.' };
           }
-          const [{ data: assurance, error: assuranceError }, { data: factors, error: factorsError }] = await Promise.all([
-            supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
-            supabase.auth.mfa.listFactors(),
-          ]);
-          if (assuranceError || factorsError) {
-            return { ok: false, error: 'Unable to verify administrative MFA. Sign in again and retry.' };
-          }
-          if (assurance.currentLevel !== 'aal2') {
-            const hasVerifiedFactor = factors.totp.some(factor => factor.status === 'verified');
-            return {
-              ok: false,
-              error: hasVerifiedFactor
-                ? 'Verify MFA in User Approvals before adding or approving members.'
-                : 'Set up MFA in User Approvals before adding or approving members.',
-            };
-          }
           const { error } = await supabase.functions.invoke('invite-aitask-member', {
             body: {
               name,

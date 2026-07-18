@@ -38,12 +38,8 @@ Deno.serve(async (request) => {
 
   const adminClient = createClient(url, serviceKey, { auth: { persistSession: false } });
   const token = authorization.slice('Bearer '.length);
-  const [{ data: authData, error: authError }, { data: claimsData, error: claimsError }] = await Promise.all([
-    adminClient.auth.getUser(token),
-    adminClient.auth.getClaims(token),
-  ]);
-  if (authError || !authData.user || claimsError) return json({ error: 'Invalid session' }, 401);
-  if (claimsData.claims.aal !== 'aal2') return json({ error: 'MFA verification required' }, 403);
+  const { data: authData, error: authError } = await adminClient.auth.getUser(token);
+  if (authError || !authData.user) return json({ error: 'Invalid session' }, 401);
 
   const { data: actor, error: actorError } = await adminClient
     .from('aitask_members')

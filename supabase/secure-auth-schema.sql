@@ -137,8 +137,7 @@ security definer
 set search_path = ''
 as $$
   select coalesce((
-    select (role = 'Admin' or is_super_admin)
-      and coalesce((select auth.jwt()) ->> 'aal', 'aal1') = 'aal2'
+    select role = 'Admin' or is_super_admin
     from public.aitask_members
     where workspace_id = p_workspace_id
       and auth_user_id = (select auth.uid())
