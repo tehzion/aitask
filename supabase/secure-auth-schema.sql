@@ -306,14 +306,16 @@ as $$
     select case private.aitask_member_role(p_workspace_id)
       when 'Admin' then true
       when 'Client' then project.client_key = private.aitask_member_client_key(p_workspace_id)
-      when 'Staff' then exists (
-        select 1
-        from public.aitask_entities task
-        where task.workspace_id = p_workspace_id
-          and task.entity_type = 'task'
-          and task.parent_id = p_project_id
-          and private.aitask_can_view_task(p_workspace_id, task.entity_id)
-      )
+      when 'Staff' then
+        project.created_by = private.aitask_member_id(p_workspace_id)
+        or exists (
+          select 1
+          from public.aitask_entities task
+          where task.workspace_id = p_workspace_id
+            and task.entity_type = 'task'
+            and task.parent_id = p_project_id
+            and private.aitask_can_view_task(p_workspace_id, task.entity_id)
+        )
       else false
     end
     from public.aitask_entities project

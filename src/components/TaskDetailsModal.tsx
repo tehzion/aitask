@@ -420,7 +420,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                 </form>
               )}
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
                   <label className="block text-xs font-medium text-slate-500 mb-1">Client Approval</label>
                   <span className={`inline-flex text-xs px-2 py-1 rounded-md font-semibold ${
@@ -434,10 +434,6 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                 <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
                   <label className="block text-xs font-medium text-slate-500 mb-1">Revisions</label>
                   <span className="text-sm font-bold text-slate-800">{task.revisionCount}</span>
-                </div>
-                <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Recurrence</label>
-                  <span className="text-sm font-bold text-slate-800">{task.isRecurring ? (task.recurrenceFrequency || 'Recurring') : 'None'}</span>
                 </div>
               </div>
 

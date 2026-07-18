@@ -227,10 +227,14 @@ export const canEditProject = (
   user: User | null | undefined,
   project: Project,
   customRoles: CustomRole[] = []
-) => (
-  hasPermission(user, 'createProjects', customRoles) ||
-  (user?.role === 'Staff' && project.createdBy === user.id)
-);
+) => {
+  void customRoles;
+  return Boolean(user) && (
+    isBossKoo(user) ||
+    user?.role === 'Admin' ||
+    (user?.role === 'Staff' && project.createdBy === user.id)
+  );
+};
 export const canDeleteProject = canEditProject;
 export const canReviewTaskAsClient = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
   user?.role === 'Client' &&
@@ -262,6 +266,15 @@ export const getVisibleNavigation = (user: User | null | undefined, customRoles:
   appNavigation.filter(item => canAccessPath(user, item.path, customRoles))
 );
 
+export const getDefaultAccessiblePath = (
+  user: User | null | undefined,
+  customRoles: CustomRole[] = []
+): AppPath => {
+  const firstPage = getVisibleNavigation(user, customRoles)[0];
+  if (firstPage) return firstPage.path;
+  return canAccessPath(user, '/settings', customRoles) ? '/settings' : '/';
+};
+
 export const getVisibleTasks = (
   user: User | null | undefined,
   tasks: Task[],
@@ -291,7 +304,7 @@ export const getVisibleProjects = (
         .map(task => task.projectId)
         .filter((id): id is string => Boolean(id))
     );
-    return projects.filter(project => visibleProjectIds.has(project.id));
+    return projects.filter(project => project.createdBy === user.id || visibleProjectIds.has(project.id));
   }
   return [];
 };

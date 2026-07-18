@@ -2196,12 +2196,25 @@ export const useStore = create<StoreState>()(
           updatedAt: new Date().toISOString(),
         };
 
+        const identityChanged = clientName !== project.clientName || projectName !== project.projectName;
+        const linkedTasks = state.tasks.filter(task => task.projectId === projectId);
+        if (identityChanged && linkedTasks.some(task => !canEditTask(currentUser, task, state.rolePermissions))) {
+          return {
+            ok: false,
+            error: 'Only an admin can rename this company while it contains tasks assigned to other staff.',
+          };
+        }
+
+        const now = new Date().toISOString();
+
         set(current => ({
           projects: current.projects.map(item => item.id === projectId ? updatedProject : item),
-          tasks: current.tasks.map(task => task.projectId === projectId
-            ? { ...task, clientName, projectName, updatedAt: new Date().toISOString() }
-            : task
-          ),
+          tasks: identityChanged
+            ? current.tasks.map(task => task.projectId === projectId
+              ? { ...task, clientName, projectName, updatedAt: now }
+              : task
+            )
+            : current.tasks,
         }));
         useToastStore.getState().addToast(`Company "${clientName}" updated successfully`, 'success');
         return { ok: true };
@@ -2214,6 +2227,13 @@ export const useStore = create<StoreState>()(
         const project = state.projects.find(item => item.id === projectId);
         if (!currentUser || !project || !canDeleteProject(currentUser, project, state.rolePermissions)) {
           return { ok: false, error: 'You do not have permission to delete this company.' };
+        }
+        const linkedTasks = state.tasks.filter(task => task.projectId === projectId);
+        if (linkedTasks.some(task => !canEditTask(currentUser, task, state.rolePermissions))) {
+          return {
+            ok: false,
+            error: 'Only an admin can delete this company while it contains tasks assigned to other staff.',
+          };
         }
 
         set(current => ({

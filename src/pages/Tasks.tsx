@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
-import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, RotateCcw, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone, Plus } from 'lucide-react';
+import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone, Plus } from 'lucide-react';
 import { format, isBefore, isToday } from 'date-fns';
 import { Department, Priority, Task, TaskStatus } from '../types';
 import TaskDetailsModal from '../components/TaskDetailsModal';
@@ -320,11 +320,6 @@ const Tasks: React.FC = () => {
 
   const renderTaskBadges = (task: Task) => (
     <div className="flex flex-wrap items-center justify-center gap-1.5">
-      {task.isRecurring && (
-        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
-          <RotateCcw className="w-3 h-3" /> {task.recurrenceFrequency || 'Recurring'}
-        </span>
-      )}
       <span className={`rounded-md px-2 py-1 text-xs font-semibold ${approvalColors[task.clientApprovalStatus]}`}>
         Client: {task.clientApprovalStatus}
       </span>
@@ -340,7 +335,7 @@ const Tasks: React.FC = () => {
     <div className={pageShell}>
       <PageHeader
         title="Tasks Management"
-        description="Manage assignments, approvals, revisions, files, and recurring work."
+        description="Manage assignments, approvals, revisions, files, and deadlines."
         action={canCreateTasks(currentUser, rolePermissions) ? (
           <Button onClick={() => setCreateTaskModalOpen(true)}>
             <Plus className="h-4 w-4" />

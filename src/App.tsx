@@ -46,7 +46,11 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 const RoleRoute: React.FC<{ path: string; children: React.ReactNode }> = ({ path, children }) => {
   const currentUser = useStore((state) => state.currentUser);
   const rolePermissions = useStore((state) => state.rolePermissions);
-  return canAccessPath(currentUser, path, rolePermissions) ? <>{children}</> : <AccessDenied />;
+  const isRequiredAccountSetup = path === '/settings'
+    && Boolean(currentUser?.mustResetPassword);
+  return canAccessPath(currentUser, path, rolePermissions) || isRequiredAccountSetup
+    ? <>{children}</>
+    : <AccessDenied />;
 };
 
 function App() {
@@ -144,7 +148,7 @@ function App() {
                 <Layout />
               </PrivateRoute>
             }>
-              <Route index element={<Dashboard />} />
+              <Route index element={<RoleRoute path="/"><Dashboard /></RoleRoute>} />
               <Route path="tasks" element={<RoleRoute path="/tasks"><Tasks /></RoleRoute>} />
               <Route path="calendar" element={<RoleRoute path="/calendar"><Calendar /></RoleRoute>} />
               <Route path="clients" element={<RoleRoute path="/clients"><Clients /></RoleRoute>} />

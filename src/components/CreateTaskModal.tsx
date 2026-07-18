@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
 import { X, Plus, ChevronDown } from 'lucide-react';
-import { Department, Priority, RecurrenceFrequency, ServiceType } from '../types';
+import { Department, Priority, ServiceType } from '../types';
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
 import { getClientOptions, getServiceOptions, hasChoice } from '../lib/choiceOptions';
@@ -18,7 +18,6 @@ interface Props {
 
 const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor'];
 const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
-const RECURRENCE_OPTIONS: RecurrenceFrequency[] = ['None', 'Daily', 'Weekly', 'Monthly'];
 const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
@@ -51,7 +50,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [attachmentLink, setAttachmentLink] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
   const [notes, setNotes] = useState('');
-  const [recurrenceFrequency, setRecurrenceFrequency] = useState<RecurrenceFrequency>('None');
   const [assignmentError, setAssignmentError] = useState('');
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -94,7 +92,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setAttachmentLink('');
     setAttachmentName('');
     setNotes('');
-    setRecurrenceFrequency('None');
     setAssignmentError('');
     setFormError('');
     setIsSubmitting(false);
@@ -303,8 +300,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       attachmentLink: safeHttpsUrl(attachmentLink) || undefined,
       attachmentName: attachmentName.trim() || undefined,
       notes: notes.trim() || undefined,
-      isRecurring: recurrenceFrequency !== 'None',
-      recurrenceFrequency,
+      isRecurring: false,
+      recurrenceFrequency: 'None',
     });
 
     if (!taskId) {
@@ -619,9 +616,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
             </div>
 
-            {/* Files, Notes & Recurrence */}
+            {/* Files and notes */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-bold uppercase text-blue-600">4. Files and recurrence</h3>
+              <h3 className="text-sm font-bold uppercase text-blue-600">4. Files and notes</h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -646,30 +643,15 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Recurrence</label>
-                  <div className="relative">
-                    <select
-                      value={recurrenceFrequency}
-                      onChange={e => setRecurrenceFrequency(e.target.value as RecurrenceFrequency)}
-                      className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
-                    >
-                      {RECURRENCE_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
-                    </select>
-                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Internal Notes</label>
-                  <input
-                    type="text"
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
-                    placeholder="Any context the team should keep visible"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Internal Notes</label>
+                <input
+                  type="text"
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
+                  placeholder="Any context the team should keep visible"
+                />
               </div>
             </div>
 

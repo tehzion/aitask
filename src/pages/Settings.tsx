@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { Badge, Button, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
-import { getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
+import { getDefaultAccessiblePath, getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
 import BackendFreshness from '../components/BackendFreshness';
@@ -176,6 +176,8 @@ const Settings: React.FC = () => {
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
   const mustResetPassword = Boolean(currentUser?.mustResetPassword);
   const canBypassPasswordReset = mustResetPassword && canUsePasswordResetBypass();
+  const isPasswordSetupOnly = mustResetPassword && !effectivePermissions.viewSettings;
+  const defaultAccessiblePath = getDefaultAccessiblePath(currentUser, rolePermissions);
   const isSupabaseMode = backendStatus.mode === 'supabase';
   const hostedLocalBuild = backendStatus.mode === 'local' && backendStatus.isHostedRuntime;
   const hasSupabaseKey = isSupabaseMode && !backendStatus.missing.includes('VITE_SUPABASE_PUBLISHABLE_KEY');
@@ -343,7 +345,7 @@ const Settings: React.FC = () => {
     if (result.ok) {
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       if (wasResetRequired) {
-        window.setTimeout(() => navigate('/', { replace: true }), 900);
+        window.setTimeout(() => navigate(defaultAccessiblePath, { replace: true }), 900);
       }
     }
 
@@ -351,7 +353,7 @@ const Settings: React.FC = () => {
       tone: result.ok ? 'success' : 'error',
       text: result.ok
         ? wasResetRequired
-          ? 'Password set. Opening your dashboard...'
+          ? 'Password set. Opening AiTask...'
           : 'Password updated.'
         : result.error || 'Password could not be updated.',
     });
@@ -373,7 +375,7 @@ const Settings: React.FC = () => {
       tone: 'success',
       text: 'Opening the workspace for this browser session...',
     });
-    navigate('/', { replace: true });
+    navigate(defaultAccessiblePath, { replace: true });
   };
 
   return (
@@ -415,7 +417,9 @@ const Settings: React.FC = () => {
           <h2 className="text-lg font-semibold text-slate-950">Account</h2>
           <p className="mt-1 text-sm text-slate-500">Profile, sign-in security, and your current access.</p>
         </div>
-        <div className={`xl:col-span-2 ${cardBase} overflow-hidden`}>
+        <div className={`${isPasswordSetupOnly ? 'xl:col-span-3' : 'xl:col-span-2'} ${cardBase} overflow-hidden`}>
+          {!isPasswordSetupOnly && (
+            <>
           <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
             <UserCircle className="w-5 h-5 text-blue-600" />
             <h2 className="text-lg font-semibold text-slate-800">Profile</h2>
@@ -583,6 +587,8 @@ const Settings: React.FC = () => {
               </div>
             </div>
           </form>
+            </>
+          )}
 
           <form onSubmit={handlePasswordSave} className="border-t border-slate-100 p-6">
             <div className="mb-4 flex items-center gap-3">
@@ -653,6 +659,8 @@ const Settings: React.FC = () => {
           </form>
       </div>
 
+      {!isPasswordSetupOnly && (
+        <>
       {isClientUser ? (
           <div className={`${cardBase} overflow-hidden`}>
             <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
@@ -692,7 +700,7 @@ const Settings: React.FC = () => {
             <div className="p-6 space-y-3 text-sm text-slate-600">
               <p><strong className="text-slate-800">Boss Koo:</strong> has super admin access to add members, manage users, approve registrations, companies, and all task workflows.</p>
               <p><strong className="text-slate-800">Admin:</strong> can create and edit all tasks and companies.</p>
-              <p><strong className="text-slate-800">Staff and Finance:</strong> can create tasks for internal teammates, update tasks they created or are assigned to, and see companies they participate in.</p>
+              <p><strong className="text-slate-800">Staff and Finance:</strong> can create tasks for internal teammates, update tasks assigned to them, and see companies they created or participate in.</p>
               <p><strong className="text-slate-800">Client:</strong> can view company tasks, calendar, reports, and review completed or waiting-approval work.</p>
               <div className="pt-3 border-t border-slate-100">
                 <p className="font-semibold text-slate-800 mb-2">Your effective permissions</p>
@@ -842,8 +850,12 @@ const Settings: React.FC = () => {
             </div>
           </div>
         )}
+        </>
+      )}
       </div>
 
+      {!isPasswordSetupOnly && (
+        <>
       {isSuperAdmin && (
         <div className={`${cardBase} overflow-hidden`}>
           <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -988,6 +1000,8 @@ const Settings: React.FC = () => {
           <p className="font-mono text-[11px] text-slate-400">{APP_BUILD_LABEL}</p>
         </div>
       </section>
+        </>
+      )}
     </div>
   );
 };

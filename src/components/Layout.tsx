@@ -5,7 +5,7 @@ import Navbar from './Navbar';
 import { ToastContainer } from './Toast';
 import CreateTaskModal from './CreateTaskModal';
 import { useStore } from '../store';
-import { canCreateTasks, isNotificationVisible, isNotificationReadByUser } from '../lib/access';
+import { canAccessPath, canCreateTasks, isNotificationVisible, isNotificationReadByUser } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -69,6 +69,13 @@ const Layout: React.FC = () => {
   }, [notifications, currentUser]);
 
   const unreadCount = myNotifs.filter(n => !isNotificationReadByUser(currentUser, n)).length;
+  const mobileNavItems = useMemo(() => [
+    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/tasks', label: 'Tasks', icon: CheckSquare },
+    { path: '/calendar', label: 'Calendar', icon: CalendarDays },
+  ].filter(item => canAccessPath(currentUser, item.path, rolePermissions)), [currentUser, rolePermissions]);
+  const canOpenSettings = Boolean(currentUser?.mustResetPassword)
+    || canAccessPath(currentUser, '/settings', rolePermissions);
 
   const persistNotificationChange = async (change: () => void) => {
     const previousNotifications = useStore.getState().notifications;
@@ -170,12 +177,14 @@ const Layout: React.FC = () => {
                     </button>
                   </>
                 )}
-                <Link
-                  to="/settings"
-                  className="inline-flex min-h-9 items-center justify-center rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
-                >
-                  Open Settings
-                </Link>
+                {canOpenSettings && (
+                  <Link
+                    to="/settings"
+                    className="inline-flex min-h-9 items-center justify-center rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
+                  >
+                    Open Settings
+                  </Link>
+                )}
               </div>
             </div>
           </div>
@@ -186,42 +195,27 @@ const Layout: React.FC = () => {
 
         {/* Mobile Bottom Navigation Bar */}
         <nav aria-label="Mobile navigation" className="fixed bottom-0 left-0 right-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-start justify-around border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-lg shadow-slate-950/10 md:hidden">
-          <NavLink
-            to="/"
-            className={({ isActive }) => cn(
-              "flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
-              isActive && "font-bold text-blue-600"
-            )}
-          >
-            <LayoutDashboard className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Dashboard</span>
-          </NavLink>
-
-          <NavLink
-            to="/tasks"
-            className={({ isActive }) => cn(
-              "flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
-              isActive && "font-bold text-blue-600"
-            )}
-          >
-            <CheckSquare className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Tasks</span>
-          </NavLink>
-
-          <NavLink
-            to="/calendar"
-            className={({ isActive }) => cn(
-              "flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
-              isActive && "font-bold text-blue-600"
-            )}
-          >
-            <CalendarDays className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px]">Calendar</span>
-          </NavLink>
+          {mobileNavItems.map(item => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) => cn(
+                  "flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
+                  isActive && "font-bold text-blue-600"
+                )}
+              >
+                <Icon className="mb-0.5 h-5 w-5" />
+                <span className="text-[10px]">{item.label}</span>
+              </NavLink>
+            );
+          })}
 
           <button
             type="button"
             onClick={() => setIsMobileNotifOpen(true)}
+            aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
             className={cn(
               "relative flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
               isMobileNotifOpen && "font-bold text-blue-600"

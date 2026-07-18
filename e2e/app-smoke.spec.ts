@@ -63,6 +63,8 @@ test('first login reaches the app and critical responsive routes remain usable',
   await newTaskButton.click();
   const createTaskDialog = page.getByRole('dialog', { name: 'Create Task' });
   await expect(createTaskDialog).toBeVisible();
+  await expect(createTaskDialog.getByText('4. Files and notes')).toBeVisible();
+  await expect(createTaskDialog.getByLabel('Recurrence')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.querySelector('[role="dialog"]')?.contains(document.activeElement))).toBe(true);
   await page.keyboard.press('Escape');
   await expect(createTaskDialog).toBeHidden();
@@ -125,4 +127,61 @@ test('first login reaches the app and critical responsive routes remain usable',
       expect(widths.content, `${route} should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(widths.viewport);
     }
   }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => {
+    const raw = window.localStorage.getItem('market-task-storage');
+    if (!raw) throw new Error('Expected local AiTask state');
+    const stored = JSON.parse(raw);
+    stored.state.currentUser = {
+      ...stored.state.currentUser,
+      id: 'e2e-task-only-role',
+      name: 'Task Only User',
+      role: 'Staff',
+      isSuperAdmin: false,
+      mustResetPassword: false,
+      permissions: {
+        viewDashboard: false,
+        viewTasks: true,
+        viewCalendar: false,
+        viewProjects: false,
+        viewAllTasks: false,
+        viewAllClients: false,
+        manageAssignedClients: false,
+        viewReports: false,
+        viewApprovals: false,
+        viewSettings: false,
+        createTasks: false,
+        editTasks: false,
+        createProjects: false,
+        manageUsers: false,
+        approveRegistrations: false,
+        deleteUsers: false,
+        clientReview: false,
+      },
+    };
+    window.localStorage.setItem('market-task-storage', JSON.stringify(stored));
+    window.sessionStorage.clear();
+  });
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
+  const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
+  await expect(mobileNav.getByText('Dashboard', { exact: true })).toHaveCount(0);
+  await expect(mobileNav.getByText('Tasks', { exact: true })).toBeVisible();
+  await expect(mobileNav.getByText('Calendar', { exact: true })).toHaveCount(0);
+
+  await page.goto('/tasks');
+  await expect(page.getByRole('heading', { name: 'Tasks Management' })).toBeVisible();
+  await page.evaluate(() => {
+    const raw = window.localStorage.getItem('market-task-storage');
+    if (!raw) throw new Error('Expected local AiTask state');
+    const stored = JSON.parse(raw);
+    stored.state.currentUser.mustResetPassword = true;
+    window.localStorage.setItem('market-task-storage', JSON.stringify(stored));
+  });
+  await page.reload();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByRole('heading', { name: 'Account Setup' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Profile' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Workspace' })).toHaveCount(0);
 });

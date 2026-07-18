@@ -7,12 +7,14 @@ import {
   canCreateUsers,
   canDeleteUser,
   canEditClientProfile,
+  canEditProject,
   canEditTask,
   canRenameClient,
   canReviewTaskAsClient,
   canViewAllClients,
   defaultRolePermissions,
   getEffectivePermissions,
+  getDefaultAccessiblePath,
   getVisibleClientNames,
   getVisibleProjects,
   getVisibleTasks,
@@ -143,6 +145,22 @@ describe('staff permission matrix', () => {
     expect(canEditClientProfile(customRoleStaff, 'Acme', tasks, [customRole])).toBe(true);
   });
 
+  it('chooses the first permitted page when Dashboard and Settings are disabled', () => {
+    const taskOnlyStaff: User = {
+      ...staff,
+      permissions: {
+        ...defaultRolePermissions.Staff,
+        viewDashboard: false,
+        viewCalendar: false,
+        viewProjects: false,
+        viewReports: false,
+        viewSettings: false,
+      },
+    };
+
+    expect(getDefaultAccessiblePath(taskOnlyStaff)).toBe('/tasks');
+  });
+
   it('honors an explicit View all clients permission', () => {
     const elevatedStaff: User = {
       ...staff,
@@ -188,7 +206,7 @@ describe('staff permission matrix', () => {
     expect(getVisibleTasks(legacyStaff, tasks).map(task => task.id)).toEqual(['task-1']);
   });
 
-  it('shows only projects linked to assigned tasks and hides empty projects', () => {
+  it('keeps owned empty companies visible and prevents editing unrelated companies', () => {
     const projectSet: Project[] = [
       ...projects,
       { ...projects[0], id: 'project-owned-empty', clientName: 'Owned', projectName: 'Owned', createdBy: staff.id },
@@ -197,7 +215,15 @@ describe('staff permission matrix', () => {
 
     expect(getVisibleProjects(staff, projectSet, tasks).map(project => project.id)).toEqual([
       'project-acme',
+      'project-owned-empty',
     ]);
+    expect(canEditProject(staff, projectSet[2])).toBe(true);
+    expect(canEditProject(staff, projectSet[3])).toBe(false);
+    expect(canEditProject({
+      ...staff,
+      permissions: { ...defaultRolePermissions.Staff, createProjects: true },
+    }, projectSet[3])).toBe(false);
+    expect(canEditProject(admin, projectSet[3])).toBe(true);
   });
 });
 
