@@ -17,7 +17,7 @@ import {
   TaskApprovalEvent,
   CustomRole,
 } from '../types';
-import { legacyDemoTaskIds, mockUsers, mockProjects, mockTasks } from '../mock';
+import { legacyDemoTaskIds, mockUsers, mockProjects, mockTasks, retiredDemoUserIds } from '../mock';
 import { canLoginWithSeedAccount, DEFAULT_USER_PASSWORD, shouldShowDemoLogin } from '../lib/auth';
 import { getLocalUserPassword, setLocalUserPassword, verifyLocalUserPassword } from '../lib/localCredentials';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
@@ -200,6 +200,7 @@ let isApplyingRemoteSnapshot = false;
 const seededUserIds = new Set(mockUsers.map(user => user.id));
 const seededProjectIds = new Set(mockProjects.map(project => project.id));
 const legacyDemoTaskIdSet = new Set<string>(legacyDemoTaskIds);
+const retiredDemoUserIdSet = new Set<string>(retiredDemoUserIds);
 const defaultTaskStatuses = ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'];
 const allowedDepartments = new Set<Department>(['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client']);
 const allowedPriorities = new Set<Priority>(['Low', 'Medium', 'High', 'Urgent']);
@@ -345,13 +346,21 @@ const hasRecoverableLocalWorkspaceContent = (
   const remoteDeletedClientIds = new Set(remote.deletedClientIds || []);
 
   return (
-    local.tasks.some(task => !legacyDemoTaskIdSet.has(task.id) && isLocalItemWorthRecovering(task, remoteTasks)) ||
+    local.tasks.some(task => (
+      !legacyDemoTaskIdSet.has(task.id) &&
+      !retiredDemoUserIdSet.has(task.assignedTo) &&
+      !retiredDemoUserIdSet.has(task.createdBy) &&
+      isLocalItemWorthRecovering(task, remoteTasks)
+    )) ||
     (local.clients || []).some(client => !remoteDeletedClientIds.has(client.id) && isLocalItemWorthRecovering(client, remoteClients)) ||
     local.projects.some(project => isLocalItemWorthRecovering(project, remoteProjects, seededProjectIds)) ||
-    local.users.some(user => isLocalItemWorthRecovering(user, remoteUsers, seededUserIds)) ||
+    local.users.some(user => !retiredDemoUserIdSet.has(user.id) && isLocalItemWorthRecovering(user, remoteUsers, seededUserIds)) ||
     local.rolePermissions.some(role => isLocalItemWorthRecovering(role, remoteRoles)) ||
     local.registrations.some(registration => !remoteRegistrations.has(registration.id)) ||
-    local.notifications.some(notification => !remoteNotifications.has(notification.id)) ||
+    local.notifications.some(notification => (
+      (!notification.targetUserId || !retiredDemoUserIdSet.has(notification.targetUserId)) &&
+      !remoteNotifications.has(notification.id)
+    )) ||
     local.taskStatuses.some(status => !defaultStatuses.has(status.toLowerCase()) && !remoteStatuses.has(status.toLowerCase()))
   );
 };
@@ -2952,25 +2961,38 @@ export const useStore = create<StoreState>()(
 
         set((state) => {
           // Keep local development seeds compatible without touching hosted workspaces.
-          const usersWithProtectedOwner = state.users.map(user => {
-            const isBoss = user.id === 'u-boss' || user.name === 'Boss Koo';
-            const normalizedUser = normalizeUserAccount(user);
+          const usersWithProtectedOwner = state.users
+            .filter(user => !retiredDemoUserIdSet.has(user.id))
+            .map(user => {
+              const isBoss = user.id === 'u-boss' || user.name === 'Boss Koo';
+              const normalizedUser = normalizeUserAccount(user);
 
-            return {
-              ...normalizedUser,
-              ...(isBoss ? { isSuperAdmin: true } : {}),
-            };
-          });
+              return {
+                ...normalizedUser,
+                ...(isBoss ? { isSuperAdmin: true } : {}),
+              };
+            });
 
           const newUsers = mockUsers
             .filter(mu => !usersWithProtectedOwner.some(su => su.id === mu.id))
             .map(user => normalizeUserAccount(user));
           const newProjects = mockProjects.filter(mp => !state.projects.some(sp => sp.id === mp.id));
-          const tasksWithoutLegacyDemo = state.tasks.filter(task => !legacyDemoTaskIdSet.has(task.id));
+          const retiredTaskIds = new Set(state.tasks
+            .filter(task => retiredDemoUserIdSet.has(task.assignedTo) || retiredDemoUserIdSet.has(task.createdBy))
+            .map(task => task.id));
+          const tasksWithoutLegacyDemo = state.tasks.filter(task => (
+            !legacyDemoTaskIdSet.has(task.id) && !retiredTaskIds.has(task.id)
+          ));
+          const notificationsWithoutRetiredDemo = state.notifications.filter(notification => (
+            !notification.targetUserId || !retiredDemoUserIdSet.has(notification.targetUserId)
+          ) && (
+            !notification.route.entityId || !retiredTaskIds.has(notification.route.entityId)
+          ));
           const newTasks = mockTasks.filter(mt => !tasksWithoutLegacyDemo.some(st => st.id === mt.id));
           const nextUsers = [...usersWithProtectedOwner, ...newUsers];
-          const normalizedUsersChanged = usersWithProtectedOwner.some((user, index) => {
-            const previous = state.users[index];
+          const normalizedUsersChanged = usersWithProtectedOwner.some(user => {
+            const previous = state.users.find(item => item.id === user.id);
+            if (!previous) return true;
             return Boolean(previous.password) ||
               previous.mustResetPassword !== user.mustResetPassword ||
               previous.isSuperAdmin !== user.isSuperAdmin;
@@ -2981,7 +3003,9 @@ export const useStore = create<StoreState>()(
             newUsers.length === 0 &&
             newProjects.length === 0 &&
             newTasks.length === 0 &&
-            tasksWithoutLegacyDemo.length === state.tasks.length
+            usersWithProtectedOwner.length === state.users.length &&
+            tasksWithoutLegacyDemo.length === state.tasks.length &&
+            notificationsWithoutRetiredDemo.length === state.notifications.length
           ) {
             return state;
           }
@@ -2991,6 +3015,7 @@ export const useStore = create<StoreState>()(
             currentUser: getCurrentUserFromSnapshot(state.currentUser, nextUsers),
             projects: [...state.projects, ...newProjects],
             tasks: [...tasksWithoutLegacyDemo, ...newTasks],
+            notifications: notificationsWithoutRetiredDemo,
           };
         });
       },

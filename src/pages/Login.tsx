@@ -18,8 +18,6 @@ const LOCKOUT_SECONDS = 30;
 const DEMO_ACCOUNTS = [
   { username: 'Boss Koo',              role: 'Super Admin', badge: 'bg-purple-100 text-purple-700' },
   { username: 'Admin Demo',            role: 'Admin',       badge: 'bg-red-100 text-red-700' },
-  { username: 'Staff Demo',            role: 'Staff',       badge: 'bg-blue-100 text-blue-700' },
-  { username: 'Finance Demo',          role: 'Staff',       badge: 'bg-blue-100 text-blue-700' },
   { username: 'UrbanEats Client Demo', role: 'Client',      badge: 'bg-emerald-100 text-emerald-700' },
 ];
 

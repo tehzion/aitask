@@ -10,8 +10,6 @@ export const mockUsers: User[] = [
 
   // Demos
   { id: 'u-admin', name: 'Admin Demo', password: DEFAULT_USER_PASSWORD, role: 'Admin', department: 'Operation', avatar: 'https://i.pravatar.cc/150?u=AdminDemo' },
-  { id: 'u-staff', name: 'Staff Demo', password: DEFAULT_USER_PASSWORD, role: 'Staff', department: 'Designer', avatar: 'https://i.pravatar.cc/150?u=StaffDemo' },
-  { id: 'u-finance', name: 'Finance Demo', password: DEFAULT_USER_PASSWORD, role: 'Staff', department: 'Account & Finance', avatar: 'https://i.pravatar.cc/150?u=FinanceDemo' },
   { id: 'u-client-urban', name: 'UrbanEats Client Demo', password: DEFAULT_USER_PASSWORD, role: 'Client', department: 'Client', companyName: 'UrbanEats', avatar: 'https://i.pravatar.cc/150?u=UrbanEatsClient' },
 ];
 
@@ -49,5 +47,6 @@ export const mockProjects: Project[] = [
 ];
 
 export const legacyDemoTaskIds = ['T-1001', 'T-1002', 'T-1003', 'T-1004', 'T-1005', 'T-1006', 'T-1007', 'T-1008'];
+export const retiredDemoUserIds = ['u-staff', 'u-finance'];
 
 export const mockTasks: Task[] = [];

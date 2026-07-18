@@ -20,8 +20,6 @@ export const shouldUseSecureSupabase = () => shouldUseSupabase();
 const legacyAliases: Record<string, string> = {
   'boss koo': 'boss@aitask.local',
   'admin demo': 'admin@aitask.local',
-  'staff demo': 'staff@aitask.local',
-  'finance demo': 'finance@aitask.local',
   'urbaneats client demo': 'urbaneats.client@aitask.local',
   'adminmojo': 'adminmojo@aitask.local',
 };

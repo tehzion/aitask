@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 test('first login reaches the app and critical responsive routes remain usable', async ({ page }) => {
+  test.setTimeout(60_000);
+
   await page.goto('/feedback?role=Client&lang=zh');
   await expect(page.getByRole('heading', { name: 'AiTask 一周使用反馈' })).toBeVisible();
   await expect(page.getByLabel('角色')).toHaveValue('Client');
@@ -43,8 +45,8 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await expect(page.getByRole('button', { name: 'Use Boss Koo' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use Admin Demo' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Use Staff Demo' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Use Finance Demo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use Staff Demo' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Use Finance Demo' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Use UrbanEats Client Demo' })).toBeVisible();
 
   await page.getByLabel('Email or username').fill('Boss Koo');

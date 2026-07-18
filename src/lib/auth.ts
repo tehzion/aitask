@@ -20,8 +20,6 @@ const HOSTED_BLOCKED_SEED_USER_IDS = new Set([
   'u-boss',
   'u-adminmojo',
   'u-admin',
-  'u-staff',
-  'u-finance',
   'u-client-urban',
 ]);
 
