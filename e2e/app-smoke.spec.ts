@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('first login reaches the app and critical responsive routes remain usable', async ({ page }) => {
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Sign in to AiTask' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Demo credentials - click to fill' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Demo accounts - select username' })).toBeVisible();
   await expect(page.getByText(/^v\d+\.\d+\.\d+\+[a-z0-9]+(?:\.dev)?$/)).toBeVisible();
 
   await page.getByRole('button', { name: 'Register as Staff' }).click();
@@ -11,6 +11,16 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByText('Staff', { exact: true })).toBeVisible();
   await expect(page.getByText('Client (External Customer)', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Already have an account? Sign in' }).click();
+
+  await page.goto('/account/password');
+  await expect(page.getByRole('heading', { name: 'Link unavailable' })).toBeVisible();
+  await page.getByRole('button', { name: 'Return to Login' }).click();
+
+  await expect(page.getByRole('button', { name: 'Use Boss Koo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use Admin Demo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use Staff Demo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use Finance Demo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use UrbanEats Client Demo' })).toBeVisible();
 
   await page.getByLabel('Email or username').fill('Boss Koo');
   await page.getByLabel('Password').fill('password123');

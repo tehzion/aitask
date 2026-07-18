@@ -60,6 +60,11 @@ import {
   type MutationConflict,
 } from '../lib/secureWorkspace';
 import { resolveAuthEmail, shouldUseSecureSupabase, supabase } from '../lib/supabaseClient';
+import {
+  clearPasswordSetupMode,
+  getPasswordSetupMode,
+  passwordSetupRedirectUrl,
+} from '../lib/authRecovery';
 
 export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required';
 
@@ -142,6 +147,8 @@ interface StoreState {
   discardMutation: (options?: { reload?: boolean }) => Promise<void>;
   commitPendingMutation: (commandType?: string) => Promise<{ ok: boolean; error?: string }>;
   login: (name: string, password?: string) => Promise<boolean>;
+  requestPasswordRecovery: (identifier: string) => Promise<{ ok: boolean; error?: string }>;
+  completePasswordSetup: (data: { newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
   updateCurrentUserProfile: (data: Pick<User, 'name' | 'email' | 'avatar'>) => { ok: boolean; error?: string };
   updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
@@ -1275,6 +1282,88 @@ export const useStore = create<StoreState>()(
         return true;
       },
 
+      requestPasswordRecovery: async (identifier) => {
+        if (!shouldUseSecureSupabase()) {
+          return { ok: false, error: 'Password recovery is available for secure hosted accounts only.' };
+        }
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          return { ok: false, error: 'You are offline. Reconnect before requesting a password email.' };
+        }
+
+        const normalizedIdentifier = identifier.trim().toLowerCase();
+        const matchingMember = normalizedIdentifier.includes('@')
+          ? undefined
+          : get().users.find(user => user.name.trim().toLowerCase() === normalizedIdentifier);
+        const email = resolveAuthEmail(matchingMember?.email || identifier);
+        if (!profileEmailPattern.test(email)) return { ok: true };
+
+        try {
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: passwordSetupRedirectUrl(),
+          });
+          if (error && /fetch|network|offline/i.test(error.message)) {
+            return { ok: false, error: 'The recovery service could not be reached. Please try again.' };
+          }
+          return { ok: true };
+        } catch {
+          return { ok: false, error: 'The recovery service could not be reached. Please try again.' };
+        }
+      },
+
+      completePasswordSetup: async (data) => {
+        if (!shouldUseSecureSupabase()) {
+          return { ok: false, error: 'This password link is only valid for secure hosted accounts.' };
+        }
+        if (!getPasswordSetupMode()) {
+          return { ok: false, error: 'This password link is invalid or has already been used.' };
+        }
+
+        const newPassword = data.newPassword.trim();
+        if (newPassword.length < 12) {
+          return { ok: false, error: 'Use a password with at least 12 characters.' };
+        }
+        if (newPassword !== data.confirmPassword.trim()) {
+          return { ok: false, error: 'Passwords do not match.' };
+        }
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          return { ok: false, error: 'You are offline. Reconnect before setting your password.' };
+        }
+
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData.user) {
+          return { ok: false, error: 'This password link has expired. Request a new email from Login.' };
+        }
+
+        const { error: passwordError } = await supabase.auth.updateUser({ password: newPassword });
+        if (passwordError) return { ok: false, error: passwordError.message };
+
+        const currentUser = get().currentUser;
+        if (currentUser?.mustResetPassword) {
+          const previousCurrentUser = currentUser;
+          const previousUsers = get().users;
+          const now = new Date().toISOString();
+          set((state) => ({
+            currentUser: state.currentUser
+              ? { ...state.currentUser, mustResetPassword: false, updatedAt: now }
+              : null,
+            users: state.users.map(member => member.id === currentUser.id
+              ? { ...member, mustResetPassword: false, updatedAt: now }
+              : member),
+          }));
+          const persisted = await get().commitPendingMutation('member.update');
+          if (!persisted.ok) {
+            set({ currentUser: previousCurrentUser, users: previousUsers });
+            return {
+              ok: false,
+              error: persisted.error || 'The password changed, but account setup could not be finalized. Retry this page.',
+            };
+          }
+        }
+
+        clearPasswordSetupMode();
+        return { ok: true };
+      },
+
       updateCurrentUserProfile: (data) => {
         const currentUser = get().currentUser;
         if (!currentUser) return { ok: false, error: 'You must be logged in to update your profile.' };
@@ -2337,6 +2426,7 @@ export const useStore = create<StoreState>()(
             phone,
             jobPosition,
             requestedRole: 'Staff',
+            onboardingMode: 'self_signup',
             id: nowId('R'),
             status: 'Pending',
             createdAt: new Date().toISOString()

@@ -18,6 +18,7 @@ const Projects = React.lazy(() => import('./pages/Projects'));
 const Reports = React.lazy(() => import('./pages/Reports'));
 const Approvals = React.lazy(() => import('./pages/Approvals'));
 const Settings = React.lazy(() => import('./pages/Settings'));
+const AccountPassword = React.lazy(() => import('./pages/AccountPassword'));
 
 const RouteLoading = () => (
   <div className="flex min-h-[40vh] items-center justify-center px-4 text-sm font-medium text-slate-500" role="status">
@@ -115,6 +116,7 @@ function App() {
         <React.Suspense fallback={<RouteLoading />}>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/account/password" element={<AccountPassword />} />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
 
             <Route path="/" element={

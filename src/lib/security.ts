@@ -387,6 +387,7 @@ const parseRegistration = (value: unknown): Registration | null => {
   const email = cleanText(value.email, 320);
   const requestedRole = cleanText(value.requestedRole, 20) as Role;
   const status = cleanText(value.status, 20) as Registration['status'];
+  const onboardingMode = cleanText(value.onboardingMode, 24) as Registration['onboardingMode'];
   const createdAt = safeIsoTimestamp(value.createdAt);
   if (!id || !name || !email || !roles.has(requestedRole) || !['Pending', 'Approved', 'Rejected'].includes(status) || !createdAt) return null;
   return {
@@ -398,6 +399,9 @@ const parseRegistration = (value: unknown): Registration | null => {
     jobPosition: cleanText(value.jobPosition, 160),
     requestedRole,
     status,
+    onboardingMode: onboardingMode === 'self_signup' || onboardingMode === 'legacy_invite'
+      ? onboardingMode
+      : undefined,
     createdAt,
     updatedAt: safeIsoTimestamp(value.updatedAt),
   };

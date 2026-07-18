@@ -14,6 +14,17 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
+const publicAppUrl = () => {
+  const configured = Deno.env.get('AITASK_PUBLIC_URL')?.trim() || 'https://aitask-virid.vercel.app';
+  try {
+    const parsed = new URL(configured);
+    if (parsed.protocol !== 'https:' || !parsed.hostname) return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+};
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -51,6 +62,7 @@ Deno.serve(async (request) => {
   const department = typeof body.department === 'string' ? body.department.trim() : 'Designer';
   const companyName = role === 'Client' && typeof body.companyName === 'string' ? body.companyName.trim() : null;
   const customRoleId = typeof body.customRoleId === 'string' && body.customRoleId.trim() ? body.customRoleId.trim() : null;
+  let onboardingMode: 'self_signup' | 'legacy_invite' | 'direct_invite' = 'direct_invite';
 
   if (registrationId) {
     const { data: registration, error } = await adminClient
@@ -66,6 +78,7 @@ Deno.serve(async (request) => {
     name = typeof registration.data.name === 'string' ? registration.data.name.trim() : '';
     email = typeof registration.data.email === 'string' ? registration.data.email.trim().toLowerCase() : '';
     role = 'Staff';
+    onboardingMode = registration.data.onboardingMode === 'legacy_invite' ? 'legacy_invite' : 'self_signup';
   }
 
   if (!name || !validEmail(email)) return json({ error: 'A valid email and name are required' }, 400);
@@ -88,17 +101,51 @@ Deno.serve(async (request) => {
   if (listError) return json({ error: 'Unable to verify the Auth user' }, 500);
   let authUser = authUsers.users.find(user => user.email?.toLowerCase() === email);
   let createdAuthUser = false;
+  const appUrl = publicAppUrl();
+  if (!appUrl) return json({ error: 'The public AiTask URL is not configured' }, 500);
+  const passwordSetupUrl = `${appUrl}/account/password`;
 
   if (registrationId) {
-    if (!authUser) return json({ error: 'The Staff member must verify their signup email before approval' }, 409);
-    if (!authUser.email_confirmed_at) return json({ error: 'The Staff member has not verified their email yet' }, 409);
+    if (!authUser && onboardingMode === 'legacy_invite') {
+      const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+        data: { name, department, aitask_registration_source: 'legacy_invite' },
+        redirectTo: passwordSetupUrl,
+      });
+      if (inviteError || !invited.user) return json({ error: inviteError?.message || 'Invitation failed' }, 400);
+      authUser = invited.user;
+      createdAuthUser = true;
+    } else if (!authUser) {
+      return json({ error: 'The Staff member must verify their signup email before approval' }, 409);
+    }
+    if (onboardingMode === 'self_signup' && !authUser.email_confirmed_at) {
+      return json({ error: 'The Staff member has not verified their email yet' }, 409);
+    }
   } else if (!authUser) {
     const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: { name, department, company_name: companyName },
+      redirectTo: passwordSetupUrl,
     });
     if (inviteError || !invited.user) return json({ error: inviteError?.message || 'Invitation failed' }, 400);
     authUser = invited.user;
     createdAuthUser = true;
+  }
+
+  if (!authUser) return json({ error: 'Unable to prepare the Auth user' }, 500);
+
+  let resolvedMemberId = memberId;
+  if (!resolvedMemberId && registrationId && onboardingMode === 'legacy_invite') {
+    const { data: existingMember, error: memberError } = await adminClient
+      .from('aitask_members')
+      .select('id')
+      .eq('workspace_id', actor.workspace_id)
+      .is('auth_user_id', null)
+      .eq('email', email)
+      .maybeSingle();
+    if (memberError) {
+      if (createdAuthUser) await adminClient.auth.admin.deleteUser(authUser.id);
+      return json({ error: 'Unable to verify the legacy member record' }, 500);
+    }
+    resolvedMemberId = existingMember?.id || '';
   }
 
   const { data: result, error: finalizeError } = await adminClient.rpc('aitask_finalize_member_invitation', {
@@ -111,7 +158,7 @@ Deno.serve(async (request) => {
     p_client_name: companyName,
     p_custom_role_id: customRoleId,
     p_custom_role_name: customRoleName,
-    p_member_id: memberId || null,
+    p_member_id: resolvedMemberId || null,
     p_registration_id: registrationId || null,
   });
 

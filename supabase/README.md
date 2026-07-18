@@ -9,7 +9,9 @@ Production AiTask uses Supabase Auth and the authenticated, row-scoped workspace
 3. Run `supabase/secure-auth-schema.sql` to create the authenticated workspace model and migrate legacy data.
 4. Apply every file under `supabase/migrations/` in timestamp order.
 5. Deploy the `invite-aitask-member` Edge Function with JWT verification enabled.
-6. Configure the frontend:
+6. Set the Edge Function secret `AITASK_PUBLIC_URL` to the canonical HTTPS application origin.
+7. Configure custom SMTP for Auth invitations and recovery email. The built-in Supabase mailer is not a production delivery service.
+8. Configure the frontend:
 
 ```env
 VITE_AITASK_BACKEND=supabase
@@ -17,6 +19,8 @@ VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 VITE_AITASK_SHOW_DEMO_LOGIN=false
 ```
+
+For the current production workspace, `AITASK_PUBLIC_URL` is `https://aitask-virid.vercel.app`. Invitation and recovery redirects must allow `/account/password`. Do not store SMTP credentials, generated passwords, service-role keys, or invitation tokens in this repository.
 
 ## v1.6.0 Command Cutover
 

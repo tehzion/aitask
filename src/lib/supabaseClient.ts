@@ -1,7 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseConfig, shouldUseSupabase } from './backend';
+import { capturePasswordSetupMode } from './authRecovery';
 
 const config = getSupabaseConfig();
+
+capturePasswordSetupMode();
 
 export const supabase = createClient(config.url || 'https://invalid.supabase.co', config.anonKey || 'invalid', {
   auth: {

@@ -111,6 +111,7 @@ export interface Registration {
   jobPosition: string;
   requestedRole: Role; // What they want to apply for
   status: 'Pending' | 'Approved' | 'Rejected';
+  onboardingMode?: 'self_signup' | 'legacy_invite';
   createdAt: string;
 }
 

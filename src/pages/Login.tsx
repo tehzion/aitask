@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
+import { LayoutDashboard, UserPlus, ChevronDown, ChevronUp, Mail } from 'lucide-react';
 import { useStore } from '../store';
 import { Role } from '../types';
 import { Button } from '../components/ui';
@@ -16,25 +16,19 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 30;
 
 const DEMO_ACCOUNTS = [
-  { username: 'Boss Koo',               password: DEFAULT_USER_PASSWORD, role: 'Super Admin', badge: 'bg-purple-100 text-purple-700' },
-  { username: 'Admin Demo',             password: DEFAULT_USER_PASSWORD, role: 'Admin',       badge: 'bg-red-100 text-red-700' },
-  { username: 'Staff Demo',             password: DEFAULT_USER_PASSWORD, role: 'Staff',       badge: 'bg-blue-100 text-blue-700' },
-  { username: 'Finance Demo',           password: DEFAULT_USER_PASSWORD, role: 'Staff',       badge: 'bg-blue-100 text-blue-700' },
-  { username: 'UrbanEats Client Demo',  password: DEFAULT_USER_PASSWORD, role: 'Client',      badge: 'bg-emerald-100 text-emerald-700' },
+  { username: 'Boss Koo',              role: 'Super Admin', badge: 'bg-purple-100 text-purple-700' },
+  { username: 'Admin Demo',            role: 'Admin',       badge: 'bg-red-100 text-red-700' },
+  { username: 'Staff Demo',            role: 'Staff',       badge: 'bg-blue-100 text-blue-700' },
+  { username: 'Finance Demo',          role: 'Staff',       badge: 'bg-blue-100 text-blue-700' },
+  { username: 'UrbanEats Client Demo', role: 'Client',      badge: 'bg-emerald-100 text-emerald-700' },
 ];
-
-const HOSTED_DEMO_USERNAMES = new Set([
-  'Admin Demo',
-  'Finance Demo',
-  'UrbanEats Client Demo',
-]);
 
 const getLoginDestination = (mustResetPassword: boolean, userId: string, requestedPath: string) => (
   mustResetPassword && !hasPasswordResetBypass(userId) ? '/settings' : requestedPath
 );
 
 const Login: React.FC = () => {
-  const { login, currentUser, registerUser } = useStore();
+  const { login, currentUser, registerUser, requestPasswordRecovery } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
   const requestedPath = typeof location.state?.returnTo === 'string'
@@ -53,9 +47,11 @@ const Login: React.FC = () => {
   const [showDemo, setShowDemo] = useState(true);
   const showDemoLogin = shouldShowDemoLogin();
   const secureAccounts = shouldUseSecureSupabase();
-  const visibleDemoAccounts = secureAccounts
-    ? DEMO_ACCOUNTS.filter(account => HOSTED_DEMO_USERNAMES.has(account.username))
-    : DEMO_ACCOUNTS;
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [recoveryIdentifier, setRecoveryIdentifier] = useState('');
+  const [recoveryError, setRecoveryError] = useState('');
+  const [recoverySent, setRecoverySent] = useState(false);
+  const [isRequestingRecovery, setIsRequestingRecovery] = useState(false);
 
   // --- Registration state ---
   const [isRegistering, setIsRegistering] = useState(false);
@@ -74,8 +70,21 @@ const Login: React.FC = () => {
 
   const fillDemo = (account: typeof DEMO_ACCOUNTS[0]) => {
     setUsername(account.username);
-    setPassword(account.password);
+    setPassword(secureAccounts ? '' : DEFAULT_USER_PASSWORD);
     setLoginError('');
+  };
+
+  const handleRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryError('');
+    setIsRequestingRecovery(true);
+    const result = await requestPasswordRecovery(recoveryIdentifier);
+    setIsRequestingRecovery(false);
+    if (!result.ok) {
+      setRecoveryError(result.error || 'Unable to request a recovery email.');
+      return;
+    }
+    setRecoverySent(true);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -163,10 +172,12 @@ const Login: React.FC = () => {
           </div>
         </div>
         <h2 className="mt-8 text-center text-2xl font-semibold text-slate-950">
-          {isRegistering ? 'Register for Access' : 'Sign in to AiTask'}
+          {isRecovering ? 'Reset your password' : isRegistering ? 'Register for Access' : 'Sign in to AiTask'}
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
-          {isRegistering
+          {isRecovering
+            ? 'Enter your account email or username to receive a secure recovery link.'
+            : isRegistering
             ? 'Fill in your details. An admin will review and approve your account.'
             : 'Enter your username and password to access the dashboard.'}
         </p>
@@ -174,7 +185,57 @@ const Login: React.FC = () => {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="border border-slate-200 bg-white px-4 py-8 shadow-[0_8px_30px_rgba(15,23,42,0.08)] sm:rounded-lg sm:px-10">
-          {!isRegistering ? (
+          {isRecovering ? (
+            recoverySent ? (
+              <div className="py-4 text-center" role="status" aria-live="polite">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
+                  <Mail className="h-6 w-6 text-blue-600" />
+                </div>
+                <h3 className="mt-4 text-lg font-semibold text-slate-900">Check your email</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  If the account can receive recovery email, a password link has been sent.
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="mt-6 w-full"
+                  onClick={() => {
+                    setIsRecovering(false);
+                    setRecoverySent(false);
+                  }}
+                >
+                  Back to Login
+                </Button>
+              </div>
+            ) : (
+              <form className="space-y-5" onSubmit={handleRecovery}>
+                <div>
+                  <label htmlFor="recovery-identifier" className="block text-sm font-medium text-slate-700">Email or username</label>
+                  <input
+                    id="recovery-identifier"
+                    type="text"
+                    autoComplete="username"
+                    required
+                    className={cn(inputBase, 'mt-2 px-4 py-3')}
+                    value={recoveryIdentifier}
+                    onChange={event => setRecoveryIdentifier(event.target.value)}
+                  />
+                </div>
+                {recoveryError && <p className="text-sm text-red-600" role="alert" aria-live="assertive">{recoveryError}</p>}
+                <Button type="submit" className="w-full py-3" disabled={isRequestingRecovery}>
+                  <Mail className="h-4 w-4" />
+                  {isRequestingRecovery ? 'Requesting email...' : 'Send recovery email'}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setIsRecovering(false)}
+                  className="w-full text-center text-sm font-medium text-blue-600 hover:text-blue-700"
+                >
+                  Back to Login
+                </button>
+              </form>
+            )
+          ) : !isRegistering ? (
             <>
               <form className="space-y-5" onSubmit={handleLogin}>
                 <div>
@@ -205,6 +266,20 @@ const Login: React.FC = () => {
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                   />
+                  {secureAccounts && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRecoveryIdentifier(username);
+                        setRecoveryError('');
+                        setRecoverySent(false);
+                        setIsRecovering(true);
+                      }}
+                      className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
                   {loginError && <p className="mt-2 text-sm text-red-600" role="alert" aria-live="polite">{loginError}</p>}
                 </div>
 
@@ -221,7 +296,7 @@ const Login: React.FC = () => {
                     onClick={() => setShowDemo(v => !v)}
                     className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:bg-slate-100 transition-colors"
                   >
-                    <span>Demo credentials - click to fill</span>
+                    <span>Demo accounts - select username</span>
                     {showDemo ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   </button>
 
@@ -231,22 +306,30 @@ const Login: React.FC = () => {
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-200">
                             <th className="text-left px-3 py-2 font-semibold text-slate-500">Username</th>
-                            <th className="text-left px-3 py-2 font-semibold text-slate-500">Password</th>
+                            {!secureAccounts && <th className="text-left px-3 py-2 font-semibold text-slate-500">Password</th>}
                             <th className="text-left px-3 py-2 font-semibold text-slate-500">Role</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {visibleDemoAccounts.map((account) => (
+                          {DEMO_ACCOUNTS.map((account) => (
                             <tr
                               key={account.username}
-                              onClick={() => fillDemo(account)}
                               className={cn(
-                                'border-b border-slate-100 last:border-0 cursor-pointer hover:bg-blue-50 transition-colors',
+                                'border-b border-slate-100 last:border-0 transition-colors hover:bg-blue-50',
                                 username === account.username ? 'bg-blue-50' : 'bg-white'
                               )}
                             >
-                              <td className="px-3 py-2 font-medium text-slate-700">{account.username}</td>
-                              <td className="px-3 py-2 font-mono text-[11px] text-slate-600">{account.password}</td>
+                              <td className="px-3 py-2 font-medium text-slate-700">
+                                <button
+                                  type="button"
+                                  onClick={() => fillDemo(account)}
+                                  className="text-left font-medium text-slate-700 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                  aria-label={`Use ${account.username}`}
+                                >
+                                  {account.username}
+                                </button>
+                              </td>
+                              {!secureAccounts && <td className="px-3 py-2 font-mono text-[11px] text-slate-600">{DEFAULT_USER_PASSWORD}</td>}
                               <td className="px-3 py-2">
                                 <span className={cn('px-1.5 py-0.5 rounded text-xs font-semibold', account.badge)}>
                                   {account.role}
