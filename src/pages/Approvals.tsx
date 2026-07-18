@@ -698,7 +698,7 @@ const Approvals: React.FC = () => {
         >
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
               <h2 id={addMemberTitleId} className="text-lg font-semibold text-slate-950">Add new member</h2>
-              <p className="text-sm text-slate-500 mt-1">Create an account directly with Boss Koo super admin permission.</p>
+              <p className="text-sm text-slate-500 mt-1">Invite a new account. Existing Staff signups should be approved below.</p>
             </div>
 
             <form onSubmit={handleAddUser} className="p-6 space-y-4">

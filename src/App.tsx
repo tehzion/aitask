@@ -79,9 +79,24 @@ function App() {
 
   useEffect(() => {
     if (!shouldUseSecureSupabase()) return;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session?.user) {
         useStore.setState({ currentUser: null });
+        return;
+      }
+
+      const currentUser = useStore.getState().currentUser;
+      if (currentUser && currentUser.authUserId !== session.user.id) {
+        useStore.setState((state) => ({
+          currentUser: null,
+          backend: {
+            ...state.backend,
+            status: 'loading',
+            isLoading: true,
+            message: 'Refreshing the signed-in account.',
+          },
+        }));
+        queueMicrotask(() => void useStore.getState().initializeBackend());
       }
     });
     return () => subscription.unsubscribe();

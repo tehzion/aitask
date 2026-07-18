@@ -33,21 +33,40 @@ Deno.serve(async (request) => {
   if (!authorization?.startsWith('Bearer ')) return json({ error: 'Authentication required' }, 401);
 
   const url = Deno.env.get('SUPABASE_URL');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!url || !serviceKey) return json({ error: 'Function configuration is incomplete' }, 500);
+  if (!url || !anonKey || !serviceKey) return json({ error: 'Function configuration is incomplete' }, 500);
 
   const adminClient = createClient(url, serviceKey, { auth: { persistSession: false } });
   const token = authorization.slice('Bearer '.length);
   const { data: authData, error: authError } = await adminClient.auth.getUser(token);
   if (authError || !authData.user) return json({ error: 'Invalid session' }, 401);
 
-  const { data: actor, error: actorError } = await adminClient
+  const userClient = createClient(url, anonKey, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: authorization } },
+  });
+  const { data: actor, error: actorError } = await userClient
     .from('aitask_members')
     .select('id,workspace_id,is_super_admin')
     .eq('auth_user_id', authData.user.id)
-    .eq('is_super_admin', true)
     .maybeSingle();
-  if (actorError || !actor) return json({ error: 'Super Admin permission required' }, 403);
+  if (actorError) {
+    console.error('Super Admin lookup failed', {
+      authUserId: authData.user.id,
+      code: actorError.code,
+      message: actorError.message,
+    });
+    return json({ error: 'Unable to verify Super Admin access. Please try again.' }, 500);
+  }
+  if (!actor) {
+    console.warn('Invitation denied for unlinked Auth user', { authUserId: authData.user.id });
+    return json({ error: 'This signed-in account is not linked to an AiTask member. Sign out and sign in again.' }, 403);
+  }
+  if (!actor.is_super_admin) {
+    console.warn('Invitation denied for non-Super-Admin member', { memberId: actor.id });
+    return json({ error: 'Boss Koo Super Admin access is required. Sign in with the Boss Koo account.' }, 403);
+  }
 
   const body = await request.json().catch(() => ({}));
   const registrationId = typeof body.registrationId === 'string' ? body.registrationId.trim() : '';
@@ -61,7 +80,7 @@ Deno.serve(async (request) => {
   let onboardingMode: 'self_signup' | 'legacy_invite' | 'direct_invite' = 'direct_invite';
 
   if (registrationId) {
-    const { data: registration, error } = await adminClient
+    const { data: registration, error } = await userClient
       .from('aitask_entities')
       .select('data')
       .eq('workspace_id', actor.workspace_id)
@@ -82,7 +101,7 @@ Deno.serve(async (request) => {
 
   let customRoleName: string | null = null;
   if (customRoleId) {
-    const { data: customRole, error } = await adminClient
+    const { data: customRole, error } = await userClient
       .from('aitask_entities')
       .select('data')
       .eq('workspace_id', actor.workspace_id)
@@ -130,7 +149,7 @@ Deno.serve(async (request) => {
 
   let resolvedMemberId = memberId;
   if (!resolvedMemberId && registrationId && onboardingMode === 'legacy_invite') {
-    const { data: existingMember, error: memberError } = await adminClient
+    const { data: existingMember, error: memberError } = await userClient
       .from('aitask_members')
       .select('id')
       .eq('workspace_id', actor.workspace_id)

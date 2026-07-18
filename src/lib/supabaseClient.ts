@@ -23,6 +23,7 @@ const legacyAliases: Record<string, string> = {
   'staff demo': 'staff@aitask.local',
   'finance demo': 'finance@aitask.local',
   'urbaneats client demo': 'urbaneats.client@aitask.local',
+  'adminmojo': 'adminmojo@aitask.local',
 };
 
 export const resolveAuthEmail = (identifier: string) => {

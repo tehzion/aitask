@@ -2481,11 +2481,41 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'A member with that name or email already exists.' };
         }
 
+        const pendingRegistration = !data.registrationId && email
+          ? get().registrations.find(registration => (
+              registration.status === 'Pending' && registration.email.trim().toLowerCase() === email.toLowerCase()
+            ))
+          : undefined;
+        if (pendingRegistration) {
+          return {
+            ok: false,
+            error: 'This email already has a pending Staff signup. Approve it from Pending Registrations instead.',
+          };
+        }
+
         if (shouldUseSecureSupabase()) {
           if (!email || !profileEmailPattern.test(email)) {
             return { ok: false, error: 'A valid email is required for a secure invitation.' };
           }
+
+          const { data: authData, error: authError } = await supabase.auth.getUser();
+          if (authError || !authData.user) {
+            return { ok: false, error: 'Your secure session has expired. Sign out, then sign in again.' };
+          }
+          if (!currentUser.authUserId || currentUser.authUserId !== authData.user.id) {
+            await get().initializeBackend();
+            return {
+              ok: false,
+              error: 'Your signed-in account changed. AiTask refreshed the session; please try again.',
+            };
+          }
+
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          if (sessionError || !session?.access_token) {
+            return { ok: false, error: 'Your secure session has expired. Sign out, then sign in again.' };
+          }
           const { error } = await supabase.functions.invoke('invite-aitask-member', {
+            headers: { Authorization: `Bearer ${session.access_token}` },
             body: {
               name,
               email,

@@ -70,7 +70,7 @@ export const feedbackQuestions: FeedbackQuestion[] = [
   { id: 'registration_approval', section: 'super_admin', roles: ['Super Admin'], en: 'Pending Staff registrations and invitation approval work correctly.', zh: '等待批准的员工注册和邀请批准功能正确。' },
   { id: 'permissions', section: 'super_admin', roles: ['Super Admin'], en: 'Role and permission changes take effect after refresh.', zh: '角色和权限更改在刷新后生效。' },
   { id: 'audit', section: 'super_admin', roles: ['Super Admin'], en: 'Sensitive administrative actions create an audit record.', zh: '敏感管理操作会产生审计记录。' },
-  { id: 'developer_scope', section: 'super_admin', roles: ['Super Admin'], en: 'adminmojo cannot enter the workspace and has read-only feedback access only.', zh: 'adminmojo 无法进入工作区，只能以只读方式查看反馈。' },
+  { id: 'developer_scope', section: 'super_admin', roles: ['Super Admin'], en: 'adminmojo has Admin access but cannot act as Super Admin.', zh: 'adminmojo 拥有管理员权限，但不能作为超级管理员。' },
 ];
 
 export const visibleFeedbackQuestions = (role: FeedbackRole) => feedbackQuestions.filter(question => (

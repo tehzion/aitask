@@ -36,7 +36,7 @@ select is(
 );
 select ok(
   not coalesce((select is_super_admin from public.aitask_members where id = 'u-adminmojo'), false),
-  'the dormant adminmojo member is not a workspace Super Admin'
+  'the adminmojo developer member is not a workspace Super Admin'
 );
 
 select * from finish();

@@ -92,7 +92,7 @@ Complete one checklist per user after using AiTask for one week. Tick `Pass`, `I
 | Approving a user sends the correct invitation. / 批准用户后会发送正确的邀请邮件。 | [ ] | [ ] | [ ] |
 | Department, role, and permissions save correctly. / 部门、角色和权限可以正确保存。 | [ ] | [ ] | [ ] |
 | Removing a permission takes effect after refresh. / 移除权限后，刷新页面即会生效。 | [ ] | [ ] | [ ] |
-| `adminmojo` cannot enter the production workspace and has read-only feedback access only. / `adminmojo` 无法进入正式工作区，只能以只读方式查看反馈。 | [ ] | [ ] | [ ] |
+| `adminmojo` has Admin access but cannot act as Super Admin. / `adminmojo` 拥有管理员权限，但不能作为超级管理员。 | [ ] | [ ] | [ ] |
 | Audit records exist for sensitive administrative actions. / 敏感管理操作有审计记录。 | [ ] | [ ] | [ ] |
 
 ## Issue Record / 问题记录
