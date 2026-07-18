@@ -5,7 +5,7 @@ import { Department, Priority, ServiceType } from '../types';
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
 import { getClientOptions, getServiceOptions, hasChoice } from '../lib/choiceOptions';
-import { canManageProjects, getVisibleProjects } from '../lib/access';
+import { canManageProjects, getAssignableProjects } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
 import ModalShell from './ModalShell';
@@ -57,11 +57,12 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const filteredUsers = users.filter(u => u.role !== 'Client' && u.department === department);
   const canCreateProjects = canManageProjects(currentUser, rolePermissions);
-  const visibleProjects = React.useMemo(
-    () => getVisibleProjects(currentUser, projects, tasks, rolePermissions),
-    [currentUser, projects, rolePermissions, tasks]
+  const isStaffTaskCreator = currentUser?.role === 'Staff';
+  const assignableProjects = React.useMemo(
+    () => getAssignableProjects(currentUser, projects, users, tasks, rolePermissions),
+    [currentUser, projects, rolePermissions, tasks, users]
   );
-  const selectedProject = projectId ? visibleProjects.find(project => project.id === projectId) : undefined;
+  const selectedProject = projectId ? assignableProjects.find(project => project.id === projectId) : undefined;
   const clientOptions = React.useMemo(() => getClientOptions(projects, tasks, users), [projects, tasks, users]);
   const serviceOptions = React.useMemo(() => getServiceOptions(projects, tasks), [projects, tasks]);
   const serviceChoices = React.useMemo(() => {
@@ -131,7 +132,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setCustomClientError('');
     if (!id) return;
 
-    const project = visibleProjects.find(item => item.id === id);
+    const project = assignableProjects.find(item => item.id === id);
     if (project) setClientName(project.clientName);
   };
 
@@ -245,6 +246,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     const finalStartDate = startDate.trim() || getTodayInputDate();
     const finalDueDate = dueDate.trim();
 
+    if (isStaffTaskCreator && !projectId) {
+      setFormError('Choose a company created by an Admin before creating this task.');
+      return;
+    }
+
     if (!trimmedTitle) {
       setFormError('Task title is required.');
       return;
@@ -284,7 +290,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       description: description.trim(),
       projectId: projectId || undefined,
       clientName: trimmedClientName,
-      projectName: projectId ? visibleProjects.find(p => p.id === projectId)?.projectName : undefined,
+      projectName: projectId ? assignableProjects.find(p => p.id === projectId)?.projectName : undefined,
       customerDetails: customerDetails.trim(),
       facebookPage: safeHttpsUrl(facebookPage) || undefined,
       website: safeHttpsUrl(website) || undefined,
@@ -310,7 +316,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    const saveResult = await commitPendingMutation();
+    const saveResult = await commitPendingMutation('task.create');
     setIsSubmitting(false);
     if (!saveResult.ok) {
       setPendingTaskId(taskId);
@@ -357,8 +363,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               
               <div>
                 <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-                  <label className="block text-sm font-medium text-slate-700">Link to Company / Brand (Optional)</label>
-                  {canCreateProjects && (
+                  <label className="block text-sm font-medium text-slate-700">
+                    Link to Company / Brand {isStaffTaskCreator ? <span className="text-red-500">*</span> : '(Optional)'}
+                  </label>
+                  {canCreateProjects && !isStaffTaskCreator && (
                     <button
                       type="button"
                       onClick={() => setIsProjectModalOpen(true)}
@@ -374,8 +382,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     onChange={e => selectProject(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                   >
-                    <option value="">No Company Link / Independent Task</option>
-                    {visibleProjects.map(p => (
+                    <option value="">{isStaffTaskCreator ? 'Choose an Admin-created company' : 'No Company Link / Independent Task'}</option>
+                    {assignableProjects.map(p => (
                       <option key={p.id} value={p.id}>{p.projectName} ({p.clientName})</option>
                     ))}
                   </select>
@@ -412,23 +420,25 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 <div>
                   <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                     <label className="block text-sm font-medium text-slate-700">Client / Brand Name <span className="text-red-500">*</span></label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingCustomClient(true);
-                        setCustomClientInput('');
-                        setCustomClientError('');
-                      }}
-                      disabled={Boolean(selectedProject)}
-                      className="flex items-center whitespace-nowrap text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300"
-                    >
-                      <Plus className="w-3 h-3 mr-0.5" /> New Client / Brand
-                    </button>
+                    {!isStaffTaskCreator && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingCustomClient(true);
+                          setCustomClientInput('');
+                          setCustomClientError('');
+                        }}
+                        disabled={Boolean(selectedProject)}
+                        className="flex items-center whitespace-nowrap text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300"
+                      >
+                        <Plus className="w-3 h-3 mr-0.5" /> New Client / Brand
+                      </button>
+                    )}
                   </div>
                   <input 
                     type="text" required
-                    list={selectedProject ? undefined : clientListId}
-                    disabled={Boolean(selectedProject)}
+                    list={selectedProject || isStaffTaskCreator ? undefined : clientListId}
+                    disabled={Boolean(selectedProject) || isStaffTaskCreator}
                     value={clientName} onChange={e => setClientName(e.target.value)}
                     maxLength={80}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
@@ -439,10 +449,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   </datalist>
                   {selectedProject && (
                     <p className="text-xs text-slate-500 mt-1">
-                      Company follows {selectedProject.projectName}. Clear the company link to edit it.
+                      Company follows {selectedProject.projectName}.
                     </p>
                   )}
-                  {isAddingCustomClient && !selectedProject && (
+                  {isAddingCustomClient && !selectedProject && !isStaffTaskCreator && (
                     <div className="mt-2 flex gap-2">
                       <input
                         type="text"

@@ -271,6 +271,18 @@ const rowsToBaseline = (members: MemberRow[], entities: EntityRow[]) => {
   baseline = next;
 };
 
+const alignBaselineToCanonicalState = (state: PersistedWorkspaceState) => {
+  const canonical = new Map<string, BaselineRow>();
+  stateToRows(state).forEach(row => {
+    const previous = baseline.get(entityKey(row.entityType, row.entityId));
+    canonical.set(entityKey(row.entityType, row.entityId), {
+      ...row,
+      version: previous?.version || row.version || 1,
+    });
+  });
+  baseline = canonical;
+};
+
 const buildOperations = (state: PersistedWorkspaceState): WorkspaceOperation[] => {
   const nextRows = stateToRows(state);
   const nextKeys = new Set(nextRows.map(row => entityKey(row.entityType, row.entityId)));
@@ -515,8 +527,62 @@ export const loadSecureWorkspace = async (authUser: User) => {
   };
   const state = parseWorkspaceSnapshot(raw);
   rowsToBaseline(memberRows, entityRows);
+  alignBaselineToCanonicalState(state);
   retryableCommand = null;
   return { state, currentUser, revision };
+};
+
+export const completeSecurePasswordSetup = async (): Promise<MutationResult<CommandResponse>> => {
+  const id = commandId();
+  const invoke = () => withSyncTimeout(supabase.rpc('aitask_complete_password_setup', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+    p_command_id: id,
+  }));
+
+  let result: Awaited<ReturnType<typeof invoke>>;
+  try {
+    result = await invoke();
+  } catch {
+    return {
+      ok: false,
+      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
+      error: 'The password changed, but Supabase could not finalize account setup. Sign in with the new password and retry.',
+    };
+  }
+  if (isAuthError(result.error) && await refreshSecureSession()) {
+    try {
+      result = await invoke();
+    } catch {
+      return {
+        ok: false,
+        code: 'RETRY_REQUIRED',
+        error: 'The password changed, but Supabase could not finalize account setup. Sign in with the new password and retry.',
+      };
+    }
+  }
+  if (result.error) {
+    return {
+      ok: false,
+      code: isAuthError(result.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
+      error: result.error.message || 'Account setup could not be finalized.',
+    };
+  }
+
+  const response = result.data as CommandResponse;
+  if (!response?.ok) {
+    return {
+      ok: false,
+      code: response?.code || 'RETRY_REQUIRED',
+      error: response?.error || 'Account setup could not be finalized.',
+    };
+  }
+
+  return {
+    ok: true,
+    data: response,
+    commandId: response.commandId || id,
+    workspaceVersion: Number(response.workspaceVersion) || 1,
+  };
 };
 
 export const saveSecureWorkspace = async (

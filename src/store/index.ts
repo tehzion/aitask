@@ -43,6 +43,7 @@ import {
   canManageProjects,
   canCommentOnTask,
   canReviewTaskAsClient,
+  getAssignableProjects,
   getVisibleProjects,
   isNotificationReadByUser,
   isNotificationVisible,
@@ -52,6 +53,7 @@ import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/s
 import { getTodayInputDate } from '../lib/utils';
 import {
   discardSecureWorkspaceCommand,
+  completeSecurePasswordSetup,
   loadSecureWorkspace,
   loadSecureWorkspaceRevision,
   rebaseRetryableCommand,
@@ -1350,8 +1352,13 @@ export const useStore = create<StoreState>()(
 
         const currentUser = get().currentUser;
         if (currentUser?.mustResetPassword) {
-          const previousCurrentUser = currentUser;
-          const previousUsers = get().users;
+          const persisted = await completeSecurePasswordSetup();
+          if (persisted.ok === false) {
+            return {
+              ok: false,
+              error: persisted.error || 'The password changed, but account setup could not be finalized. Sign in with your new password and retry.',
+            };
+          }
           const now = new Date().toISOString();
           set((state) => ({
             currentUser: state.currentUser
@@ -1360,15 +1367,15 @@ export const useStore = create<StoreState>()(
             users: state.users.map(member => member.id === currentUser.id
               ? { ...member, mustResetPassword: false, updatedAt: now }
               : member),
+            backend: {
+              ...state.backend,
+              workspaceVersion: persisted.workspaceVersion,
+              remoteVersion: persisted.workspaceVersion,
+              lastSavedAt: now,
+              lastSyncedAt: now,
+            },
           }));
-          const persisted = await get().commitPendingMutation('member.update');
-          if (!persisted.ok) {
-            set({ currentUser: previousCurrentUser, users: previousUsers });
-            return {
-              ok: false,
-              error: persisted.error || 'The password changed, but account setup could not be finalized. Retry this page.',
-            };
-          }
+          await get().pullBackendNow({ force: true, silent: true });
         }
 
         clearPasswordSetupMode();
@@ -1485,20 +1492,28 @@ export const useStore = create<StoreState>()(
           if (reauthError) return { ok: false, error: 'Current password is incorrect.' };
           const { error: passwordError } = await supabase.auth.updateUser({ password: newPassword });
           if (passwordError) return { ok: false, error: passwordError.message };
-          const previousCurrentUser = get().currentUser;
-          const previousUsers = get().users;
+          const persisted = await completeSecurePasswordSetup();
+          if (persisted.ok === false) {
+            return {
+              ok: false,
+              error: persisted.error || 'The password changed, but account setup could not be finalized. Sign in with your new password and retry.',
+            };
+          }
           const now = new Date().toISOString();
           set((state) => ({
             currentUser: state.currentUser ? { ...state.currentUser, mustResetPassword: false, updatedAt: now } : null,
             users: state.users.map(member => member.id === currentUser.id
               ? { ...member, mustResetPassword: false, updatedAt: now }
               : member),
+            backend: {
+              ...state.backend,
+              workspaceVersion: persisted.workspaceVersion,
+              remoteVersion: persisted.workspaceVersion,
+              lastSavedAt: now,
+              lastSyncedAt: now,
+            },
           }));
-          const persisted = await get().commitPendingMutation('member.update');
-          if (!persisted.ok) {
-            set({ currentUser: previousCurrentUser, users: previousUsers });
-            return { ok: false, error: persisted.error || 'The password changed, but the account setup flag could not be saved. Please retry.' };
-          }
+          await get().pullBackendNow({ force: true, silent: true });
           return { ok: true };
         }
 
@@ -2054,18 +2069,20 @@ export const useStore = create<StoreState>()(
         }
         const currentUser = state.currentUser;
         if (!currentUser || !canCreateTasks(currentUser, state.rolePermissions)) return '';
-        if (!state.users.some(user => user.id === taskData.assignedTo && user.role !== 'Client')) return '';
+        const assignee = state.users.find(user => user.id === taskData.assignedTo && user.role !== 'Client');
+        if (!assignee) return '';
 
         const project = taskData.projectId
           ? state.projects.find(item => item.id === taskData.projectId)
           : undefined;
         if (taskData.projectId) {
           if (!project) return '';
-          const visibleProjectIds = new Set(
-            getVisibleProjects(currentUser, state.projects, state.tasks, state.rolePermissions).map(project => project.id)
+          const assignableProjectIds = new Set(
+            getAssignableProjects(currentUser, state.projects, state.users, state.tasks, state.rolePermissions).map(item => item.id)
           );
-          if (!visibleProjectIds.has(taskData.projectId)) return '';
+          if (!assignableProjectIds.has(taskData.projectId)) return '';
         }
+        if (currentUser.role === 'Staff' && !project) return '';
 
         const title = taskData.title.trim();
         const clientName = project ? project.clientName : taskData.clientName.trim();
@@ -2106,10 +2123,19 @@ export const useStore = create<StoreState>()(
           return {
             tasks: [...state.tasks, newTask],
             notifications: [
+              ...(currentUser.role === 'Staff' && assignee.role !== 'Admin'
+                ? [makeNotification({
+                    targetRole: 'Admin',
+                    title: 'Task Created by Staff',
+                    message: `${currentUser.name} created a new task: "${title}".`,
+                    route: { page: 'tasks', entityId: taskId },
+                    iconType: 'task',
+                  })]
+                : []),
               makeNotification({
                 targetUserId: taskData.assignedTo,
                 title: 'New Task Assigned',
-                message: `You have been assigned a new task: "${taskData.title}".`,
+                message: `You have been assigned a new task: "${title}".`,
                 route: { page: 'tasks', entityId: taskId },
                 iconType: 'task'
               }),

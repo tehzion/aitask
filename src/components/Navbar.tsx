@@ -6,7 +6,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { IconButton } from './ui';
 import { inputBase } from './uiTokens';
 import { cn } from '../lib/utils';
-import { getEffectiveRoleName, isNotificationReadByUser, isNotificationVisible } from '../lib/access';
+import { getEffectiveRoleName, getUnreadNotifications } from '../lib/access';
 import { useSoundNotifications } from '../hooks/useSoundNotifications';
 import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 import { notificationRouteToPath } from '../lib/security';
@@ -51,13 +51,12 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const myNotifs = useMemo(() => {
-    return (notifications || [])
-      .filter(n => isNotificationVisible(currentUser, n))
+  const unreadNotifs = useMemo(() => {
+    return getUnreadNotifications(currentUser, notifications || [])
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [notifications, currentUser]);
 
-  const unreadCount = myNotifs.filter(n => !isNotificationReadByUser(currentUser, n)).length;
+  const unreadCount = unreadNotifs.length;
 
   const handleBellClick = () => {
     setShowNotifs(!showNotifs);
@@ -172,7 +171,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
                 ) : null}
               </div>
               <div className="max-h-80 overflow-y-auto custom-scrollbar">
-                {myNotifs.length > 0 ? myNotifs.map(notif => (
+                {unreadNotifs.length > 0 ? unreadNotifs.map(notif => (
                   <Link 
                     key={notif.id} 
                     to={notificationRouteToPath(notif.route ?? (notif as typeof notif & { link?: string }).link)}
@@ -180,24 +179,22 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
                       void persistNotificationChange(() => markNotificationRead(notif.id));
                       setShowNotifs(false);
                     }}
-                    className={`flex items-start gap-3 border-b border-slate-100 px-4 py-3 transition-colors hover:bg-slate-50 ${!isNotificationReadByUser(currentUser, notif) ? 'bg-blue-50/45' : ''}`}
+                    className="flex items-start gap-3 border-b border-blue-100/70 bg-blue-50/45 px-4 py-3 transition-colors hover:bg-blue-50"
                   >
                     <div className={`p-2 rounded-full shrink-0 ${getBgColor(notif.iconType)}`}>
                       {getIcon(notif.iconType)}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-bold uppercase tracking-wide text-slate-400">{notif.title}</p>
-                      <p className={`mt-0.5 text-sm leading-5 ${!isNotificationReadByUser(currentUser, notif) ? 'text-slate-950 font-semibold' : 'text-slate-600'}`}>{notif.message}</p>
+                      <p className="mt-0.5 text-sm font-semibold leading-5 text-slate-950">{notif.message}</p>
                       <p className="mt-1 text-xs text-slate-400">{formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}</p>
                     </div>
-                    {!isNotificationReadByUser(currentUser, notif) && (
-                      <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-500"></div>
-                    )}
+                    <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-500"></div>
                   </Link>
                 )) : (
                   <div className="px-4 py-8 text-center">
-                    <p className="text-sm font-semibold text-slate-600">No notifications yet</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-400">Task assignments, approvals, and sync notices will show here.</p>
+                    <p className="text-sm font-semibold text-slate-600">No unread notifications</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">You are all caught up.</p>
                   </div>
                 )}
               </div>

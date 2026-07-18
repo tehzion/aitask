@@ -316,6 +316,19 @@ as $$
             and task.parent_id = p_project_id
             and private.aitask_can_view_task(p_workspace_id, task.entity_id)
         )
+        or (
+          private.aitask_has_permission(p_workspace_id, 'createTasks')
+          and (
+            project.created_by is null
+            or exists (
+              select 1
+              from public.aitask_members creator
+              where creator.workspace_id = p_workspace_id
+                and creator.id = project.created_by
+                and (creator.role = 'Admin' or creator.is_super_admin)
+            )
+          )
+        )
       else false
     end
     from public.aitask_entities project

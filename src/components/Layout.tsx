@@ -5,7 +5,7 @@ import Navbar from './Navbar';
 import { ToastContainer } from './Toast';
 import CreateTaskModal from './CreateTaskModal';
 import { useStore } from '../store';
-import { canAccessPath, canCreateTasks, isNotificationVisible, isNotificationReadByUser } from '../lib/access';
+import { canAccessPath, canCreateTasks, getUnreadNotifications } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -62,13 +62,12 @@ const Layout: React.FC = () => {
   }, [currentUser, rolePermissions, setCreateTaskModalOpen]);
 
   // Mobile Notification Calculations
-  const myNotifs = useMemo(() => {
-    return (notifications || [])
-      .filter(n => isNotificationVisible(currentUser, n))
+  const unreadNotifs = useMemo(() => {
+    return getUnreadNotifications(currentUser, notifications || [])
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [notifications, currentUser]);
 
-  const unreadCount = myNotifs.filter(n => !isNotificationReadByUser(currentUser, n)).length;
+  const unreadCount = unreadNotifs.length;
   const mobileNavItems = useMemo(() => [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/tasks', label: 'Tasks', icon: CheckSquare },
@@ -266,8 +265,8 @@ const Layout: React.FC = () => {
             
             {/* Notifications List */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 pb-8">
-              {myNotifs.length > 0 ? (
-                myNotifs.map(notif => (
+              {unreadNotifs.length > 0 ? (
+                unreadNotifs.map(notif => (
                   <Link
                     key={notif.id}
                     to={notificationRouteToPath(notif.route ?? (notif as typeof notif & { link?: string }).link)}
@@ -277,9 +276,7 @@ const Layout: React.FC = () => {
                     }}
                     className={cn(
                       "px-4 py-3 rounded-lg border flex items-start gap-3 transition-colors",
-                      !isNotificationReadByUser(currentUser, notif)
-                        ? 'border-blue-100/70 bg-blue-50/45'
-                        : 'border-slate-100/80 bg-white'
+                      'border-blue-100/70 bg-blue-50/45'
                     )}
                   >
                     <div className={cn("p-2 rounded-full shrink-0", getBgColor(notif.iconType))}>
@@ -289,29 +286,20 @@ const Layout: React.FC = () => {
                       <p className="truncate text-[10px] font-bold uppercase tracking-wide text-slate-400">
                         {notif.title}
                       </p>
-                      <p className={cn(
-                        "mt-0.5 text-sm leading-snug",
-                        !isNotificationReadByUser(currentUser, notif)
-                          ? 'font-bold text-slate-950'
-                          : 'font-medium text-slate-600'
-                      )}>
+                      <p className="mt-0.5 text-sm font-bold leading-snug text-slate-950">
                         {notif.message}
                       </p>
                       <p className="mt-1 text-[10px] text-slate-400">
                         {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}
                       </p>
                     </div>
-                    {!isNotificationReadByUser(currentUser, notif) && (
-                      <div className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500"></div>
-                    )}
+                    <div className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500"></div>
                   </Link>
                 ))
               ) : (
                 <div className="px-5 py-12 text-center">
-                  <p className="text-sm font-semibold text-slate-600">No notifications yet</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-400">
-                    Task assignments, approvals, and sync notices will appear here.
-                  </p>
+                  <p className="text-sm font-semibold text-slate-600">No unread notifications</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">You are all caught up.</p>
                 </div>
               )}
             </div>

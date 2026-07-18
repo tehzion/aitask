@@ -14,10 +14,12 @@ import {
   canViewAllClients,
   defaultRolePermissions,
   getEffectivePermissions,
+  getAssignableProjects,
   getDefaultAccessiblePath,
   getVisibleClientNames,
   getVisibleProjects,
   getVisibleTasks,
+  getUnreadNotifications,
   isNotificationReadByUser,
 } from './access';
 
@@ -97,11 +99,37 @@ describe('staff permission matrix', () => {
     expect(canAssignTasksToOthers(admin)).toBe(true);
   });
 
+  it('lets admins view tasks created by every staff member', () => {
+    const staffCreatedTasks = [
+      makeTask({ id: 'task-created-by-staff', createdBy: staff.id, assignedTo: staff.id }),
+      makeTask({ id: 'task-created-by-other-staff', createdBy: otherStaff.id, assignedTo: otherStaff.id }),
+    ];
+
+    expect(getVisibleTasks(admin, staffCreatedTasks).map(task => task.id)).toEqual([
+      'task-created-by-staff',
+      'task-created-by-other-staff',
+    ]);
+  });
+
   it('scopes clients and projects to connected work while keeping rename admin-only', () => {
     expect(getVisibleClientNames(staff, tasks, projects)).toEqual(['Acme']);
     expect(getVisibleProjects(staff, projects, tasks).map(project => project.id)).toEqual(['project-acme']);
     expect(canRenameClient(staff)).toBe(false);
     expect(canRenameClient(admin)).toBe(true);
+  });
+
+  it('offers only Admin-created or legacy companies when Staff create tasks', () => {
+    const companySet: Project[] = [
+      { ...projects[0], createdBy: admin.id },
+      { ...projects[1], createdBy: staff.id },
+      { ...projects[0], id: 'project-legacy', clientName: 'Legacy', projectName: 'Legacy', createdBy: undefined },
+    ];
+
+    expect(getAssignableProjects(staff, companySet, [admin, staff], tasks).map(project => project.id)).toEqual([
+      'project-acme',
+      'project-legacy',
+    ]);
+    expect(getAssignableProjects(admin, companySet, [admin, staff], tasks)).toEqual(companySet);
   });
 
   it('requires both explicit permission and assignment for staff profile editing', () => {
@@ -245,6 +273,8 @@ describe('client isolation and feedback', () => {
   it('tracks notification reads per user while preserving legacy reads', () => {
     const notification = {
       id: 'notice-1',
+      targetUserId: acmeClient.id,
+      targetRole: 'Staff' as const,
       title: 'Update',
       message: 'Task changed',
       route: { page: 'tasks' as const, entityId: 'task-1' },
@@ -256,5 +286,7 @@ describe('client isolation and feedback', () => {
     expect(isNotificationReadByUser(acmeClient, notification)).toBe(true);
     expect(isNotificationReadByUser(staff, notification)).toBe(false);
     expect(isNotificationReadByUser(staff, { ...notification, isRead: true })).toBe(true);
+    expect(getUnreadNotifications(staff, [notification])).toEqual([notification]);
+    expect(getUnreadNotifications(acmeClient, [notification])).toEqual([]);
   });
 });

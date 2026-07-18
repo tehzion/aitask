@@ -47,7 +47,9 @@ try {
 
 const table = process.env.VITE_SUPABASE_STATE_TABLE || 'aitask_app_state';
 const stateId = process.env.VITE_SUPABASE_STATE_ID || 'default';
-const expectSecureCutover = process.env.AITASK_EXPECT_SECURE_CUTOVER === 'true';
+const expectSecureCutover = process.env.AITASK_EXPECT_SECURE_CUTOVER
+  ? process.env.AITASK_EXPECT_SECURE_CUTOVER === 'true'
+  : process.env.VITE_AITASK_BACKEND === 'supabase';
 const verifyOrigin = process.env.AITASK_VERIFY_ORIGIN || process.env.VITE_AITASK_VERIFY_ORIGIN || 'https://aitask-virid.vercel.app';
 const forbiddenKeyPattern = /(password|secret|token|api[_-]?key|service[_-]?role)/i;
 const headers = {

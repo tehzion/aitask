@@ -309,6 +309,25 @@ export const getVisibleProjects = (
   return [];
 };
 
+export const getAssignableProjects = (
+  user: User | null | undefined,
+  projects: Project[],
+  users: User[] = [],
+  tasks: Task[] = [],
+  customRoles: CustomRole[] = []
+) => {
+  if (!user) return [];
+  if (user.role !== 'Staff') return getVisibleProjects(user, projects, tasks, customRoles);
+  if (!canCreateTasks(user, customRoles)) return [];
+
+  const usersById = new Map(users.map(member => [member.id, member]));
+  return projects.filter(project => {
+    if (!project.createdBy) return true;
+    const creator = usersById.get(project.createdBy);
+    return Boolean(creator && (creator.role === 'Admin' || isBossKoo(creator)));
+  });
+};
+
 export const isNotificationVisible = (user: User | null | undefined, notification: AppNotification) => {
   if (!user) return false;
   if (notification.targetUserId && notification.targetUserId === user.id) return true;
@@ -323,3 +342,10 @@ export const isNotificationReadByUser = (user: User | null | undefined, notifica
   if (!user) return Boolean(notification.isRead);
   return Boolean(notification.isRead) || Boolean(notification.readByUserIds?.includes(user.id));
 };
+
+export const getUnreadNotifications = (
+  user: User | null | undefined,
+  notifications: AppNotification[] = []
+) => notifications.filter(notification => (
+  isNotificationVisible(user, notification) && !isNotificationReadByUser(user, notification)
+));

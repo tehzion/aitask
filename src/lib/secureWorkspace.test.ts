@@ -1,17 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PersistedWorkspaceState } from './supabaseSnapshot';
 
-const { rpc, refreshSession } = vi.hoisted(() => ({
+const { rpc, refreshSession, from } = vi.hoisted(() => ({
   rpc: vi.fn(),
   refreshSession: vi.fn(),
+  from: vi.fn(),
 }));
 
 vi.mock('./supabaseClient', () => ({
-  supabase: { rpc, auth: { refreshSession } },
+  supabase: { rpc, from, auth: { refreshSession } },
 }));
 
 import {
   inferSecureCommandType,
+  loadSecureWorkspace,
   rebaseRetryableCommand,
   retrySecureWorkspaceCommand,
   saveSecureWorkspace,
@@ -34,6 +36,7 @@ describe('inferSecureCommandType', () => {
   beforeEach(() => {
     rpc.mockReset();
     refreshSession.mockReset();
+    from.mockReset();
   });
 
   it('labels focused task commands', () => {
@@ -77,6 +80,7 @@ describe('secure command retry identity', () => {
   beforeEach(() => {
     rpc.mockReset();
     refreshSession.mockReset();
+    from.mockReset();
   });
 
   it('refreshes an expired session once and keeps the command ID', async () => {
@@ -154,5 +158,86 @@ describe('secure command retry identity', () => {
     expect(retry.ok).toBe(true);
     expect(rpc.mock.calls[1][1].p_command_id).not.toBe(firstCommandId);
     expect(rpc.mock.calls[1][1].p_operations[0].expectedVersion).toBe(4);
+  });
+});
+
+describe('secure workspace baseline', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    refreshSession.mockReset();
+    from.mockReset();
+  });
+
+  it('does not turn parser defaults into unrelated task updates', async () => {
+    const member = {
+      id: 'staff-9',
+      workspace_id: 'aitask-main',
+      auth_user_id: '00000000-0000-4000-8000-000000000009',
+      name: 'Staff Nine',
+      email: 'staff9@example.com',
+      role: 'Staff',
+      department: 'Designer',
+      avatar: null,
+      client_name: null,
+      is_super_admin: false,
+      must_reset_password: false,
+      custom_role_id: null,
+      custom_role_name: null,
+      permissions: {},
+      version: 3,
+      updated_at: '2026-07-18T00:00:00Z',
+    };
+    const existingTask = {
+      workspace_id: 'aitask-main',
+      entity_type: 'task',
+      entity_id: 'task-existing',
+      parent_id: 'project-admin',
+      data: {
+        id: 'task-existing',
+        projectId: 'project-admin',
+        clientName: 'Acme',
+        serviceType: 'Design',
+        title: 'Existing artwork',
+        department: 'Designer',
+        assignedTo: member.id,
+        createdBy: member.id,
+        startDate: '2026-07-18',
+        priority: 'Medium',
+        status: 'Pending',
+      },
+      version: 7,
+      updated_at: '2026-07-18T00:00:00Z',
+    };
+
+    from.mockImplementation((table: string) => ({
+      select: () => ({
+        eq: () => table === 'aitask_workspaces'
+          ? { single: () => Promise.resolve({ data: { version: 11, updated_at: '2026-07-18T00:00:00Z', sync_protocol_version: 1 }, error: null }) }
+          : Promise.resolve({ data: table === 'aitask_members' ? [member] : [existingTask], error: null }),
+      }),
+    }));
+
+    const loaded = await loadSecureWorkspace({ id: member.auth_user_id } as never);
+    const newTask = {
+      ...loaded.state.tasks[0],
+      id: 'task-new',
+      version: undefined,
+      title: 'New artwork',
+    };
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        workspaceVersion: 12,
+        changed: [{ entityType: 'task', entityId: newTask.id, version: 1, updatedAt: '2026-07-18T00:01:00Z' }],
+      },
+      error: null,
+    });
+
+    const result = await saveSecureWorkspace({ ...loaded.state, tasks: [...loaded.state.tasks, newTask] });
+
+    expect(result.ok).toBe(true);
+    expect(rpc.mock.calls[0][1].p_operations).toEqual([
+      expect.objectContaining({ action: 'insert', entityType: 'task', entityId: 'task-new', expectedVersion: 0 }),
+    ]);
   });
 });
