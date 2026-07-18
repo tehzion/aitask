@@ -9,9 +9,10 @@ Production AiTask uses Supabase Auth and the authenticated, row-scoped workspace
 3. Run `supabase/secure-auth-schema.sql` to create the authenticated workspace model and migrate legacy data.
 4. Apply every file under `supabase/migrations/` in timestamp order.
 5. Deploy the `invite-aitask-member` Edge Function with JWT verification enabled.
-6. Set the Edge Function secret `AITASK_PUBLIC_URL` to the canonical HTTPS application origin.
-7. Configure custom SMTP for Auth invitations and recovery email. The built-in Supabase mailer is not a production delivery service.
-8. Configure the frontend:
+6. Deploy the public `aitask-feedback` Edge Function with gateway JWT verification disabled; its submit and reviewer branches enforce their own validation and authorization.
+7. Set `AITASK_PUBLIC_URL` to the canonical HTTPS application origin and set `AITASK_FEEDBACK_REVIEWER_EMAILS` to the private comma-separated developer reviewer emails.
+8. Configure custom SMTP for Auth invitations, recovery email, and feedback reviewer magic links. The built-in Supabase mailer is not a production delivery service.
+9. Configure the frontend:
 
 ```env
 VITE_AITASK_BACKEND=supabase
@@ -21,6 +22,12 @@ VITE_AITASK_SHOW_DEMO_LOGIN=false
 ```
 
 For the current production workspace, `AITASK_PUBLIC_URL` is `https://aitask-virid.vercel.app`. Invitation and recovery redirects must allow `/account/password`. Do not store SMTP credentials, generated passwords, service-role keys, or invitation tokens in this repository.
+
+## Launch Feedback
+
+The public checklist is available at `/feedback`; role-specific links use `?role=Staff`, `?role=Client`, `?role=Admin`, or `?role=Super%20Admin`. Responses close operationally on 30 July 2026, with later responses retained and marked late.
+
+Feedback is stored outside the synchronized workspace in `aitask_feedback_submissions`. Anonymous and normal authenticated roles have no direct table privileges. The `aitask-feedback` Edge Function accepts validated public submissions and returns read-only results only to MFA-verified Boss Koo or an email in `AITASK_FEEDBACK_REVIEWER_EMAILS`. `adminmojo` remains unlinked from the production workspace and uses the allowlisted reviewer email flow at `/feedback/results`.
 
 ## v1.6.0 Command Cutover
 

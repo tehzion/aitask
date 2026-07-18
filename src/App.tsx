@@ -19,6 +19,8 @@ const Reports = React.lazy(() => import('./pages/Reports'));
 const Approvals = React.lazy(() => import('./pages/Approvals'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const AccountPassword = React.lazy(() => import('./pages/AccountPassword'));
+const Feedback = React.lazy(() => import('./pages/Feedback'));
+const FeedbackResults = React.lazy(() => import('./pages/FeedbackResults'));
 
 const RouteLoading = () => (
   <div className="flex min-h-[40vh] items-center justify-center px-4 text-sm font-medium text-slate-500" role="status">
@@ -89,6 +91,7 @@ function App() {
     let isMounted = true;
 
     const boot = async () => {
+      if (['/feedback', '/feedback/results'].includes(window.location.pathname)) return;
       await initializeBackend();
       if (!isMounted) return;
       startBackendAutoSync();
@@ -117,6 +120,8 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/account/password" element={<AccountPassword />} />
+            <Route path="/feedback" element={<Feedback />} />
+            <Route path="/feedback/results" element={<FeedbackResults />} />
             <Route path="/dashboard" element={<Navigate to="/" replace />} />
 
             <Route path="/" element={

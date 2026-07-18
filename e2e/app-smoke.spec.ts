@@ -1,6 +1,31 @@
 import { expect, test } from '@playwright/test';
 
 test('first login reaches the app and critical responsive routes remain usable', async ({ page }) => {
+  await page.goto('/feedback?role=Client&lang=zh');
+  await expect(page.getByRole('heading', { name: 'AiTask 一周使用反馈' })).toBeVisible();
+  await expect(page.getByLabel('角色')).toHaveValue('Client');
+  await expect(page.getByText('请在2026年7月30日前提交。')).toBeVisible();
+  await expect(page.getByText('超级管理员检查')).toHaveCount(0);
+
+  const publicViewports = [
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1280, height: 800 },
+    { width: 1536, height: 864 },
+  ];
+  for (const viewport of publicViewports) {
+    await page.setViewportSize(viewport);
+    for (const route of ['/feedback?role=Client&lang=zh', '/feedback/results']) {
+      await page.goto(route);
+      const widths = await page.evaluate(() => ({
+        viewport: document.documentElement.clientWidth,
+        content: document.documentElement.scrollWidth,
+      }));
+      expect(widths.content, `${route} should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(widths.viewport);
+    }
+  }
+  await expect(page.getByRole('heading', { name: 'Feedback reviewer login' })).toBeVisible();
+
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Sign in to AiTask' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Demo accounts - select username' })).toBeVisible();
