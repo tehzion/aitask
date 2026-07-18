@@ -18,7 +18,8 @@ const readGitValue = (args: string[]) => {
 };
 
 const fullCommit = process.env.VERCEL_GIT_COMMIT_SHA || readGitValue(['rev-parse', 'HEAD']);
-const shortCommit = fullCommit.slice(0, 7) || 'local';
+const shortCommit = fullCommit.slice(0, 7);
+const commitLabel = shortCommit || (process.env.VERCEL ? 'release' : 'local');
 const hasLocalChanges = !process.env.VERCEL && Boolean(readGitValue(['status', '--porcelain']));
 
 const verifyProductionBackend = (mode: string) => {
@@ -50,8 +51,10 @@ export default defineConfig(({ mode }) => {
   return {
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
-    __APP_COMMIT__: JSON.stringify(shortCommit),
-    __APP_BUILD_ID__: JSON.stringify(`${packageJson.version}+${shortCommit}${hasLocalChanges ? '.dev' : ''}`),
+    __APP_COMMIT__: JSON.stringify(commitLabel),
+    __APP_BUILD_ID__: JSON.stringify(shortCommit
+      ? `${packageJson.version}+${shortCommit}${hasLocalChanges ? '.dev' : ''}`
+      : process.env.VERCEL ? packageJson.version : `${packageJson.version}+local${hasLocalChanges ? '.dev' : ''}`),
     __APP_BUILD_TIME__: JSON.stringify(new Date().toISOString()),
     __APP_BUILD_CHANNEL__: JSON.stringify(process.env.VERCEL_ENV || mode),
   },
