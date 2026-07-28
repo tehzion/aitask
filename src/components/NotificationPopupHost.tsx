@@ -219,7 +219,7 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
       className={cn(
         'pointer-events-none fixed left-4 right-4 z-[65] flex flex-col gap-2.5 md:bottom-5 md:left-[17.25rem] md:right-auto md:w-[360px]',
         hasBottomNotice
-          ? 'bottom-[calc(11rem+env(safe-area-inset-bottom))]'
+          ? 'bottom-[calc(13rem+env(safe-area-inset-bottom))]'
           : 'bottom-[calc(5rem+env(safe-area-inset-bottom))]',
       )}
     >
