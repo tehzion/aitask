@@ -1,5 +1,15 @@
 export type Role = 'Admin' | 'Staff' | 'Client';
-export type Department = 'Operation' | 'Management' | 'Videoshooting' | 'Ads Management' | 'Account & Finance' | 'Designer' | 'Editor' | 'Client';
+export type Department =
+  | 'Operation'
+  | 'Management'
+  | 'Videoshooting'
+  | 'Video Shooting'
+  | 'Editor'
+  | 'Video Editor'
+  | 'Ads Management'
+  | 'Account & Finance'
+  | 'Designer'
+  | 'Client';
 export type PresetServiceType = 'Social Media' | 'Design' | 'Video' | 'Website' | 'SEO' | 'Ads' | 'Branding';
 export type ServiceType = PresetServiceType | (string & {});
 export type Priority = 'Low' | 'Medium' | 'High' | 'Urgent';

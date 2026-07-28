@@ -13,6 +13,7 @@ vi.mock('./supabaseClient', () => ({
 
 import {
   inferSecureCommandType,
+  isSecureCommandType,
   loadSecureWorkspace,
   rebaseRetryableCommand,
   retrySecureWorkspaceCommand,
@@ -55,6 +56,11 @@ describe('inferSecureCommandType', () => {
   it('uses a transactional workspace patch for cross-entity changes', () => {
     expect(inferSecureCommandType([operation('project', 'delete'), operation('task')])).toBe('workspace.patch');
   });
+
+  it('rejects command names that the Supabase RPC does not support', () => {
+    expect(isSecureCommandType('task.update')).toBe(true);
+    expect(isSecureCommandType('task_date_range')).toBe(false);
+  });
 });
 
 const stateWithUser = (id: string): PersistedWorkspaceState => ({
@@ -81,6 +87,13 @@ describe('secure command retry identity', () => {
     rpc.mockReset();
     refreshSession.mockReset();
     from.mockReset();
+  });
+
+  it('does not send an unsupported command to Supabase at runtime', async () => {
+    const result = await saveSecureWorkspace(stateWithUser('invalid'), 'task_date_range' as never);
+
+    expect(result).toMatchObject({ ok: false, code: 'VALIDATION' });
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it('refreshes an expired session once and keeps the command ID', async () => {
@@ -238,6 +251,39 @@ describe('secure workspace baseline', () => {
     expect(result.ok).toBe(true);
     expect(rpc.mock.calls[0][1].p_operations).toEqual([
       expect.objectContaining({ action: 'insert', entityType: 'task', entityId: 'task-new', expectedVersion: 0 }),
+    ]);
+
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        workspaceVersion: 13,
+        changed: [{ entityType: 'task', entityId: existingTask.entity_id, version: 8, updatedAt: '2026-07-18T00:02:00Z' }],
+      },
+      error: null,
+    });
+    const updatedExistingTask = {
+      ...loaded.state.tasks[0],
+      startDate: '2026-07-20',
+      dueDate: '2026-07-24',
+    };
+    const dateResult = await saveSecureWorkspace({
+      ...loaded.state,
+      tasks: [updatedExistingTask, newTask],
+    });
+
+    expect(dateResult.ok).toBe(true);
+    expect(rpc.mock.calls[1][1].p_command_type).toBe('task.update');
+    expect(rpc.mock.calls[1][1].p_operations).toEqual([
+      expect.objectContaining({
+        action: 'update',
+        entityType: 'task',
+        entityId: existingTask.entity_id,
+        expectedVersion: 7,
+        data: expect.objectContaining({
+          startDate: '2026-07-20',
+          dueDate: '2026-07-24',
+        }),
+      }),
     ]);
   });
 });

@@ -3,8 +3,10 @@ import { Outlet, NavLink, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import { ToastContainer } from './Toast';
+import { NotificationPopupHost } from './NotificationPopupHost';
 import CreateTaskModal from './CreateTaskModal';
 import { useStore } from '../store';
+import { useNotificationReadActions } from '../hooks/useNotificationReadActions';
 import { canAccessPath, canCreateTasks, getUnreadNotifications } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
@@ -21,15 +23,13 @@ const Layout: React.FC = () => {
     setCreateTaskModalOpen,
     notifications,
     currentUser,
-    markNotificationRead,
-    markAllNotificationsRead,
-    commitPendingMutation,
     backend,
     pullBackendNow,
     retryMutation,
     discardMutation,
     rolePermissions,
   } = useStore();
+  const notificationReadActions = useNotificationReadActions();
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -76,15 +76,6 @@ const Layout: React.FC = () => {
   const canOpenSettings = Boolean(currentUser?.mustResetPassword)
     || canAccessPath(currentUser, '/settings', rolePermissions);
 
-  const persistNotificationChange = async (change: () => void) => {
-    const previousNotifications = useStore.getState().notifications;
-    change();
-    const result = await commitPendingMutation();
-    if (result.ok) return;
-
-    useStore.setState({ notifications: previousNotifications });
-    await discardMutation({ reload: false });
-  };
   const backendStatus = getBackendStatus();
   const hostedLocalBuild = backendStatus.mode === 'local' && backendStatus.isHostedRuntime;
   const missingSupabaseConfig = backendStatus.mode === 'supabase' && !backendStatus.ready;
@@ -130,8 +121,11 @@ const Layout: React.FC = () => {
   return (
     <div className="relative flex h-[100dvh] overflow-hidden bg-slate-100 font-sans text-slate-950">
       <Sidebar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
-      <div className="flex-1 flex flex-col overflow-hidden w-full relative">
-        <Navbar onMenuClick={() => setIsMobileMenuOpen(true)} />
+      <div className="relative flex min-w-0 w-full flex-1 flex-col overflow-hidden">
+        <Navbar
+          onMenuClick={() => setIsMobileMenuOpen(true)}
+          notificationReadActions={notificationReadActions}
+        />
         {syncNeedsAttention && (
           <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 sm:px-6 lg:px-7">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -188,7 +182,7 @@ const Layout: React.FC = () => {
             </div>
           </div>
         )}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-100 p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-6 lg:p-7">
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-100 p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-6 lg:p-7">
           <Outlet />
         </main>
 
@@ -262,7 +256,7 @@ const Layout: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             {/* Notifications List */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 pb-8">
               {unreadNotifs.length > 0 ? (
@@ -271,7 +265,7 @@ const Layout: React.FC = () => {
                     key={notif.id}
                     to={notificationRouteToPath(notif.route ?? (notif as typeof notif & { link?: string }).link)}
                     onClick={() => {
-                      void persistNotificationChange(() => markNotificationRead(notif.id));
+                      void notificationReadActions.markRead(notif.id);
                       setIsMobileNotifOpen(false);
                     }}
                     className={cn(
@@ -308,16 +302,23 @@ const Layout: React.FC = () => {
             {unreadCount > 0 && (
               <button
                 type="button"
-                onClick={() => void persistNotificationChange(markAllNotificationsRead)}
-                className="shrink-0 border-t border-slate-200 bg-slate-50 p-4 text-center text-sm font-bold text-blue-700 transition-colors hover:bg-slate-100"
+                onClick={() => void notificationReadActions.markAllRead()}
+                disabled={notificationReadActions.isUpdating}
+                className="shrink-0 border-t border-slate-200 bg-slate-50 p-4 text-center text-sm font-bold text-blue-700 transition-colors hover:bg-slate-100 disabled:cursor-wait disabled:opacity-60"
               >
-                Mark All as Read
+                {notificationReadActions.isUpdating ? 'Saving...' : 'Mark All as Read'}
               </button>
             )}
           </div>
         </>
       )}
 
+      <NotificationPopupHost
+        currentUser={currentUser}
+        notifications={notifications}
+        isReady={!backend.isLoading && backend.status !== 'loading'}
+        readActions={notificationReadActions}
+      />
       <ToastContainer />
       <CreateTaskModal isOpen={isCreateTaskModalOpen} onClose={() => setCreateTaskModalOpen(false)} />
     </div>

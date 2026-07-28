@@ -108,6 +108,30 @@ describe('remote snapshot validation', () => {
     expect(parsed?.comments?.[0].version).toBe(3);
   });
 
+  it('preserves legacy video departments without dropping users or tasks', () => {
+    const parsed = parseWorkspaceSnapshot({
+      users: [{
+        id: 'video-editor-1',
+        name: 'Video Editor',
+        role: 'Staff',
+        department: 'Editor',
+      }],
+      tasks: [{
+        ...taskFixture,
+        id: 'video-task-1',
+        department: 'Videoshooting',
+      }],
+    });
+
+    expect(parsed.users[0]?.department).toBe('Editor');
+    expect(parsed.tasks[0]?.department).toBe('Videoshooting');
+  });
+
+  it('accepts the new video positions as independent values', () => {
+    expect(parseTask({ ...taskFixture, department: 'Video Editor' })?.department).toBe('Video Editor');
+    expect(parseTask({ ...taskFixture, department: 'Video Shooting' })?.department).toBe('Video Shooting');
+  });
+
   it('does not carry password or token fields into users', () => {
     const parsed = parseWorkspaceSnapshot({
       users: [{

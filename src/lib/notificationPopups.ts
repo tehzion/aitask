@@ -1,0 +1,30 @@
+import { AppNotification, User } from '../types';
+import { isNotificationReadByUser, isNotificationVisible } from './access';
+
+interface IncomingNotificationResult {
+  incomingIds: string[];
+  seenIds: Set<string>;
+}
+
+export const seedSeenNotificationIds = (
+  notifications: AppNotification[],
+) => new Set(notifications.map(notification => notification.id));
+
+export const getIncomingUnreadNotificationIds = (
+  currentUser: User,
+  notifications: AppNotification[],
+  seenNotificationIds: Set<string>,
+): IncomingNotificationResult => {
+  const nextSeenIds = new Set(seenNotificationIds);
+  const incomingIds = notifications
+    .filter(notification => !seenNotificationIds.has(notification.id))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .filter(notification => (
+      isNotificationVisible(currentUser, notification) &&
+      !isNotificationReadByUser(currentUser, notification)
+    ))
+    .map(notification => notification.id);
+
+  notifications.forEach(notification => nextSeenIds.add(notification.id));
+  return { incomingIds, seenIds: nextSeenIds };
+};

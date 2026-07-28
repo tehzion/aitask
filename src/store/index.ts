@@ -60,6 +60,7 @@ import {
   retrySecureWorkspaceCommand,
   saveSecureWorkspace,
   type MutationConflict,
+  type SecureCommandType,
 } from '../lib/secureWorkspace';
 import { resolveAuthEmail, shouldUseSecureSupabase, supabase } from '../lib/supabaseClient';
 import {
@@ -67,6 +68,7 @@ import {
   getPasswordSetupMode,
   passwordSetupRedirectUrl,
 } from '../lib/authRecovery';
+import { DEPARTMENTS } from '../lib/departments';
 
 export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required';
 
@@ -144,11 +146,11 @@ interface StoreState {
   createTaskInitialDate?: string;
 
   initializeBackend: () => Promise<void>;
-  syncBackendNow: (commandType?: string) => Promise<void>;
+  syncBackendNow: (commandType?: SecureCommandType) => Promise<void>;
   pullBackendNow: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
   retryMutation: () => Promise<{ ok: boolean; error?: string }>;
   discardMutation: (options?: { reload?: boolean }) => Promise<void>;
-  commitPendingMutation: (commandType?: string) => Promise<{ ok: boolean; error?: string }>;
+  commitPendingMutation: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string }>;
   login: (name: string, password?: string) => Promise<boolean>;
   requestPasswordRecovery: (identifier: string) => Promise<{ ok: boolean; error?: string }>;
   completePasswordSetup: (data: { newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
@@ -202,7 +204,7 @@ const seededProjectIds = new Set(mockProjects.map(project => project.id));
 const legacyDemoTaskIdSet = new Set<string>(legacyDemoTaskIds);
 const retiredDemoUserIdSet = new Set<string>(retiredDemoUserIds);
 const defaultTaskStatuses = ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'];
-const allowedDepartments = new Set<Department>(['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client']);
+const allowedDepartments = new Set<Department>(DEPARTMENTS);
 const allowedPriorities = new Set<Priority>(['Low', 'Medium', 'High', 'Urgent']);
 const sensitiveSnapshotKeyPattern = /(password|secret|token|api[_-]?key|service[_-]?role)/i;
 const safePasswordMetadataKeys = new Set(['mustResetPassword', 'must_reset_password']);

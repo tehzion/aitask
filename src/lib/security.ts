@@ -3,7 +3,6 @@ import type {
   ClientProfile,
   ClientApprovalStatus,
   CustomRole,
-  Department,
   NotificationRoute,
   Priority,
   Project,
@@ -16,18 +15,9 @@ import type {
   User,
 } from '../types';
 import { getTodayInputDate } from './utils';
+import { normalizeDepartment } from './departments';
 
 const roles = new Set<Role>(['Admin', 'Staff', 'Client']);
-const departments = new Set<Department>([
-  'Operation',
-  'Management',
-  'Videoshooting',
-  'Ads Management',
-  'Account & Finance',
-  'Designer',
-  'Editor',
-  'Client',
-]);
 const priorities = new Set<Priority>(['Low', 'Medium', 'High', 'Urgent']);
 const approvalStatuses = new Set<ClientApprovalStatus>(['Pending', 'Approved', 'Rejected']);
 const recurrenceFrequencies = new Set<RecurrenceFrequency>(['None', 'Daily', 'Weekly', 'Monthly']);
@@ -228,8 +218,8 @@ const parseUser = (value: unknown): User | null => {
   const id = cleanText(value.id, 160);
   const name = cleanText(value.name, 160);
   const role = cleanText(value.role, 20) as Role;
-  const department = cleanText(value.department, 80) as Department;
-  if (!id || !name || !roles.has(role) || !departments.has(department)) return null;
+  const department = normalizeDepartment(cleanText(value.department, 80));
+  if (!id || !name || !roles.has(role) || !department) return null;
 
   return {
     id,
@@ -307,14 +297,14 @@ export const parseTask = (value: unknown): Task | null => {
   const clientName = cleanText(value.clientName, 240);
   const serviceType = cleanText(value.serviceType, 120);
   const title = cleanText(value.title, 500);
-  const department = cleanText(value.department, 80) as Department;
+  const department = normalizeDepartment(cleanText(value.department, 80));
   const assignedTo = cleanText(value.assignedTo, 160);
   const createdBy = cleanText(value.createdBy, 160);
   const priority = cleanText(value.priority, 20) as Priority;
   const status = cleanText(value.status, 80);
   const clientApprovalStatus = cleanText(value.clientApprovalStatus, 20) as ClientApprovalStatus;
   const recurrenceFrequency = cleanText(value.recurrenceFrequency, 20) as RecurrenceFrequency;
-  if (!id || !clientName || !serviceType || !title || !departments.has(department) || !assignedTo || !createdBy || !priorities.has(priority) || !status) return null;
+  if (!id || !clientName || !serviceType || !title || !department || !assignedTo || !createdBy || !priorities.has(priority) || !status) return null;
   const today = getTodayInputDate();
 
   return {

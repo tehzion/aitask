@@ -16,6 +16,37 @@ export const SECURE_WORKSPACE_ID = 'aitask-main';
 export const SECURE_SYNC_PROTOCOL_VERSION = 1;
 const SYNC_REQUEST_TIMEOUT_MS = 20_000;
 
+export const SECURE_COMMAND_TYPES = [
+  'workspace.patch',
+  'task.create',
+  'task.update',
+  'task.delete',
+  'project.create',
+  'project.update',
+  'project.delete',
+  'client.upsert',
+  'client.rename',
+  'client.delete',
+  'comment.add',
+  'approval.review',
+  'approval.revision',
+  'notification.read',
+  'notification.read_all',
+  'member.update',
+  'member.manage',
+  'role.manage',
+  'registration.review',
+  'task_status.manage',
+  'reminder.generate',
+] as const;
+
+export type SecureCommandType = typeof SECURE_COMMAND_TYPES[number];
+
+const secureCommandTypeSet = new Set<string>(SECURE_COMMAND_TYPES);
+export const isSecureCommandType = (value: unknown): value is SecureCommandType => (
+  typeof value === 'string' && secureCommandTypeSet.has(value)
+);
+
 export type MutationErrorCode = 'OFFLINE' | 'CONFLICT' | 'FORBIDDEN' | 'VALIDATION' | 'NOT_FOUND' | 'RETRY_REQUIRED';
 
 export interface MutationConflict {
@@ -96,7 +127,7 @@ type CommandResponse = {
 
 export type SecureCommand = {
   id: string;
-  type: string;
+  type: SecureCommandType;
   operations: WorkspaceOperation[];
 };
 
@@ -339,7 +370,7 @@ const changedFieldsForConflict = (operation: WorkspaceOperation, current?: Recor
   return [...keys].filter(key => stable(operation.data?.[key]) !== stable(current?.[key])).sort();
 };
 
-export const inferSecureCommandType = (operations: WorkspaceOperation[]) => {
+export const inferSecureCommandType = (operations: WorkspaceOperation[]): SecureCommandType => {
   const entityTypes = new Set(operations.map(operation => operation.entityType));
   const actions = new Set(operations.map(operation => operation.action));
   const only = (entityType: string) => entityTypes.size === 1 && entityTypes.has(entityType);
@@ -587,8 +618,15 @@ export const completeSecurePasswordSetup = async (): Promise<MutationResult<Comm
 
 export const saveSecureWorkspace = async (
   state: PersistedWorkspaceState,
-  type?: string,
+  type?: SecureCommandType,
 ): Promise<MutationResult<CommandResponse>> => {
+  if (type !== undefined && !isSecureCommandType(type)) {
+    return {
+      ok: false,
+      code: 'VALIDATION',
+      error: 'The requested workspace command is not supported.',
+    };
+  }
   const operations = buildOperations(state);
   if (operations.length === 0) {
     const revision = await loadSecureWorkspaceRevision();

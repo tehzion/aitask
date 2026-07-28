@@ -9,10 +9,10 @@ import { cn } from '../lib/utils';
 import { canDeleteUser, defaultRolePermissions, getEffectiveRoleName, isBossKoo, permissionGroups, permissionLabels } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
+import { DEPARTMENTS } from '../lib/departments';
 import ModalShell from '../components/ModalShell';
 
 const ROLES: Role[] = ['Admin', 'Staff', 'Client'];
-const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client'];
 
 const clonePermissions = (permissions: RolePermissions): RolePermissions => ({ ...permissions });
 

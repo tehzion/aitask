@@ -8,7 +8,7 @@ import { canAccessPath } from './lib/access';
 import { hasPasswordResetBypass } from './lib/auth';
 import { RefreshCw, WifiOff } from 'lucide-react';
 import { shouldUseSecureSupabase, supabase } from './lib/supabaseClient';
-import { isPwaUpdateReady, PWA_UPDATE_READY_EVENT } from './lib/pwaUpdates';
+import { useAppNoticeState } from './hooks/useAppNoticeState';
 
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Tasks = React.lazy(() => import('./pages/Tasks'));
@@ -54,32 +54,10 @@ const RoleRoute: React.FC<{ path: string; children: React.ReactNode }> = ({ path
 };
 
 function App() {
-  const [isOnline, setIsOnline] = React.useState(() => (
-    typeof navigator === 'undefined' ? true : navigator.onLine
-  ));
-  const [isUpdateReady, setIsUpdateReady] = React.useState(isPwaUpdateReady);
+  const { isOnline, isUpdateReady } = useAppNoticeState();
   const initializeBackend = useStore(state => state.initializeBackend);
   const forceSyncMockData = useStore(state => state._forceSyncMockData);
   const sendDueDateReminders = useStore(state => state.sendDueDateReminders);
-
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleUpdateReady = () => setIsUpdateReady(true);
-    window.addEventListener(PWA_UPDATE_READY_EVENT, handleUpdateReady);
-    return () => window.removeEventListener(PWA_UPDATE_READY_EVENT, handleUpdateReady);
-  }, []);
 
   useEffect(() => {
     if (!shouldUseSecureSupabase()) return;

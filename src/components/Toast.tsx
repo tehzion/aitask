@@ -25,7 +25,7 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
       role={toast.type === 'error' ? 'alert' : 'status'}
       aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
       className={cn(
-        'flex items-center gap-3 p-4 rounded-lg shadow-lg min-w-[300px] max-w-sm backdrop-blur-sm pointer-events-auto transition-all duration-300',
+        'flex w-full min-w-0 items-center gap-3 rounded-lg p-4 shadow-lg backdrop-blur-sm pointer-events-auto transition-all duration-300 md:w-auto md:min-w-[300px] md:max-w-sm',
         'animate-in fade-in slide-in-from-right-5 slide-in-from-bottom-2',
         bgClasses[toast.type]
       )}
@@ -47,7 +47,7 @@ export const ToastContainer: React.FC = () => {
   const toasts = useToastStore((state) => state.toasts);
 
   return (
-    <div className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 right-4 z-[70] flex select-none flex-col items-end gap-2.5 md:bottom-5 md:left-auto md:right-5">
+    <div className="pointer-events-none fixed left-4 right-4 top-[calc(5rem+env(safe-area-inset-top))] z-[70] flex select-none flex-col items-end gap-2.5 md:bottom-5 md:left-auto md:right-5 md:top-auto">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} />
       ))}

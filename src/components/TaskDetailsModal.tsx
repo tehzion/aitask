@@ -6,6 +6,8 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { canAssignTasksToOthers, canCommentOnTask, canEditTask as canEditTaskByRole, canReviewTaskAsClient } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate, parseOptionalDate } from '../lib/utils';
+import { STAFF_DEPARTMENTS } from '../lib/departments';
+import type { SecureCommandType } from '../lib/secureWorkspace';
 import ModalShell from './ModalShell';
 
 interface Props {
@@ -26,7 +28,6 @@ const getStatusColor = (status: string): string => {
   return statusColors[status] || 'bg-slate-100 text-slate-700 border border-slate-200';
 };
 
-const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor'];
 const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 
 const ExternalTaskLink: React.FC<{ value: string; label: string }> = ({ value, label }) => {
@@ -120,7 +121,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     ? users.filter(user => user.role !== 'Client' && user.department === editForm.department)
     : users.filter(user => user.id === editForm.assignedTo);
 
-  const confirmPendingMutation = async (commandType?: string) => {
+  const confirmPendingMutation = async (commandType?: SecureCommandType) => {
     setIsSubmitting(true);
     const result = await commitPendingMutation(commandType);
     setIsSubmitting(false);
@@ -337,7 +338,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                           }}
                           className="w-full rounded-lg border border-slate-300 bg-white p-2.5 pr-10 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500 appearance-none cursor-pointer"
                         >
-                          {DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}
+                          {STAFF_DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}
                         </select>
                         <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                       </div>

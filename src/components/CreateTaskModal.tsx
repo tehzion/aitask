@@ -8,6 +8,7 @@ import { getClientOptions, getServiceOptions, hasChoice } from '../lib/choiceOpt
 import { canManageProjects, getAssignableProjects } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
+import { STAFF_DEPARTMENTS } from '../lib/departments';
 import ModalShell from './ModalShell';
 import { modalFooter } from './uiTokens';
 
@@ -16,7 +17,6 @@ interface Props {
   onClose: () => void;
 }
 
-const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor'];
 const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
@@ -26,6 +26,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const clientListId = React.useId();
   const titleId = React.useId();
   const descriptionId = React.useId();
+  const departmentId = React.useId();
+  const assigneeId = React.useId();
 
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectId, setProjectId] = useState('');
@@ -508,9 +510,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Assign to Position/Department <span className="text-red-500">*</span></label>
+                  <label htmlFor={departmentId} className="block text-sm font-medium text-slate-700 mb-1">Assign to Position/Department <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <select
+                      id={departmentId}
                       value={department}
                       onChange={e => {
                         setDepartment(e.target.value as Department);
@@ -519,15 +522,16 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       }}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
-                      {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                      {STAFF_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Assignee</label>
+                  <label htmlFor={assigneeId} className="block text-sm font-medium text-slate-700 mb-1">Assignee</label>
                   <div className="relative">
                     <select
+                      id={assigneeId}
                       value={assignedTo}
                       onChange={e => setAssignedTo(e.target.value)}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"

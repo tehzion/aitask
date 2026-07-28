@@ -8,21 +8,19 @@ import { inputBase } from './uiTokens';
 import { cn } from '../lib/utils';
 import { getEffectiveRoleName, getUnreadNotifications } from '../lib/access';
 import { useSoundNotifications } from '../hooks/useSoundNotifications';
+import { NotificationReadActions } from '../hooks/useNotificationReadActions';
 import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 import { notificationRouteToPath } from '../lib/security';
 
 interface NavbarProps {
   onMenuClick: () => void;
+  notificationReadActions: NotificationReadActions;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
+const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions }) => {
   const {
     currentUser,
     notifications,
-    markNotificationRead,
-    markAllNotificationsRead,
-    commitPendingMutation,
-    discardMutation,
     rolePermissions,
   } = useStore();
   const [showNotifs, setShowNotifs] = useState(false);
@@ -60,16 +58,6 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
 
   const handleBellClick = () => {
     setShowNotifs(!showNotifs);
-  };
-
-  const persistNotificationChange = async (change: () => void) => {
-    const previousNotifications = useStore.getState().notifications;
-    change();
-    const result = await commitPendingMutation();
-    if (result.ok) return;
-
-    useStore.setState({ notifications: previousNotifications });
-    await discardMutation({ reload: false });
   };
 
   const handleGlobalSearch = (event: React.FormEvent) => {
@@ -112,8 +100,8 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
           <span className="absolute inset-y-0 left-0 flex items-center pl-3">
             <Search className="w-5 h-5 text-slate-400" />
           </span>
-          <input 
-            type="text" 
+          <input
+            type="text"
             className={cn(inputBase, 'border-transparent bg-slate-100 py-2.5 pl-10 pr-3 shadow-none focus:bg-white')}
             placeholder="Search tasks..."
             value={globalSearch}
@@ -121,7 +109,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
           />
         </form>
       </div>
-      
+
       <div className="flex items-center gap-1 sm:gap-2">
         <IconButton
           label="Search"
@@ -172,11 +160,11 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
               </div>
               <div className="max-h-80 overflow-y-auto custom-scrollbar">
                 {unreadNotifs.length > 0 ? unreadNotifs.map(notif => (
-                  <Link 
-                    key={notif.id} 
+                  <Link
+                    key={notif.id}
                     to={notificationRouteToPath(notif.route ?? (notif as typeof notif & { link?: string }).link)}
                     onClick={() => {
-                      void persistNotificationChange(() => markNotificationRead(notif.id));
+                      void notificationReadActions.markRead(notif.id);
                       setShowNotifs(false);
                     }}
                     className="flex items-start gap-3 border-b border-blue-100/70 bg-blue-50/45 px-4 py-3 transition-colors hover:bg-blue-50"
@@ -201,24 +189,27 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
               {unreadCount > 0 && (
                 <button
                   type="button"
-                  onClick={() => void persistNotificationChange(markAllNotificationsRead)}
-                  className="w-full border-t border-slate-200 bg-slate-50 px-4 py-2 text-center transition-colors hover:bg-slate-100"
+                  onClick={() => void notificationReadActions.markAllRead()}
+                  disabled={notificationReadActions.isUpdating}
+                  className="w-full border-t border-slate-200 bg-slate-50 px-4 py-2 text-center transition-colors hover:bg-slate-100 disabled:cursor-wait disabled:opacity-60"
                 >
-                  <span className="text-xs font-semibold text-slate-500 transition-colors hover:text-blue-700">Mark All as Read</span>
+                  <span className="text-xs font-semibold text-slate-500 transition-colors hover:text-blue-700">
+                    {notificationReadActions.isUpdating ? 'Saving...' : 'Mark All as Read'}
+                  </span>
                 </button>
               )}
             </div>
           )}
         </div>
-        
+
         <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
           <div className="hidden md:flex flex-col items-end">
             <span className="text-sm font-semibold leading-tight text-slate-950">{currentUser.name}</span>
             <span className="text-xs text-slate-500">{getEffectiveRoleName(currentUser, rolePermissions)} - {currentUser.department}</span>
           </div>
-          <img 
-            src={currentUser.avatar} 
-            alt={currentUser.name} 
+          <img
+            src={currentUser.avatar}
+            alt={currentUser.name}
             className="w-9 h-9 rounded-full ring-2 ring-white shadow-sm object-cover"
           />
         </div>

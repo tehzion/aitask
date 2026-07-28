@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone, Plus } from 'lucide-react';
 import { format, isBefore, isToday } from 'date-fns';
-import { Department, Priority, Task, TaskStatus } from '../types';
+import { Priority, Task, TaskStatus } from '../types';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Badge, Button, PageHeader } from '../components/ui';
@@ -11,9 +11,9 @@ import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { canAssignTasksToOthers, canCreateTasks, canEditTask as canEditTaskByRole, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { SkeletonTableRow, SkeletonMobileCard } from '../components/SkeletonCard';
 import { safeHttpsUrl } from '../lib/security';
+import { DEPARTMENTS } from '../lib/departments';
 
 const PRIORITY_OPTIONS: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
-const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor', 'Client'];
 const PAGE_SIZE = 8;
 const normalizeClientName = (value: string) => value.trim().toLowerCase();
 
@@ -34,12 +34,6 @@ const priorityColors: Record<Priority, string> = {
   'Medium': 'bg-blue-100 text-blue-700',
   'High': 'bg-amber-100 text-amber-700',
   'Urgent': 'bg-red-100 text-red-700',
-};
-
-const approvalColors = {
-  Pending: 'bg-slate-100 text-slate-700',
-  Approved: 'bg-emerald-100 text-emerald-700',
-  Rejected: 'bg-red-100 text-red-700',
 };
 
 const Tasks: React.FC = () => {
@@ -119,8 +113,10 @@ const Tasks: React.FC = () => {
   const getDeptBadge = (dept: string) => {
     switch (dept) {
       case 'Designer':          return 'bg-pink-50 text-pink-700 border border-pink-100';
-      case 'Editor':            return 'bg-sky-50 text-sky-700 border border-sky-100';
-      case 'Videoshooting':     return 'bg-purple-50 text-purple-700 border border-purple-100';
+      case 'Editor':
+      case 'Video Editor':      return 'bg-sky-50 text-sky-700 border border-sky-100';
+      case 'Videoshooting':
+      case 'Video Shooting':    return 'bg-purple-50 text-purple-700 border border-purple-100';
       case 'Ads Management':    return 'bg-amber-50 text-amber-700 border border-amber-100';
       case 'Account & Finance': return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
       case 'Management':        return 'bg-blue-50 text-blue-700 border border-blue-100';
@@ -316,19 +312,6 @@ const Tasks: React.FC = () => {
         {task.status}
       </span>
     )
-  );
-
-  const renderTaskBadges = (task: Task) => (
-    <div className="flex flex-wrap items-center justify-center gap-1.5">
-      <span className={`rounded-md px-2 py-1 text-xs font-semibold ${approvalColors[task.clientApprovalStatus]}`}>
-        Client: {task.clientApprovalStatus}
-      </span>
-      {task.revisionCount > 0 && (
-        <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
-          {task.revisionCount} revision{task.revisionCount === 1 ? '' : 's'}
-        </span>
-      )}
-    </div>
   );
 
   return (
@@ -574,7 +557,7 @@ const Tasks: React.FC = () => {
         {viewType === 'table' ? (
           <>
             <div className="hidden overflow-x-auto 2xl:block">
-              <table className="w-full min-w-[1160px] text-left text-sm text-slate-500">
+              <table className="w-full min-w-[1020px] text-left text-sm text-slate-500">
                 <thead className="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
                   <tr>
                     <th className="px-3 py-3 font-semibold">Task Details</th>
@@ -583,7 +566,6 @@ const Tasks: React.FC = () => {
                     <th className="px-3 py-3 font-semibold">Timeline</th>
                     <th className="w-[100px] px-3 py-3 text-center font-semibold">Priority</th>
                     <th className="w-[130px] px-3 py-3 text-center font-semibold">Status</th>
-                    <th className="w-[180px] px-3 py-3 text-center font-semibold">Workflow</th>
                     <th className="px-3 py-3 text-center font-semibold">Progress</th>
                     <th className="px-3 py-3 font-semibold">Actions</th>
                   </tr>
@@ -633,9 +615,6 @@ const Tasks: React.FC = () => {
                           <td className="w-[130px] whitespace-nowrap px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                             {renderStatusControl(task)}
                           </td>
-                          <td className="w-[180px] px-3 py-3 text-center">
-                            {renderTaskBadges(task)}
-                          </td>
                           <td className="px-3 py-3">
                             <div className="flex items-center justify-center gap-2">
                               <div className="w-16 bg-slate-200 rounded-full h-2 overflow-hidden">
@@ -684,7 +663,7 @@ const Tasks: React.FC = () => {
                   )}
                   {!backend?.isLoading && pagedTasks.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center text-slate-500">No tasks found matching your criteria.</td>
+                      <td colSpan={8} className="px-4 py-8 text-center text-slate-500">No tasks found matching your criteria.</td>
                     </tr>
                   )}
                 </tbody>
@@ -744,7 +723,6 @@ const Tasks: React.FC = () => {
                           <span className="text-xs font-semibold text-slate-700">{task.completionPercentage}%</span>
                         </div>
                       </div>
-                      <div className="mt-3">{renderTaskBadges(task)}</div>
                     </button>
                   );
                 })
@@ -862,15 +840,10 @@ const Tasks: React.FC = () => {
                               </div>
 
                               {/* Action Badges in Card */}
-                              {(task.attachmentLink || task.revisionCount > 0 || task.clientApprovalStatus !== 'Pending') && (
+                              {(task.attachmentLink || task.revisionCount > 0) && (
                                 <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-2 text-[9px] text-slate-500">
                                   {task.attachmentLink && <Paperclip className="w-3 h-3 text-slate-400" />}
                                   {task.revisionCount > 0 && <span className="text-amber-700 font-bold">{task.revisionCount} rev</span>}
-                                  {task.clientApprovalStatus !== 'Pending' && (
-                                    <span className={cn("font-bold", task.clientApprovalStatus === 'Approved' ? "text-emerald-600" : "text-red-600")}>
-                                      Client: {task.clientApprovalStatus}
-                                    </span>
-                                  )}
                                 </div>
                               )}
                             </div>

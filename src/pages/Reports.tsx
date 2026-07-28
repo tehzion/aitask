@@ -1,13 +1,13 @@
 import React, { useMemo } from 'react';
 import { useStore } from '../store';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
-import { Department } from '../types';
 import { Users, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { endOfWeek, format, isWithinInterval, startOfWeek, subWeeks } from 'date-fns';
 import { ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
 import { getVisibleTasks } from '../lib/access';
 import { parseOptionalDate } from '../lib/utils';
+import { STAFF_DEPARTMENTS } from '../lib/departments';
 
 const Reports: React.FC = () => {
   const { tasks: allTasks, currentUser, rolePermissions } = useStore();
@@ -52,8 +52,7 @@ const Reports: React.FC = () => {
     const stats: Record<string, { total: number; completed: number; pending: number; overdue: number; name: string }> = {};
     
     // Initialize stats for each department
-    const DEPARTMENTS: Department[] = ['Operation', 'Management', 'Videoshooting', 'Ads Management', 'Account & Finance', 'Designer', 'Editor'];
-    DEPARTMENTS.forEach(dept => {
+    STAFF_DEPARTMENTS.forEach(dept => {
       stats[dept] = { name: dept, total: 0, completed: 0, pending: 0, overdue: 0 };
     });
 

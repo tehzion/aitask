@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 import { DEFAULT_USER_PASSWORD, hasPasswordResetBypass, shouldShowDemoLogin, validateStaffSignupPassword } from '../lib/auth';
 import { APP_BUILD_LABEL } from '../lib/appVersion';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
+import { STAFF_DEPARTMENTS } from '../lib/departments';
 
 /** Max failed attempts before a short lockout is applied */
 const MAX_ATTEMPTS = 5;
@@ -399,7 +400,10 @@ const Login: React.FC = () => {
                   </div>
                   <div>
                     <label htmlFor="registration-position" className="block text-sm font-medium text-slate-700">Job Position / Department</label>
-                    <input id="registration-position" type="text" required placeholder="e.g. Designer, Ads Manager" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.jobPosition} onChange={e => setRegData({ ...regData, jobPosition: e.target.value })} />
+                    <input id="registration-position" list="staff-position-options" type="text" required placeholder="e.g. Designer, Video Editor" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.jobPosition} onChange={e => setRegData({ ...regData, jobPosition: e.target.value })} />
+                    <datalist id="staff-position-options">
+                      {STAFF_DEPARTMENTS.map(position => <option key={position} value={position} />)}
+                    </datalist>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <p className="text-xs font-semibold uppercase text-slate-500">Access role</p>
