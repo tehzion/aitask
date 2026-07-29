@@ -6,6 +6,7 @@ const staff: User = {
   id: 'staff-1',
   name: 'Staff',
   role: 'Staff',
+  departments: ['Designer'],
   department: 'Designer',
 };
 

@@ -2,11 +2,12 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(29);
+select plan(38);
 
 select has_column('public', 'aitask_workspaces', 'version', 'workspaces expose an invalidation revision');
 select has_column('public', 'aitask_workspaces', 'updated_at', 'workspace revision has a server timestamp');
 select has_column('public', 'aitask_members', 'version', 'members use optimistic concurrency');
+select has_column('public', 'aitask_members', 'departments', 'members support equal multi-department membership');
 select has_column('public', 'aitask_entities', 'version', 'entities use optimistic concurrency');
 select has_table('public', 'aitask_command_receipts', 'idempotent command receipts exist');
 select has_table('public', 'aitask_audit_events', 'immutable audit events exist');
@@ -15,6 +16,12 @@ select has_function(
   'aitask_execute_command',
   array['text', 'uuid', 'text', 'jsonb'],
   'transactional command RPC exists'
+);
+select has_function(
+  'public',
+  'aitask_update_member_departments',
+  array['text', 'uuid', 'text', 'text[]', 'bigint'],
+  'department updates use a versioned transactional RPC'
 );
 select has_function(
   'private',
@@ -67,6 +74,14 @@ select ok(
   'authenticated users can execute commands'
 );
 select ok(
+  has_function_privilege('authenticated', 'public.aitask_update_member_departments(text,uuid,text,text[],bigint)', 'EXECUTE'),
+  'authenticated sessions can reach the Super Admin-guarded department RPC'
+);
+select ok(
+  not has_function_privilege('anon', 'public.aitask_update_member_departments(text,uuid,text,text[],bigint)', 'EXECUTE'),
+  'anonymous users cannot update member departments'
+);
+select ok(
   not has_function_privilege('anon', 'public.aitask_execute_command(text,uuid,text,jsonb)', 'EXECUTE'),
   'anonymous users cannot execute commands'
 );
@@ -85,6 +100,36 @@ select ok(
 select ok(
   has_function_privilege('service_role', 'public.aitask_finalize_member_invitation(text,uuid,text,text,text,text,text,text,text,text,text)', 'EXECUTE'),
   'member invitation finalization is service-role only'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.aitask_finalize_member_invitation_v2(text,uuid,text,text,text,text[],text,text,text,text,text)', 'EXECUTE'),
+  'authenticated users cannot call multi-department invitation finalization'
+);
+select ok(
+  has_function_privilege('service_role', 'public.aitask_finalize_member_invitation_v2(text,uuid,text,text,text,text[],text,text,text,text,text)', 'EXECUTE'),
+  'the account Edge Function can finalize multi-department members'
+);
+select ok(
+  position(
+    'new.departments is distinct from old.departments'
+    in pg_get_functiondef('private.aitask_guard_member_security()'::regprocedure)
+  ) > 0,
+  'self-service member updates cannot change departments'
+);
+select ok(
+  position(
+    'v_actor_role = ''Staff'''
+    in pg_get_functiondef('private.aitask_task_assignment_is_valid(text,text,jsonb,jsonb)'::regprocedure)
+  ) > 0,
+  'Staff task creation is limited to the actor departments'
+);
+select ok(
+  not exists (
+    select 1
+    from public.aitask_members member
+    where member.departments is distinct from private.aitask_normalize_member_departments(member.role, member.departments)
+  ),
+  'all stored member departments are canonical and valid'
 );
 select ok(
   not has_table_privilege('anon', 'public.aitask_members', 'SELECT'),

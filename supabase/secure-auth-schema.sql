@@ -20,6 +20,7 @@ create table if not exists public.aitask_members (
   email text,
   role text not null check (role in ('Admin', 'Staff', 'Client')),
   department text not null,
+  departments text[] not null,
   avatar text,
   client_name text,
   is_super_admin boolean not null default false,
@@ -378,6 +379,7 @@ begin
       or new.email is distinct from old.email
       or new.role is distinct from old.role
       or new.department is distinct from old.department
+      or new.departments is distinct from old.departments
       or new.client_name is distinct from old.client_name
       or new.is_super_admin is distinct from old.is_super_admin
       or (new.must_reset_password is distinct from old.must_reset_password and not (old.must_reset_password and not new.must_reset_password))
@@ -571,7 +573,7 @@ with snapshot_users as (
   from snapshot_users
 )
 insert into public.aitask_members (
-  id, workspace_id, auth_user_id, name, email, role, department, avatar,
+  id, workspace_id, auth_user_id, name, email, role, department, departments, avatar,
   client_name, is_super_admin, must_reset_password, custom_role_id,
   custom_role_name, permissions, updated_at
 )
@@ -583,6 +585,11 @@ select
   nullif(data ->> 'email', ''),
   data ->> 'role',
   data ->> 'department',
+  array[case lower(coalesce(data ->> 'department', ''))
+    when 'editor' then 'Video Editor'
+    when 'videoshooting' then 'Video Shooting'
+    else data ->> 'department'
+  end],
   nullif(data ->> 'avatar', ''),
   nullif(data ->> 'companyName', ''),
   coalesce((data ->> 'isSuperAdmin')::boolean, false),
@@ -599,6 +606,7 @@ on conflict (id) do update set
   email = coalesce(excluded.email, public.aitask_members.email),
   role = excluded.role,
   department = excluded.department,
+  departments = excluded.departments,
   avatar = excluded.avatar,
   client_name = excluded.client_name,
   is_super_admin = excluded.is_super_admin,

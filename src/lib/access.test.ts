@@ -24,11 +24,11 @@ import {
   isNotificationReadByUser,
 } from './access';
 
-const admin: User = { id: 'admin-1', name: 'Admin', role: 'Admin', department: 'Management' };
+const admin: User = { id: 'admin-1', name: 'Admin', role: 'Admin', departments: ['Management'], department: 'Management' };
 const superAdmin: User = { ...admin, id: 'boss-1', name: 'Boss Koo', isSuperAdmin: true };
-const staff: User = { id: 'staff-1', name: 'Staff', role: 'Staff', department: 'Designer' };
-const otherStaff: User = { id: 'staff-2', name: 'Other Staff', role: 'Staff', department: 'Editor' };
-const acmeClient: User = { id: 'client-1', name: 'Acme Client', role: 'Client', department: 'Client', companyName: 'Acme' };
+const staff: User = { id: 'staff-1', name: 'Staff', role: 'Staff', departments: ['Designer'], department: 'Designer' };
+const otherStaff: User = { id: 'staff-2', name: 'Other Staff', role: 'Staff', departments: ['Video Editor'], department: 'Editor' };
+const acmeClient: User = { id: 'client-1', name: 'Acme Client', role: 'Client', departments: ['Client'], department: 'Client', companyName: 'Acme' };
 
 const makeTask = (overrides: Partial<Task> = {}): Task => ({
   id: 'task-1',

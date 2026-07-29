@@ -6,6 +6,7 @@ const unlinkedMember: User = {
   id: 'unlinked-member-regression',
   name: 'Pending Invite',
   role: 'Staff',
+  departments: ['Designer'],
   department: 'Designer',
   mustResetPassword: false,
 };

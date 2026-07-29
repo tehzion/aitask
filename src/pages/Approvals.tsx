@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { CheckCircle2, XCircle, UserPlus, Users, Trash2, AlertTriangle, ShieldCheck, Save } from 'lucide-react';
+import { CheckCircle2, XCircle, UserPlus, Users, Trash2, AlertTriangle, ShieldCheck, Save, Pencil } from 'lucide-react';
 import { Department, Role, Registration, RolePermissionKey, RolePermissions } from '../types';
 import { format } from 'date-fns';
 import { Badge, Button, PageHeader } from '../components/ui';
@@ -9,8 +9,9 @@ import { cn } from '../lib/utils';
 import { canDeleteUser, defaultRolePermissions, getEffectiveRoleName, isBossKoo, permissionGroups, permissionLabels } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
-import { DEPARTMENTS } from '../lib/departments';
+import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
 import ModalShell from '../components/ModalShell';
+import DepartmentMultiSelect from '../components/DepartmentMultiSelect';
 
 const ROLES: Role[] = ['Admin', 'Staff', 'Client'];
 
@@ -20,6 +21,7 @@ const Approvals: React.FC = () => {
   const addMemberTitleId = React.useId();
   const approvalTitleId = React.useId();
   const deleteMemberTitleId = React.useId();
+  const editDepartmentsTitleId = React.useId();
   const secureAccounts = shouldUseSecureSupabase();
   const {
     registrations,
@@ -29,6 +31,7 @@ const Approvals: React.FC = () => {
     users,
     deleteUser,
     addUserBySuperAdmin,
+    updateMemberDepartments,
     rolePermissions,
     addCustomRole,
     updateCustomRole,
@@ -40,7 +43,7 @@ const Approvals: React.FC = () => {
   const [selectedReg, setSelectedReg] = useState<Registration | null>(null);
   
   const [role, setRole] = useState<Role>('Staff');
-  const [department, setDepartment] = useState<Department>('Designer');
+  const [approvalDepartments, setApprovalDepartments] = useState<Department[]>([]);
   const [companyName, setCompanyName] = useState('');
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [addUserError, setAddUserError] = useState('');
@@ -50,7 +53,7 @@ const Approvals: React.FC = () => {
     email: '',
     password: secureAccounts ? '' : DEFAULT_USER_PASSWORD,
     role: 'Staff' as Role,
-    department: 'Designer' as Department,
+    departments: [] as Department[],
     companyName: '',
     customRoleId: '',
   });
@@ -62,6 +65,9 @@ const Approvals: React.FC = () => {
   const [assignmentError, setAssignmentError] = useState('');
   const [actionError, setActionError] = useState('');
   const [isActionSaving, setIsActionSaving] = useState(false);
+  const [memberDepartmentsId, setMemberDepartmentsId] = useState<string | null>(null);
+  const [memberDepartments, setMemberDepartments] = useState<Department[]>([]);
+  const [memberDepartmentsError, setMemberDepartmentsError] = useState('');
   const superAdmin = isBossKoo(currentUser);
   const [roleForm, setRoleForm] = useState({
     name: '',
@@ -79,16 +85,12 @@ const Approvals: React.FC = () => {
 
   const handleOpenApproval = (reg: Registration) => {
     setSelectedReg(reg);
-    // Auto-fill form based on user's request
     setRole(reg.requestedRole || 'Staff');
-    
-    // Attempt to guess department based on requested role
     if (reg.requestedRole === 'Client') {
-      setDepartment('Client');
-    } else if (reg.requestedRole === 'Admin') {
-      setDepartment('Management');
+      setApprovalDepartments(['Client']);
     } else {
-      setDepartment('Designer'); // Default for staff
+      const requestedDepartment = normalizeDepartment(reg.jobPosition);
+      setApprovalDepartments(requestedDepartment && requestedDepartment !== 'Client' ? [requestedDepartment] : []);
     }
     setApprovalCustomRoleId('');
     setSendApprovalInvitation(false);
@@ -99,13 +101,18 @@ const Approvals: React.FC = () => {
     e.preventDefault();
     if (selectedReg) {
       setActionError('');
+      const departments = role === 'Client' ? ['Client' as Department] : approvalDepartments;
+      if (departments.length === 0) {
+        setActionError('Choose at least one department before approving this member.');
+        return;
+      }
       setIsActionSaving(true);
       if (secureAccounts) {
         const inviteResult = await addUserBySuperAdmin({
           name: selectedReg.name,
           email: selectedReg.email,
           role,
-          department: role === 'Client' ? 'Client' : department,
+          departments,
           companyName: role === 'Client' ? companyName : undefined,
           customRoleId: approvalCustomRoleId || undefined,
           registrationId: selectedReg.id,
@@ -122,14 +129,14 @@ const Approvals: React.FC = () => {
         setIsActionSaving(false);
         setSelectedReg(null);
         setRole('Staff');
-        setDepartment('Designer');
+        setApprovalDepartments([]);
         setCompanyName('');
         setApprovalCustomRoleId('');
         setSendApprovalInvitation(false);
         setApprovalTemporaryPassword('');
         return;
       }
-      approveRegistration(selectedReg.id, role, department, role === 'Client' ? companyName : undefined, approvalCustomRoleId || undefined);
+      approveRegistration(selectedReg.id, role, departments, role === 'Client' ? companyName : undefined, approvalCustomRoleId || undefined);
       const saved = await commitPendingMutation();
       setIsActionSaving(false);
       if (!saved.ok) {
@@ -137,9 +144,8 @@ const Approvals: React.FC = () => {
         return;
       }
       setSelectedReg(null);
-      // Reset form
       setRole('Staff');
-      setDepartment('Designer');
+      setApprovalDepartments([]);
       setCompanyName('');
       setApprovalCustomRoleId('');
     }
@@ -150,7 +156,7 @@ const Approvals: React.FC = () => {
       name: '',
       email: '',
       role: 'Staff',
-      department: 'Designer',
+      departments: [],
       companyName: '',
       customRoleId: '',
       password: secureAccounts ? '' : DEFAULT_USER_PASSWORD,
@@ -271,6 +277,33 @@ const Approvals: React.FC = () => {
     }
   };
 
+  const handleEditDepartments = (userId: string) => {
+    const user = users.find(item => item.id === userId);
+    if (!user || user.role === 'Client') return;
+    setMemberDepartmentsId(user.id);
+    setMemberDepartments(getMemberDepartments(user));
+    setMemberDepartmentsError('');
+  };
+
+  const handleSaveDepartments = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!memberDepartmentsId) return;
+    setMemberDepartmentsError('');
+    if (memberDepartments.length === 0) {
+      setMemberDepartmentsError('Choose at least one department.');
+      return;
+    }
+    setIsActionSaving(true);
+    const result = await updateMemberDepartments(memberDepartmentsId, memberDepartments);
+    setIsActionSaving(false);
+    if (!result.ok) {
+      setMemberDepartmentsError(result.error || 'Unable to update departments.');
+      return;
+    }
+    setMemberDepartmentsId(null);
+    setMemberDepartments([]);
+  };
+
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddUserError('');
@@ -280,7 +313,7 @@ const Approvals: React.FC = () => {
       email: newUser.email || undefined,
       password: newUser.password,
       role: newUser.role,
-      department: newUser.role === 'Client' ? 'Client' : newUser.department,
+      departments: newUser.role === 'Client' ? ['Client'] : newUser.departments,
       companyName: newUser.role === 'Client' ? newUser.companyName : undefined,
       customRoleId: newUser.customRoleId || undefined,
       sendInvitation: sendNewUserInvitation,
@@ -595,10 +628,12 @@ const Approvals: React.FC = () => {
             <Users className="w-5 h-5 text-blue-600" />
             <h3 className="text-lg font-semibold text-slate-800">Active System Users</h3>
           </div>
-          <Button variant="secondary" onClick={() => setIsAddUserOpen(true)}>
-            <UserPlus className="w-4 h-4" />
-            Add Member
-          </Button>
+          {superAdmin && (
+            <Button variant="secondary" onClick={() => setIsAddUserOpen(true)}>
+              <UserPlus className="w-4 h-4" />
+              Add Member
+            </Button>
+          )}
         </div>
         {deleteUserError && (
           <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -615,7 +650,7 @@ const Approvals: React.FC = () => {
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
                 <th className="px-6 py-4 font-semibold border-b border-slate-200">User</th>
-                <th className="px-6 py-4 font-semibold border-b border-slate-200">Role & Dept</th>
+                <th className="px-6 py-4 font-semibold border-b border-slate-200">Role & Departments</th>
                 <th className="px-6 py-4 font-semibold border-b border-slate-200">Custom Role</th>
                 <th className="px-6 py-4 font-semibold border-b border-slate-200">Contact</th>
                 <th className="px-6 py-4 font-semibold border-b border-slate-200 text-right">Actions</th>
@@ -637,7 +672,7 @@ const Approvals: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className={`inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
                         u.role === 'Admin' ? 'bg-purple-100 text-purple-700' :
                         u.role === 'Client' ? 'bg-amber-100 text-amber-700' :
@@ -645,9 +680,11 @@ const Approvals: React.FC = () => {
                       }`}>
                         {u.role}
                       </span>
-                      <span className="text-sm font-medium text-slate-600">
-                        {u.role === 'Client' ? `(${u.companyName})` : `(${u.department})`}
-                      </span>
+                      {u.role === 'Client' ? (
+                        <span className="text-sm font-medium text-slate-600">({u.companyName})</span>
+                      ) : getMemberDepartments(u).map(department => (
+                        <Badge key={department} tone="slate">{department}</Badge>
+                      ))}
                     </div>
                   </td>
                   <td className="px-6 py-4 min-w-[220px]">
@@ -671,7 +708,20 @@ const Approvals: React.FC = () => {
                     {u.email || 'No email on file'}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    {canDeleteUser(currentUser, u, rolePermissions) ? (
+                    <div className="flex items-center justify-end gap-1">
+                      {superAdmin && u.role !== 'Client' && (
+                        <button
+                          type="button"
+                          onClick={() => handleEditDepartments(u.id)}
+                          disabled={isActionSaving}
+                          className="inline-flex items-center rounded-lg p-2 text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50"
+                          title="Edit departments"
+                          aria-label={`Edit departments for ${u.name}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
+                      {canDeleteUser(currentUser, u, rolePermissions) ? (
                       <button 
                         onClick={() => {
                           setDeleteUserError('');
@@ -683,13 +733,14 @@ const Approvals: React.FC = () => {
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
-                    ) : isBossKoo(u) || u.id === currentUser?.id ? (
+                      ) : isBossKoo(u) || u.id === currentUser?.id ? (
                       <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
                         Protected account
                       </span>
-                    ) : (
+                      ) : (
                       <span className="text-xs font-medium text-slate-400">No access</span>
-                    )}
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -697,6 +748,48 @@ const Approvals: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {memberDepartmentsId && (
+        <ModalShell
+          labelledBy={editDepartmentsTitleId}
+          onClose={() => {
+            if (isActionSaving) return;
+            setMemberDepartmentsId(null);
+            setMemberDepartmentsError('');
+          }}
+          panelClassName="max-w-lg animate-in fade-in zoom-in-95 duration-200"
+        >
+          <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
+            <h2 id={editDepartmentsTitleId} className="text-lg font-semibold text-slate-950">
+              Edit departments
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Existing task assignments remain unchanged when a department is removed.
+            </p>
+          </div>
+          <form onSubmit={handleSaveDepartments} className="space-y-5 p-6">
+            <DepartmentMultiSelect value={memberDepartments} onChange={setMemberDepartments} />
+            {memberDepartmentsError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+                {memberDepartmentsError}
+              </div>
+            )}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isActionSaving}
+                onClick={() => setMemberDepartmentsId(null)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isActionSaving || backend.isSaving}>
+                {isActionSaving ? 'Saving...' : 'Save departments'}
+              </Button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
 
       {/* Add Member Modal */}
       {isAddUserOpen && (
@@ -747,7 +840,7 @@ const Approvals: React.FC = () => {
                       setNewUser({
                         ...newUser,
                         role: nextRole,
-                        department: nextRole === 'Client' ? 'Client' : nextRole === 'Admin' ? 'Management' : newUser.department,
+                        departments: nextRole === 'Client' ? ['Client'] : [],
                       });
                     }}
                   >
@@ -767,19 +860,17 @@ const Approvals: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Department</label>
-                  <select
-                    className={cn(inputBase, 'px-3 py-2.5')}
-                    value={newUser.department}
-                    disabled={newUser.role === 'Client'}
-                    onChange={e => setNewUser({ ...newUser, department: e.target.value as Department })}
-                  >
-                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
+              {newUser.role === 'Client' ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <p className="text-sm font-medium text-slate-700">Department</p>
+                  <p className="mt-0.5 text-sm text-slate-600">Client</p>
                 </div>
-              </div>
+              ) : (
+                <DepartmentMultiSelect
+                  value={newUser.departments}
+                  onChange={departments => setNewUser({ ...newUser, departments })}
+                />
+              )}
 
               {newUser.role === 'Client' && (
                 <div>
@@ -870,10 +961,10 @@ const Approvals: React.FC = () => {
         <ModalShell
           labelledBy={approvalTitleId}
           onClose={() => setSelectedReg(null)}
-          panelClassName="max-w-md animate-in fade-in zoom-in-95 duration-200"
+          panelClassName="max-w-lg animate-in fade-in zoom-in-95 duration-200"
         >
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
-              <h2 id={approvalTitleId} className="text-lg font-semibold text-slate-950">Assign role and department</h2>
+              <h2 id={approvalTitleId} className="text-lg font-semibold text-slate-950">Assign role and departments</h2>
               <p className="text-sm text-slate-500 mt-1">Configure system access for {selectedReg.name}.</p>
             </div>
             
@@ -884,22 +975,29 @@ const Approvals: React.FC = () => {
                   className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
                   value={secureAccounts ? 'Staff' : role}
                   disabled={secureAccounts}
-                  onChange={e => setRole(e.target.value as Role)}
+                  onChange={e => {
+                    const nextRole = e.target.value as Role;
+                    setRole(nextRole);
+                    setApprovalDepartments(nextRole === 'Client' ? ['Client'] : []);
+                  }}
                 >
                   {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
                 {secureAccounts && <p className="mt-1 text-xs text-slate-500">Registrations are approved as Staff.</p>}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Department</label>
-                <select 
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
-                  value={department} onChange={e => setDepartment(e.target.value as Department)}
-                >
-                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
+              {role === 'Client' ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <p className="text-sm font-medium text-slate-700">Department</p>
+                  <p className="mt-0.5 text-sm text-slate-600">Client</p>
+                </div>
+              ) : (
+                <DepartmentMultiSelect
+                  value={approvalDepartments}
+                  onChange={setApprovalDepartments}
+                  description="The requested position is preselected when it matches an active department. Review all selections before approval."
+                />
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Custom Role</label>

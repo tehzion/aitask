@@ -30,6 +30,7 @@ const makeStaff = (manageAssignedClients: boolean, viewAllClients = false): User
   id: 'staff-client-manager',
   name: 'Client Manager',
   role: 'Staff',
+  departments: ['Designer'],
   department: 'Designer',
   permissions: {
     ...defaultRolePermissions.Staff,

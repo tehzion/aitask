@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useStore } from '../store';
+import { getMemberDepartments } from '../lib/departments';
 import { Bell, Search, Menu, CheckCircle2, Info, AlertCircle, FileText, X, Volume2, VolumeX } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
@@ -205,7 +206,9 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
         <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
           <div className="hidden md:flex flex-col items-end">
             <span className="text-sm font-semibold leading-tight text-slate-950">{currentUser.name}</span>
-            <span className="text-xs text-slate-500">{getEffectiveRoleName(currentUser, rolePermissions)} - {currentUser.department}</span>
+            <span className="text-xs text-slate-500">
+              {getEffectiveRoleName(currentUser, rolePermissions)} - {getMemberDepartments(currentUser).join(', ')}
+            </span>
           </div>
           <img
             src={currentUser.avatar}

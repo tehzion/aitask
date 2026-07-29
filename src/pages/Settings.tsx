@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertTriangle, ArrowRight, Bell, CheckCircle2, Cloud, Database, Lock, PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserCircle, Volume2, VolumeX, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
+import { getMemberDepartments } from '../lib/departments';
 import { Badge, Button, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { getDefaultAccessiblePath, getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
@@ -560,7 +561,9 @@ const Settings: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Department</label>
-                  <p className="font-semibold text-slate-900">{currentUser?.department}</p>
+                  <p className="font-semibold text-slate-900">
+                    {currentUser ? getMemberDepartments(currentUser).join(', ') : 'Not assigned'}
+                  </p>
                 </div>
                 <div className="lg:col-span-2">
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Client Company</label>

@@ -8,6 +8,7 @@ const staff: User = {
   id: 'staff-company-owner',
   name: 'Company Owner',
   role: 'Staff',
+  departments: ['Designer'],
   department: 'Designer',
 };
 
@@ -15,6 +16,7 @@ const otherStaff: User = {
   id: 'staff-company-other',
   name: 'Other Staff',
   role: 'Staff',
+  departments: ['Video Editor'],
   department: 'Editor',
 };
 

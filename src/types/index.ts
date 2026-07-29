@@ -58,7 +58,8 @@ export interface WorkspaceMember {
   email?: string;
   password?: string; // Backward compatibility only; active mock passwords are local-only
   role: Role;
-  department: Department;
+  departments: Department[];
+  department?: Department; // Deprecated compatibility mirror; departments is authoritative
   avatar?: string;
   companyName?: string; // Used specifically for linking Clients to their projects
   isSuperAdmin?: boolean; // System-owner flag, currently reserved for Boss Koo

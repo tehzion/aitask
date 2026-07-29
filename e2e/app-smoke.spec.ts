@@ -67,6 +67,18 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.getByRole('button', { name: 'Continue for now' }).click();
   await expect(page).toHaveURL(/\/$/);
 
+  await page.goto('/approvals');
+  await page.getByRole('button', { name: 'Add Member' }).first().click();
+  const addMemberDialog = page.getByRole('dialog', { name: 'Add new member' });
+  await expect(addMemberDialog.getByRole('checkbox', { name: 'Designer' })).toBeVisible();
+  await expect(addMemberDialog.getByRole('checkbox', { name: 'Video Editor' })).toBeVisible();
+  await addMemberDialog.getByRole('checkbox', { name: 'Designer' }).check();
+  await addMemberDialog.getByRole('checkbox', { name: 'Video Editor' }).check();
+  await expect(addMemberDialog.getByRole('checkbox', { name: 'Designer' })).toBeChecked();
+  await expect(addMemberDialog.getByRole('checkbox', { name: 'Video Editor' })).toBeChecked();
+  await page.keyboard.press('Escape');
+  await page.goto('/');
+
   await page.evaluate(async () => {
     const storePath = '/src/store/index.ts';
     const { useStore } = await import(storePath);
@@ -266,9 +278,9 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(createTaskDialog.getByText('4. Files and notes')).toBeVisible();
   await expect(createTaskDialog.getByLabel('Recurrence')).toHaveCount(0);
   const taskDepartment = createTaskDialog.getByLabel(/Assign to Position\/Department/);
-  await expect(taskDepartment.locator('option[value="Videoshooting"]')).toHaveCount(1);
+  await expect(taskDepartment.locator('option[value="Videoshooting"]')).toHaveCount(0);
   await expect(taskDepartment.locator('option[value="Video Shooting"]')).toHaveCount(1);
-  await expect(taskDepartment.locator('option[value="Editor"]')).toHaveCount(1);
+  await expect(taskDepartment.locator('option[value="Editor"]')).toHaveCount(0);
   await expect(taskDepartment.locator('option[value="Video Editor"]')).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => document.querySelector('[role="dialog"]')?.contains(document.activeElement))).toBe(true);
   await page.keyboard.press('Escape');

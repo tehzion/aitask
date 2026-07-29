@@ -13,6 +13,47 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 });
 
 const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const departmentOrder = [
+  'Operation',
+  'Management',
+  'Video Shooting',
+  'Video Editor',
+  'Ads Management',
+  'Account & Finance',
+  'Designer',
+] as const;
+
+const normalizeDepartment = (value: unknown) => {
+  if (typeof value !== 'string') return null;
+  const key = value.trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+  return ({
+    operation: 'Operation',
+    management: 'Management',
+    videoshooting: 'Video Shooting',
+    'video shooting': 'Video Shooting',
+    editor: 'Video Editor',
+    'video editor': 'Video Editor',
+    'ads management': 'Ads Management',
+    'account & finance': 'Account & Finance',
+    designer: 'Designer',
+    client: 'Client',
+  } as Record<string, string>)[key] || null;
+};
+
+const normalizeDepartments = (role: string, value: unknown, legacyValue: unknown) => {
+  if (role === 'Client') return ['Client'];
+  const raw = Array.isArray(value) ? value : legacyValue ? [legacyValue] : [];
+  const normalized = raw.map(normalizeDepartment);
+  if (
+    normalized.length === 0
+    || normalized.some(department => !department || department === 'Client')
+    || new Set(normalized).size !== normalized.length
+  ) return null;
+  return normalized
+    .filter((department): department is string => Boolean(department))
+    .sort((left, right) => departmentOrder.indexOf(left as typeof departmentOrder[number])
+      - departmentOrder.indexOf(right as typeof departmentOrder[number]));
+};
 
 const publicAppUrl = () => {
   const configured = Deno.env.get('AITASK_PUBLIC_URL')?.trim() || 'https://aitask-virid.vercel.app';
@@ -163,7 +204,7 @@ Deno.serve(async (request) => {
   let name = typeof body.name === 'string' ? body.name.trim() : '';
   let email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   let role = ['Admin', 'Staff', 'Client'].includes(body.role) ? body.role : 'Staff';
-  const department = typeof body.department === 'string' ? body.department.trim() : 'Designer';
+  let departments = normalizeDepartments(role, body.departments, body.department);
   const companyName = role === 'Client' && typeof body.companyName === 'string' ? body.companyName.trim() : null;
   const customRoleId = typeof body.customRoleId === 'string' && body.customRoleId.trim() ? body.customRoleId.trim() : null;
   const sendInvitation = body.sendInvitation !== false;
@@ -187,7 +228,9 @@ Deno.serve(async (request) => {
     onboardingMode = registration.data.onboardingMode === 'legacy_invite' ? 'legacy_invite' : 'self_signup';
   }
 
+  departments = normalizeDepartments(role, body.departments, body.department);
   if (!name || !validEmail(email)) return json({ error: 'A valid email and name are required' }, 400);
+  if (!departments) return json({ error: 'Choose at least one valid department' }, 400);
   if (role === 'Client' && !companyName) return json({ error: 'Client company is required' }, 400);
 
   let customRoleName: string | null = null;
@@ -215,7 +258,7 @@ Deno.serve(async (request) => {
     if (!authUser && onboardingMode === 'legacy_invite') {
       if (sendInvitation) {
         const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-          data: { name, department, aitask_registration_source: 'legacy_invite' },
+          data: { name, aitask_registration_source: 'legacy_invite' },
           redirectTo: passwordSetupUrl,
         });
         if (inviteError || !invited.user) return json({ error: inviteError?.message || 'Invitation failed' }, 400);
@@ -226,7 +269,7 @@ Deno.serve(async (request) => {
           email,
           password: temporaryPassword,
           email_confirm: true,
-          user_metadata: { name, department, aitask_registration_source: 'legacy_invite' },
+          user_metadata: { name, aitask_registration_source: 'legacy_invite' },
         });
         if (createError || !created.user) return json({ error: createError?.message || 'Account creation failed' }, 400);
         authUser = created.user;
@@ -246,7 +289,7 @@ Deno.serve(async (request) => {
   } else if (!authUser) {
     if (sendInvitation) {
       const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-        data: { name, department, company_name: companyName },
+        data: { name, company_name: companyName },
         redirectTo: passwordSetupUrl,
       });
       if (inviteError || !invited.user) return json({ error: inviteError?.message || 'Invitation failed' }, 400);
@@ -257,7 +300,7 @@ Deno.serve(async (request) => {
         email,
         password: temporaryPassword,
         email_confirm: true,
-        user_metadata: { name, department, company_name: companyName },
+        user_metadata: { name, company_name: companyName },
       });
       if (createError || !created.user) return json({ error: createError?.message || 'Account creation failed' }, 400);
       authUser = created.user;
@@ -285,13 +328,13 @@ Deno.serve(async (request) => {
     resolvedMemberId = existingMember?.id || '';
   }
 
-  const { data: result, error: finalizeError } = await adminClient.rpc('aitask_finalize_member_invitation', {
+  const { data: result, error: finalizeError } = await adminClient.rpc('aitask_finalize_member_invitation_v2', {
     p_actor_member_id: actor.id,
     p_auth_user_id: authUser.id,
     p_name: name,
     p_email: email,
     p_role: role,
-    p_department: role === 'Client' ? 'Client' : department,
+    p_departments: role === 'Client' ? ['Client'] : departments,
     p_client_name: companyName,
     p_custom_role_id: customRoleId,
     p_custom_role_name: customRoleName,

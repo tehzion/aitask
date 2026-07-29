@@ -3,12 +3,17 @@ import type {
   AppNotification,
   ClientProfile,
   CustomRole,
+  Department,
   Project,
   Registration,
   Task,
   WorkspaceMember,
 } from '../types';
 import type { PersistedWorkspaceState } from './supabaseSnapshot';
+import {
+  getLegacyDepartmentMirror,
+  normalizeMemberDepartments,
+} from './departments';
 import { parseWorkspaceSnapshot } from './security';
 import { supabase } from './supabaseClient';
 
@@ -70,7 +75,8 @@ type MemberRow = {
   name: string;
   email: string | null;
   role: WorkspaceMember['role'];
-  department: WorkspaceMember['department'];
+  department: WorkspaceMember['department'] | null;
+  departments: WorkspaceMember['departments'] | null;
   avatar: string | null;
   client_name: string | null;
   is_super_admin: boolean;
@@ -125,6 +131,16 @@ type CommandResponse = {
   replayed?: boolean;
 };
 
+type MemberDepartmentsResponse = CommandResponse & {
+  member?: {
+    id: string;
+    departments: Department[];
+    department: Department;
+    version: number;
+    updated_at: string;
+  };
+};
+
 export type SecureCommand = {
   id: string;
   type: SecureCommandType;
@@ -133,6 +149,12 @@ export type SecureCommand = {
 
 let baseline = new Map<string, BaselineRow>();
 let retryableCommand: SecureCommand | null = null;
+let retryableMemberDepartments: {
+  id: string;
+  memberId: string;
+  departments: Department[];
+  expectedVersion: number;
+} | null = null;
 
 const entityKey = (type: string, id: string) => `${type}:${id}`;
 const stable = (value: unknown) => JSON.stringify(value);
@@ -193,39 +215,47 @@ const stripRuntimeFields = <T extends Record<string, unknown>>(value: T) => {
   return copy;
 };
 
-const memberToUser = (row: MemberRow): WorkspaceMember => ({
-  id: row.id,
-  authUserId: row.auth_user_id || undefined,
-  workspaceId: row.workspace_id,
-  name: row.name,
-  email: row.email || undefined,
-  role: row.role,
-  department: row.department,
-  avatar: row.avatar || undefined,
-  companyName: row.client_name || undefined,
-  isSuperAdmin: row.is_super_admin,
-  mustResetPassword: row.must_reset_password,
-  customRoleId: row.custom_role_id || undefined,
-  customRoleName: row.custom_role_name || undefined,
-  permissions: row.permissions && Object.keys(row.permissions).length > 0 ? row.permissions : undefined,
-  version: Number(row.version) || 1,
-  updatedAt: row.updated_at,
-});
+const memberToUser = (row: MemberRow): WorkspaceMember => {
+  const departments = normalizeMemberDepartments(row.role, row.departments, row.department);
+  return {
+    id: row.id,
+    authUserId: row.auth_user_id || undefined,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    email: row.email || undefined,
+    role: row.role,
+    departments,
+    department: getLegacyDepartmentMirror(row.role, departments),
+    avatar: row.avatar || undefined,
+    companyName: row.client_name || undefined,
+    isSuperAdmin: row.is_super_admin,
+    mustResetPassword: row.must_reset_password,
+    customRoleId: row.custom_role_id || undefined,
+    customRoleName: row.custom_role_name || undefined,
+    permissions: row.permissions && Object.keys(row.permissions).length > 0 ? row.permissions : undefined,
+    version: Number(row.version) || 1,
+    updatedAt: row.updated_at,
+  };
+};
 
-const memberData = (user: WorkspaceMember): Record<string, unknown> => ({
-  auth_user_id: user.authUserId || null,
-  name: user.name,
-  email: user.email || null,
-  role: user.role,
-  department: user.department,
-  avatar: user.avatar || null,
-  client_name: user.companyName || null,
-  is_super_admin: Boolean(user.isSuperAdmin),
-  must_reset_password: Boolean(user.mustResetPassword),
-  custom_role_id: user.customRoleId || null,
-  custom_role_name: user.customRoleName || null,
-  permissions: user.permissions || {},
-});
+const memberData = (user: WorkspaceMember): Record<string, unknown> => {
+  const departments = normalizeMemberDepartments(user.role, user.departments, user.department);
+  return {
+    auth_user_id: user.authUserId || null,
+    name: user.name,
+    email: user.email || null,
+    role: user.role,
+    departments,
+    department: getLegacyDepartmentMirror(user.role, departments),
+    avatar: user.avatar || null,
+    client_name: user.companyName || null,
+    is_super_admin: Boolean(user.isSuperAdmin),
+    must_reset_password: Boolean(user.mustResetPassword),
+    custom_role_id: user.customRoleId || null,
+    custom_role_name: user.customRoleName || null,
+    permissions: user.permissions || {},
+  };
+};
 
 const stateToRows = (state: PersistedWorkspaceState) => {
   const rows: BaselineRow[] = [];
@@ -510,6 +540,96 @@ export const loadSecureWorkspaceRevision = async () => {
     );
   }
   return { version: Number(data.version) || 1, updatedAt: String(data.updated_at), syncProtocolVersion };
+};
+
+export const saveSecureMemberDepartments = async (
+  member: WorkspaceMember,
+  requestedDepartments: Department[],
+): Promise<MutationResult<MemberDepartmentsResponse>> => {
+  const departments = normalizeMemberDepartments(member.role, requestedDepartments);
+  if (member.role === 'Client' || departments.length === 0) {
+    return { ok: false, code: 'VALIDATION', error: 'Choose at least one valid internal department.' };
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before saving departments.' };
+  }
+
+  const expectedVersion = Math.max(1, Number(member.version) || 1);
+  const matchesRetry = retryableMemberDepartments
+    && retryableMemberDepartments.memberId === member.id
+    && retryableMemberDepartments.expectedVersion === expectedVersion
+    && stable(retryableMemberDepartments.departments) === stable(departments);
+  const pending = matchesRetry
+    ? retryableMemberDepartments
+    : { id: commandId(), memberId: member.id, departments, expectedVersion };
+  retryableMemberDepartments = pending;
+
+  const invoke = () => withSyncTimeout(supabase.rpc('aitask_update_member_departments', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+    p_command_id: pending.id,
+    p_member_id: pending.memberId,
+    p_departments: pending.departments,
+    p_expected_version: pending.expectedVersion,
+  }));
+
+  let rpcResult: Awaited<ReturnType<typeof invoke>>;
+  try {
+    rpcResult = await invoke();
+    if (isAuthError(rpcResult.error) && await refreshSecureSession()) rpcResult = await invoke();
+  } catch (error) {
+    return {
+      ok: false,
+      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
+      error: error instanceof SyncRequestTimeoutError
+        ? 'Save confirmation timed out. Submit again to retry the same department change safely.'
+        : 'Supabase could not confirm the department change. Submit again to retry.',
+    };
+  }
+
+  if (rpcResult.error) {
+    return {
+      ok: false,
+      code: isAuthError(rpcResult.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
+      error: rpcResult.error.message || 'Unable to update departments.',
+    };
+  }
+
+  const response = rpcResult.data as MemberDepartmentsResponse;
+  if (!response?.ok) {
+    if (response.code !== 'RETRY_REQUIRED') retryableMemberDepartments = null;
+    return {
+      ok: false,
+      code: response.code || 'RETRY_REQUIRED',
+      error: response.error || 'The department change was rejected.',
+      conflict: response.conflict,
+    };
+  }
+
+  retryableMemberDepartments = null;
+  const legacyDepartment = getLegacyDepartmentMirror(member.role, departments);
+  const key = entityKey('member', member.id);
+  const previous = baseline.get(key);
+  const nextData = {
+    ...(previous?.data || memberData(member)),
+    departments,
+    department: legacyDepartment,
+  };
+  baseline.set(key, {
+    kind: 'member',
+    entityType: 'member',
+    entityId: member.id,
+    version: Number(response.member?.version) || expectedVersion + 1,
+    data: nextData,
+    serialized: stable({ parentId: null, data: nextData }),
+  });
+
+  return {
+    ok: true,
+    data: response,
+    commandId: response.commandId || pending.id,
+    workspaceVersion: Number(response.workspaceVersion) || 1,
+    replayed: response.replayed,
+  };
 };
 
 export const loadSecureWorkspace = async (authUser: User) => {

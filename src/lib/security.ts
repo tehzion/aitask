@@ -15,7 +15,7 @@ import type {
   User,
 } from '../types';
 import { getTodayInputDate } from './utils';
-import { normalizeDepartment } from './departments';
+import { getLegacyDepartmentMirror, normalizeDepartment, normalizeMemberDepartments } from './departments';
 
 const roles = new Set<Role>(['Admin', 'Staff', 'Client']);
 const priorities = new Set<Priority>(['Low', 'Medium', 'High', 'Urgent']);
@@ -218,8 +218,9 @@ const parseUser = (value: unknown): User | null => {
   const id = cleanText(value.id, 160);
   const name = cleanText(value.name, 160);
   const role = cleanText(value.role, 20) as Role;
-  const department = normalizeDepartment(cleanText(value.department, 80));
-  if (!id || !name || !roles.has(role) || !department) return null;
+  if (!id || !name || !roles.has(role)) return null;
+  const departments = normalizeMemberDepartments(role, value.departments, cleanText(value.department, 80));
+  if (departments.length === 0) return null;
 
   return {
     id,
@@ -229,7 +230,8 @@ const parseUser = (value: unknown): User | null => {
     name,
     email: optionalText(value.email, 320),
     role,
-    department,
+    departments,
+    department: getLegacyDepartmentMirror(role, departments),
     avatar: safeAvatarSource(value.avatar),
     companyName: optionalText(value.companyName, 240),
     isSuperAdmin: value.isSuperAdmin === true,

@@ -6,7 +6,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { canAssignTasksToOthers, canCommentOnTask, canEditTask as canEditTaskByRole, canReviewTaskAsClient } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate, parseOptionalDate } from '../lib/utils';
-import { STAFF_DEPARTMENTS } from '../lib/departments';
+import { isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
 import type { SecureCommandType } from '../lib/secureWorkspace';
 import ModalShell from './ModalShell';
 
@@ -118,7 +118,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   const isClientTaskViewer = currentUser?.role === 'Client';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
   const assigneeOptions = canAssignOthers
-    ? users.filter(user => user.role !== 'Client' && user.department === editForm.department)
+    ? users.filter(user => user.role !== 'Client' && isMemberInDepartment(user, editForm.department))
     : users.filter(user => user.id === editForm.assignedTo);
 
   const confirmPendingMutation = async (commandType?: SecureCommandType) => {
@@ -329,7 +329,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                           disabled={!canAssignOthers}
                           onChange={(e) => {
                             const nextDepartment = e.target.value as Department;
-                            const firstUser = users.find(user => user.role !== 'Client' && user.department === nextDepartment);
+                            const firstUser = users.find(user => user.role !== 'Client' && isMemberInDepartment(user, nextDepartment));
                             setEditForm({
                               ...editForm,
                               department: nextDepartment,

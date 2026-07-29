@@ -6,11 +6,11 @@ const today = new Date();
 
 export const mockUsers: User[] = [
   // Boss
-  { id: 'u-boss', name: 'Boss Koo', password: DEFAULT_USER_PASSWORD, role: 'Admin', department: 'Management', isSuperAdmin: true, avatar: 'https://i.pravatar.cc/150?u=BossKoo' },
+  { id: 'u-boss', name: 'Boss Koo', password: DEFAULT_USER_PASSWORD, role: 'Admin', departments: ['Management'], department: 'Management', isSuperAdmin: true, avatar: 'https://i.pravatar.cc/150?u=BossKoo' },
 
   // Demos
-  { id: 'u-admin', name: 'Admin Demo', password: DEFAULT_USER_PASSWORD, role: 'Admin', department: 'Operation', avatar: 'https://i.pravatar.cc/150?u=AdminDemo' },
-  { id: 'u-client-urban', name: 'UrbanEats Client Demo', password: DEFAULT_USER_PASSWORD, role: 'Client', department: 'Client', companyName: 'UrbanEats', avatar: 'https://i.pravatar.cc/150?u=UrbanEatsClient' },
+  { id: 'u-admin', name: 'Admin Demo', password: DEFAULT_USER_PASSWORD, role: 'Admin', departments: ['Operation'], department: 'Operation', avatar: 'https://i.pravatar.cc/150?u=AdminDemo' },
+  { id: 'u-client-urban', name: 'UrbanEats Client Demo', password: DEFAULT_USER_PASSWORD, role: 'Client', departments: ['Client'], department: 'Client', companyName: 'UrbanEats', avatar: 'https://i.pravatar.cc/150?u=UrbanEatsClient' },
 ];
 
 export const mockProjects: Project[] = [

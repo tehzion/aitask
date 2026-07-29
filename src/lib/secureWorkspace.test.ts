@@ -17,6 +17,7 @@ import {
   loadSecureWorkspace,
   rebaseRetryableCommand,
   retrySecureWorkspaceCommand,
+  saveSecureMemberDepartments,
   saveSecureWorkspace,
   type WorkspaceOperation,
 } from './secureWorkspace';
@@ -71,6 +72,7 @@ const stateWithUser = (id: string): PersistedWorkspaceState => ({
     name: `User ${id}`,
     email: `${id}@example.com`,
     role: 'Staff',
+    departments: ['Designer'],
     department: 'Designer',
   }],
   clients: [],
@@ -94,6 +96,33 @@ describe('secure command retry identity', () => {
 
     expect(result).toMatchObject({ ok: false, code: 'VALIDATION' });
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('sends versioned multi-department updates through the dedicated RPC', async () => {
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        commandId: '00000000-0000-4000-8000-000000000120',
+        workspaceVersion: 12,
+        member: {
+          id: '12',
+          departments: ['Video Editor', 'Designer'],
+          department: 'Video Editor',
+          version: 2,
+          updated_at: '2026-07-29T00:00:00Z',
+        },
+      },
+      error: null,
+    });
+    const member = stateWithUser('12').users[0];
+    const result = await saveSecureMemberDepartments(member, ['Designer', 'Video Editor']);
+
+    expect(result.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledWith('aitask_update_member_departments', expect.objectContaining({
+      p_member_id: '12',
+      p_departments: ['Video Editor', 'Designer'],
+      p_expected_version: 1,
+    }));
   });
 
   it('refreshes an expired session once and keeps the command ID', async () => {
@@ -189,6 +218,7 @@ describe('secure workspace baseline', () => {
       name: 'Staff Nine',
       email: 'staff9@example.com',
       role: 'Staff',
+      departments: ['Designer'],
       department: 'Designer',
       avatar: null,
       client_name: null,

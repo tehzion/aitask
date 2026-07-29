@@ -58,6 +58,7 @@ import {
   loadSecureWorkspaceRevision,
   rebaseRetryableCommand,
   retrySecureWorkspaceCommand,
+  saveSecureMemberDepartments,
   saveSecureWorkspace,
   type MutationConflict,
   type SecureCommandType,
@@ -68,7 +69,12 @@ import {
   getPasswordSetupMode,
   passwordSetupRedirectUrl,
 } from '../lib/authRecovery';
-import { DEPARTMENTS } from '../lib/departments';
+import {
+  DEPARTMENTS,
+  getLegacyDepartmentMirror,
+  isMemberInDepartment,
+  normalizeMemberDepartments,
+} from '../lib/departments';
 
 export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required';
 
@@ -179,11 +185,12 @@ interface StoreState {
   sendDueDateReminders: () => void;
   registerUser: (data: Omit<Registration, 'id' | 'status' | 'createdAt'>) => Promise<{ ok: boolean; error?: string }>;
   addUserBySuperAdmin: (data: AddMemberInput) => Promise<{ ok: boolean; error?: string }>;
+  updateMemberDepartments: (userId: string, departments: Department[]) => Promise<{ ok: boolean; error?: string }>;
   addCustomRole: (data: Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt' | 'isProtected'>) => { ok: boolean; id?: string; error?: string };
   updateCustomRole: (id: string, data: Partial<Pick<CustomRole, 'name' | 'description' | 'baseRole' | 'permissions'>>) => { ok: boolean; error?: string };
   deleteCustomRole: (id: string) => { ok: boolean; error?: string };
   assignCustomRoleToUser: (userId: string, customRoleId?: string) => { ok: boolean; error?: string };
-  approveRegistration: (id: string, role: Role, department: Department, companyName?: string, customRoleId?: string) => void;
+  approveRegistration: (id: string, role: Role, departments: Department[], companyName?: string, customRoleId?: string) => void;
   rejectRegistration: (id: string) => void;
   deleteUser: (userId: string) => Promise<{ ok: boolean; error?: string }>;
   _forceSyncMockData: () => void;
@@ -301,9 +308,12 @@ const stripPassword = <T extends { password?: string }>(item: T): Omit<T, 'passw
 
 const normalizeUserAccount = (user: User): User => {
   const hasCustomPassword = Boolean(getLocalUserPassword(user.id));
+  const departments = normalizeMemberDepartments(user.role, user.departments, user.department);
 
   return {
     ...stripPassword(user as User & { password?: string }) as User,
+    departments,
+    department: getLegacyDepartmentMirror(user.role, departments),
     mustResetPassword: Boolean(user.mustResetPassword) || (!user.authUserId && !hasCustomPassword),
   };
 };
@@ -1726,6 +1736,10 @@ export const useStore = create<StoreState>()(
 
         const assigneeUser = state.users.find(u => u.id === assignedTo && u.role !== 'Client');
         if (!assigneeUser) return state;
+        if (!isMemberInDepartment(assigneeUser, task.department)) {
+          useToastStore.getState().addToast(`${assigneeUser.name} is not assigned to ${task.department}.`, 'warning');
+          return state;
+        }
 
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
@@ -1819,6 +1833,11 @@ export const useStore = create<StoreState>()(
 
         const assignee = state.users.find(user => user.id === nextAssigneeId && user.role !== 'Client');
         if (!assignee) return { ok: false, error: 'Choose a valid internal assignee.' };
+        const nextDepartment = data.department ?? task.department;
+        const assignmentChanged = nextAssigneeId !== task.assignedTo || nextDepartment !== task.department;
+        if (assignmentChanged && !isMemberInDepartment(assignee, nextDepartment)) {
+          return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
+        }
 
         const hasProjectInput = Object.prototype.hasOwnProperty.call(data, 'projectId');
         const requestedProjectId = hasProjectInput ? data.projectId?.trim() || undefined : task.projectId;
@@ -2080,8 +2099,11 @@ export const useStore = create<StoreState>()(
         }
         const currentUser = state.currentUser;
         if (!currentUser || !canCreateTasks(currentUser, state.rolePermissions)) return '';
+        if (currentUser.role === 'Staff' && !isMemberInDepartment(currentUser, taskData.department)) return '';
         const assignee = state.users.find(user => user.id === taskData.assignedTo && user.role !== 'Client');
         if (!assignee) return '';
+        if (!canAssignTasksToOthers(currentUser, state.rolePermissions) && assignee.id !== currentUser.id) return '';
+        if (!isMemberInDepartment(assignee, taskData.department)) return '';
 
         const project = taskData.projectId
           ? state.projects.find(item => item.id === taskData.projectId)
@@ -2606,8 +2628,10 @@ export const useStore = create<StoreState>()(
         const initialPassword = data.password?.trim() || DEFAULT_USER_PASSWORD;
         const sendInvitation = data.sendInvitation !== false;
         const companyName = data.role === 'Client' ? data.companyName?.trim() : undefined;
+        const departments = normalizeMemberDepartments(data.role, data.departments, data.department);
 
         if (!name) return { ok: false, error: 'Member name is required.' };
+        if (departments.length === 0) return { ok: false, error: 'Choose at least one department.' };
         if (initialPassword !== DEFAULT_USER_PASSWORD && initialPassword.length < 12) {
           return { ok: false, error: 'Custom initial passwords must be at least 12 characters.' };
         }
@@ -2672,7 +2696,8 @@ export const useStore = create<StoreState>()(
               name,
               email,
               role: data.role,
-              department: data.department,
+              departments,
+              department: getLegacyDepartmentMirror(data.role, departments),
               companyName,
               customRoleId: data.customRoleId,
               registrationId: data.registrationId,
@@ -2702,7 +2727,8 @@ export const useStore = create<StoreState>()(
           name,
           email,
           role: data.role,
-          department: data.role === 'Client' ? 'Client' : data.department,
+          departments,
+          department: getLegacyDepartmentMirror(data.role, departments),
           mustResetPassword: true,
           companyName,
           isSuperAdmin: false,
@@ -2865,7 +2891,106 @@ export const useStore = create<StoreState>()(
         return { ok: true };
       },
 
-      approveRegistration: (id, role, department, companyName, customRoleId) => set((state) => {
+      updateMemberDepartments: async (userId, requestedDepartments) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!canCreateUsers(state.currentUser, state.rolePermissions)) {
+          return { ok: false, error: 'Only Boss Koo can manage member departments.' };
+        }
+
+        const targetUser = state.users.find(user => user.id === userId);
+        if (!targetUser) return { ok: false, error: 'User account was not found.' };
+        if (targetUser.role === 'Client') {
+          return { ok: false, error: 'Client accounts remain assigned only to Client.' };
+        }
+
+        const departments = normalizeMemberDepartments(targetUser.role, requestedDepartments);
+        if (departments.length === 0) return { ok: false, error: 'Choose at least one department.' };
+        const currentDepartments = normalizeMemberDepartments(
+          targetUser.role,
+          targetUser.departments,
+          targetUser.department,
+        );
+        if (
+          departments.length === currentDepartments.length
+          && departments.every((department, index) => department === currentDepartments[index])
+        ) {
+          return { ok: true };
+        }
+
+        if (shouldUseSecureSupabase()) {
+          set(current => ({
+            backend: {
+              ...current.backend,
+              status: 'saving',
+              isSaving: true,
+              error: undefined,
+              message: 'Saving member departments.',
+            },
+          }));
+          const result = await saveSecureMemberDepartments(targetUser, departments);
+          if (result.ok === false) {
+            set(current => ({
+              backend: {
+                ...current.backend,
+                status: result.code === 'CONFLICT'
+                  ? 'conflict'
+                  : result.code === 'OFFLINE'
+                    ? 'offline'
+                    : 'retry_required',
+                isSaving: false,
+                error: result.error,
+                conflict: result.conflict,
+                message: result.error,
+              },
+            }));
+            return { ok: false, error: result.error };
+          }
+
+          const updatedAt = result.data.member?.updated_at || new Date().toISOString();
+          const version = Number(result.data.member?.version) || Math.max(1, Number(targetUser.version) || 1) + 1;
+          isApplyingRemoteSnapshot = true;
+          set(current => ({
+            users: current.users.map(user => user.id === userId
+              ? {
+                  ...user,
+                  departments,
+                  department: getLegacyDepartmentMirror(user.role, departments),
+                  version,
+                  updatedAt,
+                }
+              : user),
+            backend: {
+              ...current.backend,
+              status: 'live',
+              isSaving: false,
+              workspaceVersion: result.workspaceVersion,
+              remoteVersion: result.workspaceVersion,
+              lastSavedAt: updatedAt,
+              lastSyncedAt: updatedAt,
+              error: undefined,
+              conflict: undefined,
+              message: 'Saved.',
+            },
+          }));
+          isApplyingRemoteSnapshot = false;
+          return { ok: true };
+        }
+
+        set(current => ({
+          users: current.users.map(user => user.id === userId
+            ? {
+                ...user,
+                departments,
+                department: getLegacyDepartmentMirror(user.role, departments),
+                updatedAt: new Date().toISOString(),
+              }
+            : user),
+        }));
+        return { ok: true };
+      },
+
+      approveRegistration: (id, role, departmentsInput, companyName, customRoleId) => set((state) => {
         if (isWorkspaceMutationLocked(state)) return state;
         if (!canApproveRegistrations(state.currentUser, state.rolePermissions)) return state;
 
@@ -2879,13 +3004,16 @@ export const useStore = create<StoreState>()(
         const customRole = customRoleId
           ? state.rolePermissions.find(role => role.id === customRoleId)
           : undefined;
+        const departments = normalizeMemberDepartments(role, departmentsInput);
+        if (departments.length === 0) return state;
 
         const newUser: User = {
           id: nowId('U'),
           name: reg.name,
           mustResetPassword: true,
           role,
-          department,
+          departments,
+          department: getLegacyDepartmentMirror(role, departments),
           companyName,
           customRoleId: customRole?.id,
           customRoleName: customRole?.name,

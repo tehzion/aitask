@@ -9,6 +9,7 @@ const staff: User = {
   id: 'staff-task-scope',
   name: 'Scoped Staff',
   role: 'Staff',
+  departments: ['Designer'],
   department: 'Designer',
 };
 
@@ -16,6 +17,7 @@ const otherStaff: User = {
   id: 'staff-task-other',
   name: 'Other Staff',
   role: 'Staff',
+  departments: ['Designer'],
   department: 'Designer',
 };
 
@@ -105,5 +107,62 @@ describe('task store authorization', () => {
     expect(useStore.getState().updateTask(unrelatedTask.id, { priority: 'High' }).ok).toBe(true);
     expect(useStore.getState().deleteTask(unrelatedTask.id).ok).toBe(true);
     expect(useStore.getState().tasks.some(task => task.id === unrelatedTask.id)).toBe(false);
+  });
+
+  it('requires a changed assignee and department pair to match membership', () => {
+    useStore.setState({
+      currentUser: {
+        ...staff,
+        permissions: { ...defaultRolePermissions.Staff, editTasks: true },
+      },
+    });
+
+    expect(useStore.getState().updateTask(ownTask.id, {
+      assignedTo: otherStaff.id,
+      department: 'Operation',
+    })).toEqual({
+      ok: false,
+      error: 'Other Staff is not assigned to Operation.',
+    });
+
+    useStore.setState({
+      users: [staff, { ...otherStaff, departments: ['Designer', 'Operation'] }],
+    });
+    expect(useStore.getState().updateTask(ownTask.id, {
+      assignedTo: otherStaff.id,
+      department: 'Operation',
+    }).ok).toBe(true);
+  });
+
+  it('limits Staff task creation to their own departments', () => {
+    const taskInput = { ...ownTask, title: 'New scoped work' };
+    useStore.setState({
+      projects: [{
+        id: 'project-staff-created',
+        clientName: 'Acme',
+        projectName: 'Acme',
+        services: ['Design'],
+        startDate: '2026-07-13',
+        deadline: '',
+        totalTasks: 0,
+        completedTasks: 0,
+      }],
+    });
+
+    expect(useStore.getState().addTask({
+      ...taskInput,
+      projectId: 'project-staff-created',
+      department: 'Operation',
+      assignedTo: staff.id,
+      createdBy: staff.id,
+    })).toBe('');
+
+    expect(useStore.getState().addTask({
+      ...taskInput,
+      projectId: 'project-staff-created',
+      department: 'Designer',
+      assignedTo: staff.id,
+      createdBy: staff.id,
+    })).not.toBe('');
   });
 });

@@ -5,10 +5,10 @@ import { Department, Priority, ServiceType } from '../types';
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
 import { getClientOptions, getServiceOptions, hasChoice } from '../lib/choiceOptions';
-import { canManageProjects, getAssignableProjects } from '../lib/access';
+import { canAssignTasksToOthers, canManageProjects, getAssignableProjects } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
-import { STAFF_DEPARTMENTS } from '../lib/departments';
+import { getMemberDepartments, isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
 import ModalShell from './ModalShell';
 import { modalFooter } from './uiTokens';
 
@@ -40,7 +40,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [customerDetails, setCustomerDetails] = useState('');
   const [facebookPage, setFacebookPage] = useState('');
   const [website, setWebsite] = useState('');
-  const [department, setDepartment] = useState<Department>('Designer');
+  const [department, setDepartment] = useState<Department | ''>('');
   const [assignedTo, setAssignedTo] = useState('');
   const [serviceType, setServiceType] = useState<ServiceType>('Design');
   const [isAddingCustomService, setIsAddingCustomService] = useState(false);
@@ -57,9 +57,22 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingTaskId, setPendingTaskId] = useState('');
 
-  const filteredUsers = users.filter(u => u.role !== 'Client' && u.department === department);
   const canCreateProjects = canManageProjects(currentUser, rolePermissions);
   const isStaffTaskCreator = currentUser?.role === 'Staff';
+  const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
+  const departmentChoices = React.useMemo(
+    () => isStaffTaskCreator && currentUser
+      ? getMemberDepartments(currentUser).filter(item => item !== 'Client')
+      : [...STAFF_DEPARTMENTS],
+    [currentUser, isStaffTaskCreator],
+  );
+  const filteredUsers = department
+    ? users.filter(user => (
+        user.role !== 'Client'
+        && isMemberInDepartment(user, department)
+        && (canAssignOthers || user.id === currentUser?.id)
+      ))
+    : [];
   const assignableProjects = React.useMemo(
     () => getAssignableProjects(currentUser, projects, users, tasks, rolePermissions),
     [currentUser, projects, rolePermissions, tasks, users]
@@ -83,7 +96,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setCustomerDetails('');
     setFacebookPage('');
     setWebsite('');
-    setDepartment('Designer');
+    setDepartment('');
     setAssignedTo('');
     setServiceType('Design');
     setIsAddingCustomService(false);
@@ -112,8 +125,13 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       setDueDate(createTaskInitialDate || '');
       setFormError('');
       setAssignmentError('');
+      setDepartment(current => (
+        current && departmentChoices.some(item => item === current)
+          ? current
+          : departmentChoices.length === 1 ? departmentChoices[0] : ''
+      ));
     }
-  }, [createTaskInitialDate, isOpen]);
+  }, [createTaskInitialDate, departmentChoices, isOpen]);
 
   if (!isOpen) return null;
 
@@ -265,6 +283,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     if (!trimmedServiceType) {
       setFormError('Service type is required.');
+      return;
+    }
+
+    if (!department) {
+      setAssignmentError('Choose a department for this task.');
       return;
     }
 
@@ -522,7 +545,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       }}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
-                      {STAFF_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                      <option value="">Choose department</option>
+                      {departmentChoices.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                   </div>

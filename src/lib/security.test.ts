@@ -123,8 +123,23 @@ describe('remote snapshot validation', () => {
       }],
     });
 
-    expect(parsed.users[0]?.department).toBe('Editor');
-    expect(parsed.tasks[0]?.department).toBe('Videoshooting');
+    expect(parsed.users[0]?.department).toBe('Video Editor');
+    expect(parsed.users[0]?.departments).toEqual(['Video Editor']);
+    expect(parsed.tasks[0]?.department).toBe('Video Shooting');
+  });
+
+  it('accepts multiple equal departments and removes duplicate legacy aliases', () => {
+    const parsed = parseWorkspaceSnapshot({
+      users: [{
+        id: 'multi-department-1',
+        name: 'Multi Department',
+        role: 'Staff',
+        departments: ['Designer', 'Editor', 'Video Editor'],
+        department: 'Operation',
+      }],
+    });
+
+    expect(parsed.users[0]?.departments).toEqual(['Video Editor', 'Designer']);
   });
 
   it('accepts the new video positions as independent values', () => {
