@@ -84,6 +84,7 @@ test('first login reaches the app and critical responsive routes remain usable',
     const { useStore } = await import(storePath);
     useStore.setState({ notifications: [] });
   });
+  await expect(page.locator('[aria-label="New notifications"]')).toHaveAttribute('data-popup-ready', 'true');
   const headerNotificationButton = page.locator('header').getByRole('button', { name: 'Notifications', exact: true });
   await expect(headerNotificationButton.locator('span')).toHaveCount(0);
 

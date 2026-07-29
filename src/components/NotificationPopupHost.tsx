@@ -149,6 +149,7 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
     seenIds: new Set(),
   });
   const [queuedIds, setQueuedIds] = useState<string[]>([]);
+  const [readyUserId, setReadyUserId] = useState<string>();
 
   const unreadNotifications = useMemo(
     () => getUnreadNotifications(currentUser, notifications),
@@ -173,11 +174,13 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
         seenIds: new Set(),
       };
       setQueuedIds([]);
+      setReadyUserId(undefined);
     }
 
     if (!tracker.current.initialized) {
       tracker.current.seenIds = seedSeenNotificationIds(notifications);
       tracker.current.initialized = true;
+      setReadyUserId(currentUser.id);
       return;
     }
 
@@ -216,6 +219,7 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
       aria-label="New notifications"
       aria-live="polite"
       aria-atomic="false"
+      data-popup-ready={readyUserId === currentUser?.id ? 'true' : 'false'}
       className={cn(
         'pointer-events-none fixed left-4 right-4 z-[65] flex flex-col gap-2.5 md:bottom-5 md:left-[17.25rem] md:right-auto md:w-[360px]',
         hasBottomNotice
