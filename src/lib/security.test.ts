@@ -108,6 +108,16 @@ describe('remote snapshot validation', () => {
     expect(parsed?.comments?.[0].version).toBe(3);
   });
 
+  it('accepts only valid ISO completion timestamps', () => {
+    expect(parseTask({
+      ...taskFixture,
+      status: 'Completed',
+      isCompleted: true,
+      completedAt: '2026-07-31T03:00:00.000Z',
+    })?.completedAt).toBe('2026-07-31T03:00:00.000Z');
+    expect(parseTask({ ...taskFixture, completedAt: 'not-a-timestamp' })?.completedAt).toBeUndefined();
+  });
+
   it('preserves legacy video departments without dropping users or tasks', () => {
     const parsed = parseWorkspaceSnapshot({
       users: [{

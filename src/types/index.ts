@@ -183,6 +183,7 @@ export interface Task {
   attachmentName?: string;
   notes?: string;
   isCompleted: boolean;
+  completedAt?: string;
   revisionCount: number;
   clientApprovalStatus: ClientApprovalStatus;
   isRecurring: boolean;

@@ -2,12 +2,11 @@ import React, { useMemo } from 'react';
 import { useStore } from '../store';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
 import { Users, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
-import { endOfWeek, format, isWithinInterval, startOfWeek, subWeeks } from 'date-fns';
 import { ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
 import { getVisibleTasks } from '../lib/access';
-import { parseOptionalDate } from '../lib/utils';
 import { STAFF_DEPARTMENTS } from '../lib/departments';
+import { getTrackedWeeklyCompletions } from '../lib/taskReporting';
 
 const Reports: React.FC = () => {
   const { tasks: allTasks, currentUser, rolePermissions } = useStore();
@@ -19,23 +18,8 @@ const Reports: React.FC = () => {
     ? `${currentUser.companyName || 'your company'} tasks`
     : 'your accessible workspace tasks';
 
-  const trendData = useMemo(() => {
-    const currentWeek = startOfWeek(new Date());
-    return [3, 2, 1, 0].map(offset => {
-      const weekStart = subWeeks(currentWeek, offset);
-      const weekEnd = endOfWeek(weekStart);
-      const weekTasks = tasks.filter(task => {
-        const dueDate = parseOptionalDate(task.dueDate);
-        return dueDate ? isWithinInterval(dueDate, { start: weekStart, end: weekEnd }) : false;
-      });
-
-      return {
-        name: format(weekStart, 'MMM d'),
-        completed: weekTasks.filter(task => task.isCompleted).length,
-        pending: weekTasks.filter(task => !task.isCompleted).length,
-      };
-    });
-  }, [tasks]);
+  const trendData = useMemo(() => getTrackedWeeklyCompletions(tasks), [tasks]);
+  const hasTrackedTrend = trendData.some(week => week.completed > 0 || week.pending > 0);
 
   const overview = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -86,7 +70,7 @@ const Reports: React.FC = () => {
     <div className={pageShell}>
       <PageHeader
         title="Four-Week Performance Report"
-        description={`Analyze ${scopeLabel} across the latest four due-date weeks.`}
+        description={`Analyze ${scopeLabel} across the latest four Monday-to-Sunday weeks.`}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -97,9 +81,12 @@ const Reports: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard title="Task Completion Trend">
-          {tasks.length === 0 ? (
-            <ChartEmptyState>No task data yet</ChartEmptyState>
+        <ChartCard
+          title="Tracked Completions and Due Work"
+          description="Completed uses actual completion time; Pending uses the task due week. Historical completions without a timestamp are excluded from the trend."
+        >
+          {!hasTrackedTrend ? (
+            <ChartEmptyState>No tracked weekly activity yet</ChartEmptyState>
           ) : (
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
               <LineChart data={trendData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>

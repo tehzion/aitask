@@ -335,6 +335,7 @@ export const parseTask = (value: unknown): Task | null => {
     attachmentName: optionalText(value.attachmentName, 240),
     notes: optionalText(value.notes, 20_000),
     isCompleted: value.isCompleted === true,
+    completedAt: safeIsoTimestamp(value.completedAt),
     revisionCount: Math.max(0, Number(value.revisionCount) || 0),
     clientApprovalStatus: approvalStatuses.has(clientApprovalStatus) ? clientApprovalStatus : 'Pending',
     isRecurring: value.isRecurring === true,

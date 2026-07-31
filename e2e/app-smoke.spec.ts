@@ -67,6 +67,38 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.getByRole('button', { name: 'Continue for now' }).click();
   await expect(page).toHaveURL(/\/$/);
 
+  await expect(page.getByRole('region', { name: 'Agency pulse' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Needs attention' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Recent completions' })).toBeVisible();
+  for (const viewport of publicViewports) {
+    await page.setViewportSize(viewport);
+    const widths = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      content: document.documentElement.scrollWidth,
+    }));
+    expect(widths.content, `Boss dashboard should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(widths.viewport);
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(async () => {
+    const storePath = '/src/store/index.ts';
+    const { useStore } = await import(storePath);
+    const current = useStore.getState();
+    const ordinaryAdmin = current.users.find(user => user.name === 'Admin Demo');
+    useStore.setState({
+      currentUser: ordinaryAdmin ? { ...ordinaryAdmin, mustResetPassword: false } : null,
+    });
+  });
+  await expect(page.getByRole('region', { name: 'Agency pulse' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Workspace metrics' })).toBeVisible();
+  await page.evaluate(async () => {
+    const storePath = '/src/store/index.ts';
+    const { useStore } = await import(storePath);
+    const current = useStore.getState();
+    const boss = current.users.find(user => user.name === 'Boss Koo');
+    useStore.setState({ currentUser: boss });
+  });
+  await expect(page.getByRole('region', { name: 'Agency pulse' })).toBeVisible();
+
   await page.goto('/approvals');
   await page.getByRole('button', { name: 'Add Member' }).first().click();
   const addMemberDialog = page.getByRole('dialog', { name: 'Add new member' });

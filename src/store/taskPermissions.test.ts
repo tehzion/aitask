@@ -165,4 +165,16 @@ describe('task store authorization', () => {
       createdBy: staff.id,
     })).not.toBe('');
   });
+
+  it('records completion, preserves it during edits, and clears it when reopened', () => {
+    useStore.getState().updateTaskStatus(ownTask.id, 'Completed');
+    const completedAt = useStore.getState().tasks.find(task => task.id === ownTask.id)?.completedAt;
+    expect(completedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    expect(useStore.getState().updateTask(ownTask.id, { priority: 'High' }).ok).toBe(true);
+    expect(useStore.getState().tasks.find(task => task.id === ownTask.id)?.completedAt).toBe(completedAt);
+
+    useStore.getState().updateTaskStatus(ownTask.id, 'In Progress');
+    expect(useStore.getState().tasks.find(task => task.id === ownTask.id)?.completedAt).toBeUndefined();
+  });
 });

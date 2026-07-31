@@ -75,6 +75,7 @@ import {
   isMemberInDepartment,
   normalizeMemberDepartments,
 } from '../lib/departments';
+import { isTaskCompleted, resolveTaskCompletedAt } from '../lib/taskCompletion';
 
 export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required';
 
@@ -172,7 +173,7 @@ interface StoreState {
   deleteTask: (taskId: string) => { ok: boolean; error?: string };
   reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => void;
   requestRevision: (taskId: string, note?: string) => void;
-  addTask: (task: Omit<Task, 'id' | 'isCompleted' | 'revisionCount' | 'clientApprovalStatus' | 'dueReminderSent' | 'approvalHistory'>) => string;
+  addTask: (task: Omit<Task, 'id' | 'isCompleted' | 'completedAt' | 'revisionCount' | 'clientApprovalStatus' | 'dueReminderSent' | 'approvalHistory'>) => string;
   addProject: (project: Omit<Project, 'id' | 'totalTasks' | 'completedTasks'>) => string;
   updateProject: (projectId: string, data: ProjectUpdateInput) => { ok: boolean; error?: string };
   deleteProject: (projectId: string) => { ok: boolean; error?: string };
@@ -1649,7 +1650,8 @@ export const useStore = create<StoreState>()(
         const isCompleted = nextStatus === 'Completed';
         const isWaitingApproval = nextStatus === 'Waiting Approval';
         const isReadyForClientReview = isCompleted || isWaitingApproval;
-        const wasCompleted = task.isCompleted || task.status === 'Completed';
+        const wasCompleted = isTaskCompleted(task);
+        const now = new Date().toISOString();
 
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
@@ -1670,9 +1672,10 @@ export const useStore = create<StoreState>()(
             ...t,
             status: nextStatus,
             isCompleted,
+            completedAt: resolveTaskCompletedAt(t, isCompleted, now),
             completionPercentage,
             clientApprovalStatus,
-            updatedAt: new Date().toISOString(),
+            updatedAt: now,
           };
         });
 
@@ -1899,6 +1902,11 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'Links must be valid HTTPS URLs.' };
         }
 
+        const statusChanged = data.status !== undefined;
+        const wasCompleted = isTaskCompleted(task);
+        const isCompleted = statusChanged ? status === 'Completed' : task.isCompleted;
+        const isReadyForClientReview = status === 'Completed' || status === 'Waiting Approval';
+        const now = new Date().toISOString();
         const updatedTask: Task = {
           ...task,
           ...data,
@@ -1919,13 +1927,28 @@ export const useStore = create<StoreState>()(
           startDate,
           dueDate,
           status,
-          completionPercentage: data.completionPercentage !== undefined
-            ? Math.max(0, Math.min(100, Number(data.completionPercentage) || 0))
-            : task.completionPercentage,
+          isCompleted,
+          completedAt: statusChanged
+            ? resolveTaskCompletedAt(task, isCompleted, now)
+            : task.completedAt,
+          completionPercentage: statusChanged && isReadyForClientReview
+            ? 100
+            : data.completionPercentage !== undefined
+              ? Math.max(0, Math.min(statusChanged && wasCompleted ? 90 : 100, Number(data.completionPercentage) || 0))
+              : statusChanged && (wasCompleted || task.completionPercentage === 100)
+                ? 90
+                : task.completionPercentage,
+          clientApprovalStatus: statusChanged
+            ? isReadyForClientReview
+              ? 'Pending'
+              : task.clientApprovalStatus === 'Approved' || wasCompleted
+                ? 'Pending'
+                : task.clientApprovalStatus
+            : task.clientApprovalStatus,
           attachmentLink: safeAttachmentLink || undefined,
           attachmentName: data.attachmentName !== undefined ? data.attachmentName.trim() || undefined : task.attachmentName,
           notes: data.notes !== undefined ? data.notes.trim() || undefined : task.notes,
-          updatedAt: new Date().toISOString(),
+          updatedAt: now,
         };
 
         const notifications: AppNotification[] = [];
@@ -1981,12 +2004,13 @@ export const useStore = create<StoreState>()(
         const task = state.tasks.find(t => t.id === taskId);
         if (!currentUser || !task || !canReviewTaskAsClient(currentUser, task, state.rolePermissions)) return state;
 
+        const now = new Date().toISOString();
         const event: TaskApprovalEvent = {
           id: nowId('A'),
           userId: currentUser.id,
           status,
           note: note?.trim() || undefined,
-          createdAt: new Date().toISOString(),
+          createdAt: now,
         };
 
         const newTasks = state.tasks.map(t => {
@@ -1997,10 +2021,11 @@ export const useStore = create<StoreState>()(
             clientApprovalStatus: status,
             status: status === 'Approved' ? 'Completed' as TaskStatus : 'In Progress' as TaskStatus,
             isCompleted: status === 'Approved',
+            completedAt: resolveTaskCompletedAt(t, status === 'Approved', now),
             completionPercentage: status === 'Approved' ? 100 : Math.min(t.completionPercentage, 90),
             revisionCount: status === 'Rejected' ? t.revisionCount + 1 : t.revisionCount,
             approvalHistory: [...(t.approvalHistory || []), event],
-            updatedAt: new Date().toISOString(),
+            updatedAt: now,
           };
         });
 
@@ -2068,6 +2093,7 @@ export const useStore = create<StoreState>()(
             clientApprovalStatus: 'Rejected' as ClientApprovalStatus,
             status: 'In Progress' as TaskStatus,
             isCompleted: false,
+            completedAt: undefined,
             completionPercentage: Math.min(t.completionPercentage, 90),
             comments: revisionComment ? [...(t.comments || []), revisionComment] : t.comments,
             updatedAt: new Date().toISOString(),
@@ -2135,6 +2161,8 @@ export const useStore = create<StoreState>()(
         set((state) => {
           if (!canCreateTasks(state.currentUser, state.rolePermissions)) return state;
 
+          const now = new Date().toISOString();
+          const isCompleted = status === 'Completed';
           const newTask: Task = {
             ...taskData,
             id: taskId,
@@ -2145,12 +2173,13 @@ export const useStore = create<StoreState>()(
             startDate,
             dueDate,
             status,
-            isCompleted: false,
+            isCompleted,
+            completedAt: isCompleted ? now : undefined,
             revisionCount: 0,
             clientApprovalStatus: 'Pending',
             dueReminderSent: false,
             approvalHistory: [],
-            updatedAt: new Date().toISOString(),
+            updatedAt: now,
           };
 
           return {

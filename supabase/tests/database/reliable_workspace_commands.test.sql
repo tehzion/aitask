@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(38);
+select plan(47);
 
 select has_column('public', 'aitask_workspaces', 'version', 'workspaces expose an invalidation revision');
 select has_column('public', 'aitask_workspaces', 'updated_at', 'workspace revision has a server timestamp');
@@ -51,6 +51,115 @@ select is(
   ),
   'O',
   'Staff registration trigger is enabled'
+);
+select has_function(
+  'private',
+  'aitask_enforce_task_completed_at',
+  array[]::text[],
+  'task completion timestamps use a database trigger function'
+);
+select has_trigger(
+  'public',
+  'aitask_entities',
+  'aitask_enforce_task_completed_at',
+  'task entities enforce completion timestamps before writes'
+);
+select is(
+  (
+    select tgenabled::text
+    from pg_trigger
+    where tgrelid = 'public.aitask_entities'::regclass
+      and tgname = 'aitask_enforce_task_completed_at'
+      and not tgisinternal
+  ),
+  'O',
+  'task completion timestamp trigger is enabled'
+);
+select is(
+  (select proconfig @> array['search_path=""'] from pg_proc where oid = 'private.aitask_enforce_task_completed_at()'::regprocedure),
+  true,
+  'completion timestamp trigger function has a fixed empty search path'
+);
+
+insert into public.aitask_workspaces(id, name)
+values ('pgtap-completion-workspace', 'pgTAP completion workspace');
+
+insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
+values (
+  'pgtap-completion-workspace',
+  'task',
+  'pgtap-completion-task',
+  '{"id":"pgtap-completion-task","status":"Completed","isCompleted":true,"completedAt":"2000-01-01T00:00:00.000Z"}'::jsonb
+);
+
+select ok(
+  (select (data ->> 'completedAt')::timestamptz > now() - interval '1 minute'
+   from public.aitask_entities
+   where workspace_id = 'pgtap-completion-workspace' and entity_id = 'pgtap-completion-task'),
+  'entering Completed replaces a forged timestamp with server time'
+);
+
+create temporary table pgtap_completion_value(value text) on commit drop;
+insert into pgtap_completion_value
+select data ->> 'completedAt'
+from public.aitask_entities
+where workspace_id = 'pgtap-completion-workspace' and entity_id = 'pgtap-completion-task';
+
+update public.aitask_entities
+set data = jsonb_set(
+  jsonb_set(data, '{title}', '"Unrelated edit"'::jsonb, true),
+  '{completedAt}',
+  '"2001-01-01T00:00:00.000Z"'::jsonb,
+  true
+)
+where workspace_id = 'pgtap-completion-workspace' and entity_id = 'pgtap-completion-task';
+
+select is(
+  (select data ->> 'completedAt' from public.aitask_entities
+   where workspace_id = 'pgtap-completion-workspace' and entity_id = 'pgtap-completion-task'),
+  (select value from pgtap_completion_value),
+  'unrelated edits preserve the original server completion time'
+);
+
+update public.aitask_entities
+set data = jsonb_set(jsonb_set(data, '{status}', '"In Progress"'::jsonb), '{isCompleted}', 'false'::jsonb)
+where workspace_id = 'pgtap-completion-workspace' and entity_id = 'pgtap-completion-task';
+
+select ok(
+  not (select data ? 'completedAt' from public.aitask_entities
+       where workspace_id = 'pgtap-completion-workspace' and entity_id = 'pgtap-completion-task'),
+  'reopening a task clears its completion timestamp'
+);
+
+update public.aitask_entities
+set data = jsonb_set(jsonb_set(data, '{status}', '"Completed"'::jsonb), '{isCompleted}', 'true'::jsonb)
+where workspace_id = 'pgtap-completion-workspace' and entity_id = 'pgtap-completion-task';
+
+select isnt(
+  (select data ->> 'completedAt' from public.aitask_entities
+   where workspace_id = 'pgtap-completion-workspace' and entity_id = 'pgtap-completion-task'),
+  (select value from pgtap_completion_value),
+  'completing a reopened task records a new timestamp'
+);
+
+alter table public.aitask_entities disable trigger aitask_enforce_task_completed_at;
+insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
+values (
+  'pgtap-completion-workspace',
+  'task',
+  'pgtap-historical-task',
+  '{"id":"pgtap-historical-task","status":"Completed","isCompleted":true}'::jsonb
+);
+alter table public.aitask_entities enable trigger aitask_enforce_task_completed_at;
+
+update public.aitask_entities
+set data = jsonb_set(data, '{title}', '"Historical edit"'::jsonb, true)
+where workspace_id = 'pgtap-completion-workspace' and entity_id = 'pgtap-historical-task';
+
+select ok(
+  not (select data ? 'completedAt' from public.aitask_entities
+       where workspace_id = 'pgtap-completion-workspace' and entity_id = 'pgtap-historical-task'),
+  'historical completed tasks remain undated during unrelated edits'
 );
 select ok(
   position(

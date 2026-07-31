@@ -5,7 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
-import { format, isToday, isThisWeek, isBefore, subMonths, isSameMonth, differenceInDays } from 'date-fns';
+import { format, isToday, isThisWeek, isBefore, differenceInDays } from 'date-fns';
 import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon, Plus, FolderKanban } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
@@ -13,6 +13,8 @@ import { cardBase, pageShell } from '../components/uiTokens';
 import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
+import BossOperationsGlance from '../components/BossOperationsGlance';
+import { getTrackedMonthlyCompletions } from '../lib/taskReporting';
 
 const COLORS = ['#2563eb', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#db2777'];
 
@@ -31,7 +33,7 @@ const StatCard = ({ title, value, icon: Icon, tone, to }: StatCardProps) => (
 );
 
 const Dashboard: React.FC = () => {
-  const { projects, tasks: allTasks, currentUser, rolePermissions, backend, setCreateTaskModalOpen } = useStore();
+  const { projects, tasks: allTasks, users, currentUser, rolePermissions, backend, setCreateTaskModalOpen } = useStore();
 
   const tasks = useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions),
@@ -44,6 +46,7 @@ const Dashboard: React.FC = () => {
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
   const hasTaskData = tasks.length > 0;
   const prioritizePersonalWork = currentUser?.role === 'Staff' || currentUser?.role === 'Client';
+  const showBossOperations = isBossKoo(currentUser);
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -87,19 +90,8 @@ const Dashboard: React.FC = () => {
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
   }, [tasks]);
 
-  const monthlyData = useMemo(() => {
-    const currentMonth = new Date();
-    return [5, 4, 3, 2, 1, 0].map(offset => {
-      const month = subMonths(currentMonth, offset);
-      return {
-        name: format(month, 'MMM'),
-        completed: tasks.filter(task => {
-          const dueDate = parseOptionalDate(task.dueDate);
-          return Boolean(dueDate && task.isCompleted && isSameMonth(dueDate, month));
-        }).length,
-      };
-    });
-  }, [tasks]);
+  const monthlyData = useMemo(() => getTrackedMonthlyCompletions(tasks), [tasks]);
+  const hasTrackedCompletionData = monthlyData.some(month => month.completed > 0);
 
   const recentTasks = useMemo(
     () => [...tasks]
@@ -235,14 +227,20 @@ const Dashboard: React.FC = () => {
       )}
 
       <div className="flex flex-col gap-6">
-        <section className={cn('grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6', prioritizePersonalWork ? 'order-2' : 'order-1')} aria-label="Workspace metrics">
-          <StatCard title="Active Companies" value={stats.activeProjects} icon={LayoutList} tone="blue" to="/projects" />
-          <StatCard title="Pending Tasks" value={stats.pendingTasks} icon={Clock} tone="amber" to="/tasks" />
-          <StatCard title="Completed Tasks" value={stats.completedTasks} icon={CheckCircle2} tone="emerald" to="/tasks" />
-          <StatCard title="Overdue Tasks" value={stats.overdueTasks} icon={AlertCircle} tone="red" to="/tasks" />
-          <StatCard title="Due Today" value={stats.dueTodayTasks} icon={Calendar} tone="blue" to="/calendar" />
-          <StatCard title="Due This Week" value={stats.dueThisWeekTasks} icon={CalendarDays} tone="slate" to="/calendar" />
-        </section>
+        {showBossOperations ? (
+          <div className="order-1">
+            <BossOperationsGlance tasks={tasks} users={users} />
+          </div>
+        ) : (
+          <section className={cn('grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6', prioritizePersonalWork ? 'order-2' : 'order-1')} aria-label="Workspace metrics">
+            <StatCard title="Active Companies" value={stats.activeProjects} icon={LayoutList} tone="blue" to="/projects" />
+            <StatCard title="Pending Tasks" value={stats.pendingTasks} icon={Clock} tone="amber" to="/tasks" />
+            <StatCard title="Completed Tasks" value={stats.completedTasks} icon={CheckCircle2} tone="emerald" to="/tasks" />
+            <StatCard title="Overdue Tasks" value={stats.overdueTasks} icon={AlertCircle} tone="red" to="/tasks" />
+            <StatCard title="Due Today" value={stats.dueTodayTasks} icon={Calendar} tone="blue" to="/calendar" />
+            <StatCard title="Due This Week" value={stats.dueThisWeekTasks} icon={CalendarDays} tone="slate" to="/calendar" />
+          </section>
+        )}
 
         <section className={cn('space-y-6', prioritizePersonalWork ? 'order-4' : 'order-2')} aria-labelledby="workspace-analytics-title">
           <div className="flex items-end justify-between gap-4">
@@ -287,8 +285,11 @@ const Dashboard: React.FC = () => {
             </ChartCard>
           </div>
 
-          <ChartCard title="Monthly Completed Tasks">
-            {hasTaskData ? (
+          <ChartCard
+            title="Tracked Monthly Completions"
+            description="Uses the actual completion timestamp. Historical completed tasks without one remain in all-time totals."
+          >
+            {hasTrackedCompletionData ? (
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 960, height: 256 }}>
                 <LineChart data={monthlyData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -299,7 +300,7 @@ const Dashboard: React.FC = () => {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <ChartEmptyState>No completed task history yet</ChartEmptyState>
+              <ChartEmptyState>No timestamped completions yet</ChartEmptyState>
             )}
           </ChartCard>
         </section>
