@@ -12,9 +12,12 @@ import {
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { cardBase } from './uiTokens';
 
-interface BossOperationsGlanceProps {
+type OperationsScope = 'agency' | 'staff';
+
+interface OperationsGlanceProps {
   tasks: Task[];
   users: User[];
+  scope: OperationsScope;
 }
 
 interface PulseValueProps {
@@ -39,10 +42,12 @@ const TaskEntry = ({
   task,
   usersById,
   mode,
+  scope,
 }: {
   task: Task;
   usersById: Map<string, User>;
   mode: 'attention' | 'completion';
+  scope: OperationsScope;
 }) => {
   const dueDate = parseOptionalDate(task.dueDate);
   const completedAt = parseOptionalDate(task.completedAt);
@@ -51,6 +56,9 @@ const TaskEntry = ({
   const timing = mode === 'completion'
     ? completedAt ? `Completed ${format(completedAt, 'd MMM, h:mm a')}` : 'Completion time unavailable'
     : getRelativeDueDateString(task.dueDate, task.isCompleted, task.status);
+  const context = scope === 'agency'
+    ? `${task.clientName} · ${usersById.get(task.assignedTo)?.name || 'Unassigned'} · ${task.department}`
+    : `${task.clientName} · ${task.department} · ${task.status}`;
 
   return (
     <Link
@@ -67,9 +75,7 @@ const TaskEntry = ({
           {mode === 'completion' && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />}
           <p className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
         </div>
-        <p className="mt-1 truncate text-xs text-slate-500">
-          {task.clientName} · {usersById.get(task.assignedTo)?.name || 'Unassigned'} · {task.department}
-        </p>
+        <p className="mt-1 truncate text-xs text-slate-500">{context}</p>
       </div>
       <div className="flex items-center justify-between gap-3 sm:justify-end">
         <time
@@ -84,13 +90,15 @@ const TaskEntry = ({
   );
 };
 
-const BossOperationsGlance: React.FC<BossOperationsGlanceProps> = ({ tasks, users }) => {
+const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope }) => {
   const [completionSegment, setCompletionSegment] = useState<CompletionSegment>('today');
   const now = new Date();
   const pulse = getAgencyPulseMetrics(tasks, now);
   const attention = getNeedsAttentionTasks(tasks, now).slice(0, 6);
   const completions = getRecentCompletionTasks(tasks, completionSegment, now).slice(0, 6);
   const usersById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
+  const isStaffScope = scope === 'staff';
+  const titleId = isStaffScope ? 'staff-work-pulse-title' : 'agency-pulse-title';
 
   const segments: Array<{ value: CompletionSegment; label: string }> = [
     { value: 'today', label: 'Today' },
@@ -99,13 +107,15 @@ const BossOperationsGlance: React.FC<BossOperationsGlanceProps> = ({ tasks, user
   ];
 
   return (
-    <section className="space-y-4" aria-labelledby="agency-pulse-title">
+    <section className="space-y-4" aria-labelledby={titleId}>
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 id="agency-pulse-title" className="text-lg font-semibold text-slate-950">Agency pulse</h2>
+          <h2 id={titleId} className="text-lg font-semibold text-slate-950">
+            {isStaffScope ? 'My work pulse' : 'Agency pulse'}
+          </h2>
           <p className="mt-1 text-sm text-slate-500">{format(now, 'EEEE, d MMMM yyyy')} · Week {pulse.period.label}</p>
         </div>
-        <p className="text-xs text-slate-500">Agency-wide operational status</p>
+        <p className="text-xs text-slate-500">{isStaffScope ? 'Your assigned workload' : 'Agency-wide operational status'}</p>
       </div>
 
       <div className={cn(cardBase, 'overflow-hidden')}>
@@ -135,7 +145,7 @@ const BossOperationsGlance: React.FC<BossOperationsGlanceProps> = ({ tasks, user
             <CheckCircle2 className="h-4 w-4 text-blue-600" aria-hidden="true" /> Overall
           </div>
           <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 sm:grid-cols-4 sm:divide-y-0">
-            <PulseValue label="Total open" value={pulse.overall.open} />
+            <PulseValue label={isStaffScope ? 'Assigned open' : 'Total open'} value={pulse.overall.open} />
             <PulseValue label="In progress" value={pulse.overall.inProgress} />
             <PulseValue label="Waiting approval" value={pulse.overall.waitingApproval} tone="warning" />
             <PulseValue label="Completed all time" value={pulse.overall.completed} tone="success" />
@@ -144,31 +154,39 @@ const BossOperationsGlance: React.FC<BossOperationsGlanceProps> = ({ tasks, user
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="needs-attention-title">
+        <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby={`${scope}-attention-title`}>
           <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
-            <h3 id="needs-attention-title" className="text-base font-semibold text-slate-900">Needs attention</h3>
-            <p className="mt-1 text-sm text-slate-500">Overdue work first, then tasks waiting for approval.</p>
+            <h3 id={`${scope}-attention-title`} className="text-base font-semibold text-slate-900">
+              {isStaffScope ? 'My focus' : 'Needs attention'}
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              {isStaffScope ? 'Your overdue assignments first, then work waiting for approval.' : 'Overdue work first, then tasks waiting for approval.'}
+            </p>
           </div>
           <div className="divide-y divide-slate-100">
-            {attention.map(task => <TaskEntry key={task.id} task={task} usersById={usersById} mode="attention" />)}
+            {attention.map(task => <TaskEntry key={task.id} task={task} usersById={usersById} mode="attention" scope={scope} />)}
             {attention.length === 0 && (
               <div className="px-5 py-10 text-center">
                 <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-600" aria-hidden="true" />
-                <p className="mt-2 text-sm font-semibold text-slate-700">Nothing urgent right now</p>
+                <p className="mt-2 text-sm font-semibold text-slate-700">
+                  {isStaffScope ? "You're caught up" : 'Nothing urgent right now'}
+                </p>
                 <p className="mt-1 text-xs text-slate-500">Overdue and approval-ready tasks will appear here.</p>
               </div>
             )}
           </div>
         </section>
 
-        <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="recent-completions-title">
+        <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby={`${scope}-completions-title`}>
           <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h3 id="recent-completions-title" className="text-base font-semibold text-slate-900">Recent completions</h3>
+                <h3 id={`${scope}-completions-title`} className="text-base font-semibold text-slate-900">
+                  {isStaffScope ? 'My recent completions' : 'Recent completions'}
+                </h3>
                 <p className="mt-1 text-sm text-slate-500">Tracked from the actual completion time.</p>
               </div>
-              <div className="inline-flex w-fit rounded-lg border border-slate-200 bg-slate-50 p-1" aria-label="Completion period">
+              <div className="inline-flex w-fit rounded-lg border border-slate-200 bg-slate-50 p-1" aria-label={`${isStaffScope ? 'Personal' : 'Agency'} completion period`}>
                 {segments.map(segment => (
                   <button
                     key={segment.value}
@@ -187,7 +205,7 @@ const BossOperationsGlance: React.FC<BossOperationsGlanceProps> = ({ tasks, user
             </div>
           </div>
           <div className="divide-y divide-slate-100">
-            {completions.map(task => <TaskEntry key={task.id} task={task} usersById={usersById} mode="completion" />)}
+            {completions.map(task => <TaskEntry key={task.id} task={task} usersById={usersById} mode="completion" scope={scope} />)}
             {completions.length === 0 && (
               <div className="px-5 py-10 text-center">
                 <Clock3 className="mx-auto h-6 w-6 text-slate-400" aria-hidden="true" />
@@ -207,4 +225,4 @@ const BossOperationsGlance: React.FC<BossOperationsGlanceProps> = ({ tasks, user
   );
 };
 
-export default BossOperationsGlance;
+export default OperationsGlance;

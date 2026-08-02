@@ -68,6 +68,7 @@ export interface WorkspaceMember {
   customRoleName?: string;
   permissions?: RolePermissions;
   updatedAt?: string;
+  directoryOnly?: boolean; // Runtime-only Client portal contact; never persisted or mutated
 }
 
 export type User = WorkspaceMember;
@@ -192,4 +193,45 @@ export interface Task {
   comments?: TaskComment[];
   approvalHistory?: TaskApprovalEvent[];
   updatedAt?: string;
+  clientProjection?: boolean; // Runtime-only marker for the redacted Client portal shape
+}
+
+export interface ClientContact {
+  id: string;
+  name: string;
+  avatar?: string;
+}
+
+export type ClientTaskProjection = Pick<Task,
+  | 'id'
+  | 'version'
+  | 'clientName'
+  | 'projectId'
+  | 'projectName'
+  | 'serviceType'
+  | 'title'
+  | 'description'
+  | 'assignedTo'
+  | 'startDate'
+  | 'dueDate'
+  | 'status'
+  | 'completionPercentage'
+  | 'attachmentLink'
+  | 'attachmentName'
+  | 'website'
+  | 'facebookPage'
+  | 'isCompleted'
+  | 'completedAt'
+  | 'revisionCount'
+  | 'clientApprovalStatus'
+  | 'updatedAt'
+>;
+
+export interface ClientPortalPayload {
+  workspaceId: string;
+  clientName: string;
+  tasks: ClientTaskProjection[];
+  projects: Project[];
+  clients: ClientProfile[];
+  contacts: ClientContact[];
 }

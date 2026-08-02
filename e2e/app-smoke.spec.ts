@@ -94,6 +94,36 @@ test('first login reaches the app and critical responsive routes remain usable',
     const storePath = '/src/store/index.ts';
     const { useStore } = await import(storePath);
     const current = useStore.getState();
+    const staff = current.users.find(user => user.role === 'Staff') || {
+      id: 'e2e-staff',
+      name: 'QA Staff',
+      role: 'Staff' as const,
+      departments: ['Designer' as const],
+      department: 'Designer' as const,
+      mustResetPassword: false,
+    };
+    useStore.setState({
+      users: current.users.some(user => user.id === staff.id) ? current.users : [...current.users, staff],
+      currentUser: { ...staff, mustResetPassword: false },
+    });
+  });
+  await expect(page.getByRole('region', { name: 'My work pulse' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Agency pulse' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Workspace metrics' })).toHaveCount(0);
+  await expect(page.getByText('Your assigned workload')).toBeVisible();
+  for (const viewport of publicViewports) {
+    await page.setViewportSize(viewport);
+    const widths = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      content: document.documentElement.scrollWidth,
+    }));
+    expect(widths.content, `Staff dashboard should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(widths.viewport);
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(async () => {
+    const storePath = '/src/store/index.ts';
+    const { useStore } = await import(storePath);
+    const current = useStore.getState();
     const boss = current.users.find(user => user.name === 'Boss Koo');
     useStore.setState({ currentUser: boss });
   });
@@ -478,6 +508,84 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/clients');
   await expect(page.getByRole('heading', { name: 'Clients' })).toBeVisible();
+
+  await page.evaluate(async () => {
+    const storePath = '/src/store/index.ts';
+    const { useStore } = await import(storePath);
+    const current = useStore.getState();
+    const client = current.users.find(user => user.role === 'Client');
+    if (!client) throw new Error('Expected a Client demo account');
+    const contact = current.users.find(user => user.role === 'Staff') || {
+      id: 'e2e-client-contact',
+      name: 'Agency Contact',
+      role: 'Staff' as const,
+      departments: ['Designer' as const],
+      department: 'Designer' as const,
+    };
+    const clientTask = {
+      id: 'e2e-client-review-task',
+      clientName: client.companyName || 'UrbanEats',
+      projectName: 'August Campaign',
+      serviceType: 'Design',
+      title: 'Review campaign artwork',
+      description: 'Please review the latest campaign artwork.',
+      department: 'Designer' as const,
+      assignedTo: contact.id,
+      createdBy: 'u-boss',
+      startDate: '2026-08-01',
+      dueDate: '2026-08-05',
+      priority: 'Urgent' as const,
+      status: 'Waiting Approval',
+      completionPercentage: 100,
+      attachmentLink: 'https://example.com/deliverable',
+      attachmentName: 'Campaign artwork',
+      notes: 'Internal QA note must not appear for clients.',
+      isCompleted: true,
+      revisionCount: 0,
+      clientApprovalStatus: 'Pending' as const,
+      isRecurring: false,
+      comments: [],
+      approvalHistory: [],
+      updatedAt: '2026-08-02T04:00:00.000Z',
+    };
+    useStore.setState({
+      users: current.users.some(user => user.id === contact.id) ? current.users : [...current.users, contact],
+      tasks: [...current.tasks.filter(task => task.id !== clientTask.id), clientTask],
+      currentUser: { ...client, mustResetPassword: false },
+    });
+  });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Client Portal' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ready for your review' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Upcoming deliveries' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Latest updates' })).toBeVisible();
+  await expect(page.getByText('Workspace analytics')).toHaveCount(0);
+  for (const viewport of publicViewports) {
+    await page.setViewportSize(viewport);
+    const widths = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      content: document.documentElement.scrollWidth,
+    }));
+    expect(widths.content, `Client portal should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(widths.viewport);
+  }
+
+  await page.setViewportSize({ width: 1536, height: 864 });
+  await page.goto('/tasks');
+  await expect(page.getByRole('heading', { name: 'Company Tasks' })).toBeVisible();
+  await expect(page.getByText('All departments')).toHaveCount(0);
+  await expect(page.getByText('All priorities')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Quick edit/i })).toHaveCount(0);
+  await page.getByText('Review campaign artwork', { exact: true }).first().click();
+  const clientTaskDialog = page.getByRole('dialog', { name: 'Review campaign artwork' });
+  await expect(clientTaskDialog).toBeVisible();
+  await expect(clientTaskDialog.getByText('Deliverables & Links')).toBeVisible();
+  await expect(clientTaskDialog.getByText('Assigned Contact', { exact: true })).toBeVisible();
+  await expect(clientTaskDialog.getByText('Internal Notes')).toHaveCount(0);
+  await expect(clientTaskDialog.getByText('Created By')).toHaveCount(0);
+  await expect(clientTaskDialog.getByText('Priority')).toHaveCount(0);
+  await expect(clientTaskDialog.getByPlaceholder('Share feedback for the team...')).toBeVisible();
+  await expect(clientTaskDialog.getByRole('button', { name: 'Approve' })).toBeVisible();
+  await page.keyboard.press('Escape');
 
   const viewports = [
     { width: 390, height: 844 },

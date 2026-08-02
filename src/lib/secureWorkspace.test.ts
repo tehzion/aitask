@@ -19,8 +19,51 @@ import {
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
   saveSecureWorkspace,
+  serializeClientProjectedTask,
   type WorkspaceOperation,
 } from './secureWorkspace';
+
+describe('Client portal command projection', () => {
+  it('serializes only allowlisted client-visible task fields', () => {
+    const projected = serializeClientProjectedTask({
+      id: 'client-task',
+      version: 4,
+      clientName: 'Acme',
+      projectId: 'project-1',
+      serviceType: 'Design',
+      title: 'Client artwork',
+      description: 'Visible brief',
+      department: 'Client',
+      assignedTo: 'staff-1',
+      createdBy: 'internal-admin',
+      startDate: '2026-08-01',
+      dueDate: '2026-08-08',
+      priority: 'Urgent',
+      status: 'Waiting Approval',
+      completionPercentage: 100,
+      notes: 'Private agency note',
+      isCompleted: true,
+      revisionCount: 1,
+      clientApprovalStatus: 'Pending',
+      isRecurring: true,
+      recurrenceFrequency: 'Weekly',
+      dueReminderSent: true,
+      clientProjection: true,
+      updatedAt: '2026-08-01T10:00:00.000Z',
+    });
+
+    expect(projected).toMatchObject({
+      id: 'client-task',
+      title: 'Client artwork',
+      status: 'Waiting Approval',
+      clientApprovalStatus: 'Pending',
+    });
+    expect(Object.keys(projected)).not.toEqual(expect.arrayContaining([
+      'notes', 'priority', 'department', 'createdBy', 'isRecurring',
+      'recurrenceFrequency', 'dueReminderSent', 'version', 'updatedAt',
+    ]));
+  });
+});
 
 const operation = (
   entityType: string,
@@ -315,5 +358,120 @@ describe('secure workspace baseline', () => {
         }),
       }),
     ]);
+  });
+
+  it('discards full Client rows and maps only projected tasks and read-only contacts', async () => {
+    const clientMember = {
+      id: 'client-1',
+      workspace_id: 'aitask-main',
+      auth_user_id: '00000000-0000-4000-8000-000000000101',
+      name: 'Acme Client',
+      email: 'client@acme.example',
+      role: 'Client',
+      departments: ['Client'],
+      department: 'Client',
+      avatar: null,
+      client_name: 'Acme',
+      is_super_admin: false,
+      must_reset_password: false,
+      custom_role_id: null,
+      custom_role_name: null,
+      permissions: {},
+      version: 2,
+      updated_at: '2026-08-01T00:00:00Z',
+    };
+    const internalMember = {
+      ...clientMember,
+      id: 'staff-private',
+      auth_user_id: '00000000-0000-4000-8000-000000000102',
+      name: 'Private Staff',
+      email: 'private@agency.example',
+      role: 'Staff',
+      departments: ['Management'],
+      department: 'Management',
+      client_name: null,
+      permissions: { editTasks: true },
+    };
+    const fullTask = {
+      workspace_id: 'aitask-main',
+      entity_type: 'task',
+      entity_id: 'task-client',
+      parent_id: null,
+      data: {
+        id: 'task-client',
+        clientName: 'Acme',
+        serviceType: 'Design',
+        title: 'Private full row',
+        description: 'Visible description',
+        department: 'Management',
+        assignedTo: internalMember.id,
+        createdBy: internalMember.id,
+        startDate: '2026-08-01',
+        dueDate: '2026-08-08',
+        priority: 'Urgent',
+        status: 'Waiting Approval',
+        completionPercentage: 100,
+        notes: 'Never return this note',
+        isCompleted: true,
+        revisionCount: 0,
+        clientApprovalStatus: 'Pending',
+        isRecurring: true,
+      },
+      version: 8,
+      updated_at: '2026-08-01T03:00:00Z',
+    };
+
+    from.mockImplementation((table: string) => ({
+      select: () => ({
+        eq: () => table === 'aitask_workspaces'
+          ? { single: () => Promise.resolve({ data: { version: 30, updated_at: '2026-08-01T03:00:00Z', sync_protocol_version: 1 }, error: null }) }
+          : Promise.resolve({
+              data: table === 'aitask_members' ? [clientMember, internalMember] : [fullTask],
+              error: null,
+            }),
+      }),
+    }));
+    rpc.mockResolvedValueOnce({
+      data: {
+        workspaceId: 'aitask-main',
+        clientName: 'Acme',
+        tasks: [{
+          id: 'task-client',
+          version: 8,
+          clientName: 'Acme',
+          serviceType: 'Design',
+          title: 'Projected title',
+          description: 'Visible description',
+          assignedTo: internalMember.id,
+          startDate: '2026-08-01',
+          dueDate: '2026-08-08',
+          status: 'Waiting Approval',
+          completionPercentage: 100,
+          isCompleted: true,
+          revisionCount: 0,
+          clientApprovalStatus: 'Pending',
+          updatedAt: '2026-08-01T03:00:00Z',
+        }],
+        projects: [],
+        clients: [],
+        contacts: [{ id: internalMember.id, name: internalMember.name, avatar: null }],
+      },
+      error: null,
+    });
+
+    const loaded = await loadSecureWorkspace({ id: clientMember.auth_user_id } as never);
+
+    expect(loaded.state.tasks).toHaveLength(1);
+    expect(loaded.state.tasks[0]).toMatchObject({
+      title: 'Projected title',
+      department: 'Client',
+      priority: 'Medium',
+      clientProjection: true,
+    });
+    expect(loaded.state.tasks[0].notes).toBeUndefined();
+    expect(loaded.state.users.map(user => user.id)).toEqual(['client-1', 'staff-private']);
+    expect(loaded.state.users[1]).toMatchObject({ name: 'Private Staff', directoryOnly: true });
+    expect(loaded.state.users[1].email).toBeUndefined();
+    expect(rpc).toHaveBeenCalledWith('aitask_read_client_portal', { p_workspace_id: 'aitask-main' });
   });
 });

@@ -13,8 +13,9 @@ import { cardBase, pageShell } from '../components/uiTokens';
 import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
-import BossOperationsGlance from '../components/BossOperationsGlance';
+import OperationsGlance from '../components/OperationsGlance';
 import { getTrackedMonthlyCompletions } from '../lib/taskReporting';
+import ClientPortalDashboard from '../components/ClientPortalDashboard';
 
 const COLORS = ['#2563eb', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#db2777'];
 
@@ -47,6 +48,21 @@ const Dashboard: React.FC = () => {
   const hasTaskData = tasks.length > 0;
   const prioritizePersonalWork = currentUser?.role === 'Staff' || currentUser?.role === 'Client';
   const showBossOperations = isBossKoo(currentUser);
+  const showStaffOperations = currentUser?.role === 'Staff';
+  const showClientPortal = currentUser?.role === 'Client';
+  const staffAssignedTasks = useMemo(
+    () => showStaffOperations && currentUser
+      ? tasks.filter(task => task.assignedTo === currentUser.id)
+      : [],
+    [currentUser, showStaffOperations, tasks]
+  );
+  const dashboardDescription = currentUser?.role === 'Staff'
+    ? staffAssignedTasks.length > 0
+      ? `Welcome back, ${currentUser.name}. Here is what needs your attention and what you have completed.`
+      : `Welcome back, ${currentUser.name}. Your assigned work will appear here.`
+    : hasTaskData
+      ? `Welcome back, ${currentUser?.name}! Here's your task overview.`
+      : `Welcome back, ${currentUser?.name}! Your live workspace is ready.`;
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -174,8 +190,10 @@ const Dashboard: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Admin' ? 'Admin Dashboard' : currentUser?.role === 'Client' ? 'Client Dashboard' : 'My Dashboard'}
-        description={hasTaskData ? `Welcome back, ${currentUser?.name}! Here's your task overview.` : `Welcome back, ${currentUser?.name}! Your live workspace is ready.`}
+        title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Admin' ? 'Admin Dashboard' : showClientPortal ? 'Client Portal' : 'My Dashboard'}
+        description={showClientPortal
+          ? `${currentUser?.companyName || 'Your company'} work, deliveries, feedback, and approvals.`
+          : dashboardDescription}
         action={(
           <div className="flex flex-wrap items-center gap-2.5">
             <BackendFreshness />
@@ -198,12 +216,18 @@ const Dashboard: React.FC = () => {
               </div>
               <div className="min-w-0">
                 <h2 className="text-lg font-bold text-slate-950">
-                  {currentUser?.role === 'Client' ? 'No visible client tasks yet' : 'Start the live workspace'}
+                  {currentUser?.role === 'Client'
+                    ? 'No visible client tasks yet'
+                    : currentUser?.role === 'Staff'
+                      ? 'No assigned tasks yet'
+                      : 'Start the live workspace'}
                 </h2>
                 <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
                   {currentUser?.role === 'Client'
                     ? 'Tasks for your company will appear here as soon as the team publishes or assigns them.'
-                    : 'Demo tasks are cleared. Create the first real task so dashboards, calendars, notifications, and reports begin filling with live data.'}
+                    : currentUser?.role === 'Staff'
+                      ? 'Work assigned to you will appear here. You can also create a task for an existing Admin-created company.'
+                      : 'Demo tasks are cleared. Create the first real task so dashboards, calendars, notifications, and reports begin filling with live data.'}
                 </p>
               </div>
             </div>
@@ -211,7 +235,7 @@ const Dashboard: React.FC = () => {
               {canCreateTask && (
                 <Button onClick={() => setCreateTaskModalOpen(true)} className="shrink-0">
                   <Plus className="h-4 w-4" />
-                  Create first task
+                  {currentUser?.role === 'Staff' ? 'Create task' : 'Create first task'}
                 </Button>
               )}
               <Link
@@ -226,10 +250,17 @@ const Dashboard: React.FC = () => {
         </section>
       )}
 
+      {showClientPortal ? (
+        <ClientPortalDashboard tasks={tasks} users={users} />
+      ) : (
       <div className="flex flex-col gap-6">
         {showBossOperations ? (
           <div className="order-1">
-            <BossOperationsGlance tasks={tasks} users={users} />
+            <OperationsGlance tasks={tasks} users={users} scope="agency" />
+          </div>
+        ) : showStaffOperations ? (
+          <div className="order-1">
+            <OperationsGlance tasks={staffAssignedTasks} users={users} scope="staff" />
           </div>
         ) : (
           <section className={cn('grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6', prioritizePersonalWork ? 'order-2' : 'order-1')} aria-label="Workspace metrics">
@@ -356,7 +387,7 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
 
-        {currentUser && (
+        {currentUser && !showStaffOperations && (
           <section className={cn(cardBase, 'p-4 sm:p-5', prioritizePersonalWork ? 'order-1' : 'order-4')} aria-labelledby="personal-work-title">
             <div className="mb-4 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -435,6 +466,7 @@ const Dashboard: React.FC = () => {
           </section>
         )}
       </div>
+      )}
     </div>
   );
 };

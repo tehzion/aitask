@@ -91,6 +91,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     setApprovalNote('');
     setRevisionNote('');
     setEditError('');
+    setMutationError('');
     setIsEditingDetails(false);
     if (task) {
       setEditForm({
@@ -135,7 +136,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!commentText.trim()) return;
+    if (!commentText.trim() || isSubmitting) return;
     addComment(task.id, commentText);
     if (await confirmPendingMutation('comment.add')) setCommentText('');
   };
@@ -147,6 +148,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   };
 
   const handleClientReview = async (status: 'Approved' | 'Rejected') => {
+    if (isSubmitting) return;
     reviewClientApproval(task.id, status, approvalNote);
     if (await confirmPendingMutation('approval.review')) setApprovalNote('');
   };
@@ -286,8 +288,10 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                   )}
                 </div>
                 <div className="text-right">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Priority</label>
-                  <span className="text-sm font-bold text-slate-800">{task.priority}</span>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{isClientTaskViewer ? 'Progress' : 'Priority'}</label>
+                  <span className="text-sm font-bold text-slate-800">
+                    {isClientTaskViewer ? `${task.completionPercentage}%` : task.priority}
+                  </span>
                 </div>
               </div>
 
@@ -439,7 +443,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
               </div>
 
               {isClientTaskViewer && (
-                <div className="rounded-lg border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-950">
+                <div className="space-y-3 rounded-lg border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-950">
                   <div className="flex items-start gap-3">
                     <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
                     <div>
@@ -452,6 +456,16 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                       </p>
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-3 border-t border-blue-100 pt-3">
+                    <div>
+                      <p className="text-xs font-medium text-blue-700">Service</p>
+                      <p className="mt-1 font-semibold text-blue-950">{task.serviceType}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-blue-700">Assigned contact</p>
+                      <p className="mt-1 font-semibold text-blue-950">{assignee?.name || 'Agency team'}</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -462,7 +476,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                 </div>
               </div>
 
-              {task.notes && (
+              {!isClientTaskViewer && task.notes && (
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Internal Notes</label>
                   <div className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">
@@ -473,16 +487,22 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Assignee</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{isClientTaskViewer ? 'Assigned Contact' : 'Assignee'}</label>
                   <div className="flex items-center gap-2">
-                    <img src={assignee?.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
-                    <span className="text-sm font-medium text-slate-800">{assignee?.name}</span>
+                    {assignee?.avatar ? (
+                      <img src={assignee.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                    ) : (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">
+                        {(assignee?.name || 'A').charAt(0)}
+                      </span>
+                    )}
+                    <span className="text-sm font-medium text-slate-800">{assignee?.name || 'Agency team'}</span>
                   </div>
                 </div>
-                <div>
+                {!isClientTaskViewer && <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Created By</label>
                   <span className="text-sm font-medium text-slate-800">{creator?.name || 'Unknown'}</span>
-                </div>
+                </div>}
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Start Date</label>
                   <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
@@ -501,7 +521,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
 
               {(task.facebookPage || task.website || task.attachmentLink || canEditTask) && (
                 <div className="pt-4 border-t border-slate-100">
-                  <label className="block text-xs font-medium text-slate-500 mb-2">Links & Attachments</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-2">{isClientTaskViewer ? 'Deliverables & Links' : 'Links & Attachments'}</label>
                   <div className="space-y-2">
                     {task.facebookPage && (
                       <ExternalTaskLink value={task.facebookPage} label="Facebook Page" />
@@ -571,10 +591,10 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                     className="w-full bg-white border border-emerald-200 text-slate-900 text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block p-3 outline-none shadow-sm resize-none"
                   />
                   <div className="flex gap-2">
-                    <button onClick={() => handleClientReview('Approved')} type="button" className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg">
-                      <CheckCircle2 className="w-4 h-4" /> Approve
+                    <button disabled={isSubmitting} onClick={() => handleClientReview('Approved')} type="button" className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
+                      <CheckCircle2 className="w-4 h-4" /> {isSubmitting ? 'Saving...' : 'Approve'}
                     </button>
-                    <button onClick={() => handleClientReview('Rejected')} type="button" className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-2 text-sm font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg">
+                    <button disabled={isSubmitting} onClick={() => handleClientReview('Rejected')} type="button" className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-2 text-sm font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
                       <XCircle className="w-4 h-4" /> Request Revision
                     </button>
                   </div>
@@ -639,11 +659,11 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                   />
                   <button
                     type="submit"
-                    disabled={!commentText.trim()}
+                    disabled={!commentText.trim() || isSubmitting}
                     aria-label="Send comment"
                     className="absolute bottom-2.5 right-2.5 p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Send className="w-4 h-4" />
+                    {isSubmitting ? <span className="text-xs font-semibold">Saving</span> : <Send className="w-4 h-4" />}
                   </button>
                 </form>
               </div>

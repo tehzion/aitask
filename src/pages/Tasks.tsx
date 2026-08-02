@@ -174,6 +174,7 @@ const Tasks: React.FC = () => {
     () => getVisibleTasks(currentUser, allTasks, rolePermissions),
     [allTasks, currentUser, rolePermissions]
   );
+  const isClientUser = currentUser?.role === 'Client';
 
   const visibleProjects = useMemo(
     () => getVisibleProjects(currentUser, projects, allTasks, rolePermissions),
@@ -256,6 +257,15 @@ const Tasks: React.FC = () => {
 
   const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
   const canEditTask = (task: Task) => canEditTaskByRole(currentUser, task, rolePermissions);
+  const isClientReviewReady = (task: Task) => (
+    task.clientApprovalStatus !== 'Approved'
+    && (task.status === 'Waiting Approval' || task.status === 'Completed' || task.isCompleted)
+  );
+  const clientTaskAction = (task: Task) => isClientReviewReady(task)
+    ? 'Review task'
+    : task.comments?.length
+      ? 'Leave feedback'
+      : 'View details';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
   const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
   const activeFilterLabels = [
@@ -317,8 +327,10 @@ const Tasks: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title="Tasks Management"
-        description="Manage assignments, approvals, revisions, files, and deadlines."
+        title={isClientUser ? 'Company Tasks' : 'Tasks Management'}
+        description={isClientUser
+          ? `Track ${currentUser?.companyName || 'your company'} work, review deliverables, and share feedback.`
+          : 'Manage assignments, approvals, revisions, files, and deadlines.'}
         action={canCreateTasks(currentUser, rolePermissions) ? (
           <Button onClick={() => setCreateTaskModalOpen(true)}>
             <Plus className="h-4 w-4" />
@@ -448,7 +460,7 @@ const Tasks: React.FC = () => {
               <input
                 type="text"
                 className={cn(inputBase, 'block py-2 pl-10 pr-3')}
-                placeholder="Search tasks, clients, assignees..."
+                placeholder={isClientUser ? 'Search company tasks...' : 'Search tasks, clients, assignees...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -513,28 +525,28 @@ const Tasks: React.FC = () => {
             </div>
           )}
 
-          <div className={cn('grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4', filtersOpen ? 'grid' : 'hidden lg:grid')}>
-            <div className="relative">
+          <div className={cn('grid-cols-1 gap-3 sm:grid-cols-2', isClientUser ? 'lg:grid-cols-3' : 'lg:grid-cols-4', filtersOpen ? 'grid' : 'hidden lg:grid')}>
+            {!isClientUser && <div className="relative">
               <select value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All departments</option>
                 {departmentOptions.map(dept => <option key={dept} value={dept}>{dept}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>
-            <div className="relative">
+            </div>}
+            {!isClientUser && <div className="relative">
               <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All assignees</option>
                 {assigneeOptions.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>
-            <div className="relative">
+            </div>}
+            {!isClientUser && <div className="relative">
               <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All clients</option>
                 {clientOptions.map(client => <option key={client} value={client}>{client}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>
+            </div>}
             <div className="relative">
               <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All statuses</option>
@@ -542,13 +554,13 @@ const Tasks: React.FC = () => {
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>
-            <div className="relative">
+            {!isClientUser && <div className="relative">
               <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All priorities</option>
                 {PRIORITY_OPTIONS.map(priority => <option key={priority} value={priority}>{priority}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>
+            </div>}
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label="Due from" />
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label="Due to" />
           </div>
@@ -557,17 +569,17 @@ const Tasks: React.FC = () => {
         {viewType === 'table' ? (
           <>
             <div className="hidden overflow-x-auto 2xl:block">
-              <table className="w-full min-w-[1020px] text-left text-sm text-slate-500">
+	              <table className={cn('w-full text-left text-sm text-slate-500', isClientUser ? 'min-w-[820px]' : 'min-w-[1020px]')}>
                 <thead className="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
                   <tr>
                     <th className="px-3 py-3 font-semibold">Task Details</th>
-                    <th className="px-3 py-3 font-semibold">Client / Company</th>
-                    <th className="px-3 py-3 font-semibold">Department</th>
-                    <th className="px-3 py-3 font-semibold">Timeline</th>
-                    <th className="w-[100px] px-3 py-3 text-center font-semibold">Priority</th>
-                    <th className="w-[130px] px-3 py-3 text-center font-semibold">Status</th>
-                    <th className="px-3 py-3 text-center font-semibold">Progress</th>
-                    <th className="px-3 py-3 font-semibold">Actions</th>
+	                    {!isClientUser && <th className="px-3 py-3 font-semibold">Client / Company</th>}
+	                    {!isClientUser && <th className="px-3 py-3 font-semibold">Department</th>}
+	                    <th className="px-3 py-3 font-semibold">Timeline</th>
+	                    {!isClientUser && <th className="w-[100px] px-3 py-3 text-center font-semibold">Priority</th>}
+	                    <th className="w-[130px] px-3 py-3 text-center font-semibold">Status</th>
+	                    <th className="px-3 py-3 text-center font-semibold">Progress</th>
+	                    <th className="px-3 py-3 font-semibold">{isClientUser ? 'Contact / Action' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -593,13 +605,13 @@ const Tasks: React.FC = () => {
                             <div className={cn("font-semibold truncate", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
                             <div className="text-xs text-slate-500 mt-0.5">{task.id} - {task.serviceType}</div>
                           </td>
-                          <td className="max-w-[150px] px-3 py-3">
+	                          {!isClientUser && <td className="max-w-[150px] px-3 py-3">
                             <div className="font-medium text-slate-800 truncate">{task.clientName}</div>
                             <div className="text-xs text-slate-500 truncate mt-0.5">{task.projectName || 'Independent task'}</div>
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-3">
+	                          </td>}
+	                          {!isClientUser && <td className="whitespace-nowrap px-3 py-3">
                             <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-md font-medium border border-slate-200">{task.department}</span>
-                          </td>
+	                          </td>}
                           <td className="whitespace-nowrap px-3 py-3 text-xs">
                             <div className="text-slate-500 mb-0.5">Start: {startDateParsed ? format(startDateParsed, 'MMM dd') : 'No start date'}</div>
                             <div
@@ -609,9 +621,9 @@ const Tasks: React.FC = () => {
                               {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                             </div>
                           </td>
-                          <td className="w-[100px] whitespace-nowrap px-3 py-3 text-center">
+	                          {!isClientUser && <td className="w-[100px] whitespace-nowrap px-3 py-3 text-center">
                             <span className={`inline-block text-xs px-2.5 py-1 rounded-md font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>
-                          </td>
+	                          </td>}
                           <td className="w-[130px] whitespace-nowrap px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                             {renderStatusControl(task)}
                           </td>
@@ -625,7 +637,7 @@ const Tasks: React.FC = () => {
                           </td>
                           <td className="px-3 py-3 text-slate-400">
                             <div className="flex flex-col items-start gap-1.5">
-                              <div className="flex items-center gap-2">
+	                              {!isClientUser && <div className="flex items-center gap-2">
                                 {task.attachmentLink && (
                                   safeHttpsUrl(task.attachmentLink) ? (
                                     <a href={safeHttpsUrl(task.attachmentLink)!} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="hover:text-blue-600" title={task.attachmentName || 'Attachment'}>
@@ -638,23 +650,28 @@ const Tasks: React.FC = () => {
                                   )
                                 )}
                                 {task.isCompleted && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                                <button
+	                                {canEditTask(task) && <button
                                   className="rounded-md p-1 transition-colors hover:bg-slate-200 hover:text-slate-700"
                                   title="Quick Edit"
                                   aria-label={`Quick edit ${task.title}`}
                                   onClick={(e) => handleQuickEditClick(e, task)}
                                 >
                                   <MoreHorizontal className="w-4 h-4" />
-                                </button>
-                              </div>
-                              <div className="flex items-center gap-1.5" title={`Assigned to: ${getUserName(task.assignedTo)}`}>
+	                                </button>}
+	                              </div>}
+	                              <div className="flex items-center gap-1.5" title={`Assigned contact: ${getUserName(task.assignedTo)}`}>
                                 <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center text-[10px] font-bold">
                                   {getUserName(task.assignedTo).charAt(0)}
                                 </div>
                                 <span className="text-xs font-medium text-slate-600 truncate max-w-[85px]">
                                   {getUserName(task.assignedTo)}
-                                </span>
-                              </div>
+	                                </span>
+	                              </div>
+	                              {isClientUser && (
+	                                <span className="mt-1 inline-flex text-xs font-semibold text-blue-700">
+	                                  {clientTaskAction(task)}
+	                                </span>
+	                              )}
                             </div>
                           </td>
                         </tr>
@@ -663,7 +680,7 @@ const Tasks: React.FC = () => {
                   )}
                   {!backend?.isLoading && pagedTasks.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-slate-500">No tasks found matching your criteria.</td>
+	                      <td colSpan={isClientUser ? 5 : 8} className="px-4 py-8 text-center text-slate-500">No tasks found matching your criteria.</td>
                     </tr>
                   )}
                 </tbody>
@@ -694,7 +711,7 @@ const Tasks: React.FC = () => {
                           <div className={cn("font-semibold leading-5", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
                           <div className="text-xs text-slate-500 mt-1 leading-5">{task.id} - {task.clientName} - {task.projectName || 'Independent task'}</div>
                         </div>
-                        <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>
+	                        {!isClientUser && <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>}
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
                         <span
@@ -705,8 +722,8 @@ const Tasks: React.FC = () => {
                           {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                         </span>
                         <span className="truncate text-right">{getUserName(task.assignedTo)}</span>
-                        <span>{task.department}</span>
-                        <span className="truncate text-right">{task.serviceType}</span>
+	                        {!isClientUser && <span>{task.department}</span>}
+	                        <span className="truncate text-right">{task.serviceType}</span>
                       </div>
                       {isOverdue && (
                         <div className="mt-2 text-[10px] text-red-500 font-extrabold flex items-center gap-1.5">
@@ -714,12 +731,17 @@ const Tasks: React.FC = () => {
                           {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                         </div>
                       )}
-                      <div className="mt-3 flex items-center justify-between gap-3">
+	                      <div className="mt-3 flex items-center justify-between gap-3">
                         <div onClick={(e) => e.stopPropagation()}>{renderStatusControl(task)}</div>
                         <div className="flex items-center gap-2">
                           <div className="w-20 bg-slate-200 rounded-full h-2 overflow-hidden">
                             <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
-                          </div>
+	                      </div>
+	                      {isClientUser && (
+	                        <div className="mt-3 border-t border-slate-100 pt-3 text-sm font-semibold text-blue-700">
+	                          {clientTaskAction(task)}
+	                        </div>
+	                      )}
                           <span className="text-xs font-semibold text-slate-700">{task.completionPercentage}%</span>
                         </div>
                       </div>
@@ -743,8 +765,8 @@ const Tasks: React.FC = () => {
           </>
         ) : (
           /* Kanban Board View */
-          <div className="p-4 overflow-x-auto bg-slate-100">
-            <div className="flex gap-4 min-w-[1000px] items-start">
+          <div className={cn('p-4 bg-slate-100', !isClientUser && 'overflow-x-auto')}>
+            <div className={cn(isClientUser ? 'grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3' : 'flex min-w-[1000px] items-start gap-4')}>
               {taskStatuses.map(status => {
                 const columnTasks = filteredTasks.filter(t => t.status === status);
                 return (
@@ -752,7 +774,7 @@ const Tasks: React.FC = () => {
                     key={status}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, status)}
-                    className="flex-1 min-w-[260px] bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col max-h-[700px] shadow-sm"
+                    className={cn('bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col max-h-[700px] shadow-sm', !isClientUser && 'min-w-[260px] flex-1')}
                   >
                     {/* Column Header */}
                     <div className="flex justify-between items-center mb-3 pb-2 border-b border-[#e0d9cf] shrink-0">
@@ -798,23 +820,23 @@ const Tasks: React.FC = () => {
                                 <h4 className={cn("text-xs font-bold leading-5 truncate flex-1", isOverdue ? "text-red-900" : "text-slate-800")}>
                                   {task.title}
                                 </h4>
-                                <Badge tone={task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : task.priority === 'Medium' ? 'blue' : 'slate'} className="text-[9px] px-1.5 py-0 shrink-0">
+                                {!isClientUser && <Badge tone={task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : task.priority === 'Medium' ? 'blue' : 'slate'} className="text-[9px] px-1.5 py-0 shrink-0">
                                   {task.priority}
-                                </Badge>
+                                </Badge>}
                               </div>
 
                               <div className="text-[10px] text-slate-500 mt-1.5 truncate">
-                                {task.id} · {task.clientName}
+                                {task.id}{isClientUser ? ` · ${task.serviceType}` : ` · ${task.clientName}`}
                               </div>
 
-                              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                              {!isClientUser && <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                                 <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-md", getDeptBadge(task.department))}>
                                   {task.department}
                                 </span>
                                 <span className="text-[9px] text-slate-500 font-medium">
                                   {task.serviceType}
                                 </span>
-                              </div>
+                              </div>}
 
                               <div className="mt-3 flex items-center justify-between text-[10px]">
                                 <span
@@ -832,10 +854,16 @@ const Tasks: React.FC = () => {
                               </div>
 
                               {/* Progress bar */}
-                              <div className="mt-2.5 flex items-center gap-1.5">
+	                              <div className="mt-2.5 flex items-center gap-1.5">
                                 <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-200/40">
                                   <div className="bg-blue-600 h-full rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
-                                </div>
+	                              </div>
+
+	                              {isClientUser && (
+	                                <div className="mt-3 border-t border-slate-100 pt-2 text-xs font-semibold text-blue-700">
+	                                  {clientTaskAction(task)}
+	                                </div>
+	                              )}
                                 <span className="text-[9px] font-bold text-slate-600 shrink-0">{task.completionPercentage}%</span>
                               </div>
 

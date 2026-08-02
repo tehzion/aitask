@@ -1,6 +1,8 @@
 import type { User } from '@supabase/supabase-js';
 import type {
   AppNotification,
+  ClientContact,
+  ClientPortalPayload,
   ClientProfile,
   CustomRole,
   Department,
@@ -14,7 +16,7 @@ import {
   getLegacyDepartmentMirror,
   normalizeMemberDepartments,
 } from './departments';
-import { parseWorkspaceSnapshot } from './security';
+import { parseWorkspaceSnapshot, safeAvatarSource } from './security';
 import { supabase } from './supabaseClient';
 
 export const SECURE_WORKSPACE_ID = 'aitask-main';
@@ -212,7 +214,41 @@ const stripRuntimeFields = <T extends Record<string, unknown>>(value: T) => {
   const copy = { ...value };
   delete copy.version;
   delete copy.updatedAt;
+  delete copy.directoryOnly;
+  delete copy.clientProjection;
   return copy;
+};
+
+const CLIENT_TASK_PROJECTION_KEYS = [
+  'id',
+  'clientName',
+  'projectId',
+  'projectName',
+  'serviceType',
+  'title',
+  'description',
+  'assignedTo',
+  'startDate',
+  'dueDate',
+  'status',
+  'completionPercentage',
+  'attachmentLink',
+  'attachmentName',
+  'website',
+  'facebookPage',
+  'isCompleted',
+  'completedAt',
+  'revisionCount',
+  'clientApprovalStatus',
+] as const;
+
+export const serializeClientProjectedTask = (task: Task): Record<string, unknown> => {
+  const source = task as unknown as Record<string, unknown>;
+  return Object.fromEntries(
+    CLIENT_TASK_PROJECTION_KEYS
+      .filter(key => source[key] !== undefined)
+      .map(key => [key, source[key]])
+  );
 };
 
 const memberToUser = (row: MemberRow): WorkspaceMember => {
@@ -279,12 +315,23 @@ const stateToRows = (state: PersistedWorkspaceState) => {
     });
   };
 
-  state.users.forEach(user => push('member', 'member', user.id, memberData(user), user.version));
+  state.users.filter(user => !user.directoryOnly).forEach(user => (
+    push('member', 'member', user.id, memberData(user), user.version)
+  ));
   state.clients?.forEach(item => push('entity', 'client', item.id, item as unknown as Record<string, unknown>, item.version));
   state.projects.forEach(item => push('entity', 'project', item.id, item as unknown as Record<string, unknown>, item.version));
   state.tasks.forEach(item => {
     const { comments = [], approvalHistory = [], ...task } = item;
-    push('entity', 'task', item.id, task as unknown as Record<string, unknown>, item.version, item.projectId);
+    push(
+      'entity',
+      'task',
+      item.id,
+      item.clientProjection
+        ? serializeClientProjectedTask(item)
+        : task as unknown as Record<string, unknown>,
+      item.version,
+      item.projectId,
+    );
     comments.forEach(comment => push(
       'entity',
       'comment',
@@ -632,6 +679,88 @@ export const saveSecureMemberDepartments = async (
   };
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+);
+
+const cleanPortalText = (value: unknown, maxLength: number) => (
+  typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
+);
+
+const portalRecords = (value: unknown) => (
+  Array.isArray(value) ? value.filter(isRecord) : []
+);
+
+const parseClientContact = (value: unknown): ClientContact | null => {
+  if (!isRecord(value)) return null;
+  const id = cleanPortalText(value.id, 160);
+  const name = cleanPortalText(value.name, 160);
+  if (!id || !name) return null;
+  return { id, name, avatar: safeAvatarSource(value.avatar) };
+};
+
+const loadClientPortalPayload = async (expectedClientName?: string): Promise<ClientPortalPayload> => {
+  const invoke = () => withSyncTimeout(supabase.rpc('aitask_read_client_portal', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+  }));
+  let result = await invoke();
+  if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
+  if (result.error) throw result.error;
+  if (!isRecord(result.data)) throw new Error('Supabase returned an invalid Client portal response.');
+
+  const workspaceId = cleanPortalText(result.data.workspaceId, 160);
+  const clientName = cleanPortalText(result.data.clientName, 240);
+  if (workspaceId !== SECURE_WORKSPACE_ID || !clientName) {
+    throw new Error('The Client portal response is not linked to this workspace.');
+  }
+  if (expectedClientName && clientName.toLocaleLowerCase() !== expectedClientName.trim().toLocaleLowerCase()) {
+    throw new Error('The Client portal company does not match this account.');
+  }
+
+  const tasks = portalRecords(result.data.tasks)
+    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.clientName, 240))
+    .map(item => ({ ...item })) as unknown as ClientPortalPayload['tasks'];
+  const projects = portalRecords(result.data.projects)
+    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.clientName, 240))
+    .map(item => ({ ...item })) as unknown as ClientPortalPayload['projects'];
+  const clients = portalRecords(result.data.clients)
+    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.clientName, 240))
+    .map(item => ({ ...item })) as unknown as ClientPortalPayload['clients'];
+  const contacts = (Array.isArray(result.data.contacts) ? result.data.contacts : [])
+    .map(parseClientContact)
+    .filter((contact): contact is ClientContact => Boolean(contact));
+
+  return { workspaceId, clientName, tasks, projects, clients, contacts };
+};
+
+const projectionToEntityRow = (
+  entityType: 'task' | 'project' | 'client',
+  item: Record<string, unknown>,
+  parentId?: string,
+): EntityRow => {
+  const { version, updatedAt, ...projection } = item;
+  const data = entityType === 'task'
+    ? {
+        ...projection,
+        department: 'Client',
+        priority: 'Medium',
+        createdBy: 'client-portal',
+        isRecurring: false,
+        recurrenceFrequency: 'None',
+        dueReminderSent: false,
+      }
+    : projection;
+  return {
+    workspace_id: SECURE_WORKSPACE_ID,
+    entity_type: entityType,
+    entity_id: cleanPortalText(item.id, 160),
+    parent_id: parentId || null,
+    data,
+    version: Math.max(1, Number(version) || 1),
+    updated_at: cleanPortalText(updatedAt, 80) || new Date(0).toISOString(),
+  };
+};
+
 export const loadSecureWorkspace = async (authUser: User) => {
   const [{ data: members, error: memberError }, { data: entities, error: entityError }, revision] = await Promise.all([
     supabase.from('aitask_members').select('*').eq('workspace_id', SECURE_WORKSPACE_ID),
@@ -643,13 +772,48 @@ export const loadSecureWorkspace = async (authUser: User) => {
 
   const memberRows = members as MemberRow[];
   const entityRows = entities as EntityRow[];
-  const users = memberRows.map(memberToUser);
-  const currentUser = users.find(member => member.authUserId === authUser.id);
+  const authenticatedMemberRow = memberRows.find(member => member.auth_user_id === authUser.id);
+  const currentUser = authenticatedMemberRow ? memberToUser(authenticatedMemberRow) : undefined;
   if (!currentUser) throw new Error('This authenticated account is not an AiTask workspace member.');
+
+  const clientPortal = currentUser.role === 'Client'
+    ? await loadClientPortalPayload(currentUser.companyName)
+    : null;
+  const clientContactUsers: WorkspaceMember[] = clientPortal?.contacts.map(contact => ({
+    id: contact.id,
+    name: contact.name,
+    avatar: contact.avatar,
+    role: 'Staff',
+    departments: [],
+    directoryOnly: true,
+  })) || [];
+  const users = currentUser.role === 'Client'
+    ? [currentUser, ...clientContactUsers.filter(contact => contact.id !== currentUser.id)]
+    : memberRows.map(memberToUser);
+  const clientTaskIds = new Set(clientPortal?.tasks.map(task => task.id) || []);
+  const clientCustomRoleId = authenticatedMemberRow?.custom_role_id;
+  const visibleEntityRows = currentUser.role === 'Client'
+    ? entityRows.filter(row => (
+        !['task', 'project', 'client'].includes(row.entity_type)
+        && (row.entity_type !== 'custom_role' || row.entity_id === clientCustomRoleId)
+      ))
+    : entityRows;
+  const projectedEntityRows: EntityRow[] = currentUser.role === 'Client' && clientPortal
+    ? [
+        ...clientPortal.tasks.map(item => projectionToEntityRow(
+          'task',
+          item as unknown as Record<string, unknown>,
+          item.projectId,
+        )),
+        ...clientPortal.projects.map(item => projectionToEntityRow('project', item as unknown as Record<string, unknown>)),
+        ...clientPortal.clients.map(item => projectionToEntityRow('client', item as unknown as Record<string, unknown>)),
+      ]
+    : [];
+  const effectiveEntityRows = [...visibleEntityRows, ...projectedEntityRows];
 
   const comments = new Map<string, Task['comments']>();
   const approvals = new Map<string, Task['approvalHistory']>();
-  entityRows.forEach(row => {
+  visibleEntityRows.forEach(row => {
     if (!row.parent_id) return;
     if (row.entity_type === 'comment') {
       const comment: Record<string, unknown> = { ...row.data, version: Number(row.version) || 1, updatedAt: row.updated_at };
@@ -663,7 +827,7 @@ export const loadSecureWorkspace = async (authUser: User) => {
     }
   });
 
-  const dataFor = <T>(type: string) => entityRows
+  const dataFor = <T>(type: string) => effectiveEntityRows
     .filter(row => row.entity_type === type)
     .map(row => ({ ...row.data, version: Number(row.version) || 1, updatedAt: row.updated_at } as T));
   const raw: PersistedWorkspaceState = {
@@ -677,7 +841,17 @@ export const loadSecureWorkspace = async (authUser: User) => {
     taskStatuses: dataFor<{ status: string }>('task_status').map(item => item.status),
   };
   const state = parseWorkspaceSnapshot(raw);
-  rowsToBaseline(memberRows, entityRows);
+  if (currentUser.role === 'Client') {
+    state.users = users;
+    state.tasks = state.tasks.map(task => clientTaskIds.has(task.id)
+      ? { ...task, clientProjection: true }
+      : task
+    );
+  }
+  rowsToBaseline(
+    currentUser.role === 'Client' && authenticatedMemberRow ? [authenticatedMemberRow] : memberRows,
+    effectiveEntityRows,
+  );
   alignBaselineToCanonicalState(state);
   retryableCommand = null;
   return { state, currentUser, revision };
