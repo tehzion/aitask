@@ -1,5 +1,6 @@
 import { AppNotification, User } from '../types';
 import { isNotificationReadByUser, isNotificationVisible } from './access';
+import { isActionNotification } from './notificationCenter';
 
 interface IncomingNotificationResult {
   incomingIds: string[];
@@ -21,7 +22,8 @@ export const getIncomingUnreadNotificationIds = (
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .filter(notification => (
       isNotificationVisible(currentUser, notification) &&
-      !isNotificationReadByUser(currentUser, notification)
+      !isNotificationReadByUser(currentUser, notification) &&
+      isActionNotification(notification)
     ))
     .map(notification => notification.id);
 

@@ -12,6 +12,7 @@ import BackendFreshness from '../components/BackendFreshness';
 import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 import { canUsePasswordResetBypass, enablePasswordResetBypass } from '../lib/auth';
 import { APP_BUILD_CHANNEL, APP_BUILD_LABEL, APP_BUILD_TIME, APP_COMMIT, APP_VERSION_LABEL } from '../lib/appVersion';
+import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 
 const AVATAR_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 const AVATAR_UPLOAD_SIZE = 320;
@@ -74,6 +75,7 @@ const Settings: React.FC = () => {
     tasks,
     projects,
     notifications,
+    notificationUnreadCount,
     backend,
     rolePermissions,
     updateCurrentUserProfile,
@@ -160,10 +162,11 @@ const Settings: React.FC = () => {
   const enabledPermissions = Object.entries(effectivePermissions)
     .filter(([, enabled]) => enabled)
     .map(([key]) => permissionLabels[key as keyof typeof permissionLabels]);
-  const unreadCount = notifications.filter(notification => (
+  const loadedUnreadCount = notifications.filter(notification => (
     isNotificationVisible(currentUser, notification) &&
     !isNotificationReadByUser(currentUser, notification)
   )).length;
+  const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : loadedUnreadCount;
   const scopeDescription = currentUser?.role === 'Client'
     ? `Manage your login details and review ${currentUser.companyName || 'your company'} account access.`
     : 'Review your profile, workspace scope, and backend sync state.';
@@ -734,7 +737,7 @@ const Settings: React.FC = () => {
                 {soundEnabled ? 'Sound alerts are enabled' : 'Sound alerts are muted'}
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                Play a chime when a new notification arrives. You can also toggle sound from the volume icon in the top bar.
+                Play a chime for new assignments, deadlines, reviews, feedback, and registration requests. You can also toggle sound from the volume icon in the top bar.
               </p>
             </div>
             <button

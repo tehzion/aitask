@@ -276,7 +276,7 @@ describe('client isolation and feedback', () => {
     expect(canReviewTaskAsClient(acmeClient, ready)).toBe(true);
   });
 
-  it('tracks notification reads per user while preserving legacy reads', () => {
+  it('uses per-user receipts as the source of truth while preserving legacy reads', () => {
     const notification = {
       id: 'notice-1',
       targetUserId: acmeClient.id,
@@ -291,7 +291,12 @@ describe('client isolation and feedback', () => {
     };
     expect(isNotificationReadByUser(acmeClient, notification)).toBe(true);
     expect(isNotificationReadByUser(staff, notification)).toBe(false);
-    expect(isNotificationReadByUser(staff, { ...notification, isRead: true })).toBe(true);
+    expect(isNotificationReadByUser(staff, { ...notification, isRead: true })).toBe(false);
+    expect(isNotificationReadByUser(staff, {
+      ...notification,
+      isRead: true,
+      readByUserIds: undefined,
+    })).toBe(true);
     expect(getUnreadNotifications(staff, [notification])).toEqual([notification]);
     expect(getUnreadNotifications(acmeClient, [notification])).toEqual([]);
   });

@@ -7,6 +7,9 @@ import type {
   CustomRole,
   Department,
   Project,
+  NotificationCategory,
+  NotificationCursor,
+  NotificationFeedPage,
   Registration,
   Task,
   WorkspaceMember,
@@ -16,7 +19,8 @@ import {
   getLegacyDepartmentMirror,
   normalizeMemberDepartments,
 } from './departments';
-import { parseWorkspaceSnapshot, safeAvatarSource } from './security';
+import { parseNotification, parseWorkspaceSnapshot, safeAvatarSource } from './security';
+import { enrichNotificationMetadata } from './notificationCenter';
 import { supabase } from './supabaseClient';
 
 export const SECURE_WORKSPACE_ID = 'aitask-main';
@@ -143,6 +147,25 @@ type MemberDepartmentsResponse = CommandResponse & {
   };
 };
 
+export interface NotificationFeedQuery {
+  cursor?: NotificationCursor;
+  limit?: number;
+  unreadOnly?: boolean;
+  category?: NotificationCategory;
+  search?: string;
+}
+
+export type NotificationReadResponse = CommandResponse & {
+  memberId?: string;
+  unreadCount?: number;
+  changedNotifications?: Array<{
+    id: string;
+    version: number;
+    updatedAt: string;
+    isRead: boolean;
+  }>;
+};
+
 export type SecureCommand = {
   id: string;
   type: SecureCommandType;
@@ -156,6 +179,12 @@ let retryableMemberDepartments: {
   memberId: string;
   departments: Department[];
   expectedVersion: number;
+} | null = null;
+let retryableNotificationMutation: {
+  id: string;
+  notificationIds: string[];
+  isRead: boolean;
+  markAll: boolean;
 } | null = null;
 
 const entityKey = (type: string, id: string) => `${type}:${id}`;
@@ -216,6 +245,7 @@ const stripRuntimeFields = <T extends Record<string, unknown>>(value: T) => {
   delete copy.updatedAt;
   delete copy.directoryOnly;
   delete copy.clientProjection;
+  delete copy.visibleToCurrentUser;
   return copy;
 };
 
@@ -687,6 +717,165 @@ const cleanPortalText = (value: unknown, maxLength: number) => (
   typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 );
 
+const parseNotificationFeedItem = (
+  value: unknown,
+  memberId: string,
+): AppNotification | null => {
+  if (!isRecord(value)) return null;
+  const parsed = parseNotification({
+    ...value,
+    isRead: value.isRead === true,
+    readByUserIds: value.isRead === true ? [memberId] : [],
+    visibleToCurrentUser: true,
+  });
+  return parsed ? enrichNotificationMetadata(parsed) : null;
+};
+
+export const loadSecureNotificationPage = async (
+  query: NotificationFeedQuery = {},
+): Promise<NotificationFeedPage> => {
+  const limit = Math.min(50, Math.max(1, Math.floor(query.limit || 50)));
+  const invoke = () => withSyncTimeout(supabase.rpc('aitask_read_notifications', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+    p_limit: limit,
+    p_before_created_at: query.cursor?.createdAt || null,
+    p_before_id: query.cursor?.id || null,
+    p_unread_only: Boolean(query.unreadOnly),
+    p_category: query.category || null,
+    p_search: query.search?.trim().slice(0, 200) || null,
+  }));
+
+  let result = await invoke();
+  if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
+  if (result.error) throw result.error;
+  if (!isRecord(result.data) || result.data.ok !== true) {
+    throw new Error(isRecord(result.data) && typeof result.data.error === 'string'
+      ? result.data.error
+      : 'Supabase returned an invalid notification feed.');
+  }
+
+  const memberId = cleanPortalText(result.data.memberId, 160);
+  if (!memberId) throw new Error('The notification feed is not linked to this account.');
+  const items = (Array.isArray(result.data.items) ? result.data.items : [])
+    .map(item => parseNotificationFeedItem(item, memberId))
+    .filter((item): item is AppNotification => Boolean(item));
+  const rawCursor = isRecord(result.data.nextCursor) ? result.data.nextCursor : undefined;
+  const createdAt = cleanPortalText(rawCursor?.createdAt, 80);
+  const cursorId = cleanPortalText(rawCursor?.id, 160);
+
+  return {
+    items,
+    unreadCount: Math.max(0, Number(result.data.unreadCount) || 0),
+    nextCursor: createdAt && cursorId ? { createdAt, id: cursorId } : undefined,
+  };
+};
+
+const applyNotificationReadBaseline = (
+  response: NotificationReadResponse,
+  isRead: boolean,
+) => {
+  const memberId = response.memberId;
+  if (!memberId) return;
+  (response.changedNotifications || []).forEach(changed => {
+    const key = entityKey('notification', changed.id);
+    const previous = baseline.get(key);
+    if (!previous) return;
+    const currentReads = Array.isArray(previous.data.readByUserIds)
+      ? previous.data.readByUserIds.filter((value): value is string => typeof value === 'string')
+      : [];
+    const readByUserIds = isRead
+      ? Array.from(new Set([...currentReads, memberId]))
+      : currentReads.filter(id => id !== memberId);
+    const data = { ...previous.data, readByUserIds };
+    baseline.set(key, {
+      ...previous,
+      version: Math.max(1, Number(changed.version) || previous.version),
+      data,
+      serialized: stable({ parentId: previous.parentId || null, data }),
+    });
+  });
+};
+
+export const setSecureNotificationsRead = async (
+  notificationIds: string[],
+  isRead: boolean,
+  markAll = false,
+): Promise<MutationResult<NotificationReadResponse>> => {
+  const ids = Array.from(new Set(notificationIds.map(id => id.trim()).filter(Boolean))).sort();
+  if (!markAll && ids.length === 0) {
+    return { ok: false, code: 'VALIDATION', error: 'Choose at least one notification.' };
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before updating notifications.' };
+  }
+  const matchesRetry = retryableNotificationMutation
+    && retryableNotificationMutation.isRead === isRead
+    && retryableNotificationMutation.markAll === markAll
+    && stable(retryableNotificationMutation.notificationIds) === stable(ids);
+  if (retryableNotificationMutation && !matchesRetry) {
+    return {
+      ok: false,
+      code: 'RETRY_REQUIRED',
+      error: 'Retry the previous notification update before starting another one.',
+    };
+  }
+  const pending = matchesRetry
+    ? retryableNotificationMutation!
+    : { id: commandId(), notificationIds: ids, isRead, markAll };
+  retryableNotificationMutation = pending;
+
+  const invoke = () => withSyncTimeout(supabase.rpc('aitask_set_notifications_read', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+    p_command_id: pending.id,
+    p_notification_ids: pending.notificationIds,
+    p_is_read: pending.isRead,
+    p_mark_all: pending.markAll,
+  }));
+
+  let result: Awaited<ReturnType<typeof invoke>>;
+  try {
+    result = await invoke();
+    if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
+  } catch (error) {
+    return {
+      ok: false,
+      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
+      error: error instanceof SyncRequestTimeoutError
+        ? 'Notification update confirmation timed out. Try the same action again safely.'
+        : 'Supabase could not confirm the notification update.',
+    };
+  }
+
+  if (result.error) {
+    if (isAuthError(result.error)) retryableNotificationMutation = null;
+    return {
+      ok: false,
+      code: isAuthError(result.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
+      error: result.error.message || 'Unable to update notifications.',
+    };
+  }
+
+  const response = result.data as NotificationReadResponse;
+  if (!response?.ok) {
+    if (response?.code !== 'RETRY_REQUIRED') retryableNotificationMutation = null;
+    return {
+      ok: false,
+      code: response?.code || 'RETRY_REQUIRED',
+      error: response?.error || 'The notification update was rejected.',
+    };
+  }
+
+  retryableNotificationMutation = null;
+  applyNotificationReadBaseline(response, isRead);
+  return {
+    ok: true,
+    data: response,
+    commandId: response.commandId || pending.id,
+    workspaceVersion: Number(response.workspaceVersion) || 1,
+    replayed: response.replayed,
+  };
+};
+
 const portalRecords = (value: unknown) => (
   Array.isArray(value) ? value.filter(isRecord) : []
 );
@@ -762,10 +951,14 @@ const projectionToEntityRow = (
 };
 
 export const loadSecureWorkspace = async (authUser: User) => {
-  const [{ data: members, error: memberError }, { data: entities, error: entityError }, revision] = await Promise.all([
+  const [{ data: members, error: memberError }, { data: entities, error: entityError }, revision, notificationFeed] = await Promise.all([
     supabase.from('aitask_members').select('*').eq('workspace_id', SECURE_WORKSPACE_ID),
-    supabase.from('aitask_entities').select('workspace_id,entity_type,entity_id,parent_id,data,version,updated_at').eq('workspace_id', SECURE_WORKSPACE_ID),
+    supabase.from('aitask_entities')
+      .select('workspace_id,entity_type,entity_id,parent_id,data,version,updated_at')
+      .eq('workspace_id', SECURE_WORKSPACE_ID)
+      .neq('entity_type', 'notification'),
     loadSecureWorkspaceRevision(),
+    loadSecureNotificationPage({ limit: 50 }),
   ]);
   if (memberError) throw memberError;
   if (entityError) throw entityError;
@@ -809,7 +1002,16 @@ export const loadSecureWorkspace = async (authUser: User) => {
         ...clientPortal.clients.map(item => projectionToEntityRow('client', item as unknown as Record<string, unknown>)),
       ]
     : [];
-  const effectiveEntityRows = [...visibleEntityRows, ...projectedEntityRows];
+  const notificationRows: EntityRow[] = notificationFeed.items.map(notification => ({
+    workspace_id: SECURE_WORKSPACE_ID,
+    entity_type: 'notification',
+    entity_id: notification.id,
+    parent_id: null,
+    data: stripRuntimeFields(notification as unknown as Record<string, unknown>),
+    version: Math.max(1, Number(notification.version) || 1),
+    updated_at: notification.updatedAt || notification.createdAt,
+  }));
+  const effectiveEntityRows = [...visibleEntityRows, ...projectedEntityRows, ...notificationRows];
 
   const comments = new Map<string, Task['comments']>();
   const approvals = new Map<string, Task['approvalHistory']>();
@@ -854,7 +1056,7 @@ export const loadSecureWorkspace = async (authUser: User) => {
   );
   alignBaselineToCanonicalState(state);
   retryableCommand = null;
-  return { state, currentUser, revision };
+  return { state, currentUser, revision, notificationFeed };
 };
 
 export const completeSecurePasswordSetup = async (): Promise<MutationResult<CommandResponse>> => {

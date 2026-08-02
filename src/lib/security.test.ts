@@ -73,6 +73,30 @@ describe('notification routes', () => {
       iconType: 'alert',
     })).toBeNull();
   });
+
+  it('accepts only supported notification center metadata', () => {
+    const parsed = parseNotification({
+      id: 'notice-2',
+      title: 'Assigned',
+      message: 'A task was assigned.',
+      route: { page: 'tasks', entityId: 'task-1' },
+      isRead: false,
+      readByUserIds: [],
+      category: 'assignment',
+      importance: 'action',
+      createdAt: '2026-08-02T00:00:00.000Z',
+      iconType: 'task',
+    });
+    expect(parsed).toMatchObject({ category: 'assignment', importance: 'action' });
+
+    const unsupported = parseNotification({
+      ...parsed,
+      category: 'marketing',
+      importance: 'urgent',
+    });
+    expect(unsupported?.category).toBeUndefined();
+    expect(unsupported?.importance).toBeUndefined();
+  });
 });
 
 describe('remote snapshot validation', () => {

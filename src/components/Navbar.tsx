@@ -12,6 +12,7 @@ import { useSoundNotifications } from '../hooks/useSoundNotifications';
 import { NotificationReadActions } from '../hooks/useNotificationReadActions';
 import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 import { notificationRouteToPath } from '../lib/security';
+import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -22,6 +23,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
   const {
     currentUser,
     notifications,
+    notificationUnreadCount,
     rolePermissions,
   } = useStore();
   const [showNotifs, setShowNotifs] = useState(false);
@@ -55,7 +57,8 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [notifications, currentUser]);
 
-  const unreadCount = unreadNotifs.length;
+  const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : unreadNotifs.length;
+  const previewNotifications = unreadNotifs.slice(0, 5);
 
   const handleBellClick = () => {
     setShowNotifs(!showNotifs);
@@ -160,7 +163,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
                 ) : null}
               </div>
               <div className="max-h-80 overflow-y-auto custom-scrollbar">
-                {unreadNotifs.length > 0 ? unreadNotifs.map(notif => (
+                {previewNotifications.length > 0 ? previewNotifications.map(notif => (
                   <Link
                     key={notif.id}
                     to={notificationRouteToPath(notif.route ?? (notif as typeof notif & { link?: string }).link)}
@@ -187,18 +190,25 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
                   </div>
                 )}
               </div>
-              {unreadCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => void notificationReadActions.markAllRead()}
-                  disabled={notificationReadActions.isUpdating}
-                  className="w-full border-t border-slate-200 bg-slate-50 px-4 py-2 text-center transition-colors hover:bg-slate-100 disabled:cursor-wait disabled:opacity-60"
+              <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-3 py-2.5">
+                <Link
+                  to="/notifications"
+                  onClick={() => setShowNotifs(false)}
+                  className="rounded-md px-2 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
                 >
-                  <span className="text-xs font-semibold text-slate-500 transition-colors hover:text-blue-700">
-                    {notificationReadActions.isUpdating ? 'Saving...' : 'Mark All as Read'}
-                  </span>
-                </button>
-              )}
+                  View all notifications
+                </Link>
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void notificationReadActions.markAllRead()}
+                    disabled={notificationReadActions.isUpdating}
+                    className="rounded-md px-2 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-white hover:text-blue-700 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {notificationReadActions.isUpdating ? 'Saving...' : 'Mark all read'}
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>

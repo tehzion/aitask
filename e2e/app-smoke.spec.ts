@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('first login reaches the app and critical responsive routes remain usable', async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(180_000);
 
   await page.goto('/feedback?role=Client&lang=zh');
   await expect(page.getByRole('heading', { name: 'AiTask 一周使用反馈' })).toBeVisible();
@@ -156,6 +156,34 @@ test('first login reaches the app and critical responsive routes remain usable',
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
+        id: 'routine-notification-qa',
+        targetUserId: current.currentUser.id,
+        title: 'Task Status Updated',
+        message: 'Routine updates belong in history without an interruptive popup.',
+        route: { page: 'tasks', entityId: 'routine-task' },
+        isRead: false,
+        readByUserIds: [],
+        category: 'status',
+        importance: 'informational',
+        createdAt: new Date().toISOString(),
+        iconType: 'status',
+      }],
+    });
+  });
+  await expect(page.getByRole('article', { name: 'New notification: Task Status Updated' })).toHaveCount(0);
+  await expect(headerNotificationButton.locator('span')).toHaveText('1');
+  await page.evaluate(async () => {
+    const storePath = '/src/store/index.ts';
+    const { useStore } = await import(storePath);
+    useStore.setState({ notifications: [] });
+  });
+
+  await page.evaluate(async () => {
+    const storePath = '/src/store/index.ts';
+    const { useStore } = await import(storePath);
+    const current = useStore.getState();
+    useStore.setState({
+      notifications: [{
         id: 'popup-notification-1',
         targetUserId: current.currentUser.id,
         title: 'Popup QA 1',
@@ -163,6 +191,8 @@ test('first login reaches the app and critical responsive routes remain usable',
         route: { page: 'tasks' },
         isRead: false,
         readByUserIds: [],
+        category: 'assignment',
+        importance: 'action',
         createdAt: new Date().toISOString(),
         iconType: 'task',
       }],
@@ -186,10 +216,12 @@ test('first login reaches the app and critical responsive routes remain usable',
         id: 'popup-notification-locked',
         targetUserId: current.currentUser.id,
         title: 'Locked notification QA',
-        message: 'An unrelated retry must block this read without being discarded.',
+        message: 'An unrelated task retry must remain intact while this read is saved.',
         route: { page: 'tasks' },
         isRead: false,
         readByUserIds: [],
+        category: 'assignment',
+        importance: 'action',
         createdAt: new Date().toISOString(),
         iconType: 'status',
       }, ...current.notifications],
@@ -205,9 +237,15 @@ test('first login reaches the app and critical responsive routes remain usable',
   const lockedPopup = page.getByRole('article', { name: 'New notification: Locked notification QA' });
   await expect(lockedPopup).toBeVisible();
   await lockedPopup.getByRole('button', { name: 'Mark as read' }).click();
-  await expect(lockedPopup).toBeVisible();
-  await expect(headerNotificationButton.locator('span')).toHaveText('2');
-  await expect(page.getByText('Resolve the current workspace sync change before updating notifications.')).toBeVisible();
+  await expect(lockedPopup).toBeHidden();
+  await expect(headerNotificationButton.locator('span')).toHaveText('1');
+  const pendingTaskMutation = await page.evaluate(async () => {
+    const storePath = '/src/store/index.ts';
+    const { useStore } = await import(storePath);
+    const backend = useStore.getState().backend;
+    return { status: backend.status, pendingMutations: backend.pendingMutations, hasLocalChanges: backend.hasLocalChanges };
+  });
+  expect(pendingTaskMutation).toEqual({ status: 'retry_required', pendingMutations: 1, hasLocalChanges: true });
   await page.evaluate(async () => {
     const storePath = '/src/store/index.ts';
     const { useStore } = await import(storePath);
@@ -239,6 +277,8 @@ test('first login reaches the app and critical responsive routes remain usable',
         route: { page: 'tasks' },
         isRead: false,
         readByUserIds: [],
+        category: 'assignment',
+        importance: 'action',
         createdAt: new Date().toISOString(),
         iconType: 'status',
       }, ...current.notifications],
@@ -251,7 +291,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(secondPopup).toBeHidden();
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
   await headerNotificationButton.click();
-  await page.getByRole('button', { name: 'Mark All as Read' }).click();
+  await page.getByRole('button', { name: 'Mark all read' }).click();
   await expect(headerNotificationButton.locator('span')).toHaveCount(0);
 
   await page.evaluate(async () => {
@@ -267,6 +307,8 @@ test('first login reaches the app and critical responsive routes remain usable',
         route: { page: 'calendar' },
         isRead: false,
         readByUserIds: [],
+        category: 'review',
+        importance: 'action',
         createdAt: new Date().toISOString(),
         iconType: 'success',
       }, ...current.notifications],
@@ -292,6 +334,8 @@ test('first login reaches the app and critical responsive routes remain usable',
         route: { page: 'calendar' },
         isRead: false,
         readByUserIds: [],
+        category: 'deadline',
+        importance: 'action',
         createdAt: new Date().toISOString(),
         iconType: 'alert',
       }, ...current.notifications],
@@ -328,7 +372,61 @@ test('first login reaches the app and critical responsive routes remain usable',
   expect((mobileToastBox?.y ?? 0) + (mobileToastBox?.height ?? 0)).toBeLessThanOrEqual(pwaPopupBox?.y ?? 0);
   await mobilePopup.getByRole('button', { name: 'Dismiss notification: Mobile Popup QA' }).click();
 
+  await page.evaluate(async () => {
+    const storePath = '/src/store/index.ts';
+    const { useStore } = await import(storePath);
+    const current = useStore.getState();
+    const now = Date.now();
+    useStore.setState({
+      notifications: Array.from({ length: 7 }, (_, index) => ({
+        id: `center-notification-${index + 1}`,
+        targetUserId: current.currentUser.id,
+        title: `Center QA ${index + 1}`,
+        message: `Notification center history item ${index + 1}.`,
+        route: { page: 'tasks', entityId: `center-task-${index + 1}` },
+        isRead: false,
+        readByUserIds: index === 6 ? [current.currentUser.id] : [],
+        category: 'status',
+        importance: 'informational',
+        createdAt: new Date(now - index * 60_000).toISOString(),
+        iconType: 'status',
+      })),
+    });
+  });
+  const mobileNotificationsButton = page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('button', { name: /Notifications, 6 unread/ });
+  await mobileNotificationsButton.click();
+  await expect(page.getByRole('link', { name: 'View all notifications' })).toBeVisible();
+  await page.getByRole('link', { name: 'View all notifications' }).click();
+  await expect(page).toHaveURL(/\/notifications$/);
+  await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
+  await expect(page.getByText('Center QA 1', { exact: true })).toBeVisible();
+
   await page.setViewportSize({ width: 1536, height: 864 });
+  await headerNotificationButton.click();
+  const desktopNotificationPreview = headerNotificationButton.locator('..');
+  await expect(desktopNotificationPreview.getByText('Center QA 5', { exact: true })).toBeVisible();
+  await expect(desktopNotificationPreview.getByText('Center QA 6', { exact: true })).toHaveCount(0);
+  await headerNotificationButton.click();
+
+  await page.getByLabel('Search notifications').fill('Center QA 7');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(page.getByText('Center QA 7', { exact: true })).toBeVisible();
+  await expect(page.getByText('Center QA 1', { exact: true })).toHaveCount(0);
+  await page.getByLabel('Search notifications').fill('');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await page.getByLabel('Filter notification category').selectOption('status');
+  await expect(page.getByText('Center QA 1', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Unread (6)' }).click();
+  const firstCenterItem = page.getByRole('article').filter({ hasText: 'Center QA 1' });
+  await firstCenterItem.getByRole('button', { name: 'Mark read' }).click();
+  await expect(firstCenterItem).toHaveCount(0);
+  await page.getByRole('button', { name: 'Mark all read' }).click();
+  await expect(page.getByText('No notifications found')).toBeVisible();
+  await page.getByRole('button', { name: /^all$/i }).click();
+  const readCenterItem = page.getByRole('article').filter({ hasText: 'Center QA 7' });
+  await readCenterItem.getByRole('button', { name: 'Mark unread' }).click();
+  await expect(headerNotificationButton.locator('span')).toHaveText('1');
+
   await page.goto('/tasks');
   await expect(page.getByRole('heading', { name: 'Tasks Management' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Workflow' })).toHaveCount(0);
@@ -593,7 +691,7 @@ test('first login reaches the app and critical responsive routes remain usable',
     { width: 1280, height: 800 },
     { width: 1536, height: 864 },
   ];
-  const routes = ['/', '/tasks', '/calendar', '/clients', '/projects', '/settings', '/reports'];
+  const routes = ['/', '/tasks', '/calendar', '/clients', '/projects', '/notifications', '/settings', '/reports'];
 
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);

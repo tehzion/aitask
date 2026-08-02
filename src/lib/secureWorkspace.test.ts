@@ -14,12 +14,14 @@ vi.mock('./supabaseClient', () => ({
 import {
   inferSecureCommandType,
   isSecureCommandType,
+  loadSecureNotificationPage,
   loadSecureWorkspace,
   rebaseRetryableCommand,
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
   saveSecureWorkspace,
   serializeClientProjectedTask,
+  setSecureNotificationsRead,
   type WorkspaceOperation,
 } from './secureWorkspace';
 
@@ -246,6 +248,83 @@ describe('secure command retry identity', () => {
   });
 });
 
+describe('secure notification transport', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    refreshSession.mockReset();
+    from.mockReset();
+  });
+
+  it('loads a whitelisted cursor page and maps the current member receipt', async () => {
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        memberId: 'staff-1',
+        unreadCount: 7,
+        items: [{
+          id: 'notice-1',
+          version: 3,
+          updatedAt: '2026-08-02T10:01:00.000Z',
+          title: 'New Task Assigned',
+          message: 'A task needs your attention.',
+          route: { page: 'tasks', entityId: 'task-1' },
+          isRead: true,
+          createdAt: '2026-08-02T10:00:00.000Z',
+          iconType: 'task',
+          category: 'assignment',
+          importance: 'action',
+        }],
+        nextCursor: { createdAt: '2026-08-02T10:00:00.000Z', id: 'notice-1' },
+      },
+      error: null,
+    });
+
+    const page = await loadSecureNotificationPage({ limit: 80, unreadOnly: true, search: ' assigned ' });
+
+    expect(rpc).toHaveBeenCalledWith('aitask_read_notifications', expect.objectContaining({
+      p_limit: 50,
+      p_unread_only: true,
+      p_search: 'assigned',
+    }));
+    expect(page).toMatchObject({ unreadCount: 7, nextCursor: { id: 'notice-1' } });
+    expect(page.items[0]).toMatchObject({
+      id: 'notice-1',
+      readByUserIds: ['staff-1'],
+      visibleToCurrentUser: true,
+    });
+    expect(page.items[0].targetUserId).toBeUndefined();
+  });
+
+  it('reuses an uncertain read command receipt and keeps task commands separate', async () => {
+    rpc
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockResolvedValueOnce({
+        data: {
+          ok: true,
+          commandId: '00000000-0000-4000-8000-000000000116',
+          memberId: 'staff-1',
+          workspaceVersion: 44,
+          unreadCount: 6,
+          changedNotifications: [{ id: 'notice-1', version: 4 }],
+        },
+        error: null,
+      });
+
+    const first = await setSecureNotificationsRead(['notice-1'], true);
+    expect(first).toMatchObject({ ok: false, code: 'RETRY_REQUIRED' });
+    const firstCommandId = rpc.mock.calls[0][1].p_command_id;
+
+    const unrelated = await setSecureNotificationsRead(['notice-2'], true);
+    expect(unrelated).toMatchObject({ ok: false, code: 'RETRY_REQUIRED' });
+    expect(rpc).toHaveBeenCalledTimes(1);
+
+    const retry = await setSecureNotificationsRead(['notice-1'], true);
+    expect(retry).toMatchObject({ ok: true, workspaceVersion: 44 });
+    expect(rpc.mock.calls[1][0]).toBe('aitask_set_notifications_read');
+    expect(rpc.mock.calls[1][1].p_command_id).toBe(firstCommandId);
+  });
+});
+
 describe('secure workspace baseline', () => {
   beforeEach(() => {
     rpc.mockReset();
@@ -299,11 +378,18 @@ describe('secure workspace baseline', () => {
       select: () => ({
         eq: () => table === 'aitask_workspaces'
           ? { single: () => Promise.resolve({ data: { version: 11, updated_at: '2026-07-18T00:00:00Z', sync_protocol_version: 1 }, error: null }) }
-          : Promise.resolve({ data: table === 'aitask_members' ? [member] : [existingTask], error: null }),
+          : table === 'aitask_entities'
+            ? { neq: () => Promise.resolve({ data: [existingTask], error: null }) }
+            : Promise.resolve({ data: [member], error: null }),
       }),
     }));
+    rpc.mockResolvedValueOnce({
+      data: { ok: true, memberId: member.id, items: [], unreadCount: 0, nextCursor: null },
+      error: null,
+    });
 
     const loaded = await loadSecureWorkspace({ id: member.auth_user_id } as never);
+    rpc.mockClear();
     const newTask = {
       ...loaded.state.tasks[0],
       id: 'task-new',
@@ -425,12 +511,15 @@ describe('secure workspace baseline', () => {
       select: () => ({
         eq: () => table === 'aitask_workspaces'
           ? { single: () => Promise.resolve({ data: { version: 30, updated_at: '2026-08-01T03:00:00Z', sync_protocol_version: 1 }, error: null }) }
-          : Promise.resolve({
-              data: table === 'aitask_members' ? [clientMember, internalMember] : [fullTask],
-              error: null,
-            }),
+          : table === 'aitask_entities'
+            ? { neq: () => Promise.resolve({ data: [fullTask], error: null }) }
+            : Promise.resolve({ data: [clientMember, internalMember], error: null }),
       }),
     }));
+    rpc.mockResolvedValueOnce({
+      data: { ok: true, memberId: clientMember.id, items: [], unreadCount: 0, nextCursor: null },
+      error: null,
+    });
     rpc.mockResolvedValueOnce({
       data: {
         workspaceId: 'aitask-main',

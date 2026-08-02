@@ -76,6 +76,7 @@ import {
   normalizeMemberDepartments,
 } from '../lib/departments';
 import { isTaskCompleted, resolveTaskCompletedAt } from '../lib/taskCompletion';
+import { enrichNotificationMetadata } from '../lib/notificationCenter';
 
 export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required';
 
@@ -140,6 +141,7 @@ interface StoreState {
   projects: Project[];
   tasks: Task[];
   notifications: AppNotification[];
+  notificationUnreadCount: number;
   registrations: Registration[];
   rolePermissions: CustomRole[];
   backend: BackendRuntimeState;
@@ -182,6 +184,7 @@ interface StoreState {
   deleteClientProfile: (clientId: string) => { ok: boolean; error?: string };
   addComment: (taskId: string, text: string) => void;
   markNotificationRead: (id: string) => void;
+  markNotificationUnread: (id: string) => void;
   markAllNotificationsRead: () => void;
   sendDueDateReminders: () => void;
   registerUser: (data: Omit<Registration, 'id' | 'status' | 'createdAt'>) => Promise<{ ok: boolean; error?: string }>;
@@ -207,6 +210,7 @@ const isWorkspaceMutationLocked = (state: StoreState) => (
   && ['offline', 'conflict', 'retry_required'].includes(state.backend.status)
 );
 let isApplyingRemoteSnapshot = false;
+let isApplyingNotificationRead = false;
 const seededUserIds = new Set(mockUsers.map(user => user.id));
 const seededProjectIds = new Set(mockProjects.map(project => project.id));
 const legacyDemoTaskIdSet = new Set<string>(legacyDemoTaskIds);
@@ -293,13 +297,26 @@ const makeBackendRuntimeState = (): BackendRuntimeState => {
   };
 };
 
-const makeNotification = (data: Omit<AppNotification, 'id' | 'isRead' | 'createdAt'>): AppNotification => ({
-  ...data,
-  id: nowId('N'),
-  isRead: false,
-  readByUserIds: [],
-  createdAt: new Date().toISOString(),
-});
+const makeNotification = (data: Omit<AppNotification, 'id' | 'isRead' | 'createdAt'>): AppNotification => (
+  enrichNotificationMetadata({
+    ...data,
+    id: nowId('N'),
+    isRead: false,
+    readByUserIds: [],
+    createdAt: new Date().toISOString(),
+  })
+);
+
+const getNotificationReadReceipts = (
+  notification: AppNotification,
+  users: User[],
+) => {
+  if (notification.readByUserIds !== undefined) return notification.readByUserIds;
+  if (!notification.isRead) return [];
+  return users
+    .filter(user => isNotificationVisible(user, notification))
+    .map(user => user.id);
+};
 
 const stripPassword = <T extends { password?: string }>(item: T): Omit<T, 'password'> => {
   const cleanItem = { ...item };
@@ -667,6 +684,7 @@ export const useStore = create<StoreState>()(
       })),
       createTaskInitialDate: undefined,
       notifications: [],
+      notificationUnreadCount: 0,
       registrations: [],
       rolePermissions: [],
       backend: makeBackendRuntimeState(),
@@ -724,6 +742,7 @@ export const useStore = create<StoreState>()(
                 updatedAt: loadedAt,
               }),
               currentUser: secure.currentUser,
+              notificationUnreadCount: secure.notificationFeed.unreadCount,
               backend: {
                 ...state.backend,
                 status: 'live',
@@ -1024,6 +1043,7 @@ export const useStore = create<StoreState>()(
                 updatedAt: pulledAt,
               }),
               currentUser: secure.currentUser,
+              notificationUnreadCount: secure.notificationFeed.unreadCount,
               backend: {
                 ...state.backend,
                 status: 'live',
@@ -1593,47 +1613,76 @@ export const useStore = create<StoreState>()(
         return { ok: true };
       },
 
-      markNotificationRead: (id) => set((state) => {
-        if (isWorkspaceMutationLocked(state)) return state;
-        const currentUser = state.currentUser;
-        return {
-          notifications: (state.notifications || []).map(n => {
-            if (n.id !== id) return n;
-            if (!currentUser) return { ...n, isRead: true };
+      markNotificationRead: (id) => {
+        isApplyingNotificationRead = true;
+        set((state) => {
+          const currentUser = state.currentUser;
+          if (!currentUser) return state;
+          return {
+            notifications: (state.notifications || []).map(notification => (
+              notification.id === id
+                ? {
+                    ...notification,
+                    readByUserIds: Array.from(new Set([
+                      ...getNotificationReadReceipts(notification, state.users),
+                      currentUser.id,
+                    ])),
+                    isRead: notification.targetUserId === currentUser.id && !notification.targetRole && !notification.targetClient
+                      ? true
+                      : notification.isRead,
+                  }
+                : notification
+            )),
+          };
+        });
+        isApplyingNotificationRead = false;
+      },
 
-            const readByUserIds = Array.from(new Set([...(n.readByUserIds || []), currentUser.id]));
-            const isDirectUserNotice = n.targetUserId === currentUser.id && !n.targetRole && !n.targetClient;
+      markNotificationUnread: (id) => {
+        isApplyingNotificationRead = true;
+        set((state) => {
+          const currentUser = state.currentUser;
+          if (!currentUser) return state;
+          return {
+            notifications: (state.notifications || []).map(notification => (
+              notification.id === id
+                ? {
+                    ...notification,
+                    readByUserIds: getNotificationReadReceipts(notification, state.users)
+                      .filter(userId => userId !== currentUser.id),
+                    isRead: false,
+                  }
+                : notification
+            )),
+          };
+        });
+        isApplyingNotificationRead = false;
+      },
 
-            return {
-              ...n,
-              readByUserIds,
-              isRead: isDirectUserNotice ? true : n.isRead,
-            };
-          })
-        };
-      }),
-
-      markAllNotificationsRead: () => set((state) => {
-        if (isWorkspaceMutationLocked(state)) return state;
-        const currentUser = state.currentUser;
-        if (!currentUser) return state;
-
-        return {
-          notifications: (state.notifications || []).map(n => {
-            const isMine = isNotificationVisible(currentUser, n);
-            if (!isMine || isNotificationReadByUser(currentUser, n)) return n;
-
-            const readByUserIds = Array.from(new Set([...(n.readByUserIds || []), currentUser.id]));
-            const isDirectUserNotice = n.targetUserId === currentUser.id && !n.targetRole && !n.targetClient;
-
-            return {
-              ...n,
-              readByUserIds,
-              isRead: isDirectUserNotice ? true : n.isRead,
-            };
-          })
-        };
-      }),
+      markAllNotificationsRead: () => {
+        isApplyingNotificationRead = true;
+        set((state) => {
+          const currentUser = state.currentUser;
+          if (!currentUser) return state;
+          return {
+            notifications: (state.notifications || []).map(notification => {
+              const isMine = isNotificationVisible(currentUser, notification);
+              if (!isMine || isNotificationReadByUser(currentUser, notification)) return notification;
+              return {
+                ...notification,
+                readByUserIds: Array.from(new Set([
+                  ...getNotificationReadReceipts(notification, state.users),
+                  currentUser.id,
+                ])),
+                isRead: notification.targetUserId === currentUser.id && !notification.targetRole && !notification.targetClient
+                  ? true
+                  : notification.isRead,
+              };
+            }),
+          };
+        });
+        isApplyingNotificationRead = false;
+      },
 
       updateTaskStatus: (taskId, status) => set((state) => {
         if (isWorkspaceMutationLocked(state)) return state;
@@ -3258,7 +3307,7 @@ export const startBackendAutoSync = () => {
   backendAutoSyncStarted = true;
 
   useStore.subscribe((state, previousState) => {
-    if (!shouldUseSupabase() || state.backend.isLoading || state.backend.isPulling || isApplyingRemoteSnapshot) return;
+    if (!shouldUseSupabase() || state.backend.isLoading || state.backend.isPulling || isApplyingRemoteSnapshot || isApplyingNotificationRead) return;
 
     const workspaceChanged =
       state.users !== previousState.users ||

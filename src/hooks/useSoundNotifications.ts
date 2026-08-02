@@ -3,10 +3,11 @@ import { AppNotification } from '../types';
 import { isNotificationVisible } from '../lib/access';
 import { playNotificationSound, resumeAudio } from '../lib/sounds';
 import { User } from '../types';
+import { isActionNotification } from '../lib/notificationCenter';
 
 /**
  * Watches the notifications list and plays a sound whenever a new
- * unread notification arrives that is visible to the current user.
+ * unread action notification arrives that is visible to the current user.
  *
  * Must be mounted after the user has interacted with the page at
  * least once (browser autoplay policy).
@@ -48,7 +49,7 @@ export const useSoundNotifications = (
       seenIds.current.add(notif.id);
 
       // Only play if this notification is visible to the current user
-      if (isNotificationVisible(currentUser, notif)) {
+      if (isNotificationVisible(currentUser, notif) && isActionNotification(notif)) {
         playNotificationSound(notif.iconType);
         break; // Play one sound per batch, avoid stacking
       }

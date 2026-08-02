@@ -6,15 +6,6 @@ export interface NotificationReadState {
   readByUserIds?: string[];
 }
 
-export interface NotificationMutationBackend {
-  status: string;
-  isLoading: boolean;
-  isSaving: boolean;
-  isPulling: boolean;
-  hasLocalChanges: boolean;
-  pendingMutations: number;
-}
-
 export const createNotificationMutationLock = () => {
   let active = false;
   return {
@@ -28,15 +19,6 @@ export const createNotificationMutationLock = () => {
     },
   };
 };
-
-export const isNotificationMutationBlocked = (backend: NotificationMutationBackend) => (
-  backend.isLoading
-  || backend.isSaving
-  || backend.isPulling
-  || backend.hasLocalChanges
-  || backend.pendingMutations > 0
-  || ['loading', 'offline', 'conflict', 'retry_required'].includes(backend.status)
-);
 
 export const captureNotificationReadState = (
   notifications: AppNotification[],

@@ -78,9 +78,21 @@ export interface NotificationRoute {
   entityId?: string;
 }
 
+export type NotificationCategory =
+  | 'assignment'
+  | 'deadline'
+  | 'review'
+  | 'feedback'
+  | 'account'
+  | 'status'
+  | 'system';
+
+export type NotificationImportance = 'action' | 'informational';
+
 export interface AppNotification {
   id: string;
   version?: number;
+  updatedAt?: string;
   targetUserId?: string; // e.g., assignee
   targetRole?: Role;     // e.g., 'Admin'
   targetClient?: string; // e.g., 'TechNova'
@@ -91,6 +103,20 @@ export interface AppNotification {
   readByUserIds?: string[];
   createdAt: string;
   iconType: 'task' | 'status' | 'success' | 'alert';
+  category?: NotificationCategory;
+  importance?: NotificationImportance;
+  visibleToCurrentUser?: boolean; // Runtime-only feed projection; never persisted
+}
+
+export interface NotificationCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface NotificationFeedPage {
+  items: AppNotification[];
+  unreadCount: number;
+  nextCursor?: NotificationCursor;
 }
 
 export interface TaskComment {

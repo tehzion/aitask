@@ -3,7 +3,6 @@ import type { AppNotification } from '../types';
 import {
   captureNotificationReadState,
   createNotificationMutationLock,
-  isNotificationMutationBlocked,
   restoreNotificationReadState,
 } from './notificationReads';
 
@@ -19,28 +18,6 @@ const notification = (id: string, isRead = false): AppNotification => ({
 });
 
 describe('notification read persistence safety', () => {
-  it('blocks reads while another workspace mutation needs attention', () => {
-    expect(isNotificationMutationBlocked({
-      status: 'retry_required',
-      isLoading: false,
-      isSaving: false,
-      isPulling: false,
-      hasLocalChanges: true,
-      pendingMutations: 1,
-    })).toBe(true);
-  });
-
-  it('allows reads only when synchronization is idle', () => {
-    expect(isNotificationMutationBlocked({
-      status: 'live',
-      isLoading: false,
-      isSaving: false,
-      isPulling: false,
-      hasLocalChanges: false,
-      pendingMutations: 0,
-    })).toBe(false);
-  });
-
   it('serializes rapid notification read attempts', () => {
     const lock = createNotificationMutationLock();
     expect(lock.tryAcquire()).toBe(true);

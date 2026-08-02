@@ -330,6 +330,7 @@ export const getAssignableProjects = (
 
 export const isNotificationVisible = (user: User | null | undefined, notification: AppNotification) => {
   if (!user) return false;
+  if (notification.visibleToCurrentUser) return true;
   if (notification.targetUserId && notification.targetUserId === user.id) return true;
   // Supabase RLS note: Boss Koo maps to super_admin, but must still receive admin-scoped operational notices.
   if (notification.targetRole === 'Admin' && isBossKoo(user)) return true;
@@ -340,7 +341,8 @@ export const isNotificationVisible = (user: User | null | undefined, notificatio
 
 export const isNotificationReadByUser = (user: User | null | undefined, notification: AppNotification) => {
   if (!user) return Boolean(notification.isRead);
-  return Boolean(notification.isRead) || Boolean(notification.readByUserIds?.includes(user.id));
+  if (notification.readByUserIds !== undefined) return notification.readByUserIds.includes(user.id);
+  return Boolean(notification.isRead);
 };
 
 export const getUnreadNotifications = (

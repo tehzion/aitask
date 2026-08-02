@@ -21,6 +21,7 @@ const Settings = React.lazy(() => import('./pages/Settings'));
 const AccountPassword = React.lazy(() => import('./pages/AccountPassword'));
 const Feedback = React.lazy(() => import('./pages/Feedback'));
 const FeedbackResults = React.lazy(() => import('./pages/FeedbackResults'));
+const Notifications = React.lazy(() => import('./pages/Notifications'));
 
 const RouteLoading = () => (
   <div className="flex min-h-[40vh] items-center justify-center px-4 text-sm font-medium text-slate-500" role="status">
@@ -133,6 +134,7 @@ function App() {
               <Route path="projects" element={<RoleRoute path="/projects"><Projects /></RoleRoute>} />
               <Route path="reports" element={<RoleRoute path="/reports"><Reports /></RoleRoute>} />
               <Route path="approvals" element={<RoleRoute path="/approvals"><Approvals /></RoleRoute>} />
+              <Route path="notifications" element={<Notifications />} />
               <Route path="settings" element={<RoleRoute path="/settings"><Settings /></RoleRoute>} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

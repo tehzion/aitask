@@ -23,6 +23,8 @@ const notification = (
   readByUserIds: [],
   createdAt: `2026-07-28T10:00:0${id.slice(-1)}.000Z`,
   iconType: 'task',
+  category: 'assignment',
+  importance: 'action',
   ...overrides,
 });
 
@@ -62,5 +64,14 @@ describe('notification popup detection', () => {
 
     expect(result.incomingIds).toEqual([newer.id, older.id]);
     expect(Array.from(result.seenIds).sort()).toEqual([older.id, newer.id]);
+  });
+
+  it('keeps routine status updates in the center without showing a popup', () => {
+    const routine = notification('notice-7', {
+      title: 'Task Status Updated',
+      category: 'status',
+      importance: 'informational',
+    });
+    expect(getIncomingUnreadNotificationIds(staff, [routine], new Set()).incomingIds).toEqual([]);
   });
 });

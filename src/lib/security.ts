@@ -355,11 +355,14 @@ export const parseNotification = (value: unknown): AppNotification | null => {
   const createdAt = safeIsoTimestamp(value.createdAt);
   const route = parseNotificationRoute(value.route) || legacyLinkToNotificationRoute(value.link);
   const iconType = cleanText(value.iconType, 20) as AppNotification['iconType'];
+  const category = cleanText(value.category, 24) as AppNotification['category'];
+  const importance = cleanText(value.importance, 24) as AppNotification['importance'];
   if (!id || !title || !message || !createdAt || !route || !iconTypes.has(iconType)) return null;
 
   return {
     id,
     version: Math.max(1, Number(value.version) || 1),
+    updatedAt: safeIsoTimestamp(value.updatedAt),
     targetUserId: optionalText(value.targetUserId, 160),
     targetRole: roles.has(value.targetRole as Role) ? value.targetRole as Role : undefined,
     targetClient: optionalText(value.targetClient, 240),
@@ -367,9 +370,16 @@ export const parseNotification = (value: unknown): AppNotification | null => {
     message,
     route,
     isRead: value.isRead === true,
-    readByUserIds: safeStringArray(value.readByUserIds, 1000, 160),
+    readByUserIds: Array.isArray(value.readByUserIds)
+      ? safeStringArray(value.readByUserIds, 1000, 160)
+      : undefined,
     createdAt,
     iconType,
+    category: ['assignment', 'deadline', 'review', 'feedback', 'account', 'status', 'system'].includes(category || '')
+      ? category
+      : undefined,
+    importance: importance === 'action' || importance === 'informational' ? importance : undefined,
+    visibleToCurrentUser: value.visibleToCurrentUser === true || undefined,
   };
 };
 

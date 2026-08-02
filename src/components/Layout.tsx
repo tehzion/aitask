@@ -13,6 +13,11 @@ import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCir
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
 import { notificationRouteToPath } from '../lib/security';
+import { shouldUseSecureSupabase } from '../lib/supabaseClient';
+
+export interface LayoutOutletContext {
+  notificationReadActions: ReturnType<typeof useNotificationReadActions>;
+}
 
 const Layout: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -22,6 +27,7 @@ const Layout: React.FC = () => {
     isCreateTaskModalOpen,
     setCreateTaskModalOpen,
     notifications,
+    notificationUnreadCount,
     currentUser,
     backend,
     pullBackendNow,
@@ -67,7 +73,8 @@ const Layout: React.FC = () => {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [notifications, currentUser]);
 
-  const unreadCount = unreadNotifs.length;
+  const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : unreadNotifs.length;
+  const previewNotifications = unreadNotifs.slice(0, 5);
   const mobileNavItems = useMemo(() => [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/tasks', label: 'Tasks', icon: CheckSquare },
@@ -183,7 +190,7 @@ const Layout: React.FC = () => {
           </div>
         )}
         <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-100 p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-6 lg:p-7">
-          <Outlet />
+          <Outlet context={{ notificationReadActions }} />
         </main>
 
         {/* Mobile Bottom Navigation Bar */}
@@ -259,8 +266,8 @@ const Layout: React.FC = () => {
 
             {/* Notifications List */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 pb-8">
-              {unreadNotifs.length > 0 ? (
-                unreadNotifs.map(notif => (
+              {previewNotifications.length > 0 ? (
+                previewNotifications.map(notif => (
                   <Link
                     key={notif.id}
                     to={notificationRouteToPath(notif.route ?? (notif as typeof notif & { link?: string }).link)}
@@ -298,17 +305,25 @@ const Layout: React.FC = () => {
               )}
             </div>
 
-            {/* Mark all as read */}
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={() => void notificationReadActions.markAllRead()}
-                disabled={notificationReadActions.isUpdating}
-                className="shrink-0 border-t border-slate-200 bg-slate-50 p-4 text-center text-sm font-bold text-blue-700 transition-colors hover:bg-slate-100 disabled:cursor-wait disabled:opacity-60"
+            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3">
+              <Link
+                to="/notifications"
+                onClick={() => setIsMobileNotifOpen(false)}
+                className="rounded-md px-2 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100"
               >
-                {notificationReadActions.isUpdating ? 'Saving...' : 'Mark All as Read'}
-              </button>
-            )}
+                View all notifications
+              </Link>
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void notificationReadActions.markAllRead()}
+                  disabled={notificationReadActions.isUpdating}
+                  className="rounded-md px-2 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white hover:text-blue-700 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {notificationReadActions.isUpdating ? 'Saving...' : 'Mark all read'}
+                </button>
+              )}
+            </div>
           </div>
         </>
       )}
