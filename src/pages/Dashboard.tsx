@@ -13,9 +13,11 @@ import { cardBase, pageShell } from '../components/uiTokens';
 import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
+import type { User } from '../types';
 import OperationsGlance from '../components/OperationsGlance';
 import { getTrackedMonthlyCompletions } from '../lib/taskReporting';
 import ClientPortalDashboard from '../components/ClientPortalDashboard';
+import TeamWorkload from '../components/TeamWorkload';
 
 const COLORS = ['#2563eb', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#db2777'];
 
@@ -50,6 +52,10 @@ const Dashboard: React.FC = () => {
   const showBossOperations = isBossKoo(currentUser);
   const showStaffOperations = currentUser?.role === 'Staff';
   const showClientPortal = currentUser?.role === 'Client';
+  const openCreateTaskFor = React.useCallback((member: User) => {
+    useStore.setState({ createTaskInitialAssignee: member.id });
+    setCreateTaskModalOpen(true);
+  }, [setCreateTaskModalOpen]);
   const staffAssignedTasks = useMemo(
     () => showStaffOperations && currentUser
       ? tasks.filter(task => task.assignedTo === currentUser.id)
@@ -176,7 +182,7 @@ const Dashboard: React.FC = () => {
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <SkeletonChartCard className="lg:col-span-2" />
-          <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm animate-pulse space-y-4">
+          <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-5">
             <div className="h-5 bg-slate-300 rounded w-1/3"></div>
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="h-14 bg-slate-100 rounded-lg w-full"></div>
@@ -208,7 +214,7 @@ const Dashboard: React.FC = () => {
       />
 
       {!hasTaskData && (
-        <section className={cn(cardBase, 'overflow-hidden border-blue-100 bg-blue-50/35')}>
+        <section className={cn(cardBase, 'overflow-hidden')}>
           <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-center">
             <div className="flex min-w-0 gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
@@ -273,6 +279,12 @@ const Dashboard: React.FC = () => {
           </section>
         )}
 
+        {showBossOperations && (
+          <div className="order-2">
+            <TeamWorkload tasks={tasks} users={users} onCreateTaskFor={openCreateTaskFor} />
+          </div>
+        )}
+
         <section className={cn('space-y-6', prioritizePersonalWork ? 'order-4' : 'order-2')} aria-labelledby="workspace-analytics-title">
           <div className="flex items-end justify-between gap-4">
             <div>
@@ -280,7 +292,7 @@ const Dashboard: React.FC = () => {
               <p className="mt-1 text-sm text-slate-500">Current workload distribution and completion trend.</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             <ChartCard title="Tasks by Department">
               {tasksByTeamData.length === 0 ? (
                 <ChartEmptyState>No task data yet</ChartEmptyState>
@@ -352,7 +364,7 @@ const Dashboard: React.FC = () => {
               const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
 
               return (
-                <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="min-w-0 rounded-lg border border-slate-200 bg-white p-3 transition-colors hover:bg-slate-50">
+                <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="min-w-0 rounded-lg border border-slate-200 bg-white p-3 transition-colors hover:border-slate-300 hover:bg-slate-50">
                   <p className={cn('truncate text-sm font-semibold text-slate-900', isOverdue && 'text-red-700')}>{task.title}</p>
                   <p className="mt-1 truncate text-xs text-slate-500">{task.clientName} - {task.projectName || 'Independent'}</p>
                   <div className="mt-3 flex items-center justify-between gap-2 text-[11px]">

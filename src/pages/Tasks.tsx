@@ -6,12 +6,13 @@ import { Priority, Task, TaskStatus } from '../types';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Badge, Button, PageHeader } from '../components/ui';
-import { cardBase, inputBase, pageShell } from '../components/uiTokens';
+import { cardBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { canAssignTasksToOthers, canCreateTasks, canEditTask as canEditTaskByRole, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { SkeletonTableRow, SkeletonMobileCard } from '../components/SkeletonCard';
 import { safeHttpsUrl } from '../lib/security';
 import { DEPARTMENTS } from '../lib/departments';
+import { getOperationsPeriod, type TeamWorkloadPeriod } from '../lib/taskReporting';
 
 const PRIORITY_OPTIONS: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const PAGE_SIZE = 8;
@@ -19,10 +20,10 @@ const normalizeClientName = (value: string) => value.trim().toLowerCase();
 
 const statusColors: Record<string, string> = {
   'Pending': 'bg-slate-100 text-slate-700 border border-slate-200',
-  'In Progress': 'bg-blue-100 text-blue-700 border border-blue-200',
-  'Waiting Approval': 'bg-amber-100 text-amber-700 border border-amber-200',
-  'Completed': 'bg-emerald-100 text-emerald-700 border border-emerald-200',
-  'Cancelled': 'bg-red-100 text-red-700 border border-red-200',
+  'In Progress': 'bg-blue-50 text-blue-700 border border-blue-100',
+  'Waiting Approval': 'bg-amber-50 text-amber-800 border border-amber-100',
+  'Completed': 'bg-emerald-50 text-emerald-800 border border-emerald-100',
+  'Cancelled': 'bg-red-50 text-red-700 border border-red-100',
 };
 
 const getStatusColor = (status: string): string => {
@@ -31,9 +32,9 @@ const getStatusColor = (status: string): string => {
 
 const priorityColors: Record<Priority, string> = {
   'Low': 'bg-slate-100 text-slate-700',
-  'Medium': 'bg-blue-100 text-blue-700',
-  'High': 'bg-amber-100 text-amber-700',
-  'Urgent': 'bg-red-100 text-red-700',
+  'Medium': 'bg-blue-50 text-blue-700',
+  'High': 'bg-amber-50 text-amber-800',
+  'Urgent': 'bg-red-50 text-red-700',
 };
 
 const Tasks: React.FC = () => {
@@ -112,11 +113,11 @@ const Tasks: React.FC = () => {
 
   const getDeptBadge = (dept: string) => {
     switch (dept) {
-      case 'Designer':          return 'bg-pink-50 text-pink-700 border border-pink-100';
+      case 'Designer':          return 'bg-violet-50 text-violet-700 border border-violet-100';
       case 'Editor':
       case 'Video Editor':      return 'bg-sky-50 text-sky-700 border border-sky-100';
       case 'Videoshooting':
-      case 'Video Shooting':    return 'bg-purple-50 text-purple-700 border border-purple-100';
+      case 'Video Shooting':    return 'bg-cyan-50 text-cyan-700 border border-cyan-100';
       case 'Ads Management':    return 'bg-amber-50 text-amber-700 border border-amber-100';
       case 'Account & Finance': return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
       case 'Management':        return 'bg-blue-50 text-blue-700 border border-blue-100';
@@ -128,11 +129,16 @@ const Tasks: React.FC = () => {
   const projectIdFilter = searchParams.get('projectId');
   const clientRouteFilter = searchParams.get('client') || '';
   const taskIdFilter = searchParams.get('taskId');
+  const assigneeRouteFilter = searchParams.get('assignee') || '';
+  const requestedPeriod = searchParams.get('period');
+  const periodRouteFilter: TeamWorkloadPeriod | '' = requestedPeriod === 'today' || requestedPeriod === 'week' || requestedPeriod === 'overall'
+    ? requestedPeriod
+    : '';
   const routeSearch = searchParams.get('search') || '';
 
   const [searchTerm, setSearchTerm] = useState(routeSearch);
   const [filterDepartment, setFilterDepartment] = useState('All');
-  const [filterAssignee, setFilterAssignee] = useState('All');
+  const [filterAssignee, setFilterAssignee] = useState(assigneeRouteFilter || 'All');
   const [filterClient, setFilterClient] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
@@ -167,8 +173,12 @@ const Tasks: React.FC = () => {
   }, [routeSearch]);
 
   useEffect(() => {
+    setFilterAssignee(assigneeRouteFilter || 'All');
+  }, [assigneeRouteFilter]);
+
+  useEffect(() => {
     setPage(1);
-  }, [searchTerm, filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority, dateFrom, dateTo, projectIdFilter, clientRouteFilter, taskIdFilter]);
+  }, [searchTerm, filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority, dateFrom, dateTo, projectIdFilter, clientRouteFilter, taskIdFilter, assigneeRouteFilter, periodRouteFilter]);
 
   const tasks = useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions),
@@ -201,6 +211,16 @@ const Tasks: React.FC = () => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [tasks, users]);
 
+  const routePeriodBounds = useMemo(() => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    if (periodRouteFilter === 'today') return { from: today, to: today };
+    if (periodRouteFilter === 'week') {
+      const period = getOperationsPeriod();
+      return { from: format(period.start, 'yyyy-MM-dd'), to: format(period.end, 'yyyy-MM-dd') };
+    }
+    return null;
+  }, [periodRouteFilter]);
+
   const filteredTasks = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -218,7 +238,9 @@ const Tasks: React.FC = () => {
 
       const matchesSearch = !normalizedSearch || searchable.includes(normalizedSearch);
       const matchesDept = filterDepartment === 'All' || task.department === filterDepartment;
-      const matchesAssignee = filterAssignee === 'All' || task.assignedTo === filterAssignee;
+      const matchesAssignee = assigneeRouteFilter
+        ? task.assignedTo === assigneeRouteFilter
+        : filterAssignee === 'All' || task.assignedTo === filterAssignee;
       const matchesClient = clientRouteFilter
         ? normalizeClientName(task.clientName) === normalizeClientName(clientRouteFilter)
         : filterClient === 'All' || normalizeClientName(task.clientName) === normalizeClientName(filterClient);
@@ -228,15 +250,21 @@ const Tasks: React.FC = () => {
       const matchesDateTo = !dateTo || (task.dueDate && task.dueDate <= dateTo);
       const matchesProject = projectIdFilter ? task.projectId === projectIdFilter : true;
       const matchesTask = taskIdFilter ? task.id === taskIdFilter : true;
+      const matchesRoutePeriod = !routePeriodBounds || Boolean(
+        task.dueDate
+        && task.dueDate >= routePeriodBounds.from
+        && task.dueDate <= routePeriodBounds.to
+      );
 
-      return matchesSearch && matchesDept && matchesAssignee && matchesClient && matchesStatus && matchesPriority && matchesDateFrom && matchesDateTo && matchesProject && matchesTask;
+      return matchesSearch && matchesDept && matchesAssignee && matchesClient && matchesStatus && matchesPriority && matchesDateFrom && matchesDateTo && matchesProject && matchesTask && matchesRoutePeriod;
     });
-  }, [clientRouteFilter, dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, projectIdFilter, searchTerm, taskIdFilter, tasks, users]);
+  }, [assigneeRouteFilter, clientRouteFilter, dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, projectIdFilter, routePeriodBounds, searchTerm, taskIdFilter, tasks, users]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTasks.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pagedTasks = filteredTasks.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const activeProject = projectIdFilter ? visibleProjects.find(p => p.id === projectIdFilter) : null;
+  const activeAssignee = assigneeRouteFilter ? users.find(user => user.id === assigneeRouteFilter && user.role !== 'Client') : undefined;
   const activeClient = clientRouteFilter || '';
   const activeClientKey = normalizeClientName(activeClient);
   const activeClientProfile = activeClient
@@ -255,6 +283,12 @@ const Tasks: React.FC = () => {
   const activeClientFacebook = safeHttpsUrl(activeClientProfile?.facebookPage || activeClientTasks.find(task => task.facebookPage)?.facebookPage);
   const selectedLiveTask = allTasks.find(t => t.id === selectedTask?.id) || null;
 
+  useEffect(() => {
+    if (!taskIdFilter) return;
+    const routedTask = tasks.find(task => task.id === taskIdFilter);
+    if (routedTask) setSelectedTask(routedTask);
+  }, [taskIdFilter, tasks]);
+
   const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
   const canEditTask = (task: Task) => canEditTaskByRole(currentUser, task, rolePermissions);
   const isClientReviewReady = (task: Task) => (
@@ -267,11 +301,13 @@ const Tasks: React.FC = () => {
       ? 'Leave feedback'
       : 'View details';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
-  const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
+  const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient, assigneeRouteFilter, periodRouteFilter].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
   const activeFilterLabels = [
     searchTerm && `Search: ${searchTerm}`,
     filterDepartment !== 'All' && filterDepartment,
-    filterAssignee !== 'All' && `Assignee: ${getUserName(filterAssignee)}`,
+    assigneeRouteFilter
+      ? `Assignee: ${activeAssignee?.name || 'Unknown'}`
+      : filterAssignee !== 'All' && `Assignee: ${getUserName(filterAssignee)}`,
     activeClient ? `Client: ${activeClient}` : filterClient !== 'All' && filterClient,
     filterStatus !== 'All' && filterStatus,
     filterPriority !== 'All' && filterPriority,
@@ -279,6 +315,7 @@ const Tasks: React.FC = () => {
     dateTo && `To ${dateTo}`,
     activeProject && activeProject.projectName,
     taskIdFilter && taskIdFilter,
+    periodRouteFilter && (periodRouteFilter === 'today' ? 'Today' : periodRouteFilter === 'week' ? 'This week' : 'Overall'),
   ].filter((label): label is string => Boolean(label));
 
   const clearRouteFilter = (key: string) => {
@@ -346,7 +383,7 @@ const Tasks: React.FC = () => {
       )}
 
       {activeProject && (
-        <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-100 text-blue-700 rounded-lg shadow-sm">
+        <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-blue-800">
           <span className="text-sm font-medium flex-1">
             Viewing tasks for <strong className="font-bold">{activeProject.projectName}</strong> ({activeProject.clientName})
           </span>
@@ -357,7 +394,7 @@ const Tasks: React.FC = () => {
       )}
 
       {taskIdFilter && (
-        <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-100 text-amber-700 rounded-lg shadow-sm">
+        <div className="flex items-center gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-amber-800">
           <span className="text-sm font-medium flex-1">Viewing specific task: <strong className="font-bold">{taskIdFilter}</strong></span>
           <button onClick={() => clearRouteFilter('taskId')} className="p-1.5 hover:bg-amber-200/50 rounded-md transition-colors" title="Clear task filter" aria-label="Clear task filter">
             <X className="w-4 h-4" />
@@ -365,9 +402,32 @@ const Tasks: React.FC = () => {
         </div>
       )}
 
+      {activeAssignee && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-blue-800">
+          <span className="min-w-0 flex-1 text-sm font-medium">
+            Assigned to <strong className="font-bold">{activeAssignee.name}</strong>
+            {periodRouteFilter && periodRouteFilter !== 'overall' ? ` · ${periodRouteFilter === 'today' ? 'Today' : 'This week'}` : ''}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete('assignee');
+              next.delete('period');
+              setSearchParams(next);
+            }}
+            className="rounded-md p-1.5 transition hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            title="Clear assignee filter"
+            aria-label="Clear assignee filter"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {activeClient && (
-        <div className={`${cardBase} overflow-hidden border-blue-100 bg-white`}>
-          <div className="border-b border-blue-100 bg-blue-50/70 px-5 py-4">
+        <div className={`${cardBase} overflow-hidden`}>
+          <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <Link to="/clients" className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-700 hover:text-blue-800">
@@ -378,7 +438,7 @@ const Tasks: React.FC = () => {
                     <Building2 className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Client task view</p>
+                    <p className="text-xs font-medium text-blue-700">Client task view</p>
                     <h2 className="mt-1 truncate text-xl font-bold text-slate-950">{activeClient}</h2>
                     <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
                       {activeClientProfile?.contactPerson || activeClientFallbackDetails || 'No saved contact person yet.'}
@@ -398,16 +458,16 @@ const Tasks: React.FC = () => {
 
           <div className="grid grid-cols-1 gap-4 px-5 py-4 lg:grid-cols-[1.1fr_1fr]">
             <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tasks</p>
+              <div className="rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-3">
+                <p className="text-xs font-medium text-slate-500">Tasks</p>
                 <p className="mt-1 text-xl font-bold text-slate-950">{activeClientTasks.length}</p>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Open</p>
+              <div className="rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-3">
+                <p className="text-xs font-medium text-slate-500">Open</p>
                 <p className="mt-1 text-xl font-bold text-slate-950">{activeClientOpenTasks}</p>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Done</p>
+              <div className="rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-3">
+                <p className="text-xs font-medium text-slate-500">Done</p>
                 <p className="mt-1 text-xl font-bold text-slate-950">{activeClientCompletedTasks}</p>
               </div>
             </div>
@@ -450,8 +510,8 @@ const Tasks: React.FC = () => {
         </div>
       )}
 
-      <div className={`${cardBase} overflow-hidden flex flex-col`}>
-        <div className="p-4 border-b border-slate-200 bg-slate-50/50 space-y-4">
+      <div className={`${tableShell} flex flex-col`}>
+        <div className="space-y-4 border-b border-slate-200 bg-slate-50/70 p-4">
           <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
             <div className="relative w-full lg:max-w-sm">
               <span className="absolute inset-y-0 left-0 flex items-center pl-3">
@@ -472,12 +532,12 @@ const Tasks: React.FC = () => {
             </div>
 
             {/* View Toggle */}
-            <div className="flex items-center bg-slate-100/80 rounded-lg p-1 shadow-inner shrink-0 border border-slate-200 sm:ml-auto">
+            <div className="flex shrink-0 items-center rounded-lg border border-slate-200 bg-white p-1 sm:ml-auto">
               <button
                 type="button"
                 onClick={() => setViewType('table')}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
+                  "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
                   viewType === 'table'
                     ? "bg-blue-600 text-white shadow-sm"
                     : "text-slate-600 hover:bg-slate-50"
@@ -489,7 +549,7 @@ const Tasks: React.FC = () => {
                 type="button"
                 onClick={() => setViewType('board')}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
+                  "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
                   viewType === 'board'
                     ? "bg-blue-600 text-white shadow-sm"
                     : "text-slate-600 hover:bg-slate-50"
@@ -534,7 +594,19 @@ const Tasks: React.FC = () => {
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>}
             {!isClientUser && <div className="relative">
-              <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+              <select
+                value={filterAssignee}
+                onChange={(e) => {
+                  setFilterAssignee(e.target.value);
+                  if (assigneeRouteFilter || periodRouteFilter) {
+                    const next = new URLSearchParams(searchParams);
+                    next.delete('assignee');
+                    next.delete('period');
+                    setSearchParams(next);
+                  }
+                }}
+                className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}
+              >
                 <option value="All">All assignees</option>
                 {assigneeOptions.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
               </select>
@@ -774,11 +846,11 @@ const Tasks: React.FC = () => {
                     key={status}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, status)}
-                    className={cn('bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col max-h-[700px] shadow-sm', !isClientUser && 'min-w-[260px] flex-1')}
+                            className={cn('flex max-h-[700px] flex-col rounded-lg border border-slate-200 bg-slate-50 p-3', !isClientUser && 'min-w-[260px] flex-1')}
                   >
                     {/* Column Header */}
                     <div className="flex justify-between items-center mb-3 pb-2 border-b border-[#e0d9cf] shrink-0">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-600">{status}</span>
+                      <span className="text-xs font-semibold text-slate-600">{status}</span>
                       <span className="rounded-md bg-slate-200/80 px-2 py-0.5 text-xs font-bold text-slate-700">{columnTasks.length}</span>
                     </div>
 
@@ -806,7 +878,7 @@ const Tasks: React.FC = () => {
                               onDragEnd={handleDragEnd}
                               onClick={() => setSelectedTask(task)}
                               className={cn(
-                                "bg-white p-3.5 rounded-lg border border-slate-200 hover:shadow-md transition-all cursor-pointer select-none relative text-left",
+                                "relative cursor-pointer select-none rounded-lg border border-slate-200 bg-white p-3.5 text-left transition-colors hover:border-slate-300 hover:bg-slate-50",
                                 isOverdue && "border-red-200 bg-red-50/10 hover:bg-red-50/20",
                                 draggingTaskId === task.id && "opacity-40 scale-[0.97]",
                                 canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"

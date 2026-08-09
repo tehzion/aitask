@@ -189,12 +189,12 @@ const Layout: React.FC = () => {
             </div>
           </div>
         )}
-        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-100 p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-6 lg:p-7">
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-6 lg:p-7">
           <Outlet context={{ notificationReadActions }} />
         </main>
 
         {/* Mobile Bottom Navigation Bar */}
-        <nav aria-label="Mobile navigation" className="fixed bottom-0 left-0 right-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-start justify-around border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-lg shadow-slate-950/10 md:hidden">
+        <nav aria-label="Mobile navigation" className="fixed bottom-0 left-0 right-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-start justify-around border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_14px_rgba(15,23,42,0.06)] md:hidden">
           {mobileNavItems.map(item => {
             const Icon = item.icon;
             return (
@@ -203,7 +203,7 @@ const Layout: React.FC = () => {
                 to={item.path}
                 className={({ isActive }) => cn(
                   "flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
-                  isActive && "font-bold text-blue-600"
+                  isActive && "font-semibold text-blue-700"
                 )}
               >
                 <Icon className="mb-0.5 h-5 w-5" />
@@ -218,7 +218,7 @@ const Layout: React.FC = () => {
             aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
             className={cn(
               "relative flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
-              isMobileNotifOpen && "font-bold text-blue-600"
+              isMobileNotifOpen && "font-semibold text-blue-700"
             )}
           >
             <div className="relative">
@@ -238,17 +238,17 @@ const Layout: React.FC = () => {
       {isMobileNotifOpen && (
         <>
           <div
-            className="fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-sm animate-fade-in md:hidden"
+            className="fixed inset-0 z-50 bg-slate-950/45 animate-fade-in md:hidden"
             onClick={() => setIsMobileNotifOpen(false)}
           />
-          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[75dvh] flex-col rounded-t-2xl border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-slate-950/20 animate-slide-up md:hidden">
+          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[75dvh] flex-col rounded-t-lg border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_28px_rgba(15,23,42,0.16)] animate-slide-up md:hidden">
             {/* Header */}
-            <div className="flex shrink-0 items-center justify-between rounded-t-2xl border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+            <div className="flex shrink-0 items-center justify-between rounded-t-lg border-b border-slate-200 bg-slate-50/80 px-5 py-4">
               <div className="flex items-center gap-2">
                 <Bell className="h-5 w-5 text-blue-600" />
                 <h3 className="text-base font-bold text-slate-900">Notifications</h3>
                 {unreadCount > 0 && (
-                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-extrabold text-blue-700">
+                  <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
                     {unreadCount} new
                   </span>
                 )}
@@ -276,18 +276,18 @@ const Layout: React.FC = () => {
                       setIsMobileNotifOpen(false);
                     }}
                     className={cn(
-                      "px-4 py-3 rounded-lg border flex items-start gap-3 transition-colors",
-                      'border-blue-100/70 bg-blue-50/45'
+                      "rounded-lg border px-4 py-3 flex items-start gap-3 transition-colors",
+                      'border-slate-200 bg-blue-50/35'
                     )}
                   >
-                    <div className={cn("p-2 rounded-full shrink-0", getBgColor(notif.iconType))}>
+                    <div className={cn("rounded-lg p-2 shrink-0", getBgColor(notif.iconType))}>
                       {getIcon(notif.iconType)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                      <p className="truncate text-xs font-medium text-slate-500">
                         {notif.title}
                       </p>
-                      <p className="mt-0.5 text-sm font-bold leading-snug text-slate-950">
+                      <p className="mt-0.5 text-sm font-semibold leading-snug text-slate-950">
                         {notif.message}
                       </p>
                       <p className="mt-1 text-[10px] text-slate-400">

@@ -76,7 +76,7 @@ const Projects: React.FC = () => {
         ) : null}
       />
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 2xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
         {projects.map(project => {
           const stats = getProjectStats(project.id);
           const progress = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
@@ -85,15 +85,15 @@ const Projects: React.FC = () => {
           const hasLegacyProjectName = project.projectName && project.projectName !== project.clientName;
 
           return (
-            <div key={project.id} className={`${cardBase} hover:shadow-md transition-shadow overflow-hidden flex flex-col`}>
-              <div className="p-5 border-b border-slate-100">
+            <div key={project.id} className={`${cardBase} flex flex-col overflow-hidden transition-colors hover:border-slate-300`}>
+              <div className="border-b border-slate-200/80 p-5">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
                       <FolderKanban className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg text-slate-900 leading-tight">{project.clientName}</h3>
+                      <h3 className="text-lg font-semibold leading-tight text-slate-900">{project.clientName}</h3>
                       <p className="text-sm font-medium text-slate-500">{hasLegacyProjectName ? project.projectName : 'Company'}</p>
                     </div>
                   </div>
@@ -129,7 +129,7 @@ const Projects: React.FC = () => {
 
                 <div className="flex flex-wrap gap-2 mb-4">
                   {project.services.map(service => (
-                    <Badge key={service} tone="slate" className="rounded-md text-[10px] uppercase tracking-wider">
+                    <Badge key={service} tone="slate" className="text-[10px]">
                       {service}
                     </Badge>
                   ))}
@@ -142,7 +142,7 @@ const Projects: React.FC = () => {
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
                     <div
-                      className={clsx("h-2.5 rounded-full transition-all duration-500", progress === 100 ? "bg-emerald-500" : "bg-blue-500")}
+                      className={clsx("h-2.5 rounded-full transition-[width] duration-300", progress === 100 ? "bg-emerald-500" : "bg-blue-600")}
                       style={{ width: `${progress}%` }}
                     ></div>
                   </div>

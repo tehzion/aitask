@@ -30,7 +30,7 @@ const PulseValue = ({ label, value, tone = 'default' }: PulseValueProps) => (
   <div className="min-w-0 px-4 py-3 sm:px-5">
     <p className="text-xs font-medium text-slate-500">{label}</p>
     <p className={cn(
-      'mt-1 text-2xl font-bold text-slate-950',
+      'mt-1 text-2xl font-semibold text-slate-950',
       tone === 'success' && 'text-emerald-700',
       tone === 'warning' && 'text-amber-700',
       tone === 'danger' && 'text-red-700',
@@ -113,7 +113,7 @@ const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope
           <h2 id={titleId} className="text-lg font-semibold text-slate-950">
             {isStaffScope ? 'My work pulse' : 'Agency pulse'}
           </h2>
-          <p className="mt-1 text-sm text-slate-500">{format(now, 'EEEE, d MMMM yyyy')} · Week {pulse.period.label}</p>
+          <p className="mt-1 text-sm text-slate-600">{format(now, 'EEEE, d MMMM yyyy')} · Week {pulse.period.label}</p>
         </div>
         <p className="text-xs text-slate-500">{isStaffScope ? 'Your assigned workload' : 'Agency-wide operational status'}</p>
       </div>

@@ -10,6 +10,7 @@ export const mockUsers: User[] = [
 
   // Demos
   { id: 'u-admin', name: 'Admin Demo', password: DEFAULT_USER_PASSWORD, role: 'Admin', departments: ['Operation'], department: 'Operation', avatar: 'https://i.pravatar.cc/150?u=AdminDemo' },
+  { id: 'u-staff-demo-local', name: 'Staff Demo', password: DEFAULT_USER_PASSWORD, role: 'Staff', departments: ['Designer'], department: 'Designer', avatar: 'https://i.pravatar.cc/150?u=StaffDemo' },
   { id: 'u-client-urban', name: 'UrbanEats Client Demo', password: DEFAULT_USER_PASSWORD, role: 'Client', departments: ['Client'], department: 'Client', companyName: 'UrbanEats', avatar: 'https://i.pravatar.cc/150?u=UrbanEatsClient' },
 ];
 

@@ -25,7 +25,7 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
       role={toast.type === 'error' ? 'alert' : 'status'}
       aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
       className={cn(
-        'flex w-full min-w-0 items-center gap-3 rounded-lg p-4 shadow-lg backdrop-blur-sm pointer-events-auto transition-all duration-300 md:w-auto md:min-w-[300px] md:max-w-sm',
+        'flex w-full min-w-0 items-center gap-3 rounded-lg p-4 shadow-[0_10px_24px_rgba(15,23,42,0.12)] pointer-events-auto transition-all duration-300 md:w-auto md:min-w-[300px] md:max-w-sm',
         'animate-in fade-in slide-in-from-right-5 slide-in-from-bottom-2',
         bgClasses[toast.type]
       )}

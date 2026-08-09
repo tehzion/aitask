@@ -9,7 +9,7 @@ import {
   subMonths,
   subWeeks,
 } from 'date-fns';
-import type { Task } from '../types';
+import type { Task, User } from '../types';
 import { parseOptionalDate } from './utils';
 import { isTaskCompleted } from './taskCompletion';
 
@@ -43,12 +43,54 @@ export interface AgencyPulseMetrics {
   untrackedHistoricalCompletions: number;
 }
 
+export type TeamWorkloadPeriod = 'today' | 'week' | 'overall';
+export type TeamWorkloadSignal = 'available' | 'balanced' | 'busy' | 'attention';
+
+export interface TeamWorkloadSummary {
+  member: User;
+  dueToday: number;
+  dueThisWeek: number;
+  open: number;
+  overdue: number;
+  waitingApproval: number;
+  completedThisWeek: number;
+  periodOpen: number;
+  signal: TeamWorkloadSignal;
+}
+
+export interface TeamTaskGroups {
+  overdue: Task[];
+  today: Task[];
+  thisWeek: Task[];
+  later: Task[];
+  noDueDate: Task[];
+  completedThisWeek: Task[];
+}
+
 const isCancelled = (task: Task) => task.status === 'Cancelled';
 const isOpen = (task: Task) => !isTaskCompleted(task) && !isCancelled(task);
 
 const isInPeriod = (value: string | undefined, start: Date, end: Date) => {
   const date = parseOptionalDate(value);
   return Boolean(date && isWithinInterval(date, { start, end }));
+};
+
+const sortByDueDate = (left: Task, right: Task) => (
+  (parseOptionalDate(left.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER)
+  - (parseOptionalDate(right.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER)
+);
+
+const getWorkloadSignal = (
+  period: TeamWorkloadPeriod,
+  periodOpen: number,
+  overdue: number,
+): TeamWorkloadSignal => {
+  if (overdue > 0) return 'attention';
+  const busyThreshold = period === 'today' ? 4 : period === 'week' ? 8 : 12;
+  const balancedThreshold = period === 'today' ? 1 : period === 'week' ? 3 : 5;
+  if (periodOpen >= busyThreshold) return 'busy';
+  if (periodOpen >= balancedThreshold) return 'balanced';
+  return 'available';
 };
 
 export const getOperationsPeriod = (now = new Date()): OperationsPeriod => {
@@ -129,6 +171,95 @@ export const getRecentCompletionTasks = (
       return true;
     })
     .sort((a, b) => (parseOptionalDate(b.completedAt)?.getTime() || 0) - (parseOptionalDate(a.completedAt)?.getTime() || 0));
+};
+
+export const getTeamWorkloadSummaries = (
+  tasks: Task[],
+  users: User[],
+  period: TeamWorkloadPeriod,
+  now = new Date(),
+): TeamWorkloadSummary[] => {
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+  const week = getOperationsPeriod(now);
+
+  return users
+    .filter(member => member.role !== 'Client' && !member.directoryOnly)
+    .map(member => {
+      const assignedTasks = tasks.filter(task => task.assignedTo === member.id);
+      const openTasks = assignedTasks.filter(isOpen);
+      const dueToday = openTasks.filter(task => isInPeriod(task.dueDate, todayStart, todayEnd)).length;
+      const dueThisWeek = openTasks.filter(task => isInPeriod(task.dueDate, week.start, week.end)).length;
+      const overdue = openTasks.filter(task => {
+        const dueDate = parseOptionalDate(task.dueDate);
+        return Boolean(dueDate && dueDate < todayStart);
+      }).length;
+      const completedThisWeek = assignedTasks.filter(task => (
+        isTaskCompleted(task) && isInPeriod(task.completedAt, week.start, week.end)
+      )).length;
+      const periodOpen = period === 'today'
+        ? dueToday
+        : period === 'week'
+          ? dueThisWeek
+          : openTasks.length;
+
+      return {
+        member,
+        dueToday,
+        dueThisWeek,
+        open: openTasks.length,
+        overdue,
+        waitingApproval: openTasks.filter(task => task.status === 'Waiting Approval').length,
+        completedThisWeek,
+        periodOpen,
+        signal: getWorkloadSignal(period, periodOpen, overdue),
+      };
+    });
+};
+
+export const getTeamMemberTaskGroups = (
+  tasks: Task[],
+  memberId: string,
+  now = new Date(),
+): TeamTaskGroups => {
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+  const week = getOperationsPeriod(now);
+  const assignedTasks = tasks.filter(task => task.assignedTo === memberId);
+  const openTasks = assignedTasks.filter(isOpen);
+
+  const overdue = openTasks
+    .filter(task => {
+      const dueDate = parseOptionalDate(task.dueDate);
+      return Boolean(dueDate && dueDate < todayStart);
+    })
+    .sort(sortByDueDate);
+  const today = openTasks
+    .filter(task => isInPeriod(task.dueDate, todayStart, todayEnd))
+    .sort(sortByDueDate);
+  const thisWeek = openTasks
+    .filter(task => {
+      const dueDate = parseOptionalDate(task.dueDate);
+      return Boolean(dueDate && dueDate > todayEnd && dueDate <= week.end);
+    })
+    .sort(sortByDueDate);
+  const later = openTasks
+    .filter(task => {
+      const dueDate = parseOptionalDate(task.dueDate);
+      return Boolean(dueDate && dueDate > week.end);
+    })
+    .sort(sortByDueDate);
+  const noDueDate = openTasks
+    .filter(task => !parseOptionalDate(task.dueDate))
+    .sort((left, right) => left.title.localeCompare(right.title));
+  const completedThisWeek = assignedTasks
+    .filter(task => isTaskCompleted(task) && isInPeriod(task.completedAt, week.start, week.end))
+    .sort((left, right) => (
+      (parseOptionalDate(right.completedAt)?.getTime() || 0)
+      - (parseOptionalDate(left.completedAt)?.getTime() || 0)
+    ));
+
+  return { overdue, today, thisWeek, later, noDueDate, completedThisWeek };
 };
 
 export const getTrackedMonthlyCompletions = (tasks: Task[], now = new Date(), months = 6) => (

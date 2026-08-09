@@ -50,8 +50,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       )}
 
       <div className={clsx(
-        'fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-slate-200 transition-transform duration-300 ease-in-out md:static md:translate-x-0',
-        'bg-white text-slate-900 shadow-xl shadow-slate-950/10 md:shadow-none',
+        'fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-slate-200/90 transition-transform duration-300 ease-in-out md:static md:translate-x-0',
+        'bg-white text-slate-900 shadow-[0_12px_28px_rgba(15,23,42,0.10)] md:shadow-none',
         isOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         {/* Logo */}
@@ -60,31 +60,30 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             AT
           </div>
           <div className="min-w-0">
-            <div className="font-sans text-lg font-bold text-slate-950">AiTask</div>
-            <p className="text-[10px] font-semibold uppercase text-slate-400">Agency Hub</p>
+            <div className="font-sans text-lg font-semibold text-slate-950">AiTask</div>
+            <p className="text-[11px] font-medium text-slate-500">Operations workspace</p>
           </div>
         </div>
 
         {/* Nav items */}
         <div className="custom-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-5">
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase text-slate-400">Menu</p>
+          <p className="mb-3 px-3 text-xs font-medium text-slate-500">Workspace</p>
           {filteredNavItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               onClick={onClose}
               className={({ isActive }) => clsx(
-                'group flex items-center rounded-lg px-3 py-2.5 transition-colors duration-200',
+                'group flex items-center border-l-2 px-3 py-2.5 transition-colors duration-200',
                 isActive
-                  ? 'border border-blue-100 bg-blue-50 text-blue-700'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
+                  ? 'border-blue-700 bg-blue-50/70 text-blue-800'
+                  : 'border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950'
               )}
             >
               {({ isActive }) => (
                 <>
                   <item.icon className={clsx('mr-3 h-[18px] w-[18px] transition-colors', isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-700')} />
                   <span className="font-medium text-sm">{item.label}</span>
-                  {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-500" />}
                 </>
               )}
             </NavLink>
@@ -98,24 +97,23 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               to="/settings"
               onClick={onClose}
               className={({ isActive }) => clsx(
-                'group flex w-full items-center rounded-lg px-3 py-2.5 transition-colors duration-200',
+                'group flex w-full items-center border-l-2 px-3 py-2.5 transition-colors duration-200',
                 isActive
-                  ? 'border border-blue-100 bg-blue-50 text-blue-700'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
+                  ? 'border-blue-700 bg-blue-50/70 text-blue-800'
+                  : 'border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950'
               )}
             >
               {({ isActive }) => (
                 <>
                   <Settings className={clsx('mr-3 h-[18px] w-[18px]', isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-700')} />
                   <span className="font-medium text-sm">Settings</span>
-                  {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-500" />}
                 </>
               )}
             </NavLink>
           )}
           <button
             onClick={handleLogout}
-            className="flex w-full items-center rounded-lg px-3 py-2.5 text-red-600/80 transition-colors duration-200 hover:bg-red-50 hover:text-red-700"
+            className="flex w-full items-center border-l-2 border-transparent px-3 py-2.5 text-red-600/80 transition-colors duration-200 hover:bg-red-50 hover:text-red-700"
           >
             <LogOut className="mr-3 h-[18px] w-[18px]" />
             <span className="font-medium text-sm">Logout</span>

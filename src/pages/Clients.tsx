@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Badge, Button, PageHeader } from '../components/ui';
-import { buttonBase, cardBase, inputBase, pageShell } from '../components/uiTokens';
+import { buttonBase, cardBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
 import { canCreateTasks, canEditClientProfile, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
@@ -424,7 +424,7 @@ const Clients: React.FC = () => {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-slate-500">Clients</p>
-              <p className="mt-1 text-2xl font-bold text-slate-950">{clients.length}</p>
+              <p className="mt-1.5 text-2xl font-semibold text-slate-950">{clients.length}</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
               <Building2 className="h-5 w-5" />
@@ -436,7 +436,7 @@ const Clients: React.FC = () => {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-slate-500">Saved Profiles</p>
-              <p className="mt-1 text-2xl font-bold text-slate-950">{savedProfiles}</p>
+              <p className="mt-1.5 text-2xl font-semibold text-slate-950">{savedProfiles}</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
               <FileText className="h-5 w-5" />
@@ -448,7 +448,7 @@ const Clients: React.FC = () => {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-slate-500">Open Tasks</p>
-              <p className="mt-1 text-2xl font-bold text-slate-950">{openTasks}</p>
+              <p className="mt-1.5 text-2xl font-semibold text-slate-950">{openTasks}</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
               <CheckSquare className="h-5 w-5" />
@@ -460,7 +460,7 @@ const Clients: React.FC = () => {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-slate-500">Client Accounts</p>
-              <p className="mt-1 text-2xl font-bold text-slate-950">{linkedAccounts}</p>
+              <p className="mt-1.5 text-2xl font-semibold text-slate-950">{linkedAccounts}</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
               <Users className="h-5 w-5" />
@@ -469,8 +469,8 @@ const Clients: React.FC = () => {
         </div>
       </div>
 
-      <div className={`${cardBase} overflow-hidden`}>
-        <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/50 p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className={tableShell}>
+        <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="relative w-full sm:max-w-sm">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3">
               <Search className="h-4 w-4 text-slate-400" />
@@ -490,7 +490,7 @@ const Clients: React.FC = () => {
 
         <div className="hidden overflow-x-auto 2xl:block">
           <table className="w-full min-w-[1180px] text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
               <tr>
                 <th className="px-5 py-4 font-semibold">Client / Brand</th>
                 <th className="px-5 py-4 font-semibold">Contact</th>
@@ -512,7 +512,7 @@ const Clients: React.FC = () => {
                       <div className="font-semibold text-slate-950">{client.name}</div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {Array.from(client.sources).map(source => (
-                          <span key={source} className={cn('rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', sourceClasses[source])}>
+                          <span key={source} className={cn('rounded-md border px-2 py-0.5 text-[10px] font-medium', sourceClasses[source])}>
                             {source}
                           </span>
                         ))}
@@ -536,7 +536,7 @@ const Clients: React.FC = () => {
                     <td className="px-5 py-6 align-top">
                       <div className="flex max-w-[220px] flex-wrap gap-1.5">
                         {Array.from(client.services).slice(0, 4).map(service => (
-                          <Badge key={service} tone="slate" className="rounded-md text-[10px] uppercase tracking-wide">
+                          <Badge key={service} tone="slate" className="text-[10px]">
                             {service}
                           </Badge>
                         ))}
@@ -601,7 +601,7 @@ const Clients: React.FC = () => {
                     <h2 className="truncate font-semibold text-slate-950">{client.name}</h2>
                     <p className="mt-1 text-xs text-slate-500">Updated {formatLastActivity(client.lastActivity)}</p>
                   </div>
-                  <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700">
+                  <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
                     {client.taskCount} tasks
                   </span>
                 </div>
@@ -610,7 +610,7 @@ const Clients: React.FC = () => {
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {Array.from(client.services).slice(0, 3).map(service => (
-                    <Badge key={service} tone="slate" className="rounded-md text-[10px] uppercase tracking-wide">
+                    <Badge key={service} tone="slate" className="text-[10px]">
                       {service}
                     </Badge>
                   ))}
@@ -658,7 +658,7 @@ const Clients: React.FC = () => {
         >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50/80 px-6 py-4">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Client profile</p>
+                <p className="text-xs font-medium text-blue-700">Client profile</p>
                 <h2 id={clientDialogTitleId} className="mt-1 truncate text-xl font-semibold text-slate-950">{selectedClient.name}</h2>
                 <p className="mt-1 text-sm text-slate-500">
                   {selectedClient.taskCount} linked task{selectedClient.taskCount === 1 ? '' : 's'} · {selectedClient.projectIds.size} company record{selectedClient.projectIds.size === 1 ? '' : 's'}
@@ -683,7 +683,7 @@ const Clients: React.FC = () => {
               )}
               {isRenamingClient && (
                 <section className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4">
-                  <label htmlFor="client-rename" className="block text-xs font-bold uppercase tracking-wide text-blue-700">
+                  <label htmlFor="client-rename" className="block text-xs font-medium text-blue-700">
                     Rename client / brand
                   </label>
                   <p className="mt-1 text-xs leading-5 text-blue-700/80">
@@ -710,7 +710,7 @@ const Clients: React.FC = () => {
                     {isEditingProfile ? (
                       <div className="space-y-3">
                         <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Contact Person</label>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">Contact Person</label>
                           <input
                             type="text"
                             className={cn(inputBase, 'p-2 text-xs')}
@@ -721,7 +721,7 @@ const Clients: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Email</label>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
                             <input
                               type="email"
                               className={cn(inputBase, 'p-2 text-xs')}
@@ -731,7 +731,7 @@ const Clients: React.FC = () => {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Phone</label>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
                             <input
                               type="text"
                               className={cn(inputBase, 'p-2 text-xs')}
@@ -743,7 +743,7 @@ const Clients: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Website</label>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Website</label>
                             <input
                               type="url"
                               className={cn(inputBase, 'p-2 text-xs')}
@@ -753,7 +753,7 @@ const Clients: React.FC = () => {
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Facebook Page</label>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">Facebook Page</label>
                             <input
                               type="url"
                               className={cn(inputBase, 'p-2 text-xs')}
@@ -764,7 +764,7 @@ const Clients: React.FC = () => {
                           </div>
                         </div>
                         <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Address</label>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">Address</label>
                           <textarea
                             rows={2}
                             className={cn(inputBase, 'resize-none p-2 text-xs')}
@@ -774,7 +774,7 @@ const Clients: React.FC = () => {
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Note / Details</label>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">Note / Details</label>
                           <textarea
                             rows={3}
                             className={cn(inputBase, 'resize-none p-2 text-xs')}
@@ -810,7 +810,7 @@ const Clients: React.FC = () => {
                   <h3 className="text-sm font-bold text-slate-900">Services & Notes</h3>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {Array.from(selectedClient.services).map(service => (
-                      <Badge key={service} tone="slate" className="rounded-md text-[10px] uppercase tracking-wide">
+                      <Badge key={service} tone="slate" className="text-[10px]">
                         {service}
                       </Badge>
                     ))}

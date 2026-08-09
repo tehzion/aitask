@@ -213,11 +213,11 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
       describedBy={descriptionId}
       onClose={handleClose}
       overlayClassName="z-[60]"
-      panelClassName="max-w-md animate-in fade-in zoom-in-95 duration-200"
+      panelClassName="max-w-md"
     >
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
           <div>
             <h2 id={titleId} className="text-xl font-semibold text-slate-950">{isEditing ? 'Edit company' : 'Create company'}</h2>
             <p id={descriptionId} className="mt-0.5 text-xs text-slate-500">{isEditing ? 'Update the company name and service scope.' : 'Add a company for task assignment.'}</p>

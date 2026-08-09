@@ -91,7 +91,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
   };
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur sm:px-6">
+    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-slate-200/90 bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-7">
       <div className="flex items-center flex-1">
         <IconButton
           onClick={onMenuClick}
@@ -125,7 +125,6 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
         <IconButton
           onClick={handleToggleSound}
           label={soundEnabled ? 'Mute notifications' : 'Unmute notifications'}
-          className="rounded-full"
         >
           {soundEnabled
             ? <Volume2 className="w-5 h-5" />
@@ -136,7 +135,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
           <IconButton
             onClick={handleBellClick}
             label="Notifications"
-            className="relative rounded-full"
+            className="relative"
           >
             <Bell className="w-5 h-5" />
             {unreadCount > 0 && (
@@ -148,7 +147,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
 
           {/* Notifications Dropdown */}
           {showNotifs && (
-            <div className="absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] max-w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-950/10 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] max-w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.12)] animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-3">
                 <div>
                   <h3 className="font-bold text-slate-900">Notifications</h3>
@@ -157,7 +156,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
                   </p>
                 </div>
                 {unreadCount > 0 ? (
-                  <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+                  <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
                     {unreadCount} New
                   </span>
                 ) : null}
@@ -171,13 +170,13 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
                       void notificationReadActions.markRead(notif.id);
                       setShowNotifs(false);
                     }}
-                    className="flex items-start gap-3 border-b border-blue-100/70 bg-blue-50/45 px-4 py-3 transition-colors hover:bg-blue-50"
+                    className="flex items-start gap-3 border-b border-slate-100 bg-blue-50/35 px-4 py-3 transition-colors hover:bg-blue-50/70"
                   >
-                    <div className={`p-2 rounded-full shrink-0 ${getBgColor(notif.iconType)}`}>
+                    <div className={`rounded-lg p-2 shrink-0 ${getBgColor(notif.iconType)}`}>
                       {getIcon(notif.iconType)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-bold uppercase tracking-wide text-slate-400">{notif.title}</p>
+                      <p className="truncate text-xs font-medium text-slate-500">{notif.title}</p>
                       <p className="mt-0.5 text-sm font-semibold leading-5 text-slate-950">{notif.message}</p>
                       <p className="mt-1 text-xs text-slate-400">{formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}</p>
                     </div>
@@ -190,7 +189,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
                   </div>
                 )}
               </div>
-              <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80 px-3 py-2.5">
                 <Link
                   to="/notifications"
                   onClick={() => setShowNotifs(false)}

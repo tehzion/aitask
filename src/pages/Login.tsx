@@ -21,6 +21,12 @@ const DEMO_ACCOUNTS = [
   { username: 'UrbanEats Client Demo', role: 'Client',      badge: 'bg-emerald-100 text-emerald-700' },
 ];
 
+const LOCAL_STAFF_DEMO_ACCOUNT = {
+  username: 'Staff Demo',
+  role: 'Staff',
+  badge: 'bg-blue-100 text-blue-700',
+};
+
 const getLoginDestination = (mustResetPassword: boolean, userId: string, requestedPath: string) => (
   mustResetPassword && !hasPasswordResetBypass(userId) ? '/settings' : requestedPath
 );
@@ -45,6 +51,9 @@ const Login: React.FC = () => {
   const [showDemo, setShowDemo] = useState(true);
   const showDemoLogin = shouldShowDemoLogin();
   const secureAccounts = shouldUseSecureSupabase();
+  const demoAccounts = secureAccounts
+    ? DEMO_ACCOUNTS
+    : [...DEMO_ACCOUNTS, LOCAL_STAFF_DEMO_ACCOUNT];
   const [isRecovering, setIsRecovering] = useState(false);
   const [recoveryIdentifier, setRecoveryIdentifier] = useState('');
   const [recoveryError, setRecoveryError] = useState('');
@@ -168,7 +177,7 @@ const Login: React.FC = () => {
             </div>
             <div>
               <div className="text-2xl font-bold text-slate-950">AiTask</div>
-              <span className="mt-0.5 block text-xs font-semibold uppercase text-slate-500">Marketing Agency</span>
+              <span className="mt-0.5 block text-xs font-medium text-slate-500">Marketing agency workspace</span>
             </div>
           </div>
         </div>
@@ -185,7 +194,7 @@ const Login: React.FC = () => {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="border border-slate-200 bg-white px-4 py-8 shadow-[0_8px_30px_rgba(15,23,42,0.08)] sm:rounded-lg sm:px-10">
+        <div className="border border-slate-200 bg-white px-4 py-8 shadow-[0_10px_24px_rgba(15,23,42,0.07)] sm:rounded-lg sm:px-10">
           {isRecovering ? (
             recoverySent ? (
               <div className="py-4 text-center" role="status" aria-live="polite">
@@ -295,7 +304,7 @@ const Login: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowDemo(v => !v)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:bg-slate-100 transition-colors"
+                    className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100"
                   >
                     <span>Demo accounts - select username</span>
                     {showDemo ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -312,7 +321,7 @@ const Login: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {DEMO_ACCOUNTS.map((account) => (
+                          {demoAccounts.map((account) => (
                             <tr
                               key={account.username}
                               className={cn(

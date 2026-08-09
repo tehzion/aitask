@@ -153,6 +153,7 @@ interface StoreState {
   isCreateTaskModalOpen: boolean;
   setCreateTaskModalOpen: (open: boolean) => void;
   createTaskInitialDate?: string;
+  createTaskInitialAssignee?: string;
 
   initializeBackend: () => Promise<void>;
   syncBackendNow: (commandType?: SecureCommandType) => Promise<void>;
@@ -680,9 +681,11 @@ export const useStore = create<StoreState>()(
       isCreateTaskModalOpen: false,
       setCreateTaskModalOpen: (open) => set((state) => ({
         isCreateTaskModalOpen: open,
-        createTaskInitialDate: open ? state.createTaskInitialDate : undefined
+        createTaskInitialDate: open ? state.createTaskInitialDate : undefined,
+        createTaskInitialAssignee: open ? state.createTaskInitialAssignee : undefined,
       })),
       createTaskInitialDate: undefined,
+      createTaskInitialAssignee: undefined,
       notifications: [],
       notificationUnreadCount: 0,
       registrations: [],

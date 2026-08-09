@@ -102,7 +102,7 @@ const ModalShell: React.FC<ModalShellProps> = ({
 
   return (
     <div
-      className={cn('fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-3 backdrop-blur-sm sm:p-4', overlayClassName)}
+      className={cn('fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3 sm:p-4', overlayClassName)}
       onMouseDown={event => {
         if (closeOnBackdrop && event.target === event.currentTarget) onClose();
       }}
@@ -115,7 +115,7 @@ const ModalShell: React.FC<ModalShellProps> = ({
         aria-describedby={describedBy}
         tabIndex={-1}
         className={cn(
-          'flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-lg bg-white shadow-xl shadow-slate-950/15 outline-none sm:max-h-[90vh]',
+          'flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.18)] outline-none sm:max-h-[90vh]',
           panelClassName,
         )}
       >

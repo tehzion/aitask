@@ -54,7 +54,7 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await expect(page.getByRole('button', { name: 'Use Boss Koo' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Use Admin Demo' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Use Staff Demo' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Use Staff Demo' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use Finance Demo' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Use UrbanEats Client Demo' })).toBeVisible();
 
@@ -70,6 +70,17 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Needs attention' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Recent completions' })).toBeVisible();
+  const teamWorkload = page.getByRole('region', { name: 'Team workload' });
+  await expect(teamWorkload).toBeVisible();
+  await teamWorkload.getByRole('button', { name: 'View Staff Demo workload' }).click();
+  const staffWorkloadDialog = page.getByRole('dialog', { name: 'Staff Demo' });
+  await expect(staffWorkloadDialog.getByRole('link', { name: 'View assigned tasks' }))
+    .toHaveAttribute('href', '/tasks?assignee=u-staff-demo-local&period=week');
+  await staffWorkloadDialog.getByRole('button', { name: 'Create task for Staff' }).click();
+  const preassignedTaskDialog = page.getByRole('dialog', { name: 'Create task' });
+  await expect(preassignedTaskDialog.getByLabel('Assign to Position/Department *')).toHaveValue('Designer');
+  await expect(preassignedTaskDialog.getByLabel('Assignee')).toHaveValue('u-staff-demo-local');
+  await page.keyboard.press('Escape');
   for (const viewport of publicViewports) {
     await page.setViewportSize(viewport);
     const widths = await page.evaluate(() => ({
@@ -436,7 +447,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await newTaskButton.click();
   const createTaskDialog = page.getByRole('dialog', { name: 'Create Task' });
   await expect(createTaskDialog).toBeVisible();
-  await expect(createTaskDialog.getByText('4. Files and notes')).toBeVisible();
+  await expect(createTaskDialog.getByText('Files and notes')).toBeVisible();
   await expect(createTaskDialog.getByLabel('Recurrence')).toHaveCount(0);
   const taskDepartment = createTaskDialog.getByLabel(/Assign to Position\/Department/);
   await expect(taskDepartment.locator('option[value="Videoshooting"]')).toHaveCount(0);

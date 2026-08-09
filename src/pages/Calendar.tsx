@@ -507,7 +507,7 @@ const Calendar: React.FC = () => {
       <div className="flex min-w-0 flex-col gap-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-slate-950">Team Calendar</h1>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+          <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">
             See each task from start to due date. Drag a range to move it, or adjust either edge.
           </p>
         </div>
@@ -526,7 +526,7 @@ const Calendar: React.FC = () => {
               <Flag className="h-3 w-3" /> MY Holidays
             </button>
 
-            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1">
               <button
                 type="button"
                 aria-pressed={viewMode === 'month'}
@@ -551,7 +551,7 @@ const Calendar: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
+            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1">
               <button
                 type="button"
                 onClick={prevPeriod}
@@ -630,7 +630,7 @@ const Calendar: React.FC = () => {
         <div className={clsx(cardBase, 'min-w-0 flex-1 overflow-hidden')}>
           <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
             {WEEKDAYS.map(day => (
-              <div key={day} className="py-2.5 text-center text-xs font-semibold uppercase text-slate-400">
+              <div key={day} className="py-2.5 text-center text-xs font-medium text-slate-500">
                 <span className="sm:hidden">{day.slice(0, 1)}</span>
                 <span className="hidden sm:inline">{day}</span>
               </div>
@@ -841,10 +841,10 @@ const Calendar: React.FC = () => {
         </div>
 
         <aside className={clsx(cardBase, 'flex w-full shrink-0 flex-col overflow-hidden xl:w-80')}>
-          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
+            <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-4 py-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase text-slate-400">Selected day</p>
-              <h2 className="mt-0.5 truncate text-base font-bold text-slate-800">
+              <p className="text-xs font-medium text-slate-500">Selected day</p>
+              <h2 className="mt-0.5 truncate text-base font-semibold text-slate-900">
                 {format(selectedDate, 'EEEE, d MMMM yyyy')}
               </h2>
             </div>
@@ -864,7 +864,7 @@ const Calendar: React.FC = () => {
           <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto p-4">
             {selectedDayHolidays.length > 0 && (
               <div className="space-y-2">
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-400">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
                   <Flag className="h-3 w-3" /> Public Holiday
                 </p>
                 {selectedDayHolidays.map(holiday => (
@@ -899,7 +899,7 @@ const Calendar: React.FC = () => {
               }}
               onDrop={event => void applyDrop(event, selectedDate)}
             >
-              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-slate-400">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
                 <CalendarRange className="h-3 w-3" />
                 {selectedDayTasks.length} active task{selectedDayTasks.length === 1 ? '' : 's'}
               </p>
@@ -984,7 +984,7 @@ const Calendar: React.FC = () => {
                             <CalendarRange className="h-4 w-4 shrink-0 text-blue-600" />
                           )}
                           <span className="min-w-0 flex-1">
-                            <span className="block text-[10px] font-semibold uppercase text-slate-400">Start and due</span>
+                            <span className="block text-[10px] font-medium text-slate-500">Start and due</span>
                             <span className="block truncate text-xs font-semibold text-slate-700">{taskDateLabel(task)}</span>
                           </span>
                           <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
@@ -993,7 +993,7 @@ const Calendar: React.FC = () => {
                         <div className="mt-3 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
                           <CalendarRange className="h-4 w-4 shrink-0 text-slate-400" />
                           <span className="min-w-0">
-                            <span className="block text-[10px] font-semibold uppercase text-slate-400">Start and due</span>
+                            <span className="block text-[10px] font-medium text-slate-500">Start and due</span>
                             <span className="block truncate text-xs font-semibold text-slate-700">{taskDateLabel(task)}</span>
                           </span>
                         </div>
@@ -1051,7 +1051,7 @@ const Calendar: React.FC = () => {
           <form onSubmit={handleDateEditorSubmit} className="flex min-h-0 flex-1 flex-col">
             <div className="space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase text-slate-400">Current range</p>
+                <p className="text-xs font-medium text-slate-500">Current range</p>
                 <p className="mt-1 text-sm font-semibold text-slate-800">{taskDateLabel(editingTask)}</p>
               </div>
 

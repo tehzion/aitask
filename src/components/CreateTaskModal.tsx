@@ -21,7 +21,7 @@ const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, rolePermissions, commitPendingMutation } = useStore();
+  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, rolePermissions, commitPendingMutation } = useStore();
   const navigate = useNavigate();
   const clientListId = React.useId();
   const titleId = React.useId();
@@ -121,17 +121,25 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   React.useEffect(() => {
     if (isOpen) {
+      const initialMember = createTaskInitialAssignee
+        ? users.find(user => user.id === createTaskInitialAssignee && user.role !== 'Client')
+        : undefined;
+      const initialDepartment = initialMember
+        ? departmentChoices.find(item => getMemberDepartments(initialMember).includes(item))
+        : undefined;
       setStartDate(createTaskInitialDate || getTodayInputDate());
       setDueDate(createTaskInitialDate || '');
       setFormError('');
       setAssignmentError('');
+      setAssignedTo(initialMember?.id || '');
       setDepartment(current => (
-        current && departmentChoices.some(item => item === current)
+        initialDepartment
+          || (current && departmentChoices.some(item => item === current)
           ? current
-          : departmentChoices.length === 1 ? departmentChoices[0] : ''
+          : departmentChoices.length === 1 ? departmentChoices[0] : '')
       ));
     }
-  }, [createTaskInitialDate, departmentChoices, isOpen]);
+  }, [createTaskInitialAssignee, createTaskInitialDate, departmentChoices, isOpen, users]);
 
   if (!isOpen) return null;
 
@@ -359,14 +367,14 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
         labelledBy={titleId}
         describedBy={descriptionId}
         onClose={closeAndReset}
-        panelClassName="max-w-2xl animate-in fade-in zoom-in-95 duration-200"
+        panelClassName="max-w-2xl"
       >
         
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
           <div>
             <h2 id={titleId} className="text-xl font-semibold text-slate-950">Create task</h2>
-            <p id={descriptionId} className="mt-1 text-xs text-slate-500">Assign work to a specific department or position.</p>
+            <p id={descriptionId} className="mt-1 text-sm text-slate-600">Assign work to a specific department or position.</p>
           </div>
           <button 
             onClick={closeAndReset}
@@ -384,7 +392,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             
             {/* Task Basic Info */}
             <div className="space-y-4">
-              <h3 className="text-sm font-bold uppercase text-blue-600">1. Task details</h3>
+              <h3 className="text-sm font-semibold text-slate-900">Task details</h3>
               
               <div>
                 <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
@@ -438,8 +446,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             </div>
 
             {/* Client & Customer Info */}
-            <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-bold uppercase text-blue-600">2. Client and assets</h3>
+            <div className="space-y-4 border-t border-slate-200/80 pt-5">
+              <h3 className="text-sm font-semibold text-slate-900">Client and assets</h3>
               
               <div>
                 <div>
@@ -528,8 +536,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             </div>
 
             {/* Assignment & Scheduling */}
-            <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-bold uppercase text-blue-600">3. Assignment and timeline</h3>
+            <div className="space-y-4 border-t border-slate-200/80 pt-5">
+              <h3 className="text-sm font-semibold text-slate-900">Assignment and timeline</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -655,8 +663,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             </div>
 
             {/* Files and notes */}
-            <div className="space-y-4 pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-bold uppercase text-blue-600">4. Files and notes</h3>
+            <div className="space-y-4 border-t border-slate-200/80 pt-5">
+              <h3 className="text-sm font-semibold text-slate-900">Files and notes</h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
