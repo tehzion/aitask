@@ -6,10 +6,12 @@ import { Department, Priority, Task, TaskStatus } from '../types';
 import { format, formatDistanceToNow } from 'date-fns';
 import { canAssignTasksToOthers, canCommentOnTask, canEditTask as canEditTaskByRole, canReviewTaskAsClient } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
-import { getTodayInputDate, parseOptionalDate } from '../lib/utils';
+import { getTodayInputDate, parseOptionalDate, cn } from '../lib/utils';
 import { isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
 import type { SecureCommandType } from '../lib/secureWorkspace';
 import ModalShell from './ModalShell';
+import { ProgressBar } from './ui';
+import { fieldLabel, inputBase } from './uiTokens';
 
 interface Props {
   isOpen: boolean;
@@ -88,6 +90,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   const [mutationError, setMutationError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const titleId = React.useId();
+  const descriptionId = React.useId();
   const [editForm, setEditForm] = useState({
     title: '',
     description: '',
@@ -109,6 +112,8 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     setEditError('');
     setMutationError('');
     setIsEditingDetails(false);
+    setCommentText('');
+    setIsSubmitting(false);
     if (task) {
       setEditForm({
         title: task.title,
@@ -162,6 +167,12 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
 
   const handleAttachmentSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    if (attachmentLink.trim() && !safeHttpsUrl(attachmentLink)) {
+      setEditError('Enter a valid https:// link for the attachment.');
+      return;
+    }
+    setEditError('');
     updateTaskAttachment(task.id, attachmentLink, attachmentName);
     await confirmPendingMutation();
   };
@@ -174,12 +185,14 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
 
   const handleRevisionRequest = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     requestRevision(task.id, revisionNote);
     if (await confirmPendingMutation('approval.revision')) setRevisionNote('');
   };
 
   const handleDetailsSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setEditError('');
 
     const result = updateTask(task.id, {
@@ -200,7 +213,9 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
       return;
     }
 
+    setIsSubmitting(true);
     const saveResult = await commitPendingMutation();
+    setIsSubmitting(false);
     if (!saveResult.ok) {
       setEditError(saveResult.error || 'The task update is waiting to be saved.');
       return;
@@ -229,16 +244,17 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   };
 
   const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
-  const getUserAvatar = (id: string) => users.find(u => u.id === id)?.avatar;
   const startDateValue = parseOptionalDate(task.startDate);
   const dueDateValue = parseOptionalDate(task.dueDate);
 
   return (
     <ModalShell
       labelledBy={titleId}
+      describedBy={descriptionId}
       onClose={onClose}
-      panelClassName="max-w-4xl animate-in fade-in zoom-in-95 duration-200"
+      panelClassName="max-w-4xl"
     >
+        <p id={descriptionId} className="sr-only">Task details, status, dates, links and comments for {task.title}.</p>
         <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 bg-slate-50/50 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
@@ -291,9 +307,12 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                   ) : (
                     <div className="relative inline-block">
                       <select
-                        className={`text-sm pl-3 pr-7 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none shadow-sm ${getStatusColor(task.status)}`}
+                        aria-label="Task status"
+                        disabled={isSubmitting}
+                        className={`text-sm pl-3 pr-7 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none shadow-sm disabled:cursor-not-allowed disabled:opacity-60 ${getStatusColor(task.status)}`}
                         value={task.status}
                         onChange={async (e) => {
+                          if (isSubmitting) return;
                           const nextStatus = e.target.value as TaskStatus;
                           if (incompletePredecessors.length > 0 && nextStatus !== 'Pending' && nextStatus !== 'Cancelled') {
                             const confirmed = window.confirm(`This step still has ${incompletePredecessors.length} incomplete predecessor task(s). Start it anyway?`);
@@ -313,9 +332,14 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                 </div>
                 <div className="text-right">
                   <label className="block text-xs font-medium text-slate-500 mb-1">{isClientTaskViewer ? 'Progress' : 'Priority'}</label>
-                  <span className="text-sm font-bold text-slate-800">
-                    {isClientTaskViewer ? `${task.completionPercentage}%` : task.priority}
-                  </span>
+                  {isClientTaskViewer ? (
+                    <div className="flex items-center justify-end gap-2">
+                      <ProgressBar className="w-24" label="Task progress" value={task.completionPercentage} max={100} />
+                      <span className="text-sm font-bold text-slate-800">{task.completionPercentage}%</span>
+                    </div>
+                  ) : (
+                    <span className="text-sm font-bold text-slate-800">{task.priority}</span>
+                  )}
                 </div>
               </div>
 
@@ -329,35 +353,37 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                 <form onSubmit={handleDetailsSave} className="rounded-lg border border-blue-100 bg-blue-50/40 p-4 space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Task Title</label>
-                      <input
-                        type="text"
-                        value={editForm.title}
-                        onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      />
+                      <label className="block">
+                        <span className={fieldLabel}>Task Title</span>
+                        <input
+                          type="text"
+                          value={editForm.title}
+                          onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                          className={cn(inputBase, 'px-2.5 py-2.5')}
+                        />
+                      </label>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Client / Brand</label>
+                    <label className="block">
+                      <span className={fieldLabel}>Client / Brand</span>
                       <input
                         type="text"
                         value={editForm.clientName}
                         onChange={(e) => setEditForm({ ...editForm, clientName: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        className={cn(inputBase, 'px-2.5 py-2.5')}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Service</label>
+                    </label>
+                    <label className="block">
+                      <span className={fieldLabel}>Service</span>
                       <input
                         type="text"
                         value={editForm.serviceType}
                         onChange={(e) => setEditForm({ ...editForm, serviceType: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        className={cn(inputBase, 'px-2.5 py-2.5')}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Department</label>
-                      <div className="relative">
+                    </label>
+                    <label className="block">
+                      <span className={fieldLabel}>Department</span>
+                      <span className="relative block">
                         <select
                           value={editForm.department}
                           disabled={!canAssignOthers}
@@ -370,77 +396,81 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                               assignedTo: firstUser?.id || editForm.assignedTo,
                             });
                           }}
-                          className="w-full rounded-lg border border-slate-300 bg-white p-2.5 pr-10 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500 appearance-none cursor-pointer"
+                          className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}
                         >
                           {STAFF_DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}
                         </select>
-                        <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Assignee</label>
-                      <div className="relative">
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
+                      </span>
+                    </label>
+                    <label className="block">
+                      <span className={fieldLabel}>Assignee</span>
+                      <span className="relative block">
                         <select
                           value={editForm.assignedTo}
                           disabled={!canAssignOthers}
                           onChange={(e) => setEditForm({ ...editForm, assignedTo: e.target.value })}
-                          className="w-full rounded-lg border border-slate-300 bg-white p-2.5 pr-10 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500 appearance-none cursor-pointer"
+                          className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}
                         >
                           {canAssignOthers && <option value="">Unassigned</option>}
                           {assigneeOptions.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
                         </select>
-                        <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Priority</label>
-                      <div className="relative">
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
+                      </span>
+                    </label>
+                    <label className="block">
+                      <span className={fieldLabel}>Priority</span>
+                      <span className="relative block">
                         <select
                           value={editForm.priority}
                           onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as Priority })}
-                          className="w-full rounded-lg border border-slate-300 bg-white p-2.5 pr-10 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 appearance-none cursor-pointer"
+                          className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}
                         >
                           {PRIORITIES.map(priority => <option key={priority} value={priority}>{priority}</option>)}
                         </select>
-                        <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Start Date <span className="text-red-500">*</span></label>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
+                      </span>
+                    </label>
+                    <label className="block">
+                      <span className={fieldLabel}>Start Date <span className="text-red-500">*</span></span>
                       <input
                         type="date"
                         required
                         value={editForm.startDate}
                         onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        className={cn(inputBase, 'px-2.5 py-2.5')}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Due Date</label>
+                    </label>
+                    <label className="block">
+                      <span className={fieldLabel}>Due Date</span>
                       <input
                         type="date"
                         value={editForm.dueDate}
                         onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        className={cn(inputBase, 'px-2.5 py-2.5')}
                       />
+                    </label>
+                    <div className="md:col-span-2">
+                      <label className="block">
+                        <span className={fieldLabel}>Description</span>
+                        <textarea
+                          rows={3}
+                          value={editForm.description}
+                          onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                          className={cn(inputBase, 'px-2.5 py-2.5')}
+                        />
+                      </label>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Description</label>
-                      <textarea
-                        rows={3}
-                        value={editForm.description}
-                        onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Internal Notes</label>
-                      <textarea
-                        rows={2}
-                        value={editForm.notes}
-                        onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      />
+                      <label className="block">
+                        <span className={fieldLabel}>Internal Notes</span>
+                        <textarea
+                          rows={2}
+                          value={editForm.notes}
+                          onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                          className={cn(inputBase, 'px-2.5 py-2.5')}
+                        />
+                      </label>
                     </div>
                   </div>
                   {editError && (
@@ -600,8 +630,8 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                     placeholder="Optional revision note..."
                     className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 outline-none shadow-sm resize-none"
                   />
-                  <button type="submit" className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg">
-                    <RotateCcw className="w-4 h-4" /> Request Revision
+                  <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
+                    <RotateCcw className="w-4 h-4" /> {isSubmitting ? 'Requesting...' : 'Request Revision'}
                   </button>
                 </form>
               )}
@@ -661,9 +691,17 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                   <p className="text-sm">No comments yet.</p>
                 </div>
               ) : (
-                task.comments.map(comment => (
+                task.comments.map(comment => {
+                  const commentAuthor = users.find(u => u.id === comment.userId);
+                  return (
                   <div key={comment.id} className="flex gap-3">
-                    <img src={getUserAvatar(comment.userId)} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 mt-1" />
+                    {commentAuthor?.avatar ? (
+                      <img src={commentAuthor.avatar} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 mt-1" />
+                    ) : (
+                      <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">
+                        {(commentAuthor?.name || '?').charAt(0)}
+                      </span>
+                    )}
                     <div className="flex-1">
                       <div className="flex items-baseline justify-between mb-1">
                         <span className="text-sm font-semibold text-slate-800">{getUserName(comment.userId)}</span>
@@ -674,7 +712,8 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                       </div>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
 

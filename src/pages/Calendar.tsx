@@ -839,7 +839,7 @@ const Calendar: React.FC = () => {
                             onDragEnd={handleDragEnd}
                             aria-label={`Adjust start date for ${task.title}`}
                             title="Drag to adjust start date"
-                            className="flex w-2 shrink-0 cursor-ew-resize items-center justify-center border-r border-current/10 bg-white/35 hover:bg-white/70"
+                            className="flex w-2.5 shrink-0 cursor-ew-resize items-center justify-center border-r border-current/10 bg-white/35 hover:bg-white/70"
                           >
                             <span className="h-3 w-0.5 rounded-full bg-current/50" />
                           </button>
@@ -877,7 +877,7 @@ const Calendar: React.FC = () => {
                             onDragEnd={handleDragEnd}
                             aria-label={`Adjust due date for ${task.title}`}
                             title={range?.hasDueDate ? 'Drag to adjust due date' : 'Drag to add a due date'}
-                            className="flex w-2 shrink-0 cursor-ew-resize items-center justify-center border-l border-current/10 bg-white/35 hover:bg-white/70"
+                            className="flex w-2.5 shrink-0 cursor-ew-resize items-center justify-center border-l border-current/10 bg-white/35 hover:bg-white/70"
                           >
                             <span className="h-3 w-0.5 rounded-full bg-current/50" />
                           </button>

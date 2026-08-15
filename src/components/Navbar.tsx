@@ -234,7 +234,7 @@ const Navbar: React.FC<NavbarProps> = ({
 
           {/* Notifications Dropdown */}
           {showNotifs && (
-            <div id="header-notifications-menu" role="region" aria-label="Notification preview" className="absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] max-w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.12)] animate-in fade-in slide-in-from-top-2 duration-200">
+            <div id="header-notifications-menu" role="region" aria-label="Notification preview" className="absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] max-w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.12)] ">
               <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-3">
                 <div>
                   <h3 className="font-bold text-slate-900">Notifications</h3>

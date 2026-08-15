@@ -143,7 +143,7 @@ const ModalShell: React.FC<ModalShellProps> = ({
         aria-describedby={describedBy}
         tabIndex={-1}
         className={cn(
-          'flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-panel border border-line bg-surface text-ink shadow-float outline-none sm:max-h-[90vh]',
+          'animate-fade-in flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-panel border border-line bg-surface text-ink shadow-float outline-none sm:max-h-[90vh]',
           panelClassName,
         )}
       >

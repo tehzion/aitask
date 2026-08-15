@@ -1014,7 +1014,7 @@ const Tasks: React.FC = () => {
               }}
             />
             <div
-              className="fixed z-50 bg-white border border-slate-200 rounded-lg shadow-xl p-4 w-64 space-y-4 text-slate-700 animate-in fade-in zoom-in-95 duration-100"
+              className="animate-fade-in fixed z-50 bg-white border border-slate-200 rounded-lg shadow-xl p-4 w-64 space-y-4 text-slate-700"
               style={{
                 top: Math.min(activeQuickEdit.y, window.innerHeight - 280),
                 left: Math.max(10, Math.min(activeQuickEdit.x, window.innerWidth - 270)),

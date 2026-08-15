@@ -788,7 +788,7 @@ const Approvals: React.FC = () => {
             setMemberDepartmentsId(null);
             setMemberDepartmentsError('');
           }}
-          panelClassName="max-w-lg animate-in fade-in zoom-in-95 duration-200"
+          panelClassName="max-w-lg "
         >
           <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
             <h2 id={editDepartmentsTitleId} className="text-lg font-semibold text-slate-950">
@@ -830,7 +830,7 @@ const Approvals: React.FC = () => {
             resetNewUser();
             setIsAddUserOpen(false);
           }}
-          panelClassName="max-w-lg animate-in fade-in zoom-in-95 duration-200"
+          panelClassName="max-w-lg "
         >
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
               <h2 id={addMemberTitleId} className="text-lg font-semibold text-slate-950">Add new member</h2>
@@ -997,7 +997,7 @@ const Approvals: React.FC = () => {
         <ModalShell
           labelledBy={approvalTitleId}
           onClose={() => setSelectedReg(null)}
-          panelClassName="max-w-lg animate-in fade-in zoom-in-95 duration-200"
+          panelClassName="max-w-lg "
         >
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
               <h2 id={approvalTitleId} className="text-lg font-semibold text-slate-950">Assign role and departments</h2>
@@ -1129,7 +1129,7 @@ const Approvals: React.FC = () => {
           labelledBy={deleteMemberTitleId}
           onClose={() => setUserToDelete(null)}
           overlayClassName="z-[60]"
-          panelClassName="max-w-sm animate-in fade-in zoom-in-95 duration-200"
+          panelClassName="max-w-sm "
         >
             <div className="p-6 text-center">
               <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">

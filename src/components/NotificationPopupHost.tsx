@@ -83,7 +83,7 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
   return (
     <article
       aria-label={`New notification: ${notification.title}`}
-      className="pointer-events-auto overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.14)] animate-in fade-in slide-in-from-left-3 slide-in-from-bottom-2"
+      className="pointer-events-auto overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.14)] "
     >
       <div className="flex items-start gap-3 p-4">
         <div className={cn(
