@@ -33,12 +33,6 @@ interface TeamWorkloadProps {
 
 type TeamSort = 'attention' | 'name' | 'open';
 
-const periodOptions: Array<{ value: TeamWorkloadPeriod; label: string }> = [
-  { value: 'today', label: 'Today' },
-  { value: 'week', label: 'This Week' },
-  { value: 'overall', label: 'Overall' },
-];
-
 const signalLabels: Record<TeamWorkloadSignal, string> = {
   available: 'Available',
   balanced: 'Balanced',
@@ -144,7 +138,7 @@ const TaskGroup = ({
 };
 
 const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskFor }) => {
-  const [period, setPeriod] = useState<TeamWorkloadPeriod>('week');
+  const [period] = useState<TeamWorkloadPeriod>('week');
   const [query, setQuery] = useState('');
   const [department, setDepartment] = useState<Department | 'All'>('All');
   const [sort, setSort] = useState<TeamSort>('attention');
@@ -198,23 +192,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 id="team-workload-title" className="text-lg font-semibold text-slate-950">Team workload</h2>
-          <p className="mt-1 text-sm text-slate-500">See assigned work by person and open the details that need action.</p>
-        </div>
-        <div className="inline-flex w-fit rounded-lg border border-slate-200 bg-slate-50 p-1" aria-label="Team workload period">
-          {periodOptions.map(option => (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={period === option.value}
-              onClick={() => setPeriod(option.value)}
-              className={cn(
-                'min-h-8 rounded-md px-3 text-xs font-semibold text-slate-600 transition focus:outline-none focus:ring-2 focus:ring-blue-200',
-                period === option.value && 'bg-white text-blue-700 shadow-sm',
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
+          <p className="mt-1 text-sm text-slate-500">See assigned work by person, grouped by day, week, and open review state.</p>
         </div>
       </div>
 
@@ -341,7 +319,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
           <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-5">
             <div className="min-w-0">
               <p className="text-xs font-medium text-blue-700">Team workload</p>
-              <h3 id={titleId} className="mt-1 truncate text-xl font-semibold text-slate-950">{selectedSummary.member.name}</h3>
+              <h3 id={titleId} data-autofocus tabIndex={-1} className="mt-1 truncate text-xl font-semibold text-slate-950 outline-none">{selectedSummary.member.name}</h3>
               <p id={descriptionId} className="mt-1 text-sm text-slate-500">
                 {getMemberDepartments(selectedSummary.member).join(' · ') || selectedSummary.member.role}
               </p>

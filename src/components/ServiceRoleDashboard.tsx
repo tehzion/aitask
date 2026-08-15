@@ -56,7 +56,7 @@ const ServiceRoleDashboard = () => {
   ), [store.currentUser, store.projects, store.rolePermissions, store.tasks]);
   const serviceTasks = visibleTasks.filter(task => Boolean(task.clientId));
   const myTasks = serviceTasks.filter(task => task.assignedTo === store.currentUser?.id);
-  const scopeTasks = persona === 'production' ? myTasks : serviceTasks;
+  const scopeTasks = persona === 'production' ? myTasks : persona === 'boss' ? visibleTasks : serviceTasks;
   const overdue = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && !task.isCompleted && task.status !== 'Cancelled' && isBefore(due, now) && !isToday(due)); });
   const dueToday = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && !task.isCompleted && isToday(due)); });
   const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && visibleClientKeys.has(getClientKey(plan.clientName)));

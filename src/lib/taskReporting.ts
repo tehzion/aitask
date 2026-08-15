@@ -123,7 +123,7 @@ export const getAgencyPulseMetrics = (tasks: Task[], now = new Date()): AgencyPu
       remaining: dueThisWeek.filter(isTaskOpen).length,
       overdue: tasks.filter(task => {
         const dueDate = parseOptionalDate(task.dueDate);
-        return Boolean(isTaskOpen(task) && dueDate && dueDate < todayStart);
+        return Boolean(isTaskOpen(task) && dueDate && dueDate < period.start);
       }).length,
     },
     overall: {

@@ -157,7 +157,12 @@ const Approvals: React.FC = () => {
     }
     const registrationsBefore = registrations;
     const usersBefore = users;
-    approveRegistration(selectedReg.id, role, departments, role === 'Client' ? companyName : undefined, approvalCustomRoleId || undefined);
+    const approved = approveRegistration(selectedReg.id, role, departments, role === 'Client' ? companyName : undefined, approvalCustomRoleId || undefined);
+    if (!approved.ok) {
+      setIsActionSaving(false);
+      setActionError(approved.error || 'Unable to approve this member.');
+      return;
+    }
     const saved = await commitPendingMutation();
     setIsActionSaving(false);
     if (!saved.ok) {
@@ -491,6 +496,8 @@ const Approvals: React.FC = () => {
                           <button
                             onClick={async () => {
                               if (isActionSaving) return;
+                              const confirmed = window.confirm(`Reject ${reg.name}'s registration? They will need to apply again.`);
+                              if (!confirmed) return;
                               const previousRegistrations = useStore.getState().registrations;
                               rejectRegistration(reg.id);
                               setIsActionSaving(true);
@@ -755,7 +762,7 @@ const Approvals: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {superAdmin && u.role !== 'Client' && (
+                      {superAdmin && u.role !== 'Client' && !isBossKoo(u) && (
                         <button
                           type="button"
                           onClick={() => handleEditDepartments(u.id)}
@@ -1017,6 +1024,11 @@ const Approvals: React.FC = () => {
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
               <h2 id={approvalTitleId} className="text-lg font-semibold text-slate-950">Assign role and departments</h2>
               <p className="text-sm text-slate-500 mt-1">Configure system access for {selectedReg.name}.</p>
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                <span><span className="font-semibold text-slate-500">Email:</span> {selectedReg.email}</span>
+                {selectedReg.phone && <span><span className="font-semibold text-slate-500">Phone:</span> {selectedReg.phone}</span>}
+                <span><span className="font-semibold text-slate-500">Position:</span> {selectedReg.jobPosition}</span>
+              </div>
             </div>
             
             <form onSubmit={handleApprove} className="p-6 space-y-4">
@@ -1100,15 +1112,31 @@ const Approvals: React.FC = () => {
                   {selectedReg.onboardingMode === 'legacy_invite' && !sendApprovalInvitation && (
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Temporary Password</label>
-                      <input
-                        type="password"
-                        autoComplete="new-password"
-                        minLength={12}
-                        className={cn(inputBase, 'px-3 py-2.5')}
-                        value={approvalTemporaryPassword}
-                        onChange={event => setApprovalTemporaryPassword(event.target.value)}
-                        required
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          autoComplete="new-password"
+                          minLength={12}
+                          className={cn(inputBase, 'px-3 py-2.5')}
+                          value={approvalTemporaryPassword}
+                          onChange={event => setApprovalTemporaryPassword(event.target.value)}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const generated = Array.from(crypto.getRandomValues(new Uint8Array(6)))
+                              .map(byte => 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'[byte % 55])
+                              .join('');
+                            setApprovalTemporaryPassword(generated);
+                            void navigator.clipboard?.writeText(generated).catch(() => undefined);
+                          }}
+                          className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          title="Generate a strong password and copy it"
+                        >
+                          Generate &amp; copy
+                        </button>
+                      </div>
                       <p className="mt-1 text-xs text-slate-500">Share it privately. AiTask does not store the password.</p>
                     </div>
                   )}
@@ -1152,7 +1180,7 @@ const Approvals: React.FC = () => {
               </div>
               <h2 id={deleteMemberTitleId} className="mb-2 text-lg font-semibold text-slate-950">Delete user account</h2>
               <p className="text-sm text-slate-500">
-                Are you sure you want to permanently delete this user? They will immediately lose access to the system. This action cannot be undone.
+                Are you sure you want to permanently delete this user? They will immediately lose access to the system, and their assigned tasks will become unassigned. This action cannot be undone.
               </p>
             </div>
             <div className="px-6 py-4 bg-slate-50 flex gap-3 justify-center">

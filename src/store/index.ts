@@ -276,7 +276,7 @@ interface StoreState {
   updateCustomRole: (id: string, data: Partial<Pick<CustomRole, 'name' | 'description' | 'baseRole' | 'permissions'>>) => { ok: boolean; error?: string };
   deleteCustomRole: (id: string) => { ok: boolean; error?: string };
   assignCustomRoleToUser: (userId: string, customRoleId?: string) => { ok: boolean; error?: string };
-  approveRegistration: (id: string, role: Role, departments: Department[], companyName?: string, customRoleId?: string) => void;
+  approveRegistration: (id: string, role: Role, departments: Department[], companyName?: string, customRoleId?: string) => { ok: boolean; error?: string };
   rejectRegistration: (id: string) => void;
   deleteUser: (userId: string) => Promise<{ ok: boolean; error?: string }>;
   _forceSyncMockData: () => void;
@@ -1621,6 +1621,17 @@ export const useStore = create<StoreState>()(
 
       requestPasswordRecovery: async (identifier) => {
         if (!shouldUseSecureSupabase()) {
+          const normalized = identifier.trim().toLowerCase();
+          const localAccount = get().users.find(user => (
+            user.name.trim().toLowerCase() === normalized ||
+            (user.email && user.email.trim().toLowerCase() === normalized)
+          ));
+          if (localAccount?.isSuperAdmin) {
+            return {
+              ok: false,
+              error: 'Local demo accounts sign in with the default password until a custom one is set. If a custom password was forgotten, clear the browser\'s AiTask data (site data for this app) and sign in with the default password again.',
+            };
+          }
           return { ok: false, error: 'Password recovery is available for secure hosted accounts only.' };
         }
         if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -2024,7 +2035,10 @@ export const useStore = create<StoreState>()(
 
         const newNotifs: AppNotification[] = [];
 
-        if (currentUser?.role !== 'Admin') {
+        const hasOtherAdmin = state.users.some(user => (
+          user.id !== currentUser?.id && (user.role === 'Admin' || user.isSuperAdmin)
+        ));
+        if (currentUser?.role !== 'Admin' || hasOtherAdmin) {
           newNotifs.push(makeNotification({
             targetRole: 'Admin',
             title: 'Task Status Updated',
@@ -3697,6 +3711,8 @@ export const useStore = create<StoreState>()(
 
         const name = data.name.trim();
         if (!name) return { ok: false, error: 'Role name is required.' };
+        const hasAnyPermission = data.permissions && Object.values(data.permissions).some(Boolean);
+        if (!hasAnyPermission) return { ok: false, error: 'Choose at least one permission so members with this role keep workspace access.' };
 
         const duplicate = get().rolePermissions.some(role => role.name.toLowerCase() === name.toLowerCase());
         if (duplicate) return { ok: false, error: 'A role with this name already exists.' };
@@ -3735,6 +3751,10 @@ export const useStore = create<StoreState>()(
         const nextName = data.name?.trim() || targetRole.name;
         const duplicate = get().rolePermissions.some(role => role.id !== id && role.name.toLowerCase() === nextName.toLowerCase());
         if (duplicate) return { ok: false, error: 'A role with this name already exists.' };
+        const nextPermissions = data.permissions ?? targetRole.permissions;
+        if (!Object.values(nextPermissions).some(Boolean)) {
+          return { ok: false, error: 'Choose at least one permission so members with this role keep workspace access.' };
+        }
 
         set((state) => {
           const nextRoles = state.rolePermissions.map(role => (
@@ -3921,29 +3941,31 @@ export const useStore = create<StoreState>()(
         return { ok: true };
       },
 
-      approveRegistration: (id, role, departmentsInput, companyName, customRoleId) => set((state) => {
-        if (isWorkspaceMutationLocked(state)) return state;
-        if (!canApproveRegistrations(state.currentUser, state.rolePermissions)) return state;
+      approveRegistration: (id, role, departmentsInput, companyName, customRoleId) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!canApproveRegistrations(state.currentUser, state.rolePermissions)) return { ok: false, error: 'Only Boss Koo can approve registrations.' };
 
         const reg = state.registrations.find(r => r.id === id);
-        if (!reg) return state;
-        if (reg.status !== 'Pending') return state;
+        if (!reg) return { ok: false, error: 'Registration not found.' };
+        if (reg.status !== 'Pending') return { ok: false, error: 'This registration has already been reviewed.' };
         if (shouldUseSecureSupabase()) {
-          return {
-            registrations: state.registrations.map(r => r.id === id ? { ...r, status: 'Approved' } : r),
-          };
+          set(current => ({
+            registrations: current.registrations.map(r => r.id === id ? { ...r, status: 'Approved' } : r),
+          }));
+          return { ok: true };
         }
         const customRole = customRoleId
           ? state.rolePermissions.find(role => role.id === customRoleId)
           : undefined;
         const departments = normalizeMemberDepartments(role, departmentsInput);
-        if (departments.length === 0) return state;
+        if (departments.length === 0) return { ok: false, error: 'Choose at least one department before approving this member.' };
 
         const duplicate = state.users.some(user => (
           user.name.toLowerCase() === reg.name.toLowerCase() ||
           (reg.email && user.email?.toLowerCase() === reg.email.toLowerCase())
         ));
-        if (duplicate) return state;
+        if (duplicate) return { ok: false, error: 'A member with this name or email already exists. Review the registration before approving.' };
 
         const userId = nowId('U');
         const newUser: User = {
@@ -3965,11 +3987,12 @@ export const useStore = create<StoreState>()(
 
         void setLocalUserPassword(userId, DEFAULT_USER_PASSWORD).catch(() => undefined);
 
-        return {
-          registrations: state.registrations.map(r => r.id === id ? { ...r, status: 'Approved' } : r),
-          users: [...state.users, newUser]
-        };
-      }),
+        set(current => ({
+          registrations: current.registrations.map(r => r.id === id ? { ...r, status: 'Approved' } : r),
+          users: [...current.users, newUser]
+        }));
+        return { ok: true };
+      },
 
       rejectRegistration: (id) => set((state) => {
         if (isWorkspaceMutationLocked(state)) return state;
@@ -4008,6 +4031,11 @@ export const useStore = create<StoreState>()(
             body: { action: 'delete_member', memberId: userId },
           });
           if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to delete the member account.') };
+          try {
+            clearLocalUserPassword(userId);
+          } catch {
+            /* credential storage unavailable */
+          }
           await get().pullBackendNow({ force: true, silent: true });
           return { ok: true };
         }
@@ -4027,8 +4055,8 @@ export const useStore = create<StoreState>()(
               route: { page: 'approvals' },
               iconType: 'alert'
             }),
-            ...(current.notifications || [])
-          ]
+            ...(current.notifications || []).filter(notification => notification.targetUserId !== userId)
+          ],
         }));
         try {
           clearLocalUserPassword(userId);
@@ -4123,7 +4151,6 @@ export const useStore = create<StoreState>()(
           taskStatuses: [...state.taskStatuses, trimmed],
           deletedTaskStatuses: (state.deletedTaskStatuses || []).filter(s => s.toLowerCase() !== trimmed.toLowerCase())
         }));
-        useToastStore.getState().addToast(`Status "${trimmed}" added successfully`, 'success');
         return { ok: true };
       },
 
@@ -4142,7 +4169,6 @@ export const useStore = create<StoreState>()(
           taskStatuses: state.taskStatuses.filter(s => s.toLowerCase() !== status.toLowerCase()),
           deletedTaskStatuses: Array.from(new Set([...(state.deletedTaskStatuses || []), status.toLowerCase()]))
         }));
-        useToastStore.getState().addToast(`Status "${status}" deleted successfully`, 'success');
         return { ok: true };
       }
     }),

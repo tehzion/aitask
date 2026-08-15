@@ -3,18 +3,19 @@ import { AlertTriangle, ArrowRight, Bell, CheckCircle2, Cloud, Database, Lock, P
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
+import { useToastStore } from '../store/useToastStore';
 import type { User } from '../types';
 import { getMemberDepartments } from '../lib/departments';
 import { Badge, Button, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
-import { getDefaultAccessiblePath, getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
+import { canManageServiceCatalog, canManageTaskTemplates, getDefaultAccessiblePath, getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
 import BackendFreshness from '../components/BackendFreshness';
 import { getSoundEnabled, setSoundEnabled, SOUND_PREF_EVENT } from '../lib/sounds';
 import { canUsePasswordResetBypass, enablePasswordResetBypass } from '../lib/auth';
 import { APP_BUILD_CHANNEL, APP_BUILD_LABEL, APP_BUILD_TIME, APP_COMMIT, APP_VERSION_LABEL } from '../lib/appVersion';
-import { shouldUseSecureSupabase } from '../lib/supabaseClient';
+import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
 import ServicePackageManager from '../components/ServicePackageManager';
 import WorkflowTemplateManager from '../components/WorkflowTemplateManager';
 
@@ -154,16 +155,19 @@ const Settings: React.FC = () => {
     setIsStatusSaving(false);
     if (!saved.ok) {
       setHasPendingStatusAdd(true);
-      setStatusError(saved.error || 'The status is waiting to be saved. Use Retry required to try again.');
+      setStatusError(saved.error || 'The status is queued but not saved. Resolve the sync issue in the Data Backend panel and try again.');
       return;
     }
 
     setHasPendingStatusAdd(false);
     setNewStatusInput('');
     setStatusError('');
+    useToastStore.getState().addToast('Status added successfully', 'success');
   };
 
   const handleDeleteStatus = async (status: string) => {
+    const confirmed = window.confirm(`Delete the "${status}" status?`);
+    if (!confirmed) return;
     const previousStatuses = useStore.getState().taskStatuses;
     const result = deleteTaskStatus(status);
     if (!result.ok) {
@@ -181,6 +185,7 @@ const Settings: React.FC = () => {
     }
 
     setStatusError('');
+    useToastStore.getState().addToast(`Status "${status}" deleted successfully`, 'success');
   };
 
   const backendStatus = getBackendStatus();
@@ -209,7 +214,8 @@ const Settings: React.FC = () => {
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
   const mustResetPassword = Boolean(currentUser?.mustResetPassword);
   const canBypassPasswordReset = mustResetPassword && canUsePasswordResetBypass();
-  const isPasswordSetupOnly = mustResetPassword && !effectivePermissions.viewSettings;
+  const isPasswordSetupOnly = mustResetPassword;
+  const secureAccounts = shouldUseSecureSupabase();
   const defaultAccessiblePath = getDefaultAccessiblePath(currentUser, rolePermissions);
   const isSupabaseMode = backendStatus.mode === 'supabase';
   const hostedLocalBuild = backendStatus.mode === 'local' && backendStatus.isHostedRuntime;
@@ -443,18 +449,36 @@ const Settings: React.FC = () => {
               <div>
                 <p className="font-bold">Password reset required</p>
                 <p className="mt-1 text-sm leading-6 text-amber-800">
-                  Use the default password once as the current password, then choose a private password with at least 12 characters.
+                  {secureAccounts
+                    ? 'Choose a private password with at least 12 characters to unlock the workspace.'
+                    : 'Use the default password once as the current password, then choose a private password with at least 12 characters.'}
                 </p>
               </div>
             </div>
             <div className="flex flex-col gap-2 lg:items-end">
               <Badge tone="amber" className="self-start lg:self-end">Required</Badge>
+              <div className="flex flex-col gap-2 sm:flex-row">
               {canBypassPasswordReset && (
                 <Button type="button" variant="secondary" onClick={handlePasswordResetBypass} className="min-h-9 whitespace-nowrap px-3 py-1.5 text-xs">
                   Continue for now
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               )}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  if (secureAccounts) {
+                    void signOutSecureSession();
+                  }
+                  useStore.setState({ currentUser: null });
+                  navigate('/login', { replace: true });
+                }}
+                className="min-h-9 whitespace-nowrap px-3 py-1.5 text-xs"
+              >
+                Sign out
+              </Button>
+              </div>
             </div>
           </div>
         </section>
@@ -709,11 +733,11 @@ const Settings: React.FC = () => {
           </form>
       </div>
 
-      {!isPasswordSetupOnly && (currentUser?.role === 'Admin' || isSuperAdmin) && (
-        <>
-          <ServicePackageManager />
-          <WorkflowTemplateManager />
-        </>
+      {!isPasswordSetupOnly && (canManageServiceCatalog(currentUser, rolePermissions) || canManageTaskTemplates(currentUser, rolePermissions)) && (
+        <div className="xl:col-span-3 space-y-6">
+          {canManageServiceCatalog(currentUser, rolePermissions) && <ServicePackageManager />}
+          {canManageTaskTemplates(currentUser, rolePermissions) && <WorkflowTemplateManager />}
+        </div>
       )}
 
       {!isPasswordSetupOnly && (
@@ -867,9 +891,9 @@ const Settings: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => void handleDeleteStatus(status)}
-                            disabled={isStatusSaving}
-                            className="text-slate-400 hover:text-red-600 p-1 rounded transition-colors hover:bg-red-50"
-                            title={`Delete ${status}`}
+                            disabled={isStatusSaving || taskCount > 0}
+                            className="text-slate-400 hover:text-red-600 p-1 rounded transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            title={taskCount > 0 ? `In use by ${taskCount} task${taskCount === 1 ? '' : 's'} and cannot be deleted` : `Delete ${status}`}
                             aria-label={`Delete ${status}`}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -909,7 +933,6 @@ const Settings: React.FC = () => {
         )}
         </>
       )}
-      </div>
 
       {!isPasswordSetupOnly && (
         <>
@@ -1012,6 +1035,8 @@ const Settings: React.FC = () => {
           </div>
         </div>
       )}
+        </>
+      )}
 
       {!isClientUser && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1057,8 +1082,7 @@ const Settings: React.FC = () => {
           <p className="font-mono text-[11px] text-slate-400">{APP_BUILD_LABEL}</p>
         </div>
       </section>
-        </>
-      )}
+    </div>
     </div>
   );
 };

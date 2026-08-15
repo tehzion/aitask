@@ -66,7 +66,9 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           <span className="whitespace-nowrap text-slate-500">
             {isLocal && backendStatus.isHostedRuntime
               ? 'Vercel configuration required'
-              : `Synced: ${formatSyncTime(lastChecked)}`}
+              : isLocal
+                ? 'Local demo mode'
+                : `Last sync: ${formatSyncTime(lastChecked)}`}
           </span>
         )}
       </div>

@@ -312,6 +312,7 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
+        {hasTaskData && (
         <section className={cn('space-y-6', prioritizePersonalWork ? 'order-4' : 'order-2')} aria-labelledby="workspace-analytics-title">
           <div className="flex items-end justify-between gap-4">
             <div>
@@ -374,6 +375,7 @@ const Dashboard: React.FC = () => {
             )}
           </ChartCard>
         </section>
+        )}
 
         <section className={cn(cardBase, 'order-3 p-4 sm:p-5')} aria-labelledby="recent-activity-title">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -426,7 +428,7 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
 
-        {currentUser && !showStaffOperations && (
+        {currentUser && !showStaffOperations && !isBossKoo(currentUser) && (
           <section className={cn(cardBase, 'p-4 sm:p-5', prioritizePersonalWork ? 'order-1' : 'order-4')} aria-labelledby="personal-work-title">
             <div className="mb-4 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
