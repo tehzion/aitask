@@ -69,6 +69,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
             ['Awaiting review', progress.awaitingReview],
             ['Approved', progress.approved],
             ['Total tasks', progress.total],
+            ...(progress.cancelled > 0 ? [['Cancelled', progress.cancelled]] as const : []),
           ].map(([label, value]) => <div key={label} className="p-5"><p className="calm-number text-2xl font-semibold text-ink">{value}</p><p className="mt-1 text-xs font-medium text-muted">{label}</p></div>)}
         </StatGroup>
       </section>
@@ -79,7 +80,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
             <h2 id="client-review-title" className="text-base font-semibold text-slate-950">Ready for your review</h2>
             <p className="mt-1 text-sm text-slate-500">Review completed work, approve it, or ask for changes.</p>
           </div>
-          <Link to="/tasks?status=Waiting%20Approval" className="inline-flex items-center gap-1 text-sm font-semibold text-blue-700 hover:text-blue-800">
+          <Link to="/tasks" className="inline-flex items-center gap-1 text-sm font-semibold text-blue-700 hover:text-blue-800">
             Company tasks <ArrowRight className="h-4 w-4" />
           </Link>
         </div>

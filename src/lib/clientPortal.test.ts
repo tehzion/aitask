@@ -45,7 +45,7 @@ describe('Client portal reporting', () => {
       makeTask({ id: 'cancelled', status: 'Cancelled' }),
     ];
 
-    expect(getClientProgress(tasks)).toEqual({ active: 1, awaitingReview: 2, approved: 1, total: 5 });
+    expect(getClientProgress(tasks)).toEqual({ active: 1, awaitingReview: 2, approved: 1, cancelled: 1, total: 4 });
   });
 
   it('orders review-ready work by due date and keeps missing dates last', () => {

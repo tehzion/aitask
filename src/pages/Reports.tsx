@@ -41,7 +41,7 @@ const Reports: React.FC = () => {
       const dueDate = parseOptionalDate(task.dueDate);
       return Boolean(isTaskOpen(task) && dueDate && isBefore(dueDate, now) && !isToday(dueDate));
     }).length;
-    const activeUsers = new Set(tasks.map(task => task.assignedTo)).size;
+    const activeUsers = new Set(tasks.map(task => task.assignedTo).filter(Boolean)).size;
 
     return { completed, pending, overdue, activeUsers };
   }, [tasks]);

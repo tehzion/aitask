@@ -33,7 +33,7 @@ import {
 } from '../types';
 import { legacyDemoTaskIds, mockUsers, mockProjects, mockTasks, retiredDemoUserIds } from '../mock';
 import { canLoginWithSeedAccount, DEFAULT_USER_PASSWORD, shouldShowDemoLogin } from '../lib/auth';
-import { getLocalUserPassword, setLocalUserPassword, verifyLocalUserPassword } from '../lib/localCredentials';
+import { clearLocalUserPassword, getLocalUserPassword, setLocalUserPassword, verifyLocalUserPassword } from '../lib/localCredentials';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
 import {
   loadSupabaseSnapshot,
@@ -4004,17 +4004,26 @@ export const useStore = create<StoreState>()(
         set((current) => ({
           users: current.users.filter(user => user.id !== userId),
           deletedUserIds: Array.from(new Set([...(current.deletedUserIds || []), userId])),
+          tasks: current.tasks.map(task => task.assignedTo === userId
+            ? { ...task, assignedTo: '', updatedAt: new Date().toISOString() }
+            : task
+          ),
           notifications: [
             makeNotification({
               targetRole: 'Admin',
               title: 'Member Removed',
-              message: `${state.currentUser?.name || 'Super admin'} removed ${targetUser?.name}.`,
+              message: `${state.currentUser?.name || 'Super admin'} removed ${targetUser?.name}. ${state.tasks.some(task => task.assignedTo === userId) ? 'Their assigned tasks are now unassigned.' : ''}`,
               route: { page: 'approvals' },
               iconType: 'alert'
             }),
             ...(current.notifications || [])
           ]
         }));
+        try {
+          clearLocalUserPassword(userId);
+        } catch {
+          /* credential storage unavailable */
+        }
 
         return { ok: true };
       },

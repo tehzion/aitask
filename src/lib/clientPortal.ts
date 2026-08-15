@@ -12,12 +12,19 @@ export const getClientTaskStage = (task: Task): ClientTaskStage => {
   return 'active';
 };
 
-export const getClientProgress = (tasks: Task[]) => ({
-  active: tasks.filter(task => getClientTaskStage(task) === 'active').length,
-  awaitingReview: tasks.filter(task => getClientTaskStage(task) === 'awaiting_review').length,
-  approved: tasks.filter(task => getClientTaskStage(task) === 'approved').length,
-  total: tasks.length,
-});
+export const getClientProgress = (tasks: Task[]) => {
+  const active = tasks.filter(task => getClientTaskStage(task) === 'active').length;
+  const awaitingReview = tasks.filter(task => getClientTaskStage(task) === 'awaiting_review').length;
+  const approved = tasks.filter(task => getClientTaskStage(task) === 'approved').length;
+  const cancelled = tasks.filter(task => getClientTaskStage(task) === 'cancelled').length;
+  return {
+    active,
+    awaitingReview,
+    approved,
+    cancelled,
+    total: active + awaitingReview + approved,
+  };
+};
 
 const dateTime = (value?: string) => {
   if (!value) return 0;

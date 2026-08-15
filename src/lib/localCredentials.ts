@@ -119,6 +119,15 @@ export const verifyPasswordCredential = async (password: string, credential: Pbk
 
 export const getLocalUserPassword = (userId: string) => readCredentials()[userId];
 
+export const clearLocalUserPassword = (userId: string) => {
+  const credentials = readCredentials();
+  if (!(userId in credentials)) return;
+  delete credentials[userId];
+  if (!writeCredentials(credentials)) {
+    throw new Error('This browser could not clear the member credential.');
+  }
+};
+
 export const setLocalUserPassword = async (userId: string, password: string) => {
   if (!password) {
     const credentials = readCredentials();
