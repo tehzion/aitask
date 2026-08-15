@@ -448,7 +448,67 @@ const Approvals: React.FC = () => {
             No pending registrations at the moment.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile cards */}
+          <div className="divide-y divide-slate-100 sm:hidden">
+            {pendingRegs.map(reg => (
+              <div key={reg.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-800">{reg.name}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">Applied {format(new Date(reg.createdAt), 'MMM dd, yyyy')}</p>
+                  </div>
+                  <span className={`inline-flex shrink-0 px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
+                    reg.requestedRole === 'Admin' ? 'bg-purple-100 text-purple-700' :
+                    reg.requestedRole === 'Client' ? 'bg-amber-100 text-amber-700' :
+                    'bg-blue-100 text-blue-700'
+                  }`}>
+                    {reg.requestedRole || 'Staff'}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-slate-600">{reg.email}</p>
+                <p className="mt-0.5 text-sm text-slate-500">{reg.phone}{reg.jobPosition ? ` · ${reg.jobPosition}` : ''}</p>
+                <div className="mt-3 flex gap-2">
+                  {superAdmin ? (
+                    <>
+                      <button
+                        onClick={() => handleOpenApproval(reg)}
+                        disabled={isActionSaving || backend.isSaving}
+                        className="flex flex-1 items-center justify-center px-3 py-2 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (isActionSaving) return;
+                          const confirmed = window.confirm(`Reject ${reg.name}'s registration? They will need to apply again.`);
+                          if (!confirmed) return;
+                          const previousRegistrations = useStore.getState().registrations;
+                          rejectRegistration(reg.id);
+                          setIsActionSaving(true);
+                          const saved = await commitPendingMutation();
+                          setIsActionSaving(false);
+                          if (!saved.ok) {
+                            useStore.setState({ registrations: previousRegistrations });
+                            setActionError(saved.error || 'The rejection was rolled back. Use Retry required to confirm it.');
+                          }
+                        }}
+                        disabled={isActionSaving || backend.isSaving}
+                        className="flex flex-1 items-center justify-center px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <XCircle className="w-4 h-4 mr-1.5" /> Reject
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs font-medium text-slate-500">Super Admin approval required</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
@@ -523,6 +583,7 @@ const Approvals: React.FC = () => {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 

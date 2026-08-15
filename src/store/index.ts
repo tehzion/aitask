@@ -250,7 +250,9 @@ interface StoreState {
   renameClient: (oldClientName: string, newClientName: string) => { ok: boolean; error?: string };
   deleteClientProfile: (clientId: string) => { ok: boolean; error?: string };
   saveServicePackage: (data: Omit<ServicePackage, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'currency'> & { id?: string }) => { ok: boolean; id?: string; error?: string };
+  deleteServicePackage: (id: string) => { ok: boolean; error?: string };
   saveWorkflowTemplate: (data: Omit<ServiceWorkflowTemplate, 'id' | 'revision' | 'createdAt' | 'updatedAt'> & { id?: string }) => { ok: boolean; id?: string; error?: string };
+  deleteWorkflowTemplate: (id: string) => { ok: boolean; error?: string };
   createClientWithPlan: (data: ClientPlanSetupInput) => { ok: boolean; clientId?: string; planId?: string; error?: string };
   createClientPlanRevision: (planId: string) => { ok: boolean; planId?: string; error?: string };
   updateDraftClientPlan: (planId: string, data: Partial<Pick<ClientServicePlan, 'name' | 'serviceItems' | 'discountType' | 'discountValue' | 'taxRateBps' | 'contractEndDate'>>) => { ok: boolean; error?: string };
@@ -2980,6 +2982,45 @@ export const useStore = create<StoreState>()(
             : [...current.serviceWorkflowTemplates, item],
         }));
         return { ok: true, id: item.id };
+      },
+
+      deleteServicePackage: (id) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!canManageServiceCatalog(state.currentUser, state.rolePermissions)) {
+          return { ok: false, error: 'Only administrators can manage service packages.' };
+        }
+        const existing = state.servicePackages.find(item => item.id === id);
+        if (!existing) return { ok: false, error: 'Package not found.' };
+        set(current => ({
+          servicePackages: current.servicePackages.filter(item => item.id !== id),
+        }));
+        useToastStore.getState().addToast(`Package "${existing.name}" deleted. Existing client plans keep their own snapshots.`, 'success');
+        return { ok: true };
+      },
+
+      deleteWorkflowTemplate: (id) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!canManageTaskTemplates(state.currentUser, state.rolePermissions)) {
+          return { ok: false, error: 'You cannot manage task workflow templates.' };
+        }
+        const existing = state.serviceWorkflowTemplates.find(item => item.id === id);
+        if (!existing) return { ok: false, error: 'Workflow template not found.' };
+        const frozenWorkflows = [
+          ...state.servicePackages.flatMap(pkg => pkg.serviceItems.map(item => item.workflow)),
+          ...state.clientPlans.flatMap(plan => plan.serviceItems.map(item => item.workflow)),
+          ...state.serviceCycles.flatMap(cycle => cycle.serviceItems.map(item => item.workflow)),
+        ];
+        const referenced = frozenWorkflows.some(workflow => workflow?.templateId === id);
+        if (referenced) {
+          return { ok: false, error: 'This workflow is frozen into existing packages or plans. Deactivate it instead of deleting.' };
+        }
+        set(current => ({
+          serviceWorkflowTemplates: current.serviceWorkflowTemplates.filter(item => item.id !== id),
+        }));
+        useToastStore.getState().addToast(`Workflow template "${existing.name}" deleted.`, 'success');
+        return { ok: true };
       },
 
       createClientWithPlan: (data) => {

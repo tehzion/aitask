@@ -13,7 +13,7 @@ import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
 import BackendFreshness from '../components/BackendFreshness';
 import { getSoundEnabled, setSoundEnabled, SOUND_PREF_EVENT } from '../lib/sounds';
-import { canUsePasswordResetBypass, enablePasswordResetBypass } from '../lib/auth';
+import { canUsePasswordResetBypass, enablePasswordResetBypass, hasPasswordResetBypass } from '../lib/auth';
 import { APP_BUILD_CHANNEL, APP_BUILD_LABEL, APP_BUILD_TIME, APP_COMMIT, APP_VERSION_LABEL } from '../lib/appVersion';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
 import ServicePackageManager from '../components/ServicePackageManager';
@@ -214,7 +214,8 @@ const Settings: React.FC = () => {
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
   const mustResetPassword = Boolean(currentUser?.mustResetPassword);
   const canBypassPasswordReset = mustResetPassword && canUsePasswordResetBypass();
-  const isPasswordSetupOnly = mustResetPassword;
+  const bypassActive = currentUser ? hasPasswordResetBypass(currentUser.id) : false;
+  const isPasswordSetupOnly = mustResetPassword && !bypassActive;
   const secureAccounts = shouldUseSecureSupabase();
   const defaultAccessiblePath = getDefaultAccessiblePath(currentUser, rolePermissions);
   const isSupabaseMode = backendStatus.mode === 'supabase';

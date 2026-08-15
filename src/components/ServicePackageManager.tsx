@@ -16,11 +16,29 @@ const blankPackage = (): Omit<ServicePackage, 'id' | 'revision' | 'createdAt' | 
 });
 
 const ServicePackageManager = () => {
-  const { servicePackages, serviceWorkflowTemplates, saveServicePackage, commitPendingMutation } = useStore();
+  const { servicePackages, serviceWorkflowTemplates, saveServicePackage, deleteServicePackage, commitPendingMutation } = useStore();
   const [editingId, setEditingId] = React.useState<string>();
   const [draft, setDraft] = React.useState(blankPackage);
   const [message, setMessage] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+
+  const handleDelete = async (pkg: ServicePackage) => {
+    const confirmed = window.confirm(
+      `Delete the "${pkg.name}" package from the catalog? Existing client plans keep their own snapshots and are unaffected.`,
+    );
+    if (!confirmed) return;
+    const result = deleteServicePackage(pkg.id);
+    if (!result.ok) return setMessage(result.error || 'Unable to delete the package.');
+    setSaving(true);
+    const committed = await commitPendingMutation('service_package.manage');
+    setSaving(false);
+    if (!committed.ok) {
+      setMessage(committed.error || 'The deletion is waiting to be saved.');
+      return;
+    }
+    if (editingId === pkg.id) edit();
+    setMessage('Package deleted. Existing client plans remain unchanged.');
+  };
 
   const edit = (pkg?: ServicePackage) => {
     setEditingId(pkg?.id);
@@ -69,10 +87,22 @@ const ServicePackageManager = () => {
           <p className="calm-eyebrow px-2 pb-2 pt-1">Package library</p>
           <div className="space-y-2">
             {servicePackages.map(pkg => (
-              <button key={pkg.id} onClick={() => edit(pkg)} aria-current={editingId === pkg.id ? 'true' : undefined} className={cn('w-full rounded-control px-3 py-3 text-left transition-colors', editingId === pkg.id ? 'bg-surface text-ink shadow-sm ring-1 ring-line' : 'text-muted hover:bg-surface/70 hover:text-ink')}>
-                <span className="block text-sm font-semibold text-slate-900">{pkg.name}</span>
+              <div key={pkg.id} className={cn('group flex items-stretch gap-1 rounded-control', editingId === pkg.id ? 'bg-surface text-ink shadow-sm ring-1 ring-line' : 'hover:bg-surface/70')}>
+              <button onClick={() => edit(pkg)} aria-current={editingId === pkg.id ? 'true' : undefined} className="min-w-0 flex-1 rounded-control px-3 py-3 text-left transition-colors">
+                <span className="block truncate text-sm font-semibold text-slate-900">{pkg.name}</span>
                 <span className="mt-1 block text-xs text-slate-500">Revision {pkg.revision} · {pkg.serviceItems.length} services</span>
               </button>
+              <button
+                type="button"
+                onClick={() => void handleDelete(pkg)}
+                disabled={saving}
+                aria-label={`Delete package ${pkg.name}`}
+                title={`Delete ${pkg.name}`}
+                className="flex w-10 items-center justify-center rounded-control text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+              </div>
             ))}
             {servicePackages.length === 0 && <p className="py-6 text-center text-sm text-slate-500">No standard packages yet.</p>}
           </div>

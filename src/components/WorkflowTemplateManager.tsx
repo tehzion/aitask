@@ -23,11 +23,29 @@ const blankTemplate = (): Omit<ServiceWorkflowTemplate, 'id' | 'revision' | 'cre
 });
 
 const WorkflowTemplateManager = () => {
-  const { serviceWorkflowTemplates, saveWorkflowTemplate, commitPendingMutation } = useStore();
+  const { serviceWorkflowTemplates, saveWorkflowTemplate, deleteWorkflowTemplate, commitPendingMutation } = useStore();
   const [editingId, setEditingId] = React.useState<string>();
   const [draft, setDraft] = React.useState(blankTemplate);
   const [message, setMessage] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+
+  const handleDelete = async (template: ServiceWorkflowTemplate) => {
+    const confirmed = window.confirm(
+      `Delete the "${template.name}" workflow template? Plans that already froze this workflow keep their copy.`,
+    );
+    if (!confirmed) return;
+    const result = deleteWorkflowTemplate(template.id);
+    if (!result.ok) return setMessage(result.error || 'Unable to delete the workflow template.');
+    setSaving(true);
+    const committed = await commitPendingMutation('service_workflow.manage');
+    setSaving(false);
+    if (!committed.ok) {
+      setMessage(committed.error || 'The deletion is waiting to be saved.');
+      return;
+    }
+    if (editingId === template.id) edit();
+    setMessage('Workflow template deleted. Frozen copies in plans remain unchanged.');
+  };
 
   const edit = (template?: ServiceWorkflowTemplate) => {
     setEditingId(template?.id);
@@ -79,10 +97,22 @@ const WorkflowTemplateManager = () => {
           <p className="calm-eyebrow px-2 pb-2 pt-1">Workflow library</p>
           <div className="space-y-2">
             {serviceWorkflowTemplates.map(template => (
-              <button key={template.id} onClick={() => edit(template)} aria-current={editingId === template.id ? 'true' : undefined} className={cn('w-full rounded-control px-3 py-3 text-left transition-colors', editingId === template.id ? 'bg-surface text-ink shadow-sm ring-1 ring-line' : 'text-muted hover:bg-surface/70 hover:text-ink')}>
-                <span className="block text-sm font-semibold text-slate-900">{template.name}</span>
+              <div key={template.id} className={cn('group flex items-stretch gap-1 rounded-control', editingId === template.id ? 'bg-surface text-ink shadow-sm ring-1 ring-line' : 'hover:bg-surface/70')}>
+              <button onClick={() => edit(template)} aria-current={editingId === template.id ? 'true' : undefined} className="min-w-0 flex-1 rounded-control px-3 py-3 text-left transition-colors">
+                <span className="block truncate text-sm font-semibold text-slate-900">{template.name}</span>
                 <span className="mt-1 block text-xs text-slate-500">Revision {template.revision} · {template.steps.length} steps</span>
               </button>
+              <button
+                type="button"
+                onClick={() => void handleDelete(template)}
+                disabled={saving}
+                aria-label={`Delete workflow ${template.name}`}
+                title={`Delete ${template.name}`}
+                className="flex w-10 items-center justify-center rounded-control text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+              </div>
             ))}
           </div>
         </div>
