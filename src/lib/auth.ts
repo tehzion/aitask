@@ -75,3 +75,20 @@ export const enablePasswordResetBypass = (userId?: string) => {
     return false;
   }
 };
+
+export const clearPasswordResetBypass = (userId?: string) => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    if (userId) {
+      window.sessionStorage.removeItem(`${PASSWORD_RESET_BYPASS_SESSION_PREFIX}${userId}`);
+      return;
+    }
+    for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.sessionStorage.key(index);
+      if (key?.startsWith(PASSWORD_RESET_BYPASS_SESSION_PREFIX)) window.sessionStorage.removeItem(key);
+    }
+  } catch {
+    /* session storage unavailable */
+  }
+};

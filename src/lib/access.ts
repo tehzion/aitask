@@ -1,4 +1,5 @@
-import { AppNotification, CustomRole, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
+import { AppNotification, CustomRole, Department, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
+import { getMemberDepartments, isMemberInDepartment } from './departments';
 
 export type DashboardPersona = 'boss' | 'admin' | 'operation' | 'account' | 'production' | 'client';
 
@@ -123,7 +124,7 @@ export const getDashboardPersona = (user: User | null | undefined): DashboardPer
   if (isBossKoo(user)) return 'boss';
   if (user?.role === 'Admin') return 'admin';
   if (user?.role === 'Client') return 'client';
-  const departments = user?.departments || (user?.department ? [user.department] : []);
+  const departments = getMemberDepartments(user);
   if (departments.includes('Operation')) return 'operation';
   if (departments.includes('Account & Finance')) return 'account';
   return 'production';
@@ -351,7 +352,6 @@ export const getVisibleProjects = (
 export const getAssignableProjects = (
   user: User | null | undefined,
   projects: Project[],
-  users: User[] = [],
   tasks: Task[] = [],
   customRoles: CustomRole[] = []
 ) => {
@@ -359,11 +359,26 @@ export const getAssignableProjects = (
   if (user.role !== 'Staff') return getVisibleProjects(user, projects, tasks, customRoles);
   if (!canCreateTasks(user, customRoles)) return [];
 
-  const usersById = new Map(users.map(member => [member.id, member]));
+  const participationProjectIds = new Set(
+    getVisibleProjects(user, projects, tasks, customRoles).map(project => project.id)
+  );
+  const projectDepartments = new Map<string, Set<string>>();
+  tasks.forEach(task => {
+    if (!task.projectId) return;
+    const departments = projectDepartments.get(task.projectId) || new Set<string>();
+    departments.add(task.department);
+    projectDepartments.set(task.projectId, departments);
+  });
+
   return projects.filter(project => {
+    if (participationProjectIds.has(project.id) && project.createdBy !== user.id) return true;
+    if (project.createdBy === user.id) {
+      return tasks.some(task => task.projectId === project.id && task.assignedTo === user.id);
+    }
     if (!project.createdBy) return true;
-    const creator = usersById.get(project.createdBy);
-    return Boolean(creator && (creator.role === 'Admin' || isBossKoo(creator)));
+    const departments = projectDepartments.get(project.id);
+    if (!departments || departments.size === 0) return true;
+    return Array.from(departments).some(department => isMemberInDepartment(user, department as Department));
   });
 };
 

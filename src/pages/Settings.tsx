@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, Bell, CheckCircle2, Cloud, Database, Lock, P
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
+import type { User } from '../types';
 import { getMemberDepartments } from '../lib/departments';
 import { Badge, Button, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
@@ -258,6 +259,11 @@ const Settings: React.FC = () => {
     event.preventDefault();
     setIsProfileSaving(true);
 
+    const previousProfile = {
+      name: currentUser?.name || '',
+      email: currentUser?.email || '',
+      avatar: currentUser?.avatar || '',
+    };
     const emailChanged = profileEmail.trim().toLowerCase() !== (currentUser?.email || '').trim().toLowerCase();
     if (backend.mode === 'supabase' && emailChanged) {
       const emailResult = await updateCurrentUserEmail(profileEmail, profileCurrentPassword);
@@ -283,6 +289,16 @@ const Settings: React.FC = () => {
 
     const saved = await commitPendingMutation();
     setIsProfileSaving(false);
+    if (!saved.ok) {
+      useStore.setState(state => ({
+        users: state.users.map(user => user.id === currentUser?.id
+          ? { ...user, name: previousProfile.name, email: previousProfile.email, avatar: previousProfile.avatar }
+          : user),
+        currentUser: state.currentUser?.id === currentUser?.id
+          ? { ...(state.currentUser as User), name: previousProfile.name, email: previousProfile.email, avatar: previousProfile.avatar }
+          : state.currentUser,
+      }));
+    }
     setProfileMessage({
       tone: saved.ok ? 'success' : 'error',
       text: saved.ok ? 'Profile updated.' : saved.error || 'Profile is waiting to be saved. Use Retry required to try again.',

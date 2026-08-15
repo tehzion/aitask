@@ -119,7 +119,7 @@ export const safeHttpsUrl = (value: unknown): string | null => {
 };
 
 export const safeAvatarSource = (value: unknown): string | undefined => {
-  const candidate = cleanText(value, 2_000_000);
+  const candidate = cleanText(value, 64_000);
   if (!candidate) return undefined;
   if (/^data:image\/(?:png|jpe?g|webp);base64,[a-z0-9+/=]+$/i.test(candidate)) return candidate;
   if (candidate.startsWith('/') && !candidate.startsWith('//') && !candidate.includes('\\')) return candidate;
@@ -245,6 +245,8 @@ const parseUser = (value: unknown): User | null => {
     workspaceId: optionalText(value.workspaceId, 160),
     name,
     email: optionalText(value.email, 320),
+    phone: optionalText(value.phone, 80),
+    jobPosition: optionalText(value.jobPosition, 160),
     role,
     departments,
     department: getLegacyDepartmentMirror(role, departments),

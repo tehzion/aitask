@@ -1,4 +1,4 @@
-import { DEFAULT_USER_PASSWORD, hasDefaultPassword } from './auth';
+import { DEFAULT_USER_PASSWORD } from './auth';
 
 const CREDENTIAL_STORAGE_KEY = 'aitask-local-credentials-v1';
 export const PBKDF2_ITERATIONS = 310_000;
@@ -120,7 +120,7 @@ export const verifyPasswordCredential = async (password: string, credential: Pbk
 export const getLocalUserPassword = (userId: string) => readCredentials()[userId];
 
 export const setLocalUserPassword = async (userId: string, password: string) => {
-  if (!password || hasDefaultPassword(password)) {
+  if (!password) {
     const credentials = readCredentials();
     delete credentials[userId];
     if (!writeCredentials(credentials)) {

@@ -206,6 +206,11 @@ const Tasks: React.FC = () => {
     [allTasks, currentUser, projects, rolePermissions]
   );
 
+  const visibleClientKeys = useMemo(() => new Set(
+    [...tasks.map(task => normalizeClientName(task.clientName)), ...visibleProjects.map(project => normalizeClientName(project.clientName))]
+      .filter(Boolean)
+  ), [tasks, visibleProjects]);
+
   const clientOptions = useMemo(() => (
     Array.from(new Map(
       [...tasks.map(t => t.clientName), ...visibleProjects.map(p => p.clientName)]
@@ -282,7 +287,8 @@ const Tasks: React.FC = () => {
   const activeAssignee = assigneeRouteFilter ? users.find(user => user.id === assigneeRouteFilter && user.role !== 'Client') : undefined;
   const activeClient = clientRouteFilter || '';
   const activeClientKey = normalizeClientName(activeClient);
-  const activeClientProfile = activeClient
+  const canViewActiveClient = visibleClientKeys.has(activeClientKey);
+  const activeClientProfile = activeClient && canViewActiveClient
     ? clientProfiles.find(client => normalizeClientName(client.clientName) === activeClientKey)
     : undefined;
   const activeClientTasks = activeClient
@@ -488,6 +494,12 @@ const Tasks: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
+              {!canViewActiveClient ? (
+                <span className="inline-flex items-center gap-2 sm:col-span-2">
+                  <MapPin className="h-4 w-4 shrink-0 text-slate-400" /> This client is outside your assigned work. Contact details are hidden.
+                </span>
+              ) : (
+                <>
               {activeClientProfile?.email && (
                 <span className="inline-flex items-center gap-2 truncate">
                   <Mail className="h-4 w-4 shrink-0 text-slate-400" /> {activeClientProfile.email}
@@ -502,6 +514,8 @@ const Tasks: React.FC = () => {
                 <span className="inline-flex items-center gap-2 sm:col-span-2">
                   <MapPin className="h-4 w-4 shrink-0 text-slate-400" /> <span className="line-clamp-2">{activeClientProfile.address}</span>
                 </span>
+              )}
+                </>
               )}
               <span className="inline-flex items-center gap-2">
                 <Building2 className="h-4 w-4 shrink-0 text-slate-400" /> {activeClientProjects.length} company record{activeClientProjects.length === 1 ? '' : 's'}

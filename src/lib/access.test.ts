@@ -131,11 +131,42 @@ describe('staff permission matrix', () => {
       { ...projects[0], id: 'project-legacy', clientName: 'Legacy', projectName: 'Legacy', createdBy: undefined },
     ];
 
-    expect(getAssignableProjects(staff, companySet, [admin, staff], tasks).map(project => project.id)).toEqual([
+    expect(getAssignableProjects(staff, companySet, tasks).map(project => project.id)).toEqual([
       'project-acme',
       'project-legacy',
     ]);
-    expect(getAssignableProjects(admin, companySet, [admin, staff], tasks)).toEqual(companySet);
+    expect(getAssignableProjects(admin, companySet, tasks)).toEqual(companySet);
+  });
+
+  it('hides unrelated Admin-created companies from Staff create-task dropdown', () => {
+    const otherDeptProject: Project = {
+      ...projects[0],
+      id: 'project-other-dept',
+      clientName: 'Video Co',
+      projectName: 'Video Co',
+      createdBy: admin.id,
+    };
+    const freshAdminProject: Project = {
+      ...projects[0],
+      id: 'project-fresh-admin',
+      clientName: 'Fresh Co',
+      projectName: 'Fresh Co',
+      createdBy: admin.id,
+    };
+    const companySet: Project[] = [
+      { ...projects[0], createdBy: admin.id },
+      otherDeptProject,
+      freshAdminProject,
+    ];
+    const staffTasks = [
+      makeTask({ id: 'designer-task', projectId: 'project-acme', department: 'Designer' }),
+      makeTask({ id: 'video-task', projectId: 'project-other-dept', department: 'Video Editor', assignedTo: otherStaff.id }),
+    ];
+
+    expect(getAssignableProjects(staff, companySet, staffTasks).map(project => project.id)).toEqual([
+      'project-acme',
+      'project-fresh-admin',
+    ]);
   });
 
   it('requires both explicit permission and assignment for staff profile editing', () => {

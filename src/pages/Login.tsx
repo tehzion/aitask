@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, UserPlus, ChevronDown, ChevronUp, Mail, Moon, Sun } from 'lucide-react';
 import { useStore } from '../store';
-import { Role } from '../types';
 import { Button } from '../components/ui';
 import { inputBase } from '../components/uiTokens';
 import { cn } from '../lib/utils';
@@ -65,7 +64,7 @@ const Login: React.FC = () => {
   // --- Registration state ---
   const [isRegistering, setIsRegistering] = useState(false);
   const [regData, setRegData] = useState({
-    name: '', email: '', phone: '', jobPosition: '', requestedRole: 'Staff' as Role,
+    name: '', email: '', phone: '', jobPosition: '',
   });
   const [regSuccess, setRegSuccess] = useState(false);
   const [regPassword, setRegPassword] = useState('');
@@ -164,13 +163,13 @@ const Login: React.FC = () => {
       return;
     }
     setRegSuccess(true);
-    setRegData({ name: '', email: '', phone: '', jobPosition: '', requestedRole: 'Staff' });
+    setRegData({ name: '', email: '', phone: '', jobPosition: '' });
     setRegPassword('');
     setRegConfirmPassword('');
   };
 
   return (
-    <div className="relative min-h-screen bg-slate-50 flex flex-col justify-center px-4 py-10 dark:bg-slate-950 sm:px-6 lg:px-8">
+    <main className="relative min-h-screen bg-slate-50 flex flex-col justify-center px-4 py-10 dark:bg-slate-950 sm:px-6 lg:px-8">
       <button
         type="button"
         onClick={toggleTheme}
@@ -192,9 +191,9 @@ const Login: React.FC = () => {
             </div>
           </div>
         </div>
-        <h2 className="mt-8 text-center text-2xl font-semibold text-slate-950">
+        <h1 className="mt-8 text-center text-2xl font-semibold text-slate-950">
           {isRecovering ? 'Reset your password' : isRegistering ? 'Register for Access' : 'Sign in to AiTask'}
-        </h2>
+        </h1>
         <p className="mt-2 text-center text-sm text-slate-600">
           {isRecovering
             ? 'Enter your account email or username to receive a secure recovery link.'
@@ -212,7 +211,7 @@ const Login: React.FC = () => {
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
                   <Mail className="h-6 w-6 text-blue-600" />
                 </div>
-                <h3 className="mt-4 text-lg font-semibold text-slate-900">Check your email</h3>
+                <h2 className="mt-4 text-lg font-semibold text-slate-900">Check your email</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
                   If the account can receive recovery email, a password link has been sent.
                 </p>
@@ -327,7 +326,6 @@ const Login: React.FC = () => {
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-200">
                             <th className="text-left px-3 py-2 font-semibold text-slate-500">Username</th>
-                            {!secureAccounts && <th className="text-left px-3 py-2 font-semibold text-slate-500">Password</th>}
                             <th className="text-left px-3 py-2 font-semibold text-slate-500">Role</th>
                           </tr>
                         </thead>
@@ -350,7 +348,6 @@ const Login: React.FC = () => {
                                   {account.username}
                                 </button>
                               </td>
-                              {!secureAccounts && <td className="px-3 py-2 font-mono text-[11px] text-slate-600">{DEFAULT_USER_PASSWORD}</td>}
                               <td className="px-3 py-2">
                                 <span className={cn('px-1.5 py-0.5 rounded text-xs font-semibold', account.badge)}>
                                   {account.role}
@@ -394,7 +391,7 @@ const Login: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-medium text-slate-900">Registration Submitted!</h3>
+                  <h2 className="text-lg font-medium text-slate-900">Registration Submitted!</h2>
                   <p className="mt-2 text-sm text-slate-500">
                     {secureAccounts
                       ? 'Your Staff registration is waiting for approval. After approval, sign in with the password you chose. Email setup is optional.'
@@ -460,7 +457,7 @@ const Login: React.FC = () => {
           {APP_BUILD_LABEL}
         </p>
       </div>
-    </div>
+    </main>
   );
 };
 

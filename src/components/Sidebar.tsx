@@ -4,6 +4,7 @@ import { LayoutDashboard, CheckSquare, CalendarDays, FolderKanban, BarChart3, Se
 import { useStore } from '../store';
 import clsx from 'clsx';
 import { canAccessPath, getVisibleNavigation } from '../lib/access';
+import { clearPasswordResetBypass } from '../lib/auth';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
 import { APP_VERSION_LABEL, APP_COMMIT } from '../lib/appVersion';
 
@@ -31,7 +32,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
   const sidebarRef = React.useRef<HTMLElement>(null);
   const navigate = useNavigate();
   const handleLogout = async () => {
+    const signingOutUser = useStore.getState().currentUser;
     if (shouldUseSecureSupabase()) await signOutSecureSession();
+    clearPasswordResetBypass(signingOutUser?.id);
     useStore.setState({ currentUser: null });
     navigate('/login', { replace: true });
   };
@@ -183,6 +186,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
             </NavLink>
           )}
           <button
+            type="button"
             onClick={handleLogout}
             title={isCollapsed ? 'Logout' : undefined}
             className={clsx('flex min-h-11 w-full items-center rounded-control px-3 py-2.5 text-red-600/80 transition-colors duration-160 hover:bg-red-50 hover:text-red-700', isCollapsed && 'md:justify-center md:px-2')}

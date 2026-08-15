@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { X, Plus, ChevronDown } from 'lucide-react';
-import { Department, Priority, ServiceType } from '../types';
+import { Department, Priority, ServiceType, TaskVisibility } from '../types';
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
 import { getClientOptions, getServiceOptions, hasChoice } from '../lib/choiceOptions';
@@ -63,6 +63,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [customServiceInput, setCustomServiceInput] = useState('');
   const [customServiceError, setCustomServiceError] = useState('');
   const [priority, setPriority] = useState<Priority>('Medium');
+  const [visibility, setVisibility] = useState<TaskVisibility>(() => (
+    currentUser?.role === 'Staff' ? 'internal' : 'client-visible'
+  ));
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [attachmentLink, setAttachmentLink] = useState('');
@@ -90,8 +93,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       ))
     : [];
   const assignableProjects = React.useMemo(
-    () => getAssignableProjects(currentUser, projects, users, tasks, rolePermissions),
-    [currentUser, projects, rolePermissions, tasks, users]
+    () => getAssignableProjects(currentUser, projects, tasks, rolePermissions),
+    [currentUser, projects, rolePermissions, tasks]
   );
   const selectedProject = projectId ? assignableProjects.find(project => project.id === projectId) : undefined;
   const clientOptions = React.useMemo(() => getClientOptions(projects, tasks, users), [projects, tasks, users]);
@@ -119,6 +122,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setCustomServiceInput('');
     setCustomServiceError('');
     setPriority('Medium');
+    setVisibility(currentUser?.role === 'Staff' ? 'internal' : 'client-visible');
     setStartDate(getTodayInputDate());
     setDueDate('');
     setAttachmentLink('');
@@ -128,7 +132,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setFormError('');
     setIsSubmitting(false);
     setPendingTaskId('');
-  }, []);
+  }, [currentUser?.role]);
 
   const closeAndReset = React.useCallback(() => {
     resetForm();
@@ -352,6 +356,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       customerDetails: customerDetails.trim(),
       facebookPage: safeHttpsUrl(facebookPage) || undefined,
       website: safeHttpsUrl(website) || undefined,
+      visibility,
       department,
       assignedTo: finalAssignee,
       serviceType: trimmedServiceType,
@@ -660,6 +665,19 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
                       {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Client visibility</label>
+                  <div className="relative">
+                    <select
+                      value={visibility} onChange={e => setVisibility(e.target.value as TaskVisibility)}
+                      className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                    >
+                      <option value="client-visible">Visible to client</option>
+                      <option value="internal">Internal only</option>
                     </select>
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                   </div>

@@ -3,7 +3,7 @@ import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileCheck2, UsersRou
 import { Link } from 'react-router-dom';
 import { isBefore, isToday } from 'date-fns';
 import { useStore } from '../store';
-import { canViewServicePrices, getDashboardPersona } from '../lib/access';
+import { canViewServicePrices, getClientKey, getDashboardPersona, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { formatMoney } from '../lib/serviceManagement';
 import { parseOptionalDate } from '../lib/utils';
 import { DataRow, ProgressBar, StatGroup, StatusChip, Surface } from './ui';
@@ -47,14 +47,21 @@ const ServiceRoleDashboard = () => {
   const persona = getDashboardPersona(store.currentUser);
   const canSeePrices = canViewServicePrices(store.currentUser, store.rolePermissions);
   const now = new Date();
-  const serviceTasks = store.tasks.filter(task => Boolean(task.clientId));
+  const visibleTasks = React.useMemo(
+    () => getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions),
+    [store.currentUser, store.rolePermissions, store.tasks],
+  );
+  const visibleClientKeys = React.useMemo(() => new Set(
+    getVisibleClientNames(store.currentUser, store.tasks, store.projects, store.rolePermissions).map(getClientKey)
+  ), [store.currentUser, store.projects, store.rolePermissions, store.tasks]);
+  const serviceTasks = visibleTasks.filter(task => Boolean(task.clientId));
   const myTasks = serviceTasks.filter(task => task.assignedTo === store.currentUser?.id);
   const scopeTasks = persona === 'production' ? myTasks : serviceTasks;
   const overdue = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && !task.isCompleted && task.status !== 'Cancelled' && isBefore(due, now) && !isToday(due)); });
   const dueToday = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && !task.isCompleted && isToday(due)); });
-  const activePlans = store.clientPlans.filter(plan => plan.status === 'Active');
+  const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && visibleClientKeys.has(getClientKey(plan.clientName)));
   const contractedMonthly = canSeePrices ? activePlans.reduce((sum, plan) => sum + (store.servicePricingSnapshots.find(item => item.parentType === 'client_plan' && item.parentId === plan.id)?.totalMinor || 0), 0) : 0;
-  const delivered = store.deliverables.filter(item => item.status === 'Delivered');
+  const delivered = store.deliverables.filter(item => item.status === 'Delivered' && visibleClientKeys.has(getClientKey(item.clientName)));
   const waitingInternal = scopeTasks.filter(task => task.status === 'Waiting Approval' && task.visibility !== 'client-visible');
   const waitingClient = scopeTasks.filter(task => task.status === 'Waiting Approval' && task.visibility === 'client-visible');
   const revisions = scopeTasks.filter(task => task.revisionCount > 0 && !task.isCompleted);

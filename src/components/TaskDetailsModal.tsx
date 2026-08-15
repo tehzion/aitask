@@ -368,6 +368,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                       <input
                         type="text"
                         value={editForm.clientName}
+                        disabled={!canAssignOthers}
                         onChange={(e) => setEditForm({ ...editForm, clientName: e.target.value })}
                         className={cn(inputBase, 'px-2.5 py-2.5')}
                       />
@@ -377,6 +378,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                       <input
                         type="text"
                         value={editForm.serviceType}
+                        disabled={!canAssignOthers}
                         onChange={(e) => setEditForm({ ...editForm, serviceType: e.target.value })}
                         className={cn(inputBase, 'px-2.5 py-2.5')}
                       />

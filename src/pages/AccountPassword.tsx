@@ -37,8 +37,13 @@ const AccountPassword: React.FC = () => {
     };
 
     void checkSession();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted || !session || !getPasswordSetupMode()) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted || !getPasswordSetupMode()) return;
+      if (!session) {
+        setHasValidSession(false);
+        setIsChecking(false);
+        return;
+      }
       setHasValidSession(true);
       setIsChecking(false);
     });

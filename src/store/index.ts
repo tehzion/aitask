@@ -303,6 +303,7 @@ const sensitiveSnapshotKeyPattern = /(password|secret|token|api[_-]?key|service[
 const safePasswordMetadataKeys = new Set(['mustResetPassword', 'must_reset_password']);
 const normalizeClientKey = (value?: string | null) => value?.trim().toLowerCase() || '';
 const profileEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^\+?[0-9\s\-()]{7,20}$/;
 
 const getFunctionErrorMessage = async (error: unknown, fallback: string) => {
   if (!error || typeof error !== 'object') return fallback;
@@ -1738,6 +1739,15 @@ export const useStore = create<StoreState>()(
         }
 
         if (!shouldUseSecureSupabase()) {
+          let isValid = false;
+          try {
+            isValid = await verifyLocalUserPassword(currentUser.id, currentPassword, {
+              allowDefaultPassword: shouldShowDemoLogin() && !getBackendStatus().isHostedRuntime,
+            });
+          } catch {
+            isValid = false;
+          }
+          if (!isValid) return { ok: false, error: 'The current password is incorrect.' };
           const result = get().updateCurrentUserProfile({
             name: currentUser.name,
             email,
@@ -2139,9 +2149,21 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'You do not have permission to reassign this task.' };
         }
 
+        const nextDepartment = data.department ?? task.department;
+        if (!canAssignOthers && nextDepartment !== task.department) {
+          return { ok: false, error: 'You do not have permission to change the task department.' };
+        }
+        const requestedClientName = data.clientName !== undefined ? data.clientName.trim() : task.clientName;
+        if (!canAssignOthers && requestedClientName.toLowerCase() !== task.clientName.toLowerCase()) {
+          return { ok: false, error: 'You do not have permission to change the client.' };
+        }
+        const requestedServiceType = data.serviceType !== undefined ? data.serviceType.trim() : task.serviceType;
+        if (!canAssignOthers && requestedServiceType.toLowerCase() !== task.serviceType.toLowerCase()) {
+          return { ok: false, error: 'You do not have permission to change the service.' };
+        }
+
         const assignee = state.users.find(user => user.id === nextAssigneeId && user.role !== 'Client');
         if (!assignee) return { ok: false, error: 'Choose a valid internal assignee.' };
-        const nextDepartment = data.department ?? task.department;
         const assignmentChanged = nextAssigneeId !== task.assignedTo || nextDepartment !== task.department;
         if (assignmentChanged && !isMemberInDepartment(assignee, nextDepartment)) {
           return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
@@ -2455,7 +2477,7 @@ export const useStore = create<StoreState>()(
         if (taskData.projectId) {
           if (!project) return '';
           const assignableProjectIds = new Set(
-            getAssignableProjects(currentUser, state.projects, state.users, state.tasks, state.rolePermissions).map(item => item.id)
+            getAssignableProjects(currentUser, state.projects, state.tasks, state.rolePermissions).map(item => item.id)
           );
           if (!assignableProjectIds.has(taskData.projectId)) return '';
         }
@@ -3395,13 +3417,30 @@ export const useStore = create<StoreState>()(
       }),
 
       registerUser: async (data) => {
-        const name = data.name.trim();
-        const email = data.email.trim().toLowerCase();
-        const phone = data.phone.trim();
-        const jobPosition = data.jobPosition.trim();
+        const name = data.name.trim().slice(0, 160);
+        const email = data.email.trim().toLowerCase().slice(0, 320);
+        const phone = data.phone.trim().slice(0, 80);
+        const jobPosition = data.jobPosition.trim().slice(0, 160);
 
         if (!name || !email || !phone || !jobPosition || !profileEmailPattern.test(email)) {
           return { ok: false, error: 'Complete all fields with a valid email address.' };
+        }
+        if (!PHONE_PATTERN.test(phone)) {
+          return { ok: false, error: 'Enter a valid phone number.' };
+        }
+
+        const state = get();
+        const duplicatePending = (state.registrations || []).some(registration => (
+          registration.status === 'Pending' && registration.email.toLowerCase() === email
+        ));
+        if (duplicatePending) {
+          return { ok: false, error: 'This email already has a pending Staff registration.' };
+        }
+        const existingUser = state.users.some(user => (
+          user.email?.toLowerCase() === email || user.name.toLowerCase() === name.toLowerCase()
+        ));
+        if (existingUser) {
+          return { ok: false, error: 'An account with this name or email already exists.' };
         }
 
         if (shouldUseSecureSupabase()) {
@@ -3423,10 +3462,13 @@ export const useStore = create<StoreState>()(
           });
           if (error) return { ok: false, error: error.message };
           if (signUpData.session) await supabase.auth.signOut({ scope: 'local' });
+          if (!signUpData.user && !signUpData.session) {
+            return { ok: false, error: 'This email is already registered. Use the sign-in page instead.' };
+          }
           return { ok: true };
         }
 
-        set((state) => {
+        set((current) => {
           const newReg: Registration = {
             name,
             email,
@@ -3439,21 +3481,23 @@ export const useStore = create<StoreState>()(
             createdAt: new Date().toISOString()
           };
 
-          const bossKoo = state.users.find(u => u.name === 'Boss Koo');
-          const newNotifs = [...(state.notifications || [])];
+          const superAdmins = current.users.filter(u => u.isSuperAdmin);
+          const newNotifs = [...(current.notifications || [])];
 
-          if (bossKoo) {
-            newNotifs.unshift(makeNotification({
-              targetUserId: bossKoo.id,
-              title: 'New Registration',
-              message: `${name} has registered and is waiting for your approval.`,
-              route: { page: 'approvals' },
-              iconType: 'status'
-            }));
+          if (superAdmins.length > 0) {
+            superAdmins.forEach(admin => {
+              newNotifs.unshift(makeNotification({
+                targetUserId: admin.id,
+                title: 'New Registration',
+                message: `${name} has registered and is waiting for your approval.`,
+                route: { page: 'approvals' },
+                iconType: 'status'
+              }));
+            });
           }
 
           return {
-            registrations: [...(state.registrations || []), newReg],
+            registrations: [...(current.registrations || []), newReg],
             notifications: newNotifs
           };
         });
@@ -3855,9 +3899,19 @@ export const useStore = create<StoreState>()(
         const departments = normalizeMemberDepartments(role, departmentsInput);
         if (departments.length === 0) return state;
 
+        const duplicate = state.users.some(user => (
+          user.name.toLowerCase() === reg.name.toLowerCase() ||
+          (reg.email && user.email?.toLowerCase() === reg.email.toLowerCase())
+        ));
+        if (duplicate) return state;
+
+        const userId = nowId('U');
         const newUser: User = {
-          id: nowId('U'),
+          id: userId,
           name: reg.name,
+          email: reg.email,
+          phone: reg.phone,
+          jobPosition: reg.jobPosition,
           mustResetPassword: true,
           role,
           departments,
@@ -3868,6 +3922,8 @@ export const useStore = create<StoreState>()(
           avatar: `https://i.pravatar.cc/150?u=${reg.name.replace(/\s/g, '')}`,
           updatedAt: new Date().toISOString()
         };
+
+        void setLocalUserPassword(userId, DEFAULT_USER_PASSWORD).catch(() => undefined);
 
         return {
           registrations: state.registrations.map(r => r.id === id ? { ...r, status: 'Approved' } : r),

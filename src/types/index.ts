@@ -64,6 +64,8 @@ export interface WorkspaceMember {
   workspaceId?: string;
   name: string;
   email?: string;
+  phone?: string;
+  jobPosition?: string;
   password?: string; // Backward compatibility only; active mock passwords are local-only
   role: Role;
   departments: Department[];

@@ -232,6 +232,12 @@ const Approvals: React.FC = () => {
       permissions: roleForm.permissions,
     };
 
+    const hasAnyPermission = Object.values(roleForm.permissions).some(Boolean);
+    if (!hasAnyPermission) {
+      setRoleError('Choose at least one permission so members with this role keep workspace access.');
+      return;
+    }
+
     const result = roleEditorId
       ? updateCustomRole(roleEditorId, payload)
       : addCustomRole(payload);
@@ -267,8 +273,17 @@ const Approvals: React.FC = () => {
   };
 
   const handleDeleteRole = async (customRoleId: string) => {
+    const targetRole = useStore.getState().rolePermissions.find(customRole => customRole.id === customRoleId);
+    if (!targetRole) return;
+    const affectedMembers = useStore.getState().users.filter(user => user.customRoleId === customRoleId).length;
+    const confirmed = window.confirm(
+      `Delete "${targetRole.name}"?${affectedMembers > 0 ? ` ${affectedMembers} member${affectedMembers === 1 ? '' : 's'} will revert to their base role.` : ''}`
+    );
+    if (!confirmed) return;
+
     const previousRoles = useStore.getState().rolePermissions;
     const previousUsers = useStore.getState().users;
+    const previousDeletedRoleIds = useStore.getState().deletedRoleIds || [];
     const result = deleteCustomRole(customRoleId);
     if (!result.ok) {
       setRoleError(result.error || 'Unable to delete role.');
@@ -279,7 +294,7 @@ const Approvals: React.FC = () => {
     const saved = await commitPendingMutation();
     setIsActionSaving(false);
     if (!saved.ok) {
-      useStore.setState({ rolePermissions: previousRoles, users: previousUsers });
+      useStore.setState({ rolePermissions: previousRoles, users: previousUsers, deletedRoleIds: previousDeletedRoleIds });
       setRoleError(saved.error || 'The role deletion was rolled back. Use Retry required to confirm it.');
       return;
     }
