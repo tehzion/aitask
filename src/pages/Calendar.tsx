@@ -7,6 +7,7 @@ import {
   endOfMonth,
   endOfWeek,
   format,
+  isAfter,
   isBefore,
   isSameDay,
   isSameMonth,
@@ -43,7 +44,6 @@ import {
   normalizeCalendarTaskRange,
   resizeCalendarTaskRange,
   shiftCalendarTaskRange,
-  taskOccursOnCalendarDate,
   type CalendarRangeSegment,
 } from '../lib/calendarRanges';
 import { canCreateTasks, canEditTask as canEditTaskByRole, getVisibleTasks } from '../lib/access';
@@ -53,7 +53,8 @@ import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEK_STARTS_ON = { weekStartsOn: 1 } as const;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 type DragMode = 'move' | 'start' | 'due';
@@ -134,12 +135,20 @@ const Calendar: React.FC = () => {
     [allTasks, currentUser, rolePermissions],
   );
   const taskById = useMemo(() => new Map(tasks.map(task => [task.id, task])), [tasks]);
+  const rangeByTaskId = useMemo(
+    () => new Map(tasks.map(task => [task.id, normalizeCalendarTaskRange(task)])),
+    [tasks],
+  );
   const editingTask = editingTaskId ? taskById.get(editingTaskId) : undefined;
   const editingPendingAttempt = pendingDateAttempt?.taskId === editingTaskId
     ? pendingDateAttempt
     : null;
   const hasBlockedMutation = backend.pendingMutations > 0
     && ['offline', 'conflict', 'retry_required'].includes(backend.status);
+  const savingTaskIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    savingTaskIdRef.current = savingTaskId;
+  }, [savingTaskId]);
 
   const nextPeriod = () => setCurrentDate(viewMode === 'month' ? addMonths(currentDate, 1) : addWeeks(currentDate, 1));
   const prevPeriod = () => setCurrentDate(viewMode === 'month' ? subMonths(currentDate, 1) : subWeeks(currentDate, 1));
@@ -158,8 +167,8 @@ const Calendar: React.FC = () => {
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
-  const calendarStart = viewMode === 'month' ? startOfWeek(monthStart) : startOfWeek(currentDate);
-  const calendarEnd = viewMode === 'month' ? endOfWeek(monthEnd) : endOfWeek(currentDate);
+  const calendarStart = viewMode === 'month' ? startOfWeek(monthStart, WEEK_STARTS_ON) : startOfWeek(currentDate, WEEK_STARTS_ON);
+  const calendarEnd = viewMode === 'month' ? endOfWeek(monthEnd, WEEK_STARTS_ON) : endOfWeek(currentDate, WEEK_STARTS_ON);
   const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
   const maxVisibleLanes = viewMode === 'month' ? 3 : 6;
   const weeks = Array.from({ length: Math.ceil(days.length / 7) }, (_, index) => {
@@ -171,18 +180,24 @@ const Calendar: React.FC = () => {
   });
 
   const getUserName = (id: string) => users.find(user => user.id === id)?.name || 'Unknown';
-  const getTasksForDay = (day: Date) => tasks.filter(task => taskOccursOnCalendarDate(task, day));
+  const getTasksForDay = (day: Date) => {
+    const calendarDay = parseISO(format(day, 'yyyy-MM-dd'));
+    return tasks.filter(task => {
+      const range = rangeByTaskId.get(task.id);
+      return Boolean(range && !isBefore(calendarDay, range.start) && !isAfter(calendarDay, range.end));
+    });
+  };
   const getHolidaysForDay = (day: Date): MalaysiaHoliday[] => (
     showHolidays ? getHolidaysForDate(format(day, 'yyyy-MM-dd')) : []
   );
   const canEditTaskDates = useCallback(
     (task: Task) => (
       canEditTaskByRole(currentUser, task, rolePermissions)
-      && savingTaskId !== task.id
+      && savingTaskIdRef.current !== task.id
       && !backend.isSaving
       && !hasBlockedMutation
     ),
-    [backend.isSaving, currentUser, hasBlockedMutation, rolePermissions, savingTaskId],
+    [backend.isSaving, currentUser, hasBlockedMutation, rolePermissions],
   );
 
   const showSavedMessage = (title: string) => {
@@ -475,7 +490,7 @@ const Calendar: React.FC = () => {
       case 'Video Shooting': return 'bg-violet-400';
       case 'Ads Management': return 'bg-amber-400';
       case 'Account & Finance': return 'bg-emerald-400';
-      case 'Management': return 'bg-blue-400';
+      case 'Management': return 'bg-indigo-400';
       case 'Operation': return 'bg-slate-400';
       default: return 'bg-slate-400';
     }
@@ -490,7 +505,7 @@ const Calendar: React.FC = () => {
       case 'Video Shooting': return 'bg-violet-50 text-violet-700';
       case 'Ads Management': return 'bg-amber-50 text-amber-700';
       case 'Account & Finance': return 'bg-emerald-50 text-emerald-700';
-      case 'Management': return 'bg-blue-50 text-blue-700';
+      case 'Management': return 'bg-indigo-50 text-indigo-700';
       case 'Operation': return 'bg-slate-100 text-slate-700';
       default: return 'bg-slate-100 text-slate-700';
     }
@@ -581,7 +596,12 @@ const Calendar: React.FC = () => {
                 <CalendarIcon className="h-4 w-4" />
                 {viewMode === 'month'
                   ? format(currentDate, 'MMMM yyyy')
-                  : `${format(calendarStart, 'MMM d')} - ${format(calendarEnd, 'MMM d, yyyy')}`}
+                  : (
+                    <>
+                      <span className="sm:hidden">{format(calendarStart, 'MMM d')} - {format(calendarEnd, 'MMM d')}</span>
+                      <span className="hidden sm:inline">{format(calendarStart, 'MMM d')} - {format(calendarEnd, 'MMM d, yyyy')}</span>
+                    </>
+                  )}
               </button>
               <button
                 type="button"
@@ -616,7 +636,7 @@ const Calendar: React.FC = () => {
             </>
           )}
         </div>
-        <p className="hidden shrink-0 items-center gap-1.5 text-xs text-slate-400 2xl:flex">
+        <p id="calendar-drag-hint" className="hidden shrink-0 items-center gap-1.5 text-xs text-slate-400 2xl:flex">
           <GripVertical className="h-3 w-3" />
           Drag the bar to move · drag either edge to resize
         </p>
@@ -639,7 +659,7 @@ const Calendar: React.FC = () => {
       )}
 
       <div className="flex flex-col gap-4 xl:flex-row">
-        <div className={clsx(cardBase, 'min-w-0 flex-1 overflow-hidden')}>
+        <div className={clsx(cardBase, 'min-w-0 flex-1 overflow-hidden')} aria-describedby="calendar-drag-hint">
           <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
             {WEEKDAYS.map(day => (
               <div key={day} className="py-2.5 text-center text-xs font-medium text-slate-500">
@@ -679,7 +699,7 @@ const Calendar: React.FC = () => {
                         data-calendar-date={dateStr}
                         onClick={() => setSelectedDate(day)}
                         className={clsx(
-                          'relative min-w-0 cursor-pointer select-none transition-colors',
+                          'group relative min-w-0 cursor-pointer select-none transition-colors',
                           !inMonth && 'bg-slate-50',
                           inMonth && !primaryHoliday && !isDropTarget && 'bg-white hover:bg-slate-50',
                           inMonth && primaryHoliday && !isDropTarget && HOLIDAY_COLORS[primaryHoliday.category].bg,
@@ -688,10 +708,26 @@ const Calendar: React.FC = () => {
                         )}
                       >
                         <div className="flex items-center justify-between p-1.5">
-                          <span className={clsx(
-                            'flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold',
-                            todayDay ? 'bg-blue-600 text-white' : inMonth ? 'text-slate-700' : 'text-slate-500',
-                          )}>
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Select ${format(day, 'EEEE, d MMMM yyyy')}`}
+                            aria-current={selected ? 'date' : undefined}
+                            onClick={event => {
+                              event.stopPropagation();
+                              setSelectedDate(day);
+                            }}
+                            onKeyDown={event => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                setSelectedDate(day);
+                              }
+                            }}
+                            className={clsx(
+                              'flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold outline-none',
+                              todayDay ? 'bg-blue-600 text-white' : inMonth ? 'text-slate-700 hover:bg-slate-100' : 'text-slate-500 hover:bg-slate-100',
+                            )}
+                          >
                             {format(day, 'd')}
                           </span>
                           <div className="flex items-center gap-1">
@@ -709,7 +745,10 @@ const Calendar: React.FC = () => {
                                 }}
                                 title={`Assign task on ${format(day, 'd MMM yyyy')}`}
                                 aria-label={`Assign task on ${format(day, 'd MMM yyyy')}`}
-                                className="hidden h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white/90 text-slate-500 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 sm:flex"
+                                className={clsx(
+                                  'hidden h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white/90 text-slate-500 shadow-sm transition-opacity hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 sm:flex',
+                                  selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
+                                )}
                               >
                                 <Plus className="h-3.5 w-3.5" />
                               </button>
