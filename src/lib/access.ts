@@ -379,6 +379,7 @@ export const isNotificationVisible = (user: User | null | undefined, notificatio
 };
 
 export const isNotificationReadByUser = (user: User | null | undefined, notification: AppNotification) => {
+  if (user && notification.unreadByUserIds?.includes(user.id)) return false;
   if (!user) return Boolean(notification.isRead);
   if (notification.readByUserIds !== undefined) return notification.readByUserIds.includes(user.id);
   return Boolean(notification.isRead);

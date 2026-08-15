@@ -39,6 +39,7 @@ export const uploadServiceFile = async (input: {
 };
 
 export const downloadServiceFile = async (attachment: AttachmentRef) => {
+  if (!shouldUseSecureSupabase()) return { ok: false as const, error: 'Private file downloads require the Supabase backend.' };
   const { data, error } = await supabase.storage.from(attachment.bucket).download(attachment.path);
   if (error || !data) return { ok: false as const, error: error?.message || 'The file could not be downloaded.' };
   const url = URL.createObjectURL(data);

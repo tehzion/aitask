@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
 import { canDeleteProject, canEditProject, canManageProjects, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { isTaskOpen } from '../lib/taskReporting';
 import { Project } from '../types';
 
 const Projects: React.FC = () => {
@@ -54,7 +55,7 @@ const Projects: React.FC = () => {
     const projectTasks = tasks.filter(t => t.projectId === projectId);
     const total = projectTasks.length;
     const completed = projectTasks.filter(t => t.isCompleted).length;
-    const pending = total - completed;
+    const pending = projectTasks.filter(isTaskOpen).length;
     
     // Get unique team members
     const teamMemberIds = [...new Set(projectTasks.map(t => t.assignedTo))];
@@ -93,7 +94,7 @@ const Projects: React.FC = () => {
                       <FolderKanban className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold leading-tight text-slate-900">{project.clientName}</h3>
+                      <h2 className="text-lg font-semibold leading-tight text-slate-900">{project.clientName}</h2>
                       <p className="text-sm font-medium text-slate-500">{hasLegacyProjectName ? project.projectName : 'Company'}</p>
                     </div>
                   </div>

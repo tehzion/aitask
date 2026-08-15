@@ -25,6 +25,7 @@ import { canCreateTasks, canEditClientProfile, canRenameClient, canViewAllClient
 import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
 import { ClientProfile } from '../types';
 import ModalShell from '../components/ModalShell';
 import CreateClientPlanModal from '../components/CreateClientPlanModal';
@@ -129,7 +130,21 @@ const Clients: React.FC = () => {
     upsertClientProfile,
     renameClient,
     commitPendingMutation,
-  } = useStore();
+  } = useStore(useShallow(state => ({
+    clients: state.clients,
+    tasks: state.tasks,
+    projects: state.projects,
+    clientPlans: state.clientPlans,
+    serviceCycles: state.serviceCycles,
+    deliverables: state.deliverables,
+    users: state.users,
+    currentUser: state.currentUser,
+    rolePermissions: state.rolePermissions,
+    setCreateTaskModalOpen: state.setCreateTaskModalOpen,
+    upsertClientProfile: state.upsertClientProfile,
+    renameClient: state.renameClient,
+    commitPendingMutation: state.commitPendingMutation,
+  })));
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedClientName, setSelectedClientName] = React.useState('');
   const [isEditingProfile, setIsEditingProfile] = React.useState(false);
@@ -140,7 +155,30 @@ const Clients: React.FC = () => {
   const [renameError, setRenameError] = React.useState('');
   const [isSavingClient, setIsSavingClient] = React.useState(false);
   const [isCreateClientOpen, setIsCreateClientOpen] = React.useState(false);
+  const [openMenuClientKey, setOpenMenuClientKey] = React.useState<string | null>(null);
   const clientDialogTitleId = React.useId();
+
+  React.useEffect(() => {
+    if (!openMenuClientKey) return;
+    const closeMenu = () => {
+      if (document.querySelector('[data-aitask-modal-portal]')) return;
+      setOpenMenuClientKey(null);
+    };
+    const onMouseDown = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('[role="menu"]') || target?.closest('[aria-haspopup="menu"]')) return;
+      closeMenu();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeMenu();
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openMenuClientKey]);
 
   const canSeeAllClients = canViewAllClients(currentUser, rolePermissions);
   const visibleClientKeys = React.useMemo(() => new Set(
@@ -538,7 +576,26 @@ const Clients: React.FC = () => {
                     <td className="px-5 py-6 align-top">
                       <div className="flex min-w-[150px] items-center gap-2">
                         {client.profile ? <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>Workspace <ArrowRight className="h-4 w-4" /></Link> : <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>View tasks</Link>}
-                        <details className="group relative"><summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink" aria-label={`More actions for ${client.name}`}><MoreHorizontal className="h-5 w-5" /></summary><div className="absolute right-0 top-11 z-20 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line"><Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">View tasks</Link><button type="button" onClick={() => openClientPanel(client)} className="flex min-h-10 w-full items-center rounded-control px-3 text-left text-sm text-ink hover:bg-inset">Details</button>{website && <a href={website} target="_blank" rel="noopener noreferrer" className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">Website</a>}{facebookPage && <a href={facebookPage} target="_blank" rel="noopener noreferrer" className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">Facebook</a>}</div></details>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            aria-haspopup="menu"
+                            aria-expanded={openMenuClientKey === client.name}
+                            aria-label={`More actions for ${client.name}`}
+                            onClick={() => setOpenMenuClientKey(prev => prev === client.name ? null : client.name)}
+                            className="flex h-10 w-10 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"
+                          >
+                            <MoreHorizontal className="h-5 w-5" />
+                          </button>
+                          {openMenuClientKey === client.name && (
+                            <div role="menu" aria-label={`Actions for ${client.name}`} className="absolute right-0 top-11 z-20 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line">
+                              <Link role="menuitem" to={`/tasks?client=${encodeURIComponent(client.name)}`} onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">View tasks</Link>
+                              <button type="button" role="menuitem" onClick={() => openClientPanel(client)} className="flex min-h-10 w-full items-center rounded-control px-3 text-left text-sm text-ink hover:bg-inset">Details</button>
+                              {website && <a role="menuitem" href={website} target="_blank" rel="noopener noreferrer" onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">Website</a>}
+                              {facebookPage && <a role="menuitem" href={facebookPage} target="_blank" rel="noopener noreferrer" onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">Facebook</a>}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>

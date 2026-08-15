@@ -36,7 +36,9 @@ export const shouldShowDemoLogin = () => {
     if (isDisabled(configured)) return false;
   }
 
-  return true;
+  // Fail closed: demo login only appears when the flag is explicitly enabled
+  // (or during local development).
+  return import.meta.env.DEV || isLocalHost();
 };
 
 export const canLoginWithSeedAccount = (userId: string) => (
@@ -50,7 +52,7 @@ export const canUsePasswordResetBypass = () => {
     if (isDisabled(configured)) return false;
   }
 
-  return isLocalHost();
+  return import.meta.env.DEV && isLocalHost();
 };
 
 export const hasPasswordResetBypass = (userId?: string) => {

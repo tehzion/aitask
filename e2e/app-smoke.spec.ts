@@ -587,7 +587,8 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.setViewportSize({ width: 1536, height: 864 });
   await page.goto('/clients');
   const techNovaRow = page.getByRole('row').filter({ hasText: 'TechNova' });
-  const techNovaDetails = techNovaRow.getByRole('button', { name: 'Details' });
+  await techNovaRow.getByRole('button', { name: 'More actions for TechNova' }).click();
+  const techNovaDetails = techNovaRow.getByRole('menuitem', { name: 'Details' });
   await techNovaDetails.click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible();

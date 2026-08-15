@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { useToastStore } from './useToastStore';
 import {
   User,
@@ -728,14 +728,19 @@ const mergeWorkspaceStates = (
     const remoteNotif = remoteNotifsMap.get(id);
     if (!localNotif) return remoteNotif!;
     if (!remoteNotif) return localNotif;
+    const unreadByUserIds = Array.from(new Set([
+      ...(localNotif.unreadByUserIds || []),
+      ...(remoteNotif.unreadByUserIds || [])
+    ]));
     const readByUserIds = Array.from(new Set([
       ...(localNotif.readByUserIds || []),
       ...(remoteNotif.readByUserIds || [])
-    ]));
+    ])).filter(userId => !unreadByUserIds.includes(userId));
     return {
       ...remoteNotif,
-      isRead: localNotif.isRead || remoteNotif.isRead,
+      isRead: (localNotif.isRead || remoteNotif.isRead) && unreadByUserIds.length === 0,
       readByUserIds,
+      unreadByUserIds,
     };
   });
 
@@ -816,6 +821,67 @@ const makeWorkspacePatch = (current: StoreState, snapshot: SnapshotResult) => {
       ? workspace.taskStatuses
       : ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'],
     currentUser: getCurrentUserFromSnapshot(current.currentUser, users),
+  };
+};
+
+const PERSIST_KEY = 'market-task-storage';
+
+const seedUserIdentity = new Map(mockUsers.map(user => [user.id, user]));
+
+const sanitizePersistedUsers = (users: User[]): User[] => (
+  users.map(user => {
+    const seed = seedUserIdentity.get(user.id);
+    if (!seed) return { ...user, permissions: undefined };
+    return {
+      ...user,
+      role: seed.role,
+      isSuperAdmin: seed.isSuperAdmin === true,
+      departments: seed.departments,
+      department: seed.department,
+      permissions: undefined,
+    };
+  })
+);
+
+const safeStorageAdapter: StateStorage = {
+  getItem: (name) => {
+    try { return window.localStorage.getItem(name); } catch { return null; }
+  },
+  setItem: (name, value) => {
+    try { window.localStorage.setItem(name, value); }
+    catch {
+      useToastStore.getState().addToast('Browser storage is full. Recent changes may not survive a reload.', 'error');
+    }
+  },
+  removeItem: (name) => {
+    try { window.localStorage.removeItem(name); } catch { /* storage unavailable */ }
+  },
+};
+
+const mergePersistedWorkspace = (persistedState: unknown, currentState: StoreState): StoreState => {
+  if (shouldUseSupabase() || !persistedState || typeof persistedState !== 'object') return currentState;
+  const persisted = persistedState as Record<string, unknown>;
+  const normalized = normalizeWorkspaceState(persisted as unknown as PersistedWorkspaceState);
+  const persistedCurrentUser = persisted.currentUser as User | null | undefined;
+  const persistedUserId = typeof persistedCurrentUser?.id === 'string' ? persistedCurrentUser.id : '';
+  const users = sanitizePersistedUsers(normalized.users);
+  const rehydratedUser = persistedUserId ? users.find(user => user.id === persistedUserId) ?? null : null;
+  let currentUser: User | null = null;
+  if (rehydratedUser) {
+    currentUser = stripPassword({ ...rehydratedUser, mustResetPassword: persistedCurrentUser?.mustResetPassword === true }) as User;
+  } else if (persistedCurrentUser) {
+    const seed = seedUserIdentity.get(persistedCurrentUser.id);
+    currentUser = stripPassword({
+      ...persistedCurrentUser,
+      isSuperAdmin: seed?.isSuperAdmin === true,
+      password: undefined,
+    }) as User;
+  }
+  return {
+    ...currentState,
+    ...normalized,
+    users,
+    currentUser,
   };
 };
 
@@ -1810,6 +1876,7 @@ export const useStore = create<StoreState>()(
                       ...getNotificationReadReceipts(notification, state.users),
                       currentUser.id,
                     ])),
+                    unreadByUserIds: (notification.unreadByUserIds || []).filter(userId => userId !== currentUser.id),
                     isRead: notification.targetUserId === currentUser.id && !notification.targetRole && !notification.targetClient
                       ? true
                       : notification.isRead,
@@ -1833,6 +1900,10 @@ export const useStore = create<StoreState>()(
                     ...notification,
                     readByUserIds: getNotificationReadReceipts(notification, state.users)
                       .filter(userId => userId !== currentUser.id),
+                    unreadByUserIds: Array.from(new Set([
+                      ...(notification.unreadByUserIds || []),
+                      currentUser.id,
+                    ])),
                     isRead: false,
                   }
                 : notification
@@ -1857,6 +1928,7 @@ export const useStore = create<StoreState>()(
                   ...getNotificationReadReceipts(notification, state.users),
                   currentUser.id,
                 ])),
+                unreadByUserIds: (notification.unreadByUserIds || []).filter(userId => userId !== currentUser.id),
                 isRead: notification.targetUserId === currentUser.id && !notification.targetRole && !notification.targetClient
                   ? true
                   : notification.isRead,
@@ -2409,7 +2481,7 @@ export const useStore = create<StoreState>()(
         if (!isValidIsoDate(startDate) || (dueDate && !isValidIsoDate(dueDate))) return '';
         if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) return '';
 
-        const taskId = `T-${Date.now().toString().slice(-6)}`;
+        const taskId = nowId('T');
         set((state) => {
           if (!canCreateTasks(state.currentUser, state.rolePermissions)) return state;
 
@@ -2502,7 +2574,7 @@ export const useStore = create<StoreState>()(
           createdBy: currentUser.id,
           totalTasks: 0,
           completedTasks: 0,
-          id: `P-${Date.now().toString().slice(-6)}`,
+          id: nowId('P'),
           updatedAt: new Date().toISOString(),
         };
         set((state) => ({ projects: [...state.projects, newProject] }));
@@ -3060,7 +3132,7 @@ export const useStore = create<StoreState>()(
         const cycle = state.serviceCycles.find(item => item.id === cycleId);
         const actor = state.currentUser;
         if (!cycle || !actor) return { ok: false, error: 'Cycle not found.' };
-        const authorized = canManageServiceCycles(actor, state.rolePermissions) || (actor.role === 'Staff' && state.tasks.some(task => task.clientId === cycle.clientId && task.assignedTo === actor.id));
+        const authorized = canManageServiceCycles(actor, state.rolePermissions) || (actor.role === 'Staff' && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
         if (!authorized) return { ok: false, error: 'You do not have access to this cycle.' };
         const now = new Date().toISOString();
         set(current => ({ serviceCycles: current.serviceCycles.map(item => item.id === cycleId ? { ...item, status, publishedAt: status === 'Published' ? item.publishedAt || now : item.publishedAt, updatedAt: now } : item) }));
@@ -3171,7 +3243,7 @@ export const useStore = create<StoreState>()(
         const cycle = state.serviceCycles.find(item => item.id === cycleId);
         const actor = state.currentUser;
         if (!cycle || !actor || actor.role === 'Client') return { ok: false, error: 'You cannot comment on this cycle.' };
-        const authorized = canManageServiceCycles(actor, state.rolePermissions) || state.tasks.some(task => task.clientId === cycle.clientId && task.assignedTo === actor.id);
+        const authorized = canManageServiceCycles(actor, state.rolePermissions) || state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id);
         const clean = text.trim().slice(0, 10_000);
         if (!authorized || !clean) return { ok: false, error: authorized ? 'Comment cannot be empty.' : 'You do not have access to this cycle.' };
         const now = new Date().toISOString();
@@ -3398,7 +3470,7 @@ export const useStore = create<StoreState>()(
 
         const name = data.name.trim();
         const email = data.email?.trim();
-        const initialPassword = data.password?.trim() || DEFAULT_USER_PASSWORD;
+        const initialPassword = data.password?.trim() || (shouldUseSecureSupabase() ? '' : DEFAULT_USER_PASSWORD);
         const sendInvitation = data.sendInvitation !== false;
         const companyName = data.role === 'Client' ? data.companyName?.trim() : undefined;
         const departments = normalizeMemberDepartments(data.role, data.departments, data.department);
@@ -3771,6 +3843,7 @@ export const useStore = create<StoreState>()(
 
         const reg = state.registrations.find(r => r.id === id);
         if (!reg) return state;
+        if (reg.status !== 'Pending') return state;
         if (shouldUseSecureSupabase()) {
           return {
             registrations: state.registrations.map(r => r.id === id ? { ...r, status: 'Approved' } : r),
@@ -3969,9 +4042,17 @@ export const useStore = create<StoreState>()(
       }
     }),
     {
-      name: 'market-task-storage',
-      version: 3,
+      name: PERSIST_KEY,
+      version: 4,
+      storage: createJSONStorage(() => safeStorageAdapter),
+      merge: mergePersistedWorkspace,
       migrate: (persistedState) => shouldUseSupabase() ? {} : persistedState as StoreState,
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) {
+          safeStorageAdapter.removeItem(PERSIST_KEY);
+          useToastStore.getState().addToast('Stored workspace data was corrupted and has been reset.', 'error');
+        }
+      },
       partialize: (state) => {
         if (shouldUseSupabase()) return {};
 

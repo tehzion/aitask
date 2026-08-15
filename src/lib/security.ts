@@ -403,6 +403,9 @@ export const parseNotification = (value: unknown): AppNotification | null => {
     readByUserIds: Array.isArray(value.readByUserIds)
       ? safeStringArray(value.readByUserIds, 1000, 160)
       : undefined,
+    unreadByUserIds: Array.isArray(value.unreadByUserIds)
+      ? safeStringArray(value.unreadByUserIds, 1000, 160)
+      : undefined,
     createdAt,
     iconType,
     category: ['assignment', 'deadline', 'review', 'feedback', 'account', 'status', 'system'].includes(category || '')

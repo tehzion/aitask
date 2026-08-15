@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
 import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone, Plus } from 'lucide-react';
 import { format, isBefore, isToday } from 'date-fns';
 import { Priority, Task, TaskStatus } from '../types';
@@ -38,7 +39,21 @@ const priorityColors: Record<Priority, string> = {
 };
 
 const Tasks: React.FC = () => {
-  const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore();
+  const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore(useShallow(state => ({
+    tasks: state.tasks,
+    clients: state.clients,
+    users: state.users,
+    projects: state.projects,
+    updateTaskStatus: state.updateTaskStatus,
+    updateTaskPriority: state.updateTaskPriority,
+    updateTaskAssignee: state.updateTaskAssignee,
+    currentUser: state.currentUser,
+    rolePermissions: state.rolePermissions,
+    backend: state.backend,
+    taskStatuses: state.taskStatuses,
+    setCreateTaskModalOpen: state.setCreateTaskModalOpen,
+    commitPendingMutation: state.commitPendingMutation,
+  })));
   const [viewType, setViewType] = useState<'table' | 'board'>('table');
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [activeQuickEdit, setActiveQuickEdit] = useState<{ taskId: string; x: number; y: number } | null>(null);
@@ -618,7 +633,15 @@ const Tasks: React.FC = () => {
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>}
             {!isClientUser && <div className="relative">
-              <select aria-label="Filter by client" value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+              <select aria-label="Filter by client" value={filterClient} onChange={(e) => {
+                setFilterClient(e.target.value);
+                if (clientRouteFilter || periodRouteFilter) {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete('client');
+                  next.delete('period');
+                  setSearchParams(next);
+                }
+              }} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All clients</option>
                 {clientOptions.map(client => <option key={client} value={client}>{client}</option>)}
               </select>
@@ -826,7 +849,7 @@ const Tasks: React.FC = () => {
                   );
                 })
               )}
-              {!backend?.isLoading && pagedTasks.length === 0 && <div className="p-8 text-center text-sm text-slate-500">No tasks found matching your criteria.</div>}
+              {!backend?.isLoading && pagedTasks.length === 0 && <div className="p-8 text-center text-sm text-slate-700">No tasks found matching your criteria.</div>}
             </div>
 
             <div className="p-4 border-t border-slate-200 flex flex-col sm:flex-row gap-3 justify-between items-center bg-slate-50 text-sm">

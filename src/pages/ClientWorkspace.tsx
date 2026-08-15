@@ -16,6 +16,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { useStore } from "../store";
 import type {
   AddonBillingMode,
+  AttachmentRef,
   CommentVisibility,
   DeliverableStatus,
 } from "../types";
@@ -201,11 +202,7 @@ const ClientWorkspace = () => {
     if (file && file.size > MAX_SERVICE_FILE_BYTES)
       return setMessage("Files must be 100 MB or smaller.");
     setActivitySaving(true);
-    const result = store.addCycleComment(cycle.id, comment, visibility);
-    if (!result.ok || !result.id) {
-      setActivitySaving(false);
-      return setMessage(result.error || "Unable to add the comment.");
-    }
+    let attachment: AttachmentRef | undefined;
     if (file && store.currentUser) {
       const uploaded = await uploadServiceFile({
         file,
@@ -218,7 +215,15 @@ const ClientWorkspace = () => {
         setActivitySaving(false);
         return setMessage(uploaded.error);
       }
-      store.addCycleCommentAttachment(result.id, uploaded.attachment);
+      attachment = uploaded.attachment;
+    }
+    const result = store.addCycleComment(cycle.id, comment, visibility);
+    if (!result.ok || !result.id) {
+      setActivitySaving(false);
+      return setMessage(result.error || "Unable to add the comment.");
+    }
+    if (attachment) {
+      store.addCycleCommentAttachment(result.id, attachment);
     }
     const saved = await store.commitPendingMutation("cycle_comment.manage");
     setActivitySaving(false);
@@ -836,7 +841,10 @@ const ClientWorkspace = () => {
                 {item.attachments.map((attachment) => (
                   <button
                     key={attachment.id}
-                    onClick={() => void downloadServiceFile(attachment)}
+                    onClick={async () => {
+                      const downloaded = await downloadServiceFile(attachment);
+                      if (!downloaded.ok) setMessage(downloaded.error);
+                    }}
                     className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-blue-700"
                   >
                     <FileUp className="h-4 w-4" />

@@ -50,6 +50,7 @@ import { canCreateTasks, canEditTask as canEditTaskByRole, getVisibleTasks } fro
 import { getHolidaysForDate, HOLIDAY_COLORS, type MalaysiaHoliday } from '../lib/malaysiaHolidays';
 import { getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { useStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -96,7 +97,18 @@ const Calendar: React.FC = () => {
     commitPendingMutation,
     retryMutation,
     discardMutation,
-  } = useStore();
+  } = useStore(useShallow(state => ({
+    tasks: state.tasks,
+    users: state.users,
+    currentUser: state.currentUser,
+    rolePermissions: state.rolePermissions,
+    backend: state.backend,
+    updateTask: state.updateTask,
+    setCreateTaskModalOpen: state.setCreateTaskModalOpen,
+    commitPendingMutation: state.commitPendingMutation,
+    retryMutation: state.retryMutation,
+    discardMutation: state.discardMutation,
+  })));
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -267,7 +279,7 @@ const Calendar: React.FC = () => {
   };
 
   const closeDateEditor = () => {
-    if (savingTaskId === editingTaskId || editingPendingAttempt) return;
+    if (savingTaskId === editingTaskId) return;
     setEditingTaskId(null);
     setDateDraft(null);
     setDateDraftError('');
@@ -678,7 +690,7 @@ const Calendar: React.FC = () => {
                         <div className="flex items-center justify-between p-1.5">
                           <span className={clsx(
                             'flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold',
-                            todayDay ? 'bg-blue-600 text-white' : inMonth ? 'text-slate-700' : 'text-slate-300',
+                            todayDay ? 'bg-blue-600 text-white' : inMonth ? 'text-slate-700' : 'text-slate-500',
                           )}>
                             {format(day, 'd')}
                           </span>
@@ -907,7 +919,7 @@ const Calendar: React.FC = () => {
               {selectedDayTasks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-200 py-8 text-center">
                   <p className="text-sm text-slate-400">No active tasks</p>
-                  <p className="mb-1 text-xs text-slate-300">Choose another day or assign a task</p>
+                  <p className="mb-1 text-xs text-slate-500">Choose another day or assign a task</p>
                   {canCreateTasks(currentUser, rolePermissions) && (
                     <Button
                       onClick={() => handleAddTaskForDate(selectedDate)}
@@ -1022,7 +1034,7 @@ const Calendar: React.FC = () => {
           labelledBy="calendar-date-editor-title"
           describedBy="calendar-date-editor-description"
           onClose={closeDateEditor}
-          closeOnBackdrop={savingTaskId !== editingTask.id && !editingPendingAttempt}
+          closeOnBackdrop={savingTaskId !== editingTask.id}
           panelClassName="max-w-md"
         >
           <div className={panelHeader}>
@@ -1040,7 +1052,7 @@ const Calendar: React.FC = () => {
             <button
               type="button"
               onClick={closeDateEditor}
-              disabled={savingTaskId === editingTask.id || Boolean(editingPendingAttempt)}
+              disabled={savingTaskId === editingTask.id}
               aria-label="Close date editor"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
             >

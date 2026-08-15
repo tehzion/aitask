@@ -110,6 +110,7 @@ export interface AppNotification {
   route: NotificationRoute;
   isRead: boolean;
   readByUserIds?: string[];
+  unreadByUserIds?: string[];
   createdAt: string;
   iconType: 'task' | 'status' | 'success' | 'alert';
   category?: NotificationCategory;

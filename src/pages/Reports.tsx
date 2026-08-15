@@ -6,7 +6,9 @@ import { ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../component
 import { cardBase, pageShell } from '../components/uiTokens';
 import { getVisibleTasks } from '../lib/access';
 import { STAFF_DEPARTMENTS } from '../lib/departments';
-import { getTrackedWeeklyCompletions } from '../lib/taskReporting';
+import { getTrackedWeeklyCompletions, isTaskOpen } from '../lib/taskReporting';
+import { parseOptionalDate } from '../lib/utils';
+import { isBefore, isToday } from 'date-fns';
 
 const Reports: React.FC = () => {
   const { tasks: allTasks, currentUser, rolePermissions } = useStore();
@@ -22,10 +24,13 @@ const Reports: React.FC = () => {
   const hasTrackedTrend = trendData.some(week => week.completed > 0 || week.pending > 0);
 
   const overview = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
     const completed = tasks.filter(task => task.isCompleted).length;
-    const pending = tasks.filter(task => !task.isCompleted).length;
-    const overdue = tasks.filter(task => !task.isCompleted && task.dueDate && task.dueDate < today).length;
+    const pending = tasks.filter(isTaskOpen).length;
+    const overdue = tasks.filter(task => {
+      const dueDate = parseOptionalDate(task.dueDate);
+      return Boolean(isTaskOpen(task) && dueDate && isBefore(dueDate, now) && !isToday(dueDate));
+    }).length;
     const activeUsers = new Set(tasks.map(task => task.assignedTo)).size;
 
     return { completed, pending, overdue, activeUsers };
@@ -40,7 +45,7 @@ const Reports: React.FC = () => {
       stats[dept] = { name: dept, total: 0, completed: 0, pending: 0, overdue: 0 };
     });
 
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
 
     tasks.forEach(task => {
       const dept = task.department;
@@ -48,9 +53,10 @@ const Reports: React.FC = () => {
         stats[dept].total += 1;
         if (task.isCompleted) {
           stats[dept].completed += 1;
-        } else {
+        } else if (isTaskOpen(task)) {
           stats[dept].pending += 1;
-          if (task.dueDate && task.dueDate < today) {
+          const dueDate = parseOptionalDate(task.dueDate);
+          if (dueDate && isBefore(dueDate, now) && !isToday(dueDate)) {
             stats[dept].overdue += 1;
           }
         }

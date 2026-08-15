@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
 import { getMemberDepartments } from '../lib/departments';
 import { Bell, Search, Menu, CheckCircle2, Info, AlertCircle, FileText, X, Volume2, VolumeX, Keyboard, Moon, Sun, Monitor, ChevronDown } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -39,7 +40,12 @@ const Navbar: React.FC<NavbarProps> = ({
     notifications,
     notificationUnreadCount,
     rolePermissions,
-  } = useStore();
+  } = useStore(useShallow(state => ({
+    currentUser: state.currentUser,
+    notifications: state.notifications,
+    notificationUnreadCount: state.notificationUnreadCount,
+    rolePermissions: state.rolePermissions,
+  })));
   const [showNotifs, setShowNotifs] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');

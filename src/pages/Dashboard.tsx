@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
 import { SkeletonMetricCard, SkeletonChartCard } from '../components/SkeletonCard';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -15,7 +16,7 @@ import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import type { User } from '../types';
 import OperationsGlance from '../components/OperationsGlance';
-import { getTrackedMonthlyCompletions } from '../lib/taskReporting';
+import { getTrackedMonthlyCompletions, isTaskOpen } from '../lib/taskReporting';
 import ClientPortalDashboard from '../components/ClientPortalDashboard';
 import TeamWorkload from '../components/TeamWorkload';
 import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
@@ -37,7 +38,15 @@ const StatCard = ({ title, value, icon: Icon, tone, to }: StatCardProps) => (
 );
 
 const Dashboard: React.FC = () => {
-  const { projects, tasks: allTasks, users, currentUser, rolePermissions, backend, setCreateTaskModalOpen } = useStore();
+  const { projects, tasks: allTasks, users, currentUser, rolePermissions, backend, setCreateTaskModalOpen } = useStore(useShallow(state => ({
+    projects: state.projects,
+    tasks: state.tasks,
+    users: state.users,
+    currentUser: state.currentUser,
+    rolePermissions: state.rolePermissions,
+    backend: state.backend,
+    setCreateTaskModalOpen: state.setCreateTaskModalOpen,
+  })));
 
   const tasks = useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions),
@@ -76,7 +85,7 @@ const Dashboard: React.FC = () => {
     
     const activeProjects = visibleProjects.length;
       
-    const pendingTasks = tasks.filter(t => !t.isCompleted).length;
+    const pendingTasks = tasks.filter(isTaskOpen).length;
     const completedTasks = tasks.filter(t => t.isCompleted).length;
     
     const overdueTasks = tasks.filter(t => {

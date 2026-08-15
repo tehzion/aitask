@@ -68,7 +68,7 @@ export interface TeamTaskGroups {
 }
 
 const isCancelled = (task: Task) => task.status === 'Cancelled';
-const isOpen = (task: Task) => !isTaskCompleted(task) && !isCancelled(task);
+export const isTaskOpen = (task: Task) => !isTaskCompleted(task) && !isCancelled(task);
 
 const isInPeriod = (value: string | undefined, start: Date, end: Date) => {
   const date = parseOptionalDate(value);
@@ -115,21 +115,21 @@ export const getAgencyPulseMetrics = (tasks: Task[], now = new Date()): AgencyPu
     today: {
       completed: tasks.filter(task => isTaskCompleted(task) && isInPeriod(task.completedAt, todayStart, todayEnd)).length,
       due: dueToday.length,
-      open: dueToday.filter(isOpen).length,
+      open: dueToday.filter(isTaskOpen).length,
     },
     week: {
       completed: tasks.filter(task => isTaskCompleted(task) && isInPeriod(task.completedAt, period.start, period.end)).length,
       due: dueThisWeek.length,
-      remaining: dueThisWeek.filter(isOpen).length,
+      remaining: dueThisWeek.filter(isTaskOpen).length,
       overdue: tasks.filter(task => {
         const dueDate = parseOptionalDate(task.dueDate);
-        return Boolean(isOpen(task) && dueDate && dueDate < todayStart);
+        return Boolean(isTaskOpen(task) && dueDate && dueDate < todayStart);
       }).length,
     },
     overall: {
-      open: tasks.filter(isOpen).length,
-      inProgress: tasks.filter(task => isOpen(task) && task.status === 'In Progress').length,
-      waitingApproval: tasks.filter(task => isOpen(task) && task.status === 'Waiting Approval').length,
+      open: tasks.filter(isTaskOpen).length,
+      inProgress: tasks.filter(task => isTaskOpen(task) && task.status === 'In Progress').length,
+      waitingApproval: tasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length,
       completed: tasks.filter(isTaskCompleted).length,
     },
     untrackedHistoricalCompletions: tasks.filter(task => isTaskCompleted(task) && !parseOptionalDate(task.completedAt)).length,
@@ -141,12 +141,12 @@ export const getNeedsAttentionTasks = (tasks: Task[], now = new Date()) => {
   const overdue = tasks
     .filter(task => {
       const dueDate = parseOptionalDate(task.dueDate);
-      return Boolean(isOpen(task) && dueDate && dueDate < todayStart);
+      return Boolean(isTaskOpen(task) && dueDate && dueDate < todayStart);
     })
     .sort((a, b) => (parseOptionalDate(a.dueDate)?.getTime() || 0) - (parseOptionalDate(b.dueDate)?.getTime() || 0));
   const overdueIds = new Set(overdue.map(task => task.id));
   const waitingApproval = tasks
-    .filter(task => isOpen(task) && task.status === 'Waiting Approval' && !overdueIds.has(task.id))
+    .filter(task => isTaskOpen(task) && task.status === 'Waiting Approval' && !overdueIds.has(task.id))
     .sort((a, b) => (parseOptionalDate(a.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER) - (parseOptionalDate(b.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER));
   return [...overdue, ...waitingApproval];
 };
@@ -187,7 +187,7 @@ export const getTeamWorkloadSummaries = (
     .filter(member => member.role !== 'Client' && !member.directoryOnly)
     .map(member => {
       const assignedTasks = tasks.filter(task => task.assignedTo === member.id);
-      const openTasks = assignedTasks.filter(isOpen);
+      const openTasks = assignedTasks.filter(isTaskOpen);
       const dueToday = openTasks.filter(task => isInPeriod(task.dueDate, todayStart, todayEnd)).length;
       const dueThisWeek = openTasks.filter(task => isInPeriod(task.dueDate, week.start, week.end)).length;
       const overdue = openTasks.filter(task => {
@@ -226,7 +226,7 @@ export const getTeamMemberTaskGroups = (
   const todayEnd = endOfDay(now);
   const week = getOperationsPeriod(now);
   const assignedTasks = tasks.filter(task => task.assignedTo === memberId);
-  const openTasks = assignedTasks.filter(isOpen);
+  const openTasks = assignedTasks.filter(isTaskOpen);
 
   const overdue = openTasks
     .filter(task => {
@@ -284,7 +284,7 @@ export const getTrackedWeeklyCompletions = (tasks: Task[], now = new Date(), wee
     return {
       name: format(weekStart, 'MMM d'),
       completed: tasks.filter(task => isTaskCompleted(task) && isInPeriod(task.completedAt, weekStart, weekEnd)).length,
-      pending: dueTasks.filter(task => isOpen(task)).length,
+      pending: dueTasks.filter(task => isTaskOpen(task)).length,
     };
   });
 };

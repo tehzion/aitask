@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
 import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save, ChevronDown, AlertTriangle } from 'lucide-react';
 import { Department, Priority, Task, TaskStatus } from '../types';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -62,7 +63,21 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     commitPendingMutation,
     rolePermissions,
     taskStatuses,
-  } = useStore();
+  } = useStore(useShallow(state => ({
+    users: state.users,
+    tasks: state.tasks,
+    currentUser: state.currentUser,
+    updateTaskStatus: state.updateTaskStatus,
+    updateTask: state.updateTask,
+    deleteTask: state.deleteTask,
+    addComment: state.addComment,
+    updateTaskAttachment: state.updateTaskAttachment,
+    reviewClientApproval: state.reviewClientApproval,
+    requestRevision: state.requestRevision,
+    commitPendingMutation: state.commitPendingMutation,
+    rolePermissions: state.rolePermissions,
+    taskStatuses: state.taskStatuses,
+  })));
   const [commentText, setCommentText] = useState('');
   const [attachmentLink, setAttachmentLink] = useState('');
   const [attachmentName, setAttachmentName] = useState('');

@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertTriangle, ArrowRight, Bell, CheckCircle2, Cloud, Database, Lock, PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserCircle, Volume2, VolumeX, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
 import { getMemberDepartments } from '../lib/departments';
 import { Badge, Button, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
@@ -88,7 +89,23 @@ const Settings: React.FC = () => {
     addTaskStatus,
     deleteTaskStatus,
     commitPendingMutation,
-  } = useStore();
+  } = useStore(useShallow(state => ({
+    currentUser: state.currentUser,
+    tasks: state.tasks,
+    projects: state.projects,
+    notifications: state.notifications,
+    notificationUnreadCount: state.notificationUnreadCount,
+    backend: state.backend,
+    rolePermissions: state.rolePermissions,
+    updateCurrentUserProfile: state.updateCurrentUserProfile,
+    updateCurrentUserEmail: state.updateCurrentUserEmail,
+    updateCurrentUserPassword: state.updateCurrentUserPassword,
+    pullBackendNow: state.pullBackendNow,
+    taskStatuses: state.taskStatuses,
+    addTaskStatus: state.addTaskStatus,
+    deleteTaskStatus: state.deleteTaskStatus,
+    commitPendingMutation: state.commitPendingMutation,
+  })));
   const isSuperAdmin = isBossKoo(currentUser);
   const isClientUser = currentUser?.role === 'Client';
   const [profileName, setProfileName] = React.useState(currentUser?.name || '');
@@ -775,7 +792,7 @@ const Settings: React.FC = () => {
           </div>
         </div>
 
-        {(currentUser?.role === 'Admin' || isSuperAdmin) && (
+        {isSuperAdmin && (
           <div className={`${cardBase} overflow-hidden`}>
             <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
               <SlidersHorizontal className="w-5 h-5 text-blue-600" />

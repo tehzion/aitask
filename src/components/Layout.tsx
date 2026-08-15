@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useShallow } from 'zustand/react/shallow';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import { ToastContainer } from './Toast';
@@ -50,7 +51,18 @@ const Layout: React.FC = () => {
     retryMutation,
     discardMutation,
     rolePermissions,
-  } = useStore();
+  } = useStore(useShallow(state => ({
+    isCreateTaskModalOpen: state.isCreateTaskModalOpen,
+    setCreateTaskModalOpen: state.setCreateTaskModalOpen,
+    notifications: state.notifications,
+    notificationUnreadCount: state.notificationUnreadCount,
+    currentUser: state.currentUser,
+    backend: state.backend,
+    pullBackendNow: state.pullBackendNow,
+    retryMutation: state.retryMutation,
+    discardMutation: state.discardMutation,
+    rolePermissions: state.rolePermissions,
+  })));
   const notificationReadActions = useNotificationReadActions();
 
   const toggleSidebar = () => {

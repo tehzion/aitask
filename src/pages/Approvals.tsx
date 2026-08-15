@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
 import { CheckCircle2, XCircle, UserPlus, Users, Trash2, AlertTriangle, ShieldCheck, Save, Pencil } from 'lucide-react';
 import { Department, Role, Registration, RolePermissionKey, RolePermissions, User } from '../types';
 import { format } from 'date-fns';
@@ -39,7 +40,23 @@ const Approvals: React.FC = () => {
     assignCustomRoleToUser,
     backend,
     commitPendingMutation,
-  } = useStore();
+  } = useStore(useShallow(state => ({
+    registrations: state.registrations,
+    approveRegistration: state.approveRegistration,
+    rejectRegistration: state.rejectRegistration,
+    currentUser: state.currentUser,
+    users: state.users,
+    deleteUser: state.deleteUser,
+    addUserBySuperAdmin: state.addUserBySuperAdmin,
+    updateMemberDepartments: state.updateMemberDepartments,
+    rolePermissions: state.rolePermissions,
+    addCustomRole: state.addCustomRole,
+    updateCustomRole: state.updateCustomRole,
+    deleteCustomRole: state.deleteCustomRole,
+    assignCustomRoleToUser: state.assignCustomRoleToUser,
+    backend: state.backend,
+    commitPendingMutation: state.commitPendingMutation,
+  })));
   const [selectedReg, setSelectedReg] = useState<Registration | null>(null);
   
   const [role, setRole] = useState<Role>('Staff');
@@ -96,60 +113,68 @@ const Approvals: React.FC = () => {
     setApprovalCustomRoleId('');
     setSendApprovalInvitation(false);
     setApprovalTemporaryPassword('');
+    setCompanyName('');
   };
 
   const handleApprove = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedReg) {
-      setActionError('');
-      const departments = role === 'Client' ? ['Client' as Department] : approvalDepartments;
-      if (departments.length === 0) {
-        setActionError('Choose at least one department before approving this member.');
-        return;
-      }
-      setIsActionSaving(true);
-      if (secureAccounts) {
-        const inviteResult = await addUserBySuperAdmin({
-          name: selectedReg.name,
-          email: selectedReg.email,
-          role,
-          departments,
-          companyName: role === 'Client' ? companyName : undefined,
-          customRoleId: approvalCustomRoleId || undefined,
-          registrationId: selectedReg.id,
-          sendInvitation: sendApprovalInvitation,
-          password: selectedReg.onboardingMode === 'legacy_invite' && !sendApprovalInvitation
-            ? approvalTemporaryPassword
-            : undefined,
-        });
-        if (!inviteResult.ok) {
-          setIsActionSaving(false);
-          setActionError(inviteResult.error || 'Unable to approve this member.');
-          return;
-        }
+    if (!selectedReg || isActionSaving) return;
+    setActionError('');
+    const departments = role === 'Client' ? ['Client' as Department] : approvalDepartments;
+    if (departments.length === 0) {
+      setActionError('Choose at least one department before approving this member.');
+      return;
+    }
+    setIsActionSaving(true);
+    if (secureAccounts) {
+      const inviteResult = await addUserBySuperAdmin({
+        name: selectedReg.name,
+        email: selectedReg.email,
+        role,
+        departments,
+        companyName: role === 'Client' ? companyName : undefined,
+        customRoleId: approvalCustomRoleId || undefined,
+        registrationId: selectedReg.id,
+        sendInvitation: sendApprovalInvitation,
+        password: selectedReg.onboardingMode === 'legacy_invite' && !sendApprovalInvitation
+          ? approvalTemporaryPassword
+          : undefined,
+      });
+      if (!inviteResult.ok) {
         setIsActionSaving(false);
-        setSelectedReg(null);
-        setRole('Staff');
-        setApprovalDepartments([]);
-        setCompanyName('');
-        setApprovalCustomRoleId('');
-        setSendApprovalInvitation(false);
-        setApprovalTemporaryPassword('');
+        setActionError(inviteResult.error || 'Unable to approve this member.');
         return;
       }
-      approveRegistration(selectedReg.id, role, departments, role === 'Client' ? companyName : undefined, approvalCustomRoleId || undefined);
-      const saved = await commitPendingMutation();
       setIsActionSaving(false);
-      if (!saved.ok) {
-        setActionError(saved.error || 'The approval is waiting to be saved. Use Retry required to continue.');
-        return;
-      }
       setSelectedReg(null);
       setRole('Staff');
       setApprovalDepartments([]);
       setCompanyName('');
       setApprovalCustomRoleId('');
+      setSendApprovalInvitation(false);
+      setApprovalTemporaryPassword('');
+      return;
     }
+    const registrationsBefore = registrations;
+    const usersBefore = users;
+    approveRegistration(selectedReg.id, role, departments, role === 'Client' ? companyName : undefined, approvalCustomRoleId || undefined);
+    const saved = await commitPendingMutation();
+    setIsActionSaving(false);
+    if (!saved.ok) {
+      useStore.setState({
+        registrations: registrationsBefore,
+        users: usersBefore,
+      });
+      setActionError(saved.error || 'The approval is waiting to be saved. Use Retry required to continue.');
+      return;
+    }
+    setSelectedReg(null);
+    setRole('Staff');
+    setApprovalDepartments([]);
+    setCompanyName('');
+    setApprovalCustomRoleId('');
+    setSendApprovalInvitation(false);
+    setApprovalTemporaryPassword('');
   };
 
   const resetNewUser = () => {
@@ -395,7 +420,7 @@ const Approvals: React.FC = () => {
       <div className={`${cardBase} overflow-hidden`}>
         <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
           <UserPlus className="w-5 h-5 text-blue-600" />
-          <h3 className="text-lg font-semibold text-slate-800">Pending Registrations ({pendingRegs.length})</h3>
+          <h2 className="text-lg font-semibold text-slate-800">Pending Registrations ({pendingRegs.length})</h2>
         </div>
         
         {pendingRegs.length === 0 ? (
@@ -450,6 +475,7 @@ const Approvals: React.FC = () => {
                           </button>
                           <button
                             onClick={async () => {
+                              if (isActionSaving) return;
                               const previousRegistrations = useStore.getState().registrations;
                               rejectRegistration(reg.id);
                               setIsActionSaving(true);
@@ -483,7 +509,7 @@ const Approvals: React.FC = () => {
         <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
           <ShieldCheck className="w-5 h-5 text-blue-600" />
           <div>
-            <h3 className="text-lg font-semibold text-slate-800">Roles & Permissions</h3>
+            <h2 className="text-lg font-semibold text-slate-800">Roles & Permissions</h2>
             <p className="text-sm text-slate-500">Create named roles with core app permissions. Super admin access stays protected.</p>
           </div>
         </div>
@@ -504,6 +530,7 @@ const Approvals: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Base Role</label>
                 <select
+                  aria-label="Base Role"
                   className={cn(inputBase, 'px-3 py-2.5')}
                   value={roleForm.baseRole}
                   onChange={e => handleRoleBaseChange(e.target.value as Role)}
@@ -573,7 +600,7 @@ const Approvals: React.FC = () => {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="font-semibold text-slate-900">{customRole.name}</h4>
+                      <h3 className="font-semibold text-slate-900">{customRole.name}</h3>
                       <Badge tone="slate">Base: {customRole.baseRole}</Badge>
                     </div>
                     {customRole.description && <p className="mt-1 text-sm text-slate-500">{customRole.description}</p>}
@@ -600,7 +627,7 @@ const Approvals: React.FC = () => {
       {historyRegs.length > 0 && (
           <div className={`${cardBase} overflow-hidden opacity-70`}>
           <div className="px-6 py-4 border-b border-slate-100">
-            <h3 className="text-sm font-semibold text-slate-800">Recent Decisions</h3>
+            <h2 className="text-sm font-semibold text-slate-800">Recent Decisions</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -629,7 +656,7 @@ const Approvals: React.FC = () => {
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Users className="w-5 h-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-slate-800">Active System Users</h3>
+            <h2 className="text-lg font-semibold text-slate-800">Active System Users</h2>
           </div>
           {superAdmin && (
             <Button variant="secondary" onClick={() => setIsAddUserOpen(true)}>
@@ -664,7 +691,7 @@ const Approvals: React.FC = () => {
                 <tr key={u.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover border border-slate-200" />
+                      <img src={u.avatar} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-200" />
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold text-slate-800">{u.name}</span>
@@ -695,6 +722,7 @@ const Approvals: React.FC = () => {
                       <Badge tone="purple">Permanent Super Admin</Badge>
                     ) : (
                       <select
+                        aria-label={`Custom role for ${u.name}`}
                         className={cn(inputBase, 'px-3 py-2 text-sm')}
                         value={u.customRoleId || ''}
                         onChange={e => void handleAssignRole(u.id, e.target.value)}
@@ -836,6 +864,7 @@ const Approvals: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">System Role</label>
                   <select
+                    aria-label="System Role"
                     className={cn(inputBase, 'px-3 py-2.5')}
                     value={newUser.role}
                     onChange={e => {
@@ -853,6 +882,7 @@ const Approvals: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Custom Role</label>
                   <select
+                    aria-label="Custom Role"
                     className={cn(inputBase, 'px-3 py-2.5')}
                     value={newUser.customRoleId}
                     onChange={e => setNewUser({ ...newUser, customRoleId: e.target.value })}
@@ -978,6 +1008,7 @@ const Approvals: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">System Role</label>
                 <select 
+                  aria-label="System Role"
                   className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
                   value={secureAccounts ? 'Staff' : role}
                   disabled={secureAccounts}
@@ -1008,6 +1039,7 @@ const Approvals: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Custom Role</label>
                 <select
+                  aria-label="Custom Role"
                   className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
                   value={approvalCustomRoleId}
                   onChange={e => setApprovalCustomRoleId(e.target.value)}
@@ -1082,9 +1114,10 @@ const Approvals: React.FC = () => {
                 </button>
                 <button 
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                  disabled={isActionSaving}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Confirm & Approve
+                  {isActionSaving ? 'Saving...' : 'Confirm & Approve'}
                 </button>
               </div>
             </form>
@@ -1102,7 +1135,7 @@ const Approvals: React.FC = () => {
               <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <h3 id={deleteMemberTitleId} className="mb-2 text-lg font-semibold text-slate-950">Delete user account</h3>
+              <h2 id={deleteMemberTitleId} className="mb-2 text-lg font-semibold text-slate-950">Delete user account</h2>
               <p className="text-sm text-slate-500">
                 Are you sure you want to permanently delete this user? They will immediately lose access to the system. This action cannot be undone.
               </p>

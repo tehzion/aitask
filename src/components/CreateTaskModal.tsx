@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
 import { X, Plus, ChevronDown } from 'lucide-react';
 import { Department, Priority, ServiceType } from '../types';
 import CreateProjectModal from './CreateProjectModal';
@@ -21,7 +22,22 @@ const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, commitPendingMutation } = useStore();
+  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, commitPendingMutation } = useStore(useShallow(state => ({
+    users: state.users,
+    currentUser: state.currentUser,
+    addTask: state.addTask,
+    projects: state.projects,
+    tasks: state.tasks,
+    createTaskInitialDate: state.createTaskInitialDate,
+    createTaskInitialAssignee: state.createTaskInitialAssignee,
+    createTaskInitialClientId: state.createTaskInitialClientId,
+    createTaskInitialClientName: state.createTaskInitialClientName,
+    createTaskInitialServiceType: state.createTaskInitialServiceType,
+    createTaskInitialCycleId: state.createTaskInitialCycleId,
+    createTaskInitialDeliverableId: state.createTaskInitialDeliverableId,
+    rolePermissions: state.rolePermissions,
+    commitPendingMutation: state.commitPendingMutation,
+  })));
   const navigate = useNavigate();
   const clientListId = React.useId();
   const titleId = React.useId();

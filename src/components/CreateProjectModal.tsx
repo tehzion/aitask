@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
 import { Check, X, Plus } from 'lucide-react';
 import { Project, ServiceType } from '../types';
 import { getClientOptions, getServiceOptions, hasChoice, PRESET_SERVICES } from '../lib/choiceOptions';
@@ -15,7 +16,14 @@ interface Props {
 }
 
 const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProjectCreated, onProjectUpdated }) => {
-  const { addProject, updateProject, projects, tasks, users, commitPendingMutation } = useStore();
+  const { addProject, updateProject, projects, tasks, users, commitPendingMutation } = useStore(useShallow(state => ({
+    addProject: state.addProject,
+    updateProject: state.updateProject,
+    projects: state.projects,
+    tasks: state.tasks,
+    users: state.users,
+    commitPendingMutation: state.commitPendingMutation,
+  })));
   const clientListId = React.useId();
   const titleId = React.useId();
   const descriptionId = React.useId();
