@@ -21,7 +21,7 @@ const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, rolePermissions, commitPendingMutation } = useStore();
+  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, commitPendingMutation } = useStore();
   const navigate = useNavigate();
   const clientListId = React.useId();
   const titleId = React.useId();
@@ -132,6 +132,12 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       setFormError('');
       setAssignmentError('');
       setAssignedTo(initialMember?.id || '');
+      if (createTaskInitialClientName) {
+        const initialProject = assignableProjects.find(project => project.clientId === createTaskInitialClientId || project.clientName.toLowerCase() === createTaskInitialClientName.toLowerCase());
+        setProjectId(initialProject?.id || '');
+        setClientName(createTaskInitialClientName);
+      }
+      if (createTaskInitialServiceType) setServiceType(createTaskInitialServiceType);
       setDepartment(current => (
         initialDepartment
           || (current && departmentChoices.some(item => item === current)
@@ -139,7 +145,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
           : departmentChoices.length === 1 ? departmentChoices[0] : '')
       ));
     }
-  }, [createTaskInitialAssignee, createTaskInitialDate, departmentChoices, isOpen, users]);
+  }, [assignableProjects, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialDate, createTaskInitialServiceType, departmentChoices, isOpen, users]);
 
   if (!isOpen) return null;
 
@@ -322,6 +328,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       title: trimmedTitle,
       description: description.trim(),
       projectId: projectId || undefined,
+      clientId: createTaskInitialClientId,
+      serviceCycleId: createTaskInitialCycleId,
+      deliverableId: createTaskInitialDeliverableId,
       clientName: trimmedClientName,
       projectName: projectId ? assignableProjects.find(p => p.id === projectId)?.projectName : undefined,
       customerDetails: customerDetails.trim(),

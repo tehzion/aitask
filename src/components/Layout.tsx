@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Outlet, NavLink, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import { ToastContainer } from './Toast';
@@ -14,6 +14,9 @@ import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
 import { notificationRouteToPath } from '../lib/security';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
+import { useColorTheme } from '../hooks/useColorTheme';
+import { getNavigationShortcut, isEditableShortcutTarget } from '../lib/keyboard';
+import KeyboardShortcutsDialog from './KeyboardShortcutsDialog';
 
 export interface LayoutOutletContext {
   notificationReadActions: ReturnType<typeof useNotificationReadActions>;
@@ -22,6 +25,19 @@ export interface LayoutOutletContext {
 const Layout: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileNotifOpen, setIsMobileNotifOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try { return window.localStorage.getItem('aitask-sidebar-collapsed') === 'true'; } catch { return false; }
+  });
+  const [isShortcutHelpOpen, setIsShortcutHelpOpen] = useState(false);
+  const [shortcutAnnouncement, setShortcutAnnouncement] = useState('');
+  const shortcutPrefixRef = useRef('');
+  const shortcutTimerRef = useRef<number | null>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const appContentRef = useRef<HTMLDivElement>(null);
+  const mobileMenuTriggerRef = useRef<HTMLElement | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { preference, resolvedTheme, setPreference, toggleTheme } = useColorTheme();
 
   const {
     isCreateTaskModalOpen,
@@ -37,35 +53,111 @@ const Layout: React.FC = () => {
   } = useStore();
   const notificationReadActions = useNotificationReadActions();
 
-  // Global Keyboard Shortcuts
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed(current => {
+      const next = !current;
+      try { window.localStorage.setItem('aitask-sidebar-collapsed', String(next)); } catch { /* keep the in-memory preference */ }
+      return next;
+    });
+  };
+
+  const userCanCreateTasks = canCreateTasks(currentUser, rolePermissions);
+
+  const openMobileMenu = React.useCallback(() => {
+    mobileMenuTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setIsMobileMenuOpen(true);
+  }, []);
+
+  const closeMobileMenu = React.useCallback(() => {
+    if (!isMobileMenuOpen) return;
+    setIsMobileMenuOpen(false);
+    window.setTimeout(() => mobileMenuTriggerRef.current?.focus(), 0);
+  }, [isMobileMenuOpen]);
+
+  // Global keyboard shortcuts are intentionally disabled while typing.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const active = document.activeElement;
-      if (active && (
-        active.tagName === 'INPUT' ||
-        active.tagName === 'TEXTAREA' ||
-        active.tagName === 'SELECT' ||
-        active.getAttribute('contenteditable') === 'true'
-      )) {
+      if (isEditableShortcutTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (e.key === 'Escape') {
+        closeMobileMenu();
+        setIsMobileNotifOpen(false);
+        shortcutPrefixRef.current = '';
+        return;
+      }
+
+      if (e.key === '?') {
+        e.preventDefault();
+        setIsShortcutHelpOpen(true);
+        return;
+      }
+
+      if (e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        toggleTheme();
+        setShortcutAnnouncement(`Switched to ${resolvedTheme === 'dark' ? 'day' : 'night'} mode.`);
+        return;
+      }
+
+      if (shortcutPrefixRef.current === 'g') {
+        shortcutPrefixRef.current = '';
+        if (shortcutTimerRef.current) window.clearTimeout(shortcutTimerRef.current);
+        const shortcut = getNavigationShortcut(e.key);
+        if (!shortcut || !canAccessPath(currentUser, shortcut.path, rolePermissions)) return;
+        e.preventDefault();
+        navigate(shortcut.path);
+        setShortcutAnnouncement(`Opened ${shortcut.label}.`);
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        shortcutPrefixRef.current = 'g';
+        setShortcutAnnouncement('Go to: press a page shortcut key.');
+        if (shortcutTimerRef.current) window.clearTimeout(shortcutTimerRef.current);
+        shortcutTimerRef.current = window.setTimeout(() => {
+          shortcutPrefixRef.current = '';
+          setShortcutAnnouncement('Navigation shortcut cancelled.');
+        }, 8000);
         return;
       }
 
       if (e.key === 'n' || e.key === 'N') {
-        if (!canCreateTasks(currentUser, rolePermissions)) return;
+        if (!userCanCreateTasks) return;
         e.preventDefault();
         setCreateTaskModalOpen(true);
       } else if (e.key === '/') {
-        const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement;
+        const searchInput = Array.from(document.querySelectorAll<HTMLInputElement>('[data-global-search]'))
+          .find(input => input.getClientRects().length > 0);
         if (searchInput) {
           e.preventDefault();
           searchInput.focus();
           searchInput.select();
+        } else {
+          e.preventDefault();
+          window.dispatchEvent(new Event('aitask-focus-search'));
         }
       }
     };
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [currentUser, rolePermissions, setCreateTaskModalOpen]);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (shortcutTimerRef.current) window.clearTimeout(shortcutTimerRef.current);
+    };
+  }, [closeMobileMenu, currentUser, navigate, resolvedTheme, rolePermissions, setCreateTaskModalOpen, toggleTheme, userCanCreateTasks]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => mainRef.current?.focus({ preventScroll: true }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const content = appContentRef.current;
+    if (!content) return;
+    if (isMobileMenuOpen) content.setAttribute('inert', '');
+    else content.removeAttribute('inert');
+    return () => content.removeAttribute('inert');
+  }, [isMobileMenuOpen]);
 
   // Mobile Notification Calculations
   const unreadNotifs = useMemo(() => {
@@ -126,12 +218,21 @@ const Layout: React.FC = () => {
   };
 
   return (
-    <div className="relative flex h-[100dvh] overflow-hidden bg-slate-100 font-sans text-slate-950">
-      <Sidebar isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
-      <div className="relative flex min-w-0 w-full flex-1 flex-col overflow-hidden">
+    <div className="relative flex h-[100dvh] overflow-hidden bg-canvas font-sans text-ink">
+      <a href="#main-content" className="fixed left-3 top-3 z-[100] -translate-y-20 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-lg transition-transform focus:translate-y-0">
+        Skip to main content
+      </a>
+      <p className="sr-only" aria-live="polite" aria-atomic="true">{shortcutAnnouncement}</p>
+      <Sidebar isOpen={isMobileMenuOpen} onClose={closeMobileMenu} isCollapsed={isSidebarCollapsed} onToggleCollapsed={toggleSidebar} />
+      <div ref={appContentRef} className="relative flex min-w-0 w-full flex-1 flex-col overflow-hidden">
         <Navbar
-          onMenuClick={() => setIsMobileMenuOpen(true)}
+          onMenuClick={openMobileMenu}
           notificationReadActions={notificationReadActions}
+          resolvedTheme={resolvedTheme}
+          themePreference={preference}
+          onSetThemePreference={setPreference}
+          onToggleTheme={toggleTheme}
+          onOpenShortcuts={() => setIsShortcutHelpOpen(true)}
         />
         {syncNeedsAttention && (
           <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 sm:px-6 lg:px-7">
@@ -189,7 +290,12 @@ const Layout: React.FC = () => {
             </div>
           </div>
         )}
-        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-6 lg:p-7">
+        <main
+          ref={mainRef}
+          id="main-content"
+          tabIndex={-1}
+          className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-canvas p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none sm:p-6 md:pb-6 lg:p-8"
+        >
           <Outlet context={{ notificationReadActions }} />
         </main>
 
@@ -336,6 +442,11 @@ const Layout: React.FC = () => {
       />
       <ToastContainer />
       <CreateTaskModal isOpen={isCreateTaskModalOpen} onClose={() => setCreateTaskModalOpen(false)} />
+      <KeyboardShortcutsDialog
+        isOpen={isShortcutHelpOpen}
+        canCreateTask={userCanCreateTasks}
+        onClose={() => setIsShortcutHelpOpen(false)}
+      />
     </div>
   );
 };

@@ -4,6 +4,14 @@ import type {
   ClientContact,
   ClientPortalPayload,
   ClientProfile,
+  ClientServicePlan,
+  ServicePackage,
+  ServiceCycle,
+  Deliverable,
+  CycleComment,
+  Addon,
+  ServiceWorkflowTemplate,
+  ServicePricingSnapshot,
   CustomRole,
   Department,
   Project,
@@ -22,6 +30,7 @@ import {
 import { parseNotification, parseWorkspaceSnapshot, safeAvatarSource } from './security';
 import { enrichNotificationMetadata } from './notificationCenter';
 import { supabase } from './supabaseClient';
+import { stripServiceItemPrices } from './serviceManagement';
 
 export const SECURE_WORKSPACE_ID = 'aitask-main';
 export const SECURE_SYNC_PROTOCOL_VERSION = 1;
@@ -49,6 +58,14 @@ export const SECURE_COMMAND_TYPES = [
   'registration.review',
   'task_status.manage',
   'reminder.generate',
+  'service_package.manage',
+  'client_plan.manage',
+  'service_cycle.manage',
+  'deliverable.manage',
+  'cycle_comment.manage',
+  'addon.manage',
+  'service_workflow.manage',
+  'deliverable.workflow.generate',
 ] as const;
 
 export type SecureCommandType = typeof SECURE_COMMAND_TYPES[number];
@@ -90,6 +107,7 @@ type MemberRow = {
   custom_role_id: string | null;
   custom_role_name: string | null;
   permissions: WorkspaceMember['permissions'] | null;
+  worker_type: WorkspaceMember['workerType'] | null;
   version: number;
   updated_at: string;
 };
@@ -253,6 +271,8 @@ const CLIENT_TASK_PROJECTION_KEYS = [
   'id',
   'clientName',
   'projectId',
+  'serviceCycleId',
+  'deliverableId',
   'projectName',
   'serviceType',
   'title',
@@ -270,6 +290,9 @@ const CLIENT_TASK_PROJECTION_KEYS = [
   'completedAt',
   'revisionCount',
   'clientApprovalStatus',
+  'visibility',
+  'workflowStepOrder',
+  'workflowStepRequired',
 ] as const;
 
 export const serializeClientProjectedTask = (task: Task): Record<string, unknown> => {
@@ -299,6 +322,7 @@ const memberToUser = (row: MemberRow): WorkspaceMember => {
     customRoleId: row.custom_role_id || undefined,
     customRoleName: row.custom_role_name || undefined,
     permissions: row.permissions && Object.keys(row.permissions).length > 0 ? row.permissions : undefined,
+    workerType: row.worker_type || 'employee',
     version: Number(row.version) || 1,
     updatedAt: row.updated_at,
   };
@@ -320,6 +344,7 @@ const memberData = (user: WorkspaceMember): Record<string, unknown> => {
     custom_role_id: user.customRoleId || null,
     custom_role_name: user.customRoleName || null,
     permissions: user.permissions || {},
+    worker_type: user.workerType || 'employee',
   };
 };
 
@@ -386,6 +411,25 @@ const stateToRows = (state: PersistedWorkspaceState) => {
     const existing = baseline.get(entityKey('task_status', status));
     push('entity', 'task_status', status, { status }, existing?.version);
   });
+  state.servicePackages?.forEach(item => push('entity', 'service_package', item.id, item as unknown as Record<string, unknown>, item.version));
+  state.clientPlans?.forEach(item => push('entity', 'client_plan', item.id, {
+    ...item,
+    serviceItems: stripServiceItemPrices(item.serviceItems),
+    discountValue: 0,
+    taxRateBps: 0,
+  } as unknown as Record<string, unknown>, item.version, item.clientId));
+  state.serviceCycles?.forEach(item => push('entity', 'service_cycle', item.id, {
+    ...item,
+    serviceItems: stripServiceItemPrices(item.serviceItems),
+    addonSnapshots: item.addonSnapshots.map(addon => ({ ...addon, unitPriceMinor: 0 })),
+    discountValue: 0,
+    taxRateBps: 0,
+  } as unknown as Record<string, unknown>, item.version, item.planId));
+  state.deliverables?.forEach(item => push('entity', 'deliverable', item.id, item as unknown as Record<string, unknown>, item.version, item.cycleId));
+  state.cycleComments?.forEach(item => push('entity', 'cycle_comment', item.id, item as unknown as Record<string, unknown>, item.version, item.cycleId));
+  state.addons?.forEach(item => push('entity', 'addon', item.id, { ...item, unitPriceMinor: 0 } as unknown as Record<string, unknown>, item.version, item.planId));
+  state.serviceWorkflowTemplates?.forEach(item => push('entity', 'service_workflow_template', item.id, item as unknown as Record<string, unknown>, item.version));
+  state.servicePricingSnapshots?.forEach(item => push('entity', 'service_pricing_snapshot', item.id, item as unknown as Record<string, unknown>, item.version, item.parentId));
   return rows;
 };
 
@@ -533,12 +577,23 @@ const executeCommand = async (command: SecureCommand): Promise<MutationResult<Co
     return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before retrying this change.' };
   }
 
-  const invoke = () => withSyncTimeout(supabase.rpc('aitask_execute_command', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_command_id: command.id,
-    p_command_type: command.type,
-    p_operations: command.operations,
-  }));
+  const serviceCommand = new Set<SecureCommandType>([
+    'service_package.manage', 'client_plan.manage', 'service_cycle.manage',
+    'deliverable.manage', 'cycle_comment.manage', 'addon.manage',
+    'service_workflow.manage', 'deliverable.workflow.generate',
+  ]).has(command.type);
+  const invoke = () => command.type === 'deliverable.workflow.generate'
+    ? withSyncTimeout(supabase.rpc('aitask_generate_deliverable_task_chain', {
+      p_workspace_id: SECURE_WORKSPACE_ID,
+      p_command_id: command.id,
+      p_operations: command.operations,
+    }))
+    : withSyncTimeout(supabase.rpc(serviceCommand ? 'aitask_execute_service_command' : 'aitask_execute_command', {
+      p_workspace_id: SECURE_WORKSPACE_ID,
+      p_command_id: command.id,
+      p_command_type: command.type,
+      p_operations: command.operations,
+    }));
 
   let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
@@ -918,12 +973,16 @@ const loadClientPortalPayload = async (expectedClientName?: string): Promise<Cli
   const contacts = (Array.isArray(result.data.contacts) ? result.data.contacts : [])
     .map(parseClientContact)
     .filter((contact): contact is ClientContact => Boolean(contact));
+  const clientPlans = portalRecords(result.data.clientPlans).map(item => ({ ...item })) as unknown as ClientPortalPayload['clientPlans'];
+  const serviceCycles = portalRecords(result.data.serviceCycles).map(item => ({ ...item })) as unknown as ClientPortalPayload['serviceCycles'];
+  const deliverables = portalRecords(result.data.deliverables).map(item => ({ ...item })) as unknown as ClientPortalPayload['deliverables'];
+  const cycleComments = portalRecords(result.data.cycleComments).map(item => ({ ...item })) as unknown as ClientPortalPayload['cycleComments'];
 
-  return { workspaceId, clientName, tasks, projects, clients, contacts };
+  return { workspaceId, clientName, tasks, projects, clients, contacts, clientPlans, serviceCycles, deliverables, cycleComments };
 };
 
 const projectionToEntityRow = (
-  entityType: 'task' | 'project' | 'client',
+  entityType: string,
   item: Record<string, unknown>,
   parentId?: string,
 ): EntityRow => {
@@ -987,7 +1046,7 @@ export const loadSecureWorkspace = async (authUser: User) => {
   const clientCustomRoleId = authenticatedMemberRow?.custom_role_id;
   const visibleEntityRows = currentUser.role === 'Client'
     ? entityRows.filter(row => (
-        !['task', 'project', 'client'].includes(row.entity_type)
+        !['task', 'project', 'client', 'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon', 'service_package', 'service_workflow_template', 'service_pricing_snapshot'].includes(row.entity_type)
         && (row.entity_type !== 'custom_role' || row.entity_id === clientCustomRoleId)
       ))
     : entityRows;
@@ -1000,6 +1059,10 @@ export const loadSecureWorkspace = async (authUser: User) => {
         )),
         ...clientPortal.projects.map(item => projectionToEntityRow('project', item as unknown as Record<string, unknown>)),
         ...clientPortal.clients.map(item => projectionToEntityRow('client', item as unknown as Record<string, unknown>)),
+        ...clientPortal.clientPlans.map(item => projectionToEntityRow('client_plan', item as unknown as Record<string, unknown>, item.clientId)),
+        ...clientPortal.serviceCycles.map(item => projectionToEntityRow('service_cycle', item as unknown as Record<string, unknown>, item.planId)),
+        ...clientPortal.deliverables.map(item => projectionToEntityRow('deliverable', item as unknown as Record<string, unknown>, item.cycleId)),
+        ...clientPortal.cycleComments.map(item => projectionToEntityRow('cycle_comment', item as unknown as Record<string, unknown>, item.cycleId)),
       ]
     : [];
   const notificationRows: EntityRow[] = notificationFeed.items.map(notification => ({
@@ -1041,6 +1104,14 @@ export const loadSecureWorkspace = async (authUser: User) => {
     registrations: dataFor<Registration>('registration'),
     rolePermissions: dataFor<CustomRole>('custom_role'),
     taskStatuses: dataFor<{ status: string }>('task_status').map(item => item.status),
+    servicePackages: dataFor<ServicePackage>('service_package'),
+    clientPlans: dataFor<ClientServicePlan>('client_plan'),
+    serviceCycles: dataFor<ServiceCycle>('service_cycle'),
+    deliverables: dataFor<Deliverable>('deliverable'),
+    cycleComments: dataFor<CycleComment>('cycle_comment'),
+    addons: dataFor<Addon>('addon'),
+    serviceWorkflowTemplates: dataFor<ServiceWorkflowTemplate>('service_workflow_template'),
+    servicePricingSnapshots: dataFor<ServicePricingSnapshot>('service_pricing_snapshot'),
   };
   const state = parseWorkspaceSnapshot(raw);
   if (currentUser.role === 'Client') {

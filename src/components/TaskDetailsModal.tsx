@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../store';
-import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save, ChevronDown } from 'lucide-react';
+import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save, ChevronDown, AlertTriangle } from 'lucide-react';
 import { Department, Priority, Task, TaskStatus } from '../types';
 import { format, formatDistanceToNow } from 'date-fns';
 import { canAssignTasksToOthers, canCommentOnTask, canEditTask as canEditTaskByRole, canReviewTaskAsClient } from '../lib/access';
@@ -50,6 +50,7 @@ const ExternalTaskLink: React.FC<{ value: string; label: string }> = ({ value, l
 const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   const {
     users,
+    tasks,
     currentUser,
     updateTaskStatus,
     updateTask,
@@ -118,6 +119,9 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   const canClientReview = canReviewTaskAsClient(currentUser, task, rolePermissions);
   const isClientTaskViewer = currentUser?.role === 'Client';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
+  const incompletePredecessors = (task.predecessorTaskIds || [])
+    .map(id => tasks.find(item => item.id === id))
+    .filter((item): item is Task => Boolean(item && !item.isCompleted));
   const assigneeOptions = canAssignOthers
     ? users.filter(user => user.role !== 'Client' && isMemberInDepartment(user, editForm.department))
     : users.filter(user => user.id === editForm.assignedTo);
@@ -275,7 +279,12 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                         className={`text-sm pl-3 pr-7 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none shadow-sm ${getStatusColor(task.status)}`}
                         value={task.status}
                         onChange={async (e) => {
-                          updateTaskStatus(task.id, e.target.value as TaskStatus);
+                          const nextStatus = e.target.value as TaskStatus;
+                          if (incompletePredecessors.length > 0 && nextStatus !== 'Pending' && nextStatus !== 'Cancelled') {
+                            const confirmed = window.confirm(`This step still has ${incompletePredecessors.length} incomplete predecessor task(s). Start it anyway?`);
+                            if (!confirmed) return;
+                          }
+                          updateTaskStatus(task.id, nextStatus);
                           await confirmPendingMutation();
                         }}
                       >
@@ -294,6 +303,12 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                   </span>
                 </div>
               </div>
+
+              {incompletePredecessors.length > 0 && !isClientTaskViewer && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  <div className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">Soft dependency warning</p><p className="mt-1 text-amber-800">This task may start early after confirmation, but the following predecessor step{incompletePredecessors.length === 1 ? '' : 's'} remain incomplete:</p><ul className="mt-2 list-disc space-y-1 pl-5">{incompletePredecessors.map(item => <li key={item.id}>{item.title}</li>)}</ul></div></div>
+                </div>
+              )}
 
               {isEditingDetails && (
                 <form onSubmit={handleDetailsSave} className="rounded-lg border border-blue-100 bg-blue-50/40 p-4 space-y-3">
@@ -356,6 +371,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                           onChange={(e) => setEditForm({ ...editForm, assignedTo: e.target.value })}
                           className="w-full rounded-lg border border-slate-300 bg-white p-2.5 pr-10 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-500 appearance-none cursor-pointer"
                         >
+                          {canAssignOthers && <option value="">Unassigned</option>}
                           {assigneeOptions.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
                         </select>
                         <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />

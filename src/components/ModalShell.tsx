@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../lib/utils';
 
 interface ModalShellProps {
@@ -22,6 +23,8 @@ const focusableSelector = [
 
 const modalStack: symbol[] = [];
 let previousBodyOverflow = '';
+let previousRootAriaHidden: string | null = null;
+let rootWasInert = false;
 
 const ModalShell: React.FC<ModalShellProps> = ({
   children,
@@ -35,6 +38,11 @@ const ModalShell: React.FC<ModalShellProps> = ({
   const panelRef = React.useRef<HTMLDivElement>(null);
   const tokenRef = React.useRef(Symbol('aitask-modal'));
   const onCloseRef = React.useRef(onClose);
+  const [portalNode] = React.useState(() => {
+    const node = document.createElement('div');
+    node.dataset.aitaskModalPortal = '';
+    return node;
+  });
 
   React.useEffect(() => {
     onCloseRef.current = onClose;
@@ -47,6 +55,13 @@ const ModalShell: React.FC<ModalShellProps> = ({
     if (modalStack.length === 0) {
       previousBodyOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
+      const root = document.getElementById('root');
+      if (root) {
+        previousRootAriaHidden = root.getAttribute('aria-hidden');
+        rootWasInert = root.hasAttribute('inert');
+        root.setAttribute('inert', '');
+        root.setAttribute('aria-hidden', 'true');
+      }
     }
     modalStack.push(token);
 
@@ -95,14 +110,27 @@ const ModalShell: React.FC<ModalShellProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
       const stackIndex = modalStack.lastIndexOf(token);
       if (stackIndex >= 0) modalStack.splice(stackIndex, 1);
-      if (modalStack.length === 0) document.body.style.overflow = previousBodyOverflow;
+      if (modalStack.length === 0) {
+        document.body.style.overflow = previousBodyOverflow;
+        const root = document.getElementById('root');
+        if (root) {
+          if (!rootWasInert) root.removeAttribute('inert');
+          if (previousRootAriaHidden === null) root.removeAttribute('aria-hidden');
+          else root.setAttribute('aria-hidden', previousRootAriaHidden);
+        }
+      }
       window.setTimeout(() => previouslyFocused?.focus(), 0);
     };
   }, []);
 
-  return (
+  React.useLayoutEffect(() => {
+    document.body.appendChild(portalNode);
+    return () => portalNode.remove();
+  }, [portalNode]);
+
+  return createPortal(
     <div
-      className={cn('fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3 sm:p-4', overlayClassName)}
+      className={cn('fixed inset-0 z-[100] flex items-center justify-center bg-[#071015]/60 p-3 backdrop-blur-[2px] sm:p-4', overlayClassName)}
       onMouseDown={event => {
         if (closeOnBackdrop && event.target === event.currentTarget) onClose();
       }}
@@ -115,13 +143,14 @@ const ModalShell: React.FC<ModalShellProps> = ({
         aria-describedby={describedBy}
         tabIndex={-1}
         className={cn(
-          'flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.18)] outline-none sm:max-h-[90vh]',
+          'flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-panel border border-line bg-surface text-ink shadow-float outline-none sm:max-h-[90vh]',
           panelClassName,
         )}
       >
         {children}
       </div>
-    </div>
+    </div>,
+    portalNode,
   );
 };
 

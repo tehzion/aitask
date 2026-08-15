@@ -11,6 +11,7 @@
     "check": "tsc -b --noEmit",
     "test": "vitest run src",
     "test:e2e": "playwright test",
+    "test:e2e:pwa": "pnpm build && playwright test -c playwright.pwa.config.ts",
     "verify:pwa": "node scripts/verify-pwa.mjs",
     "verify:supabase": "node scripts/verify-supabase.mjs",
     "release:patch": "pnpm version patch --no-git-tag-version",
@@ -18,6 +19,8 @@
     "release:major": "pnpm version major --no-git-tag-version"
   },
   "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "@supabase/supabase-js": "2.89.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -30,6 +33,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^9.25.0",
     "@playwright/test": "^1.61.1",
     "@types/node": "^22.15.30",
@@ -43,6 +47,7 @@
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
     "postcss": "^8.5.3",
+    "supabase": "2.114.0",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.30.1",

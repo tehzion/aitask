@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, UserPlus, ChevronDown, ChevronUp, Mail } from 'lucide-react';
+import { LayoutDashboard, UserPlus, ChevronDown, ChevronUp, Mail, Moon, Sun } from 'lucide-react';
 import { useStore } from '../store';
 import { Role } from '../types';
 import { Button } from '../components/ui';
@@ -10,6 +10,7 @@ import { DEFAULT_USER_PASSWORD, hasPasswordResetBypass, shouldShowDemoLogin, val
 import { APP_BUILD_LABEL } from '../lib/appVersion';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { STAFF_DEPARTMENTS } from '../lib/departments';
+import { useColorTheme } from '../hooks/useColorTheme';
 
 /** Max failed attempts before a short lockout is applied */
 const MAX_ATTEMPTS = 5;
@@ -32,6 +33,7 @@ const getLoginDestination = (mustResetPassword: boolean, userId: string, request
 );
 
 const Login: React.FC = () => {
+  const { resolvedTheme, toggleTheme } = useColorTheme();
   const { login, currentUser, registerUser, requestPasswordRecovery } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -168,7 +170,16 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center px-4 py-10 sm:px-6 lg:px-8">
+    <div className="relative min-h-screen bg-slate-50 flex flex-col justify-center px-4 py-10 dark:bg-slate-950 sm:px-6 lg:px-8">
+      <button
+        type="button"
+        onClick={toggleTheme}
+        aria-label={`Switch to ${resolvedTheme === 'dark' ? 'day' : 'night'} mode`}
+        aria-pressed={resolvedTheme === 'dark'}
+        className="fixed right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"
+      >
+        {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      </button>
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <div className="flex items-center gap-3">

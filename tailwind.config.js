@@ -7,7 +7,37 @@ export default {
     container: {
       center: true,
     },
-    extend: {},
+    extend: {
+      colors: {
+        canvas: 'rgb(var(--calm-canvas) / <alpha-value>)',
+        surface: 'rgb(var(--calm-surface) / <alpha-value>)',
+        inset: 'rgb(var(--calm-inset) / <alpha-value>)',
+        ink: 'rgb(var(--calm-ink) / <alpha-value>)',
+        muted: 'rgb(var(--calm-muted) / <alpha-value>)',
+        line: 'rgb(var(--calm-line) / <alpha-value>)',
+        accent: 'rgb(var(--calm-accent) / <alpha-value>)',
+        'accent-soft': 'rgb(var(--calm-accent-soft) / <alpha-value>)',
+      },
+      fontFamily: {
+        sans: ['Geist Variable', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['Geist Mono Variable', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+      },
+      borderRadius: {
+        panel: '0.875rem',
+        control: '0.5rem',
+        tag: '0.375rem',
+      },
+      boxShadow: {
+        calm: '0 18px 50px -30px rgb(21 32 40 / 0.38)',
+        float: '0 22px 60px -24px rgb(8 26 22 / 0.46)',
+      },
+      transitionDuration: {
+        160: '160ms',
+      },
+      maxWidth: {
+        workspace: '100rem',
+      },
+    },
   },
   plugins: [],
 };

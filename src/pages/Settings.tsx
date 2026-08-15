@@ -13,6 +13,8 @@ import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 import { canUsePasswordResetBypass, enablePasswordResetBypass } from '../lib/auth';
 import { APP_BUILD_CHANNEL, APP_BUILD_LABEL, APP_BUILD_TIME, APP_COMMIT, APP_VERSION_LABEL } from '../lib/appVersion';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
+import ServicePackageManager from '../components/ServicePackageManager';
+import WorkflowTemplateManager from '../components/WorkflowTemplateManager';
 
 const AVATAR_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 const AVATAR_UPLOAD_SIZE = 320;
@@ -664,6 +666,13 @@ const Settings: React.FC = () => {
             </div>
           </form>
       </div>
+
+      {!isPasswordSetupOnly && (currentUser?.role === 'Admin' || isSuperAdmin) && (
+        <>
+          <ServicePackageManager />
+          <WorkflowTemplateManager />
+        </>
+      )}
 
       {!isPasswordSetupOnly && (
         <>

@@ -14,6 +14,7 @@ const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Tasks = React.lazy(() => import('./pages/Tasks'));
 const Calendar = React.lazy(() => import('./pages/Calendar'));
 const Clients = React.lazy(() => import('./pages/Clients'));
+const ClientWorkspace = React.lazy(() => import('./pages/ClientWorkspace'));
 const Projects = React.lazy(() => import('./pages/Projects'));
 const Reports = React.lazy(() => import('./pages/Reports'));
 const Approvals = React.lazy(() => import('./pages/Approvals'));
@@ -131,6 +132,8 @@ function App() {
               <Route path="tasks" element={<RoleRoute path="/tasks"><Tasks /></RoleRoute>} />
               <Route path="calendar" element={<RoleRoute path="/calendar"><Calendar /></RoleRoute>} />
               <Route path="clients" element={<RoleRoute path="/clients"><Clients /></RoleRoute>} />
+              {/* ClientWorkspace performs client ownership and assigned-staff checks itself. */}
+              <Route path="clients/:clientId" element={<ClientWorkspace />} />
               <Route path="projects" element={<RoleRoute path="/projects"><Projects /></RoleRoute>} />
               <Route path="reports" element={<RoleRoute path="/reports"><Reports /></RoleRoute>} />
               <Route path="approvals" element={<RoleRoute path="/approvals"><Approvals /></RoleRoute>} />

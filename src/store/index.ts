@@ -16,6 +16,20 @@ import {
   ClientApprovalStatus,
   TaskApprovalEvent,
   CustomRole,
+  ServiceItem,
+  ServicePackage,
+  ClientServicePlan,
+  ServiceCycle,
+  Deliverable,
+  CycleComment,
+  Addon,
+  PlanOrigin,
+  ServiceCycleStatus,
+  DeliverableStatus,
+  CommentVisibility,
+  AttachmentRef,
+  ServiceWorkflowTemplate,
+  ServicePricingSnapshot,
 } from '../types';
 import { legacyDemoTaskIds, mockUsers, mockProjects, mockTasks, retiredDemoUserIds } from '../mock';
 import { canLoginWithSeedAccount, DEFAULT_USER_PASSWORD, shouldShowDemoLogin } from '../lib/auth';
@@ -43,6 +57,10 @@ import {
   canManageProjects,
   canCommentOnTask,
   canReviewTaskAsClient,
+  canManageClientPlans,
+  canManageServiceCatalog,
+  canManageServiceCycles,
+  canManageTaskTemplates,
   getAssignableProjects,
   getVisibleProjects,
   isNotificationReadByUser,
@@ -77,6 +95,15 @@ import {
 } from '../lib/departments';
 import { isTaskCompleted, resolveTaskCompletedAt } from '../lib/taskCompletion';
 import { enrichNotificationMetadata } from '../lib/notificationCenter';
+import {
+  addDaysClamped,
+  applyPricingSnapshot,
+  makeCycleRecords,
+  makePricingSnapshot,
+  nextBillingDate,
+  resolveDeliverableStatus,
+  SHORT_VIDEO_WORKFLOW_TEMPLATE,
+} from '../lib/serviceManagement';
 
 export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required';
 
@@ -104,6 +131,8 @@ interface BackendRuntimeState {
 type TaskUpdateInput = Partial<Pick<
   Task,
   | 'projectId'
+  | 'serviceCycleId'
+  | 'deliverableId'
   | 'clientName'
   | 'customerDetails'
   | 'facebookPage'
@@ -125,6 +154,28 @@ type TaskUpdateInput = Partial<Pick<
   | 'isRecurring'
   | 'recurrenceFrequency'
 >>;
+
+export type ClientPlanSetupInput = {
+  clientName: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  website?: string;
+  facebookPage?: string;
+  notes?: string;
+  planName: string;
+  origin: PlanOrigin;
+  sourcePackageId?: string;
+  sourcePackageRevision?: number;
+  serviceItems: ServiceItem[];
+  startDate: string;
+  billingDay: number;
+  discountType: ClientServicePlan['discountType'];
+  discountValue: number;
+  taxRateBps: number;
+  contractEndDate?: string;
+};
 
 type ProjectUpdateInput = Partial<Pick<Project, 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline'>>;
 type ClientProfileInput = Partial<Pick<ClientProfile, 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes'>>;
@@ -150,10 +201,24 @@ interface StoreState {
   deletedRoleIds: string[];
   deletedTaskStatuses: string[];
   deletedClientIds: string[];
+  servicePackages: ServicePackage[];
+  clientPlans: ClientServicePlan[];
+  serviceCycles: ServiceCycle[];
+  deliverables: Deliverable[];
+  cycleComments: CycleComment[];
+  addons: Addon[];
+  serviceWorkflowTemplates: ServiceWorkflowTemplate[];
+  servicePricingSnapshots: ServicePricingSnapshot[];
   isCreateTaskModalOpen: boolean;
   setCreateTaskModalOpen: (open: boolean) => void;
   createTaskInitialDate?: string;
   createTaskInitialAssignee?: string;
+  createTaskInitialClientId?: string;
+  createTaskInitialClientName?: string;
+  createTaskInitialServiceType?: string;
+  createTaskInitialCycleId?: string;
+  createTaskInitialDeliverableId?: string;
+  openCreateTaskForDeliverable: (data: { clientId: string; clientName: string; serviceType: string; cycleId: string; deliverableId: string }) => void;
 
   initializeBackend: () => Promise<void>;
   syncBackendNow: (commandType?: SecureCommandType) => Promise<void>;
@@ -183,6 +248,21 @@ interface StoreState {
   upsertClientProfile: (clientName: string, data: ClientProfileInput) => { ok: boolean; id?: string; error?: string };
   renameClient: (oldClientName: string, newClientName: string) => { ok: boolean; error?: string };
   deleteClientProfile: (clientId: string) => { ok: boolean; error?: string };
+  saveServicePackage: (data: Omit<ServicePackage, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'currency'> & { id?: string }) => { ok: boolean; id?: string; error?: string };
+  saveWorkflowTemplate: (data: Omit<ServiceWorkflowTemplate, 'id' | 'revision' | 'createdAt' | 'updatedAt'> & { id?: string }) => { ok: boolean; id?: string; error?: string };
+  createClientWithPlan: (data: ClientPlanSetupInput) => { ok: boolean; clientId?: string; planId?: string; error?: string };
+  createClientPlanRevision: (planId: string) => { ok: boolean; planId?: string; error?: string };
+  updateDraftClientPlan: (planId: string, data: Partial<Pick<ClientServicePlan, 'name' | 'serviceItems' | 'discountType' | 'discountValue' | 'taxRateBps' | 'contractEndDate'>>) => { ok: boolean; error?: string };
+  activateClientPlan: (planId: string) => { ok: boolean; cycleId?: string; error?: string };
+  setClientPlanStatus: (planId: string, status: ClientServicePlan['status']) => { ok: boolean; error?: string };
+  setServiceCycleStatus: (cycleId: string, status: ServiceCycleStatus) => { ok: boolean; error?: string };
+  updateDeliverableStatus: (deliverableId: string, status: DeliverableStatus) => { ok: boolean; error?: string };
+  linkTaskToDeliverable: (taskId: string, cycleId?: string, deliverableId?: string) => { ok: boolean; error?: string };
+  generateDeliverableTaskChain: (deliverableId: string) => { ok: boolean; taskIds?: string[]; error?: string };
+  addCycleComment: (cycleId: string, text: string, visibility: CommentVisibility) => { ok: boolean; id?: string; error?: string };
+  addCycleCommentAttachment: (commentId: string, attachment: AttachmentRef) => { ok: boolean; error?: string };
+  addAddon: (data: Omit<Addon, 'id' | 'createdAt' | 'updatedAt'>) => { ok: boolean; id?: string; error?: string };
+  setAddonActive: (addonId: string, isActive: boolean, effectiveUntil?: string) => { ok: boolean; error?: string };
   addComment: (taskId: string, text: string) => void;
   markNotificationRead: (id: string) => void;
   markNotificationUnread: (id: string) => void;
@@ -264,7 +344,7 @@ export const stripSensitiveWorkspaceFields = (value: unknown): unknown => {
 };
 
 const sanitizeWorkspaceStateForSnapshot = (
-  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds'>
+  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds' | 'servicePackages' | 'clientPlans' | 'serviceCycles' | 'deliverables' | 'cycleComments' | 'addons' | 'serviceWorkflowTemplates' | 'servicePricingSnapshots'>
 ): PersistedWorkspaceState => stripSensitiveWorkspaceFields({
   users: state.users.map(user => stripPassword(user as User & { password?: string })),
   clients: state.clients || [],
@@ -278,6 +358,14 @@ const sanitizeWorkspaceStateForSnapshot = (
   deletedRoleIds: state.deletedRoleIds || [],
   deletedTaskStatuses: state.deletedTaskStatuses || [],
   deletedClientIds: state.deletedClientIds || [],
+  servicePackages: state.servicePackages || [],
+  clientPlans: state.clientPlans || [],
+  serviceCycles: state.serviceCycles || [],
+  deliverables: state.deliverables || [],
+  cycleComments: state.cycleComments || [],
+  addons: state.addons || [],
+  serviceWorkflowTemplates: state.serviceWorkflowTemplates || [],
+  servicePricingSnapshots: state.servicePricingSnapshots || [],
 }) as PersistedWorkspaceState;
 
 const selectPersistedWorkspaceState = sanitizeWorkspaceStateForSnapshot;
@@ -343,11 +431,49 @@ export const normalizeWorkspaceUserForBackend = (user: User, secureAuth: boolean
     : normalizeUserAccount(user)
 );
 
-const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorkspaceState => (
-  parseWorkspaceSnapshot(state)
-);
+const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorkspaceState => {
+  const parsed = parseWorkspaceSnapshot(state);
+  const pricingByParent = new Map(parsed.servicePricingSnapshots.map(item => [item.parentId, item]));
+  const clients = [...parsed.clients];
+  const byKey = new Map(clients.map(client => [normalizeClientKey(client.clientName), client]));
+  const discoveredNames = [
+    ...parsed.tasks.map(task => task.clientName),
+    ...parsed.projects.map(project => project.clientName),
+    ...parsed.users.filter(user => user.role === 'Client').map(user => user.companyName || ''),
+  ].map(name => name.trim()).filter(Boolean);
+
+  discoveredNames.forEach(name => {
+    const key = normalizeClientKey(name);
+    if (byKey.has(key)) return;
+    const now = new Date(0).toISOString();
+    const slug = key.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'client';
+    const client: ClientProfile = { id: `CL-${slug}`, clientName: name, createdAt: now, updatedAt: now };
+    byKey.set(key, client);
+    clients.push(client);
+  });
+
+  return {
+    ...parsed,
+    clients,
+    tasks: parsed.tasks.map(task => ({ ...task, clientId: task.clientId || byKey.get(normalizeClientKey(task.clientName))?.id })),
+    projects: parsed.projects.map(project => ({ ...project, clientId: project.clientId || byKey.get(normalizeClientKey(project.clientName))?.id })),
+    clientPlans: parsed.clientPlans.map(item => applyPricingSnapshot(item, pricingByParent.get(item.id))),
+    serviceCycles: parsed.serviceCycles.map(item => applyPricingSnapshot(item, pricingByParent.get(item.id))),
+    addons: parsed.addons.map(item => applyPricingSnapshot(item, pricingByParent.get(item.id))),
+    serviceWorkflowTemplates: parsed.serviceWorkflowTemplates.length ? parsed.serviceWorkflowTemplates : [{ ...SHORT_VIDEO_WORKFLOW_TEMPLATE, steps: SHORT_VIDEO_WORKFLOW_TEMPLATE.steps.map(step => ({ ...step })) }],
+  };
+};
 
 const getTime = (value?: string) => value ? new Date(value).getTime() || 0 : 0;
+
+const mergeEntityCollections = <T extends { id: string; updatedAt?: string }>(local: T[] = [], remote: T[] = []) => {
+  const byId = new Map<string, T>();
+  [...local, ...remote].forEach(item => {
+    const existing = byId.get(item.id);
+    if (!existing || getTime(item.updatedAt) >= getTime(existing.updatedAt)) byId.set(item.id, item);
+  });
+  return Array.from(byId.values());
+};
 
 const isLocalItemWorthRecovering = <T extends { id: string; updatedAt?: string }>(
   item: T,
@@ -357,6 +483,22 @@ const isLocalItemWorthRecovering = <T extends { id: string; updatedAt?: string }
   const remoteItem = remoteItems.get(item.id);
   if (!remoteItem) return !seededIds?.has(item.id);
   return getTime(item.updatedAt) > getTime(remoteItem.updatedAt);
+};
+
+const deriveServiceProgress = (tasks: Task[], deliverables: Deliverable[], cycles: ServiceCycle[]) => {
+  const now = new Date().toISOString();
+  const nextDeliverables = deliverables.map(deliverable => {
+    const status = resolveDeliverableStatus(deliverable, tasks);
+    return status === deliverable.status ? deliverable : { ...deliverable, status, updatedAt: now };
+  });
+  const nextCycles = cycles.map(cycle => {
+    if (!['Published', 'Completed'].includes(cycle.status)) return cycle;
+    const cycleDeliverables = nextDeliverables.filter(item => item.cycleId === cycle.id);
+    const completed = cycleDeliverables.length > 0 && cycleDeliverables.every(item => item.status === 'Delivered');
+    const status: ServiceCycleStatus = completed ? 'Completed' : cycle.status === 'Completed' ? 'Published' : cycle.status;
+    return status === cycle.status ? cycle : { ...cycle, status, updatedAt: now };
+  });
+  return { deliverables: nextDeliverables, serviceCycles: nextCycles };
 };
 
 const hasRecoverableLocalWorkspaceContent = (
@@ -393,6 +535,10 @@ const hasRecoverableLocalWorkspaceContent = (
       !remoteNotifications.has(notification.id)
     )) ||
     local.taskStatuses.some(status => !defaultStatuses.has(status.toLowerCase()) && !remoteStatuses.has(status.toLowerCase()))
+    || (local.servicePackages || []).some(item => isLocalItemWorthRecovering(item, new Map((remote.servicePackages || []).map(remoteItem => [remoteItem.id, remoteItem]))))
+    || (local.clientPlans || []).some(item => isLocalItemWorthRecovering(item, new Map((remote.clientPlans || []).map(remoteItem => [remoteItem.id, remoteItem]))))
+    || (local.serviceCycles || []).some(item => isLocalItemWorthRecovering(item, new Map((remote.serviceCycles || []).map(remoteItem => [remoteItem.id, remoteItem]))))
+    || (local.serviceWorkflowTemplates || []).some(item => isLocalItemWorthRecovering(item, new Map((remote.serviceWorkflowTemplates || []).map(remoteItem => [remoteItem.id, remoteItem]))))
   );
 };
 
@@ -641,6 +787,14 @@ const mergeWorkspaceStates = (
     deletedRoleIds: mergedDeletedRoleIds,
     deletedTaskStatuses: mergedDeletedTaskStatuses,
     deletedClientIds: mergedDeletedClientIds,
+    servicePackages: mergeEntityCollections(local.servicePackages, remote.servicePackages),
+    clientPlans: mergeEntityCollections(local.clientPlans, remote.clientPlans),
+    serviceCycles: mergeEntityCollections(local.serviceCycles, remote.serviceCycles),
+    deliverables: mergeEntityCollections(local.deliverables, remote.deliverables),
+    cycleComments: mergeEntityCollections(local.cycleComments, remote.cycleComments),
+    addons: mergeEntityCollections(local.addons, remote.addons),
+    serviceWorkflowTemplates: mergeEntityCollections(local.serviceWorkflowTemplates, remote.serviceWorkflowTemplates),
+    servicePricingSnapshots: mergeEntityCollections(local.servicePricingSnapshots, remote.servicePricingSnapshots),
   };
 };
 
@@ -678,14 +832,40 @@ export const useStore = create<StoreState>()(
       deletedRoleIds: [],
       deletedTaskStatuses: [],
       deletedClientIds: [],
+      servicePackages: [],
+      clientPlans: [],
+      serviceCycles: [],
+      deliverables: [],
+      cycleComments: [],
+      addons: [],
+      serviceWorkflowTemplates: [{ ...SHORT_VIDEO_WORKFLOW_TEMPLATE, steps: SHORT_VIDEO_WORKFLOW_TEMPLATE.steps.map(step => ({ ...step })) }],
+      servicePricingSnapshots: [],
       isCreateTaskModalOpen: false,
       setCreateTaskModalOpen: (open) => set((state) => ({
         isCreateTaskModalOpen: open,
         createTaskInitialDate: open ? state.createTaskInitialDate : undefined,
         createTaskInitialAssignee: open ? state.createTaskInitialAssignee : undefined,
+        createTaskInitialClientId: open ? state.createTaskInitialClientId : undefined,
+        createTaskInitialClientName: open ? state.createTaskInitialClientName : undefined,
+        createTaskInitialServiceType: open ? state.createTaskInitialServiceType : undefined,
+        createTaskInitialCycleId: open ? state.createTaskInitialCycleId : undefined,
+        createTaskInitialDeliverableId: open ? state.createTaskInitialDeliverableId : undefined,
       })),
       createTaskInitialDate: undefined,
       createTaskInitialAssignee: undefined,
+      createTaskInitialClientId: undefined,
+      createTaskInitialClientName: undefined,
+      createTaskInitialServiceType: undefined,
+      createTaskInitialCycleId: undefined,
+      createTaskInitialDeliverableId: undefined,
+      openCreateTaskForDeliverable: (data) => set({
+        isCreateTaskModalOpen: true,
+        createTaskInitialClientId: data.clientId,
+        createTaskInitialClientName: data.clientName,
+        createTaskInitialServiceType: data.serviceType,
+        createTaskInitialCycleId: data.cycleId,
+        createTaskInitialDeliverableId: data.deliverableId,
+      }),
       notifications: [],
       notificationUnreadCount: 0,
       registrations: [],
@@ -1757,7 +1937,8 @@ export const useStore = create<StoreState>()(
 
         return {
           tasks: newTasks,
-          notifications: [...newNotifs, ...(state.notifications || [])]
+          notifications: [...newNotifs, ...(state.notifications || [])],
+          ...deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles),
         };
       }),
 
@@ -2014,10 +2195,14 @@ export const useStore = create<StoreState>()(
           }));
         }
 
-        set(current => ({
-          tasks: current.tasks.map(item => item.id === taskId ? updatedTask : item),
-          notifications: [...notifications, ...(current.notifications || [])],
-        }));
+        set(current => {
+          const tasks = current.tasks.map(item => item.id === taskId ? updatedTask : item);
+          return {
+            tasks,
+            notifications: [...notifications, ...(current.notifications || [])],
+            ...deriveServiceProgress(tasks, current.deliverables, current.serviceCycles),
+          };
+        });
 
         useToastStore.getState().addToast(`Task "${updatedTask.title}" updated successfully`, 'success');
         return { ok: true };
@@ -2042,10 +2227,17 @@ export const useStore = create<StoreState>()(
             })]
           : [];
 
-        set(current => ({
-          tasks: current.tasks.filter(item => item.id !== taskId),
-          notifications: [...notifications, ...(current.notifications || [])],
-        }));
+        set(current => {
+          const tasks = current.tasks.filter(item => item.id !== taskId);
+          const deliverables = current.deliverables.map(item => item.taskIds.includes(taskId)
+            ? { ...item, taskIds: item.taskIds.filter(id => id !== taskId), updatedAt: new Date().toISOString() }
+            : item);
+          return {
+            tasks,
+            notifications: [...notifications, ...(current.notifications || [])],
+            ...deriveServiceProgress(tasks, deliverables, current.serviceCycles),
+          };
+        });
         useToastStore.getState().addToast(`Task "${task.title}" deleted`, 'success');
         return { ok: true };
       },
@@ -2117,7 +2309,8 @@ export const useStore = create<StoreState>()(
 
         return {
           tasks: newTasks,
-          notifications: [...notifications, ...(state.notifications || [])]
+          notifications: [...notifications, ...(state.notifications || [])],
+          ...deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles),
         };
       }),
 
@@ -2165,7 +2358,8 @@ export const useStore = create<StoreState>()(
               iconType: 'alert'
             }),
             ...(state.notifications || [])
-          ]
+          ],
+          ...deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles),
         };
       }),
 
@@ -2193,7 +2387,13 @@ export const useStore = create<StoreState>()(
           );
           if (!assignableProjectIds.has(taskData.projectId)) return '';
         }
-        if (currentUser.role === 'Staff' && !project) return '';
+        if (currentUser.role === 'Staff' && !project) {
+          const serviceDeliverable = taskData.deliverableId
+            ? state.deliverables.find(item => item.id === taskData.deliverableId && item.cycleId === taskData.serviceCycleId)
+            : undefined;
+          const assignedClient = serviceDeliverable && state.tasks.some(item => item.clientId === serviceDeliverable.clientId && item.assignedTo === currentUser.id);
+          if (!assignedClient) return '';
+        }
 
         const title = taskData.title.trim();
         const clientName = project ? project.clientName : taskData.clientName.trim();
@@ -2218,6 +2418,7 @@ export const useStore = create<StoreState>()(
           const newTask: Task = {
             ...taskData,
             id: taskId,
+            clientId: project?.clientId || taskData.clientId || state.clients.find(client => normalizeClientKey(client.clientName) === normalizeClientKey(clientName))?.id,
             title,
             clientName,
             projectName: project ? project.projectName : taskData.projectName,
@@ -2229,13 +2430,21 @@ export const useStore = create<StoreState>()(
             completedAt: isCompleted ? now : undefined,
             revisionCount: 0,
             clientApprovalStatus: 'Pending',
+            visibility: taskData.visibility || 'client-visible',
             dueReminderSent: false,
             approvalHistory: [],
             updatedAt: now,
           };
 
+          const tasks = [...state.tasks, newTask];
+          const deliverables = taskData.deliverableId
+              ? state.deliverables.map(item => item.id === taskData.deliverableId
+                ? { ...item, taskIds: Array.from(new Set([...item.taskIds, taskId])), updatedAt: now }
+                : item)
+              : state.deliverables;
           return {
-            tasks: [...state.tasks, newTask],
+            tasks,
+            ...deriveServiceProgress(tasks, deliverables, state.serviceCycles),
             notifications: [
               ...(currentUser.role === 'Staff' && assignee.role !== 'Admin'
                 ? [makeNotification({
@@ -2510,6 +2719,11 @@ export const useStore = create<StoreState>()(
               ? { ...notification, targetClient: nextName }
               : notification
           )),
+          clientPlans: current.clientPlans.map(item => item.clientId && normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
+          serviceCycles: current.serviceCycles.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
+          deliverables: current.deliverables.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
+          cycleComments: current.cycleComments.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
+          addons: current.addons.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
         }));
 
         useToastStore.getState().addToast(`Client renamed to "${nextName}".`, 'success');
@@ -2526,6 +2740,9 @@ export const useStore = create<StoreState>()(
 
         const client = state.clients.find(c => c.id === clientId);
         if (!client) return { ok: false, error: 'Client profile not found.' };
+        if (state.clientPlans.some(plan => plan.clientId === clientId)) {
+          return { ok: false, error: 'End and archive this client service plan before deleting the client profile.' };
+        }
 
         set(current => ({
           clients: current.clients.filter(c => c.id !== clientId),
@@ -2533,6 +2750,481 @@ export const useStore = create<StoreState>()(
         }));
 
         useToastStore.getState().addToast(`Client profile for "${client.clientName}" deleted.`, 'success');
+        return { ok: true };
+      },
+
+      saveServicePackage: (data) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!canManageServiceCatalog(state.currentUser, state.rolePermissions)) {
+          return { ok: false, error: 'Only administrators can manage service packages.' };
+        }
+        const name = data.name.trim().slice(0, 160);
+        if (!name) return { ok: false, error: 'Package name is required.' };
+        const serviceItems = data.serviceItems.map(item => ({
+          ...item,
+          id: item.id || nowId('SI'),
+          name: item.name.trim().slice(0, 160),
+          platforms: item.platforms.map(value => value.trim()).filter(Boolean).slice(0, 20),
+          unit: item.unit.trim().slice(0, 80) || 'item',
+          quantity: Math.max(1, Math.trunc(item.quantity)),
+          unitPriceMinor: Math.max(0, Math.trunc(item.unitPriceMinor)),
+          description: cleanProfileText(item.description, 2000),
+          workflow: item.workflow ? {
+            ...item.workflow,
+            steps: item.workflow.steps.map(step => ({ ...step })).sort((left, right) => left.order - right.order),
+          } : undefined,
+        })).filter(item => item.name);
+        if (serviceItems.length === 0) return { ok: false, error: 'Add at least one service item.' };
+        if (serviceItems.reduce((sum, item) => sum + item.quantity, 0) > 400) return { ok: false, error: 'A package can generate at most 400 deliverables per cycle.' };
+        const existing = data.id ? state.servicePackages.find(item => item.id === data.id) : undefined;
+        const now = new Date().toISOString();
+        const item: ServicePackage = {
+          id: existing?.id || nowId('PKG'),
+          name,
+          description: cleanProfileText(data.description, 2000),
+          revision: existing ? existing.revision + 1 : 1,
+          currency: 'MYR',
+          serviceItems,
+          discountType: data.discountType,
+          discountValue: Math.max(0, Math.trunc(data.discountValue)),
+          taxRateBps: Math.min(10_000, Math.max(0, Math.trunc(data.taxRateBps))),
+          isActive: data.isActive,
+          createdAt: existing?.createdAt || now,
+          updatedAt: now,
+        };
+        set(current => ({
+          servicePackages: existing
+            ? current.servicePackages.map(pkg => pkg.id === existing.id ? item : pkg)
+            : [...current.servicePackages, item],
+        }));
+        useToastStore.getState().addToast(`Package "${item.name}" saved.`, 'success');
+        return { ok: true, id: item.id };
+      },
+
+      saveWorkflowTemplate: (data) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!canManageTaskTemplates(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot manage task workflow templates.' };
+        const name = data.name.trim().slice(0, 160);
+        if (!name) return { ok: false, error: 'Template name is required.' };
+        const steps = data.steps
+          .map((step, index) => ({
+            ...step,
+            id: step.id || nowId('WFS'),
+            order: index + 1,
+            title: step.title.trim().slice(0, 160),
+            description: cleanProfileText(step.description, 2000),
+            dueOffsetDays: step.dueOffsetDays === undefined ? undefined : Math.max(0, Math.min(365, Math.trunc(step.dueOffsetDays))),
+            clientVisible: Boolean(step.clientVisible),
+            required: step.required !== false,
+          }))
+          .filter(step => step.title)
+          .slice(0, 50);
+        if (!steps.length) return { ok: false, error: 'Add at least one workflow step.' };
+        if (steps.some(step => !allowedDepartments.has(step.department))) return { ok: false, error: 'Every workflow step needs a valid department.' };
+        const existing = data.id ? state.serviceWorkflowTemplates.find(item => item.id === data.id) : undefined;
+        const now = new Date().toISOString();
+        const item: ServiceWorkflowTemplate = {
+          id: existing?.id || nowId('SWT'),
+          name,
+          description: cleanProfileText(data.description, 2000),
+          serviceTypes: data.serviceTypes.map(value => value.trim()).filter(Boolean).slice(0, 30),
+          revision: existing ? existing.revision + 1 : 1,
+          isActive: data.isActive,
+          steps,
+          createdAt: existing?.createdAt || now,
+          updatedAt: now,
+        };
+        set(current => ({
+          serviceWorkflowTemplates: existing
+            ? current.serviceWorkflowTemplates.map(template => template.id === existing.id ? item : template)
+            : [...current.serviceWorkflowTemplates, item],
+        }));
+        return { ok: true, id: item.id };
+      },
+
+      createClientWithPlan: (data) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot create client plans.' };
+        const clientName = data.clientName.trim().slice(0, 240);
+        if (!clientName) return { ok: false, error: 'Client name is required.' };
+        if (state.clients.some(client => normalizeClientKey(client.clientName) === normalizeClientKey(clientName))) {
+          return { ok: false, error: 'This client already exists. Open the client workspace to add a plan.' };
+        }
+        const serviceItems = data.serviceItems.map(item => ({
+          ...item,
+          id: item.id || nowId('SI'),
+          name: item.name.trim().slice(0, 160),
+          platforms: item.platforms.map(value => value.trim()).filter(Boolean).slice(0, 20),
+          unit: item.unit.trim().slice(0, 80) || 'item',
+          quantity: Math.max(1, Math.trunc(item.quantity)),
+          unitPriceMinor: Math.max(0, Math.trunc(item.unitPriceMinor)),
+          description: cleanProfileText(item.description, 2000),
+          workflow: item.workflow ? { ...item.workflow, steps: item.workflow.steps.map(step => ({ ...step })) } : undefined,
+        })).filter(item => item.name);
+        if (!serviceItems.length) return { ok: false, error: 'Add at least one service item.' };
+        if (serviceItems.reduce((sum, item) => sum + item.quantity, 0) > 400) return { ok: false, error: 'A plan can generate at most 400 deliverables per cycle.' };
+        if (!isValidIsoDate(data.startDate)) return { ok: false, error: 'Choose a valid service start date.' };
+        const now = new Date().toISOString();
+        const clientId = nowId('CL');
+        const planId = nowId('PLN');
+        const client: ClientProfile = {
+          id: clientId,
+          clientName,
+          contactPerson: cleanProfileText(data.contactPerson, 160),
+          email: cleanProfileText(data.email, 320),
+          phone: cleanProfileText(data.phone, 80),
+          address: cleanProfileText(data.address, 1000),
+          website: data.website?.trim() ? safeHttpsUrl(data.website) || undefined : undefined,
+          facebookPage: data.facebookPage?.trim() ? safeHttpsUrl(data.facebookPage) || undefined : undefined,
+          notes: cleanProfileText(data.notes, 5000),
+          createdAt: now,
+          updatedAt: now,
+        };
+        const plan: ClientServicePlan = {
+          id: planId,
+          clientId,
+          clientName,
+          name: data.planName.trim().slice(0, 160) || `${clientName} Service Plan`,
+          origin: data.origin,
+          sourcePackageId: data.sourcePackageId,
+          sourcePackageRevision: data.sourcePackageRevision,
+          revision: 1,
+          status: 'Draft',
+          currency: 'MYR',
+          serviceItems,
+          discountType: data.discountType,
+          discountValue: Math.max(0, Math.trunc(data.discountValue)),
+          taxRateBps: Math.min(10_000, Math.max(0, Math.trunc(data.taxRateBps))),
+          startDate: data.startDate,
+          billingDay: Math.min(31, Math.max(1, Math.trunc(data.billingDay))),
+          contractEndDate: data.contractEndDate && isValidIsoDate(data.contractEndDate) ? data.contractEndDate : undefined,
+          createdBy: actor.id,
+          createdAt: now,
+          updatedAt: now,
+        };
+        const pricing = makePricingSnapshot({
+          id: nowId('PRICE'), clientId, parentType: 'client_plan', parentId: planId, items: serviceItems,
+          discountType: plan.discountType, discountValue: plan.discountValue, taxRateBps: plan.taxRateBps, now,
+        });
+        set(current => ({
+          clients: [...current.clients, client],
+          clientPlans: [...current.clientPlans, plan],
+          servicePricingSnapshots: [...current.servicePricingSnapshots, pricing],
+        }));
+        useToastStore.getState().addToast(`Client "${clientName}" and draft plan created.`, 'success');
+        return { ok: true, clientId, planId };
+      },
+
+      createClientPlanRevision: (planId) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot revise client plans.' };
+        const source = state.clientPlans.find(item => item.id === planId);
+        if (!source || source.status !== 'Active') return { ok: false, error: 'Only an active plan can be revised.' };
+        const pending = state.clientPlans.find(item => item.supersedesPlanId === source.id && item.status === 'Draft');
+        if (pending) return { ok: true, planId: pending.id };
+        const now = new Date().toISOString();
+        const nextPlanId = nowId('PLN');
+        const revision = Math.max(0, ...state.clientPlans.filter(item => item.clientId === source.clientId).map(item => item.revision)) + 1;
+        const effectiveFromCycleStart = source.nextCycleStart || nextBillingDate(getTodayInputDate(), source.billingDay);
+        const nextPlan: ClientServicePlan = {
+          ...source,
+          id: nextPlanId,
+          version: undefined,
+          revision,
+          status: 'Draft',
+          supersedesPlanId: source.id,
+          effectiveFromCycleStart,
+          startDate: effectiveFromCycleStart,
+          nextCycleStart: undefined,
+          serviceItems: source.serviceItems.map(item => ({
+            ...item,
+            platforms: [...item.platforms],
+            workflow: item.workflow ? { ...item.workflow, steps: item.workflow.steps.map(step => ({ ...step })) } : undefined,
+          })),
+          createdBy: state.currentUser!.id,
+          createdAt: now,
+          updatedAt: now,
+        };
+        const sourcePricing = state.servicePricingSnapshots.find(item => item.parentId === source.id);
+        const pricing = makePricingSnapshot({
+          id: nowId('PRICE'), clientId: source.clientId, parentType: 'client_plan', parentId: nextPlanId,
+          items: nextPlan.serviceItems, discountType: sourcePricing?.discountType || source.discountType,
+          discountValue: sourcePricing?.discountValue ?? source.discountValue,
+          taxRateBps: sourcePricing?.taxRateBps ?? source.taxRateBps, now,
+        });
+        set(current => ({
+          clientPlans: [...current.clientPlans, nextPlan],
+          servicePricingSnapshots: [...current.servicePricingSnapshots, pricing],
+        }));
+        return { ok: true, planId: nextPlanId };
+      },
+
+      updateDraftClientPlan: (planId, data) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot edit client plans.' };
+        const plan = state.clientPlans.find(item => item.id === planId);
+        if (!plan || plan.status !== 'Draft') return { ok: false, error: 'Only draft plans can be edited.' };
+        const serviceItems = (data.serviceItems || plan.serviceItems).map(item => ({
+          ...item,
+          name: item.name.trim().slice(0, 160),
+          platforms: item.platforms.map(value => value.trim()).filter(Boolean).slice(0, 20),
+          unit: item.unit.trim().slice(0, 80) || 'item',
+          quantity: Math.max(1, Math.trunc(item.quantity)),
+          unitPriceMinor: Math.max(0, Math.trunc(item.unitPriceMinor)),
+          workflow: item.workflow ? { ...item.workflow, steps: item.workflow.steps.map(step => ({ ...step })) } : undefined,
+        })).filter(item => item.name);
+        if (!serviceItems.length || serviceItems.reduce((sum, item) => sum + item.quantity, 0) > 400) return { ok: false, error: 'Draft plans need 1–400 deliverable slots.' };
+        const now = new Date().toISOString();
+        const next: ClientServicePlan = {
+          ...plan,
+          ...data,
+          name: data.name?.trim().slice(0, 160) || plan.name,
+          serviceItems,
+          discountValue: Math.max(0, Math.trunc(data.discountValue ?? plan.discountValue)),
+          taxRateBps: Math.min(10_000, Math.max(0, Math.trunc(data.taxRateBps ?? plan.taxRateBps))),
+          contractEndDate: data.contractEndDate && isValidIsoDate(data.contractEndDate) ? data.contractEndDate : undefined,
+          updatedAt: now,
+        };
+        const pricing = makePricingSnapshot({
+          id: state.servicePricingSnapshots.find(item => item.parentId === plan.id)?.id || nowId('PRICE'),
+          clientId: plan.clientId, parentType: 'client_plan', parentId: plan.id, items: serviceItems,
+          discountType: next.discountType, discountValue: next.discountValue, taxRateBps: next.taxRateBps, now,
+        });
+        set(current => ({
+          clientPlans: current.clientPlans.map(item => item.id === plan.id ? next : item),
+          servicePricingSnapshots: current.servicePricingSnapshots.some(item => item.parentId === plan.id)
+            ? current.servicePricingSnapshots.map(item => item.parentId === plan.id ? { ...pricing, createdAt: item.createdAt } : item)
+            : [...current.servicePricingSnapshots, pricing],
+        }));
+        return { ok: true };
+      },
+
+      activateClientPlan: (planId) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot activate client plans.' };
+        const plan = state.clientPlans.find(item => item.id === planId);
+        if (!plan) return { ok: false, error: 'Plan not found.' };
+        if (plan.status !== 'Draft' && plan.status !== 'Paused') return { ok: false, error: 'Only draft or paused plans can be activated.' };
+        if (plan.supersedesPlanId && state.clientPlans.some(item => item.id === plan.supersedesPlanId && item.status === 'Active')) {
+          return { ok: true, error: `Revision ${plan.revision} is scheduled for ${plan.effectiveFromCycleStart}.` };
+        }
+        if (state.clientPlans.some(item => item.clientId === plan.clientId && item.id !== plan.id && item.status === 'Active')) {
+          return { ok: false, error: 'This client already has an active plan.' };
+        }
+        const periodStart = plan.status === 'Paused' ? nextBillingDate(getTodayInputDate(), plan.billingDay) : plan.startDate;
+        const existing = state.serviceCycles.find(cycle => cycle.planId === plan.id && cycle.periodStart === periodStart);
+        const records = existing ? null : makeCycleRecords(plan, state.addons.filter(addon => addon.clientId === plan.clientId), periodStart, nowId);
+        const now = new Date().toISOString();
+        const cyclePricing = records ? makePricingSnapshot({
+          id: nowId('PRICE'), clientId: plan.clientId, parentType: 'service_cycle', parentId: records.cycle.id,
+          items: records.cycle.serviceItems, discountType: plan.discountType, discountValue: plan.discountValue, taxRateBps: plan.taxRateBps, now,
+        }) : undefined;
+        if (records && cyclePricing) records.cycle.pricingSnapshotId = cyclePricing.id;
+        set(current => ({
+          clientPlans: current.clientPlans.map(item => item.id === plan.id ? {
+            ...item,
+            status: 'Active',
+            nextCycleStart: nextBillingDate(periodStart, item.billingDay),
+            updatedAt: now,
+          } : item),
+          serviceCycles: records ? [...current.serviceCycles, records.cycle] : current.serviceCycles,
+          deliverables: records ? [...current.deliverables, ...records.deliverables] : current.deliverables,
+          servicePricingSnapshots: cyclePricing ? [...current.servicePricingSnapshots, cyclePricing] : current.servicePricingSnapshots,
+        }));
+        useToastStore.getState().addToast(`Plan "${plan.name}" activated.`, 'success');
+        return { ok: true, cycleId: existing?.id || records?.cycle.id };
+      },
+
+      setClientPlanStatus: (planId, status) => {
+        const state = get();
+        const actor = state.currentUser;
+        if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot change plan status.' };
+        const plan = state.clientPlans.find(item => item.id === planId);
+        if (!plan) return { ok: false, error: 'Plan not found.' };
+        if (status === 'Active') return { ok: false, error: 'Use Activate to start or resume this plan.' };
+        if (plan.status === 'Ended') return { ok: false, error: 'Ended plans cannot be reopened.' };
+        set(current => ({ clientPlans: current.clientPlans.map(item => item.id === planId ? { ...item, status, updatedAt: new Date().toISOString() } : item) }));
+        return { ok: true };
+      },
+
+      setServiceCycleStatus: (cycleId, status) => {
+        const state = get();
+        const cycle = state.serviceCycles.find(item => item.id === cycleId);
+        const actor = state.currentUser;
+        if (!cycle || !actor) return { ok: false, error: 'Cycle not found.' };
+        const authorized = canManageServiceCycles(actor, state.rolePermissions) || (actor.role === 'Staff' && state.tasks.some(task => task.clientId === cycle.clientId && task.assignedTo === actor.id));
+        if (!authorized) return { ok: false, error: 'You do not have access to this cycle.' };
+        const now = new Date().toISOString();
+        set(current => ({ serviceCycles: current.serviceCycles.map(item => item.id === cycleId ? { ...item, status, publishedAt: status === 'Published' ? item.publishedAt || now : item.publishedAt, updatedAt: now } : item) }));
+        return { ok: true };
+      },
+
+      updateDeliverableStatus: (deliverableId, status) => {
+        const state = get();
+        const deliverable = state.deliverables.find(item => item.id === deliverableId);
+        const actor = state.currentUser;
+        if (!deliverable || !actor) return { ok: false, error: 'Deliverable not found.' };
+        const authorized = canManageServiceCycles(actor, state.rolePermissions) || (actor.role === 'Staff' && state.tasks.some(task => task.deliverableId === deliverable.id && task.assignedTo === actor.id));
+        if (!authorized) return { ok: false, error: 'You do not have access to this deliverable.' };
+        set(current => {
+          const deliverables = current.deliverables.map(item => item.id === deliverableId ? { ...item, status, updatedAt: new Date().toISOString() } : item);
+          const derived = deriveServiceProgress(current.tasks, deliverables, current.serviceCycles);
+          return derived;
+        });
+        return { ok: true };
+      },
+
+      linkTaskToDeliverable: (taskId, cycleId, deliverableId) => {
+        const state = get();
+        const task = state.tasks.find(item => item.id === taskId);
+        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions)) return { ok: false, error: 'You cannot edit this task.' };
+        const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
+        if (deliverableId && (!deliverable || deliverable.cycleId !== cycleId || deliverable.clientId !== task.clientId)) return { ok: false, error: 'The task and deliverable must belong to the same client and cycle.' };
+        const now = new Date().toISOString();
+        set(current => {
+          const tasks = current.tasks.map(item => item.id === taskId ? { ...item, serviceCycleId: cycleId, deliverableId, updatedAt: now } : item);
+          const deliverables = current.deliverables.map(item => ({
+            ...item,
+            taskIds: item.id === deliverableId
+              ? Array.from(new Set([...item.taskIds, taskId]))
+              : item.taskIds.filter(id => id !== taskId),
+            updatedAt: item.taskIds.includes(taskId) || item.id === deliverableId ? now : item.updatedAt,
+          }));
+          return { tasks, ...deriveServiceProgress(tasks, deliverables, current.serviceCycles) };
+        });
+        return { ok: true };
+      },
+
+      generateDeliverableTaskChain: (deliverableId) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        if (!actor || !canManageServiceCycles(actor, state.rolePermissions)) return { ok: false, error: 'Only authorized operations staff can generate task chains.' };
+        const deliverable = state.deliverables.find(item => item.id === deliverableId);
+        if (!deliverable) return { ok: false, error: 'Deliverable not found.' };
+        const cycle = state.serviceCycles.find(item => item.id === deliverable.cycleId);
+        const serviceItem = cycle?.serviceItems.find(item => item.id === deliverable.serviceItemId);
+        const workflow = serviceItem?.workflow;
+        if (!cycle || !workflow?.steps.length) return { ok: false, error: 'This service item has no frozen task workflow.' };
+        const existing = state.tasks.filter(task => task.deliverableId === deliverable.id && task.generatedFromDeliverable);
+        if (existing.length) return { ok: true, taskIds: existing.sort((a, b) => (a.workflowStepOrder || 0) - (b.workflowStepOrder || 0)).map(task => task.id) };
+        const generationId = nowId('WFG');
+        const now = new Date().toISOString();
+        const today = getTodayInputDate();
+        const startDate = today > cycle.periodStart ? today : cycle.periodStart;
+        const taskIds = workflow.steps.map(() => nowId('T'));
+        const tasks: Task[] = workflow.steps.map((step, index) => ({
+          id: taskIds[index],
+          clientId: deliverable.clientId,
+          serviceCycleId: cycle.id,
+          deliverableId: deliverable.id,
+          visibility: step.clientVisible ? 'client-visible' : 'internal',
+          workflowTemplateId: workflow.templateId,
+          workflowTemplateRevision: workflow.templateRevision,
+          workflowStepId: step.id,
+          workflowStepOrder: step.order,
+          workflowStepRequired: step.required,
+          predecessorTaskIds: index === 0 ? [] : [taskIds[index - 1]],
+          generatedFromDeliverable: true,
+          clientName: deliverable.clientName,
+          projectName: `${deliverable.clientName} service cycle`,
+          serviceType: serviceItem.name,
+          title: `${String(step.order).padStart(2, '0')}. ${step.title} — ${deliverable.title}`,
+          description: step.description || `${step.title} for ${deliverable.title}`,
+          department: step.department,
+          assignedTo: '',
+          createdBy: actor.id,
+          startDate,
+          dueDate: addDaysClamped(cycle.periodStart, step.dueOffsetDays, cycle.periodEnd),
+          priority: 'Medium',
+          status: 'Pending',
+          completionPercentage: 0,
+          isCompleted: false,
+          revisionCount: 0,
+          clientApprovalStatus: 'Pending',
+          isRecurring: false,
+          comments: [],
+          approvalHistory: [],
+          updatedAt: now,
+        }));
+        const nextDeliverables = state.deliverables.map(item => item.id === deliverable.id ? {
+          ...item,
+          taskIds: [...item.taskIds, ...taskIds],
+          workflowGeneratedAt: now,
+          workflowGenerationId: generationId,
+          updatedAt: now,
+        } : item);
+        set({ tasks: [...state.tasks, ...tasks], ...deriveServiceProgress([...state.tasks, ...tasks], nextDeliverables, state.serviceCycles) });
+        return { ok: true, taskIds };
+      },
+
+      addCycleComment: (cycleId, text, visibility) => {
+        const state = get();
+        const cycle = state.serviceCycles.find(item => item.id === cycleId);
+        const actor = state.currentUser;
+        if (!cycle || !actor || actor.role === 'Client') return { ok: false, error: 'You cannot comment on this cycle.' };
+        const authorized = canManageServiceCycles(actor, state.rolePermissions) || state.tasks.some(task => task.clientId === cycle.clientId && task.assignedTo === actor.id);
+        const clean = text.trim().slice(0, 10_000);
+        if (!authorized || !clean) return { ok: false, error: authorized ? 'Comment cannot be empty.' : 'You do not have access to this cycle.' };
+        const now = new Date().toISOString();
+        const item: CycleComment = { id: nowId('CC'), clientId: cycle.clientId, clientName: cycle.clientName, cycleId, userId: actor.id, text: clean, visibility, attachments: [], createdAt: now, updatedAt: now };
+        set(current => ({ cycleComments: [...current.cycleComments, item] }));
+        return { ok: true, id: item.id };
+      },
+
+      addCycleCommentAttachment: (commentId, attachment) => {
+        const state = get();
+        const comment = state.cycleComments.find(item => item.id === commentId);
+        if (!comment || comment.userId !== state.currentUser?.id) return { ok: false, error: 'You cannot attach a file to this comment.' };
+        set(current => ({ cycleComments: current.cycleComments.map(item => item.id === commentId ? { ...item, attachments: [...item.attachments, attachment], updatedAt: new Date().toISOString() } : item) }));
+        return { ok: true };
+      },
+
+      addAddon: (data) => {
+        const state = get();
+        const actor = state.currentUser;
+        if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot manage add-ons.' };
+        if (!state.clientPlans.some(plan => plan.id === data.planId && plan.clientId === data.clientId)) return { ok: false, error: 'Client plan not found.' };
+        const name = data.name.trim().slice(0, 160);
+        if (!name) return { ok: false, error: 'Add-on name is required.' };
+        if (data.billingMode === 'one_off' && !data.targetCycleId) return { ok: false, error: 'Choose the cycle for this one-off add-on.' };
+        if (!isValidIsoDate(data.effectiveFrom)) return { ok: false, error: 'Choose a valid effective date.' };
+        const now = new Date().toISOString();
+        const id = nowId('ADD');
+        const pricingSnapshotId = nowId('PRICE');
+        const item: Addon = { ...data, id, pricingSnapshotId, name, platforms: data.platforms.map(value => value.trim()).filter(Boolean).slice(0, 20), quantity: Math.max(1, Math.trunc(data.quantity)), unitPriceMinor: Math.max(0, Math.trunc(data.unitPriceMinor)), description: cleanProfileText(data.description, 2000), createdAt: now, updatedAt: now };
+        const pricing = makePricingSnapshot({ id: pricingSnapshotId, clientId: item.clientId, parentType: 'addon', parentId: id, addonUnitPriceMinor: item.unitPriceMinor, addonQuantity: item.quantity, now });
+        set(current => ({
+          addons: [...current.addons, item],
+          servicePricingSnapshots: [...current.servicePricingSnapshots, pricing],
+          serviceCycles: current.serviceCycles.map(cycle => {
+            const applies = cycle.status === 'Draft' && (
+              (item.billingMode === 'one_off' && item.targetCycleId === cycle.id)
+              || (item.billingMode === 'monthly' && cycle.planId === item.planId && cycle.periodStart >= item.effectiveFrom)
+            );
+            return applies ? { ...cycle, addonSnapshots: [...cycle.addonSnapshots, item], updatedAt: now } : cycle;
+          }),
+        }));
+        return { ok: true, id: item.id };
+      },
+
+      setAddonActive: (addonId, isActive, effectiveUntil) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot manage add-ons.' };
+        const addon = state.addons.find(item => item.id === addonId);
+        if (!addon) return { ok: false, error: 'Add-on not found.' };
+        if (effectiveUntil && !isValidIsoDate(effectiveUntil)) return { ok: false, error: 'Choose a valid ending date.' };
+        const now = new Date().toISOString();
+        set(current => ({ addons: current.addons.map(item => item.id === addonId ? { ...item, isActive, effectiveUntil: isActive ? effectiveUntil : effectiveUntil || getTodayInputDate(), updatedAt: now } : item) }));
         return { ok: true };
       },
 
@@ -2780,6 +3472,7 @@ export const useStore = create<StoreState>()(
               departments,
               department: getLegacyDepartmentMirror(data.role, departments),
               companyName,
+              workerType: data.role === 'Staff' ? data.workerType || 'employee' : undefined,
               customRoleId: data.customRoleId,
               registrationId: data.registrationId,
               memberId: data.memberId,
@@ -2812,6 +3505,7 @@ export const useStore = create<StoreState>()(
           department: getLegacyDepartmentMirror(data.role, departments),
           mustResetPassword: true,
           companyName,
+          workerType: data.role === 'Staff' ? data.workerType || 'employee' : undefined,
           isSuperAdmin: false,
           customRoleId: customRole?.id,
           customRoleName: customRole?.name,
@@ -3276,7 +3970,7 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: 'market-task-storage',
-      version: 2,
+      version: 3,
       migrate: (persistedState) => shouldUseSupabase() ? {} : persistedState as StoreState,
       partialize: (state) => {
         if (shouldUseSupabase()) return {};
@@ -3298,6 +3992,14 @@ export const useStore = create<StoreState>()(
           deletedRoleIds: state.deletedRoleIds || [],
           deletedTaskStatuses: state.deletedTaskStatuses || [],
           deletedClientIds: state.deletedClientIds || [],
+          servicePackages: state.servicePackages,
+          clientPlans: state.clientPlans,
+          serviceCycles: state.serviceCycles,
+          deliverables: state.deliverables,
+          cycleComments: state.cycleComments,
+          addons: state.addons,
+          serviceWorkflowTemplates: state.serviceWorkflowTemplates,
+          servicePricingSnapshots: state.servicePricingSnapshots,
         };
       },
     }
@@ -3326,7 +4028,19 @@ export const startBackendAutoSync = () => {
       state.deletedTaskStatuses !== previousState.deletedTaskStatuses ||
       state.deletedClientIds !== previousState.deletedClientIds;
 
-    if (!workspaceChanged) return;
+    const serviceWorkspaceChanged =
+      state.servicePackages !== previousState.servicePackages ||
+      state.clientPlans !== previousState.clientPlans ||
+      state.serviceCycles !== previousState.serviceCycles ||
+      state.deliverables !== previousState.deliverables ||
+      state.cycleComments !== previousState.cycleComments ||
+      state.addons !== previousState.addons;
+
+    const serviceMetadataChanged =
+      state.serviceWorkflowTemplates !== previousState.serviceWorkflowTemplates ||
+      state.servicePricingSnapshots !== previousState.servicePricingSnapshots;
+
+    if (!workspaceChanged && !serviceWorkspaceChanged && !serviceMetadataChanged) return;
 
     if (!state.backend.hasLocalChanges) {
       useStore.setState((current) => ({

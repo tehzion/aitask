@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useStore } from '../store';
 import { getMemberDepartments } from '../lib/departments';
-import { Bell, Search, Menu, CheckCircle2, Info, AlertCircle, FileText, X, Volume2, VolumeX } from 'lucide-react';
+import { Bell, Search, Menu, CheckCircle2, Info, AlertCircle, FileText, X, Volume2, VolumeX, Keyboard, Moon, Sun, Monitor, ChevronDown } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { IconButton } from './ui';
@@ -13,13 +13,27 @@ import { NotificationReadActions } from '../hooks/useNotificationReadActions';
 import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
 import { notificationRouteToPath } from '../lib/security';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
+import type { ResolvedTheme, ThemePreference } from '../lib/theme';
 
 interface NavbarProps {
   onMenuClick: () => void;
   notificationReadActions: NotificationReadActions;
+  resolvedTheme: ResolvedTheme;
+  themePreference: ThemePreference;
+  onSetThemePreference: (preference: ThemePreference) => void;
+  onToggleTheme: () => void;
+  onOpenShortcuts: () => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions }) => {
+const Navbar: React.FC<NavbarProps> = ({
+  onMenuClick,
+  notificationReadActions,
+  resolvedTheme,
+  themePreference,
+  onSetThemePreference,
+  onToggleTheme,
+  onOpenShortcuts,
+}) => {
   const {
     currentUser,
     notifications,
@@ -30,7 +44,12 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
   const [soundEnabled, setSoundEnabledState] = useState(getSoundEnabled);
+  const [showAppearance, setShowAppearance] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const appearanceRef = useRef<HTMLDivElement>(null);
+  const appearanceTriggerRef = useRef<HTMLButtonElement>(null);
+  const appearanceItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const mobileSearchRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   // Play sound on new notifications
@@ -47,9 +66,49 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setShowNotifs(false);
       }
+      if (appearanceRef.current && !appearanceRef.current.contains(event.target as Node)) setShowAppearance(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!showAppearance) return;
+    const selectedIndex = ['light', 'dark', 'system'].indexOf(themePreference);
+    window.setTimeout(() => appearanceItemRefs.current[Math.max(0, selectedIndex)]?.focus(), 0);
+  }, [showAppearance, themePreference]);
+
+  const closeAppearance = (returnFocus = false) => {
+    setShowAppearance(false);
+    if (returnFocus) window.setTimeout(() => appearanceTriggerRef.current?.focus(), 0);
+  };
+
+  const handleAppearanceKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let nextIndex: number | undefined;
+    if (event.key === 'ArrowDown') nextIndex = (index + 1) % 3;
+    if (event.key === 'ArrowUp') nextIndex = (index + 2) % 3;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = 2;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeAppearance(true);
+      return;
+    }
+    if (nextIndex === undefined) return;
+    event.preventDefault();
+    appearanceItemRefs.current[nextIndex]?.focus();
+  };
+
+  useEffect(() => {
+    const handleFocusSearch = () => {
+      setShowMobileSearch(true);
+      window.setTimeout(() => {
+        mobileSearchRef.current?.focus();
+        mobileSearchRef.current?.select();
+      }, 0);
+    };
+    window.addEventListener('aitask-focus-search', handleFocusSearch);
+    return () => window.removeEventListener('aitask-focus-search', handleFocusSearch);
   }, []);
 
   const unreadNotifs = useMemo(() => {
@@ -91,7 +150,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
   };
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-slate-200/90 bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-7">
+    <header className="sticky top-0 z-10 flex h-[4.5rem] shrink-0 items-center justify-between border-b border-line/80 bg-surface/95 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
       <div className="flex items-center flex-1">
         <IconButton
           onClick={onMenuClick}
@@ -106,7 +165,10 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
           </span>
           <input
             type="text"
-            className={cn(inputBase, 'border-transparent bg-slate-100 py-2.5 pl-10 pr-3 shadow-none focus:bg-white')}
+            aria-label="Search tasks"
+            aria-keyshortcuts="/"
+            data-global-search
+            className={cn(inputBase, 'border-transparent bg-inset py-2.5 pl-10 pr-3 shadow-none focus:bg-surface')}
             placeholder="Search tasks..."
             value={globalSearch}
             onChange={(event) => setGlobalSearch(event.target.value)}
@@ -122,6 +184,23 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
         >
           {showMobileSearch ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
         </IconButton>
+        <div className="relative flex items-center" ref={appearanceRef}>
+          <IconButton onClick={onToggleTheme} label={`Switch to ${resolvedTheme === 'dark' ? 'day' : 'night'} mode`} aria-pressed={resolvedTheme === 'dark'} aria-keyshortcuts="Shift+D" className="rounded-r-none">
+            {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </IconButton>
+          <button ref={appearanceTriggerRef} type="button" onClick={() => setShowAppearance(value => !value)} onKeyDown={event => { if (event.key === 'Escape' && showAppearance) { event.preventDefault(); closeAppearance(true); } }} aria-label="Appearance settings" aria-haspopup="menu" aria-expanded={showAppearance} aria-controls="appearance-menu" className="flex h-11 w-11 items-center justify-center rounded-r-control text-muted hover:bg-inset hover:text-ink"><ChevronDown className="h-4 w-4" /></button>
+          {showAppearance && <div id="appearance-menu" role="menu" aria-label="Appearance" className="absolute right-0 top-12 z-50 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line">
+            {([{ id: 'light', label: 'Light', icon: Sun }, { id: 'dark', label: 'Dark', icon: Moon }, { id: 'system', label: 'System', icon: Monitor }] as const).map((option, index) => <button key={option.id} ref={node => { appearanceItemRefs.current[index] = node; }} type="button" role="menuitemradio" aria-checked={themePreference === option.id} onKeyDown={event => handleAppearanceKeyDown(event, index)} onClick={() => { onSetThemePreference(option.id); closeAppearance(true); }} className={cn('flex min-h-11 w-full items-center gap-2.5 rounded-control px-3 text-sm transition-colors duration-160', themePreference === option.id ? 'bg-accent-soft font-semibold text-accent' : 'text-muted hover:bg-inset hover:text-ink')}><option.icon className="h-4 w-4" />{option.label}</button>)}
+          </div>}
+        </div>
+        <IconButton
+          onClick={onOpenShortcuts}
+          label="Keyboard shortcuts"
+          aria-keyshortcuts="?"
+          className="hidden sm:inline-flex"
+        >
+          <Keyboard className="h-5 w-5" />
+        </IconButton>
         <IconButton
           onClick={handleToggleSound}
           label={soundEnabled ? 'Mute notifications' : 'Unmute notifications'}
@@ -135,6 +214,8 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
           <IconButton
             onClick={handleBellClick}
             label="Notifications"
+            aria-expanded={showNotifs}
+            aria-controls="header-notifications-menu"
             className="relative"
           >
             <Bell className="w-5 h-5" />
@@ -147,7 +228,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
 
           {/* Notifications Dropdown */}
           {showNotifs && (
-            <div className="absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] max-w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.12)] animate-in fade-in slide-in-from-top-2 duration-200">
+            <div id="header-notifications-menu" role="region" aria-label="Notification preview" className="absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] max-w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.12)] animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-3">
                 <div>
                   <h3 className="font-bold text-slate-900">Notifications</h3>
@@ -212,7 +293,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
           )}
         </div>
 
-        <div className="flex items-center gap-3 border-l border-slate-200 pl-4">
+        <div className="flex items-center gap-3 border-l border-line pl-4">
           <div className="hidden md:flex flex-col items-end">
             <span className="text-sm font-semibold leading-tight text-slate-950">{currentUser.name}</span>
             <span className="text-xs text-slate-500">
@@ -222,7 +303,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
           <img
             src={currentUser.avatar}
             alt={currentUser.name}
-            className="w-9 h-9 rounded-full ring-2 ring-white shadow-sm object-cover"
+            className="h-9 w-9 rounded-control object-cover ring-1 ring-line"
           />
         </div>
       </div>
@@ -231,8 +312,12 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick, notificationReadActions })
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
+              ref={mobileSearchRef}
               type="text"
               autoFocus
+              aria-label="Search tasks"
+              aria-keyshortcuts="/"
+              data-global-search
               className={cn(inputBase, 'py-2.5 pl-10 pr-3')}
               placeholder="Search tasks..."
               value={globalSearch}

@@ -7,19 +7,28 @@
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
 
-/* ── Corporate workspace design tokens ─────────────────────────────── */
+/* ── Calm Operations design tokens ─────────────────────────────────── */
 :root {
-  --color-bg:        #f8fafc;
-  --color-surface:   #ffffff;
-  --color-border:    #dbe3ee;
-  --color-text:      #0f172a;
-  --color-muted:     #5f6f85;
-  --color-primary:   #1d4ed8;
-  --color-primary-h: #1e40af;
-  --color-primary-l: #eff6ff;
-  --color-accent:    #0f766e;
+  --calm-canvas:     244 246 248;
+  --calm-surface:    255 255 255;
+  --calm-inset:      237 241 243;
+  --calm-ink:        21 32 40;
+  --calm-muted:      94 108 118;
+  --calm-line:       221 227 231;
+  --calm-accent:     23 107 92;
+  --calm-accent-soft: 230 241 238;
 
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --color-bg:        #f4f6f8;
+  --color-surface:   #ffffff;
+  --color-border:    #dde3e7;
+  --color-text:      #152028;
+  --color-muted:     #5e6c76;
+  --color-primary:   #176b5c;
+  --color-primary-h: #125448;
+  --color-primary-l: #e6f1ee;
+  --color-accent:    #176b5c;
+
+  font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
@@ -28,11 +37,217 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+html.dark {
+  --calm-canvas:     11 17 21;
+  --calm-surface:    17 26 32;
+  --calm-inset:      23 34 41;
+  --calm-ink:        237 243 245;
+  --calm-muted:      152 167 177;
+  --calm-line:       38 52 61;
+  --calm-accent:     85 182 161;
+  --calm-accent-soft: 21 58 51;
+
+  --color-bg:        #0b1115;
+  --color-surface:   #111a20;
+  --color-border:    #26343d;
+  --color-text:      #edf3f5;
+  --color-muted:     #98a7b1;
+  --color-primary:   #55b6a1;
+  --color-primary-h: #78c7b6;
+  --color-primary-l: #153a33;
+  --color-accent:    #55b6a1;
+}
+
 /* ── Global workspace background ──────────────────────────────────── */
 body {
   min-height: 100dvh;
   background-color: var(--color-bg);
+  background-image:
+    radial-gradient(circle at 15% -10%, rgb(var(--calm-accent) / 0.055), transparent 30rem),
+    radial-gradient(circle at 90% 10%, rgb(136 160 170 / 0.05), transparent 34rem);
   color: var(--color-text);
+}
+
+html.dark body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+.calm-surface {
+  border-radius: 0.875rem;
+  background: rgb(var(--calm-surface));
+  box-shadow: inset 0 0 0 1px rgb(var(--calm-line) / 0.78);
+}
+
+.calm-inset {
+  border-radius: 0.875rem;
+  background: rgb(var(--calm-inset) / 0.78);
+  box-shadow: inset 0 0 0 1px rgb(var(--calm-line) / 0.58);
+}
+
+.calm-raised {
+  border-radius: 0.875rem;
+  background: rgb(var(--calm-surface));
+  box-shadow:
+    inset 0 0 0 1px rgb(var(--calm-line) / 0.7),
+    0 22px 52px -34px rgb(21 32 40 / 0.55);
+}
+
+.calm-number {
+  font-family: "Geist Mono Variable", ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+.calm-eyebrow {
+  color: rgb(var(--calm-muted));
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.text-balance { text-wrap: balance; }
+.text-pretty { text-wrap: pretty; }
+
+button,
+a,
+input,
+select,
+textarea { -webkit-tap-highlight-color: transparent; }
+
+svg { stroke-width: 1.75; }
+
+.bg-blue-600,
+.bg-blue-700 { background-color: rgb(var(--calm-accent)); }
+[class~="hover:bg-blue-700"]:hover,
+[class~="hover:bg-blue-800"]:hover { background-color: color-mix(in srgb, rgb(var(--calm-accent)) 86%, black); }
+.text-blue-600,
+.text-blue-700,
+.text-blue-800 { color: rgb(var(--calm-accent)); }
+.border-blue-600,
+.border-blue-700 { border-color: rgb(var(--calm-accent)); }
+.bg-blue-50,
+[class~="bg-blue-50/35"],
+[class~="bg-blue-50/70"] { background-color: rgb(var(--calm-accent-soft) / 0.72); }
+.bg-blue-100 { background-color: rgb(var(--calm-accent-soft)); }
+.border-blue-100,
+.border-blue-200 { border-color: rgb(var(--calm-accent) / 0.26); }
+
+.text-slate-600,
+.text-slate-500,
+.text-slate-400 { color: rgb(var(--calm-muted)); }
+
+/* Existing screens use Tailwind palette utilities directly. This compatibility
+   layer gives those screens an accessible night palette while semantic dark:
+   utilities are introduced over time. */
+html.dark .bg-white,
+html.dark [class~="bg-white/95"] { background-color: rgb(var(--calm-surface) / 0.97); }
+html.dark .bg-slate-50,
+html.dark [class~="bg-slate-50/70"],
+html.dark [class~="bg-slate-50/80"] { background-color: rgb(var(--calm-inset) / 0.88); }
+html.dark .bg-slate-100 { background-color: rgb(var(--calm-inset)); }
+html.dark .bg-slate-200 { background-color: rgb(var(--calm-line)); }
+
+html.dark .bg-blue-50,
+html.dark [class~="bg-blue-50/35"],
+html.dark [class~="bg-blue-50/70"] { background-color: rgb(var(--calm-accent-soft) / 0.76); }
+html.dark .bg-blue-100 { background-color: rgb(var(--calm-accent-soft)); }
+html.dark .bg-blue-600.text-white,
+html.dark .bg-blue-700.text-white { color: #07110f; }
+html.dark .bg-sky-50 { background-color: rgb(7 89 133 / 0.34); }
+html.dark .bg-cyan-50 { background-color: rgb(21 94 117 / 0.34); }
+html.dark .bg-emerald-50 { background-color: rgb(6 78 59 / 0.36); }
+html.dark .bg-emerald-100 { background-color: rgb(6 95 70 / 0.42); }
+html.dark .bg-amber-50 { background-color: rgb(120 53 15 / 0.35); }
+html.dark .bg-amber-100 { background-color: rgb(146 64 14 / 0.4); }
+html.dark .bg-red-50 { background-color: rgb(127 29 29 / 0.35); }
+html.dark .bg-red-100 { background-color: rgb(153 27 27 / 0.4); }
+html.dark .bg-violet-50,
+html.dark .bg-purple-50 { background-color: rgb(76 29 149 / 0.34); }
+html.dark .bg-rose-50,
+html.dark .bg-pink-50 { background-color: rgb(136 19 55 / 0.34); }
+
+html.dark .text-slate-950,
+html.dark .text-slate-900 { color: #f8fafc; }
+html.dark .text-slate-800,
+html.dark .text-slate-700 { color: #e2e8f0; }
+html.dark .text-slate-600 { color: #cbd5e1; }
+html.dark .text-slate-500 { color: #b6c2d1; }
+html.dark .text-slate-400 { color: #94a3b8; }
+html.dark .text-blue-900,
+html.dark .text-blue-800,
+html.dark .text-blue-700,
+html.dark .text-blue-600 { color: rgb(var(--calm-accent)); }
+html.dark .text-sky-800,
+html.dark .text-sky-700,
+html.dark .text-sky-600 { color: #7dd3fc; }
+html.dark .text-cyan-800,
+html.dark .text-cyan-700,
+html.dark .text-cyan-600 { color: #67e8f9; }
+html.dark .text-emerald-900,
+html.dark .text-emerald-800,
+html.dark .text-emerald-700,
+html.dark .text-emerald-600 { color: #6ee7b7; }
+html.dark .text-amber-900,
+html.dark .text-amber-800,
+html.dark .text-amber-700,
+html.dark .text-amber-600 { color: #fcd34d; }
+html.dark .text-red-900,
+html.dark .text-red-800,
+html.dark .text-red-700,
+html.dark .text-red-600 { color: #fca5a5; }
+html.dark .text-violet-800,
+html.dark .text-violet-700,
+html.dark .text-violet-600,
+html.dark .text-purple-800,
+html.dark .text-purple-700 { color: #c4b5fd; }
+html.dark .text-rose-800,
+html.dark .text-rose-700,
+html.dark .text-pink-700 { color: #fda4af; }
+
+html.dark .border-white { border-color: #0f172a; }
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark [class~="border-slate-200/80"],
+html.dark [class~="border-slate-200/90"] { border-color: #334155; }
+html.dark .border-slate-300 { border-color: #475569; }
+html.dark .border-blue-100,
+html.dark .border-blue-200 { border-color: #1e40af; }
+html.dark .border-emerald-100,
+html.dark .border-emerald-200 { border-color: #047857; }
+html.dark .border-amber-100,
+html.dark .border-amber-200,
+html.dark .border-amber-300 { border-color: #a16207; }
+html.dark .border-red-100,
+html.dark .border-red-200 { border-color: #b91c1c; }
+html.dark .border-violet-100,
+html.dark .border-purple-100 { border-color: #6d28d9; }
+html.dark .border-sky-100,
+html.dark .border-cyan-100 { border-color: #0369a1; }
+
+html.dark [class~="hover:bg-white"]:hover,
+html.dark [class~="hover:bg-slate-50"]:hover,
+html.dark [class~="hover:bg-slate-100"]:hover { background-color: #334155; }
+html.dark [class~="hover:bg-blue-50"]:hover,
+html.dark [class~="hover:bg-blue-100"]:hover { background-color: rgb(30 64 175 / 0.52); }
+html.dark [class~="hover:bg-amber-100"]:hover { background-color: rgb(146 64 14 / 0.56); }
+html.dark [class~="hover:bg-red-50"]:hover { background-color: rgb(153 27 27 / 0.48); }
+html.dark [class~="dark:bg-slate-950"] { background-color: rgb(var(--calm-canvas)); }
+html.dark [class~="dark:bg-slate-900"] { background-color: rgb(var(--calm-surface)); }
+
+html.dark input,
+html.dark textarea,
+html.dark select,
+html.dark option { color-scheme: dark; }
+
+::selection {
+  background: rgb(var(--calm-accent) / 0.24);
+  color: rgb(var(--calm-ink));
+}
+
+html.dark ::selection {
+  background: rgb(var(--calm-accent) / 0.38);
+  color: #ffffff;
 }
 
 /* ── Custom scrollbar ─────────────────────────────────────────────── */
@@ -40,13 +255,20 @@ body {
 .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+html.dark .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
 main { min-width: 0; }
 
 /* ── Focus ring ──────────────────────────────────────────────────── */
 *:focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid rgb(var(--calm-accent));
   outline-offset: 2px;
+}
+
+html.dark *:focus-visible {
+  outline-color: rgb(var(--calm-accent));
 }
 
 /* ── Mobile slide-up & backdrop fade-in animations ───────────────── */
@@ -74,5 +296,31 @@ main { min-width: 0; }
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  *:focus-visible {
+    outline-width: 3px;
+  }
+
+  button,
+  input,
+  select,
+  textarea,
+  a {
+    text-underline-offset: 0.2em;
+  }
+}
+
+@media (forced-colors: active) {
+  *:focus-visible {
+    outline: 3px solid Highlight;
+  }
+
+  button,
+  [role="button"],
+  a {
+    forced-color-adjust: auto;
   }
 }

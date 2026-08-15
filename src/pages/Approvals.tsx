@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
 import { CheckCircle2, XCircle, UserPlus, Users, Trash2, AlertTriangle, ShieldCheck, Save, Pencil } from 'lucide-react';
-import { Department, Role, Registration, RolePermissionKey, RolePermissions } from '../types';
+import { Department, Role, Registration, RolePermissionKey, RolePermissions, User } from '../types';
 import { format } from 'date-fns';
 import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
@@ -56,6 +56,7 @@ const Approvals: React.FC = () => {
     departments: [] as Department[],
     companyName: '',
     customRoleId: '',
+    workerType: 'employee' as NonNullable<User['workerType']>,
   });
   const [approvalCustomRoleId, setApprovalCustomRoleId] = useState('');
   const [sendApprovalInvitation, setSendApprovalInvitation] = useState(false);
@@ -159,6 +160,7 @@ const Approvals: React.FC = () => {
       departments: [],
       companyName: '',
       customRoleId: '',
+      workerType: 'employee',
       password: secureAccounts ? '' : DEFAULT_USER_PASSWORD,
     });
     setSendNewUserInvitation(false);
@@ -316,6 +318,7 @@ const Approvals: React.FC = () => {
       departments: newUser.role === 'Client' ? ['Client'] : newUser.departments,
       companyName: newUser.role === 'Client' ? newUser.companyName : undefined,
       customRoleId: newUser.customRoleId || undefined,
+      workerType: newUser.role === 'Staff' ? newUser.workerType : undefined,
       sendInvitation: sendNewUserInvitation,
     });
     setIsActionSaving(false);
@@ -866,10 +869,13 @@ const Approvals: React.FC = () => {
                   <p className="mt-0.5 text-sm text-slate-600">Client</p>
                 </div>
               ) : (
-                <DepartmentMultiSelect
-                  value={newUser.departments}
-                  onChange={departments => setNewUser({ ...newUser, departments })}
-                />
+                <div className="space-y-4">
+                  <DepartmentMultiSelect
+                    value={newUser.departments}
+                    onChange={departments => setNewUser({ ...newUser, departments })}
+                  />
+                  {newUser.role === 'Staff' && <label className="block text-sm font-medium text-slate-700">Worker type<select className={cn(inputBase, 'mt-1 px-3 py-2.5')} value={newUser.workerType} onChange={event => setNewUser({ ...newUser, workerType: event.target.value as NonNullable<User['workerType']> })}><option value="employee">Employee</option><option value="supplier">Supplier</option><option value="freelancer">Freelancer</option></select></label>}
+                </div>
               )}
 
               {newUser.role === 'Client' && (

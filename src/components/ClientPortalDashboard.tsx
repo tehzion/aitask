@@ -3,9 +3,7 @@ import {
   ArrowRight,
   CalendarDays,
   CheckCircle2,
-  CircleDot,
   Clock3,
-  MessageSquareText,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Task, WorkspaceMember } from '../types';
@@ -17,6 +15,8 @@ import {
 } from '../lib/clientPortal';
 import { cn, parseOptionalDate } from '../lib/utils';
 import { cardBase } from './uiTokens';
+import { useStore } from '../store';
+import { DataRow, ProgressBar, StatGroup, StatusChip, Surface } from './ui';
 
 interface ClientPortalDashboardProps {
   tasks: Task[];
@@ -26,33 +26,51 @@ interface ClientPortalDashboardProps {
 const taskPath = (task: Task) => `/tasks?taskId=${encodeURIComponent(task.id)}`;
 
 const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => {
+  const currentUser = useStore(state => state.currentUser);
+  const clients = useStore(state => state.clients);
+  const clientPlans = useStore(state => state.clientPlans);
+  const serviceCycles = useStore(state => state.serviceCycles);
+  const client = clients.find(item => item.clientName.trim().toLowerCase() === currentUser?.companyName?.trim().toLowerCase());
+  const activePlan = clientPlans.find(item => item.clientId === client?.id && item.status === 'Active');
+  const publishedCycles = serviceCycles.filter(item => item.clientId === client?.id && ['Published', 'Completed'].includes(item.status));
   const progress = getClientProgress(tasks);
   const reviewReady = getClientReviewReadyTasks(tasks).slice(0, 5);
   const upcoming = getClientUpcomingDeliveries(tasks).slice(0, 6);
   const latest = getClientLatestUpdates(tasks).slice(0, 6);
   const contactName = (id: string) => users.find(user => user.id === id)?.name || 'Agency team';
 
-  const metrics = [
-    { label: 'Active', value: progress.active, icon: CircleDot, tone: 'bg-blue-50 text-blue-700' },
-    { label: 'Awaiting review', value: progress.awaitingReview, icon: MessageSquareText, tone: 'bg-amber-50 text-amber-700' },
-    { label: 'Approved', value: progress.approved, icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700' },
-    { label: 'Total tasks', value: progress.total, icon: CalendarDays, tone: 'bg-slate-100 text-slate-700' },
-  ];
+  const completion = progress.total ? Math.round((progress.approved / progress.total) * 100) : 0;
 
   return (
     <div className="space-y-6">
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Company progress">
-        {metrics.map(({ label, value, icon: Icon, tone }) => (
-          <div key={label} className={cn(cardBase, 'flex min-h-28 items-center gap-3 p-4 sm:p-5')}>
-            <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', tone)}>
-              <Icon className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-2xl font-semibold text-slate-950">{value}</p>
-              <p className="mt-0.5 text-sm text-slate-600">{label}</p>
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,.85fr)]" aria-label="Company progress">
+        <Surface variant="inset" className="relative overflow-hidden p-6 sm:p-8">
+          <p className="calm-eyebrow">Current service cycle</p>
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
+            <div>
+              <p className="calm-number text-5xl font-semibold tracking-tight text-ink">{completion}%</p>
+              <p className="mt-2 text-sm text-muted">of visible work approved</p>
             </div>
           </div>
-        ))}
+          <ProgressBar value={completion} className="mt-6" label={`${completion}% of work approved`} />
+          {client && activePlan && (
+            <div className="mt-6 flex flex-col gap-4 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2"><h2 className="font-semibold text-ink">{activePlan.name}</h2><StatusChip tone="emerald">Active</StatusChip></div>
+                <p className="mt-1 text-sm text-muted">{activePlan.serviceItems.length} services · {publishedCycles.length} published cycle(s)</p>
+              </div>
+              <Link to={`/clients/${encodeURIComponent(client.id)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white transition active:translate-y-px dark:text-[#07110f]">Open service workspace <ArrowRight className="h-4 w-4" /></Link>
+            </div>
+          )}
+        </Surface>
+        <StatGroup className="grid-cols-2" aria-label="Task summary">
+          {[
+            ['Active', progress.active],
+            ['Awaiting review', progress.awaitingReview],
+            ['Approved', progress.approved],
+            ['Total tasks', progress.total],
+          ].map(([label, value]) => <div key={label} className="p-5"><p className="calm-number text-2xl font-semibold text-ink">{value}</p><p className="mt-1 text-xs font-medium text-muted">{label}</p></div>)}
+        </StatGroup>
       </section>
 
       <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="client-review-title">
@@ -75,7 +93,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
                   {task.dueDate ? ` · Due ${format(parseOptionalDate(task.dueDate)!, 'd MMM yyyy')}` : ''}
                 </p>
               </div>
-              <Link to={taskPath(task)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+              <Link to={taskPath(task)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white transition active:translate-y-px">
                 Review task <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
@@ -101,18 +119,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
               const dueDate = parseOptionalDate(task.dueDate);
               const overdue = Boolean(dueDate && isBefore(dueDate, new Date()) && !isToday(dueDate));
               return (
-                <Link key={task.id} to={taskPath(task)} className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-slate-50 sm:px-5">
-                  <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700', overdue && 'bg-red-50 text-red-700')}>
-                    <CalendarDays className="h-4 w-4" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
-                    <p className="mt-0.5 truncate text-xs text-slate-500">{task.serviceType} · {contactName(task.assignedTo)}</p>
-                  </div>
-                  <span className={cn('shrink-0 text-xs font-semibold text-slate-600', overdue && 'text-red-700')}>
-                    {overdue ? 'Overdue · ' : ''}{dueDate ? format(dueDate, 'd MMM') : ''}
-                  </span>
-                </Link>
+                <DataRow key={task.id} title={<Link to={taskPath(task)} className="hover:text-accent">{task.title}</Link>} description={`${task.serviceType} · ${contactName(task.assignedTo)}`} action={<span className={cn('inline-flex items-center gap-1.5 text-xs font-semibold text-muted', overdue && 'text-red-700')}><CalendarDays className="h-4 w-4" />{overdue ? 'Overdue · ' : ''}{dueDate ? format(dueDate, 'd MMM') : ''}</span>} />
               );
             })}
             {upcoming.length === 0 && <p className="px-5 py-10 text-center text-sm text-slate-500">No scheduled deliveries right now.</p>}
@@ -126,18 +133,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
           </div>
           <div className="divide-y divide-slate-100">
             {latest.map(task => (
-              <Link key={task.id} to={taskPath(task)} className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-slate-50 sm:px-5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                  <Clock3 className="h-4 w-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
-                  <p className="mt-0.5 truncate text-xs text-slate-500">{task.status} · {task.serviceType}</p>
-                </div>
-                <span className="shrink-0 text-xs text-slate-500">
-                  {task.updatedAt ? formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true }) : ''}
-                </span>
-              </Link>
+              <DataRow key={task.id} title={<Link to={taskPath(task)} className="hover:text-accent">{task.title}</Link>} description={`${task.status} · ${task.serviceType}`} action={<span className="inline-flex items-center gap-1.5 text-xs text-muted"><Clock3 className="h-4 w-4" />{task.updatedAt ? formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true }) : ''}</span>} />
             ))}
             {latest.length === 0 && <p className="px-5 py-10 text-center text-sm text-slate-500">Updates will appear here as work progresses.</p>}
           </div>

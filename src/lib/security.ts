@@ -1,6 +1,14 @@
 import type {
   AppNotification,
   ClientProfile,
+  ClientServicePlan,
+  ServicePackage,
+  ServiceCycle,
+  Deliverable,
+  CycleComment,
+  Addon,
+  ServiceWorkflowTemplate,
+  ServicePricingSnapshot,
   ClientApprovalStatus,
   CustomRole,
   NotificationRoute,
@@ -49,6 +57,14 @@ export interface SafeWorkspaceState {
   deletedRoleIds: string[];
   deletedTaskStatuses: string[];
   deletedClientIds: string[];
+  servicePackages: ServicePackage[];
+  clientPlans: ClientServicePlan[];
+  serviceCycles: ServiceCycle[];
+  deliverables: Deliverable[];
+  cycleComments: CycleComment[];
+  addons: Addon[];
+  serviceWorkflowTemplates: ServiceWorkflowTemplate[];
+  servicePricingSnapshots: ServicePricingSnapshot[];
 }
 
 const isRecord = (value: unknown): value is UnknownRecord => (
@@ -239,6 +255,9 @@ const parseUser = (value: unknown): User | null => {
     customRoleId: optionalText(value.customRoleId, 160),
     customRoleName: optionalText(value.customRoleName, 160),
     permissions: isRecord(value.permissions) ? value.permissions as User['permissions'] : undefined,
+    workerType: ['employee', 'supplier', 'freelancer'].includes(cleanText(value.workerType, 20))
+      ? cleanText(value.workerType, 20) as NonNullable<User['workerType']>
+      : 'employee',
     updatedAt: safeIsoTimestamp(value.updatedAt),
   };
 };
@@ -306,7 +325,8 @@ export const parseTask = (value: unknown): Task | null => {
   const status = cleanText(value.status, 80);
   const clientApprovalStatus = cleanText(value.clientApprovalStatus, 20) as ClientApprovalStatus;
   const recurrenceFrequency = cleanText(value.recurrenceFrequency, 20) as RecurrenceFrequency;
-  if (!id || !clientName || !serviceType || !title || !department || !assignedTo || !createdBy || !priorities.has(priority) || !status) return null;
+  const generatedFromDeliverable = value.generatedFromDeliverable === true;
+  if (!id || !clientName || !serviceType || !title || !department || (!assignedTo && !generatedFromDeliverable) || !createdBy || !priorities.has(priority) || !status) return null;
   const today = getTodayInputDate();
 
   return {
@@ -315,6 +335,16 @@ export const parseTask = (value: unknown): Task | null => {
     workspaceId: optionalText(value.workspaceId, 160),
     clientId: optionalText(value.clientId, 160),
     projectId: optionalText(value.projectId, 160),
+    serviceCycleId: optionalText(value.serviceCycleId, 160),
+    deliverableId: optionalText(value.deliverableId, 160),
+    visibility: cleanText(value.visibility, 30) === 'internal' ? 'internal' : 'client-visible',
+    workflowTemplateId: optionalText(value.workflowTemplateId, 160),
+    workflowTemplateRevision: value.workflowTemplateRevision === undefined ? undefined : Math.max(1, Number(value.workflowTemplateRevision) || 1),
+    workflowStepId: optionalText(value.workflowStepId, 160),
+    workflowStepOrder: value.workflowStepOrder === undefined ? undefined : Math.max(1, Number(value.workflowStepOrder) || 1),
+    workflowStepRequired: value.workflowStepRequired === undefined ? undefined : Boolean(value.workflowStepRequired),
+    predecessorTaskIds: safeStringArray(value.predecessorTaskIds, 50, 160),
+    generatedFromDeliverable,
     clientName,
     customerDetails: optionalText(value.customerDetails, 5000),
     facebookPage: safeHttpsUrl(value.facebookPage) || undefined,
@@ -429,5 +459,13 @@ export const parseWorkspaceSnapshot = (value: unknown): SafeWorkspaceState => {
     deletedRoleIds: safeStringArray(record.deletedRoleIds, 2000, 160),
     deletedTaskStatuses: safeStringArray(record.deletedTaskStatuses, 2000, 80),
     deletedClientIds: safeStringArray(record.deletedClientIds, 2000, 160),
+    servicePackages: Array.isArray(record.servicePackages) ? record.servicePackages.filter(isRecord) as unknown as ServicePackage[] : [],
+    clientPlans: Array.isArray(record.clientPlans) ? record.clientPlans.filter(isRecord) as unknown as ClientServicePlan[] : [],
+    serviceCycles: Array.isArray(record.serviceCycles) ? record.serviceCycles.filter(isRecord) as unknown as ServiceCycle[] : [],
+    deliverables: Array.isArray(record.deliverables) ? record.deliverables.filter(isRecord) as unknown as Deliverable[] : [],
+    cycleComments: Array.isArray(record.cycleComments) ? record.cycleComments.filter(isRecord) as unknown as CycleComment[] : [],
+    addons: Array.isArray(record.addons) ? record.addons.filter(isRecord) as unknown as Addon[] : [],
+    serviceWorkflowTemplates: Array.isArray(record.serviceWorkflowTemplates) ? record.serviceWorkflowTemplates.filter(isRecord) as unknown as ServiceWorkflowTemplate[] : [],
+    servicePricingSnapshots: Array.isArray(record.servicePricingSnapshots) ? record.servicePricingSnapshots.filter(isRecord) as unknown as ServicePricingSnapshot[] : [],
   };
 };

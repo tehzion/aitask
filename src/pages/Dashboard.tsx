@@ -18,6 +18,7 @@ import OperationsGlance from '../components/OperationsGlance';
 import { getTrackedMonthlyCompletions } from '../lib/taskReporting';
 import ClientPortalDashboard from '../components/ClientPortalDashboard';
 import TeamWorkload from '../components/TeamWorkload';
+import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
 
 const COLORS = ['#2563eb', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#db2777'];
 
@@ -260,12 +261,15 @@ const Dashboard: React.FC = () => {
         <ClientPortalDashboard tasks={tasks} users={users} />
       ) : (
       <div className="flex flex-col gap-6">
+        <div className="order-1">
+          <ServiceRoleDashboard />
+        </div>
         {showBossOperations ? (
-          <div className="order-1">
+          <div className="order-2">
             <OperationsGlance tasks={tasks} users={users} scope="agency" />
           </div>
         ) : showStaffOperations ? (
-          <div className="order-1">
+          <div className="order-2">
             <OperationsGlance tasks={staffAssignedTasks} users={users} scope="staff" />
           </div>
         ) : (

@@ -8,6 +8,7 @@ import {
   FileText,
   Mail,
   MapPin,
+  MoreHorizontal,
   Pencil,
   Phone,
   Plus,
@@ -18,14 +19,15 @@ import {
   X,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
-import { Badge, Button, PageHeader } from '../components/ui';
-import { buttonBase, cardBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
+import { Badge, Button, PageHeader, ProgressBar, StatGroup, StatusChip } from '../components/ui';
+import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
 import { canCreateTasks, canEditClientProfile, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
 import { ClientProfile } from '../types';
 import ModalShell from '../components/ModalShell';
+import CreateClientPlanModal from '../components/CreateClientPlanModal';
 
 type ClientSource = 'Profile' | 'Task' | 'Company' | 'Account';
 
@@ -117,6 +119,9 @@ const Clients: React.FC = () => {
     clients: clientProfiles,
     tasks: allTasks,
     projects: allProjects,
+    clientPlans,
+    serviceCycles,
+    deliverables,
     users,
     currentUser,
     rolePermissions,
@@ -134,6 +139,7 @@ const Clients: React.FC = () => {
   const [renameValue, setRenameValue] = React.useState('');
   const [renameError, setRenameError] = React.useState('');
   const [isSavingClient, setIsSavingClient] = React.useState(false);
+  const [isCreateClientOpen, setIsCreateClientOpen] = React.useState(false);
   const clientDialogTitleId = React.useId();
 
   const canSeeAllClients = canViewAllClients(currentUser, rolePermissions);
@@ -300,6 +306,15 @@ const Clients: React.FC = () => {
   const openTasks = clients.reduce((sum, client) => sum + client.openTaskCount, 0);
   const linkedAccounts = clients.reduce((sum, client) => sum + client.accountUsers.length, 0);
   const savedProfiles = clients.filter(client => Boolean(client.profile)).length;
+  const getServiceContext = (client: ClientSummary) => {
+    if (!client.profile) return null;
+    const plans = clientPlans.filter(plan => plan.clientId === client.profile?.id).sort((a, b) => b.revision - a.revision);
+    const plan = plans.find(item => item.status === 'Active') || plans.find(item => item.status === 'Paused') || plans[0];
+    const cycle = serviceCycles.filter(item => item.clientId === client.profile?.id).sort((a, b) => b.periodStart.localeCompare(a.periodStart))[0];
+    const cycleDeliverables = cycle ? deliverables.filter(item => item.cycleId === cycle.id) : [];
+    const deliveredCount = cycleDeliverables.filter(item => item.status === 'Delivered').length;
+    return { plan, cycle, included: cycleDeliverables.length, delivered: deliveredCount };
+  };
   const selectedClientCanRename = selectedClient
     ? canRenameClient(currentUser)
     : false;
@@ -410,67 +425,20 @@ const Clients: React.FC = () => {
     <div className={pageShell}>
       <PageHeader
         title="Clients"
-        description="Manage contact profiles, account details, and linked work."
-        action={canAddTasks ? (
-          <Button onClick={() => setCreateTaskModalOpen(true)}>
-            <Plus className="h-4 w-4" />
-            New task
-          </Button>
-        ) : null}
+        description="Client scope, current delivery progress, contacts and linked work in one place."
+        meta={<><span>{clients.length} visible clients</span><span aria-hidden="true">·</span><span>{totalTasks} linked tasks</span></>}
+        action={<div className="flex flex-wrap gap-2">
+          {(currentUser?.role === 'Admin' || currentUser?.isSuperAdmin) && <Button onClick={() => setIsCreateClientOpen(true)}><Building2 className="h-4 w-4" />New client</Button>}
+          {canAddTasks && <Button variant="secondary" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />New task</Button>}
+        </div>}
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className={`${cardBase} p-4`}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-slate-500">Clients</p>
-              <p className="mt-1.5 text-2xl font-semibold text-slate-950">{clients.length}</p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-              <Building2 className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
-
-        <div className={`${cardBase} p-4`}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-slate-500">Saved Profiles</p>
-              <p className="mt-1.5 text-2xl font-semibold text-slate-950">{savedProfiles}</p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-              <FileText className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
-
-        <div className={`${cardBase} p-4`}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-slate-500">Open Tasks</p>
-              <p className="mt-1.5 text-2xl font-semibold text-slate-950">{openTasks}</p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-              <CheckSquare className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
-
-        <div className={`${cardBase} p-4`}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-slate-500">Client Accounts</p>
-              <p className="mt-1.5 text-2xl font-semibold text-slate-950">{linkedAccounts}</p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-              <Users className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
-      </div>
+      <StatGroup className="grid-cols-2 lg:grid-cols-4" aria-label="Client summary">
+        {[{ label: 'Clients', value: clients.length, icon: Building2 }, { label: 'Saved profiles', value: savedProfiles, icon: FileText }, { label: 'Open tasks', value: openTasks, icon: CheckSquare }, { label: 'Client accounts', value: linkedAccounts, icon: Users }].map(({ label, value, icon: Icon }) => <div key={label} className="flex min-h-28 items-center justify-between gap-4 p-4 sm:p-5"><div><p className="text-xs font-medium text-muted">{label}</p><p className="calm-number mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">{value}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-control bg-accent-soft text-accent"><Icon className="h-4 w-4" /></span></div>)}
+      </StatGroup>
 
       <div className={tableShell}>
-        <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="flex flex-col gap-3 border-b border-line bg-inset/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="relative w-full sm:max-w-sm">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3">
               <Search className="h-4 w-4 text-slate-400" />
@@ -490,7 +458,7 @@ const Clients: React.FC = () => {
 
         <div className="hidden overflow-x-auto 2xl:block">
           <table className="w-full min-w-[1180px] text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
+            <thead className="sticky top-0 z-[1] border-b border-line bg-inset text-xs text-muted">
               <tr>
                 <th className="px-5 py-4 font-semibold">Client / Brand</th>
                 <th className="px-5 py-4 font-semibold">Contact</th>
@@ -505,11 +473,12 @@ const Clients: React.FC = () => {
                 const contact = getClientContact(client);
                 const website = safeHttpsUrl(contact.website);
                 const facebookPage = safeHttpsUrl(contact.facebookPage);
+                const serviceContext = getServiceContext(client);
 
                 return (
-                  <tr key={client.name} className="border-b border-slate-100 bg-white text-slate-700 transition-colors hover:bg-slate-50">
+                  <tr key={client.name} className="border-b border-line/70 bg-surface text-ink transition-colors duration-160 hover:bg-inset/60">
                     <td className="px-5 py-6 align-top">
-                      <div className="font-semibold text-slate-950">{client.name}</div>
+                      <div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{client.name.slice(0, 2).toUpperCase()}</span><div><div className="font-semibold text-ink">{client.name}</div>{serviceContext?.plan && <StatusChip className="mt-1.5" tone={serviceContext.plan.status === 'Active' ? 'emerald' : serviceContext.plan.status === 'Paused' ? 'amber' : 'slate'}>{serviceContext.plan.status}</StatusChip>}</div></div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {Array.from(client.sources).map(source => (
                           <span key={source} className={cn('rounded-md border px-2 py-0.5 text-[10px] font-medium', sourceClasses[source])}>
@@ -534,6 +503,7 @@ const Clients: React.FC = () => {
                       )}
                     </td>
                     <td className="px-5 py-6 align-top">
+                      {serviceContext?.plan && <p className="mb-2 text-xs font-semibold text-ink">{serviceContext.plan.name}</p>}
                       <div className="flex max-w-[220px] flex-wrap gap-1.5">
                         {Array.from(client.services).slice(0, 4).map(service => (
                           <Badge key={service} tone="slate" className="text-[10px]">
@@ -545,9 +515,10 @@ const Clients: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-5 py-6 align-top">
-                      <div className="font-semibold text-slate-950">{client.taskCount} total</div>
+                      <div className="font-semibold text-ink">{client.taskCount} total</div>
                       <p className="mt-1 text-xs text-slate-500">{client.openTaskCount} open, {client.completedTaskCount} completed</p>
                       <p className="mt-1 text-xs text-slate-500">{client.projectIds.size} company record{client.projectIds.size === 1 ? '' : 's'}</p>
+                      {serviceContext?.cycle && <ProgressBar className="mt-3 w-40" label="Cycle delivered" value={serviceContext.delivered} max={Math.max(1, serviceContext.included)} />}
                     </td>
                     <td className="px-5 py-6 align-top">
                       <div className="flex flex-col items-start gap-2">
@@ -565,20 +536,9 @@ const Clients: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-5 py-6 align-top">
-                      <div className="flex min-w-[160px] flex-col items-stretch gap-2">
-                        <Link
-                          to={`/tasks?client=${encodeURIComponent(client.name)}`}
-                          className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm hover:bg-blue-700')}
-                        >
-                          View tasks <ArrowRight className="h-4 w-4" />
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => openClientPanel(client)}
-                          className={cn(buttonBase, 'min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50')}
-                        >
-                          Details
-                        </button>
+                      <div className="flex min-w-[150px] items-center gap-2">
+                        {client.profile ? <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>Workspace <ArrowRight className="h-4 w-4" /></Link> : <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>View tasks</Link>}
+                        <details className="group relative"><summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink" aria-label={`More actions for ${client.name}`}><MoreHorizontal className="h-5 w-5" /></summary><div className="absolute right-0 top-11 z-20 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line"><Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">View tasks</Link><button type="button" onClick={() => openClientPanel(client)} className="flex min-h-10 w-full items-center rounded-control px-3 text-left text-sm text-ink hover:bg-inset">Details</button>{website && <a href={website} target="_blank" rel="noopener noreferrer" className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">Website</a>}{facebookPage && <a href={facebookPage} target="_blank" rel="noopener noreferrer" className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">Facebook</a>}</div></details>
                       </div>
                     </td>
                   </tr>
@@ -588,14 +548,14 @@ const Clients: React.FC = () => {
           </table>
         </div>
 
-        <div className="grid grid-cols-1 gap-px bg-slate-200 md:grid-cols-2 2xl:hidden">
+        <div className="grid grid-cols-1 gap-px bg-line md:grid-cols-2 2xl:hidden">
           {filteredClients.map(client => {
             const contact = getClientContact(client);
             const website = safeHttpsUrl(contact.website);
             const facebookPage = safeHttpsUrl(contact.facebookPage);
 
             return (
-              <div key={client.name} className="bg-white p-5">
+              <div key={client.name} className="bg-surface p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 className="truncate font-semibold text-slate-950">{client.name}</h2>
@@ -618,6 +578,7 @@ const Clients: React.FC = () => {
                 </div>
 
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                  {client.profile && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>Workspace <ArrowRight className="h-4 w-4" /></Link>}
                   <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>
                     View tasks <ArrowRight className="h-4 w-4" />
                   </Link>
@@ -902,6 +863,7 @@ const Clients: React.FC = () => {
             </div>
         </ModalShell>
       )}
+      {isCreateClientOpen && <CreateClientPlanModal onClose={() => setIsCreateClientOpen(false)} />}
     </div>
   );
 };

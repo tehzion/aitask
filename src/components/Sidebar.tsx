@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, CalendarDays, FolderKanban, BarChart3, Settings, LogOut, UserPlus, Users } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarDays, FolderKanban, BarChart3, Settings, LogOut, UserPlus, Users, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useStore } from '../store';
 import clsx from 'clsx';
 import { canAccessPath, getVisibleNavigation } from '../lib/access';
@@ -20,9 +20,15 @@ const navIcons = {
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  isCollapsed: boolean;
+  onToggleCollapsed: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggleCollapsed }) => {
+  const [isDesktop, setIsDesktop] = React.useState(() => (
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  ));
+  const sidebarRef = React.useRef<HTMLElement>(null);
   const navigate = useNavigate();
   const handleLogout = async () => {
     if (shouldUseSecureSupabase()) await signOutSecureSession();
@@ -39,51 +45,114 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   }));
   const canViewSettings = canAccessPath(currentUser, '/settings', rolePermissions);
 
+  React.useEffect(() => {
+    const media = window.matchMedia('(min-width: 768px)');
+    const handleChange = () => setIsDesktop(media.matches);
+    handleChange();
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, []);
+
+  React.useEffect(() => {
+    if (!sidebarRef.current) return;
+    if (!isDesktop && !isOpen) sidebarRef.current.setAttribute('inert', '');
+    else sidebarRef.current.removeAttribute('inert');
+  }, [isDesktop, isOpen]);
+
+  React.useEffect(() => {
+    if (!isDesktop && isOpen) {
+      window.setTimeout(() => sidebarRef.current?.querySelector<HTMLElement>('a[href]')?.focus(), 0);
+    }
+  }, [isDesktop, isOpen]);
+
+  React.useEffect(() => {
+    if (isDesktop || !isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const sidebar = sidebarRef.current;
+      if (!sidebar) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(sidebar.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+        .filter(element => element.getClientRects().length > 0);
+      if (!focusable.length) {
+        event.preventDefault();
+        sidebar.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isDesktop, isOpen, onClose]);
+
   return (
     <>
       {/* Mobile Overlay */}
       {isOpen && (
-        <div
+        <button
+          type="button"
+          aria-label="Close navigation menu"
+          tabIndex={-1}
           className="fixed inset-0 z-20 bg-slate-950/35 backdrop-blur-sm transition-opacity md:hidden"
           onClick={onClose}
         />
       )}
 
-      <div className={clsx(
-        'fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-slate-200/90 transition-transform duration-300 ease-in-out md:static md:translate-x-0',
-        'bg-white text-slate-900 shadow-[0_12px_28px_rgba(15,23,42,0.10)] md:shadow-none',
+      <aside
+        ref={sidebarRef}
+        tabIndex={-1}
+        aria-label="Primary navigation"
+        aria-hidden={!isDesktop && !isOpen}
+        className={clsx(
+        'fixed inset-y-0 left-0 z-30 flex w-[17rem] flex-col border-r border-line/80 transition-transform duration-160 ease-out md:static md:translate-x-0',
+        'bg-surface text-ink shadow-float md:shadow-none',
+        isCollapsed && 'md:w-20',
         isOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         {/* Logo */}
-        <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 px-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white shadow-sm">
+        <div className={clsx('flex h-[4.5rem] shrink-0 items-center gap-3 border-b border-line/70 px-5', isCollapsed && 'md:justify-center md:px-2')}>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent text-sm font-semibold tracking-[-0.03em] text-white shadow-[0_10px_24px_-16px_rgb(var(--calm-accent)/0.9)]">
             AT
           </div>
-          <div className="min-w-0">
-            <div className="font-sans text-lg font-semibold text-slate-950">AiTask</div>
-            <p className="text-[11px] font-medium text-slate-500">Operations workspace</p>
+          <div className={clsx('min-w-0', isCollapsed && 'md:hidden')}>
+            <div className="font-sans text-lg font-semibold tracking-[-0.03em] text-ink">AiTask</div>
+            <p className="text-[11px] font-medium text-muted">Operations workspace</p>
           </div>
         </div>
 
         {/* Nav items */}
         <div className="custom-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-5">
-          <p className="mb-3 px-3 text-xs font-medium text-slate-500">Workspace</p>
+          <p className={clsx('calm-eyebrow mb-3 px-3', isCollapsed && 'md:sr-only')}>Workspace</p>
           {filteredNavItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               onClick={onClose}
+              title={isCollapsed ? item.label : undefined}
               className={({ isActive }) => clsx(
-                'group flex items-center border-l-2 px-3 py-2.5 transition-colors duration-200',
+                'group flex min-h-11 items-center rounded-control px-3 py-2.5 transition-colors duration-160',
+                isCollapsed && 'md:justify-center md:px-2',
                 isActive
-                  ? 'border-blue-700 bg-blue-50/70 text-blue-800'
-                  : 'border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+                  ? 'bg-accent-soft text-accent'
+                  : 'text-muted hover:bg-inset hover:text-ink'
               )}
             >
               {({ isActive }) => (
                 <>
-                  <item.icon className={clsx('mr-3 h-[18px] w-[18px] transition-colors', isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-700')} />
-                  <span className="font-medium text-sm">{item.label}</span>
+                  <item.icon className={clsx('h-[19px] w-[19px] shrink-0 transition-colors', !isCollapsed && 'mr-3', isCollapsed && 'md:mr-0', isActive ? 'text-accent' : 'text-muted group-hover:text-ink')} />
+                  <span className={clsx('text-sm font-medium', isCollapsed && 'md:hidden')}>{item.label}</span>
                 </>
               )}
             </NavLink>
@@ -91,38 +160,44 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="space-y-1 border-t border-slate-200 p-3">
+        <div className="space-y-1 border-t border-line/70 p-3">
           {canViewSettings && (
             <NavLink
               to="/settings"
               onClick={onClose}
+              title={isCollapsed ? 'Settings' : undefined}
               className={({ isActive }) => clsx(
-                'group flex w-full items-center border-l-2 px-3 py-2.5 transition-colors duration-200',
+                'group flex min-h-11 w-full items-center rounded-control px-3 py-2.5 transition-colors duration-160',
+                isCollapsed && 'md:justify-center md:px-2',
                 isActive
-                  ? 'border-blue-700 bg-blue-50/70 text-blue-800'
-                  : 'border-transparent text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+                  ? 'bg-accent-soft text-accent'
+                  : 'text-muted hover:bg-inset hover:text-ink'
               )}
             >
               {({ isActive }) => (
                 <>
-                  <Settings className={clsx('mr-3 h-[18px] w-[18px]', isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-700')} />
-                  <span className="font-medium text-sm">Settings</span>
+                  <Settings className={clsx('h-[19px] w-[19px]', !isCollapsed && 'mr-3', isCollapsed && 'md:mr-0', isActive ? 'text-accent' : 'text-muted group-hover:text-ink')} />
+                  <span className={clsx('text-sm font-medium', isCollapsed && 'md:hidden')}>Settings</span>
                 </>
               )}
             </NavLink>
           )}
           <button
             onClick={handleLogout}
-            className="flex w-full items-center border-l-2 border-transparent px-3 py-2.5 text-red-600/80 transition-colors duration-200 hover:bg-red-50 hover:text-red-700"
+            title={isCollapsed ? 'Logout' : undefined}
+            className={clsx('flex min-h-11 w-full items-center rounded-control px-3 py-2.5 text-red-600/80 transition-colors duration-160 hover:bg-red-50 hover:text-red-700', isCollapsed && 'md:justify-center md:px-2')}
           >
-            <LogOut className="mr-3 h-[18px] w-[18px]" />
-            <span className="font-medium text-sm">Logout</span>
+            <LogOut className={clsx('h-[19px] w-[19px]', !isCollapsed && 'mr-3', isCollapsed && 'md:mr-0')} />
+            <span className={clsx('text-sm font-medium', isCollapsed && 'md:hidden')}>Logout</span>
           </button>
-          <p className="px-3 pt-2 font-mono text-[10px] text-slate-400" title="AiTask application version and build commit">
+          <button type="button" onClick={onToggleCollapsed} className="hidden min-h-11 w-full items-center justify-center rounded-control text-muted transition-colors duration-160 hover:bg-inset hover:text-ink md:flex" aria-label={isCollapsed ? 'Expand navigation' : 'Collapse navigation'} title={isCollapsed ? 'Expand navigation' : 'Collapse navigation'}>
+            {isCollapsed ? <PanelLeftOpen className="h-[19px] w-[19px]" /> : <><PanelLeftClose className="mr-3 h-[19px] w-[19px]" /><span className="text-sm font-medium">Collapse</span></>}
+          </button>
+          <p className={clsx('px-3 pt-2 font-mono text-[10px] text-muted/70', isCollapsed && 'md:hidden')} title="AiTask application version and build commit">
             {APP_VERSION_LABEL} · {APP_COMMIT}
           </p>
         </div>
-      </div>
+      </aside>
     </>
   );
 };

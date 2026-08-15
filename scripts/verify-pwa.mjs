@@ -18,8 +18,8 @@ assert.equal(manifest.short_name, 'AiTask');
 assert.equal(manifest.start_url, '/');
 assert.equal(manifest.scope, '/');
 assert.equal(manifest.display, 'standalone');
-assert.equal(manifest.theme_color, '#2563eb');
-assert.equal(manifest.background_color, '#f6f7f9');
+assert.equal(manifest.theme_color, '#176B5C');
+assert.equal(manifest.background_color, '#F4F6F8');
 
 const iconContracts = new Set(manifest.icons.map(icon => `${icon.src}|${icon.sizes}|${icon.purpose}`));
 assert(iconContracts.has('/pwa-192x192.png|192x192|any'));
@@ -28,7 +28,7 @@ assert(iconContracts.has('/pwa-maskable-512x512.png|512x512|maskable'));
 
 assert.match(indexHtml, /<link rel="manifest" href="\/manifest[.]webmanifest"/);
 assert.match(indexHtml, /<link rel="apple-touch-icon" href="\/apple-touch-icon[.]png"/);
-assert.match(indexHtml, /<meta name="theme-color" content="#2563eb"/);
+assert.match(indexHtml, /<meta name="theme-color" content="#176B5C"/);
 assert.match(indexHtml, /id="root"/);
 
 for (const asset of [

@@ -519,6 +519,7 @@ const Tasks: React.FC = () => {
               </span>
               <input
                 type="text"
+                aria-label="Filter tasks"
                 className={cn(inputBase, 'block py-2 pl-10 pr-3')}
                 placeholder={isClientUser ? 'Search company tasks...' : 'Search tasks, clients, assignees...'}
                 value={searchTerm}
@@ -532,10 +533,11 @@ const Tasks: React.FC = () => {
             </div>
 
             {/* View Toggle */}
-            <div className="flex shrink-0 items-center rounded-lg border border-slate-200 bg-white p-1 sm:ml-auto">
+            <div className="flex shrink-0 items-center rounded-lg border border-slate-200 bg-white p-1 sm:ml-auto" role="group" aria-label="Task view">
               <button
                 type="button"
                 onClick={() => setViewType('table')}
+                aria-pressed={viewType === 'table'}
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
                   viewType === 'table'
@@ -548,6 +550,8 @@ const Tasks: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setViewType('board')}
+                aria-pressed={viewType === 'board'}
+                aria-keyshortcuts="B"
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
                   viewType === 'board'
@@ -587,7 +591,7 @@ const Tasks: React.FC = () => {
 
           <div className={cn('grid-cols-1 gap-3 sm:grid-cols-2', isClientUser ? 'lg:grid-cols-3' : 'lg:grid-cols-4', filtersOpen ? 'grid' : 'hidden lg:grid')}>
             {!isClientUser && <div className="relative">
-              <select value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+              <select aria-label="Filter by department" value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All departments</option>
                 {departmentOptions.map(dept => <option key={dept} value={dept}>{dept}</option>)}
               </select>
@@ -595,6 +599,7 @@ const Tasks: React.FC = () => {
             </div>}
             {!isClientUser && <div className="relative">
               <select
+                aria-label="Filter by assignee"
                 value={filterAssignee}
                 onChange={(e) => {
                   setFilterAssignee(e.target.value);
@@ -613,21 +618,21 @@ const Tasks: React.FC = () => {
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>}
             {!isClientUser && <div className="relative">
-              <select value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+              <select aria-label="Filter by client" value={filterClient} onChange={(e) => setFilterClient(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All clients</option>
                 {clientOptions.map(client => <option key={client} value={client}>{client}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>}
             <div className="relative">
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+              <select aria-label="Filter by status" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All statuses</option>
                 {taskStatuses.map(status => <option key={status} value={status}>{status}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>
             {!isClientUser && <div className="relative">
-              <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+              <select aria-label="Filter by priority" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All priorities</option>
                 {PRIORITY_OPTIONS.map(priority => <option key={priority} value={priority}>{priority}</option>)}
               </select>

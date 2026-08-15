@@ -16,6 +16,8 @@ dist-ssr
 .tmp-responsive-profile
 playwright-report
 test-results
+supabase/.branches
+supabase/.temp
 
 # Environment / secrets — NEVER commit real keys
 .env

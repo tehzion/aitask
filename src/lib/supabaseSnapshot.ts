@@ -1,4 +1,4 @@
-import { AppNotification, ClientProfile, CustomRole, Project, Registration, Task, User } from '../types';
+import { Addon, AppNotification, ClientProfile, ClientServicePlan, CustomRole, CycleComment, Deliverable, Project, Registration, ServiceCycle, ServicePackage, ServicePricingSnapshot, ServiceWorkflowTemplate, Task, User } from '../types';
 import { getSupabaseConfig, shouldUseSupabase } from './backend';
 
 export interface PersistedWorkspaceState {
@@ -14,6 +14,14 @@ export interface PersistedWorkspaceState {
   deletedRoleIds?: string[];
   deletedTaskStatuses?: string[];
   deletedClientIds?: string[];
+  servicePackages?: ServicePackage[];
+  clientPlans?: ClientServicePlan[];
+  serviceCycles?: ServiceCycle[];
+  deliverables?: Deliverable[];
+  cycleComments?: CycleComment[];
+  addons?: Addon[];
+  serviceWorkflowTemplates?: ServiceWorkflowTemplate[];
+  servicePricingSnapshots?: ServicePricingSnapshot[];
 }
 
 export interface SnapshotResult {

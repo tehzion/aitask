@@ -207,6 +207,9 @@ Deno.serve(async (request) => {
   let departments = normalizeDepartments(role, body.departments, body.department);
   const companyName = role === 'Client' && typeof body.companyName === 'string' ? body.companyName.trim() : null;
   const customRoleId = typeof body.customRoleId === 'string' && body.customRoleId.trim() ? body.customRoleId.trim() : null;
+  const workerType = role === 'Staff' && ['employee', 'supplier', 'freelancer'].includes(body.workerType)
+    ? body.workerType
+    : 'employee';
   const sendInvitation = body.sendInvitation !== false;
   const temporaryPassword = typeof body.password === 'string' ? body.password.trim() : '';
   let onboardingMode: 'self_signup' | 'legacy_invite' | 'direct_invite' = 'direct_invite';
@@ -346,6 +349,12 @@ Deno.serve(async (request) => {
     if (createdAuthUser) await adminClient.auth.admin.deleteUser(authUser.id);
     return json({ error: finalizeError.message }, 400);
   }
+
+  const { error: workerTypeError } = await adminClient.from('aitask_members')
+    .update({ worker_type: workerType })
+    .eq('workspace_id', actor.workspace_id)
+    .eq('auth_user_id', authUser.id);
+  if (workerTypeError) return json({ error: 'Member created, but worker type could not be saved. Retry the invitation update.' }, 409);
 
   return json(result, createdAuthUser ? 201 : 200);
 });

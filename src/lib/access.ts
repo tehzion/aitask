@@ -1,5 +1,7 @@
 import { AppNotification, CustomRole, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
 
+export type DashboardPersona = 'boss' | 'admin' | 'operation' | 'account' | 'production' | 'client';
+
 export type AppPath = '/' | '/tasks' | '/calendar' | '/clients' | '/projects' | '/reports' | '/approvals' | '/settings';
 
 export const appNavigation: { label: string; path: AppPath }[] = [
@@ -30,12 +32,21 @@ export const permissionLabels: Record<RolePermissionKey, string> = {
   approveRegistrations: 'Approve registrations',
   deleteUsers: 'Delete users',
   clientReview: 'Client review actions',
+  manageServiceCatalog: 'Manage service packages',
+  manageTaskTemplates: 'Manage task workflow templates',
+  manageClientPlans: 'Manage client service plans',
+  manageServiceCycles: 'Manage service cycles and deliverables',
+  viewAllServiceClients: 'View all service clients',
+  viewAssignedServiceClients: 'View assigned service clients',
+  viewServicePrices: 'View internal service prices',
+  viewProductionReports: 'View production reports',
 };
 
 export const permissionGroups: { title: string; keys: RolePermissionKey[] }[] = [
   { title: 'Page Access', keys: ['viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects', 'viewReports', 'viewApprovals', 'viewSettings'] },
   { title: 'Task Access', keys: ['viewAllTasks', 'createTasks', 'editTasks'] },
-  { title: 'Client Access', keys: ['viewAllClients', 'manageAssignedClients'] },
+  { title: 'Client Access', keys: ['viewAllClients', 'manageAssignedClients', 'viewAllServiceClients', 'viewAssignedServiceClients', 'viewServicePrices'] },
+  { title: 'Service Management', keys: ['manageServiceCatalog', 'manageTaskTemplates', 'manageClientPlans', 'manageServiceCycles', 'viewProductionReports'] },
   { title: 'Workflow Actions', keys: ['createProjects', 'manageUsers', 'approveRegistrations', 'deleteUsers', 'clientReview'] },
 ];
 
@@ -63,6 +74,14 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'createTasks',
     'editTasks',
     'createProjects',
+    'manageServiceCatalog',
+    'manageTaskTemplates',
+    'manageClientPlans',
+    'manageServiceCycles',
+    'viewAllServiceClients',
+    'viewAssignedServiceClients',
+    'viewServicePrices',
+    'viewProductionReports',
   ]),
   Staff: makePermissions([
     'viewDashboard',
@@ -72,6 +91,8 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewReports',
     'viewSettings',
     'createTasks',
+    'viewAssignedServiceClients',
+    'viewProductionReports',
   ]),
   Client: makePermissions([
     'viewDashboard',
@@ -97,6 +118,16 @@ const routePermission: Record<AppPath, RolePermissionKey> = {
 
 export const isBossKoo = (user: User | null | undefined) => Boolean(user?.isSuperAdmin);
 export const isAdmin = (user: User | null | undefined) => user?.role === 'Admin';
+
+export const getDashboardPersona = (user: User | null | undefined): DashboardPersona => {
+  if (isBossKoo(user)) return 'boss';
+  if (user?.role === 'Admin') return 'admin';
+  if (user?.role === 'Client') return 'client';
+  const departments = user?.departments || (user?.department ? [user.department] : []);
+  if (departments.includes('Operation')) return 'operation';
+  if (departments.includes('Account & Finance')) return 'account';
+  return 'production';
+};
 
 export const getEffectivePermissions = (
   user: User | null | undefined,
@@ -154,6 +185,12 @@ export const canManageTasks = (user: User | null | undefined, customRoles: Custo
   hasPermission(user, 'createTasks', customRoles) || hasPermission(user, 'editTasks', customRoles)
 );
 export const canManageProjects = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'createProjects', customRoles);
+export const canManageServiceCatalog = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'manageServiceCatalog', customRoles);
+export const canManageTaskTemplates = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'manageTaskTemplates', customRoles);
+export const canManageClientPlans = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'manageClientPlans', customRoles);
+export const canManageServiceCycles = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'manageServiceCycles', customRoles);
+export const canViewServicePrices = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'viewServicePrices', customRoles);
+export const canViewProductionReports = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'viewProductionReports', customRoles);
 export const canManageClientProfiles = (user: User | null | undefined) => Boolean(user && (isBossKoo(user) || user.role === 'Admin'));
 export const getClientKey = (value: string | null | undefined) => value?.trim().toLowerCase() || '';
 export const canEditClientProfile = (
@@ -238,6 +275,7 @@ export const canEditProject = (
 export const canDeleteProject = canEditProject;
 export const canReviewTaskAsClient = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
   user?.role === 'Client' &&
+  task.visibility !== 'internal' &&
   hasPermission(user, 'clientReview', customRoles) &&
   user.companyName === task.clientName &&
   (task.isCompleted || task.status === 'Waiting Approval') &&
@@ -247,6 +285,7 @@ export const canCommentOnTask = (user: User | null | undefined, task: Task, cust
   canEditTask(user, task, customRoles) ||
   (
     user?.role === 'Client' &&
+    task.visibility !== 'internal' &&
     Boolean(user.companyName) &&
     user.companyName === task.clientName &&
     hasPermission(user, 'clientReview', customRoles)
@@ -281,7 +320,7 @@ export const getVisibleTasks = (
   customRoles: CustomRole[] = []
 ) => {
   if (!user) return [];
-  if (user.role === 'Client') return tasks.filter(task => task.clientName === user.companyName);
+  if (user.role === 'Client') return tasks.filter(task => task.clientName === user.companyName && task.visibility !== 'internal');
   if (user.role === 'Admin' || isBossKoo(user) || canViewAllTasks(user, customRoles)) return tasks;
   if (user.role === 'Staff') {
     return tasks.filter(task => task.assignedTo === user.id);
