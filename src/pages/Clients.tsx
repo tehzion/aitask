@@ -26,7 +26,7 @@ import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
-import { ClientProfile } from '../types';
+import { ClientProfile, ClientServicePlan, ServiceCycle } from '../types';
 import ModalShell from '../components/ModalShell';
 import CreateClientPlanModal from '../components/CreateClientPlanModal';
 
@@ -327,6 +327,8 @@ const Clients: React.FC = () => {
         contact.phone,
         contact.address,
         contact.notes,
+        contact.website,
+        contact.facebookPage,
         ...client.accountUsers,
         ...Array.from(client.projectNames),
         ...Array.from(client.services),
@@ -340,19 +342,29 @@ const Clients: React.FC = () => {
       : null
   ), [clients, selectedClientName]);
 
-  const totalTasks = clients.reduce((sum, client) => sum + client.taskCount, 0);
-  const openTasks = clients.reduce((sum, client) => sum + client.openTaskCount, 0);
-  const linkedAccounts = clients.reduce((sum, client) => sum + client.accountUsers.length, 0);
-  const savedProfiles = clients.filter(client => Boolean(client.profile)).length;
-  const getServiceContext = (client: ClientSummary) => {
-    if (!client.profile) return null;
-    const plans = clientPlans.filter(plan => plan.clientId === client.profile?.id).sort((a, b) => b.revision - a.revision);
-    const plan = plans.find(item => item.status === 'Active') || plans.find(item => item.status === 'Paused') || plans[0];
-    const cycle = serviceCycles.filter(item => item.clientId === client.profile?.id).sort((a, b) => b.periodStart.localeCompare(a.periodStart))[0];
-    const cycleDeliverables = cycle ? deliverables.filter(item => item.cycleId === cycle.id) : [];
-    const deliveredCount = cycleDeliverables.filter(item => item.status === 'Delivered').length;
-    return { plan, cycle, included: cycleDeliverables.length, delivered: deliveredCount };
-  };
+  const totalTasks = React.useMemo(() => clients.reduce((sum, client) => sum + client.taskCount, 0), [clients]);
+  const openTasks = React.useMemo(() => clients.reduce((sum, client) => sum + client.openTaskCount, 0), [clients]);
+  const linkedAccounts = React.useMemo(() => clients.reduce((sum, client) => sum + client.accountUsers.length, 0), [clients]);
+  const savedProfiles = React.useMemo(() => clients.filter(client => Boolean(client.profile)).length, [clients]);
+
+  const serviceContextByClientKey = React.useMemo(() => {
+    const contextByKey = new Map<string, { plan: ClientServicePlan | undefined; cycle: ServiceCycle | undefined; included: number; delivered: number } | null>();
+    clients.forEach(client => {
+      if (!client.profile) {
+        contextByKey.set(getClientKey(client.name), null);
+        return;
+      }
+      const profileId = client.profile.id;
+      const plans = clientPlans.filter(plan => plan.clientId === profileId).sort((a, b) => b.revision - a.revision);
+      const plan = plans.find(item => item.status === 'Active') || plans.find(item => item.status === 'Paused') || plans[0];
+      const cycle = serviceCycles.filter(item => item.clientId === profileId).sort((a, b) => b.periodStart.localeCompare(a.periodStart))[0];
+      const cycleDeliverables = cycle ? deliverables.filter(item => item.cycleId === cycle.id) : [];
+      const deliveredCount = cycleDeliverables.filter(item => item.status === 'Delivered').length;
+      contextByKey.set(getClientKey(client.name), { plan, cycle, included: cycleDeliverables.length, delivered: deliveredCount });
+    });
+    return contextByKey;
+  }, [clientPlans, clients, deliverables, serviceCycles]);
+  const getServiceContext = (client: ClientSummary) => serviceContextByClientKey.get(getClientKey(client.name)) ?? null;
   const selectedClientCanRename = selectedClient
     ? canRenameClient(currentUser)
     : false;

@@ -6,7 +6,7 @@ import { Department, Priority, ServiceType, TaskVisibility } from '../types';
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
 import { getClientOptions, getServiceOptions, hasChoice } from '../lib/choiceOptions';
-import { canAssignTasksToOthers, canManageProjects, getAssignableProjects } from '../lib/access';
+import { canAssignTasksToOthers, canCreateTasks, canManageProjects, getAssignableProjects, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
 import { getMemberDepartments, isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
@@ -96,9 +96,19 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     () => getAssignableProjects(currentUser, projects, tasks, rolePermissions),
     [currentUser, projects, rolePermissions, tasks]
   );
+  const visibleTasksForChoices = React.useMemo(
+    () => getVisibleTasks(currentUser, tasks, rolePermissions),
+    [currentUser, rolePermissions, tasks],
+  );
   const selectedProject = projectId ? assignableProjects.find(project => project.id === projectId) : undefined;
-  const clientOptions = React.useMemo(() => getClientOptions(projects, tasks, users), [projects, tasks, users]);
-  const serviceOptions = React.useMemo(() => getServiceOptions(projects, tasks), [projects, tasks]);
+  const clientOptions = React.useMemo(
+    () => getClientOptions(assignableProjects, visibleTasksForChoices, users),
+    [assignableProjects, users, visibleTasksForChoices],
+  );
+  const serviceOptions = React.useMemo(
+    () => getServiceOptions(assignableProjects, visibleTasksForChoices),
+    [assignableProjects, visibleTasksForChoices],
+  );
   const serviceChoices = React.useMemo(() => {
     if (!serviceType || hasChoice(serviceOptions, serviceType)) return serviceOptions;
     return [...serviceOptions, serviceType];
@@ -375,7 +385,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     if (!taskId) {
       setIsSubmitting(false);
-      setFormError('You do not have permission to create tasks.');
+      setFormError(
+        canCreateTasks(currentUser, rolePermissions)
+          ? 'This task could not be created. Review the selected company, department, and fields.'
+          : 'You do not have permission to create tasks.'
+      );
       return;
     }
 

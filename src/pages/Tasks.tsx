@@ -59,14 +59,22 @@ const Tasks: React.FC = () => {
   const [activeQuickEdit, setActiveQuickEdit] = useState<{ taskId: string; x: number; y: number } | null>(null);
   const [quickSyncError, setQuickSyncError] = useState('');
 
-  const persistQuickChange = async (previousTask: Task) => {
+  const persistQuickChange = async (previousTask: Task, changedField: 'status' | 'priority' | 'assignedTo') => {
     const result = await commitPendingMutation();
     if (result.ok) {
       setQuickSyncError('');
       return true;
     }
     useStore.setState(state => ({
-      tasks: state.tasks.map(task => task.id === previousTask.id ? previousTask : task),
+      tasks: state.tasks.map(task => {
+        if (task.id !== previousTask.id) return task;
+        const patch = changedField === 'status'
+          ? { status: previousTask.status, isCompleted: previousTask.isCompleted, completionPercentage: previousTask.completionPercentage }
+          : changedField === 'priority'
+            ? { priority: previousTask.priority }
+            : { assignedTo: previousTask.assignedTo };
+        return { ...task, ...patch };
+      }),
     }));
     setQuickSyncError(result.error || 'The quick change was rolled back. Use Retry required to confirm it safely.');
     return false;
@@ -123,7 +131,7 @@ const Tasks: React.FC = () => {
     if (!canEditTask(task)) return;
 
     updateTaskStatus(taskId, targetStatus);
-    await persistQuickChange(task);
+    await persistQuickChange(task, 'status');
   };
 
   const getDeptBadge = (dept: string) => {
@@ -176,6 +184,7 @@ const Tasks: React.FC = () => {
       }
       if (e.key === 'b' || e.key === 'B') {
         e.preventDefault();
+        if (document.querySelector('[data-aitask-modal-portal]')) return;
         setViewType('board');
       }
     };
@@ -186,6 +195,15 @@ const Tasks: React.FC = () => {
   useEffect(() => {
     setSearchTerm(routeSearch);
   }, [routeSearch]);
+
+  useEffect(() => {
+    const hasMatchingParam = searchParams.get('search') === searchTerm;
+    if (hasMatchingParam) return;
+    const next = new URLSearchParams(searchParams);
+    if (searchTerm) next.set('search', searchTerm);
+    else next.delete('search');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, searchTerm, setSearchParams]);
 
   useEffect(() => {
     setFilterAssignee(assigneeRouteFilter || 'All');
@@ -322,6 +340,7 @@ const Tasks: React.FC = () => {
       ? 'Leave feedback'
       : 'View details';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
+  const TABLE_COLUMN_COUNT = isClientUser ? 5 : 8;
   const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient, assigneeRouteFilter, periodRouteFilter].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
   const activeFilterLabels = [
     searchTerm && `Search: ${searchTerm}`,
@@ -366,7 +385,7 @@ const Tasks: React.FC = () => {
           disabled={backend.isSaving}
           onChange={async (e) => {
             updateTaskStatus(task.id, e.target.value as TaskStatus);
-            await persistQuickChange(task);
+            await persistQuickChange(task, 'status');
           }}
         >
           {taskStatuses.map(status => (
@@ -794,7 +813,7 @@ const Tasks: React.FC = () => {
                   )}
                   {!backend?.isLoading && pagedTasks.length === 0 && (
                     <tr>
-	                      <td colSpan={isClientUser ? 5 : 8} className="px-4 py-8 text-center text-slate-500">No tasks found matching your criteria.</td>
+	                      <td colSpan={TABLE_COLUMN_COUNT} className="px-4 py-8 text-center text-slate-500">No tasks found matching your criteria.</td>
                     </tr>
                   )}
                 </tbody>
@@ -842,7 +861,7 @@ const Tasks: React.FC = () => {
                       {isOverdue && (
                         <div className="mt-2 text-[10px] text-red-500 font-extrabold flex items-center gap-1.5">
                           <span className="h-2 w-2 rounded-full bg-red-500" />
-                          {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
+                          Overdue
                         </div>
                       )}
 	                      <div className="mt-3 flex items-center justify-between gap-3">
@@ -1058,7 +1077,7 @@ const Tasks: React.FC = () => {
                     value={currentTask.status}
                     onChange={(e) => {
                       updateTaskStatus(currentTask.id, e.target.value as TaskStatus);
-                      void persistQuickChange(currentTask);
+                      void persistQuickChange(currentTask, 'status');
                       setActiveQuickEdit(null);
                     }}
                   >
@@ -1079,7 +1098,7 @@ const Tasks: React.FC = () => {
                     value={currentTask.priority}
                     onChange={(e) => {
                       updateTaskPriority(currentTask.id, e.target.value as Priority);
-                      void persistQuickChange(currentTask);
+                      void persistQuickChange(currentTask, 'priority');
                       setActiveQuickEdit(null);
                     }}
                   >
@@ -1101,7 +1120,7 @@ const Tasks: React.FC = () => {
                     disabled={!canAssignOthers}
                     onChange={(e) => {
                       updateTaskAssignee(currentTask.id, e.target.value);
-                      void persistQuickChange(currentTask);
+                      void persistQuickChange(currentTask, 'assignedTo');
                       setActiveQuickEdit(null);
                     }}
                   >

@@ -401,12 +401,18 @@ const getNotificationReadReceipts = (
   notification: AppNotification,
   users: User[],
 ) => {
-  if (notification.readByUserIds !== undefined) return notification.readByUserIds;
+  if (notification.readByUserIds !== undefined) return [...notification.readByUserIds];
   if (!notification.isRead) return [];
   return users
     .filter(user => isNotificationVisible(user, notification))
     .map(user => user.id);
 };
+
+const countUnreadForUser = (user: User | null | undefined, notifications: AppNotification[]) => (
+  notifications.filter(notification => (
+    isNotificationVisible(user, notification) && !isNotificationReadByUser(user, notification)
+  )).length
+);
 
 const stripPassword = <T extends { password?: string }>(item: T): Omit<T, 'password'> => {
   const cleanItem = { ...item };
@@ -1877,23 +1883,22 @@ export const useStore = create<StoreState>()(
         set((state) => {
           const currentUser = state.currentUser;
           if (!currentUser) return state;
-          return {
-            notifications: (state.notifications || []).map(notification => (
-              notification.id === id
-                ? {
-                    ...notification,
-                    readByUserIds: Array.from(new Set([
-                      ...getNotificationReadReceipts(notification, state.users),
-                      currentUser.id,
-                    ])),
-                    unreadByUserIds: (notification.unreadByUserIds || []).filter(userId => userId !== currentUser.id),
-                    isRead: notification.targetUserId === currentUser.id && !notification.targetRole && !notification.targetClient
-                      ? true
-                      : notification.isRead,
-                  }
-                : notification
-            )),
-          };
+          const notifications = (state.notifications || []).map(notification => (
+            notification.id === id
+              ? {
+                  ...notification,
+                  readByUserIds: Array.from(new Set([
+                    ...getNotificationReadReceipts(notification, state.users),
+                    currentUser.id,
+                  ])),
+                  unreadByUserIds: (notification.unreadByUserIds || []).filter(userId => userId !== currentUser.id),
+                  isRead: notification.targetUserId === currentUser.id && !notification.targetRole && !notification.targetClient
+                    ? true
+                    : notification.isRead,
+                }
+              : notification
+          ));
+          return { notifications, notificationUnreadCount: countUnreadForUser(currentUser, notifications) };
         });
         isApplyingNotificationRead = false;
       },
@@ -1903,22 +1908,21 @@ export const useStore = create<StoreState>()(
         set((state) => {
           const currentUser = state.currentUser;
           if (!currentUser) return state;
-          return {
-            notifications: (state.notifications || []).map(notification => (
-              notification.id === id
-                ? {
-                    ...notification,
-                    readByUserIds: getNotificationReadReceipts(notification, state.users)
-                      .filter(userId => userId !== currentUser.id),
-                    unreadByUserIds: Array.from(new Set([
-                      ...(notification.unreadByUserIds || []),
-                      currentUser.id,
-                    ])),
-                    isRead: false,
-                  }
-                : notification
-            )),
-          };
+          const notifications = (state.notifications || []).map(notification => (
+            notification.id === id
+              ? {
+                  ...notification,
+                  readByUserIds: getNotificationReadReceipts(notification, state.users)
+                    .filter(userId => userId !== currentUser.id),
+                  unreadByUserIds: Array.from(new Set([
+                    ...(notification.unreadByUserIds || []),
+                    currentUser.id,
+                  ])),
+                  isRead: false,
+                }
+              : notification
+          ));
+          return { notifications, notificationUnreadCount: countUnreadForUser(currentUser, notifications) };
         });
         isApplyingNotificationRead = false;
       },
@@ -1928,23 +1932,22 @@ export const useStore = create<StoreState>()(
         set((state) => {
           const currentUser = state.currentUser;
           if (!currentUser) return state;
-          return {
-            notifications: (state.notifications || []).map(notification => {
-              const isMine = isNotificationVisible(currentUser, notification);
-              if (!isMine || isNotificationReadByUser(currentUser, notification)) return notification;
-              return {
-                ...notification,
-                readByUserIds: Array.from(new Set([
-                  ...getNotificationReadReceipts(notification, state.users),
-                  currentUser.id,
-                ])),
-                unreadByUserIds: (notification.unreadByUserIds || []).filter(userId => userId !== currentUser.id),
-                isRead: notification.targetUserId === currentUser.id && !notification.targetRole && !notification.targetClient
-                  ? true
-                  : notification.isRead,
-              };
-            }),
-          };
+          const notifications = (state.notifications || []).map(notification => {
+            const isMine = isNotificationVisible(currentUser, notification);
+            if (!isMine || isNotificationReadByUser(currentUser, notification)) return notification;
+            return {
+              ...notification,
+              readByUserIds: Array.from(new Set([
+                ...getNotificationReadReceipts(notification, state.users),
+                currentUser.id,
+              ])),
+              unreadByUserIds: (notification.unreadByUserIds || []).filter(userId => userId !== currentUser.id),
+              isRead: notification.targetUserId === currentUser.id && !notification.targetRole && !notification.targetClient
+                ? true
+                : notification.isRead,
+            };
+          });
+          return { notifications, notificationUnreadCount: countUnreadForUser(currentUser, notifications) };
         });
         isApplyingNotificationRead = false;
       },
@@ -4144,6 +4147,7 @@ export const useStore = create<StoreState>()(
 );
 
 let backendAutoSyncStarted = false;
+let backendAutoSyncCleanup: (() => void) | null = null;
 export const startBackendAutoSync = () => {
   if (backendAutoSyncStarted) return;
   backendAutoSyncStarted = true;
@@ -4207,10 +4211,7 @@ export const startBackendAutoSync = () => {
     void state.pullBackendNow({ silent: true });
   };
 
-  window.setInterval(pullLatest, 15000);
-  window.addEventListener('focus', pullLatest);
-  document.addEventListener('visibilitychange', pullLatest);
-  window.addEventListener('offline', () => {
+  const handleOffline = () => {
     useStore.setState((state) => ({
       backend: {
         ...state.backend,
@@ -4220,8 +4221,8 @@ export const startBackendAutoSync = () => {
           : 'Offline. Live sync will resume when you reconnect.',
       },
     }));
-  });
-  window.addEventListener('online', () => {
+  };
+  const handleOnline = () => {
     useStore.setState((state) => ({
       backend: {
         ...state.backend,
@@ -4235,5 +4236,24 @@ export const startBackendAutoSync = () => {
     if (!shouldUseSecureSupabase() || state.currentUser) {
       void state.pullBackendNow({ silent: true });
     }
-  });
+  };
+
+  const pullInterval = window.setInterval(pullLatest, 15000);
+  window.addEventListener('focus', pullLatest);
+  document.addEventListener('visibilitychange', pullLatest);
+  window.addEventListener('offline', handleOffline);
+  window.addEventListener('online', handleOnline);
+
+  backendAutoSyncCleanup = () => {
+    window.clearInterval(pullInterval);
+    window.removeEventListener('focus', pullLatest);
+    document.removeEventListener('visibilitychange', pullLatest);
+    window.removeEventListener('offline', handleOffline);
+    window.removeEventListener('online', handleOnline);
+    backendAutoSyncStarted = false;
+  };
+};
+
+export const stopBackendAutoSync = () => {
+  backendAutoSyncCleanup?.();
 };

@@ -95,6 +95,11 @@ const ClientWorkspace = () => {
     store.currentUser,
     store.rolePermissions,
   );
+  const canLinkTasks = hasPermission(
+    store.currentUser,
+    "editTasks",
+    store.rolePermissions,
+  );
   const canSeePrices = canViewServicePrices(
     store.currentUser,
     store.rolePermissions,
@@ -241,8 +246,8 @@ const ClientWorkspace = () => {
   const addAddon = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!activePlan || addonSaving) return;
-    if (addon.quantity < 1 || addon.unitPrice < 0 || !Number.isFinite(addon.unitPrice)) {
-      setMessage("Enter a quantity of at least one and a valid non-negative price.");
+    if (addon.quantity < 1 || !Number.isInteger(addon.quantity) || addon.unitPrice < 0 || !Number.isFinite(addon.unitPrice)) {
+      setMessage("Enter a whole quantity of at least one and a valid non-negative price.");
       return;
     }
     if (addon.billingMode === "one_off" && !addon.targetCycleId) {
@@ -465,24 +470,32 @@ const ClientWorkspace = () => {
                 )}
                 <Button
                   variant="secondary"
-                  onClick={() =>
+                  onClick={() => {
+                    const confirmed = window.confirm(
+                      `Pause the "${activePlan.name}" plan? Invoices stay on their current cycle and future cycles stop generating.`,
+                    );
+                    if (!confirmed) return;
                     void saveAndCommit(
                       store.setClientPlanStatus(activePlan.id, "Paused"),
                       "client_plan.manage",
-                    )
-                  }
+                    );
+                  }}
                 >
                   <Pause className="h-4 w-4" />
                   Pause
                 </Button>
                 <Button
                   variant="secondary"
-                  onClick={() =>
+                  onClick={() => {
+                    const confirmed = window.confirm(
+                      `End the "${activePlan.name}" plan? This cannot be reopened; the client keeps access to completed work.`,
+                    );
+                    if (!confirmed) return;
                     void saveAndCommit(
                       store.setClientPlanStatus(activePlan.id, "Ended"),
                       "client_plan.manage",
-                    )
-                  }
+                    );
+                  }}
                 >
                   <StopCircle className="h-4 w-4" />
                   End
@@ -688,6 +701,7 @@ const ClientWorkspace = () => {
                                   tasks
                                 </Button>
                               )}
+                            {canLinkTasks && (
                             <select
                               className={cn(
                                 inputBase,
@@ -718,6 +732,7 @@ const ClientWorkspace = () => {
                                   </option>
                                 ))}
                             </select>
+                            )}
                             <Button
                               variant="secondary"
                               onClick={() =>

@@ -11,7 +11,7 @@ import { getDefaultAccessiblePath, getEffectivePermissions, getEffectiveRoleName
 import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
 import BackendFreshness from '../components/BackendFreshness';
-import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
+import { getSoundEnabled, setSoundEnabled, SOUND_PREF_EVENT } from '../lib/sounds';
 import { canUsePasswordResetBypass, enablePasswordResetBypass } from '../lib/auth';
 import { APP_BUILD_CHANNEL, APP_BUILD_LABEL, APP_BUILD_TIME, APP_COMMIT, APP_VERSION_LABEL } from '../lib/appVersion';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
@@ -118,6 +118,15 @@ const Settings: React.FC = () => {
   const [isPreparingAvatar, setIsPreparingAvatar] = React.useState(false);
   const avatarFileInputRef = React.useRef<HTMLInputElement>(null);
   const [soundEnabled, setSoundEnabledState] = React.useState(getSoundEnabled);
+
+  React.useEffect(() => {
+    const handleSoundPreference = (event: Event) => {
+      const enabled = (event as CustomEvent<boolean>).detail;
+      setSoundEnabledState(enabled);
+    };
+    window.addEventListener(SOUND_PREF_EVENT, handleSoundPreference);
+    return () => window.removeEventListener(SOUND_PREF_EVENT, handleSoundPreference);
+  }, []);
   const [passwordForm, setPasswordForm] = React.useState({
     currentPassword: '',
     newPassword: '',

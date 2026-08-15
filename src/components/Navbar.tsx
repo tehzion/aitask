@@ -11,7 +11,7 @@ import { cn } from '../lib/utils';
 import { getEffectiveRoleName, getUnreadNotifications } from '../lib/access';
 import { useSoundNotifications } from '../hooks/useSoundNotifications';
 import { NotificationReadActions } from '../hooks/useNotificationReadActions';
-import { getSoundEnabled, setSoundEnabled } from '../lib/sounds';
+import { getSoundEnabled, setSoundEnabled, SOUND_PREF_EVENT } from '../lib/sounds';
 import { notificationRouteToPath } from '../lib/security';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import type { ResolvedTheme, ThemePreference } from '../lib/theme';
@@ -57,6 +57,15 @@ const Navbar: React.FC<NavbarProps> = ({
   const appearanceItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const mobileSearchRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleSoundPreference = (event: Event) => {
+      const enabled = (event as CustomEvent<boolean>).detail;
+      setSoundEnabledState(enabled);
+    };
+    window.addEventListener(SOUND_PREF_EVENT, handleSoundPreference);
+    return () => window.removeEventListener(SOUND_PREF_EVENT, handleSoundPreference);
+  }, []);
 
   // Play sound on new notifications
   useSoundNotifications(notifications, currentUser);

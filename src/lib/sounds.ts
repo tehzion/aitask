@@ -96,6 +96,9 @@ export const playSuccessSound = async () => {
 /** Sound preference key in localStorage */
 const SOUND_PREF_KEY = 'aitask_sound_enabled';
 
+/** Dispatch when the preference changes so independent UI controls stay in sync. */
+export const SOUND_PREF_EVENT = 'aitask:sound-preference-changed';
+
 export const getSoundEnabled = (): boolean => {
   try {
     const stored = localStorage.getItem(SOUND_PREF_KEY);
@@ -110,6 +113,9 @@ export const setSoundEnabled = (enabled: boolean) => {
     localStorage.setItem(SOUND_PREF_KEY, String(enabled));
   } catch {
     // ignore
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SOUND_PREF_EVENT, { detail: enabled }));
   }
 };
 

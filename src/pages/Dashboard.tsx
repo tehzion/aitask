@@ -13,7 +13,8 @@ import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../c
 import { cardBase, pageShell } from '../components/uiTokens';
 import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
-import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
+import { cn, getRelativeDueDateString, parseOptionalDate, themeTokenColor } from '../lib/utils';
+import { useColorTheme } from '../hooks/useColorTheme';
 import type { User } from '../types';
 import OperationsGlance from '../components/OperationsGlance';
 import { getTrackedMonthlyCompletions, isTaskOpen } from '../lib/taskReporting';
@@ -52,6 +53,17 @@ const Dashboard: React.FC = () => {
     () => getVisibleTasks(currentUser, allTasks, rolePermissions),
     [allTasks, currentUser, rolePermissions]
   );
+  const { resolvedTheme } = useColorTheme();
+  const chartColors = useMemo(() => {
+    void resolvedTheme;
+    return {
+      grid: themeTokenColor('--calm-line', '#e2e8f0'),
+      tick: themeTokenColor('--calm-muted', '#64748b'),
+      accent: themeTokenColor('--calm-accent', '#2563eb'),
+      cursor: themeTokenColor('--calm-inset', '#f8fafc'),
+      surface: themeTokenColor('--calm-surface', '#ffffff'),
+    };
+  }, [resolvedTheme]);
   const visibleProjects = useMemo(
     () => getVisibleProjects(currentUser, projects, allTasks, rolePermissions),
     [allTasks, currentUser, projects, rolePermissions]
@@ -312,11 +324,11 @@ const Dashboard: React.FC = () => {
               ) : (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 256 }}>
                   <BarChart data={tasksByTeamData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                    <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
-                    <Bar dataKey="value" fill="#2563eb" radius={[4, 4, 0, 0]} barSize={36} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
+                    <Tooltip cursor={{ fill: chartColors.cursor }} contentStyle={{ borderRadius: '8px', border: `1px solid ${chartColors.grid}`, boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
+                    <Bar dataKey="value" fill={chartColors.accent} radius={[4, 4, 0, 0]} barSize={36} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -333,7 +345,7 @@ const Dashboard: React.FC = () => {
                         <Cell key={`cell-${entry.name}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: `1px solid ${chartColors.grid}`, boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
                     <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
                   </PieChart>
                 </ResponsiveContainer>
@@ -348,11 +360,11 @@ const Dashboard: React.FC = () => {
             {hasTrackedCompletionData ? (
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 960, height: 256 }}>
                 <LineChart data={monthlyData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                  <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
-                  <Line type="monotone" dataKey="completed" stroke="#2563eb" strokeWidth={2.5} activeDot={{ r: 5 }} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
+                  <Tooltip cursor={{ fill: chartColors.cursor }} contentStyle={{ borderRadius: '8px', border: `1px solid ${chartColors.grid}`, boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
+                  <Line type="monotone" dataKey="completed" stroke={chartColors.accent} strokeWidth={2.5} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (

@@ -7,7 +7,8 @@ import { cardBase, pageShell } from '../components/uiTokens';
 import { getVisibleTasks } from '../lib/access';
 import { STAFF_DEPARTMENTS } from '../lib/departments';
 import { getTrackedWeeklyCompletions, isTaskOpen } from '../lib/taskReporting';
-import { parseOptionalDate } from '../lib/utils';
+import { parseOptionalDate, themeTokenColor } from '../lib/utils';
+import { useColorTheme } from '../hooks/useColorTheme';
 import { isBefore, isToday } from 'date-fns';
 
 const Reports: React.FC = () => {
@@ -16,6 +17,15 @@ const Reports: React.FC = () => {
     () => getVisibleTasks(currentUser, allTasks, rolePermissions),
     [allTasks, currentUser, rolePermissions]
   );
+  const { resolvedTheme } = useColorTheme();
+  const chartColors = useMemo(() => {
+    void resolvedTheme;
+    return {
+      grid: themeTokenColor('--calm-line', '#e2e8f0'),
+      tick: themeTokenColor('--calm-muted', '#64748b'),
+      cursor: themeTokenColor('--calm-inset', '#f8fafc'),
+    };
+  }, [resolvedTheme]);
   const scopeLabel = currentUser?.role === 'Client'
     ? `${currentUser.companyName || 'your company'} tasks`
     : 'your accessible workspace tasks';
@@ -96,10 +106,10 @@ const Reports: React.FC = () => {
           ) : (
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
               <LineChart data={trendData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
-                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: chartColors.tick }} />
+                <Tooltip cursor={{ fill: chartColors.cursor }} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
                 <Legend iconType="circle" wrapperStyle={{fontSize: '12px'}} />
                 <Line type="monotone" dataKey="completed" stroke="#10b981" strokeWidth={3} activeDot={{ r: 8 }} />
                 <Line type="monotone" dataKey="pending" stroke="#f59e0b" strokeWidth={3} />
@@ -114,10 +124,10 @@ const Reports: React.FC = () => {
           ) : (
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
               <BarChart data={departmentStats} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
-                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} width={100} />
-                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartColors.grid} />
+                <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick }} />
+                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} width={100} />
+                <Tooltip cursor={{ fill: chartColors.cursor }} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
                 <Legend iconType="circle" wrapperStyle={{fontSize: '12px'}} />
                 <Bar dataKey="completed" name="Completed Tasks" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
                 <Bar dataKey="pending" name="Pending Tasks" stackId="a" fill="#f59e0b" radius={[0, 4, 4, 0]} />

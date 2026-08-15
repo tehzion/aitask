@@ -158,13 +158,16 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
       .flatMap(getMemberDepartments),
   )).sort((left, right) => left.localeCompare(right)), [users]);
 
+  const rawSummaries = useMemo(
+    () => getTeamWorkloadSummaries(tasks, users, period),
+    [period, tasks, users],
+  );
   const summaries = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    const filtered = getTeamWorkloadSummaries(tasks, users, period)
-      .filter(summary => (
-        (!normalizedQuery || summary.member.name.toLowerCase().includes(normalizedQuery))
-        && (department === 'All' || getMemberDepartments(summary.member).includes(department))
-      ));
+    const filtered = rawSummaries.filter(summary => (
+      (!normalizedQuery || summary.member.name.toLowerCase().includes(normalizedQuery))
+      && (department === 'All' || getMemberDepartments(summary.member).includes(department))
+    ));
 
     return [...filtered].sort((left, right) => {
       if (sort === 'name') return left.member.name.localeCompare(right.member.name);
@@ -174,11 +177,11 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
         || right.periodOpen - left.periodOpen
         || left.member.name.localeCompare(right.member.name);
     });
-  }, [department, period, query, sort, tasks, users]);
+  }, [department, query, rawSummaries, sort]);
 
   const selectedSummary = useMemo(
-    () => getTeamWorkloadSummaries(tasks, users, period).find(summary => summary.member.id === selectedMemberId),
-    [period, selectedMemberId, tasks, users],
+    () => rawSummaries.find(summary => summary.member.id === selectedMemberId),
+    [rawSummaries, selectedMemberId],
   );
   const selectedGroups: TeamTaskGroups | null = useMemo(
     () => selectedMemberId ? getTeamMemberTaskGroups(tasks, selectedMemberId) : null,

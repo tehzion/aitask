@@ -151,6 +151,8 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
   const [queuedIds, setQueuedIds] = useState<string[]>([]);
   const [readyUserId, setReadyUserId] = useState<string>();
 
+  const MAX_QUEUED_IDS = 12;
+
   const unreadNotifications = useMemo(
     () => getUnreadNotifications(currentUser, notifications),
     [currentUser, notifications],
@@ -192,7 +194,7 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
     tracker.current.seenIds = incoming.seenIds;
 
     if (incoming.incomingIds.length === 0) return;
-    setQueuedIds(current => Array.from(new Set([...current, ...incoming.incomingIds])));
+    setQueuedIds(current => Array.from(new Set([...current, ...incoming.incomingIds])).slice(-MAX_QUEUED_IDS));
   }, [currentUser, isReady, notifications]);
 
   useEffect(() => {

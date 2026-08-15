@@ -17,6 +17,12 @@ export function getTodayInputDate(date = new Date()): string {
   return localDate.toISOString().slice(0, 10);
 }
 
+export function themeTokenColor(token: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  return value ? `rgb(${value})` : fallback;
+}
+
 export function getRelativeDueDateString(dueDateStr: string | undefined, isCompleted: boolean, status: string): string {
   const parsedDueDate = parseOptionalDate(dueDateStr);
   if (!parsedDueDate) return 'No due date';

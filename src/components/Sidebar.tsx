@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, CheckSquare, CalendarDays, FolderKanban, BarChart3, Settings, LogOut, UserPlus, Users, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import { useStore } from '../store';
+import { useStore, stopBackendAutoSync } from '../store';
 import clsx from 'clsx';
 import { canAccessPath, getVisibleNavigation } from '../lib/access';
 import { clearPasswordResetBypass } from '../lib/auth';
@@ -35,6 +35,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
     const signingOutUser = useStore.getState().currentUser;
     if (shouldUseSecureSupabase()) await signOutSecureSession();
     clearPasswordResetBypass(signingOutUser?.id);
+    stopBackendAutoSync();
     useStore.setState({ currentUser: null });
     navigate('/login', { replace: true });
   };
