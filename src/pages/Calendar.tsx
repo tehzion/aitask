@@ -528,14 +528,17 @@ const Calendar: React.FC = () => {
   const selectedDayTasks = getTasksForDay(selectedDate);
   const selectedDayHolidays = getHolidaysForDay(selectedDate);
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+  const isClientUser = currentUser?.role === 'Client';
 
   return (
     <div className={pageShell}>
       <div className="flex min-w-0 flex-col gap-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-slate-950">Team Calendar</h1>
+          <h1 className="text-2xl font-semibold text-slate-950">{isClientUser ? 'Delivery Schedule' : 'Team Calendar'}</h1>
           <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">
-            See each task from start to due date. Drag a range to move it, or adjust either edge.
+            {isClientUser
+              ? 'See each deliverable from its start date to its due date.'
+              : 'See each task from start to due date. Drag a range to move it, or adjust either edge.'}
           </p>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -636,10 +639,12 @@ const Calendar: React.FC = () => {
             </>
           )}
         </div>
+        {!isClientUser && (
         <p id="calendar-drag-hint" className="hidden shrink-0 items-center gap-1.5 text-xs text-slate-400 2xl:flex">
           <GripVertical className="h-3 w-3" />
           Drag the bar to move · drag either edge to resize
         </p>
+        )}
       </div>
 
       {dropSuccess && (
@@ -860,10 +865,10 @@ const Calendar: React.FC = () => {
                           {savingTaskId === task.id ? (
                             <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
                           ) : (
-                            <span className={clsx('h-2 w-2 shrink-0 rounded-full', getDeptDot(task.department))} />
+                            <span className={clsx('h-2 w-2 shrink-0 rounded-full', isClientUser ? 'bg-accent' : getDeptDot(task.department))} />
                           )}
                           <span className="min-w-0 flex-1 truncate">
-                            {task.clientName && segment.spanDays > 1 ? `${task.clientName} · ` : ''}
+                            {!isClientUser && task.clientName && segment.spanDays > 1 ? `${task.clientName} · ` : ''}
                             {task.title}
                           </span>
                         </button>
@@ -990,7 +995,7 @@ const Calendar: React.FC = () => {
                       )}
                     >
                       <div className="flex items-start gap-2">
-                        <span className={clsx('mt-1.5 h-2 w-2 shrink-0 rounded-full', getDeptDot(task.department))} />
+                        <span className={clsx('mt-1.5 h-2 w-2 shrink-0 rounded-full', isClientUser ? 'bg-accent' : getDeptDot(task.department))} />
                         <div className="min-w-0 flex-1">
                           <Link
                             to={`/tasks?taskId=${encodeURIComponent(task.id)}`}
@@ -1002,20 +1007,26 @@ const Calendar: React.FC = () => {
                           >
                             {task.title}
                           </Link>
-                          <p className="mt-0.5 truncate text-[10px] text-slate-400">{task.clientName}</p>
+                          <p className="mt-0.5 truncate text-[10px] text-slate-400">{isClientUser ? task.serviceType : task.clientName}</p>
                         </div>
+                        {!isClientUser && (
                         <Badge tone={task.isCompleted ? 'emerald' : task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : 'slate'}>
                           {task.priority}
                         </Badge>
+                        )}
                       </div>
 
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        {!isClientUser && (
                         <span className={clsx('rounded px-1.5 py-0.5 text-[10px] font-semibold', getDeptBadge(task.department))}>
                           {task.department}
                         </span>
+                        )}
+                        {!isClientUser && (
                         <span className="flex items-center gap-1 text-[10px] text-slate-400">
                           <User className="h-2.5 w-2.5" /> {getUserName(task.assignedTo)}
                         </span>
+                        )}
                         <Badge tone={task.status === 'Completed' ? 'emerald' : task.status === 'Cancelled' ? 'slate' : 'blue'} className="px-1.5 py-0.5 text-[10px]">
                           {task.status}
                         </Badge>

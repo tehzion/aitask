@@ -848,7 +848,7 @@ const ClientWorkspace = () => {
                     {store.users.find((user) => user.id === item.userId)
                       ?.name || "Team member"}
                   </p>
-                  <Badge tone="slate">{item.visibility}</Badge>
+                  {!isClient && <Badge tone="slate">{item.visibility}</Badge>}
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
                   {item.text}

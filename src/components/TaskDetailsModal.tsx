@@ -496,7 +496,13 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                     task.clientApprovalStatus === 'Rejected' ? 'bg-red-100 text-red-700' :
                     'bg-slate-100 text-slate-700'
                   }`}>
-                    {task.clientApprovalStatus}
+                    {isClientTaskViewer
+                      ? task.clientApprovalStatus === 'Approved'
+                        ? 'Approved'
+                        : task.clientApprovalStatus === 'Rejected'
+                          ? 'Changes requested'
+                          : 'Not reviewed'
+                      : task.clientApprovalStatus}
                   </span>
                 </div>
                 <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
@@ -658,7 +664,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                       <CheckCircle2 className="w-4 h-4" /> {isSubmitting ? 'Saving...' : 'Approve'}
                     </button>
                     <button disabled={isSubmitting} onClick={() => handleClientReview('Rejected')} type="button" className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-2 text-sm font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
-                      <XCircle className="w-4 h-4" /> Request Revision
+                      <XCircle className="w-4 h-4" /> Request changes
                     </button>
                   </div>
                 </div>

@@ -961,22 +961,35 @@ const loadClientPortalPayload = async (expectedClientName?: string): Promise<Cli
     throw new Error('The Client portal company does not match this account.');
   }
 
+  const companyKey = clientName.trim().toLocaleLowerCase();
+  const belongsToClient = (item: { clientName?: string }) => (
+    cleanPortalText(item.clientName, 240).trim().toLocaleLowerCase() === companyKey
+  );
+
   const tasks = portalRecords(result.data.tasks)
-    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.clientName, 240))
+    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
     .map(item => ({ ...item })) as unknown as ClientPortalPayload['tasks'];
   const projects = portalRecords(result.data.projects)
-    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.clientName, 240))
+    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
     .map(item => ({ ...item })) as unknown as ClientPortalPayload['projects'];
   const clients = portalRecords(result.data.clients)
-    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.clientName, 240))
+    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
     .map(item => ({ ...item })) as unknown as ClientPortalPayload['clients'];
   const contacts = (Array.isArray(result.data.contacts) ? result.data.contacts : [])
     .map(parseClientContact)
     .filter((contact): contact is ClientContact => Boolean(contact));
-  const clientPlans = portalRecords(result.data.clientPlans).map(item => ({ ...item })) as unknown as ClientPortalPayload['clientPlans'];
-  const serviceCycles = portalRecords(result.data.serviceCycles).map(item => ({ ...item })) as unknown as ClientPortalPayload['serviceCycles'];
-  const deliverables = portalRecords(result.data.deliverables).map(item => ({ ...item })) as unknown as ClientPortalPayload['deliverables'];
-  const cycleComments = portalRecords(result.data.cycleComments).map(item => ({ ...item })) as unknown as ClientPortalPayload['cycleComments'];
+  const clientPlans = portalRecords(result.data.clientPlans)
+    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
+    .map(item => ({ ...item })) as unknown as ClientPortalPayload['clientPlans'];
+  const serviceCycles = portalRecords(result.data.serviceCycles)
+    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
+    .map(item => ({ ...item })) as unknown as ClientPortalPayload['serviceCycles'];
+  const deliverables = portalRecords(result.data.deliverables)
+    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
+    .map(item => ({ ...item })) as unknown as ClientPortalPayload['deliverables'];
+  const cycleComments = portalRecords(result.data.cycleComments)
+    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
+    .map(item => ({ ...item })) as unknown as ClientPortalPayload['cycleComments'];
 
   return { workspaceId, clientName, tasks, projects, clients, contacts, clientPlans, serviceCycles, deliverables, cycleComments };
 };
@@ -1047,7 +1060,7 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
   const clientCustomRoleId = authenticatedMemberRow?.custom_role_id;
   const visibleEntityRows = currentUser.role === 'Client'
     ? entityRows.filter(row => (
-        !['task', 'project', 'client', 'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon', 'service_package', 'service_workflow_template', 'service_pricing_snapshot'].includes(row.entity_type)
+        !['task', 'project', 'client', 'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon', 'service_package', 'service_workflow_template', 'service_pricing_snapshot', 'registration', 'task_status'].includes(row.entity_type)
         && (row.entity_type !== 'custom_role' || row.entity_id === clientCustomRoleId)
       ))
     : entityRows;

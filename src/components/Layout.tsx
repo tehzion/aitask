@@ -10,7 +10,7 @@ import { useStore } from '../store';
 import { useNotificationReadActions } from '../hooks/useNotificationReadActions';
 import { canAccessPath, canCreateTasks, getUnreadNotifications } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
-import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw, Settings as SettingsIcon } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
 import { notificationRouteToPath } from '../lib/security';
@@ -184,6 +184,9 @@ const Layout: React.FC = () => {
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/tasks', label: 'Tasks', icon: CheckSquare },
     { path: '/calendar', label: 'Calendar', icon: CalendarDays },
+    ...(canAccessPath(currentUser, '/settings', rolePermissions)
+      ? [{ path: '/settings', label: 'Settings', icon: SettingsIcon }]
+      : []),
   ].filter(item => canAccessPath(currentUser, item.path, rolePermissions)), [currentUser, rolePermissions]);
   const canOpenSettings = Boolean(currentUser?.mustResetPassword)
     || canAccessPath(currentUser, '/settings', rolePermissions);

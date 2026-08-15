@@ -278,7 +278,7 @@ export const canReviewTaskAsClient = (user: User | null | undefined, task: Task,
   user?.role === 'Client' &&
   task.visibility !== 'internal' &&
   hasPermission(user, 'clientReview', customRoles) &&
-  user.companyName === task.clientName &&
+  getClientKey(user.companyName) === getClientKey(task.clientName) &&
   (task.isCompleted || task.status === 'Waiting Approval') &&
   task.clientApprovalStatus !== 'Approved'
 );
@@ -288,7 +288,7 @@ export const canCommentOnTask = (user: User | null | undefined, task: Task, cust
     user?.role === 'Client' &&
     task.visibility !== 'internal' &&
     Boolean(user.companyName) &&
-    user.companyName === task.clientName &&
+    getClientKey(user.companyName) === getClientKey(task.clientName) &&
     hasPermission(user, 'clientReview', customRoles)
   )
 );
@@ -321,7 +321,7 @@ export const getVisibleTasks = (
   customRoles: CustomRole[] = []
 ) => {
   if (!user) return [];
-  if (user.role === 'Client') return tasks.filter(task => task.clientName === user.companyName && task.visibility !== 'internal');
+  if (user.role === 'Client') return tasks.filter(task => getClientKey(task.clientName) === getClientKey(user.companyName) && task.visibility !== 'internal');
   if (user.role === 'Admin' || isBossKoo(user) || canViewAllTasks(user, customRoles)) return tasks;
   if (user.role === 'Staff') {
     return tasks.filter(task => task.assignedTo === user.id);
@@ -336,7 +336,7 @@ export const getVisibleProjects = (
   customRoles: CustomRole[] = []
 ) => {
   if (!user) return [];
-  if (user.role === 'Client') return projects.filter(project => project.clientName === user.companyName);
+  if (user.role === 'Client') return projects.filter(project => getClientKey(project.clientName) === getClientKey(user.companyName));
   if (user.role === 'Admin' || isBossKoo(user)) return projects;
   if (user.role === 'Staff') {
     const visibleProjectIds = new Set(
@@ -388,8 +388,8 @@ export const isNotificationVisible = (user: User | null | undefined, notificatio
   if (notification.targetUserId && notification.targetUserId === user.id) return true;
   // Supabase RLS note: Boss Koo maps to super_admin, but must still receive admin-scoped operational notices.
   if (notification.targetRole === 'Admin' && isBossKoo(user)) return true;
-  if (notification.targetRole && notification.targetRole === user.role) return true;
-  if (notification.targetClient && user.role === 'Client' && notification.targetClient === user.companyName) return true;
+  if (user.role !== 'Client' && notification.targetRole && notification.targetRole === user.role) return true;
+  if (notification.targetClient && user.role === 'Client' && getClientKey(notification.targetClient) === getClientKey(user.companyName)) return true;
   return false;
 };
 

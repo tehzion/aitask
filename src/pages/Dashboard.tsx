@@ -11,7 +11,8 @@ import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, A
 import { Link } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
-import { canCreateTasks, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
+import { canCreateTasks, getClientKey, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
+import { getClientTaskStage } from '../lib/clientPortal';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate, themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
@@ -177,11 +178,12 @@ const Dashboard: React.FC = () => {
     );
 
     const actionRequired = tasks.filter(t => {
-      if (t.isCompleted || t.status === 'Cancelled') return false;
       if (currentUser.role === 'Client') {
-        return t.clientName === currentUser.companyName && t.status === 'Waiting Approval';
+        return getClientKey(t.clientName) === getClientKey(currentUser.companyName)
+          && getClientTaskStage(t) === 'awaiting_review';
       } else {
-        return t.assignedTo === currentUser.id && t.status === 'Waiting Approval';
+        return !t.isCompleted && t.status !== 'Cancelled'
+          && t.assignedTo === currentUser.id && t.status === 'Waiting Approval';
       }
     });
 

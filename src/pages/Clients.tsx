@@ -181,6 +181,7 @@ const Clients: React.FC = () => {
   }, [openMenuClientKey]);
 
   const canSeeAllClients = canViewAllClients(currentUser, rolePermissions);
+  const isClientUser = currentUser?.role === 'Client';
   const visibleClientKeys = React.useMemo(() => new Set(
     getVisibleClientNames(currentUser, allTasks, allProjects, rolePermissions).map(getClientKey)
   ), [allProjects, allTasks, currentUser, rolePermissions]);
@@ -846,7 +847,7 @@ const Clients: React.FC = () => {
                     ))}
                     {selectedClient.services.size === 0 && <span className="text-sm text-slate-400">No services recorded yet.</span>}
                   </div>
-                  {!isEditingProfile && getClientContact(selectedClient).notes && (
+                  {!isEditingProfile && !isClientUser && getClientContact(selectedClient).notes && (
                     <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{getClientContact(selectedClient).notes}</p>
                   )}
                 </section>

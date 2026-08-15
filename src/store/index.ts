@@ -2367,6 +2367,7 @@ export const useStore = create<StoreState>()(
 
       reviewClientApproval: (taskId, status, note) => set((state) => {
         if (isWorkspaceMutationLocked(state)) return state;
+        if (status !== 'Approved' && status !== 'Rejected') return state;
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
         if (!currentUser || !task || !canReviewTaskAsClient(currentUser, task, state.rolePermissions)) return state;
@@ -3392,6 +3393,16 @@ export const useStore = create<StoreState>()(
             targetUserId: task.assignedTo,
             title: currentUser.role === 'Client' ? 'Client Feedback' : 'New Comment',
             message: `${currentUser.name} commented on your task "${task.title}".`,
+            route: { page: 'tasks', entityId: taskId },
+            iconType: 'status'
+          }));
+        }
+
+        if (currentUser.role !== 'Client' && task.visibility !== 'internal' && task.clientName) {
+          newNotifs.push(makeNotification({
+            targetClient: task.clientName,
+            title: 'Team Update',
+            message: `${currentUser.name} posted an update on "${task.title}".`,
             route: { page: 'tasks', entityId: taskId },
             iconType: 'status'
           }));

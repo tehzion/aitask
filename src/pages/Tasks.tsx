@@ -14,6 +14,13 @@ import { SkeletonTableRow, SkeletonMobileCard } from '../components/SkeletonCard
 import { safeHttpsUrl } from '../lib/security';
 import { DEPARTMENTS } from '../lib/departments';
 import { getOperationsPeriod, type TeamWorkloadPeriod } from '../lib/taskReporting';
+import { getClientTaskStage } from '../lib/clientPortal';
+
+const CLIENT_BOARD_COLUMNS = [
+  { value: 'active', label: 'In progress' },
+  { value: 'awaiting_review', label: 'Awaiting your review' },
+  { value: 'approved', label: 'Approved' },
+] as const;
 
 const PRIORITY_OPTIONS: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const PAGE_SIZE = 8;
@@ -377,6 +384,13 @@ const Tasks: React.FC = () => {
     setSearchParams(new URLSearchParams(), { replace: true });
   };
 
+  const clientStatusLabel = (task: Task) => {
+    if (task.status === 'Cancelled') return 'Cancelled';
+    if (task.clientApprovalStatus === 'Approved') return 'Approved';
+    if (task.status === 'Waiting Approval' || task.status === 'Completed' || task.isCompleted) return 'Awaiting your review';
+    return 'In progress';
+  };
+
   const renderStatusControl = (task: Task) => (
     canEditTask(task) ? (
       <div className="relative inline-block">
@@ -397,7 +411,7 @@ const Tasks: React.FC = () => {
       </div>
     ) : (
       <span className={`text-xs px-2.5 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
-        {task.status}
+        {isClientUser ? clientStatusLabel(task) : task.status}
       </span>
     )
   );
@@ -466,7 +480,7 @@ const Tasks: React.FC = () => {
         </div>
       )}
 
-      {activeClient && (
+      {activeClient && !(isClientUser && !canViewActiveClient) && (
         <div className={`${cardBase} overflow-hidden`}>
           <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -681,13 +695,13 @@ const Tasks: React.FC = () => {
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>}
-            <div className="relative">
+            {!isClientUser && <div className="relative">
               <select aria-label="Filter by status" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All statuses</option>
                 {taskStatuses.map(status => <option key={status} value={status}>{status}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>
+            </div>}
             {!isClientUser && <div className="relative">
               <select aria-label="Filter by priority" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">All priorities</option>
@@ -871,14 +885,14 @@ const Tasks: React.FC = () => {
                           <div className="w-20 bg-slate-200 rounded-full h-2 overflow-hidden">
                             <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
 	                      </div>
-	                      {isClientUser && (
-	                        <div className="mt-3 border-t border-slate-100 pt-3 text-sm font-semibold text-blue-700">
-	                          {clientTaskAction(task)}
-	                        </div>
-	                      )}
                           <span className="text-xs font-semibold text-slate-700">{task.completionPercentage}%</span>
                         </div>
                       </div>
+                      {isClientUser && (
+                        <div className="mt-3 border-t border-slate-100 pt-3">
+                          <span className="text-sm font-semibold text-blue-700">{clientTaskAction(task)}</span>
+                        </div>
+                      )}
                     </button>
                   );
                 })
@@ -901,18 +915,21 @@ const Tasks: React.FC = () => {
           /* Kanban Board View */
           <div className={cn('p-4 bg-slate-100', !isClientUser && 'overflow-x-auto')}>
             <div className={cn(isClientUser ? 'grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3' : 'flex min-w-[1000px] items-start gap-4')}>
-              {taskStatuses.map(status => {
-                const columnTasks = filteredTasks.filter(t => t.status === status);
+              {(isClientUser ? CLIENT_BOARD_COLUMNS : taskStatuses).map(column => {
+                const status = isClientUser ? column.value : column;
+                const columnTasks = isClientUser
+                  ? filteredTasks.filter(t => getClientTaskStage(t) === status)
+                  : filteredTasks.filter(t => t.status === status);
                 return (
                   <div
                     key={status}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, status)}
+                    onDragOver={isClientUser ? undefined : handleDragOver}
+                    onDrop={isClientUser ? undefined : (e) => handleDrop(e, status as TaskStatus)}
                             className={cn('flex max-h-[700px] flex-col rounded-lg border border-slate-200 bg-slate-50 p-3', !isClientUser && 'min-w-[260px] flex-1')}
                   >
                     {/* Column Header */}
                     <div className="flex justify-between items-center mb-3 pb-2 border-b border-[#e0d9cf] shrink-0">
-                      <span className="text-xs font-semibold text-slate-600">{status}</span>
+                      <span className="text-xs font-semibold text-slate-600">{isClientUser ? column.label : status}</span>
                       <span className="rounded-md bg-slate-200/80 px-2 py-0.5 text-xs font-bold text-slate-700">{columnTasks.length}</span>
                     </div>
 
@@ -992,14 +1009,14 @@ const Tasks: React.FC = () => {
                                 <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-200/40">
                                   <div className="bg-blue-600 h-full rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
 	                              </div>
-
-	                              {isClientUser && (
-	                                <div className="mt-3 border-t border-slate-100 pt-2 text-xs font-semibold text-blue-700">
-	                                  {clientTaskAction(task)}
-	                                </div>
-	                              )}
                                 <span className="text-[9px] font-bold text-slate-600 shrink-0">{task.completionPercentage}%</span>
                               </div>
+
+                              {isClientUser && (
+                                <div className="mt-2.5 border-t border-slate-100 pt-2">
+                                  <span className="text-xs font-semibold text-blue-700">{clientTaskAction(task)}</span>
+                                </div>
+                              )}
 
                               {/* Action Badges in Card */}
                               {(task.attachmentLink || task.revisionCount > 0) && (

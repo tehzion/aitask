@@ -29,6 +29,7 @@ const Reports: React.FC = () => {
   const scopeLabel = currentUser?.role === 'Client'
     ? `${currentUser.companyName || 'your company'} tasks`
     : 'your accessible workspace tasks';
+  const isClientUser = currentUser?.role === 'Client';
 
   const trendData = useMemo(() => getTrackedWeeklyCompletions(tasks), [tasks]);
   const hasTrackedTrend = trendData.some(week => week.completed > 0 || week.pending > 0);
@@ -93,7 +94,7 @@ const Reports: React.FC = () => {
         <MetricCard title="Completed" value={overview.completed} icon={CheckCircle2} tone="emerald" />
         <MetricCard title="Pending" value={overview.pending} icon={Clock} tone="amber" />
         <MetricCard title="Overdue" value={overview.overdue} icon={AlertCircle} tone="red" />
-        <MetricCard title="Active Assignees" value={overview.activeUsers} icon={Users} tone="indigo" />
+        {!isClientUser && <MetricCard title="Active Assignees" value={overview.activeUsers} icon={Users} tone="indigo" />}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -118,6 +119,7 @@ const Reports: React.FC = () => {
           )}
         </ChartCard>
 
+        {!isClientUser && (
         <ChartCard title="Department Productivity Overview">
           {departmentStats.length === 0 ? (
             <ChartEmptyState>No department data yet</ChartEmptyState>
@@ -135,9 +137,11 @@ const Reports: React.FC = () => {
             </ResponsiveContainer>
           )}
         </ChartCard>
+        )}
       </div>
 
       {/* Detailed Department Performance Table */}
+      {!isClientUser && (
       <div className={`${cardBase} overflow-hidden`}>
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
           <div>
@@ -198,6 +202,7 @@ const Reports: React.FC = () => {
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 };

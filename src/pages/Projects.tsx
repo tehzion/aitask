@@ -23,6 +23,7 @@ const Projects: React.FC = () => {
     () => getVisibleProjects(currentUser, allProjects, allTasks, rolePermissions),
     [allProjects, allTasks, currentUser, rolePermissions]
   );
+  const isClientUser = currentUser?.role === 'Client';
 
   const openCreateCompany = () => {
     setEditingProject(null);
@@ -166,6 +167,7 @@ const Projects: React.FC = () => {
                   </div>
                 </div>
                 
+                {!isClientUser && (
                 <div className="space-y-3">
                   <p className="text-xs font-semibold uppercase text-slate-500">Assigned team</p>
                   <div className="flex items-center gap-2 text-slate-600">
@@ -193,6 +195,7 @@ const Projects: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                )}
               </div>
 
               <div className="border-t border-slate-200 p-4 bg-white flex justify-center">
