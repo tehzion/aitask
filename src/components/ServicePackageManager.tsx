@@ -78,7 +78,7 @@ const ServicePackageManager = () => {
           <label className="block text-sm font-medium text-slate-700">Description<textarea className={cn(inputBase, 'mt-1 min-h-20 px-3 py-2.5')} value={draft.description || ''} onChange={e => setDraft({ ...draft, description: e.target.value })} /></label>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="text-sm font-medium text-slate-700">Discount type<select className={cn(inputBase,'mt-1 px-3 py-2.5')} value={draft.discountType} onChange={e=>setDraft({...draft,discountType:e.target.value as ServicePackage['discountType'],discountValue:0})}><option value="none">None</option><option value="percent">Percent</option><option value="fixed">Fixed MYR</option></select></label>
-            <label className="text-sm font-medium text-slate-700">Discount value<input className={cn(inputBase,'mt-1 px-3 py-2.5')} type="number" min="0" step="0.01" disabled={draft.discountType==='none'} value={draft.discountType==='fixed'?draft.discountValue/100:draft.discountValue/100} onChange={e=>setDraft({...draft,discountValue:Math.round(Number(e.target.value)*100)})}/></label>
+            <label className="text-sm font-medium text-slate-700">Discount value<input className={cn(inputBase,'mt-1 px-3 py-2.5')} type="number" min="0" max={draft.discountType === 'percent' ? 100 : undefined} step="0.01" disabled={draft.discountType==='none'} value={draft.discountValue/100} onChange={e=>setDraft({...draft,discountValue:Math.round(Number(e.target.value)*100)})}/></label>
           </div>
           <div className="space-y-3">
             {draft.serviceItems.map(item => (

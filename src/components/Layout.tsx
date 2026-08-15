@@ -90,6 +90,7 @@ const Layout: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isEditableShortcutTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (document.querySelector('[data-aitask-modal-portal]')) return;
 
       if (e.key === 'Escape') {
         closeMobileMenu();
@@ -104,13 +105,6 @@ const Layout: React.FC = () => {
         return;
       }
 
-      if (e.shiftKey && e.key.toLowerCase() === 'd') {
-        e.preventDefault();
-        toggleTheme();
-        setShortcutAnnouncement(`Switched to ${resolvedTheme === 'dark' ? 'day' : 'night'} mode.`);
-        return;
-      }
-
       if (shortcutPrefixRef.current === 'g') {
         shortcutPrefixRef.current = '';
         if (shortcutTimerRef.current) window.clearTimeout(shortcutTimerRef.current);
@@ -119,6 +113,13 @@ const Layout: React.FC = () => {
         e.preventDefault();
         navigate(shortcut.path);
         setShortcutAnnouncement(`Opened ${shortcut.label}.`);
+        return;
+      }
+
+      if (e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        toggleTheme();
+        setShortcutAnnouncement(`Switched to ${resolvedTheme === 'dark' ? 'day' : 'night'} mode.`);
         return;
       }
 

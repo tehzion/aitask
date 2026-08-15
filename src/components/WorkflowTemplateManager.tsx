@@ -106,7 +106,7 @@ const WorkflowTemplateManager = () => {
                   <div className="flex justify-end gap-1">
                     <button aria-label="Move step up" onClick={() => moveStep(index, -1)} className="rounded-md p-2 text-slate-500 hover:bg-white"><ArrowUp className="h-4 w-4" /></button>
                     <button aria-label="Move step down" onClick={() => moveStep(index, 1)} className="rounded-md p-2 text-slate-500 hover:bg-white"><ArrowDown className="h-4 w-4" /></button>
-                    <button aria-label="Remove step" onClick={() => setDraft(current => ({ ...current, steps: current.steps.filter(item => item.id !== step.id).map((item, itemIndex) => ({ ...item, order: itemIndex + 1 })) }))} className="rounded-md p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+                    <button aria-label="Remove step" disabled={draft.steps.length === 1} onClick={() => setDraft(current => ({ ...current, steps: current.steps.filter(item => item.id !== step.id).map((item, itemIndex) => ({ ...item, order: itemIndex + 1 })) }))} className="rounded-md p-2 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 </div>
                 <div className="mt-3 grid gap-3 pl-0 lg:grid-cols-[1fr_auto_auto] lg:pl-11">

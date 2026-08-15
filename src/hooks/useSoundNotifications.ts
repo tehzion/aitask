@@ -20,14 +20,13 @@ export const useSoundNotifications = (
   const seenIds = useRef<Set<string>>(new Set());
   const initialized = useRef(false);
 
-  // Seed seenIds on first render so existing notifications don't trigger sound
+  // Seed seenIds on the first render with a non-empty list so notifications
+  // that arrive with (or just after) the initial load never trigger a sound.
   useEffect(() => {
-    if (!initialized.current) {
-      initialized.current = true;
-      notifications.forEach(n => seenIds.current.add(n.id));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (initialized.current || notifications.length === 0) return;
+    initialized.current = true;
+    notifications.forEach(n => seenIds.current.add(n.id));
+  }, [notifications]);
 
   // Resume AudioContext on any user interaction
   useEffect(() => {

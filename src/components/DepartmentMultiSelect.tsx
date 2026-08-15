@@ -37,7 +37,7 @@ const DepartmentMultiSelect: React.FC<DepartmentMultiSelectProps> = ({
           <label
             key={department}
             className={cn(
-              'flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors',
+              'flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors focus-within:ring-2 focus-within:ring-blue-500/40',
               selected.has(department)
                 ? 'border-blue-300 bg-blue-50 text-blue-900'
                 : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300',

@@ -1,6 +1,8 @@
 import React from 'react';
 import ModalShell from './ModalShell';
 import { NAVIGATION_SHORTCUTS } from '../lib/keyboard';
+import { canAccessPath } from '../lib/access';
+import { useStore } from '../store';
 import { X } from 'lucide-react';
 
 interface KeyboardShortcutsDialogProps {
@@ -16,6 +18,11 @@ const Key: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = ({ isOpen, canCreateTask, onClose }) => {
+  const currentUser = useStore(state => state.currentUser);
+  const rolePermissions = useStore(state => state.rolePermissions);
+  const accessibleShortcuts = NAVIGATION_SHORTCUTS.filter(shortcut => (
+    canAccessPath(currentUser, shortcut.path, rolePermissions)
+  ));
   if (!isOpen) return null;
 
   return (
@@ -49,7 +56,7 @@ const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = ({ isOpe
           <h3 id="shortcut-navigation-heading" className="text-sm font-semibold text-slate-950 dark:text-white">Go to a page</h3>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Press G, then the page key.</p>
           <dl className="mt-3 space-y-3">
-            {NAVIGATION_SHORTCUTS.map(shortcut => (
+            {accessibleShortcuts.map(shortcut => (
               <div key={shortcut.path} className="flex items-center justify-between gap-4">
                 <dt className="text-sm text-slate-600 dark:text-slate-300">{shortcut.label}</dt>
                 <dd className="flex gap-1"><Key>G</Key><Key>{shortcut.key.toUpperCase()}</Key></dd>

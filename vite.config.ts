@@ -100,6 +100,7 @@ export default defineConfig(({ mode }) => {
         name: 'AiTask - Marketing Agency Task Management',
         short_name: 'AiTask',
         description: 'Marketing agency task, project, calendar, and approval management.',
+        lang: 'en',
         start_url: '/',
         scope: '/',
         display: 'standalone',

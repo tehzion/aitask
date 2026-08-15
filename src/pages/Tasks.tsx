@@ -325,7 +325,8 @@ const Tasks: React.FC = () => {
   useEffect(() => {
     if (!taskIdFilter) return;
     const routedTask = tasks.find(task => task.id === taskIdFilter);
-    if (routedTask) setSelectedTask(routedTask);
+    if (!routedTask) return;
+    setSelectedTask(current => current?.id === routedTask.id ? current : routedTask);
   }, [taskIdFilter, tasks]);
 
   const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
@@ -361,7 +362,7 @@ const Tasks: React.FC = () => {
   const clearRouteFilter = (key: string) => {
     const next = new URLSearchParams(searchParams);
     next.delete(key);
-    setSearchParams(next);
+    setSearchParams(next, { replace: true });
   };
 
   const clearAllFilters = () => {
@@ -373,7 +374,7 @@ const Tasks: React.FC = () => {
     setFilterPriority('All');
     setDateFrom('');
     setDateTo('');
-    setSearchParams(new URLSearchParams());
+    setSearchParams(new URLSearchParams(), { replace: true });
   };
 
   const renderStatusControl = (task: Task) => (
@@ -436,7 +437,7 @@ const Tasks: React.FC = () => {
       {taskIdFilter && (
         <div className="flex items-center gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-amber-800">
           <span className="text-sm font-medium flex-1">Viewing specific task: <strong className="font-bold">{taskIdFilter}</strong></span>
-          <button onClick={() => clearRouteFilter('taskId')} className="p-1.5 hover:bg-amber-200/50 rounded-md transition-colors" title="Clear task filter" aria-label="Clear task filter">
+          <button onClick={() => { setSelectedTask(null); clearRouteFilter('taskId'); }} className="p-1.5 hover:bg-amber-200/50 rounded-md transition-colors" title="Clear task filter" aria-label="Clear task filter">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -1027,7 +1028,10 @@ const Tasks: React.FC = () => {
 
       <TaskDetailsModal
         isOpen={!!selectedTask}
-        onClose={() => setSelectedTask(null)}
+        onClose={() => {
+          setSelectedTask(null);
+          if (taskIdFilter) clearRouteFilter('taskId');
+        }}
         task={selectedLiveTask}
       />
 

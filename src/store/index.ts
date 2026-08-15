@@ -72,6 +72,7 @@ import { getTodayInputDate } from '../lib/utils';
 import {
   discardSecureWorkspaceCommand,
   completeSecurePasswordSetup,
+  getRetainedSecureCommand,
   loadSecureWorkspace,
   loadSecureWorkspaceRevision,
   rebaseRetryableCommand,
@@ -1289,6 +1290,22 @@ export const useStore = create<StoreState>()(
             if (userError) throw userError;
             if (!user) throw new Error('Your session has expired. Sign in again.');
             const secure = await loadSecureWorkspace(user);
+            const latest = get();
+            if (!options.force && (latest.backend.hasLocalChanges || latest.backend.pendingMutations > 0)) {
+              set((state) => ({
+                backend: {
+                  ...state.backend,
+                  status: 'conflict',
+                  isPulling: false,
+                  lastPulledAt: pulledAt,
+                  remoteVersion: secure.revision.version,
+                  remoteUpdatedAt: secure.revision.updatedAt,
+                  hasRemoteUpdate: true,
+                  message: 'You made changes during the refresh. Review and retry your pending change.',
+                },
+              }));
+              return;
+            }
             isApplyingRemoteSnapshot = true;
             set((state) => ({
               ...makeWorkspacePatch(state, {
@@ -1419,6 +1436,8 @@ export const useStore = create<StoreState>()(
               error: error instanceof Error ? error.message : 'Unable to load Supabase state.',
             }
           }));
+        } finally {
+          isApplyingRemoteSnapshot = false;
         }
       },
 
@@ -1497,7 +1516,9 @@ export const useStore = create<StoreState>()(
             message: options.reload === false ? 'Pending change discarded.' : 'Loading the latest saved workspace.',
           },
         }));
-        if (options.reload !== false) await get().pullBackendNow({ force: true, silent: false });
+        if (options.reload !== false || shouldUseSecureSupabase()) {
+          await get().pullBackendNow({ force: true, silent: false });
+        }
       },
 
       commitPendingMutation: async (commandType) => {
@@ -1530,8 +1551,10 @@ export const useStore = create<StoreState>()(
           if (error || !data.user) return false;
 
           try {
-            const secure = await loadSecureWorkspace(data.user);
+            const retainedBeforeLogin = await getRetainedSecureCommand();
+            const secure = await loadSecureWorkspace(data.user, { preserveRetainedCommand: true });
             isApplyingRemoteSnapshot = true;
+            const hasRetainedChange = retainedBeforeLogin !== null;
             set((state) => ({
               ...makeWorkspacePatch(state, {
                 state: secure.state,
@@ -1542,14 +1565,17 @@ export const useStore = create<StoreState>()(
               currentUser: secure.currentUser,
               backend: {
                 ...state.backend,
-                status: 'live',
+                status: hasRetainedChange ? 'retry_required' : 'live',
                 isLoading: false,
                 workspaceVersion: secure.revision.version,
                 remoteVersion: secure.revision.version,
                 remoteUpdatedAt: secure.revision.updatedAt,
                 lastPulledAt: new Date().toISOString(),
-                pendingMutations: 0,
-                message: 'Secure Supabase session is active.',
+                pendingMutations: hasRetainedChange ? 1 : 0,
+                hasLocalChanges: hasRetainedChange,
+                message: hasRetainedChange
+                  ? 'Secure session restored. Review and retry the change you made before signing out.'
+                  : 'Secure Supabase session is active.',
               },
             }));
             isApplyingRemoteSnapshot = false;
@@ -3994,7 +4020,7 @@ export const useStore = create<StoreState>()(
       },
 
       _forceSyncMockData: () => {
-        if (!shouldShowDemoLogin() || get().backend.mode === 'supabase') return;
+        if (!shouldShowDemoLogin() || get().backend.mode === 'supabase' || shouldUseSecureSupabase()) return;
 
         set((state) => {
           // Keep local development seeds compatible without touching hosted workspaces.

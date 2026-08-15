@@ -73,7 +73,7 @@ const FeedbackResults: React.FC = () => {
     setError('');
     const { error: loginError } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: `${window.location.origin}/feedback/results`, shouldCreateUser: true },
+      options: { emailRedirectTo: `${window.location.origin}/feedback/results`, shouldCreateUser: false },
     });
     if (loginError && /fetch|network/i.test(loginError.message)) {
       setError('The reviewer login service could not be reached.');

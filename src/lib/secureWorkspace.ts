@@ -1009,7 +1009,8 @@ const projectionToEntityRow = (
   };
 };
 
-export const loadSecureWorkspace = async (authUser: User) => {
+export const loadSecureWorkspace = async (authUser: User, options: { preserveRetainedCommand?: boolean } = {}) => {
+  const retainedBeforeLoad = options.preserveRetainedCommand ? retryableCommand : null;
   const [{ data: members, error: memberError }, { data: entities, error: entityError }, revision, notificationFeed] = await Promise.all([
     supabase.from('aitask_members').select('*').eq('workspace_id', SECURE_WORKSPACE_ID),
     supabase.from('aitask_entities')
@@ -1126,7 +1127,8 @@ export const loadSecureWorkspace = async (authUser: User) => {
     effectiveEntityRows,
   );
   alignBaselineToCanonicalState(state);
-  retryableCommand = null;
+  if (!options.preserveRetainedCommand) retryableCommand = null;
+  else if (retainedBeforeLoad) retryableCommand = retainedBeforeLoad;
   return { state, currentUser, revision, notificationFeed };
 };
 
@@ -1219,11 +1221,17 @@ export const rebaseRetryableCommand = (conflict: MutationConflict) => {
   retryableCommand = {
     ...retryableCommand,
     id: commandId(),
-    operations: retryableCommand.operations.map(operation => (
-      operation.entityType === conflict.entityType && operation.entityId === conflict.entityId
-        ? { ...operation, expectedVersion: conflict.actualVersion }
-        : operation
-    )),
+    operations: retryableCommand.operations.map(operation => {
+      if (operation.entityType !== conflict.entityType || operation.entityId !== conflict.entityId) return operation;
+      let mergedData = operation.data;
+      if (conflict.changedFields && operation.data && conflict.current) {
+        const userChangedFields = Object.fromEntries(
+          conflict.changedFields.map(key => [key, (operation.data as Record<string, unknown>)[key]]),
+        );
+        mergedData = { ...conflict.current, ...userChangedFields };
+      }
+      return { ...operation, data: mergedData, expectedVersion: conflict.actualVersion };
+    }),
   };
   return true;
 };
@@ -1231,3 +1239,5 @@ export const rebaseRetryableCommand = (conflict: MutationConflict) => {
 export const discardSecureWorkspaceCommand = () => {
   retryableCommand = null;
 };
+
+export const getRetainedSecureCommand = (): SecureCommand | null => retryableCommand;

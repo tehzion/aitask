@@ -9,7 +9,7 @@ export const NAVIGATION_SHORTCUTS: NavigationShortcut[] = [
   { key: 't', label: 'Tasks', path: '/tasks' },
   { key: 'c', label: 'Calendar', path: '/calendar' },
   { key: 'l', label: 'Clients', path: '/clients' },
-  { key: 'p', label: 'Projects', path: '/projects' },
+  { key: 'p', label: 'Companies', path: '/projects' },
   { key: 'r', label: 'Reports', path: '/reports' },
   { key: 'a', label: 'Approvals', path: '/approvals' },
   { key: 's', label: 'Settings', path: '/settings' },

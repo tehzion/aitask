@@ -78,6 +78,10 @@ const Rating: React.FC<{ label: string; value: number | null; onChange: (value: 
 const Feedback: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [language, setLanguage] = React.useState<FeedbackLanguage>(() => searchParams.get('lang') === 'zh' ? 'zh' : 'en');
+
+  React.useEffect(() => {
+    document.documentElement.lang = language === 'zh' ? 'zh' : 'en';
+  }, [language]);
   const [role, setRole] = React.useState<FeedbackRole>(() => parseFeedbackRole(searchParams.get('role')));
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -107,6 +111,7 @@ const Feedback: React.FC = () => {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (isSubmitting) return;
     setError('');
     const missingIssue = questions.some(question => answers[question.id] === 'issue' && (issueDetails[question.id] || '').trim().length < 3);
     if (missingIssue) {
@@ -241,7 +246,7 @@ const Feedback: React.FC = () => {
           {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert" aria-live="assertive">{error}</p>}
           <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Link to="/feedback/results" className="text-center text-sm font-medium text-slate-500 hover:text-blue-700">{t.results}</Link>
-            <Button type="submit" className="min-h-12 px-6" disabled={isSubmitting || !navigator.onLine}><Send className="h-4 w-4" />{isSubmitting ? t.submitting : t.submit}</Button>
+            <Button type="submit" className="min-h-12 px-6" disabled={isSubmitting}><Send className="h-4 w-4" />{isSubmitting ? t.submitting : t.submit}</Button>
           </div>
         </section>
       </form>

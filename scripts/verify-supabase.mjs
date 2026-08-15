@@ -126,6 +126,44 @@ for (const secureTable of ['aitask_workspaces', 'aitask_members', 'aitask_entiti
 }
 console.log('Secure table check passed: anonymous callers cannot read workspace data.');
 
+// Run the guard/health checks before the cutover early-exit so the trigger and
+// policy audit still runs while the legacy snapshot is reachable.
+const healthUrl = new URL('/rest/v1/rpc/aitask_app_state_health', baseUrl);
+const healthResponse = await request(healthUrl, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: '{}',
+});
+
+if (!healthResponse.ok) {
+  if (expectSecureCutover && [401, 403, 404].includes(healthResponse.status)) {
+    console.log('Health RPC is no longer callable anonymously; skipping pre-cutover health audit.');
+  } else {
+    console.error(`Legacy health RPC failed: ${await responseDetail(healthResponse)}`);
+    process.exit(1);
+  }
+} else {
+  const health = await healthResponse.json();
+  const policies = Array.isArray(health?.policies) ? health.policies : [];
+  const demoPolicies = Array.isArray(health?.demo_policies) ? health.demo_policies : [];
+  const healthForbiddenKeys = Array.isArray(health?.forbidden_keys) ? health.forbidden_keys : [];
+  console.log(`Legacy snapshot policies: ${policies.length > 0 ? policies.join(', ') : 'none'}.`);
+
+  if (demoPolicies.length > 0) {
+    console.error(`Public demo policies are still present: ${demoPolicies.join(', ')}`);
+    process.exit(1);
+  }
+  if (!health?.has_guard_trigger) {
+    console.error('Missing guard trigger: aitask_app_state_guard_before_write.');
+    process.exit(1);
+  }
+  if (health?.contains_forbidden_keys || healthForbiddenKeys.length > 0) {
+    console.error(`Database health scan found forbidden secret-like keys: ${healthForbiddenKeys.join(', ')}`);
+    process.exit(1);
+  }
+  console.log('Guard trigger and policy audit passed.');
+}
+
 const snapshotUrl = new URL(`/rest/v1/${encodeURIComponent(table)}`, baseUrl);
 snapshotUrl.searchParams.set('id', `eq.${stateId}`);
 snapshotUrl.searchParams.set('select', 'version,updated_at,state');
@@ -147,6 +185,28 @@ if (expectSecureCutover) {
   process.exit(1);
 }
 
+// Negative write probe: anon (without any auth user) must never be able to
+// insert or update the snapshot, regardless of the Origin header it sends.
+const negativeWriteUrl = new URL(`/rest/v1/${encodeURIComponent(table)}`, baseUrl);
+const spoofProbeHeaders = {
+  'Content-Type': 'application/json',
+  Prefer: 'return=minimal',
+  apikey: supabaseKey,
+  Authorization: `Bearer ${supabaseKey}`,
+  Origin: 'https://attacker.example.com',
+};
+const anonWriteResponse = await fetch(negativeWriteUrl, {
+  method: 'POST',
+  headers: spoofProbeHeaders,
+  body: JSON.stringify({ id: '__aitask_verify_probe__', state: {}, version: 1 }),
+});
+const anonWriteStatus = anonWriteResponse.status;
+if (anonWriteStatus < 400 && anonWriteStatus !== 409) {
+  console.error(`Security failure: anon write probe was accepted with a spoofed Origin (status ${anonWriteStatus}). Apply supabase/secure-cutover.sql before storing real data.`);
+  process.exit(1);
+}
+console.log(`Anon write probe rejected (status ${anonWriteStatus}).`);
+
 const rows = await snapshotResponse.json();
 if (Array.isArray(rows) && rows.length > 0) {
   const row = rows[0];
@@ -159,36 +219,6 @@ if (Array.isArray(rows) && rows.length > 0) {
   console.log('Legacy snapshot secret scan passed.');
 } else {
   console.log(`Legacy snapshot ${stateId} does not exist.`);
-}
-
-const healthUrl = new URL('/rest/v1/rpc/aitask_app_state_health', baseUrl);
-const healthResponse = await request(healthUrl, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: '{}',
-});
-if (!healthResponse.ok) {
-  console.error(`Legacy health RPC failed: ${await responseDetail(healthResponse)}`);
-  process.exit(1);
-}
-
-const health = await healthResponse.json();
-const policies = Array.isArray(health?.policies) ? health.policies : [];
-const demoPolicies = Array.isArray(health?.demo_policies) ? health.demo_policies : [];
-const healthForbiddenKeys = Array.isArray(health?.forbidden_keys) ? health.forbidden_keys : [];
-console.log(`Legacy snapshot policies: ${policies.length > 0 ? policies.join(', ') : 'none'}.`);
-
-if (demoPolicies.length > 0) {
-  console.error(`Public demo policies are still present: ${demoPolicies.join(', ')}`);
-  process.exit(1);
-}
-if (!health?.has_guard_trigger) {
-  console.error('Missing guard trigger: aitask_app_state_guard_before_write.');
-  process.exit(1);
-}
-if (health?.contains_forbidden_keys || healthForbiddenKeys.length > 0) {
-  console.error(`Database health scan found forbidden secret-like keys: ${healthForbiddenKeys.join(', ')}`);
-  process.exit(1);
 }
 
 console.log('Staged rollout is healthy: command API is protected and the guarded legacy snapshot remains available until frontend cutover.');

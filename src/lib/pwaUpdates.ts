@@ -30,6 +30,15 @@ export const registerPwaUpdates = () => {
 
   registerSW({
     immediate: true,
+    onNeedReload() {
+      updateReady = true;
+      if (window.location.pathname === '/login' || document.visibilityState === 'hidden') {
+        isReloading = true;
+        window.location.reload();
+        return;
+      }
+      window.dispatchEvent(new Event(PWA_UPDATE_READY_EVENT));
+    },
     onRegisteredSW(swUrl, registration) {
       if (!registration) return;
 

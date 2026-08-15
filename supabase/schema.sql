@@ -27,6 +27,7 @@ declare
   current_value jsonb;
   item_key text;
   item_value jsonb;
+  allowed_password_keys text[] := array['mustResetPassword', 'must_reset_password', 'passwordResetRequired'];
 begin
   pending := array[new.state];
 
@@ -42,7 +43,9 @@ begin
       for item_key, item_value in
         select key, value from jsonb_each(current_value)
       loop
-        if item_key ~* '(password|secret|token|api[_-]?key|service[_-]?role)' then
+        if item_key = any(allowed_password_keys) then
+          null;
+        elsif item_key ~* '(password|secret|token|api[_-]?key|service[_-]?role)' then
           raise exception 'aitask_app_state cannot store password, token, secret, api key, or service-role fields';
         end if;
 
@@ -54,6 +57,8 @@ begin
       loop
         pending := pending || item_value;
       end loop;
+    elsif jsonb_typeof(current_value) = 'string' and current_value #>> '{}' ~* '(password[^a-z]{0,4}[=:]|bearer [a-z0-9._-]{20}|sb_(publishable|secret)_[a-z0-9_-]{20}|service_role)' then
+      raise exception 'aitask_app_state cannot store credential-like string values';
     end if;
   end loop;
 
@@ -97,7 +102,10 @@ grant execute on function public.aitask_is_internal_app_origin() to anon, authen
 -- Interim snapshot policies:
 -- AiTask still uses mock login in v1, so this allows only the known app origins
 -- to read/write the shared JSON snapshot with the frontend publishable key.
--- Replace this with Supabase Auth + normalized tables before full production hardening.
+-- WARNING: the Origin header is attacker-spoofable; these policies are a
+-- development convenience, NOT an authorization boundary. Apply
+-- supabase/secure-cutover.sql (revokes anon/authenticated access and switches
+-- to identity-based RLS) before any workspace contains real client data.
 drop policy if exists "allow demo snapshot read" on public.aitask_app_state;
 drop policy if exists "allow demo snapshot write" on public.aitask_app_state;
 drop policy if exists "allow demo snapshot update" on public.aitask_app_state;
