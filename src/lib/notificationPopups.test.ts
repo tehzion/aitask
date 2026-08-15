@@ -31,9 +31,17 @@ const notification = (
 describe('notification popup detection', () => {
   it('seeds existing notifications so login does not show a backlog', () => {
     const existing = [notification('notice-1'), notification('notice-2')];
-    const seenIds = seedSeenNotificationIds(existing);
+    const seenIds = seedSeenNotificationIds(staff, existing);
 
     expect(getIncomingUnreadNotificationIds(staff, existing, seenIds).incomingIds).toEqual([]);
+  });
+
+  it('seeds only notifications visible to the current user', () => {
+    const visible = notification('notice-1');
+    const otherUser = notification('notice-2', { targetUserId: 'staff-2' });
+    const seenIds = seedSeenNotificationIds(staff, [visible, otherUser]);
+
+    expect(Array.from(seenIds)).toEqual(['notice-1']);
   });
 
   it('returns only new visible unread notifications and never repeats them', () => {
@@ -44,7 +52,7 @@ describe('notification popup detection', () => {
     const first = getIncomingUnreadNotificationIds(
       staff,
       [visible, otherUser, alreadyRead, existing],
-      seedSeenNotificationIds([existing]),
+      seedSeenNotificationIds(staff, [existing]),
     );
 
     expect(first.incomingIds).toEqual([visible.id]);

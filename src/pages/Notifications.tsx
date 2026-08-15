@@ -123,10 +123,11 @@ const Notifications: React.FC = () => {
       search,
     }).then(page => {
       if (cancelled) return;
-      setItems(current => queryChanged || tab === 'unread'
+      const resetList = queryChanged || tab === 'unread';
+      setItems(current => resetList
         ? page.items
         : mergeNotificationPages(current, page.items));
-      setNextCursor(current => queryChanged || !current ? page.nextCursor : current);
+      setNextCursor(current => resetList || !current ? page.nextCursor : current);
       useStore.setState({ notificationUnreadCount: page.unreadCount });
     }).catch(loadError => {
       if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Unable to load notifications.');
@@ -304,8 +305,12 @@ const Notifications: React.FC = () => {
             <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
               <Bell className="h-5 w-5" />
             </div>
-            <h2 className="mt-4 text-base font-semibold text-slate-900">No notifications found</h2>
-            <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">Try another category or search, or switch back to All.</p>
+            <h2 className="mt-4 text-base font-semibold text-slate-900">{tab === 'unread' ? 'No unread notifications' : 'No notifications found'}</h2>
+            <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">
+              {tab === 'unread'
+                ? 'You are all caught up. New assignments, deadlines, and reviews will appear here.'
+                : 'Try another category or search, or switch back to All.'}
+            </p>
           </div>
         ) : (
           <div>

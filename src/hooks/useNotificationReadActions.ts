@@ -45,6 +45,7 @@ export const useNotificationReadActions = (): NotificationReadActions => {
       ? getUnreadNotifications(current.currentUser, current.notifications).map(notification => notification.id)
       : notificationIds;
     const previousReadState = captureNotificationReadState(current.notifications, affectedIds);
+    const previousUnreadCount = current.notificationUnreadCount;
     setIsUpdating(true);
     change();
 
@@ -67,6 +68,7 @@ export const useNotificationReadActions = (): NotificationReadActions => {
 
         useStore.setState(state => ({
           notifications: restoreNotificationReadState(state.notifications, previousReadState),
+          notificationUnreadCount: previousUnreadCount,
         }));
         useToastStore.getState().addToast(
           result.code === 'OFFLINE'

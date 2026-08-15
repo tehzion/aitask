@@ -432,7 +432,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await firstCenterItem.getByRole('button', { name: 'Mark read' }).click();
   await expect(firstCenterItem).toHaveCount(0);
   await page.getByRole('button', { name: 'Mark all read' }).click();
-  await expect(page.getByText('No notifications found')).toBeVisible();
+  await expect(page.getByText('No unread notifications')).toBeVisible();
   await page.getByRole('button', { name: /^all$/i }).click();
   const readCenterItem = page.getByRole('article').filter({ hasText: 'Center QA 7' });
   await readCenterItem.getByRole('button', { name: 'Mark unread' }).click();

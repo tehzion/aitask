@@ -37,6 +37,14 @@ const ServicePackageManager = () => {
   }));
 
   const save = async () => {
+    setMessage('');
+    if (!draft.name.trim()) return setMessage('Package name is required.');
+    if (draft.serviceItems.length === 0) return setMessage('Add at least one service item.');
+    if (draft.serviceItems.some(item => !item.name.trim())) return setMessage('Every service item needs a name.');
+    if (draft.serviceItems.some(item => !Number.isInteger(item.quantity) || item.quantity < 1)) return setMessage('Quantities must be whole numbers of at least one.');
+    if (draft.serviceItems.some(item => item.unitPriceMinor < 0 || !Number.isFinite(item.unitPriceMinor))) return setMessage('Unit prices must be non-negative.');
+    if (draft.discountType === 'percent' && draft.discountValue > 10000) return setMessage('Percent discount cannot exceed 100%.');
+
     const result = saveServicePackage({ ...draft, id: editingId });
     if (!result.ok) return setMessage(result.error || 'Unable to save the package.');
     setSaving(true);
@@ -88,7 +96,7 @@ const ServicePackageManager = () => {
                 <input aria-label="Unit" placeholder="Unit" className={cn(inputBase, 'px-3 py-2 md:col-span-2')} value={item.unit} onChange={e => updateItem(item.id, { unit: e.target.value })} />
                 <input aria-label="Quantity" className={cn(inputBase, 'px-3 py-2 md:col-span-1')} type="number" min="1" value={item.quantity} onChange={e => updateItem(item.id, { quantity: Number(e.target.value) })} />
                 <input aria-label="Unit price" className={cn(inputBase, 'px-3 py-2 md:col-span-2')} type="number" min="0" step="0.01" value={item.unitPriceMinor / 100} onChange={e => updateItem(item.id, { unitPriceMinor: Math.round(Number(e.target.value) * 100) })} />
-                <button aria-label="Remove service" onClick={() => setDraft(current => ({ ...current, serviceItems: current.serviceItems.filter(value => value.id !== item.id) }))} className="flex items-center justify-center rounded-lg text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+                <button aria-label="Remove service" disabled={draft.serviceItems.length === 1} onClick={() => setDraft(current => ({ ...current, serviceItems: current.serviceItems.filter(value => value.id !== item.id) }))} className="flex items-center justify-center rounded-lg text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"><Trash2 className="h-4 w-4" /></button>
                 <label className="text-xs font-medium text-slate-600 md:col-span-11">Task workflow<select aria-label="Task workflow" className={cn(inputBase, 'mt-1 px-3 py-2')} value={item.workflow?.templateId || ''} onChange={event => {
                   const template = serviceWorkflowTemplates.find(value => value.id === event.target.value);
                   updateItem(item.id, { workflow: template ? snapshotWorkflow(template) : undefined });

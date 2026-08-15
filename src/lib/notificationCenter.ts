@@ -105,23 +105,26 @@ export const groupNotifications = (
 
   sorted.forEach(notification => {
     const enriched = enrichNotificationMetadata(notification);
-    const previous = groups.at(-1);
-    const elapsed = previous
-      ? new Date(previous.notifications.at(-1)?.createdAt || 0).getTime() - new Date(enriched.createdAt).getTime()
-      : Number.POSITIVE_INFINITY;
-    const belongsToPrevious = previous
-      && notificationGroupKey(previous.latest) === notificationGroupKey(enriched)
-      && elapsed >= 0
-      && elapsed <= GROUP_WINDOW_MS;
+    const enrichedKey = notificationGroupKey(enriched);
+    let matchingGroup: NotificationGroup | undefined;
+    for (let index = groups.length - 1; index >= 0; index -= 1) {
+      const candidate = groups[index];
+      const elapsed = new Date(candidate.notifications.at(-1)?.createdAt || 0).getTime() - new Date(enriched.createdAt).getTime();
+      if (elapsed < 0 || elapsed > GROUP_WINDOW_MS) break;
+      if (notificationGroupKey(candidate.latest) === enrichedKey) {
+        matchingGroup = candidate;
+        break;
+      }
+    }
 
-    if (belongsToPrevious) {
-      previous.notifications.push(enriched);
-      if (!isNotificationReadByUser(currentUser, enriched)) previous.unreadCount += 1;
+    if (matchingGroup) {
+      matchingGroup.notifications.push(enriched);
+      if (!isNotificationReadByUser(currentUser, enriched)) matchingGroup.unreadCount += 1;
       return;
     }
 
     groups.push({
-      id: `${notificationGroupKey(enriched)}:${enriched.id}`,
+      id: `${enrichedKey}:${enriched.id}`,
       category: enriched.category!,
       importance: enriched.importance!,
       notifications: [enriched],

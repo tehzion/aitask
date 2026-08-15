@@ -31,7 +31,10 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
     if (saving) return;
     setMode(value);
     const pkg = servicePackages.find(item => item.id === packageId) || servicePackages.find(item => item.isActive);
-    if (value === 'custom') setItems([blankItem()]);
+    if (value === 'custom') {
+      setItems([blankItem()]);
+      setPlan(current => ({ ...current, discountType: 'none', discountValue: 0, taxRateBps: 0 }));
+    }
     else if (pkg) setItems(pkg.serviceItems.map(item => ({ ...item, id: crypto.randomUUID(), platforms: [...item.platforms], workflow: item.workflow ? structuredClone(item.workflow) : undefined })));
   };
 

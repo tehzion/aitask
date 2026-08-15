@@ -8,8 +8,13 @@ interface IncomingNotificationResult {
 }
 
 export const seedSeenNotificationIds = (
+  currentUser: User,
   notifications: AppNotification[],
-) => new Set(notifications.map(notification => notification.id));
+) => new Set(
+  notifications
+    .filter(notification => isNotificationVisible(currentUser, notification))
+    .map(notification => notification.id)
+);
 
 export const getIncomingUnreadNotificationIds = (
   currentUser: User,
@@ -27,6 +32,8 @@ export const getIncomingUnreadNotificationIds = (
     ))
     .map(notification => notification.id);
 
-  notifications.forEach(notification => nextSeenIds.add(notification.id));
+  notifications.forEach(notification => {
+    if (isNotificationVisible(currentUser, notification)) nextSeenIds.add(notification.id);
+  });
   return { incomingIds, seenIds: nextSeenIds };
 };

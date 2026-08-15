@@ -8,6 +8,7 @@ import {
   isValid,
   parseISO,
 } from 'date-fns';
+import { parseDateOnlyLocal } from './utils';
 
 export interface CalendarRangeSource {
   id: string;
@@ -54,7 +55,7 @@ const dateKey = (date: Date) => format(date, 'yyyy-MM-dd');
 
 const parseDate = (value?: string) => {
   if (!value) return null;
-  const parsed = parseISO(value);
+  const parsed = parseDateOnlyLocal(value) ?? parseISO(value);
   return isValid(parsed) ? parsed : null;
 };
 

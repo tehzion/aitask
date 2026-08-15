@@ -180,7 +180,7 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
     }
 
     if (!tracker.current.initialized) {
-      tracker.current.seenIds = seedSeenNotificationIds(notifications);
+      tracker.current.seenIds = seedSeenNotificationIds(currentUser, notifications);
       tracker.current.initialized = true;
       setReadyUserId(currentUser.id);
       return;
