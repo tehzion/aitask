@@ -12,6 +12,7 @@ vi.mock('./supabaseClient', () => ({
 }));
 
 import {
+  buildOperations,
   inferSecureCommandType,
   isSecureCommandType,
   loadSecureNotificationPage,
@@ -127,6 +128,40 @@ const stateWithUser = (id: string): PersistedWorkspaceState => ({
   registrations: [],
   rolePermissions: [],
   taskStatuses: [],
+});
+
+describe('buildOperations', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    refreshSession.mockReset();
+    from.mockReset();
+  });
+
+  it('strips client-side unread tombstones from notification diffs', () => {
+    const notification = {
+      id: 'notice-1',
+      title: 'Notice',
+      message: 'A task changed.',
+      route: { page: 'tasks' as const, entityId: 'task-1' },
+      isRead: false,
+      readByUserIds: ['member-1'],
+      unreadByUserIds: ['member-2'],
+      createdAt: '2026-08-16T00:00:00.000Z',
+      iconType: 'status' as const,
+    };
+    const state: PersistedWorkspaceState = {
+      ...stateWithUser('member-1'),
+      notifications: [notification],
+    };
+    const operations = buildOperations(state);
+    const notificationOp = operations.find(operation => (
+      operation.entityType === 'notification' && operation.entityId === 'notice-1'
+    ));
+    expect(notificationOp).toBeDefined();
+    expect(notificationOp?.data).not.toHaveProperty('unreadByUserIds');
+    expect(notificationOp?.data).not.toHaveProperty('visibleToCurrentUser');
+    expect(notificationOp?.data).toHaveProperty('readByUserIds');
+  });
 });
 
 describe('secure command retry identity', () => {

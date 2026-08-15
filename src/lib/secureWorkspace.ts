@@ -264,6 +264,7 @@ const stripRuntimeFields = <T extends Record<string, unknown>>(value: T) => {
   delete copy.directoryOnly;
   delete copy.clientProjection;
   delete copy.visibleToCurrentUser;
+  delete copy.unreadByUserIds;
   return copy;
 };
 
@@ -404,7 +405,7 @@ const stateToRows = (state: PersistedWorkspaceState) => {
       item.id,
     ));
   });
-  state.notifications.forEach(item => push('entity', 'notification', item.id, item as unknown as Record<string, unknown>, item.version));
+  state.notifications.forEach(item => push('entity', 'notification', item.id, stripRuntimeFields(item as unknown as Record<string, unknown>), item.version));
   state.registrations.forEach(item => push('entity', 'registration', item.id, item as unknown as Record<string, unknown>, item.version));
   state.rolePermissions?.forEach(item => push('entity', 'custom_role', item.id, item as unknown as Record<string, unknown>, item.version));
   state.taskStatuses?.forEach(status => {
@@ -465,7 +466,7 @@ const alignBaselineToCanonicalState = (state: PersistedWorkspaceState) => {
   baseline = canonical;
 };
 
-const buildOperations = (state: PersistedWorkspaceState): WorkspaceOperation[] => {
+export const buildOperations = (state: PersistedWorkspaceState): WorkspaceOperation[] => {
   const nextRows = stateToRows(state);
   const nextKeys = new Set(nextRows.map(row => entityKey(row.entityType, row.entityId)));
   const operations: WorkspaceOperation[] = [];
