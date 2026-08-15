@@ -647,7 +647,7 @@ const Approvals: React.FC = () => {
 
       {/* History */}
       {historyRegs.length > 0 && (
-          <div className={`${cardBase} overflow-hidden opacity-70`}>
+          <div className={`${cardBase} overflow-hidden`}>
           <div className="px-6 py-4 border-b border-slate-100">
             <h2 className="text-sm font-semibold text-slate-800">Recent Decisions</h2>
           </div>

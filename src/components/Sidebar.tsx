@@ -190,7 +190,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
             type="button"
             onClick={handleLogout}
             title={isCollapsed ? 'Logout' : undefined}
-            className={clsx('flex min-h-11 w-full items-center rounded-control px-3 py-2.5 text-red-600/80 transition-colors duration-160 hover:bg-red-50 hover:text-red-700', isCollapsed && 'md:justify-center md:px-2')}
+            className={clsx('flex min-h-11 w-full items-center rounded-control px-3 py-2.5 text-red-700 transition-colors duration-160 hover:bg-red-50 hover:text-red-800', isCollapsed && 'md:justify-center md:px-2')}
           >
             <LogOut className={clsx('h-[19px] w-[19px]', !isCollapsed && 'mr-3', isCollapsed && 'md:mr-0')} />
             <span className={clsx('text-sm font-medium', isCollapsed && 'md:hidden')}>Logout</span>
@@ -198,7 +198,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
           <button type="button" onClick={onToggleCollapsed} className="hidden min-h-11 w-full items-center justify-center rounded-control text-muted transition-colors duration-160 hover:bg-inset hover:text-ink md:flex" aria-label={isCollapsed ? 'Expand navigation' : 'Collapse navigation'} title={isCollapsed ? 'Expand navigation' : 'Collapse navigation'}>
             {isCollapsed ? <PanelLeftOpen className="h-[19px] w-[19px]" /> : <><PanelLeftClose className="mr-3 h-[19px] w-[19px]" /><span className="text-sm font-medium">Collapse</span></>}
           </button>
-          <p className={clsx('px-3 pt-2 font-mono text-[10px] text-muted/70', isCollapsed && 'md:hidden')} title="AiTask application version and build commit">
+          <p className={clsx('px-3 pt-2 font-mono text-[10px] text-muted', isCollapsed && 'md:hidden')} title="AiTask application version and build commit">
             {APP_VERSION_LABEL} · {APP_COMMIT}
           </p>
         </div>

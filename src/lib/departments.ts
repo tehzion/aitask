@@ -17,21 +17,35 @@ export const DEPARTMENTS = [
 
 const departmentAliases: Record<string, Department> = {
   operation: 'Operation',
+  operations: 'Operation',
   management: 'Management',
   videoshooting: 'Video Shooting',
   'video shooting': 'Video Shooting',
+  shooting: 'Video Shooting',
+  videography: 'Video Shooting',
   editor: 'Video Editor',
   'video editor': 'Video Editor',
+  'video editing': 'Video Editor',
+  editing: 'Video Editor',
   'ads management': 'Ads Management',
+  ads: 'Ads Management',
+  advertising: 'Ads Management',
   'account & finance': 'Account & Finance',
+  account: 'Account & Finance',
+  finance: 'Account & Finance',
+  'account and finance': 'Account & Finance',
   designer: 'Designer',
+  design: 'Designer',
+  graphic: 'Designer',
   client: 'Client',
 };
 
 export const normalizeDepartment = (value: unknown): Department | null => {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, ' ');
-  return departmentAliases[normalized] || null;
+  if (departmentAliases[normalized]) return departmentAliases[normalized];
+  const exact = DEPARTMENTS.find(department => department.toLowerCase() === normalized);
+  return exact || null;
 };
 
 const departmentOrder = new Map<Department, number>(

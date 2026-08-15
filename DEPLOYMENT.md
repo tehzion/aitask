@@ -1,48 +1,51 @@
 # Vercel + Supabase Setup
 
-AiTask can deploy to Vercel as a Vite single-page app.
+AiTask deploys to Vercel as a Vite single-page app and syncs through Supabase Auth.
 
 ## Vercel
 
 Use these project settings:
 
 - Framework Preset: `Vite`
-- Build Command: `npm run build`
+- Build Command: `pnpm build`
 - Output Directory: `dist`
-- Install Command: Vercel default
+- Install Command: Vercel default (pnpm is detected from `pnpm-lock.yaml`)
 
 The included `vercel.json` sends all routes to `index.html` so React Router direct links work, including `/tasks`, `/calendar`, `/reports`, `/approvals`, and `/settings`.
 
 ## Supabase
 
 1. Create a Supabase project.
-2. Open Supabase SQL Editor.
-3. Run `supabase/schema.sql`.
-4. In Vercel, add these Environment Variables for Production, Preview, and Development:
+2. Apply the database schema. The secure identity-based workspace lives in `supabase/secure-auth-schema.sql`; historical migrations live under `supabase/migrations/` and should be applied in filename order (`supabase db push` with the Supabase CLI applies both). The legacy JSON-snapshot table (`supabase/schema.sql`) is only needed while migrating an old snapshot deployment; `supabase/secure-cutover.sql` revokes anon access to it.
+3. In Vercel, add these Environment Variables for Production, Preview, and Development:
 
 ```env
 VITE_AITASK_BACKEND=supabase
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
-VITE_SUPABASE_STATE_TABLE=aitask_app_state
-VITE_SUPABASE_STATE_ID=default
 VITE_AITASK_SHOW_DEMO_LOGIN=false
+VITE_AITASK_ALLOW_PASSWORD_RESET_BYPASS=false
 ```
 
-5. Redeploy the Vercel project after saving env vars.
+4. Redeploy the Vercel project after saving env vars.
 
-The first Supabase-enabled visit creates the workspace snapshot from the current app state: maintained login accounts and starter projects, with no seeded demo tasks. After that, users, tasks, projects, notifications, registrations, and custom roles sync through Supabase.
+Users sign in with Supabase Auth. The workspace (members, tasks, projects, clients, plans, cycles, notifications, roles) is stored in normalized RLS-protected tables and mutated through the `aitask_execute_command` RPC with per-entity optimistic concurrency and command-id idempotency.
 
-If the app was already live before the freshness update, run the latest `supabase/schema.sql` again before redeploying. It keeps the existing snapshot and adds the `version` column plus explicit Data API grants used for conflict-safe sync.
-The latest schema also removes broad demo snapshot policies and installs the guard trigger that rejects password/token/secret-like JSON keys.
+## Verification
 
-Before redeploying, verify the frontend key can read the snapshot through the Supabase Data API:
+Run these before redeploying:
 
 ```bash
-npm run verify:supabase
+pnpm verify:supabase
+pnpm lint
+pnpm check
+pnpm build
+pnpm verify:pwa
+pnpm test:e2e
 ```
 
-That command reports the current snapshot version and `updated_at`. If it fails with `401`/`403`, check the publishable key, table grants, and RLS policies before sending clients back to the app.
+- `verify:supabase` checks that anonymous callers cannot execute workspace commands or read the secure tables, that the legacy snapshot guard trigger exists, and that a spoofed `Origin` cannot write the legacy snapshot. Set `AITASK_EXPECT_SECURE_CUTOVER=true` once `secure-cutover.sql` has been applied.
+- `verify:pwa` rebuilds `dist/` and checks the generated manifest/service worker.
 
 ## If Vercel Does Not Show Live
 
@@ -50,40 +53,17 @@ The dashboard should show `Supabase`/`Live` after the Production deployment is b
 
 Vite embeds `VITE_*` values at build time, so changing Vercel environment variables only takes effect after a new deployment.
 
-Check the Vercel project has these variables in the same environment you are viewing, usually Production:
+Demo account shortcuts are shown only when `VITE_AITASK_SHOW_DEMO_LOGIN=true` (and never in hosted builds by default — the app fails closed).
 
-```env
-VITE_AITASK_BACKEND=supabase
-VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
-VITE_SUPABASE_STATE_TABLE=aitask_app_state
-VITE_SUPABASE_STATE_ID=default
-VITE_AITASK_SHOW_DEMO_LOGIN=false
-```
-
-Then redeploy from Vercel. When the build is correct and `supabase/schema.sql` has been run, Dashboard and Settings show `Supabase`/`Live`.
-
-If clients already used the app before Supabase was live, the next hosted load now recovers browser-local workspace changes that are newer than the remote snapshot and syncs that merged state back to Supabase.
-
-Demo account shortcuts and demo passwords are shown by default for walkthroughs. Set `VITE_AITASK_SHOW_DEMO_LOGIN=false` to hide them for client-facing deployments.
-
-## Local Check Before Deploy
-
-Run these serially:
+## Local Development
 
 ```bash
-npm run verify:supabase
-cmd /c npm run lint
-cmd /c npm run check
-cmd /c npm run build
+pnpm dev      # local demo mode (no Supabase)
+pnpm build    # production build
 ```
 
-Then preview locally if needed:
+Set `VITE_AITASK_BACKEND=supabase` plus the URL/key above to develop against a hosted workspace.
 
-```bash
-cmd /c npm run preview
-```
+## Production Note
 
-## Important Production Note
-
-The current Supabase bridge is a shared JSON snapshot so the app can move online quickly without breaking workflows. Before a real production launch, migrate to Supabase Auth, normalized tables, storage buckets for attachments, and stricter row-level security policies.
+The legacy shared-JSON snapshot bridge (`aitask_app_state`) is an interim compatibility path. The secure deployment uses Supabase Auth with identity-based RLS; before onboarding real clients, confirm `supabase/secure-cutover.sql` has been applied so anonymous snapshot access is revoked.
