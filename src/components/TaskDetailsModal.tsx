@@ -417,7 +417,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                           className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}
                         >
                           {canAssignOthers && <option value="">Unassigned</option>}
-                          {assigneeOptions.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                          {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{user.name}</option>)}
                         </select>
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
                       </span>
@@ -534,7 +534,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                     </div>
                     <div>
                       <p className="text-xs font-medium text-blue-700">Assigned contact</p>
-                      <p className="mt-1 font-semibold text-blue-950">{assignee?.name || 'Agency team'}</p>
+                      <p data-i18n-skip className="mt-1 font-semibold text-blue-950">{assignee?.name || 'Agency team'}</p>
                     </div>
                   </div>
                 </div>
@@ -567,12 +567,12 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                         {(assignee?.name || 'A').charAt(0)}
                       </span>
                     )}
-                    <span className="text-sm font-medium text-slate-800">{assignee?.name || 'Agency team'}</span>
+                    <span data-i18n-skip className="text-sm font-medium text-slate-800">{assignee?.name || 'Agency team'}</span>
                   </div>
                 </div>
                 {!isClientTaskViewer && <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Created By</label>
-                  <span className="text-sm font-medium text-slate-800">{creator?.name || 'Unknown'}</span>
+                  <span data-i18n-skip className="text-sm font-medium text-slate-800">{creator?.name || 'Unknown'}</span>
                 </div>}
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Start Date</label>

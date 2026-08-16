@@ -312,14 +312,14 @@ const Navbar: React.FC<NavbarProps> = ({
 
         <div className="flex items-center gap-3 border-l border-line pl-4">
           <div className="hidden md:flex flex-col items-end">
-            <span className="text-sm font-semibold leading-tight text-slate-950">{currentUser.name}</span>
+            <span data-i18n-skip className="text-sm font-semibold leading-tight text-slate-950">{currentUser.name}</span>
             <span className="text-xs text-slate-500">
               {getEffectiveRoleName(currentUser, rolePermissions)} - {getMemberDepartments(currentUser).join(', ')}
             </span>
           </div>
           <img
             src={currentUser.avatar}
-            alt={currentUser.name}
+            data-i18n-skip alt={currentUser.name}
             className="h-9 w-9 rounded-control object-cover ring-1 ring-line"
           />
         </div>

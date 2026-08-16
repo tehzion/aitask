@@ -461,7 +461,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   >
                     <option value="">{isStaffTaskCreator ? 'Choose an Admin-created company' : 'No Company Link / Independent Task'}</option>
                     {assignableProjects.map(p => (
-                      <option key={p.id} value={p.id}>{p.projectName} ({p.clientName})</option>
+                      <option key={p.id} data-i18n-skip value={p.id}>{p.projectName} ({p.clientName})</option>
                     ))}
                   </select>
                   <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
@@ -616,7 +616,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         {filteredUsers.length > 0 ? `Auto assign: ${filteredUsers[0].name}` : 'No users in this department'}
                       </option>
                       {filteredUsers.map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
+                        <option key={u.id} data-i18n-skip value={u.id}>{u.name}</option>
                       ))}
                     </select>
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />

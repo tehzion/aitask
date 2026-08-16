@@ -419,7 +419,7 @@ const Dashboard: React.FC = () => {
               return (
                 <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="min-w-0 rounded-control bg-inset/70 p-3 transition-colors hover:bg-inset">
                   <p data-i18n-skip className={cn('truncate text-sm font-semibold text-slate-900', isOverdue && 'text-red-700')}>{task.title}</p>
-                  <p className="mt-1 truncate text-xs text-slate-500">{task.clientName} - {task.projectName || 'Independent'}</p>
+                  <p data-i18n-skip className="mt-1 truncate text-xs text-slate-500">{task.clientName} - {task.projectName || 'Independent'}</p>
                   <div className="mt-3 flex items-center justify-between gap-2 text-[11px]">
                     <span className={cn('truncate text-slate-500', isOverdue && 'font-semibold text-red-600')}>
                       {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
@@ -477,7 +477,7 @@ const Dashboard: React.FC = () => {
                       <p data-i18n-skip className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
                       <div className="mt-1 flex justify-between gap-2 text-xs text-slate-500">
                         <span>{task.id}</span>
-                        <span className="truncate font-medium">{task.clientName}</span>
+                        <span data-i18n-skip className="truncate font-medium">{task.clientName}</span>
                       </div>
                     </Link>
                   ))}

@@ -815,7 +815,7 @@ const Approvals: React.FC = () => {
                       >
                         <option value="">Base role only ({getEffectiveRoleName(u, rolePermissions)})</option>
                         {rolePermissions.map(customRole => (
-                          <option key={customRole.id} value={customRole.id}>{customRole.name}</option>
+                          <option key={customRole.id} data-i18n-skip value={customRole.id}>{customRole.name}</option>
                         ))}
                       </select>
                     )}
@@ -973,7 +973,7 @@ const Approvals: React.FC = () => {
                     onChange={e => setNewUser({ ...newUser, customRoleId: e.target.value })}
                   >
                     <option value="">Base role only</option>
-                    {rolePermissions.map(customRole => <option key={customRole.id} value={customRole.id}>{customRole.name}</option>)}
+                    {rolePermissions.map(customRole => <option key={customRole.id} data-i18n-skip value={customRole.id}>{customRole.name}</option>)}
                   </select>
                 </div>
               </div>

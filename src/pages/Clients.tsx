@@ -594,14 +594,14 @@ const Clients: React.FC = () => {
                             type="button"
                             aria-haspopup="menu"
                             aria-expanded={openMenuClientKey === client.name}
-                            aria-label={`More actions for ${client.name}`}
+                            aria-label={`More actions for ${client.name}`} data-i18n-skip
                             onClick={() => setOpenMenuClientKey(prev => prev === client.name ? null : client.name)}
                             className="flex h-10 w-10 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"
                           >
                             <MoreHorizontal className="h-5 w-5" />
                           </button>
                           {openMenuClientKey === client.name && (
-                            <div role="menu" aria-label={`Actions for ${client.name}`} className="absolute right-0 top-11 z-20 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line">
+                            <div role="menu" data-i18n-skip aria-label={`Actions for ${client.name}`} className="absolute right-0 top-11 z-20 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line">
                               <Link role="menuitem" to={`/tasks?client=${encodeURIComponent(client.name)}`} onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">View tasks</Link>
                               <button type="button" role="menuitem" onClick={() => openClientPanel(client)} className="flex min-h-10 w-full items-center rounded-control px-3 text-left text-sm text-ink hover:bg-inset">Details</button>
                               {website && <a role="menuitem" href={website} target="_blank" rel="noopener noreferrer" onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">Website</a>}
