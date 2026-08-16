@@ -1,9 +1,12 @@
-import { format, formatDistanceToNow, isBefore, isToday } from 'date-fns';
+import { addDays, format, formatDistanceToNow, isBefore, isToday } from 'date-fns';
 import {
+  AlertCircle,
   ArrowRight,
+  CalendarClock,
   CalendarDays,
   CheckCircle2,
   Clock3,
+  FileCheck2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Task, WorkspaceMember } from '../types';
@@ -34,15 +37,58 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
   const activePlan = clientPlans.find(item => item.clientId === client?.id && item.status === 'Active');
   const publishedCycles = serviceCycles.filter(item => item.clientId === client?.id && ['Published', 'Completed'].includes(item.status));
   const progress = getClientProgress(tasks);
-  const reviewReady = getClientReviewReadyTasks(tasks).slice(0, 5);
-  const upcoming = getClientUpcomingDeliveries(tasks).slice(0, 6);
+  const reviewReadyAll = getClientReviewReadyTasks(tasks);
+  const reviewReady = reviewReadyAll.slice(0, 5);
+  const upcomingAll = getClientUpcomingDeliveries(tasks);
+  const upcoming = upcomingAll.slice(0, 6);
   const latest = getClientLatestUpdates(tasks).slice(0, 6);
   const contactName = (id: string) => users.find(user => user.id === id)?.name || 'Agency team';
 
   const completion = progress.total ? Math.round((progress.approved / progress.total) * 100) : 0;
 
+  const today = new Date();
+  const isOverdue = (task: Task) => {
+    const dueDate = parseOptionalDate(task.dueDate);
+    return Boolean(dueDate && isBefore(dueDate, today) && !isToday(dueDate));
+  };
+  const overdueCount = upcomingAll.filter(isOverdue).length;
+  const dueSoonCount = upcomingAll.filter(task => {
+    const dueDate = parseOptionalDate(task.dueDate);
+    return Boolean(dueDate && !isBefore(dueDate, today) && isBefore(dueDate, addDays(today, 7)));
+  }).length;
+  const sortedUpcoming = [...upcoming].sort((left, right) => {
+    const leftDue = parseOptionalDate(left.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER;
+    const rightDue = parseOptionalDate(right.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER;
+    return Number(isOverdue(right)) - Number(isOverdue(left)) || leftDue - rightDue;
+  });
+  const tasksLink = currentUser?.companyName ? `/tasks?client=${encodeURIComponent(currentUser.companyName)}` : '/tasks';
+
   return (
     <div className="space-y-6">
+      <section className="grid gap-3 sm:grid-cols-3" aria-label="Client briefing">
+        <Link to={tasksLink} className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+          <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', reviewReadyAll.length > 0 ? 'bg-amber-50 text-amber-700' : 'bg-inset text-muted')}><FileCheck2 className="h-4 w-4" /></span>
+          <span className="min-w-0">
+            <span className="calm-number block text-xl font-semibold text-ink">{reviewReadyAll.length}</span>
+            <span className="block truncate text-xs text-muted">Ready for your review</span>
+          </span>
+        </Link>
+        <Link to={tasksLink} className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+          <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', overdueCount > 0 ? 'bg-red-50 text-red-700' : 'bg-inset text-muted')}><AlertCircle className="h-4 w-4" /></span>
+          <span className="min-w-0">
+            <span className="calm-number block text-xl font-semibold text-ink">{overdueCount}</span>
+            <span className="block truncate text-xs text-muted">Overdue</span>
+          </span>
+        </Link>
+        <Link to={tasksLink} className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+          <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', dueSoonCount > 0 ? 'bg-blue-50 text-blue-700' : 'bg-inset text-muted')}><CalendarClock className="h-4 w-4" /></span>
+          <span className="min-w-0">
+            <span className="calm-number block text-xl font-semibold text-ink">{dueSoonCount}</span>
+            <span className="block truncate text-xs text-muted">Due soon</span>
+          </span>
+        </Link>
+      </section>
+
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,.85fr)]" aria-label="Company progress">
         <Surface variant="inset" className="relative overflow-hidden p-6 sm:p-8">
           <p className="calm-eyebrow">Current service cycle</p>
@@ -65,7 +111,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
         </Surface>
         <StatGroup className="grid-cols-2" aria-label="Task summary">
           {[
-            ['Active', progress.active],
+            ['In progress', progress.active],
             ['Awaiting review', progress.awaitingReview],
             ['Approved', progress.approved],
             ['Total tasks', progress.total],
@@ -75,22 +121,22 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
       </section>
 
       <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="client-review-title">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4 sm:px-5">
           <div>
-            <h2 id="client-review-title" className="text-base font-semibold text-slate-950">Ready for your review</h2>
-            <p className="mt-1 text-sm text-slate-500">Review completed work, approve it, or ask for changes.</p>
+            <h2 id="client-review-title" className="text-base font-semibold text-ink">Ready for your review</h2>
+            <p className="mt-1 text-sm text-muted">Review completed work, approve it, or ask for changes.</p>
           </div>
-          <Link to="/tasks" className="inline-flex items-center gap-1 text-sm font-semibold text-blue-700 hover:text-blue-800">
+          <Link to={tasksLink} className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:text-accent/80">
             Company tasks <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-line">
           {reviewReady.map(task => (
             <div key={task.id} className="grid gap-3 px-4 py-4 sm:grid-cols-[1fr_auto] sm:items-center sm:px-5">
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-950">{task.title}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {task.serviceType} · {contactName(task.assignedTo)}
+                <p data-i18n-skip className="truncate text-sm font-semibold text-ink">{task.title}</p>
+                <p className="mt-1 text-xs text-muted">
+                  <span data-i18n-skip>{task.serviceType} · {contactName(task.assignedTo)}</span>
                   {task.dueDate ? ` · Due ${format(parseOptionalDate(task.dueDate)!, 'd MMM yyyy')}` : ''}
                 </p>
               </div>
@@ -102,8 +148,8 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
           {reviewReady.length === 0 && (
             <div className="px-5 py-10 text-center">
               <CheckCircle2 className="mx-auto h-7 w-7 text-emerald-500" />
-              <p className="mt-2 text-sm font-semibold text-slate-700">You are all caught up</p>
-              <p className="mt-1 text-xs text-slate-500">New deliverables will appear here when they are ready.</p>
+              <p className="mt-2 text-sm font-semibold text-ink">You are all caught up</p>
+              <p className="mt-1 text-xs text-muted">New deliverables will appear here when they are ready.</p>
             </div>
           )}
         </div>
@@ -111,32 +157,32 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
 
       <div className="grid gap-6 xl:grid-cols-2">
         <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="client-upcoming-title">
-          <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
-            <h2 id="client-upcoming-title" className="text-base font-semibold text-slate-950">Upcoming deliveries</h2>
-            <p className="mt-1 text-sm text-slate-500">Active work ordered by delivery date.</p>
+          <div className="border-b border-line px-4 py-4 sm:px-5">
+            <h2 id="client-upcoming-title" className="text-base font-semibold text-ink">Upcoming deliveries</h2>
+            <p className="mt-1 text-sm text-muted">Active work ordered by delivery date.</p>
           </div>
-          <div className="divide-y divide-slate-100">
-            {upcoming.map(task => {
+          <div className="divide-y divide-line">
+            {sortedUpcoming.map(task => {
               const dueDate = parseOptionalDate(task.dueDate);
-              const overdue = Boolean(dueDate && isBefore(dueDate, new Date()) && !isToday(dueDate));
+              const overdue = isOverdue(task);
               return (
-                <DataRow key={task.id} title={<Link to={taskPath(task)} className="hover:text-accent">{task.title}</Link>} description={`${task.serviceType} · ${contactName(task.assignedTo)}`} action={<span className={cn('inline-flex items-center gap-1.5 text-xs font-semibold text-muted', overdue && 'text-red-700')}><CalendarDays className="h-4 w-4" />{overdue ? 'Overdue · ' : ''}{dueDate ? format(dueDate, 'd MMM') : ''}</span>} />
+                <DataRow key={task.id} title={<Link data-i18n-skip to={taskPath(task)} className="hover:text-accent">{task.title}</Link>} description={<span data-i18n-skip>{task.serviceType} · {contactName(task.assignedTo)}</span>} action={<span className={cn('inline-flex items-center gap-1.5 text-xs font-semibold text-muted', overdue && 'text-red-700')}><CalendarDays className="h-4 w-4" />{overdue ? 'Overdue · ' : ''}{dueDate ? format(dueDate, 'd MMM') : ''}</span>} />
               );
             })}
-            {upcoming.length === 0 && <p className="px-5 py-10 text-center text-sm text-slate-500">No scheduled deliveries right now.</p>}
+            {upcoming.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">No scheduled deliveries right now.</p>}
           </div>
         </section>
 
         <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="client-updates-title">
-          <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
-            <h2 id="client-updates-title" className="text-base font-semibold text-slate-950">Latest updates</h2>
-            <p className="mt-1 text-sm text-slate-500">Recently updated work for your company.</p>
+          <div className="border-b border-line px-4 py-4 sm:px-5">
+            <h2 id="client-updates-title" className="text-base font-semibold text-ink">Latest updates</h2>
+            <p className="mt-1 text-sm text-muted">Recently updated work for your company.</p>
           </div>
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-line">
             {latest.map(task => (
-              <DataRow key={task.id} title={<Link to={taskPath(task)} className="hover:text-accent">{task.title}</Link>} description={`${task.status} · ${task.serviceType}`} action={<span className="inline-flex items-center gap-1.5 text-xs text-muted"><Clock3 className="h-4 w-4" />{task.updatedAt ? formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true }) : ''}</span>} />
+              <DataRow key={task.id} title={<Link data-i18n-skip to={taskPath(task)} className="hover:text-accent">{task.title}</Link>} description={<>{task.status} · <span data-i18n-skip>{task.serviceType}</span></>} action={<span className="inline-flex items-center gap-1.5 text-xs text-muted"><Clock3 className="h-4 w-4" />{task.updatedAt ? formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true }) : ''}</span>} />
             ))}
-            {latest.length === 0 && <p className="px-5 py-10 text-center text-sm text-slate-500">Updates will appear here as work progresses.</p>}
+            {latest.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">Updates will appear here as work progresses.</p>}
           </div>
         </section>
       </div>

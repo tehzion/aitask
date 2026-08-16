@@ -6,7 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
-import { format, isToday, isThisWeek, isBefore, differenceInDays } from 'date-fns';
+import { isToday, isThisWeek, isBefore, differenceInDays } from 'date-fns';
 import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon, Plus, FolderKanban, UserPlus, Users, FileCheck2, Sparkles, CalendarClock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
@@ -85,7 +85,6 @@ const Dashboard: React.FC = () => {
   );
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
   const hasTaskData = tasks.length > 0;
-  const prioritizePersonalWork = currentUser?.role === 'Staff' || currentUser?.role === 'Client';
   const showBossOperations = isBossKoo(currentUser);
   const showStaffOperations = currentUser?.role === 'Staff';
   const showClientPortal = currentUser?.role === 'Client';
@@ -535,7 +534,7 @@ const Dashboard: React.FC = () => {
                 <OperationsGlance tasks={staffAssignedTasks} users={users} scope="staff" />
               </div>
             ) : (
-              <section className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3', prioritizePersonalWork ? 'order-2' : 'order-1')} aria-label="Workspace metrics">
+              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 order-1" aria-label="Workspace metrics">
                 <StatCard title="Active Companies" value={stats.activeProjects} icon={LayoutList} tone="blue" to="/projects" />
                 <StatCard title="Pending Tasks" value={stats.pendingTasks} icon={Clock} tone="amber" to="/tasks" />
                 <StatCard title="Completed Tasks" value={stats.completedTasks} icon={CheckCircle2} tone="emerald" to="/tasks" />
@@ -645,7 +644,7 @@ const Dashboard: React.FC = () => {
         )}
 
         {hasTaskData && (
-        <section className={cn('space-y-6', prioritizePersonalWork ? 'order-4' : 'order-2')} aria-labelledby="workspace-analytics-title">
+        <section className="space-y-6 order-2" aria-labelledby="workspace-analytics-title">
           <div className="flex items-end justify-between gap-4">
             <div>
               <h2 id="workspace-analytics-title" className="text-lg font-semibold text-slate-950">Workspace analytics</h2>
@@ -759,82 +758,6 @@ const Dashboard: React.FC = () => {
             )}
           </div>
         </section>
-
-        {currentUser && !showStaffOperations && !isBossKoo(currentUser) && (
-          <section className={cn(cardBase, 'p-4 sm:p-5', prioritizePersonalWork ? 'order-1' : 'order-4')} aria-labelledby="personal-work-title">
-            <div className="mb-4 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 id="personal-work-title" className="text-lg font-semibold text-slate-950">
-                  {currentUser.role === 'Client' ? 'Your review work' : 'My work'}
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">Due work, overdue items, and actions requiring attention.</p>
-              </div>
-              <Link to="/tasks" className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
-                Go to tasks <ArrowRight className="ml-1 h-4 w-4" />
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              <div className="space-y-3">
-                <h3 className="flex items-center gap-2 border-b border-line/70 pb-2 text-sm font-semibold text-ink">
-                  Due today <span className="calm-number text-muted">{myTasks.dueToday.length}</span>
-                </h3>
-                <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
-                  {myTasks.dueToday.map(task => (
-                    <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-control bg-inset/55 p-3 transition-colors hover:bg-inset">
-                      <p data-i18n-skip className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
-                      <div className="mt-1 flex justify-between gap-2 text-xs text-slate-500">
-                        <span>{task.id}</span>
-                        <span data-i18n-skip className="truncate font-medium">{task.clientName}</span>
-                      </div>
-                    </Link>
-                  ))}
-                  {myTasks.dueToday.length === 0 && <p className="py-4 text-center text-xs text-slate-500">No tasks due today.</p>}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="flex items-center gap-2 border-b border-line/70 pb-2 text-sm font-semibold text-ink">
-                  Overdue <span className="calm-number text-red-700">{myTasks.overdue.length}</span>
-                </h3>
-                <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
-                  {myTasks.overdue.map(task => {
-                    const dueDate = parseOptionalDate(task.dueDate);
-                    const days = dueDate ? Math.max(1, differenceInDays(new Date(), dueDate)) : 0;
-                    return (
-                      <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-control bg-red-50/30 p-3 transition-colors hover:bg-red-50/60" title={dueDate ? `Due: ${format(dueDate, 'yyyy-MM-dd')}` : 'No due date'}>
-                        <p data-i18n-skip className="truncate text-sm font-semibold text-red-900">{task.title}</p>
-                        <div className="mt-1 flex justify-between gap-2 text-xs text-red-700">
-                          <span>{days} day{days === 1 ? '' : 's'} overdue</span>
-                          <span className="truncate font-medium">{task.clientName}</span>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                  {myTasks.overdue.length === 0 && <p className="py-4 text-center text-xs text-slate-500">No overdue tasks.</p>}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="flex items-center gap-2 border-b border-line/70 pb-2 text-sm font-semibold text-ink">
-                  {currentUser.role === 'Client' ? 'Waiting for your review' : 'Waiting approval'} <span className="calm-number text-amber-700">{myTasks.actionRequired.length}</span>
-                </h3>
-                <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
-                  {myTasks.actionRequired.map(task => (
-                    <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-control bg-inset/55 p-3 transition-colors hover:bg-inset">
-                      <p data-i18n-skip className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
-                      <div className="mt-1 flex justify-between gap-2 text-xs text-slate-500">
-                        <span>{task.status}</span>
-                        <span className="truncate font-medium">{task.clientName}</span>
-                      </div>
-                    </Link>
-                  ))}
-                  {myTasks.actionRequired.length === 0 && <p className="py-4 text-center text-xs text-slate-500">No reviews pending.</p>}
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
       </div>
       )}
     </div>

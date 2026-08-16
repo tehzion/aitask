@@ -32,4 +32,24 @@ describe('Chinese UI translations', () => {
     expect(translateUiText('Task "Due Report" deleted', 'zh')).toBe('任务“Due Report”已删除');
     expect(translateUiText('Status updated to "In Progress"', 'zh')).toBe('状态已更新为“In Progress”');
   });
+
+  it('translates client portal chrome in whole and split-node forms', () => {
+    expect(translateUiText('services ·', 'zh')).toBe('项服务 ·');
+    expect(translateUiText('published cycle(s)', 'zh')).toBe('个已发布周期');
+    expect(translateUiText('linked task(s)', 'zh')).toBe('个关联任务');
+    expect(translateUiText('1 services · 1 published cycle(s)', 'zh')).toBe('1 项服务 · 1 个已发布周期');
+    expect(translateUiText('3 linked task(s) · Short Video Production', 'zh')).toBe('3 个关联任务 · Short Video Production');
+    expect(translateUiText('· Due 18 Aug 2026', 'zh')).toBe('· 截止 18 8月 2026');
+    expect(translateUiText('75% of work approved', 'zh')).toBe('75% 的工作已批准');
+    expect(translateUiText('Track Settings work, review deliverables, and share feedback.', 'zh')).toBe('跟踪Settings 的工作、审阅交付物并分享反馈。');
+    expect(translateUiText('Awaiting your review', 'zh')).toBe('等待您的审阅');
+    expect(translateUiText('Review task', 'zh')).toBe('审阅任务');
+    expect(translateUiText('Leave feedback', 'zh')).toBe('留下反馈');
+    expect(translateUiText('Request changes', 'zh')).toBe('请求修改');
+    expect(translateUiText('Delivery Schedule', 'zh')).toBe('交付日程');
+    expect(translateUiText('Company Tasks', 'zh')).toBe('公司任务');
+    expect(translateUiText('Awaiting review', 'zh')).toBe('待审阅');
+    expect(translateUiText('Approved', 'zh')).toBe('已批准');
+    expect(translateUiText('Total tasks', 'zh')).toBe('任务总数');
+  });
 });

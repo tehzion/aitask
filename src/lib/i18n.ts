@@ -670,6 +670,50 @@ const zhCopyAdditions: Record<string, string> = {
   'in review': '个待审核',
   'My tasks': '我的任务',
   'Quick task filters': '任务快捷筛选',
+  // Client portal dashboard
+  'Client briefing': '客户简报',
+  'of visible work approved': '的可见工作已批准',
+  'Task summary': '任务概览',
+  'Awaiting review': '待审阅',
+  'Approved': '已批准',
+  'Total tasks': '任务总数',
+  'Review completed work, approve it, or ask for changes.': '审阅已完成的工作、批准或提出修改。',
+  'Company tasks': '公司任务',
+  'Company Tasks': '公司任务',
+  'Review task': '审阅任务',
+  'New deliverables will appear here when they are ready.': '新的交付物准备就绪后会显示在这里。',
+  'Active work ordered by delivery date.': '进行中的工作按交付日期排序。',
+  'Overdue ·': '已逾期 ·',
+  'Recently updated work for your company.': '贵公司最近更新的工作。',
+  'Updates will appear here as work progresses.': '随着工作推进，更新会显示在这里。',
+  'Agency team': '代理团队',
+  // Client tasks, calendar and workspace
+  'Awaiting your review': '等待您的审阅',
+  'Leave feedback': '留下反馈',
+  'Search company tasks...': '搜索公司任务…',
+  'Contact / Action': '联系人 / 操作',
+  'Delivery Schedule': '交付日程',
+  'Request changes': '请求修改',
+  'No visible client tasks yet': '暂无可查看的客户任务',
+  'Tasks for your company will appear here as soon as the team publishes or assigns them.': '团队发布或分配任务后，贵公司的任务会显示在这里。',
+  'No saved contact person yet.': '尚未保存联系人。',
+  'Clear client filter': '清除客户筛选',
+  'Back to Clients': '返回客户列表',
+  'Assigned to': '分配给',
+  'This client is outside your assigned work. Contact details are hidden.': '该客户不在您负责的工作范围内，联系方式已隐藏。',
+  // Interpolated JSX text children are split into static pieces at runtime; translate each piece.
+  'services ·': '项服务 ·',
+  'published cycle(s)': '个已发布周期',
+  'linked task(s)': '个关联任务',
+  'services · starts': '项服务 · 开始于',
+  'Back to clients': '返回客户列表',
+  'Service plan, monthly cycles, deliverables and client files.': '服务方案、月度周期、交付物与客户文件。',
+  'Service context': '服务背景',
+  'Monthly deliverables': '月度交付物',
+  'Contract reminder': '合同到期提醒',
+  'deliverables completed': '个交付物已完成',
+  'No plan': '暂无方案',
+  'Activate plan': '启用方案',
 };
 
 const preserveWhitespace = (value: string, replacement: string) => {
@@ -677,6 +721,26 @@ const preserveWhitespace = (value: string, replacement: string) => {
   const trailing = value.match(/\s*$/)?.[0] || '';
   return `${leading}${replacement}${trailing}`;
 };
+
+const MONTH_ABBREVIATIONS: Array<[RegExp, string]> = [
+  [/\bJan\b/g, '1月'],
+  [/\bFeb\b/g, '2月'],
+  [/\bMar\b/g, '3月'],
+  [/\bApr\b/g, '4月'],
+  [/\bMay\b/g, '5月'],
+  [/\bJun\b/g, '6月'],
+  [/\bJul\b/g, '7月'],
+  [/\bAug\b/g, '8月'],
+  [/\bSep\b/g, '9月'],
+  [/\bOct\b/g, '10月'],
+  [/\bNov\b/g, '11月'],
+  [/\bDec\b/g, '12月'],
+];
+
+const translateInlineDate = (value: string) => MONTH_ABBREVIATIONS.reduce(
+  (translated, [term, replacement]) => translated.replace(term, replacement),
+  value,
+);
 
 const translatePattern = (value: string) => {
   const patterns: Array<[RegExp, (...matches: string[]) => string]> = [
@@ -698,6 +762,13 @@ const translatePattern = (value: string) => {
     [/^Plan "(.+)" activated\.$/, plan => `方案“${plan}”已启用。`],
     [/^(.+) · dates updated$/, title => `${title} · 日期已更新`],
     [/^(\d+) linked task\(s\) · (.+)$/, (count, name) => `${count} 个关联任务 · ${name}`],
+    [/^(\d+) linked task\(s\)$/, count => `${count} 个关联任务`],
+    [/^(\d+) services · (\d+) published cycle\(s\)$/, (services, cycles) => `${services} 项服务 · ${cycles} 个已发布周期`],
+    [/^· Due (.+)$/, date => `· 截止 ${translateInlineDate(date)}`],
+    [/^(\d+)% of work approved$/, percent => `${percent}% 的工作已批准`],
+    [/^(\d+) of (\d+) deliverables completed$/, (done, total) => `已完成 ${done} / ${total} 个交付物`],
+    [/^(.+) work, deliveries, feedback, and approvals\.$/, company => `${company} 的工作、交付、反馈与审批。`],
+    [/^Track (.+) work, review deliverables, and share feedback\.$/, company => `跟踪${company} 的工作、审阅交付物并分享反馈。`],
     [/^(.+) · rev (\d+) · (\d+) tasks$/, (name, revision, steps) => `${name} · 第 ${revision} 版 · ${steps} 个任务`],
     // Confirm dialogs (wrapped with useI18n().t)
     [/^Delete "(.+)"\? This removes the task from the workspace\.$/, title => `确定删除“${title}”？该任务将从工作区移除。`],
@@ -746,6 +817,7 @@ const translatePattern = (value: string) => {
     [/\bPending\b/g, '待处理'],
     [/\bCompleted\b/g, '已完成'],
     [/\bWaiting Approval\b/g, '等待审批'],
+    [/\bCancelled\b/g, '已取消'],
     [/\bVideo Editor\b/g, '视频剪辑'],
     [/\bVideo Shooting\b/g, '拍摄'],
     [/\bOperation\b/g, '运营'],

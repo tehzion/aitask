@@ -463,7 +463,7 @@ const Tasks: React.FC = () => {
       {activeAssignee && (
         <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-blue-800">
           <span className="min-w-0 flex-1 text-sm font-medium">
-            Assigned to <strong className="font-bold">{activeAssignee.name}</strong>
+            Assigned to <strong data-i18n-skip className="font-bold">{activeAssignee.name}</strong>
             {periodRouteFilter && periodRouteFilter !== 'overall' ? ` · ${periodRouteFilter === 'today' ? 'Today' : 'This week'}` : ''}
           </span>
           <button
@@ -497,9 +497,9 @@ const Tasks: React.FC = () => {
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-blue-700">Client task view</p>
-                    <h2 className="mt-1 truncate text-xl font-bold text-slate-950">{activeClient}</h2>
+                    <h2 data-i18n-skip className="mt-1 truncate text-xl font-bold text-slate-950">{activeClient}</h2>
                     <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                      {activeClientProfile?.contactPerson || activeClientFallbackDetails || 'No saved contact person yet.'}
+                      {activeClientProfile?.contactPerson || activeClientFallbackDetails ? <span data-i18n-skip>{activeClientProfile?.contactPerson || activeClientFallbackDetails}</span> : 'No saved contact person yet.'}
                     </p>
                   </div>
                 </div>
@@ -539,12 +539,12 @@ const Tasks: React.FC = () => {
                 <>
               {activeClientProfile?.email && (
                 <span className="inline-flex items-center gap-2 truncate">
-                  <Mail className="h-4 w-4 shrink-0 text-slate-400" /> {activeClientProfile.email}
+                  <Mail className="h-4 w-4 shrink-0 text-slate-400" /> <span data-i18n-skip>{activeClientProfile.email}</span>
                 </span>
               )}
               {activeClientProfile?.phone && (
                 <span className="inline-flex items-center gap-2 truncate">
-                  <Phone className="h-4 w-4 shrink-0 text-slate-400" /> {activeClientProfile.phone}
+                  <Phone className="h-4 w-4 shrink-0 text-slate-400" /> <span data-i18n-skip>{activeClientProfile.phone}</span>
                 </span>
               )}
               {activeClientProfile?.address && (
@@ -835,7 +835,7 @@ const Tasks: React.FC = () => {
                           <td className="px-3 py-3">
                             <div className="flex items-center justify-center gap-2">
                               <div className="w-16 bg-slate-200 rounded-full h-2 overflow-hidden">
-                                <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
+                                <div className="bg-accent h-2 rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
                               </div>
                               <span className="text-xs font-semibold text-slate-700 w-8">{task.completionPercentage}%</span>
                             </div>
@@ -865,15 +865,15 @@ const Tasks: React.FC = () => {
 	                                </button>}
 	                              </div>}
 	                              <div className="flex items-center gap-1.5" title={`Assigned contact: ${getUserName(task.assignedTo)}`}>
-                                <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center text-[10px] font-bold">
+                                <div className="w-5 h-5 rounded-full bg-accent-soft text-accent flex items-center justify-center text-[10px] font-bold">
                                   {getUserName(task.assignedTo).charAt(0)}
                                 </div>
-                                <span className="text-xs font-medium text-slate-600 truncate max-w-[85px]">
+                                <span data-i18n-skip className="text-xs font-medium text-slate-600 truncate max-w-[85px]">
                                   {getUserName(task.assignedTo)}
 	                                </span>
 	                              </div>
 	                              {isClientUser && (
-	                                <span className="mt-1 inline-flex text-xs font-semibold text-blue-700">
+                              <span className="inline-flex text-xs font-semibold text-accent">
 	                                  {clientTaskAction(task)}
 	                                </span>
 	                              )}
@@ -943,7 +943,7 @@ const Tasks: React.FC = () => {
                         )}
                         {isClientUser && (
                           <div className="mt-3 border-t border-slate-100 pt-3">
-                            <span className="text-sm font-semibold text-blue-700">{clientTaskAction(task)}</span>
+                            <span className="text-sm font-semibold text-accent">{clientTaskAction(task)}</span>
                           </div>
                         )}
                       </button>
@@ -951,7 +951,7 @@ const Tasks: React.FC = () => {
                         <div>{renderStatusControl(task)}</div>
                         <div className="flex items-center gap-2">
                           <div className="w-20 bg-slate-200 rounded-full h-2 overflow-hidden">
-                            <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
+                            <div className="bg-accent h-2 rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
                           </div>
                           <span className="text-xs font-semibold text-slate-700">{task.completionPercentage}%</span>
                         </div>
@@ -991,7 +991,7 @@ const Tasks: React.FC = () => {
                             className={cn('flex max-h-[700px] flex-col rounded-lg border border-slate-200 bg-slate-50 p-3', !isClientUser && 'min-w-[260px] flex-1')}
                   >
                     {/* Column Header */}
-                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-[#e0d9cf] shrink-0">
+                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-line shrink-0">
                       <span className="text-xs font-semibold text-slate-600">{isClientUser ? column.label : status}</span>
                       <span className="rounded-md bg-slate-200/80 px-2 py-0.5 text-xs font-bold text-slate-700">{columnTasks.length}</span>
                     </div>
@@ -1060,7 +1060,7 @@ const Tasks: React.FC = () => {
                                   {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
                                 </span>
                                 <div className="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
-                                  <div className="w-4 h-4 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center text-[9px] font-bold">
+                                  <div className="w-4 h-4 rounded-full bg-accent-soft text-accent flex items-center justify-center text-[9px] font-bold">
                                     {getUserName(task.assignedTo).charAt(0)}
                                   </div>
                                   <span className="text-slate-600 font-semibold text-[9px] max-w-[50px] truncate">{getUserName(task.assignedTo)}</span>
@@ -1070,14 +1070,14 @@ const Tasks: React.FC = () => {
                               {/* Progress bar */}
 	                              <div className="mt-2.5 flex items-center gap-1.5">
                                 <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-200/40">
-                                  <div className="bg-blue-600 h-full rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
+                                  <div className="bg-accent h-full rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
 	                              </div>
                                 <span className="text-[9px] font-bold text-slate-600 shrink-0">{task.completionPercentage}%</span>
                               </div>
 
                               {isClientUser && (
                                 <div className="mt-2.5 border-t border-slate-100 pt-2">
-                                  <span className="text-xs font-semibold text-blue-700">{clientTaskAction(task)}</span>
+                                  <span className="text-xs font-semibold text-accent">{clientTaskAction(task)}</span>
                                 </div>
                               )}
 

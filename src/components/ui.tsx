@@ -5,7 +5,7 @@ import { buttonBase, cardBase } from './uiTokens';
 
 /* ── PageHeader ─────────────────────────────────────────────────────────── */
 interface PageHeaderProps {
-  title: string;
+  title: React.ReactNode;
   description?: string;
   action?: React.ReactNode;
   breadcrumb?: React.ReactNode;

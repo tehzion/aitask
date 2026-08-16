@@ -325,7 +325,7 @@ const ClientWorkspace = () => {
       </Link>
       <PageHeader
         compact
-        title={client.clientName}
+        title={<span data-i18n-skip>{client.clientName}</span>}
         description="Service plan, monthly cycles, deliverables and client files."
         meta={
           <>
@@ -359,7 +359,7 @@ const ClientWorkspace = () => {
           <Surface variant="inset" className="p-6 sm:p-8">
             <p className="calm-eyebrow">Current delivery progress</p>
             <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-              <div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{currentProgress}%</p><p className="mt-2 text-sm text-muted">{currentDelivered} of {currentCycleDeliverables.length} deliverables completed</p></div>
+              <div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{currentProgress}%</p><p className="mt-2 text-sm text-muted">{`${currentDelivered} of ${currentCycleDeliverables.length} deliverables completed`}</p></div>
               {currentCycle && <StatusChip tone={currentCycle.status === "Completed" || currentCycle.status === "Published" ? "emerald" : "slate"}>{currentCycle.status}</StatusChip>}
             </div>
             <ProgressBar className="mt-7" value={currentDelivered} max={Math.max(currentCycleDeliverables.length, 1)} label="Monthly deliverables" />
@@ -603,13 +603,13 @@ const ClientWorkspace = () => {
                         className="grid gap-3 px-5 py-4 lg:grid-cols-[1fr_180px_420px] lg:items-start"
                       >
                         <div>
-                          <p className="font-semibold text-slate-900">
+                          <p data-i18n-skip className="font-semibold text-slate-900">
                             {deliverable.title}
                           </p>
                           <p className="mt-1 text-xs text-slate-500">
                             {linkedTasks.length} linked task(s)
                             {serviceItem?.workflow
-                              ? ` · ${serviceItem.workflow.name}`
+                              ? <> · <span data-i18n-skip>{serviceItem.workflow.name}</span></>
                               : ""}
                           </p>
                           {linkedTasks.length > 0 && (
@@ -639,6 +639,7 @@ const ClientWorkspace = () => {
                                     >{task.workflowStepOrder}</span>
                                     <Link
                                       to="/tasks"
+                                      data-i18n-skip
                                       className="min-w-0 font-medium text-ink hover:text-accent"
                                     >
                                       {task.title.replace(/^\d+\.\s*/, "")}
@@ -729,7 +730,7 @@ const ClientWorkspace = () => {
                                     task.deliverableId === deliverable.id,
                                 )
                                 .map((task) => (
-                                  <option key={task.id} value={task.id}>
+                                  <option key={task.id} value={task.id} data-i18n-skip>
                                     {task.title}
                                   </option>
                                 ))}
