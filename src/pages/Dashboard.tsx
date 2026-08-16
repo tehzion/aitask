@@ -17,6 +17,7 @@ import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate, themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
 import type { User } from '../types';
+import { getMemberDepartments } from '../lib/departments';
 import OperationsGlance from '../components/OperationsGlance';
 import { getTrackedMonthlyCompletions, isTaskOpen } from '../lib/taskReporting';
 import ClientPortalDashboard from '../components/ClientPortalDashboard';
@@ -124,6 +125,7 @@ const Dashboard: React.FC = () => {
       { key: 'clients', label: t('Create the first client plan'), done: clientsDone, to: '/clients' },
     ].filter(step => !step.done);
   }, [clientPlans, currentUser, hasLocalServiceDemo, serviceCycles.length, showBossOperations, t, tasks.length, users]);
+
   const openCreateTaskFor = React.useCallback((member: User) => {
     useStore.setState({ createTaskInitialAssignee: member.id });
     setCreateTaskModalOpen(true);
@@ -238,6 +240,60 @@ const Dashboard: React.FC = () => {
 
     return { dueToday, overdue, actionRequired };
   }, [tasks, currentUser]);
+  const staffBriefing = useMemo(() => {
+    if (!showStaffOperations || !currentUser) return null;
+    const dueSoon = staffAssignedTasks
+      .filter(task => isTaskOpen(task) && task.dueDate)
+      .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
+      .slice(0, 6);
+    const waitingCount = staffAssignedTasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length;
+    return {
+      dueTodayCount: myTasks.dueToday.length,
+      overdueCount: myTasks.overdue.length,
+      waitingCount,
+      dueSoon,
+    };
+  }, [currentUser, myTasks.dueToday.length, myTasks.overdue.length, showStaffOperations, staffAssignedTasks]);
+
+  const departmentContext = useMemo(() => {
+    if (!showStaffOperations || !currentUser) return null;
+    const myDepartments = getMemberDepartments(currentUser);
+    if (myDepartments.length === 0) return null;
+    const primaryDepartment = myDepartments[0];
+    const teammates = users.filter(user => (
+      user.id !== currentUser.id
+      && user.role !== 'Client'
+      && !user.directoryOnly
+      && getMemberDepartments(user).includes(primaryDepartment)
+    ));
+    const departmentTasks = allTasks.filter(task => task.department === primaryDepartment);
+    const openCount = departmentTasks.filter(isTaskOpen).length;
+    const overdueCount = departmentTasks.filter(task => {
+      const dueDate = parseOptionalDate(task.dueDate);
+      return Boolean(isTaskOpen(task) && dueDate && isBefore(dueDate, new Date()) && !isToday(dueDate));
+    }).length;
+    const waitingCount = departmentTasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length;
+    return { primaryDepartment, teammates, openCount, overdueCount, waitingCount };
+  }, [allTasks, currentUser, showStaffOperations, users]);
+
+  const staffOnboardingSteps = useMemo(() => {
+    if (!showStaffOperations || !currentUser) return [];
+    const passwordDone = !currentUser?.mustResetPassword;
+    const profileDone = Boolean(currentUser.avatar || currentUser.email);
+    const taskAssigned = staffAssignedTasks.length > 0;
+    const updatedSomething = tasks.some(task => (
+      task.assignedTo === currentUser.id && (task.isCompleted || (task.comments?.length || 0) > 0)
+    ));
+    return [
+      { key: 'password', label: t('Set your own password'), done: passwordDone, to: '/settings' },
+      { key: 'profile', label: t('Complete your profile'), done: profileDone, to: '/settings' },
+      { key: 'first-task', label: t('Review your first assigned task'), done: taskAssigned, to: '/tasks' },
+      { key: 'first-update', label: t('Complete a task or leave an update'), done: updatedSomething, to: '/tasks' },
+    ].filter(step => !step.done);
+  }, [currentUser, showStaffOperations, staffAssignedTasks.length, t, tasks]);
+
+
+
 
   if (backend?.isLoading) {
     return (
@@ -487,6 +543,103 @@ const Dashboard: React.FC = () => {
                 <StatCard title="Due Today" value={stats.dueTodayTasks} icon={Calendar} tone="blue" to="/calendar" />
                 <StatCard title="Due This Week" value={stats.dueThisWeekTasks} icon={CalendarDays} tone="slate" to="/calendar" />
               </section>
+            )}
+
+            {showStaffOperations && (
+              <div className="order-2 space-y-6">
+                {staffOnboardingSteps.length > 0 && (
+                  <section className={cn(cardBase, 'p-5')} aria-labelledby="staff-onboarding-title">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-accent" />
+                      <h2 id="staff-onboarding-title" className="text-base font-semibold text-ink">{t('Getting started')}</h2>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {staffOnboardingSteps.map(step => (
+                        <Link key={step.key} to={step.to} className="group flex min-h-11 items-center justify-between gap-3 rounded-control border border-line bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-inset">
+                          {step.label}
+                          <ArrowRight className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5" />
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {staffBriefing && (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Link to="/tasks?period=today" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', staffBriefing.dueTodayCount > 0 ? 'bg-blue-50 text-blue-700' : 'bg-inset text-muted')}><Calendar className="h-4 w-4" /></span>
+                      <span className="min-w-0">
+                        <span className="calm-number block text-xl font-semibold text-ink">{staffBriefing.dueTodayCount}</span>
+                        <span className="block truncate text-xs text-muted">{t('Due today')}</span>
+                      </span>
+                    </Link>
+                    <Link to="/tasks" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', staffBriefing.overdueCount > 0 ? 'bg-red-50 text-red-700' : 'bg-inset text-muted')}><AlertCircle className="h-4 w-4" /></span>
+                      <span className="min-w-0">
+                        <span className="calm-number block text-xl font-semibold text-ink">{staffBriefing.overdueCount}</span>
+                        <span className="block truncate text-xs text-muted">{t('Overdue')}</span>
+                      </span>
+                    </Link>
+                    <Link to="/tasks" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', staffBriefing.waitingCount > 0 ? 'bg-amber-50 text-amber-700' : 'bg-inset text-muted')}><FileCheck2 className="h-4 w-4" /></span>
+                      <span className="min-w-0">
+                        <span className="calm-number block text-xl font-semibold text-ink">{staffBriefing.waitingCount}</span>
+                        <span className="block truncate text-xs text-muted">{t('Waiting approval')}</span>
+                      </span>
+                    </Link>
+                  </div>
+                )}
+
+                {staffBriefing && staffBriefing.dueSoon.length > 0 && (
+                  <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="due-soon-title">
+                    <div className="border-b border-line/70 px-5 py-4">
+                      <h2 id="due-soon-title" className="text-base font-semibold text-ink">{t('Due soon')}</h2>
+                      <p className="mt-1 text-sm text-muted">{t('Your upcoming deadlines in order.')}</p>
+                    </div>
+                    <div className="divide-y divide-line/60">
+                      {staffBriefing.dueSoon.map(task => (
+                        <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-inset/50">
+                          <span className="min-w-0 truncate text-sm font-medium text-ink">
+                            <span data-i18n-skip>{task.title}</span>
+                            <span className="ml-2 text-xs text-muted">{task.clientName}</span>
+                          </span>
+                          <span className="shrink-0 text-xs font-semibold text-muted">{getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {departmentContext && (
+                  <section className={cn(cardBase, 'p-5')} aria-labelledby="department-context-title">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h2 id="department-context-title" className="text-base font-semibold text-ink">
+                          {t('My department')} · <span data-i18n-skip>{departmentContext.primaryDepartment}</span>
+                        </h2>
+                        <p className="mt-1 text-sm text-muted">
+                          {departmentContext.teammates.length + 1} {t('members')} · {departmentContext.openCount} {t('open tasks')} · {departmentContext.overdueCount} {t('overdue')} · {departmentContext.waitingCount} {t('in review')}
+                        </p>
+                      </div>
+                      <Link to="/tasks" className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">
+                        {t('My tasks')} <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </div>
+                    {departmentContext.teammates.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {departmentContext.teammates.map(member => (
+                          <span key={member.id} className="inline-flex items-center gap-2 rounded-full border border-line bg-inset px-3 py-1 text-xs font-medium text-ink">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-soft text-[10px] font-semibold text-accent">
+                              {member.avatar ? <img src={member.avatar} alt="" className="h-full w-full rounded-full object-cover" /> : member.name.charAt(0)}
+                            </span>
+                            <span data-i18n-skip>{member.name}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )}
+              </div>
             )}
           </>
         )}

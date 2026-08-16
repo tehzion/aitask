@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
+import { useI18n } from '../components/I18nProvider';
 import { useShallow } from 'zustand/react/shallow';
 import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone, Plus } from 'lucide-react';
 import { format, isBefore, isToday } from 'date-fns';
@@ -46,6 +47,7 @@ const priorityColors: Record<Priority, string> = {
 };
 
 const Tasks: React.FC = () => {
+  const { t } = useI18n();
   const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore(useShallow(state => ({
     tasks: state.tasks,
     clients: state.clients,
@@ -576,6 +578,60 @@ const Tasks: React.FC = () => {
 
       <div className={`${tableShell} flex flex-col`}>
         <div className="space-y-4 border-b border-slate-200 bg-slate-50/70 p-4">
+          {!isClientUser && (
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick task filters">
+              {([
+                ['all', t('All')],
+                ['today', t('Due today')],
+                ['overdue', t('Overdue')],
+                ['waiting', t('Waiting approval')],
+              ] as const).map(([value, label]) => {
+                const isActive = value === 'all'
+                  ? !dateFrom && !dateTo && filterStatus === 'All'
+                  : value === 'today'
+                    ? dateFrom === format(new Date(), 'yyyy-MM-dd') && dateTo === format(new Date(), 'yyyy-MM-dd')
+                    : value === 'overdue'
+                      ? !dateFrom && dateTo === format(new Date(), 'yyyy-MM-dd')
+                      : filterStatus === 'Waiting Approval';
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => {
+                      const todayKey = format(new Date(), 'yyyy-MM-dd');
+                      if (value === 'all') {
+                        setDateFrom('');
+                        setDateTo('');
+                        setFilterStatus('All');
+                      } else if (value === 'today') {
+                        setDateFrom(todayKey);
+                        setDateTo(todayKey);
+                        setFilterStatus('All');
+                      } else if (value === 'overdue') {
+                        setDateFrom('');
+                        setDateTo(todayKey);
+                        setFilterStatus('All');
+                      } else {
+                        setDateFrom('');
+                        setDateTo('');
+                        setFilterStatus('Waiting Approval');
+                      }
+                      setPage(1);
+                    }}
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
+                      isActive
+                        ? 'border-accent bg-accent text-white'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
             <div className="relative w-full lg:max-w-sm">
               <span className="absolute inset-y-0 left-0 flex items-center pl-3">

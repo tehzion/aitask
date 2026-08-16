@@ -657,6 +657,19 @@ const zhCopyAdditions: Record<string, string> = {
   'Search members...': '搜索成员…',
   'Filter members by role': '按角色筛选成员',
   'All roles': '所有角色',
+  // Staff dashboard
+  'Getting started': '开始使用',
+  'Complete your profile': '完善您的个人资料',
+  'Review your first assigned task': '查看您的第一个任务',
+  'Complete a task or leave an update': '完成任务或留下动态',
+  'Due soon': '即将到期',
+  'Your upcoming deadlines in order.': '按顺序列出您即将到来的截止日期。',
+  'My department': '我的部门',
+  'members': '位成员',
+  'open tasks': '个进行中任务',
+  'in review': '个待审核',
+  'My tasks': '我的任务',
+  'Quick task filters': '任务快捷筛选',
 };
 
 const preserveWhitespace = (value: string, replacement: string) => {
@@ -722,6 +735,7 @@ const translatePattern = (value: string) => {
     [/^Reject (\d+) registrations\? Those applicants will need to apply again\.$/, count => `确定拒绝 ${count} 份注册申请？这些申请人需要重新申请。`],
     [/^Approve (\d+) registrations as Staff with their requested departments\?$/, count => `确定以员工身份并按申请的部门批准 ${count} 份注册申请？`],
     [/^(\d+)d pending$/, days => `已等待 ${days} 天`],
+    [/^Nice work — (\d+) task(s)? completed this week\.$/, (count) => `做得不错——本周已完成 ${count} 个任务。`],
   ];
   for (const [pattern, replace] of patterns) {
     const match = value.match(pattern);

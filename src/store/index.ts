@@ -2100,6 +2100,26 @@ export const useStore = create<StoreState>()(
 
         useToastStore.getState().addToast(`Status updated to "${nextStatus}"`, 'success');
 
+        if (isCompleted && !wasCompleted && currentUser) {
+          const celebrateKey = `aitask:completion-celebrated:${currentUser.id}`;
+          let celebrated = false;
+          try { celebrated = window.sessionStorage.getItem(celebrateKey) === '1'; } catch { /* session storage unavailable */ }
+          if (!celebrated) {
+            try { window.sessionStorage.setItem(celebrateKey, '1'); } catch { /* keep going without persistence */ }
+            const weekStart = new Date();
+            weekStart.setHours(0, 0, 0, 0);
+            const day = weekStart.getDay() === 0 ? 6 : weekStart.getDay() - 1;
+            weekStart.setDate(weekStart.getDate() - day);
+            const weekCompletions = newTasks.filter(item => (
+              item.assignedTo === currentUser.id
+              && isTaskCompleted(item)
+              && item.completedAt
+              && new Date(item.completedAt) >= weekStart
+            )).length;
+            useToastStore.getState().addToast(`Nice work — ${weekCompletions} task${weekCompletions === 1 ? '' : 's'} completed this week.`, 'success');
+          }
+        }
+
         return {
           tasks: newTasks,
           notifications: [...newNotifs, ...(state.notifications || [])],
