@@ -714,6 +714,11 @@ const zhCopyAdditions: Record<string, string> = {
   'deliverables completed': '个交付物已完成',
   'No plan': '暂无方案',
   'Activate plan': '启用方案',
+  // Workspace optimistic lock
+  'The workspace changed since your last sync. Review the latest data before retrying.': '工作区自上次同步后已发生变化。请在重试前查看最新数据。',
+  'Reapplying your change on the latest workspace.': '正在最新工作区上重新应用您的更改。',
+  'Your change was reapplied on the latest workspace.': '您的更改已在最新工作区上重新应用。',
+  'Your change could not be reapplied.': '无法重新应用您的更改。',
 };
 
 const preserveWhitespace = (value: string, replacement: string) => {

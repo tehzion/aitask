@@ -80,8 +80,10 @@ import {
   discardSecureWorkspaceCommand,
   completeSecurePasswordSetup,
   getRetainedSecureCommand,
+  isWorkspaceConflict,
   loadSecureWorkspace,
   loadSecureWorkspaceRevision,
+  overlayRetainedWorkspaceEntities,
   rebaseRetryableCommand,
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
@@ -232,6 +234,7 @@ interface StoreState {
   syncBackendNow: (commandType?: SecureCommandType) => Promise<void>;
   pullBackendNow: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
   retryMutation: () => Promise<{ ok: boolean; error?: string }>;
+  reapplyMutationOnLatestWorkspace: () => Promise<{ ok: boolean; error?: string }>;
   discardMutation: (options?: { reload?: boolean }) => Promise<void>;
   commitPendingMutation: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string }>;
   login: (name: string, password?: string) => Promise<boolean>;
@@ -1145,7 +1148,11 @@ export const useStore = create<StoreState>()(
           if (shouldUseSecureSupabase()) {
             const hadRemoteUpdate = stateToSave.backend.hasRemoteUpdate;
             const savedWorkspace = selectPersistedWorkspaceState(stateToSave);
-            const result = await saveSecureWorkspace(savedWorkspace, commandType);
+            const result = await saveSecureWorkspace(
+              savedWorkspace,
+              commandType,
+              stateToSave.backend.workspaceVersion,
+            );
             if (result.ok === false) {
               set((state) => ({
                 backend: {
@@ -1176,8 +1183,8 @@ export const useStore = create<StoreState>()(
                 lastSyncedAt: syncedAt,
                 lastSavedAt: syncedAt,
                 lastPulledAt: syncedAt,
-                workspaceVersion: result.workspaceVersion,
-                remoteVersion: result.workspaceVersion,
+                workspaceVersion: Math.max(state.backend.workspaceVersion || 0, result.workspaceVersion),
+                remoteVersion: Math.max(state.backend.remoteVersion || 0, result.workspaceVersion),
                 hasRemoteUpdate: false,
                 hasLocalChanges: hasChangesAfterSave,
                 pendingMutations: hasChangesAfterSave ? 1 : 0,
@@ -1481,12 +1488,61 @@ export const useStore = create<StoreState>()(
         }
       },
 
+      reapplyMutationOnLatestWorkspace: async () => {
+        const current = get();
+        const retained = getRetainedSecureCommand();
+        if (!retained || !isWorkspaceConflict(current.backend.conflict)) {
+          return { ok: false, error: 'There is no workspace conflict to reapply.' };
+        }
+        const localSnapshot = selectPersistedWorkspaceState(current);
+        await get().pullBackendNow({ force: true, silent: true });
+        const fresh = get();
+        const merged = overlayRetainedWorkspaceEntities(
+          selectPersistedWorkspaceState(fresh),
+          localSnapshot,
+          retained.operations,
+        );
+        isApplyingRemoteSnapshot = true;
+        set((state) => ({
+          ...makeWorkspacePatch(state, {
+            state: merged,
+            source: 'supabase',
+            version: 1,
+            message: 'Latest workspace loaded.',
+            updatedAt: new Date().toISOString(),
+          }),
+          backend: {
+            ...state.backend,
+            status: 'saving',
+            isSaving: false,
+            isPulling: false,
+            hasLocalChanges: true,
+            pendingMutations: 1,
+            conflict: undefined,
+            error: undefined,
+            message: 'Reapplying your change on the latest workspace.',
+          },
+        }));
+        isApplyingRemoteSnapshot = false;
+        await get().syncBackendNow();
+        const after = get().backend;
+        if (!after.hasLocalChanges && after.status === 'live') {
+          useToastStore.getState().addToast('Your change was reapplied on the latest workspace.', 'success');
+          return { ok: true };
+        }
+        return { ok: false, error: after.error || after.message || 'Your change could not be reapplied.' };
+      },
+
       retryMutation: async () => {
         const current = get();
         if (current.backend.isSaving || current.backend.isPulling) {
           return { ok: false, error: 'Another synchronization request is still running.' };
         }
-        if (current.backend.conflict) rebaseRetryableCommand(current.backend.conflict);
+        const conflict = current.backend.conflict;
+        if (conflict && isWorkspaceConflict(conflict) && getRetainedSecureCommand()) {
+          return get().reapplyMutationOnLatestWorkspace();
+        }
+        if (conflict) rebaseRetryableCommand(conflict);
 
         set((state) => ({
           backend: {
@@ -1499,7 +1555,7 @@ export const useStore = create<StoreState>()(
           },
         }));
 
-        const result = await retrySecureWorkspaceCommand();
+        const result = await retrySecureWorkspaceCommand(get().backend.workspaceVersion || undefined);
         if (result.ok === false) {
           set((state) => ({
             backend: {
@@ -1515,6 +1571,10 @@ export const useStore = create<StoreState>()(
               message: result.error,
             },
           }));
+          if (result.code === 'CONFLICT' && isWorkspaceConflict(result.conflict)) {
+            const reapplied = await get().reapplyMutationOnLatestWorkspace();
+            if (reapplied.ok) return reapplied;
+          }
           return { ok: false, error: result.error };
         }
 
@@ -1524,8 +1584,8 @@ export const useStore = create<StoreState>()(
             ...state.backend,
             status: 'live',
             isSaving: false,
-            workspaceVersion: result.workspaceVersion,
-            remoteVersion: result.workspaceVersion,
+            workspaceVersion: Math.max(state.backend.workspaceVersion || 0, result.workspaceVersion),
+            remoteVersion: Math.max(state.backend.remoteVersion || 0, result.workspaceVersion),
             lastSavedAt: savedAt,
             lastSyncedAt: savedAt,
             conflict: undefined,

@@ -572,7 +572,108 @@ const applyCommandVersions = (command: SecureCommand, response: CommandResponse)
   });
 };
 
-const executeCommand = async (command: SecureCommand): Promise<MutationResult<CommandResponse>> => {
+export const isWorkspaceConflict = (conflict?: MutationConflict | null) => (
+  conflict?.entityType === 'workspace'
+);
+
+export const overlayRetainedWorkspaceEntities = (
+  remote: PersistedWorkspaceState,
+  local: PersistedWorkspaceState,
+  operations: WorkspaceOperation[],
+): PersistedWorkspaceState => {
+  const opsByType = new Map<string, WorkspaceOperation[]>();
+  operations.forEach(operation => {
+    const list = opsByType.get(operation.entityType) || [];
+    list.push(operation);
+    opsByType.set(operation.entityType, list);
+  });
+
+  const overlayList = <T extends { id: string }>(
+    remoteItems: T[],
+    localItems: T[],
+    type: string,
+  ): T[] => {
+    const ops = opsByType.get(type);
+    if (!ops || ops.length === 0) return remoteItems;
+    const deleted = new Set(ops.filter(operation => operation.action === 'delete').map(operation => operation.entityId));
+    const touched = new Set(ops.filter(operation => operation.action !== 'delete').map(operation => operation.entityId));
+    const localById = new Map(localItems.map(item => [item.id, item]));
+    const merged = remoteItems
+      .filter(item => !deleted.has(item.id))
+      .map(item => touched.has(item.id) && localById.has(item.id) ? localById.get(item.id)! : item);
+    const inserts = localItems.filter(item => touched.has(item.id) && !merged.some(existing => existing.id === item.id));
+    return [...merged, ...inserts];
+  };
+
+  const taskIdsFromChildren = [
+    ...(opsByType.get('comment') || []),
+    ...(opsByType.get('approval') || []),
+  ]
+    .map(operation => operation.parentId)
+    .filter((id): id is string => Boolean(id));
+  const effectiveTaskOps = [
+    ...(opsByType.get('task') || []),
+    ...taskIdsFromChildren.map(id => ({
+      kind: 'entity',
+      action: 'update',
+      entityType: 'task',
+      entityId: id,
+      expectedVersion: 0,
+    } satisfies WorkspaceOperation)),
+  ];
+
+  const tasks = (() => {
+    if (effectiveTaskOps.length === 0) return remote.tasks;
+    const deleted = new Set(effectiveTaskOps.filter(operation => operation.action === 'delete').map(operation => operation.entityId));
+    const touched = new Set(effectiveTaskOps.filter(operation => operation.action !== 'delete').map(operation => operation.entityId));
+    const localById = new Map(local.tasks.map(item => [item.id, item]));
+    const merged = remote.tasks
+      .filter(item => !deleted.has(item.id))
+      .map(item => touched.has(item.id) && localById.has(item.id) ? localById.get(item.id)! : item);
+    const inserts = local.tasks.filter(item => touched.has(item.id) && !merged.some(existing => existing.id === item.id));
+    return [...merged, ...inserts];
+  })();
+
+  const statuses = (() => {
+    const ops = opsByType.get('task_status');
+    if (!ops || ops.length === 0) return remote.taskStatuses;
+    const next = [...remote.taskStatuses];
+    ops.forEach(operation => {
+      if (operation.action === 'delete') {
+        const index = next.indexOf(operation.entityId);
+        if (index >= 0) next.splice(index, 1);
+      } else if (!next.includes(operation.entityId)) {
+        next.push(operation.entityId);
+      }
+    });
+    return next;
+  })();
+
+  return {
+    ...remote,
+    users: overlayList(remote.users, local.users, 'member'),
+    clients: overlayList(remote.clients, local.clients, 'client'),
+    projects: overlayList(remote.projects, local.projects, 'project'),
+    tasks,
+    notifications: overlayList(remote.notifications, local.notifications, 'notification'),
+    registrations: overlayList(remote.registrations, local.registrations, 'registration'),
+    rolePermissions: overlayList(remote.rolePermissions, local.rolePermissions, 'custom_role'),
+    taskStatuses: statuses,
+    servicePackages: overlayList(remote.servicePackages, local.servicePackages, 'service_package'),
+    clientPlans: overlayList(remote.clientPlans, local.clientPlans, 'client_plan'),
+    serviceCycles: overlayList(remote.serviceCycles, local.serviceCycles, 'service_cycle'),
+    deliverables: overlayList(remote.deliverables, local.deliverables, 'deliverable'),
+    cycleComments: overlayList(remote.cycleComments, local.cycleComments, 'cycle_comment'),
+    addons: overlayList(remote.addons, local.addons, 'addon'),
+    serviceWorkflowTemplates: overlayList(remote.serviceWorkflowTemplates, local.serviceWorkflowTemplates, 'service_workflow_template'),
+    servicePricingSnapshots: overlayList(remote.servicePricingSnapshots, local.servicePricingSnapshots, 'service_pricing_snapshot'),
+  };
+};
+
+const executeCommand = async (
+  command: SecureCommand,
+  expectedWorkspaceVersion?: number,
+): Promise<MutationResult<CommandResponse>> => {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     retryableCommand = command;
     return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before retrying this change.' };
@@ -588,12 +689,14 @@ const executeCommand = async (command: SecureCommand): Promise<MutationResult<Co
       p_workspace_id: SECURE_WORKSPACE_ID,
       p_command_id: command.id,
       p_operations: command.operations,
+      p_expected_workspace_version: expectedWorkspaceVersion ?? null,
     }))
     : withSyncTimeout(supabase.rpc(serviceCommand ? 'aitask_execute_service_command' : 'aitask_execute_command', {
       p_workspace_id: SECURE_WORKSPACE_ID,
       p_command_id: command.id,
       p_command_type: command.type,
       p_operations: command.operations,
+      p_expected_workspace_version: expectedWorkspaceVersion ?? null,
     }));
 
   let rpcResult: Awaited<ReturnType<typeof invoke>>;
@@ -1202,6 +1305,7 @@ export const completeSecurePasswordSetup = async (): Promise<MutationResult<Comm
 export const saveSecureWorkspace = async (
   state: PersistedWorkspaceState,
   type?: SecureCommandType,
+  expectedWorkspaceVersion?: number,
 ): Promise<MutationResult<CommandResponse>> => {
   if (type !== undefined && !isSecureCommandType(type)) {
     return {
@@ -1216,10 +1320,12 @@ export const saveSecureWorkspace = async (
     return { ok: true, data: { ok: true, workspaceVersion: revision.version }, commandId: commandId(), workspaceVersion: revision.version };
   }
   const command: SecureCommand = { id: commandId(), type: type || inferSecureCommandType(operations), operations };
-  return executeCommand(command);
+  return executeCommand(command, expectedWorkspaceVersion);
 };
 
-export const retrySecureWorkspaceCommand = async (): Promise<MutationResult<CommandResponse>> => {
+export const retrySecureWorkspaceCommand = async (
+  expectedWorkspaceVersion?: number,
+): Promise<MutationResult<CommandResponse>> => {
   if (!retryableCommand) {
     return { ok: false, code: 'NOT_FOUND', error: 'There is no command waiting to retry.' };
   }
@@ -1227,7 +1333,7 @@ export const retrySecureWorkspaceCommand = async (): Promise<MutationResult<Comm
   if (command.operations.some(operation => operation.expectedVersion < 0)) {
     return { ok: false, code: 'CONFLICT', error: 'Review the latest record before retrying.' };
   }
-  return executeCommand(command);
+  return executeCommand(command, expectedWorkspaceVersion);
 };
 
 export const rebaseRetryableCommand = (conflict: MutationConflict) => {

@@ -15,8 +15,10 @@ import {
   buildOperations,
   inferSecureCommandType,
   isSecureCommandType,
+  isWorkspaceConflict,
   loadSecureNotificationPage,
   loadSecureWorkspace,
+  overlayRetainedWorkspaceEntities,
   rebaseRetryableCommand,
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
@@ -280,6 +282,159 @@ describe('secure command retry identity', () => {
     expect(retry.ok).toBe(true);
     expect(rpc.mock.calls[1][1].p_command_id).not.toBe(firstCommandId);
     expect(rpc.mock.calls[1][1].p_operations[0].expectedVersion).toBe(4);
+  });
+});
+
+describe('workspace optimistic lock', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    refreshSession.mockReset();
+    from.mockReset();
+  });
+
+  it('sends the expected workspace version with save commands', async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ok: true, workspaceVersion: 9, changed: [{ entityType: 'member', entityId: '5', version: 3, updatedAt: '2026-08-16T00:00:00Z' }] },
+      error: null,
+    });
+
+    const result = await saveSecureWorkspace(stateWithUser('5'), undefined, 8);
+
+    expect(result.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledWith('aitask_execute_command', expect.objectContaining({
+      p_expected_workspace_version: 8,
+    }));
+  });
+
+  it('omits the workspace precondition when no version is known', async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ok: true, workspaceVersion: 2, changed: [{ entityType: 'member', entityId: '6', version: 1, updatedAt: '2026-08-16T00:00:00Z' }] },
+      error: null,
+    });
+
+    await saveSecureWorkspace(stateWithUser('6'));
+
+    expect(rpc).toHaveBeenCalledWith('aitask_execute_command', expect.objectContaining({
+      p_expected_workspace_version: null,
+    }));
+  });
+
+  it('surfaces a workspace-scoped conflict from the server', async () => {
+    const conflict = {
+      entityType: 'workspace',
+      entityId: 'aitask-main',
+      expectedVersion: 8,
+      actualVersion: 9,
+      current: { workspaceVersion: 9, updatedAt: '2026-08-16T00:00:00Z' },
+    };
+    rpc.mockResolvedValueOnce({
+      data: { ok: false, code: 'CONFLICT', error: 'The workspace changed since your last sync. Review the latest data before retrying.', conflict },
+      error: null,
+    });
+
+    const result = await saveSecureWorkspace(stateWithUser('7'), undefined, 8);
+
+    expect(result).toMatchObject({ ok: false, code: 'CONFLICT' });
+    if (result.ok === false) {
+      expect(isWorkspaceConflict(result.conflict)).toBe(true);
+      expect(result.conflict).toMatchObject({ entityType: 'workspace', expectedVersion: 8, actualVersion: 9 });
+    }
+    expect(isWorkspaceConflict(undefined)).toBe(false);
+    expect(isWorkspaceConflict({ entityType: 'task', entityId: 't-1', expectedVersion: 1, actualVersion: 2 })).toBe(false);
+  });
+
+  it('sends the expected workspace version when retrying a retained command', async () => {
+    rpc
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockResolvedValueOnce({
+        data: { ok: true, workspaceVersion: 3, changed: [{ entityType: 'member', entityId: '8', version: 1, updatedAt: '2026-08-16T00:00:00Z' }] },
+        error: null,
+      });
+
+    await saveSecureWorkspace(stateWithUser('8'), undefined, 2);
+    const retry = await retrySecureWorkspaceCommand(2);
+
+    expect(retry.ok).toBe(true);
+    expect(rpc.mock.calls[1][1].p_expected_workspace_version).toBe(2);
+  });
+});
+
+describe('overlayRetainedWorkspaceEntities', () => {
+  const task = (id: string, title: string) => ({ id, title });
+  const member = (id: string, name: string) => ({ id, name });
+
+  const remote = (): PersistedWorkspaceState => ({
+    ...stateWithUser('member-1'),
+    users: [member('member-1', 'Remote me'), member('member-2', 'Teammate')] as unknown as PersistedWorkspaceState['users'],
+    clients: [{ id: 'client-1', clientName: 'Acme' }] as unknown as NonNullable<PersistedWorkspaceState['clients']>,
+    projects: [],
+    tasks: [task('task-1', 'Remote title'), task('task-2', 'Untouched'), task('task-3', 'Delete me')] as unknown as PersistedWorkspaceState['tasks'],
+    notifications: [],
+    registrations: [],
+    rolePermissions: [],
+    taskStatuses: ['Pending', 'Cancelled'],
+  });
+
+  const local = (): PersistedWorkspaceState => ({
+    ...remote(),
+    users: [member('member-1', 'Local edit'), member('member-2', 'Teammate')] as unknown as PersistedWorkspaceState['users'],
+    tasks: [
+      task('task-1', 'Local edit'),
+      task('task-2', 'Untouched'),
+      task('task-3', 'Delete me'),
+      task('task-4', 'Fresh insert'),
+      { ...task('task-1', 'Local edit'), comments: [{ id: 'comment-1', text: 'Local note' }] },
+    ] as unknown as PersistedWorkspaceState['tasks'],
+    taskStatuses: ['Pending', 'Cancelled', 'Archived'],
+  });
+
+  it('overlays only the entities touched by the retained operations', () => {
+    const operations: WorkspaceOperation[] = [
+      { kind: 'member', action: 'update', entityType: 'member', entityId: 'member-1', expectedVersion: 2, data: { name: 'Local edit' } },
+      { kind: 'entity', action: 'update', entityType: 'task', entityId: 'task-1', expectedVersion: 2, data: { title: 'Local edit' } },
+    ];
+
+    const merged = overlayRetainedWorkspaceEntities(remote(), local(), operations);
+
+    expect((merged.users as { id: string; name: string }[]).find(user => user.id === 'member-1')?.name).toBe('Local edit');
+    expect((merged.users as { id: string; name: string }[]).find(user => user.id === 'member-2')?.name).toBe('Teammate');
+    expect((merged.tasks as { id: string; title: string }[]).find(item => item.id === 'task-1')?.title).toBe('Local edit');
+    expect((merged.tasks as { id: string; title: string }[]).find(item => item.id === 'task-2')?.title).toBe('Untouched');
+  });
+
+  it('re-adds inserted entities and honours deletions', () => {
+    const operations: WorkspaceOperation[] = [
+      { kind: 'entity', action: 'insert', entityType: 'task', entityId: 'task-4', expectedVersion: 0, data: { title: 'Fresh insert' } },
+      { kind: 'entity', action: 'delete', entityType: 'task', entityId: 'task-3', expectedVersion: 2 },
+    ];
+
+    const merged = overlayRetainedWorkspaceEntities(remote(), local(), operations);
+    const ids = (merged.tasks as { id: string }[]).map(item => item.id);
+
+    expect(ids).toContain('task-4');
+    expect(ids).not.toContain('task-3');
+  });
+
+  it('overlays the parent task when only child comments changed', () => {
+    const operations: WorkspaceOperation[] = [
+      { kind: 'entity', action: 'insert', entityType: 'comment', entityId: 'comment-1', parentId: 'task-1', expectedVersion: 0, data: { text: 'Local note' } },
+    ];
+
+    const merged = overlayRetainedWorkspaceEntities(remote(), local(), operations);
+    const overlaid = (merged.tasks as { id: string; comments?: unknown[] }[]).find(item => item.id === 'task-1');
+
+    expect(overlaid?.comments).toHaveLength(1);
+  });
+
+  it('applies task status additions and removals', () => {
+    const operations: WorkspaceOperation[] = [
+      { kind: 'entity', action: 'insert', entityType: 'task_status', entityId: 'Archived', expectedVersion: 0 },
+      { kind: 'entity', action: 'delete', entityType: 'task_status', entityId: 'Cancelled', expectedVersion: 2 },
+    ];
+
+    const merged = overlayRetainedWorkspaceEntities(remote(), local(), operations);
+
+    expect(merged.taskStatuses).toEqual(['Pending', 'Archived']);
   });
 });
 
