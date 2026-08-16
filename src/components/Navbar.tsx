@@ -15,6 +15,7 @@ import { getSoundEnabled, setSoundEnabled, SOUND_PREF_EVENT } from '../lib/sound
 import { notificationRouteToPath } from '../lib/security';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import type { ResolvedTheme, ThemePreference } from '../lib/theme';
+import { LanguageSwitcher } from './I18nProvider';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -148,19 +149,19 @@ const Navbar: React.FC<NavbarProps> = ({
 
   const getIcon = (type: string) => {
     switch(type) {
-      case 'task': return <FileText className="w-4 h-4 text-blue-500" />;
+      case 'task': return <FileText className="w-4 h-4 text-accent" />;
       case 'success': return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
       case 'status': return <Info className="w-4 h-4 text-amber-500" />;
-      default: return <AlertCircle className="w-4 h-4 text-blue-600" />;
+      default: return <AlertCircle className="w-4 h-4 text-accent" />;
     }
   };
 
   const getBgColor = (type: string) => {
     switch(type) {
-      case 'task': return 'bg-blue-50';
+      case 'task': return 'bg-accent-soft';
       case 'success': return 'bg-emerald-50';
       case 'status': return 'bg-amber-50';
-      default: return 'bg-blue-50';
+      default: return 'bg-accent-soft';
     }
   };
 
@@ -192,6 +193,7 @@ const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
+        <LanguageSwitcher compact />
         <IconButton
           label="Search"
           onClick={() => setShowMobileSearch(value => !value)}
@@ -243,8 +245,8 @@ const Navbar: React.FC<NavbarProps> = ({
 
           {/* Notifications Dropdown */}
           {showNotifs && (
-            <div id="header-notifications-menu" role="region" aria-label="Notification preview" className="absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] max-w-80 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_28px_rgba(15,23,42,0.12)] ">
-              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-3">
+            <div id="header-notifications-menu" role="region" aria-label="Notification preview" className="calm-raised absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] max-w-80 overflow-hidden">
+              <div className="flex items-center justify-between border-b border-line/80 bg-inset/80 px-4 py-3">
                 <div>
                   <h3 className="font-bold text-slate-900">Notifications</h3>
                   <p className="text-xs text-slate-500">
@@ -252,7 +254,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   </p>
                 </div>
                 {unreadCount > 0 ? (
-                  <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+                  <span className="rounded-tag bg-accent-soft px-2 py-1 text-xs font-medium text-accent">
                     {unreadCount} New
                   </span>
                 ) : null}
@@ -266,7 +268,7 @@ const Navbar: React.FC<NavbarProps> = ({
                       void notificationReadActions.markRead(notif.id);
                       setShowNotifs(false);
                     }}
-                    className="flex items-start gap-3 border-b border-slate-100 bg-blue-50/35 px-4 py-3 transition-colors hover:bg-blue-50/70"
+                    className="flex items-start gap-3 border-b border-line/60 bg-surface px-4 py-3 transition-colors hover:bg-inset/70"
                   >
                     <div className={`rounded-lg p-2 shrink-0 ${getBgColor(notif.iconType)}`}>
                       {getIcon(notif.iconType)}
@@ -276,7 +278,7 @@ const Navbar: React.FC<NavbarProps> = ({
                       <p className="mt-0.5 text-sm font-semibold leading-5 text-slate-950">{notif.message}</p>
                       <p className="mt-1 text-xs text-slate-400">{formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}</p>
                     </div>
-                    <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-500"></div>
+                    <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true"></div>
                   </Link>
                 )) : (
                   <div className="px-4 py-8 text-center">
@@ -285,11 +287,11 @@ const Navbar: React.FC<NavbarProps> = ({
                   </div>
                 )}
               </div>
-              <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3 border-t border-line/80 bg-inset/80 px-3 py-2.5">
                 <Link
                   to="/notifications"
                   onClick={() => setShowNotifs(false)}
-                  className="rounded-md px-2 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                  className="rounded-tag px-2 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-accent-soft"
                 >
                   View all notifications
                 </Link>
@@ -298,7 +300,7 @@ const Navbar: React.FC<NavbarProps> = ({
                     type="button"
                     onClick={() => void notificationReadActions.markAllRead()}
                     disabled={notificationReadActions.isUpdating}
-                    className="rounded-md px-2 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-white hover:text-blue-700 disabled:cursor-wait disabled:opacity-60"
+                    className="rounded-tag px-2 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface hover:text-accent disabled:cursor-wait disabled:opacity-60"
                   >
                     {notificationReadActions.isUpdating ? 'Saving...' : 'Mark all read'}
                   </button>
@@ -323,7 +325,7 @@ const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
       {showMobileSearch && (
-        <form onSubmit={handleGlobalSearch} className="absolute inset-x-0 top-16 border-b border-slate-200 bg-white p-3 sm:hidden">
+        <form onSubmit={handleGlobalSearch} className="absolute inset-x-0 top-16 border-b border-line bg-surface p-3 sm:hidden">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input

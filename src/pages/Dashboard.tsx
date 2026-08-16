@@ -22,8 +22,7 @@ import { getTrackedMonthlyCompletions, isTaskOpen } from '../lib/taskReporting';
 import ClientPortalDashboard from '../components/ClientPortalDashboard';
 import TeamWorkload from '../components/TeamWorkload';
 import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
-
-const COLORS = ['#2563eb', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#db2777'];
+import { isLocalServiceDemoEnabled, LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID } from '../mock/localServiceDemo';
 
 interface StatCardProps {
   title: string;
@@ -34,13 +33,13 @@ interface StatCardProps {
 }
 
 const StatCard = ({ title, value, icon: Icon, tone, to }: StatCardProps) => (
-  <Link to={to} className="block rounded-lg transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-200">
+  <Link to={to} className="block rounded-panel transition-colors hover:bg-inset/70 focus:outline-none focus:ring-2 focus:ring-accent/35">
     <MetricCard title={title} value={value} icon={Icon} tone={tone} />
   </Link>
 );
 
 const Dashboard: React.FC = () => {
-  const { projects, tasks: allTasks, users, currentUser, rolePermissions, backend, setCreateTaskModalOpen } = useStore(useShallow(state => ({
+  const { projects, tasks: allTasks, users, currentUser, rolePermissions, backend, setCreateTaskModalOpen, hasLocalServiceDemo } = useStore(useShallow(state => ({
     projects: state.projects,
     tasks: state.tasks,
     users: state.users,
@@ -48,6 +47,7 @@ const Dashboard: React.FC = () => {
     rolePermissions: state.rolePermissions,
     backend: state.backend,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
+    hasLocalServiceDemo: state.clients.some(client => client.id === LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID),
   })));
 
   const tasks = useMemo(
@@ -60,9 +60,14 @@ const Dashboard: React.FC = () => {
     return {
       grid: themeTokenColor('--calm-line', '#e2e8f0'),
       tick: themeTokenColor('--calm-muted', '#64748b'),
-      accent: themeTokenColor('--calm-accent', '#2563eb'),
-      cursor: themeTokenColor('--calm-inset', '#f8fafc'),
+      accent: themeTokenColor('--calm-accent', '#1d6b5d'),
+      cursor: themeTokenColor('--calm-inset', '#eff3f2'),
       surface: themeTokenColor('--calm-surface', '#ffffff'),
+      series: [
+        themeTokenColor('--calm-accent', '#1d6b5d'),
+        themeTokenColor('--calm-muted', '#5f6c6f'),
+        themeTokenColor('--calm-line', '#dce3e1'),
+      ],
     };
   }, [resolvedTheme]);
   const visibleProjects = useMemo(
@@ -237,6 +242,25 @@ const Dashboard: React.FC = () => {
         )}
       />
 
+      {isLocalServiceDemoEnabled() && backend.mode === 'local' && hasLocalServiceDemo && (
+        <section className={cn(cardBase, 'mt-5 overflow-hidden')} aria-labelledby="local-service-demo-heading">
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="calm-eyebrow">Local sample workspace</p>
+              <h2 id="local-service-demo-heading" className="mt-1 text-lg font-semibold text-slate-950">Explore the service demo</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">Open UrbanEats for a published cycle, deliverables, task-chain dependencies, comments, files, and add-ons. TechNova and EcoLife show the other plan-creation modes.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Link to={`/clients/${LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-accent px-4 text-sm font-semibold text-white transition hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 dark:text-[rgb(var(--calm-accent-ink))]">
+                Open UrbanEats
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              {currentUser?.role !== 'Client' && <Link to="/clients" className="inline-flex min-h-11 items-center justify-center rounded-control px-4 text-sm font-semibold text-accent transition hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">Browse clients</Link>}
+            </div>
+          </div>
+        </section>
+      )}
+
       {!hasTaskData && (
         <section className={cn(cardBase, 'overflow-hidden')}>
           <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -296,7 +320,7 @@ const Dashboard: React.FC = () => {
             <OperationsGlance tasks={staffAssignedTasks} users={users} scope="staff" />
           </div>
         ) : (
-          <section className={cn('grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6', prioritizePersonalWork ? 'order-2' : 'order-1')} aria-label="Workspace metrics">
+          <section className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3', prioritizePersonalWork ? 'order-2' : 'order-1')} aria-label="Workspace metrics">
             <StatCard title="Active Companies" value={stats.activeProjects} icon={LayoutList} tone="blue" to="/projects" />
             <StatCard title="Pending Tasks" value={stats.pendingTasks} icon={Clock} tone="amber" to="/tasks" />
             <StatCard title="Completed Tasks" value={stats.completedTasks} icon={CheckCircle2} tone="emerald" to="/tasks" />
@@ -345,7 +369,7 @@ const Dashboard: React.FC = () => {
                   <PieChart>
                     <Pie data={tasksByStatusData} cx="50%" cy="50%" innerRadius={56} outerRadius={82} paddingAngle={4} dataKey="value">
                       {tasksByStatusData.map((entry, index) => (
-                        <Cell key={`cell-${entry.name}`} fill={COLORS[index % COLORS.length]} />
+                        <Cell key={`cell-${entry.name}`} fill={chartColors.series[index % chartColors.series.length]} />
                       ))}
                     </Pie>
                     <Tooltip contentStyle={{ borderRadius: '8px', border: `1px solid ${chartColors.grid}`, boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
@@ -393,7 +417,7 @@ const Dashboard: React.FC = () => {
               const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
 
               return (
-                <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="min-w-0 rounded-lg border border-slate-200 bg-white p-3 transition-colors hover:border-slate-300 hover:bg-slate-50">
+                <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="min-w-0 rounded-control bg-inset/70 p-3 transition-colors hover:bg-inset">
                   <p className={cn('truncate text-sm font-semibold text-slate-900', isOverdue && 'text-red-700')}>{task.title}</p>
                   <p className="mt-1 truncate text-xs text-slate-500">{task.clientName} - {task.projectName || 'Independent'}</p>
                   <div className="mt-3 flex items-center justify-between gap-2 text-[11px]">
@@ -444,13 +468,12 @@ const Dashboard: React.FC = () => {
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
               <div className="space-y-3">
-                <h3 className="flex items-center gap-2 border-b border-slate-100 pb-2 text-sm font-semibold text-slate-700">
-                  <span className="h-2 w-2 rounded-full bg-blue-500" />
-                  Due today <span className="text-slate-400">{myTasks.dueToday.length}</span>
+                <h3 className="flex items-center gap-2 border-b border-line/70 pb-2 text-sm font-semibold text-ink">
+                  Due today <span className="calm-number text-muted">{myTasks.dueToday.length}</span>
                 </h3>
                 <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
                   {myTasks.dueToday.map(task => (
-                    <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-lg border border-slate-200 bg-slate-50/40 p-3 transition-colors hover:bg-slate-50">
+                    <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-control bg-inset/55 p-3 transition-colors hover:bg-inset">
                       <p className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
                       <div className="mt-1 flex justify-between gap-2 text-xs text-slate-500">
                         <span>{task.id}</span>
@@ -463,16 +486,15 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div className="space-y-3">
-                <h3 className="flex items-center gap-2 border-b border-slate-100 pb-2 text-sm font-semibold text-slate-700">
-                  <span className="h-2 w-2 rounded-full bg-red-500" />
-                  Overdue <span className="text-slate-400">{myTasks.overdue.length}</span>
+                <h3 className="flex items-center gap-2 border-b border-line/70 pb-2 text-sm font-semibold text-ink">
+                  Overdue <span className="calm-number text-red-700">{myTasks.overdue.length}</span>
                 </h3>
                 <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
                   {myTasks.overdue.map(task => {
                     const dueDate = parseOptionalDate(task.dueDate);
                     const days = dueDate ? Math.max(1, differenceInDays(new Date(), dueDate)) : 0;
                     return (
-                      <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-lg border border-red-100 bg-red-50/30 p-3 transition-colors hover:bg-red-50/60" title={dueDate ? `Due: ${format(dueDate, 'yyyy-MM-dd')}` : 'No due date'}>
+                      <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-control bg-red-50/30 p-3 transition-colors hover:bg-red-50/60" title={dueDate ? `Due: ${format(dueDate, 'yyyy-MM-dd')}` : 'No due date'}>
                         <p className="truncate text-sm font-semibold text-red-900">{task.title}</p>
                         <div className="mt-1 flex justify-between gap-2 text-xs text-red-700">
                           <span>{days} day{days === 1 ? '' : 's'} overdue</span>
@@ -486,13 +508,12 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div className="space-y-3">
-                <h3 className="flex items-center gap-2 border-b border-slate-100 pb-2 text-sm font-semibold text-slate-700">
-                  <span className="h-2 w-2 rounded-full bg-amber-500" />
-                  {currentUser.role === 'Client' ? 'Waiting for your review' : 'Waiting approval'} <span className="text-slate-400">{myTasks.actionRequired.length}</span>
+                <h3 className="flex items-center gap-2 border-b border-line/70 pb-2 text-sm font-semibold text-ink">
+                  {currentUser.role === 'Client' ? 'Waiting for your review' : 'Waiting approval'} <span className="calm-number text-amber-700">{myTasks.actionRequired.length}</span>
                 </h3>
                 <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
                   {myTasks.actionRequired.map(task => (
-                    <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-lg border border-slate-200 bg-slate-50/40 p-3 transition-colors hover:bg-slate-50">
+                    <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-control bg-inset/55 p-3 transition-colors hover:bg-inset">
                       <p className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
                       <div className="mt-1 flex justify-between gap-2 text-xs text-slate-500">
                         <span>{task.status}</span>

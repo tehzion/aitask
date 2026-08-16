@@ -26,6 +26,14 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
   const titleId = React.useId();
   const selectedPackage = servicePackages.find(item => item.id === packageId);
   const readOnlyItems = mode === 'standard';
+  const appliedPackageKeyRef = React.useRef('');
+
+  const applyPackage = React.useCallback((pkg: typeof selectedPackage) => {
+    if (!pkg) return;
+    setItems(pkg.serviceItems.map(item => ({ ...item, id: crypto.randomUUID(), platforms: [...item.platforms], workflow: item.workflow ? structuredClone(item.workflow) : undefined })));
+    setPlan(current => ({ ...current, discountType: pkg.discountType, discountValue: pkg.discountValue, taxRateBps: pkg.taxRateBps }));
+    appliedPackageKeyRef.current = `${pkg.id}:${pkg.revision}`;
+  }, []);
 
   const chooseMode = (value: PlanOrigin) => {
     if (saving) return;
@@ -35,17 +43,15 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
       setItems([blankItem()]);
       setPlan(current => ({ ...current, discountType: 'none', discountValue: 0, taxRateBps: 0 }));
     }
-    else if (pkg) setItems(pkg.serviceItems.map(item => ({ ...item, id: crypto.randomUUID(), platforms: [...item.platforms], workflow: item.workflow ? structuredClone(item.workflow) : undefined })));
+    else applyPackage(pkg);
   };
 
   React.useEffect(() => {
     if (mode === 'custom') return;
     const pkg = servicePackages.find(item => item.id === packageId);
-    if (pkg) {
-      setItems(pkg.serviceItems.map(item => ({ ...item, id: crypto.randomUUID(), platforms: [...item.platforms], workflow: item.workflow ? structuredClone(item.workflow) : undefined })));
-      setPlan(current => ({ ...current, discountType: pkg.discountType, discountValue: pkg.discountValue, taxRateBps: pkg.taxRateBps }));
-    }
-  }, [mode, packageId, servicePackages]);
+    const packageKey = pkg ? `${pkg.id}:${pkg.revision}` : '';
+    if (pkg && appliedPackageKeyRef.current !== packageKey) applyPackage(pkg);
+  }, [applyPackage, mode, packageId, servicePackages]);
 
   const updateItem = (id: string, patch: Partial<ServiceItem>) => setItems(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
   const isValidOptionalUrl = (value: string) => {
@@ -143,8 +149,8 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
   const serviceSlots = items.reduce((sum, item) => sum + (Number.isFinite(item.quantity) ? Math.max(0, item.quantity) : 0), 0);
   const steps = ['Client details', 'Plan source', 'Service scope', 'Terms', 'Review'];
   const modeOptions = [
-    { value: 'standard' as const, title: 'Use standard package', text: 'Use the selected package snapshot without changing its scope.', icon: PackageCheck },
-    { value: 'customized' as const, title: 'Duplicate as custom', text: 'Start from a package and adjust quantity, platform or price.', icon: Copy },
+    { value: 'standard' as const, title: 'Use standard package', text: 'Save the selected Growth Plan as this client’s frozen service scope.', icon: PackageCheck },
+    { value: 'customized' as const, title: 'Duplicate as Custom Plan', text: 'Select Growth Plan, duplicate it, then adjust quantity, platform or price for this client only.', icon: Copy },
     { value: 'custom' as const, title: 'Fully custom', text: 'Build a service plan from a blank scope.', icon: Sparkles },
   ];
 
@@ -157,14 +163,14 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[13rem_minmax(0,1fr)_17rem]">
         <aside className="hidden border-r border-line bg-inset/55 p-4 lg:block" aria-label="Creation progress">
-          <ol className="space-y-1">{steps.map((label, index) => { const number = index + 1; const current = step === number; const complete = step > number; return <li key={label}><button type="button" onClick={() => complete && setStep(number)} disabled={!complete || saving} className={cn('flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-left text-sm', current ? 'bg-surface font-semibold text-ink shadow-sm ring-1 ring-line' : complete ? 'text-accent hover:bg-surface' : 'text-muted/60')}><span className={cn('calm-number flex h-6 w-6 items-center justify-center rounded-tag text-xs', current ? 'bg-accent text-[#07110f]' : complete ? 'bg-accent-soft text-accent' : 'bg-line/60')}>{complete ? <Check className="h-3.5 w-3.5" /> : number}</span>{label}</button></li>; })}</ol>
+          <ol className="space-y-1">{steps.map((label, index) => { const number = index + 1; const current = step === number; const complete = step > number; return <li key={label}><button type="button" onClick={() => complete && setStep(number)} disabled={!complete || saving} className={cn('flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-left text-sm', current ? 'bg-surface font-semibold text-ink shadow-sm ring-1 ring-line' : complete ? 'text-accent hover:bg-surface' : 'text-muted/60')}><span className={cn('calm-number flex h-6 w-6 items-center justify-center rounded-tag text-xs', current ? 'bg-accent text-[rgb(var(--calm-accent-ink))]' : complete ? 'bg-accent-soft text-accent' : 'bg-line/60')}>{complete ? <Check className="h-3.5 w-3.5" /> : number}</span>{label}</button></li>; })}</ol>
         </aside>
 
         <main className="custom-scrollbar min-h-0 overflow-y-auto p-5 sm:p-6 lg:p-8">
           <div className="mb-5 flex gap-1 lg:hidden" aria-hidden="true">{steps.map((_, index) => <span key={index} className={cn('h-1.5 flex-1 rounded-full', index + 1 <= step ? 'bg-accent' : 'bg-line')} />)}</div>
           {step === 1 && <section aria-labelledby="client-details-step"><h3 id="client-details-step" className="text-lg font-semibold text-ink">Client details</h3><p className="mt-1 text-sm text-muted">Start with the primary business and contact information.</p><div className="mt-6 grid gap-4 md:grid-cols-2">{([['clientName','Client / company name'],['contactPerson','Contact person'],['email','Email'],['phone','Phone'],['address','Address'],['website','Website'],['facebookPage','Facebook page']] as const).map(([key,label]) => <label key={key} className="text-sm font-medium text-ink">{label}{key === 'clientName' && ' *'}<input className={cn(inputBase, 'mt-1.5 px-3 py-2.5')} value={profile[key]} onChange={e => setProfile({ ...profile, [key]: e.target.value })} /></label>)}<label className="text-sm font-medium text-ink md:col-span-2">Notes<textarea className={cn(inputBase, 'mt-1.5 min-h-28 px-3 py-2.5')} value={profile.notes} onChange={e => setProfile({ ...profile, notes: e.target.value })} /></label></div></section>}
 
-          {step === 2 && <section aria-labelledby="plan-source-step"><h3 id="plan-source-step" className="text-lg font-semibold text-ink">Choose a plan source</h3><p className="mt-1 text-sm text-muted">The selected scope and workflow are frozen when you save.</p><div className="mt-6 grid gap-3 xl:grid-cols-3">{modeOptions.map(option => <button type="button" key={option.value} onClick={() => chooseMode(option.value)} aria-pressed={mode === option.value} className={cn('min-h-44 rounded-panel p-5 text-left ring-1 transition-[background-color,box-shadow,transform] duration-160 active:scale-[0.99]', mode === option.value ? 'bg-accent-soft text-ink ring-accent/45' : 'bg-surface text-ink ring-line hover:bg-inset')}><span className={cn('flex h-10 w-10 items-center justify-center rounded-control', mode === option.value ? 'bg-accent text-white' : 'bg-inset text-muted')}><option.icon className="h-5 w-5" /></span><span className="mt-5 block font-semibold">{option.title}</span><span className="mt-1 block text-sm leading-5 text-muted">{option.text}</span></button>)}</div>{mode !== 'custom' && <label className="mt-6 block text-sm font-medium text-ink">Standard package<select className={cn(inputBase, 'mt-1.5 px-3 py-2.5')} value={packageId} onChange={e => setPackageId(e.target.value)}><option value="">Choose package</option>{servicePackages.filter(item => item.isActive).map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name} · rev {pkg.revision}</option>)}</select></label>}</section>}
+          {step === 2 && <section aria-labelledby="plan-source-step"><h3 id="plan-source-step" className="text-lg font-semibold text-ink">Choose a plan source</h3><p className="mt-1 text-sm text-muted">The selected scope and workflow are frozen when you save.</p><p className="mt-3 rounded-control bg-inset px-3 py-2 text-sm leading-6 text-muted">Duplicating Growth Plan creates this client’s own Custom Service Plan. Later quantity, platform, or price changes never modify the original Growth Plan.</p><div className="mt-6 grid gap-3 xl:grid-cols-3">{modeOptions.map(option => <button type="button" key={option.value} onClick={() => chooseMode(option.value)} aria-pressed={mode === option.value} className={cn('min-h-44 rounded-panel p-5 text-left ring-1 transition-[background-color,box-shadow,transform] duration-160 active:scale-[0.99]', mode === option.value ? 'bg-accent-soft text-ink ring-accent/45' : 'bg-surface text-ink ring-line hover:bg-inset')}><span className={cn('flex h-10 w-10 items-center justify-center rounded-control', mode === option.value ? 'bg-accent text-white' : 'bg-inset text-muted')}><option.icon className="h-5 w-5" /></span><span className="mt-5 block font-semibold">{option.title}</span><span className="mt-1 block text-sm leading-5 text-muted">{option.text}</span></button>)}</div>{mode !== 'custom' && <label className="mt-6 block text-sm font-medium text-ink">Standard package<select className={cn(inputBase, 'mt-1.5 px-3 py-2.5')} value={packageId} onChange={e => setPackageId(e.target.value)}><option value="">Choose package</option>{servicePackages.filter(item => item.isActive).map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name} · rev {pkg.revision}</option>)}</select></label>}</section>}
 
           {step === 3 && <section aria-labelledby="service-scope-step"><h3 id="service-scope-step" className="text-lg font-semibold text-ink">Service scope</h3><p className="mt-1 text-sm text-muted">{readOnlyItems ? 'Standard package items and task workflows are frozen and read-only.' : 'Adjust quantity, platform, price and the internal task workflow.'}</p><div className="mt-6 space-y-3">{items.map((item, index) => <article key={item.id} className="rounded-panel bg-inset/60 p-4 ring-1 ring-line/70"><div className="mb-3 flex items-center justify-between"><p className="calm-eyebrow">Service {index + 1}</p>{!readOnlyItems && <button type="button" aria-label="Remove service" onClick={()=>setItems(current=>current.filter(value=>value.id!==item.id))} className="flex h-9 w-9 items-center justify-center rounded-control text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4"/></button>}</div><div className="grid gap-3 md:grid-cols-12"><input disabled={readOnlyItems} aria-label="Service name" placeholder="Service" className={cn(inputBase,'px-3 py-2.5 md:col-span-4')} value={item.name} onChange={e=>updateItem(item.id,{name:e.target.value})}/><input disabled={readOnlyItems} aria-label="Platforms" placeholder="Platforms" className={cn(inputBase,'px-3 py-2.5 md:col-span-3')} value={item.platforms.join(', ')} onChange={e=>updateItem(item.id,{platforms:e.target.value.split(',').map(v=>v.trim()).filter(Boolean)})}/><input disabled={readOnlyItems} aria-label="Unit" className={cn(inputBase,'px-3 py-2.5 md:col-span-2')} value={item.unit} onChange={e=>updateItem(item.id,{unit:e.target.value})}/><input disabled={readOnlyItems} aria-label="Quantity" type="number" min="1" className={cn(inputBase,'px-3 py-2.5 md:col-span-1')} value={item.quantity} onChange={e=>updateItem(item.id,{quantity:Number(e.target.value)})}/><input disabled={readOnlyItems} aria-label="Price" type="number" min="0" step="0.01" className={cn(inputBase,'px-3 py-2.5 md:col-span-2')} value={item.unitPriceMinor/100} onChange={e=>updateItem(item.id,{unitPriceMinor:Math.round(Number(e.target.value)*100)})}/><label className="text-xs font-semibold text-muted md:col-span-12">Task workflow<select disabled={readOnlyItems} className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={item.workflow?.templateId || ''} onChange={e=>{const template=serviceWorkflowTemplates.find(value=>value.id===e.target.value);updateItem(item.id,{workflow:template?snapshotWorkflow(template):undefined});}}><option value="">No automatic task chain</option>{serviceWorkflowTemplates.filter(value=>value.isActive).map(template=><option key={template.id} value={template.id}>{template.name} · rev {template.revision} · {template.steps.length} steps</option>)}</select></label></div></article>)}{!readOnlyItems && <Button variant="secondary" onClick={()=>setItems(current=>[...current,blankItem()])}><Plus className="h-4 w-4"/>Add service</Button>}</div></section>}
 

@@ -36,7 +36,7 @@ export const Button: React.FC<ButtonProps> = ({ className, variant = 'primary', 
     className={cn(
       buttonBase,
       'min-h-11 px-4 py-2.5',
-      variant === 'primary'   && 'bg-accent text-white shadow-[0_8px_20px_-12px_rgb(var(--calm-accent)/0.8)] hover:bg-accent/90 dark:text-[#07110f]',
+      variant === 'primary'   && 'bg-accent text-white shadow-[0_5px_12px_-10px_rgb(7_22_18/0.8)] hover:bg-accent/90 dark:text-[rgb(var(--calm-accent-ink))]',
       variant === 'secondary' && 'border border-line bg-surface text-ink hover:border-accent/35 hover:bg-inset',
       variant === 'ghost'     && 'text-muted hover:bg-inset hover:text-ink',
       variant === 'quiet'     && 'px-2 text-accent hover:bg-accent-soft',
@@ -79,13 +79,13 @@ interface MetricCardProps {
 }
 
 const toneClasses: Record<string, string> = {
-  indigo:  'bg-blue-50   text-blue-700',
+  indigo:  'bg-accent-soft text-accent',
   emerald: 'bg-emerald-50 text-emerald-600',
   amber:   'bg-amber-50   text-amber-600',
   orange:  'bg-amber-50  text-amber-700',
   red:     'bg-red-50     text-red-600',
-  blue:    'bg-sky-50     text-sky-600',
-  purple:  'bg-violet-50 text-violet-700',
+  blue:    'bg-accent-soft text-accent',
+  purple:  'bg-accent-soft text-accent',
   slate:   'bg-slate-100  text-slate-600',
 };
 
@@ -126,7 +126,7 @@ export const ChartCard: React.FC<ChartCardProps> = ({ title, description, childr
 );
 
 export const ChartEmptyState: React.FC<{ children?: React.ReactNode }> = ({ children = 'No data yet' }) => (
-  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/80 text-sm font-medium text-slate-400">
+  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-control border border-dashed border-line bg-inset/80 text-sm font-medium text-muted">
     {children}
   </div>
 );
@@ -143,9 +143,9 @@ const badgeTones: Record<string, string> = {
   amber:   'bg-amber-50   text-amber-700  border-amber-100',
   red:     'bg-red-50     text-red-700    border-red-100',
   orange:  'bg-amber-50   text-amber-700  border-amber-100',
-  purple:  'bg-violet-50  text-violet-700 border-violet-100',
-  pink:    'bg-rose-50    text-rose-700   border-rose-100',
-  indigo:  'bg-blue-50    text-blue-700   border-blue-100',
+  purple:  'bg-accent-soft text-accent border-accent/20',
+  pink:    'bg-accent-soft text-accent border-accent/20',
+  indigo:  'bg-accent-soft text-accent border-accent/20',
 };
 
 export const Badge: React.FC<BadgeProps> = ({ className, tone = 'slate', ...props }) => (
@@ -165,17 +165,17 @@ export const Surface: React.FC<React.HTMLAttributes<HTMLElement> & { variant?: '
 };
 
 export const StatGroup: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className, ...props }) => (
-  <div className={cn('calm-surface grid divide-y divide-line/70 overflow-hidden sm:divide-x sm:divide-y-0', className)} {...props} />
+  <div className={cn('calm-surface grid divide-y divide-line/70 overflow-hidden ring-1 ring-line/70 sm:divide-x sm:divide-y-0', className)} {...props} />
 );
 
-export const StatusChip: React.FC<React.HTMLAttributes<HTMLSpanElement> & { tone?: BadgeProps['tone']; dot?: boolean }> = ({ tone = 'slate', dot = true, className, children, ...props }) => (
+export const StatusChip: React.FC<React.HTMLAttributes<HTMLSpanElement> & { tone?: BadgeProps['tone']; dot?: boolean }> = ({ tone = 'slate', dot = false, className, children, ...props }) => (
   <span className={cn('inline-flex items-center gap-1.5 rounded-tag border px-2 py-1 text-xs font-medium', badgeTones[tone], className)} {...props}>
     {dot && <span className="h-1.5 w-1.5 rounded-full bg-current opacity-75" aria-hidden="true" />}
     {children}
   </span>
 );
 
-export interface SegmentTab<T extends string> { id: T; label: string; count?: number }
+export interface SegmentTab<T extends string> { id: T; label: string; compactLabel?: string; count?: number }
 export const SegmentedTabs = <T extends string,>({ items, value, onChange, label, idPrefix }: { items: SegmentTab<T>[]; value: T; onChange: (value: T) => void; label: string; idPrefix?: string }) => {
   const generatedId = React.useId().replace(/:/g, '');
   const prefix = idPrefix || `segmented-tabs-${generatedId}`;
@@ -200,7 +200,7 @@ export const SegmentedTabs = <T extends string,>({ items, value, onChange, label
   };
 
   return (
-    <div role="tablist" aria-label={label} className="no-scrollbar flex min-w-0 gap-1 overflow-x-auto rounded-control bg-inset p-1">
+    <div role="tablist" aria-label={label} className="no-scrollbar flex min-w-0 gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 sm:gap-1 sm:p-1">
       {items.map((item, index) => (
         <button
           key={item.id}
@@ -209,13 +209,15 @@ export const SegmentedTabs = <T extends string,>({ items, value, onChange, label
           type="button"
           role="tab"
           tabIndex={value === item.id ? 0 : -1}
+          aria-label={item.label}
           aria-selected={value === item.id}
           aria-controls={`${prefix}-panel-${item.id}`}
           onClick={() => onChange(item.id)}
           onKeyDown={event => handleKeyDown(event, index)}
-          className={cn('min-h-11 shrink-0 rounded-tag px-3 text-sm font-medium transition-[background-color,color,box-shadow] duration-160', value === item.id ? 'bg-surface text-ink shadow-sm ring-1 ring-line/70' : 'text-muted hover:text-ink')}
+          className={cn('min-h-11 shrink-0 rounded-tag px-2 text-xs font-medium transition-[background-color,color,box-shadow] duration-160 sm:px-3 sm:text-sm', value === item.id ? 'bg-surface text-ink ring-1 ring-line/70' : 'text-muted hover:text-ink')}
         >
-          {item.label}{typeof item.count === 'number' && <span className="calm-number ml-1.5 text-xs opacity-70">{item.count}</span>}
+          {item.compactLabel ? <><span className="sm:hidden" aria-hidden="true">{item.compactLabel}</span><span className="hidden sm:inline">{item.label}</span></> : item.label}
+          {typeof item.count === 'number' && <span className="calm-number ml-1.5 text-xs opacity-70">{item.count}</span>}
         </button>
       ))}
     </div>
@@ -240,7 +242,7 @@ export const DataRow: React.FC<Omit<React.HTMLAttributes<HTMLElement>, 'title'> 
 );
 
 export const EmptyState: React.FC<{ title: string; description: string; action?: React.ReactNode; className?: string }> = ({ title, description, action, className }) => (
-  <div className={cn('rounded-panel border border-dashed border-line px-5 py-12 text-center', className)}>
+  <div className={cn('rounded-panel bg-inset px-5 py-12 text-center', className)}>
     <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-control bg-accent-soft text-accent"><ArrowUpRight className="h-5 w-5" /></div>
     <h3 className="mt-4 font-semibold text-ink">{title}</h3><p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">{description}</p>{action && <div className="mt-5">{action}</div>}
   </div>

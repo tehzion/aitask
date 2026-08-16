@@ -18,7 +18,7 @@ assert.equal(manifest.short_name, 'AiTask');
 assert.equal(manifest.start_url, '/');
 assert.equal(manifest.scope, '/');
 assert.equal(manifest.display, 'standalone');
-assert.equal(manifest.theme_color, '#176B5C');
+assert.equal(manifest.theme_color, '#1D6B5D');
 assert.equal(manifest.background_color, '#F4F6F8');
 
 const iconContracts = new Set(manifest.icons.map(icon => `${icon.src}|${icon.sizes}|${icon.purpose}`));
@@ -28,7 +28,7 @@ assert(iconContracts.has('/pwa-maskable-512x512.png|512x512|maskable'));
 
 assert.match(indexHtml, /<link rel="manifest" href="\/manifest[.]webmanifest"/);
 assert.match(indexHtml, /<link rel="apple-touch-icon" href="\/apple-touch-icon[.]png"/);
-assert.match(indexHtml, /<meta name="theme-color" content="#176B5C"/);
+assert.match(indexHtml, /<meta name="theme-color" content="#1D6B5D"/);
 assert.match(indexHtml, /id="root"/);
 
 for (const asset of [
@@ -44,6 +44,7 @@ assert(!/supabase[.]co|aitask_app_state/i.test(serviceWorker), 'Supabase data mu
 assert(serviceWorker.includes('aitask-route-assets'), 'Lazy route scripts must be cached after first use.');
 assert(serviceWorker.includes('aitask-navigation'), 'Page navigation must use its own network-first cache.');
 assert(serviceWorker.includes('navigationPreload'), 'Network-first navigation preload must be enabled.');
+assert(/assets\/supabase-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'The synchronous Supabase runtime must be in the install-time precache for the offline shell.');
 assert.match(serviceWorkerSource, /new NetworkFirst\s*\(/, 'Page navigation must prefer the deployed app over a cached shell.');
 assert.doesNotMatch(
   serviceWorkerSource,

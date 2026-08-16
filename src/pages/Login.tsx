@@ -10,6 +10,8 @@ import { APP_BUILD_LABEL } from '../lib/appVersion';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { STAFF_DEPARTMENTS } from '../lib/departments';
 import { useColorTheme } from '../hooks/useColorTheme';
+import { isLocalServiceDemoEnabled } from '../mock/localServiceDemo';
+import { LanguageSwitcher } from '../components/I18nProvider';
 
 /** Max failed attempts before a short lockout is applied */
 const MAX_ATTEMPTS = 5;
@@ -21,11 +23,11 @@ const DEMO_ACCOUNTS = [
   { username: 'UrbanEats Client Demo', role: 'Client',      badge: 'bg-emerald-100 text-emerald-700' },
 ];
 
-const LOCAL_STAFF_DEMO_ACCOUNT = {
-  username: 'Staff Demo',
-  role: 'Staff',
-  badge: 'bg-blue-100 text-blue-700',
-};
+const LOCAL_STAFF_DEMO_ACCOUNTS = [
+  { username: 'Staff Demo', role: 'Staff', badge: 'bg-blue-100 text-blue-700' },
+  { username: 'Operation Demo', role: 'Operation', badge: 'bg-amber-100 text-amber-800' },
+  { username: 'Account Demo', role: 'Account', badge: 'bg-violet-100 text-violet-800' },
+];
 
 const getLoginDestination = (mustResetPassword: boolean, userId: string, requestedPath: string) => (
   mustResetPassword && !hasPasswordResetBypass(userId) ? '/settings' : requestedPath
@@ -54,7 +56,12 @@ const Login: React.FC = () => {
   const secureAccounts = shouldUseSecureSupabase();
   const demoAccounts = secureAccounts
     ? DEMO_ACCOUNTS
-    : [...DEMO_ACCOUNTS, LOCAL_STAFF_DEMO_ACCOUNT];
+    : [
+      ...DEMO_ACCOUNTS,
+      ...LOCAL_STAFF_DEMO_ACCOUNTS.filter(account => (
+        account.username === 'Staff Demo' || isLocalServiceDemoEnabled()
+      )),
+    ];
   const [isRecovering, setIsRecovering] = useState(false);
   const [recoveryIdentifier, setRecoveryIdentifier] = useState('');
   const [recoveryError, setRecoveryError] = useState('');
@@ -170,15 +177,18 @@ const Login: React.FC = () => {
 
   return (
     <main className="relative min-h-screen bg-slate-50 flex flex-col justify-center px-4 py-10 dark:bg-slate-950 sm:px-6 lg:px-8">
-      <button
-        type="button"
-        onClick={toggleTheme}
-        aria-label={`Switch to ${resolvedTheme === 'dark' ? 'day' : 'night'} mode`}
-        aria-pressed={resolvedTheme === 'dark'}
-        className="fixed right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"
-      >
-        {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-      </button>
+      <div className="fixed right-4 top-4 z-10 flex items-center gap-2">
+        <LanguageSwitcher compact className="rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm hover:bg-slate-100 hover:text-slate-950 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white" />
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={`Switch to ${resolvedTheme === 'dark' ? 'day' : 'night'} mode`}
+          aria-pressed={resolvedTheme === 'dark'}
+          className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"
+        >
+          {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </button>
+      </div>
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <div className="flex items-center gap-3">

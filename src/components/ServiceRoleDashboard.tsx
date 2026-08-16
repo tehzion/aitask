@@ -12,17 +12,16 @@ type WorkspaceTask = ReturnType<typeof useStore.getState>['tasks'][number];
 
 const WorkbenchHeader = ({ id, title, description, action }: { id: string; title: string; description: string; action?: React.ReactNode }) => (
   <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-    <div><p className="calm-eyebrow">Service operations</p><h2 id={id} className="mt-1 text-xl font-semibold tracking-[-0.025em] text-ink">{title}</h2><p className="mt-1 max-w-[65ch] text-sm leading-6 text-muted">{description}</p></div>
+    <div><h2 id={id} className="text-xl font-semibold tracking-[-0.025em] text-ink">{title}</h2><p className="mt-1 max-w-[65ch] text-sm leading-6 text-muted">{description}</p></div>
     {action}
   </div>
 );
 
 const SpotlightMetric = ({ label, value, icon: Icon, detail, tone = 'accent' }: { label: string; value: React.ReactNode; icon: React.ComponentType<{ className?: string }>; detail: string; tone?: 'accent' | 'danger' }) => (
-  <div className="relative min-h-44 overflow-hidden rounded-panel bg-[#152028] p-5 text-white dark:bg-[#061015] sm:p-6">
-    <div className="absolute -right-14 -top-20 h-48 w-48 rounded-full bg-white/5" aria-hidden="true" />
-    <div className="relative flex h-full flex-col justify-between gap-8">
-      <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium text-white/70">{label}</p><span className={tone === 'danger' ? 'rounded-control bg-red-400/15 p-2 text-red-200' : 'rounded-control bg-white/10 p-2 text-white'}><Icon className="h-5 w-5" /></span></div>
-      <div><p className="calm-number text-4xl font-semibold tracking-[-0.055em]">{value}</p><p className="mt-2 text-xs leading-5 text-white/60">{detail}</p></div>
+  <div className={`calm-raised min-h-44 border-l-2 p-5 sm:p-6 ${tone === 'danger' ? 'border-red-500' : 'border-accent'}`}>
+    <div className="flex h-full flex-col justify-between gap-8">
+      <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium text-muted">{label}</p><span className={tone === 'danger' ? 'rounded-control bg-red-50 p-2 text-red-700' : 'rounded-control bg-accent-soft p-2 text-accent'}><Icon className="h-5 w-5" /></span></div>
+      <div><p className="calm-number text-4xl font-semibold tracking-[-0.055em] text-ink">{value}</p><p className="mt-2 text-xs leading-5 text-muted">{detail}</p></div>
     </div>
   </div>
 );

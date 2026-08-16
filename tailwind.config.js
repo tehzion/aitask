@@ -28,8 +28,8 @@ export default {
         tag: '0.375rem',
       },
       boxShadow: {
-        calm: '0 18px 50px -30px rgb(21 32 40 / 0.38)',
-        float: '0 22px 60px -24px rgb(8 26 22 / 0.46)',
+        calm: '0 18px 50px -30px rgb(7 22 18 / 0.32)',
+        float: '0 18px 42px -24px rgb(7 22 18 / 0.46)',
       },
       transitionDuration: {
         160: '160ms',

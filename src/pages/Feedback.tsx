@@ -17,6 +17,7 @@ import {
 } from '../lib/feedback';
 import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
+import { useI18n } from '../components/I18nProvider';
 
 const roles: FeedbackRole[] = ['Super Admin', 'Admin', 'Staff', 'Client'];
 const devices = ['Desktop', 'Laptop', 'Tablet', 'Mobile', 'Other'];
@@ -77,11 +78,13 @@ const Rating: React.FC<{ label: string; value: number | null; onChange: (value: 
 
 const Feedback: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const [language, setLanguage] = React.useState<FeedbackLanguage>(() => searchParams.get('lang') === 'zh' ? 'zh' : 'en');
+  const { locale, setLocale } = useI18n();
+  const [language, setLanguage] = React.useState<FeedbackLanguage>(() => searchParams.get('lang') === 'zh' ? 'zh' : locale);
 
   React.useEffect(() => {
-    document.documentElement.lang = language === 'zh' ? 'zh' : 'en';
-  }, [language]);
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+    return () => { document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en'; };
+  }, [language, locale]);
   const [role, setRole] = React.useState<FeedbackRole>(() => parseFeedbackRole(searchParams.get('role')));
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -165,7 +168,7 @@ const Feedback: React.FC = () => {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">AT</div>
             <div><p className="font-semibold text-slate-950">AiTask</p><p className="text-xs text-slate-500">Launch feedback</p></div>
           </div>
-          <button type="button" onClick={() => setLanguage(value => value === 'en' ? 'zh' : 'en')} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <button type="button" data-i18n-skip onClick={() => { const next = language === 'en' ? 'zh' : 'en'; setLanguage(next); setLocale(next); }} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
             <Languages className="h-4 w-4" /> {language === 'en' ? '中文' : 'English'}
           </button>
         </div>

@@ -73,9 +73,9 @@ const emptyProfileForm: ClientProfileForm = {
 };
 
 const sourceClasses: Record<ClientSource, string> = {
-  Profile: 'bg-blue-50 text-blue-700 border-blue-100',
-  Task: 'bg-violet-50 text-violet-700 border-violet-100',
-  Company: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+  Profile: 'bg-accent-soft text-accent border-accent/20',
+  Task: 'bg-slate-100 text-slate-700 border-slate-200',
+  Company: 'bg-slate-100 text-slate-700 border-slate-200',
   Account: 'bg-slate-100 text-slate-700 border-slate-200',
 };
 

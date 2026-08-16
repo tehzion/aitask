@@ -6,7 +6,6 @@ import clsx from 'clsx';
 import { canAccessPath, getVisibleNavigation } from '../lib/access';
 import { clearPasswordResetBypass } from '../lib/auth';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
-import { APP_VERSION_LABEL, APP_COMMIT } from '../lib/appVersion';
 
 const navIcons = {
   Dashboard: LayoutDashboard,
@@ -165,6 +164,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
 
         {/* Footer */}
         <div className="space-y-1 border-t border-line/70 p-3">
+          <button
+            type="button"
+            onClick={handleLogout}
+            title={isCollapsed ? 'Logout' : undefined}
+            className={clsx('flex min-h-11 w-full items-center rounded-control px-3 py-2.5 text-red-700 transition-colors duration-160 hover:bg-red-50 hover:text-red-800', isCollapsed && 'md:justify-center md:px-2')}
+          >
+            <LogOut className={clsx('h-[19px] w-[19px]', !isCollapsed && 'mr-3', isCollapsed && 'md:mr-0')} />
+            <span className={clsx('text-sm font-medium', isCollapsed && 'md:hidden')}>Logout</span>
+          </button>
           {canViewSettings && (
             <NavLink
               to="/settings"
@@ -186,21 +194,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
               )}
             </NavLink>
           )}
-          <button
-            type="button"
-            onClick={handleLogout}
-            title={isCollapsed ? 'Logout' : undefined}
-            className={clsx('flex min-h-11 w-full items-center rounded-control px-3 py-2.5 text-red-700 transition-colors duration-160 hover:bg-red-50 hover:text-red-800', isCollapsed && 'md:justify-center md:px-2')}
-          >
-            <LogOut className={clsx('h-[19px] w-[19px]', !isCollapsed && 'mr-3', isCollapsed && 'md:mr-0')} />
-            <span className={clsx('text-sm font-medium', isCollapsed && 'md:hidden')}>Logout</span>
-          </button>
           <button type="button" onClick={onToggleCollapsed} className="hidden min-h-11 w-full items-center justify-center rounded-control text-muted transition-colors duration-160 hover:bg-inset hover:text-ink md:flex" aria-label={isCollapsed ? 'Expand navigation' : 'Collapse navigation'} title={isCollapsed ? 'Expand navigation' : 'Collapse navigation'}>
             {isCollapsed ? <PanelLeftOpen className="h-[19px] w-[19px]" /> : <><PanelLeftClose className="mr-3 h-[19px] w-[19px]" /><span className="text-sm font-medium">Collapse</span></>}
           </button>
-          <p className={clsx('px-3 pt-2 font-mono text-[10px] text-muted', isCollapsed && 'md:hidden')} title="AiTask application version and build commit">
-            {APP_VERSION_LABEL} · {APP_COMMIT}
-          </p>
         </div>
       </aside>
     </>

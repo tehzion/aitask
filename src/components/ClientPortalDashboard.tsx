@@ -59,7 +59,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
                 <div className="flex items-center gap-2"><h2 className="font-semibold text-ink">{activePlan.name}</h2><StatusChip tone="emerald">Active</StatusChip></div>
                 <p className="mt-1 text-sm text-muted">{activePlan.serviceItems.length} services · {publishedCycles.length} published cycle(s)</p>
               </div>
-              <Link to={`/clients/${encodeURIComponent(client.id)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white transition active:translate-y-px dark:text-[#07110f]">Open service workspace <ArrowRight className="h-4 w-4" /></Link>
+              <Link to={`/clients/${encodeURIComponent(client.id)}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white transition active:translate-y-px dark:text-[rgb(var(--calm-accent-ink))]">Open service workspace <ArrowRight className="h-4 w-4" /></Link>
             </div>
           )}
         </Surface>

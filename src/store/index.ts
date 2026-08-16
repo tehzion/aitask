@@ -32,6 +32,13 @@ import {
   ServicePricingSnapshot,
 } from '../types';
 import { legacyDemoTaskIds, mockUsers, mockProjects, mockTasks, retiredDemoUserIds } from '../mock';
+import {
+  createLocalServiceDemoFixture,
+  isLocalServiceDemoEnabled,
+  isLocalServiceDemoRecordId,
+  LOCAL_SERVICE_DEMO_VERSION,
+  LOCAL_SERVICE_DEMO_VERSION_KEY,
+} from '../mock/localServiceDemo';
 import { canLoginWithSeedAccount, DEFAULT_USER_PASSWORD, shouldShowDemoLogin } from '../lib/auth';
 import { clearLocalUserPassword, getLocalUserPassword, setLocalUserPassword, verifyLocalUserPassword } from '../lib/localCredentials';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
@@ -282,6 +289,7 @@ interface StoreState {
   rejectRegistration: (id: string) => void;
   deleteUser: (userId: string) => Promise<{ ok: boolean; error?: string }>;
   _forceSyncMockData: () => void;
+  resetLocalServiceDemo: () => { ok: boolean; error?: string };
   addTaskStatus: (status: string) => { ok: boolean; error?: string };
   deleteTaskStatus: (status: string) => { ok: boolean; error?: string };
 }
@@ -836,7 +844,37 @@ const makeWorkspacePatch = (current: StoreState, snapshot: SnapshotResult) => {
 
 const PERSIST_KEY = 'market-task-storage';
 
-const seedUserIdentity = new Map(mockUsers.map(user => [user.id, user]));
+const getLocalServiceDemoVersion = () => {
+  try { return window.localStorage.getItem(LOCAL_SERVICE_DEMO_VERSION_KEY); }
+  catch { return null; }
+};
+
+const setLocalServiceDemoVersion = () => {
+  try { window.localStorage.setItem(LOCAL_SERVICE_DEMO_VERSION_KEY, LOCAL_SERVICE_DEMO_VERSION); }
+  catch { /* Zustand persistence will still retain the fixture data when storage is available. */ }
+};
+
+const hasLocalServiceData = (state: Pick<StoreState,
+  'servicePackages' | 'clientPlans' | 'serviceCycles' | 'deliverables' | 'cycleComments' | 'addons' | 'servicePricingSnapshots'
+>) => (
+  state.servicePackages.length > 0 ||
+  state.clientPlans.length > 0 ||
+  state.serviceCycles.length > 0 ||
+  state.deliverables.length > 0 ||
+  state.cycleComments.length > 0 ||
+  state.addons.length > 0 ||
+  state.servicePricingSnapshots.length > 0
+);
+
+const replaceLocalServiceDemoRecords = <T extends { id: string }>(current: T[], fixture: T[]) => [
+  ...current.filter(item => !isLocalServiceDemoRecordId(item.id)),
+  ...fixture,
+];
+
+const seedUserIdentity = new Map([
+  ...mockUsers,
+  ...createLocalServiceDemoFixture().users,
+].map(user => [user.id, user]));
 
 const sanitizePersistedUsers = (users: User[]): User[] => (
   users.map(user => {
@@ -4170,6 +4208,75 @@ export const useStore = create<StoreState>()(
             notifications: notificationsWithoutRetiredDemo,
           };
         });
+
+        // The service walkthrough is intentionally limited to an explicitly local browser
+        // workspace. It never creates a pending mutation or reaches a Supabase command.
+        if (!isLocalServiceDemoEnabled() || hasLocalServiceData(get()) || getLocalServiceDemoVersion() === LOCAL_SERVICE_DEMO_VERSION) return;
+
+        const fixture = createLocalServiceDemoFixture();
+        const demoUserIds = new Set(fixture.users.map(user => user.id));
+        set((state) => {
+          const users = [
+            ...state.users.filter(user => !demoUserIds.has(user.id)),
+            ...fixture.users.map(user => normalizeUserAccount(user)),
+          ];
+          return {
+            users,
+            currentUser: getCurrentUserFromSnapshot(state.currentUser, users),
+            clients: [...state.clients, ...fixture.clients],
+            tasks: [...state.tasks, ...fixture.tasks],
+            servicePackages: [...state.servicePackages, ...fixture.servicePackages],
+            clientPlans: [...state.clientPlans, ...fixture.clientPlans],
+            serviceCycles: [...state.serviceCycles, ...fixture.serviceCycles],
+            deliverables: [...state.deliverables, ...fixture.deliverables],
+            cycleComments: [...state.cycleComments, ...fixture.cycleComments],
+            addons: [...state.addons, ...fixture.addons],
+            serviceWorkflowTemplates: [
+              ...state.serviceWorkflowTemplates,
+              ...fixture.serviceWorkflowTemplates.filter(template => !state.serviceWorkflowTemplates.some(item => item.id === template.id)),
+            ],
+            servicePricingSnapshots: [...state.servicePricingSnapshots, ...fixture.servicePricingSnapshots],
+          };
+        });
+        setLocalServiceDemoVersion();
+      },
+
+      resetLocalServiceDemo: () => {
+        const state = get();
+        if (!isLocalServiceDemoEnabled() || state.backend.mode !== 'local' || shouldUseSecureSupabase()) {
+          return { ok: false, error: 'The sample workspace is available only in an explicit local browser session.' };
+        }
+        if (!state.currentUser || state.currentUser.role !== 'Admin') {
+          return { ok: false, error: 'Only an administrator can reset the sample workspace.' };
+        }
+
+        const fixture = createLocalServiceDemoFixture();
+        const demoUserIds = new Set(fixture.users.map(user => user.id));
+        set((current) => {
+          const users = [
+            ...current.users.filter(user => !demoUserIds.has(user.id)),
+            ...fixture.users.map(user => normalizeUserAccount(user)),
+          ];
+          return {
+            users,
+            currentUser: getCurrentUserFromSnapshot(current.currentUser, users),
+            clients: replaceLocalServiceDemoRecords(current.clients, fixture.clients),
+            tasks: replaceLocalServiceDemoRecords(current.tasks, fixture.tasks),
+            servicePackages: replaceLocalServiceDemoRecords(current.servicePackages, fixture.servicePackages),
+            clientPlans: replaceLocalServiceDemoRecords(current.clientPlans, fixture.clientPlans),
+            serviceCycles: replaceLocalServiceDemoRecords(current.serviceCycles, fixture.serviceCycles),
+            deliverables: replaceLocalServiceDemoRecords(current.deliverables, fixture.deliverables),
+            cycleComments: replaceLocalServiceDemoRecords(current.cycleComments, fixture.cycleComments),
+            addons: replaceLocalServiceDemoRecords(current.addons, fixture.addons),
+            serviceWorkflowTemplates: [
+              ...current.serviceWorkflowTemplates,
+              ...fixture.serviceWorkflowTemplates.filter(template => !current.serviceWorkflowTemplates.some(item => item.id === template.id)),
+            ],
+            servicePricingSnapshots: replaceLocalServiceDemoRecords(current.servicePricingSnapshots, fixture.servicePricingSnapshots),
+          };
+        });
+        setLocalServiceDemoVersion();
+        return { ok: true };
       },
 
       addTaskStatus: (status) => {

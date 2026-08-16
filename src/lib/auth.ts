@@ -27,6 +27,8 @@ const HOSTED_BLOCKED_SEED_USER_IDS = new Set([
   'u-adminmojo',
   'u-admin',
   'u-client-urban',
+  'u-operation-demo-local',
+  'u-account-demo-local',
 ]);
 
 export const shouldShowDemoLogin = () => {

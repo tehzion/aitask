@@ -104,7 +104,7 @@ export default defineConfig(({ mode }) => {
         start_url: '/',
         scope: '/',
         display: 'standalone',
-        theme_color: '#176B5C',
+        theme_color: '#1D6B5D',
         background_color: '#F4F6F8',
         icons: [
           {
@@ -139,7 +139,6 @@ export default defineConfig(({ mode }) => {
           '**/Approvals-*.js',
           '**/Settings-*.js',
           '**/BarChart-*.js',
-          '**/supabase-*.js',
         ],
       },
     }),

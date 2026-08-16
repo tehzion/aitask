@@ -130,7 +130,7 @@ const ModalShell: React.FC<ModalShellProps> = ({
 
   return createPortal(
     <div
-      className={cn('fixed inset-0 z-[100] flex items-center justify-center bg-[#071015]/60 p-3 backdrop-blur-[2px] sm:p-4', overlayClassName)}
+      className={cn('fixed inset-0 z-[100] flex items-center justify-center bg-ink/60 p-3 backdrop-blur-[2px] sm:p-4', overlayClassName)}
       onMouseDown={event => {
         if (closeOnBackdrop && event.target === event.currentTarget) onClose();
       }}

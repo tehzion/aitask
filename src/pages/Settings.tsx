@@ -18,6 +18,7 @@ import { APP_BUILD_CHANNEL, APP_BUILD_LABEL, APP_BUILD_TIME, APP_COMMIT, APP_VER
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
 import ServicePackageManager from '../components/ServicePackageManager';
 import WorkflowTemplateManager from '../components/WorkflowTemplateManager';
+import { isLocalServiceDemoEnabled } from '../mock/localServiceDemo';
 
 const AVATAR_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 const AVATAR_UPLOAD_SIZE = 320;
@@ -91,6 +92,7 @@ const Settings: React.FC = () => {
     addTaskStatus,
     deleteTaskStatus,
     commitPendingMutation,
+    resetLocalServiceDemo,
   } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     tasks: state.tasks,
@@ -107,6 +109,7 @@ const Settings: React.FC = () => {
     addTaskStatus: state.addTaskStatus,
     deleteTaskStatus: state.deleteTaskStatus,
     commitPendingMutation: state.commitPendingMutation,
+    resetLocalServiceDemo: state.resetLocalServiceDemo,
   })));
   const isSuperAdmin = isBossKoo(currentUser);
   const isClientUser = currentUser?.role === 'Client';
@@ -139,6 +142,7 @@ const Settings: React.FC = () => {
   const [isProfileSaving, setIsProfileSaving] = React.useState(false);
   const [isStatusSaving, setIsStatusSaving] = React.useState(false);
   const [hasPendingStatusAdd, setHasPendingStatusAdd] = React.useState(false);
+  const [localDemoMessage, setLocalDemoMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
   const handleStatusAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,6 +220,7 @@ const Settings: React.FC = () => {
   const canBypassPasswordReset = mustResetPassword && canUsePasswordResetBypass();
   const bypassActive = currentUser ? hasPasswordResetBypass(currentUser.id) : false;
   const isPasswordSetupOnly = mustResetPassword && !bypassActive;
+  const canResetLocalDemo = !isPasswordSetupOnly && currentUser?.role === 'Admin' && isLocalServiceDemoEnabled();
   const secureAccounts = shouldUseSecureSupabase();
   const defaultAccessiblePath = getDefaultAccessiblePath(currentUser, rolePermissions);
   const isSupabaseMode = backendStatus.mode === 'supabase';
@@ -431,6 +436,21 @@ const Settings: React.FC = () => {
       text: 'Opening the workspace for this browser session...',
     });
     navigate(defaultAccessiblePath, { replace: true });
+  };
+
+  const handleResetLocalDemo = () => {
+    const confirmed = window.confirm(
+      'Reset the local sample workspace? This recreates the UrbanEats, TechNova, and EcoLife demo records without deleting your other local records.',
+    );
+    if (!confirmed) return;
+
+    const result = resetLocalServiceDemo();
+    setLocalDemoMessage({
+      tone: result.ok ? 'success' : 'error',
+      text: result.ok
+        ? 'Sample workspace reset. Open Clients to explore the seeded service plans and cycles.'
+        : result.error || 'The sample workspace could not be reset.',
+    });
   };
 
   return (
@@ -739,6 +759,23 @@ const Settings: React.FC = () => {
           {canManageServiceCatalog(currentUser, rolePermissions) && <ServicePackageManager />}
           {canManageTaskTemplates(currentUser, rolePermissions) && <WorkflowTemplateManager />}
         </div>
+      )}
+
+      {canResetLocalDemo && (
+        <section className={`${cardBase} overflow-hidden xl:col-span-3`} aria-labelledby="local-demo-title">
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="calm-eyebrow">Local development only</p>
+              <h2 id="local-demo-title" className="mt-1 text-lg font-semibold text-slate-900">Sample service workspace</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">UrbanEats, TechNova, and EcoLife demonstrate package modes, frozen plans, cycles, task chains, client-visible activity, add-ons, revisions, and role-specific workbenches. This data stays in this browser.</p>
+            </div>
+            <Button type="button" variant="secondary" onClick={handleResetLocalDemo}>
+              <Database className="h-4 w-4" />
+              Reset sample workspace
+            </Button>
+          </div>
+          {localDemoMessage && <p className={cn('border-t border-line px-5 py-3 text-sm font-medium', localDemoMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-700')} role={localDemoMessage.tone === 'error' ? 'alert' : 'status'}>{localDemoMessage.text}</p>}
+        </section>
       )}
 
       {!isPasswordSetupOnly && (

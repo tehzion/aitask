@@ -304,12 +304,12 @@ const ClientWorkspace = () => {
     );
   };
 
-  const tabs: { id: Tab; label: string }[] = [
+  const tabs: { id: Tab; label: string; compactLabel?: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "plan", label: "Plan" },
     { id: "cycles", label: "Cycles" },
     ...(canManagePlans ? [{ id: "addons" as Tab, label: "Add-ons" }] : []),
-    { id: "activity", label: "Activity / Files" },
+    { id: "activity", label: "Activity / Files", compactLabel: "Activity" },
   ];
 
   return (
@@ -472,7 +472,7 @@ const ClientWorkspace = () => {
                   variant="secondary"
                   onClick={() => {
                     const confirmed = window.confirm(
-                      `Pause the "${activePlan.name}" plan? Invoices stay on their current cycle and future cycles stop generating.`,
+                      `Pause the "${activePlan.name}" plan? The current cycle stays unchanged and future cycles stop generating.`,
                     );
                     if (!confirmed) return;
                     void saveAndCommit(

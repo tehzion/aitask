@@ -319,7 +319,7 @@ const Layout: React.FC = () => {
         </main>
 
         {/* Mobile Bottom Navigation Bar */}
-        <nav aria-label="Mobile navigation" className="fixed bottom-0 left-0 right-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-start justify-around border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_14px_rgba(15,23,42,0.06)] md:hidden">
+        <nav aria-label="Mobile navigation" className="fixed bottom-0 left-0 right-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-start justify-around border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_14px_rgb(7_22_18/0.10)] md:hidden">
           {mobileNavItems.map(item => {
             const Icon = item.icon;
             return (
@@ -328,7 +328,7 @@ const Layout: React.FC = () => {
                 to={item.path}
                 className={({ isActive }) => cn(
                   "flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
-                  isActive && "font-semibold text-blue-700"
+                  isActive && "font-semibold text-accent"
                 )}
               >
                 <Icon className="mb-0.5 h-5 w-5" />
@@ -343,13 +343,13 @@ const Layout: React.FC = () => {
             aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
             className={cn(
               "relative flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
-              isMobileNotifOpen && "font-semibold text-blue-700"
+              isMobileNotifOpen && "font-semibold text-accent"
             )}
           >
             <div className="relative">
               <Bell className="w-5 h-5 mb-0.5" />
               {unreadCount > 0 && (
-                <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white bg-blue-600 text-[8px] font-black text-white">
+                <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-surface bg-accent text-[8px] font-black text-white">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
@@ -366,14 +366,14 @@ const Layout: React.FC = () => {
             className="fixed inset-0 z-50 bg-slate-950/45 animate-fade-in md:hidden"
             onClick={() => setIsMobileNotifOpen(false)}
           />
-          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[75dvh] flex-col rounded-t-lg border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_28px_rgba(15,23,42,0.16)] animate-slide-up md:hidden">
+          <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[75dvh] flex-col rounded-t-panel border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_28px_rgb(7_22_18/0.18)] animate-slide-up md:hidden">
             {/* Header */}
-            <div className="flex shrink-0 items-center justify-between rounded-t-lg border-b border-slate-200 bg-slate-50/80 px-5 py-4">
+            <div className="flex shrink-0 items-center justify-between rounded-t-panel border-b border-line bg-inset/80 px-5 py-4">
               <div className="flex items-center gap-2">
-                <Bell className="h-5 w-5 text-blue-600" />
+                <Bell className="h-5 w-5 text-accent" />
                 <h3 className="text-base font-bold text-slate-900">Notifications</h3>
                 {unreadCount > 0 && (
-                  <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                  <span className="rounded-tag bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">
                     {unreadCount} new
                   </span>
                 )}
@@ -400,10 +400,7 @@ const Layout: React.FC = () => {
                       void notificationReadActions.markRead(notif.id);
                       setIsMobileNotifOpen(false);
                     }}
-                    className={cn(
-                      "rounded-lg border px-4 py-3 flex items-start gap-3 transition-colors",
-                      'border-slate-200 bg-blue-50/35'
-                    )}
+                    className="flex items-start gap-3 rounded-control bg-inset/70 px-4 py-3 transition-colors hover:bg-inset"
                   >
                     <div className={cn("rounded-lg p-2 shrink-0", getBgColor(notif.iconType))}>
                       {getIcon(notif.iconType)}
@@ -419,7 +416,7 @@ const Layout: React.FC = () => {
                         {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}
                       </p>
                     </div>
-                    <div className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500"></div>
+                    <div className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-accent" aria-hidden="true"></div>
                   </Link>
                 ))
               ) : (
@@ -430,11 +427,11 @@ const Layout: React.FC = () => {
               )}
             </div>
 
-            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line bg-inset px-4 py-3">
               <Link
                 to="/notifications"
                 onClick={() => setIsMobileNotifOpen(false)}
-                className="rounded-md px-2 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                className="rounded-tag px-2 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent-soft"
               >
                 View all notifications
               </Link>
@@ -443,7 +440,7 @@ const Layout: React.FC = () => {
                   type="button"
                   onClick={() => void notificationReadActions.markAllRead()}
                   disabled={notificationReadActions.isUpdating}
-                  className="rounded-md px-2 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-white hover:text-blue-700 disabled:cursor-wait disabled:opacity-60"
+                  className="rounded-tag px-2 py-2 text-sm font-semibold text-muted transition-colors hover:bg-surface hover:text-accent disabled:cursor-wait disabled:opacity-60"
                 >
                   {notificationReadActions.isUpdating ? 'Saving...' : 'Mark all read'}
                 </button>

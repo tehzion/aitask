@@ -598,12 +598,12 @@ begin
           jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(price.data,'{id}',to_jsonb(v_price_id)),'{parentType}','"service_cycle"'::jsonb),'{parentId}',to_jsonb(v_cycle_id)),'{createdAt}',to_jsonb(now()::text)),'{updatedAt}',to_jsonb(now()::text))
         from public.aitask_entities price where price.workspace_id=p_workspace_id and price.entity_type='service_pricing_snapshot' and price.data->>'parentId'=v_plan.entity_id limit 1;
         for v_item in select value from jsonb_array_elements(coalesce(v_plan.data->'serviceItems','[]'::jsonb)) loop
-          for v_sequence in 1..greatest(0,least(500,coalesce((v_item->>'quantity')::integer,0))) loop
+          for v_slot in 1..greatest(0,least(500,coalesce((v_item->>'quantity')::integer,0))) loop
             v_deliverable_id:='DL-'||replace(gen_random_uuid()::text,'-','');
             insert into public.aitask_entities(workspace_id,entity_type,entity_id,parent_id,data)
             values(p_workspace_id,'deliverable',v_deliverable_id,v_cycle_id,jsonb_build_object(
               'id',v_deliverable_id,'clientId',v_plan.client_id,'clientName',v_plan.data->>'clientName','planId',v_plan.entity_id,
-              'cycleId',v_cycle_id,'serviceItemId',v_item->>'id','sequence',v_sequence,'title',(v_item->>'name')||' '||v_sequence,
+              'cycleId',v_cycle_id,'serviceItemId',v_item->>'id','sequence',v_slot,'title',(v_item->>'name')||' '||v_slot,
               'status','Planned','taskIds','[]'::jsonb,'attachments','[]'::jsonb,'createdAt',now(),'updatedAt',now()));
           end loop;
         end loop;

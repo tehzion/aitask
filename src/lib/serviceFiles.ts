@@ -1,5 +1,6 @@
 import type { AttachmentRef } from '../types';
 import { shouldUseSecureSupabase, supabase } from './supabaseClient';
+import { getLocalServiceDemoFile } from '../mock/localServiceDemo';
 
 export const SERVICE_FILES_BUCKET = 'client-service-files';
 export const SERVICE_FILE_MAX_BYTES = 100 * 1024 * 1024;
@@ -39,7 +40,17 @@ export const uploadServiceFile = async (input: {
 };
 
 export const downloadServiceFile = async (attachment: AttachmentRef) => {
-  if (!shouldUseSecureSupabase()) return { ok: false as const, error: 'Private file downloads require the Supabase backend.' };
+  if (!shouldUseSecureSupabase()) {
+    const localDemoFile = getLocalServiceDemoFile(attachment);
+    if (!localDemoFile) return { ok: false as const, error: 'Private file downloads require the Supabase backend.' };
+    const url = URL.createObjectURL(new Blob([localDemoFile.content], { type: localDemoFile.mimeType }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = attachment.fileName;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    return { ok: true as const };
+  }
   const { data, error } = await supabase.storage.from(attachment.bucket).download(attachment.path);
   if (error || !data) return { ok: false as const, error: error?.message || 'The file could not be downloaded.' };
   const url = URL.createObjectURL(data);

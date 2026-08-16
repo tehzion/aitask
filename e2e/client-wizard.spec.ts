@@ -40,13 +40,14 @@ test('keyboard completes standard, duplicated and fully custom client creation',
 
   const cases = [
     { name: 'Keyboard Standard Co', mode: 'Use standard package', origin: 'standard', quantity: 1 },
-    { name: 'Keyboard Duplicate Co', mode: 'Duplicate as custom', origin: 'customized', quantity: 2 },
+    { name: 'Keyboard Duplicate Co', mode: 'Duplicate as Custom Plan', origin: 'customized', quantity: 2 },
     { name: 'Keyboard Custom Co', mode: 'Fully custom', origin: 'custom', quantity: 3 },
   ] as const;
 
   for (const [index, item] of cases.entries()) {
     await page.goto('/clients');
     const newClient = page.getByRole('button', { name: 'New client' });
+    await expect(newClient).toBeVisible();
     await newClient.focus();
     await page.keyboard.press('Enter');
     const dialog = page.getByRole('dialog', { name: 'Create client and service plan' });

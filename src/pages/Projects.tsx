@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useStore } from '../store';
-import { FolderKanban, Users, CheckCircle2, Clock, ArrowRight, Pencil, Trash2, Plus } from 'lucide-react';
+import { FolderKanban, Users, ArrowRight, Pencil, Trash2, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import CreateProjectModal from '../components/CreateProjectModal';
 import { Link } from 'react-router-dom';
-import { Badge, Button, PageHeader } from '../components/ui';
-import { cardBase, pageShell } from '../components/uiTokens';
+import { Badge, Button, EmptyState, PageHeader, ProgressBar } from '../components/ui';
+import { pageShell, tableShell } from '../components/uiTokens';
 import { canDeleteProject, canEditProject, canManageProjects, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { isTaskOpen } from '../lib/taskReporting';
 import { Project } from '../types';
@@ -78,144 +78,105 @@ const Projects: React.FC = () => {
         ) : null}
       />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+      <section className={`${tableShell} divide-y divide-line/70`} aria-label="Companies">
+        <div className={clsx(
+          'hidden items-center gap-4 border-b border-line/80 bg-inset/70 px-5 py-3 text-xs font-semibold text-muted xl:grid',
+          isClientUser ? 'xl:grid-cols-[minmax(15rem,1.45fr)_minmax(12rem,1fr)_auto]' : 'xl:grid-cols-[minmax(15rem,1.45fr)_minmax(12rem,1fr)_minmax(11rem,.8fr)_auto]'
+        )}>
+          <span>Company</span>
+          <span>Delivery progress</span>
+          {!isClientUser && <span>Assigned team</span>}
+          <span className="text-right">Actions</span>
+        </div>
         {projects.map(project => {
           const stats = getProjectStats(project.id);
-          const progress = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
           const canEdit = canEditProject(currentUser, project, rolePermissions);
           const canDelete = canDeleteProject(currentUser, project, rolePermissions);
           const hasLegacyProjectName = project.projectName && project.projectName !== project.clientName;
 
           return (
-            <div key={project.id} className={`${cardBase} flex flex-col overflow-hidden transition-colors hover:border-slate-300`}>
-              <div className="border-b border-slate-200/80 p-5">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
-                      <FolderKanban className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-semibold leading-tight text-slate-900">{project.clientName}</h2>
-                      <p className="text-sm font-medium text-slate-500">{hasLegacyProjectName ? project.projectName : 'Company'}</p>
-                    </div>
+            <article
+              key={project.id}
+              className={clsx(
+                'grid gap-5 px-4 py-5 transition-colors duration-160 hover:bg-inset/60 sm:px-5 xl:items-center',
+                isClientUser ? 'xl:grid-cols-[minmax(15rem,1.45fr)_minmax(12rem,1fr)_auto]' : 'xl:grid-cols-[minmax(15rem,1.45fr)_minmax(12rem,1fr)_minmax(11rem,.8fr)_auto]'
+              )}
+            >
+              <div className="min-w-0">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
+                    <FolderKanban className="h-5 w-5" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    {(canEdit || canDelete) && (
-                      <div className="flex items-center gap-1">
-                        {canEdit && (
-                          <button
-                            type="button"
-                            onClick={() => openEditCompany(project)}
-                            className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                            title="Edit company"
-                            aria-label={`Edit ${project.clientName}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteProject(project)}
-                            className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                            title="Delete company"
-                            aria-label={`Delete ${project.clientName}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    )}
+                  <div className="min-w-0">
+                    <h2 className="truncate text-base font-semibold text-ink">{project.clientName}</h2>
+                    <p className="mt-0.5 text-sm text-muted">{hasLegacyProjectName ? project.projectName : 'Company'}</p>
                   </div>
                 </div>
-
-                <div className="flex flex-wrap gap-2 mb-4">
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {project.services.map(service => (
-                    <Badge key={service} tone="slate" className="text-[10px]">
-                      {service}
-                    </Badge>
+                    <Badge key={service} tone="slate" className="text-[10px]">{service}</Badge>
                   ))}
                 </div>
-
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500 font-medium">Task Progress</span>
-                    <span className="font-bold text-slate-800">{progress}%</span>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                    <div
-                      className={clsx("h-2.5 rounded-full transition-[width] duration-300", progress === 100 ? "bg-emerald-500" : "bg-blue-600")}
-                      style={{ width: `${progress}%` }}
-                    ></div>
-                  </div>
-                </div>
               </div>
 
-              <div className="grid flex-1 grid-cols-2 gap-4 bg-slate-50 p-5">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <FolderKanban className="h-4 w-4 text-blue-500" />
-                    <span className="text-sm"><strong className="text-slate-900">{stats.total}</strong> Total tasks</span>
+              <div className="min-w-0">
+                <ProgressBar value={stats.completed} max={Math.max(stats.total, 1)} label="Task progress" />
+                <p className="mt-2 text-xs text-muted"><span className="calm-number font-semibold text-ink">{stats.completed}</span> of {stats.total} complete · {stats.pending} open</p>
+              </div>
+
+              {!isClientUser && (
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm text-muted">
+                    <Users className="h-4 w-4 shrink-0 text-accent" />
+                    <span className="font-medium text-ink">Assigned team</span>
                   </div>
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    <span className="text-sm"><strong className="text-slate-900">{stats.completed}</strong> Completed</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <Clock className="w-4 h-4 text-amber-500" />
-                    <span className="text-sm"><strong className="text-slate-900">{stats.pending}</strong> Pending</span>
-                  </div>
-                </div>
-                
-                {!isClientUser && (
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase text-slate-500">Assigned team</p>
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <Users className="w-4 h-4 text-blue-500" />
-                    <div className="flex -space-x-2">
-                      {stats.teamMembers.slice(0, 3).map((user) => (
-                        user ? (
-                          <div 
-                            key={user.id} 
-                            className="w-6 h-6 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-700 overflow-hidden shrink-0 z-10"
-                            title={user.name}
-                          >
-                            {user.avatar ? <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" /> : user.name.charAt(0)}
-                          </div>
-                        ) : null
-                      ))}
-                      {stats.teamMembers.length > 3 && (
-                        <div className="w-6 h-6 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-500 shrink-0 z-0">
-                          +{stats.teamMembers.length - 3}
+                  {stats.teamMembers.length > 0 ? (
+                    <div className="mt-2 flex items-center gap-1.5" aria-label={`Assigned team for ${project.clientName}`}>
+                      {stats.teamMembers.slice(0, 3).map(user => user ? (
+                        <div key={user.id} className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-control bg-inset text-[10px] font-semibold text-ink ring-1 ring-line" title={user.name}>
+                          {user.avatar ? <img src={user.avatar} alt={user.name} className="h-full w-full object-cover" /> : user.name.charAt(0)}
                         </div>
-                      )}
-                      {stats.teamMembers.length === 0 && (
-                        <span className="ml-2 text-xs text-slate-500">No assignees yet</span>
-                      )}
+                      ) : null)}
+                      {stats.teamMembers.length > 3 && <span className="calm-number ml-1 text-xs font-medium text-muted">+{stats.teamMembers.length - 3}</span>}
                     </div>
-                  </div>
+                  ) : <p className="mt-2 text-xs text-muted">No assignees yet</p>}
                 </div>
-                )}
-              </div>
+              )}
 
-              <div className="border-t border-slate-200 p-4 bg-white flex justify-center">
-                <Link to={`/tasks?projectId=${encodeURIComponent(project.id)}`} className="text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-1 transition-colors group">
-                  View Tasks <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              <div className="flex flex-wrap items-center gap-1.5 xl:justify-end">
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => openEditCompany(project)}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                    title="Edit company"
+                    aria-label={`Edit ${project.clientName}`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteProject(project)}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                    title="Delete company"
+                    aria-label={`Delete ${project.clientName}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+                <Link to={`/tasks?projectId=${encodeURIComponent(project.id)}`} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control px-3 text-sm font-semibold text-accent transition-colors hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+                  View Tasks <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
-            </div>
+            </article>
           );
         })}
         {projects.length === 0 && (
-          <div className={clsx(cardBase, 'flex flex-col items-center justify-center border-dashed px-6 py-14 text-center md:col-span-2 2xl:col-span-3')}>
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-              <FolderKanban className="h-5 w-5" />
-            </div>
-            <h2 className="mt-4 text-base font-semibold text-slate-900">No companies yet</h2>
-            <p className="mt-1 max-w-md text-sm leading-6 text-slate-500">Companies will appear here when they are created or linked to visible task work.</p>
-          </div>
+          <EmptyState title="No companies yet" description="Companies will appear here when they are created or linked to visible task work." className="m-4" />
         )}
-      </div>
+      </section>
       
       <CreateProjectModal isOpen={isModalOpen} project={editingProject} onClose={closeCompanyModal} />
     </div>

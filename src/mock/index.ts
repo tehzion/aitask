@@ -1,6 +1,7 @@
 import { User, Project, Task } from '../types';
 import { addDays, subDays, format } from 'date-fns';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
+import { LOCAL_SERVICE_DEMO_USER_IDS } from './localServiceDemo';
 
 const today = new Date();
 
@@ -11,6 +12,8 @@ export const mockUsers: User[] = [
   // Demos
   { id: 'u-admin', name: 'Admin Demo', password: DEFAULT_USER_PASSWORD, role: 'Admin', departments: ['Operation'], department: 'Operation', avatar: 'https://i.pravatar.cc/150?u=AdminDemo' },
   { id: 'u-staff-demo-local', name: 'Staff Demo', password: DEFAULT_USER_PASSWORD, role: 'Staff', departments: ['Designer'], department: 'Designer', avatar: 'https://i.pravatar.cc/150?u=StaffDemo' },
+  { id: LOCAL_SERVICE_DEMO_USER_IDS.operation, authUserId: 'local-demo-operation', name: 'Operation Demo', password: DEFAULT_USER_PASSWORD, role: 'Staff', departments: ['Operation'], department: 'Operation', workerType: 'employee', avatar: 'https://i.pravatar.cc/150?u=OperationDemo' },
+  { id: LOCAL_SERVICE_DEMO_USER_IDS.account, authUserId: 'local-demo-account', name: 'Account Demo', password: DEFAULT_USER_PASSWORD, role: 'Staff', departments: ['Account & Finance'], department: 'Account & Finance', workerType: 'employee', avatar: 'https://i.pravatar.cc/150?u=AccountDemo' },
   { id: 'u-client-urban', name: 'UrbanEats Client Demo', password: DEFAULT_USER_PASSWORD, role: 'Client', departments: ['Client'], department: 'Client', companyName: 'UrbanEats', avatar: 'https://i.pravatar.cc/150?u=UrbanEatsClient' },
 ];
 

@@ -395,6 +395,7 @@ const Tasks: React.FC = () => {
     canEditTask(task) ? (
       <div className="relative inline-block">
         <select
+          aria-label={`Change status for ${task.title}`}
           className={`text-xs pl-2.5 pr-6 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none ${getStatusColor(task.status)}`}
           value={task.status}
           disabled={backend.isSaving}
@@ -844,9 +845,8 @@ const Tasks: React.FC = () => {
                   const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
 
                   return (
-                    <button
+                    <article
                       key={task.id}
-                      onClick={() => setSelectedTask(task)}
                       className={cn(
                         "relative w-full border-l-4 p-4 text-left transition-colors hover:bg-slate-50",
                         isOverdue
@@ -854,14 +854,20 @@ const Tasks: React.FC = () => {
                           : "border-l-transparent bg-white"
                       )}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className={cn("font-semibold leading-5", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
-                          <div className="text-xs text-slate-500 mt-1 leading-5">{task.id} - {task.clientName} - {task.projectName || 'Independent task'}</div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTask(task)}
+                        className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                        aria-label={`View task ${task.title}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className={cn("font-semibold leading-5", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
+                            <div className="text-xs text-slate-500 mt-1 leading-5">{task.id} - {task.clientName} - {task.projectName || 'Independent task'}</div>
+                          </div>
+	                          {!isClientUser && <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>}
                         </div>
-	                        {!isClientUser && <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>}
-                      </div>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
                         <span
                           className={cn("inline-flex items-center gap-1", isOverdue ? "text-red-700 font-bold" : "text-slate-600")}
                           title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
@@ -871,29 +877,30 @@ const Tasks: React.FC = () => {
                         </span>
                         <span className="truncate text-right">{getUserName(task.assignedTo)}</span>
 	                        {!isClientUser && <span>{task.department}</span>}
-	                        <span className="truncate text-right">{task.serviceType}</span>
-                      </div>
-                      {isOverdue && (
-                        <div className="mt-2 text-[10px] text-red-500 font-extrabold flex items-center gap-1.5">
-                          <span className="h-2 w-2 rounded-full bg-red-500" />
-                          Overdue
+	                          <span className="truncate text-right">{task.serviceType}</span>
                         </div>
-                      )}
-	                      <div className="mt-3 flex items-center justify-between gap-3">
-                        <div onClick={(e) => e.stopPropagation()}>{renderStatusControl(task)}</div>
+                        {isOverdue && (
+                          <div className="mt-2 text-[10px] text-red-500 font-extrabold flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-red-500" />
+                            Overdue
+                          </div>
+                        )}
+                        {isClientUser && (
+                          <div className="mt-3 border-t border-slate-100 pt-3">
+                            <span className="text-sm font-semibold text-blue-700">{clientTaskAction(task)}</span>
+                          </div>
+                        )}
+                      </button>
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <div>{renderStatusControl(task)}</div>
                         <div className="flex items-center gap-2">
                           <div className="w-20 bg-slate-200 rounded-full h-2 overflow-hidden">
                             <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
-	                      </div>
+                          </div>
                           <span className="text-xs font-semibold text-slate-700">{task.completionPercentage}%</span>
                         </div>
                       </div>
-                      {isClientUser && (
-                        <div className="mt-3 border-t border-slate-100 pt-3">
-                          <span className="text-sm font-semibold text-blue-700">{clientTaskAction(task)}</span>
-                        </div>
-                      )}
-                    </button>
+                    </article>
                   );
                 })
               )}

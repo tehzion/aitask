@@ -8,6 +8,7 @@ import { getPasswordSetupMode } from '../lib/authRecovery';
 import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
+import { LanguageSwitcher } from '../components/I18nProvider';
 
 const AccountPassword: React.FC = () => {
   const navigate = useNavigate();
@@ -69,7 +70,8 @@ const AccountPassword: React.FC = () => {
   const unavailable = !isChecking && !hasValidSession;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10 sm:px-6">
+    <main className="relative flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10 sm:px-6">
+      <LanguageSwitcher compact className="fixed right-4 top-4 z-10 rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm hover:bg-slate-100 hover:text-slate-950 focus:ring-blue-500" />
       <section className="w-full max-w-md border border-slate-200 bg-white px-5 py-8 shadow-[0_8px_30px_rgba(15,23,42,0.08)] sm:rounded-lg sm:px-10" aria-labelledby="password-title">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-blue-600 text-white">
           {isComplete ? <CheckCircle2 className="h-6 w-6" /> : <KeyRound className="h-6 w-6" />}

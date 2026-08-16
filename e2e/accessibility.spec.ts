@@ -31,7 +31,7 @@ test('day/night mode and keyboard shortcuts remain accessible', async ({ page })
   await page.keyboard.press('Shift+D');
   await expect(root).toHaveClass(/dark/);
   await expect(page.getByRole('button', { name: 'Switch to day mode' })).toHaveAttribute('aria-pressed', 'true');
-  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(11, 17, 21)');
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(16, 22, 24)');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('aitask-color-theme'))).toBe('dark');
   await page.waitForTimeout(250);
   await expectNoAxeViolations(page, 'Admin dashboard in night mode');
@@ -80,7 +80,7 @@ test('day/night mode and keyboard shortcuts remain accessible', async ({ page })
   await expect(navigation).toHaveAttribute('aria-hidden', 'false');
   await expect(navigation.getByRole('link', { name: 'Dashboard' })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
-  await expect(navigation.getByRole('button', { name: 'Logout' })).toBeFocused();
+  await expect(navigation.getByRole('link', { name: 'Settings' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(navigation.getByRole('link', { name: 'Dashboard' })).toBeFocused();
   await page.keyboard.press('Escape');

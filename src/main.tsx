@@ -4,6 +4,7 @@ import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 import App from './App'
 import ErrorBoundary from './components/ErrorBoundary'
+import { I18nProvider } from './components/I18nProvider'
 import { registerPwaUpdates } from './lib/pwaUpdates'
 import { initializeTheme } from './lib/theme'
 import './index.css'
@@ -14,7 +15,9 @@ registerPwaUpdates()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      <I18nProvider>
+        <App />
+      </I18nProvider>
     </ErrorBoundary>
   </StrictMode>,
 )
