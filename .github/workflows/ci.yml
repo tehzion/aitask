@@ -49,6 +49,9 @@ jobs:
       - name: Verify PWA output
         run: pnpm verify:pwa
 
+      - name: PWA install and offline shell
+        run: pnpm test:e2e:pwa
+
       - name: Verify Supabase secure cutover
         run: pnpm verify:supabase
         env:
