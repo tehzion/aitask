@@ -380,7 +380,7 @@ const sanitizeWorkspaceStateForSnapshot = (
   servicePricingSnapshots: state.servicePricingSnapshots || [],
 }) as PersistedWorkspaceState;
 
-const selectPersistedWorkspaceState = sanitizeWorkspaceStateForSnapshot;
+export const selectPersistedWorkspaceState = sanitizeWorkspaceStateForSnapshot;
 
 const makeBackendRuntimeState = (): BackendRuntimeState => {
   const status = getBackendStatus();

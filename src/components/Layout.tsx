@@ -18,6 +18,7 @@ import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { useColorTheme } from '../hooks/useColorTheme';
 import { getNavigationShortcut, isEditableShortcutTarget } from '../lib/keyboard';
 import KeyboardShortcutsDialog from './KeyboardShortcutsDialog';
+import CommandPalette from './CommandPalette';
 
 export interface LayoutOutletContext {
   notificationReadActions: ReturnType<typeof useNotificationReadActions>;
@@ -30,6 +31,7 @@ const Layout: React.FC = () => {
     try { return window.localStorage.getItem('aitask-sidebar-collapsed') === 'true'; } catch { return false; }
   });
   const [isShortcutHelpOpen, setIsShortcutHelpOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [shortcutAnnouncement, setShortcutAnnouncement] = useState('');
   const shortcutPrefixRef = useRef('');
   const shortcutTimerRef = useRef<number | null>(null);
@@ -99,9 +101,15 @@ const Layout: React.FC = () => {
         return;
       }
 
-      if (e.key === '?') {
+      if (e.key === '?' ) {
         e.preventDefault();
         setIsShortcutHelpOpen(true);
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(true);
         return;
       }
 
@@ -462,6 +470,11 @@ const Layout: React.FC = () => {
         isOpen={isShortcutHelpOpen}
         canCreateTask={userCanCreateTasks}
         onClose={() => setIsShortcutHelpOpen(false)}
+      />
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onOpenShortcuts={() => setIsShortcutHelpOpen(true)}
       />
     </div>
   );

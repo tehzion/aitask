@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { SkeletonMetricCard, SkeletonChartCard } from '../components/SkeletonCard';
@@ -7,7 +7,7 @@ import {
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
 import { format, isToday, isThisWeek, isBefore, differenceInDays } from 'date-fns';
-import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon, Plus, FolderKanban } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon, Plus, FolderKanban, UserPlus, Users, FileCheck2, Sparkles, CalendarClock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
@@ -22,7 +22,10 @@ import { getTrackedMonthlyCompletions, isTaskOpen } from '../lib/taskReporting';
 import ClientPortalDashboard from '../components/ClientPortalDashboard';
 import TeamWorkload from '../components/TeamWorkload';
 import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
+import { useI18n } from '../components/I18nProvider';
 import { isLocalServiceDemoEnabled, LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID } from '../mock/localServiceDemo';
+
+type BossTab = 'overview' | 'pulse' | 'workload';
 
 interface StatCardProps {
   title: string;
@@ -39,7 +42,7 @@ const StatCard = ({ title, value, icon: Icon, tone, to }: StatCardProps) => (
 );
 
 const Dashboard: React.FC = () => {
-  const { projects, tasks: allTasks, users, currentUser, rolePermissions, backend, setCreateTaskModalOpen, hasLocalServiceDemo } = useStore(useShallow(state => ({
+  const { projects, tasks: allTasks, users, currentUser, rolePermissions, backend, setCreateTaskModalOpen, hasLocalServiceDemo, registrations, clientPlans, serviceCycles } = useStore(useShallow(state => ({
     projects: state.projects,
     tasks: state.tasks,
     users: state.users,
@@ -48,7 +51,12 @@ const Dashboard: React.FC = () => {
     backend: state.backend,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
     hasLocalServiceDemo: state.clients.some(client => client.id === LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID),
+    registrations: state.registrations,
+    clientPlans: state.clientPlans,
+    serviceCycles: state.serviceCycles,
   })));
+  const { t } = useI18n();
+  const [bossTab, setBossTab] = useState<BossTab>('overview');
 
   const tasks = useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions),
@@ -80,6 +88,42 @@ const Dashboard: React.FC = () => {
   const showBossOperations = isBossKoo(currentUser);
   const showStaffOperations = currentUser?.role === 'Staff';
   const showClientPortal = currentUser?.role === 'Client';
+
+  const bossBriefing = useMemo(() => {
+    if (!showBossOperations) return null;
+    const today = new Date();
+    const pendingRegs = (registrations || []).filter(reg => reg.status === 'Pending');
+    const overdue = tasks.filter(task => {
+      const dueDate = parseOptionalDate(task.dueDate);
+      return Boolean(isTaskOpen(task) && dueDate && isBefore(dueDate, today) && !isToday(dueDate));
+    });
+    const waitingApproval = tasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval');
+    const renewing = (clientPlans || []).filter(plan => {
+      if (plan.status !== 'Active' || !plan.contractEndDate) return false;
+      const days = differenceInDays(parseOptionalDate(plan.contractEndDate) || today, today);
+      return days >= 0 && days <= 30;
+    });
+    return {
+      pendingRegs,
+      overdueCount: overdue.length,
+      waitingCount: waitingApproval.length,
+      renewals: renewing.sort((a, b) => (a.contractEndDate || '').localeCompare(b.contractEndDate || '')),
+    };
+  }, [clientPlans, registrations, showBossOperations, tasks]);
+
+  const onboardingSteps = useMemo(() => {
+    if (!showBossOperations) return [];
+    const passwordDone = !currentUser?.mustResetPassword;
+    const membersDone = users.filter(user => user.id !== currentUser?.id && !user.directoryOnly).length > 0;
+    const tasksDone = tasks.length > 0;
+    const clientsDone = (clientPlans || []).length > 0 || serviceCycles.length > 0 || hasLocalServiceDemo;
+    return [
+      { key: 'password', label: t('Set your own password'), done: passwordDone, to: '/settings' },
+      { key: 'members', label: t('Add your first member'), done: membersDone, to: '/approvals' },
+      { key: 'tasks', label: t('Create the first task'), done: tasksDone, to: '/tasks' },
+      { key: 'clients', label: t('Create the first client plan'), done: clientsDone, to: '/clients' },
+    ].filter(step => !step.done);
+  }, [clientPlans, currentUser, hasLocalServiceDemo, serviceCycles.length, showBossOperations, t, tasks.length, users]);
   const openCreateTaskFor = React.useCallback((member: User) => {
     useStore.setState({ createTaskInitialAssignee: member.id });
     setCreateTaskModalOpen(true);
@@ -308,32 +352,143 @@ const Dashboard: React.FC = () => {
         <ClientPortalDashboard tasks={tasks} users={users} />
       ) : (
       <div className="flex flex-col gap-6">
-        <div className="order-1">
-          <ServiceRoleDashboard />
-        </div>
-        {showBossOperations ? (
-          <div className="order-2">
-            <OperationsGlance tasks={tasks} users={users} scope="agency" />
-          </div>
-        ) : showStaffOperations ? (
-          <div className="order-2">
-            <OperationsGlance tasks={staffAssignedTasks} users={users} scope="staff" />
-          </div>
-        ) : (
-          <section className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3', prioritizePersonalWork ? 'order-2' : 'order-1')} aria-label="Workspace metrics">
-            <StatCard title="Active Companies" value={stats.activeProjects} icon={LayoutList} tone="blue" to="/projects" />
-            <StatCard title="Pending Tasks" value={stats.pendingTasks} icon={Clock} tone="amber" to="/tasks" />
-            <StatCard title="Completed Tasks" value={stats.completedTasks} icon={CheckCircle2} tone="emerald" to="/tasks" />
-            <StatCard title="Overdue Tasks" value={stats.overdueTasks} icon={AlertCircle} tone="red" to="/tasks" />
-            <StatCard title="Due Today" value={stats.dueTodayTasks} icon={Calendar} tone="blue" to="/calendar" />
-            <StatCard title="Due This Week" value={stats.dueThisWeekTasks} icon={CalendarDays} tone="slate" to="/calendar" />
+        {showBossOperations && onboardingSteps.length > 0 && (
+          <section className={cn(cardBase, 'p-5')} aria-labelledby="onboarding-checklist-title">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-accent" />
+              <h2 id="onboarding-checklist-title" className="text-base font-semibold text-ink">{t('Workspace setup')}</h2>
+            </div>
+            <p className="mt-1 text-sm text-muted">{t('A few steps to get the workspace moving.')}</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {onboardingSteps.map(step => (
+                <Link key={step.key} to={step.to} className="group flex min-h-11 items-center justify-between gap-3 rounded-control border border-line bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-inset">
+                  {step.label}
+                  <ArrowRight className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              ))}
+            </div>
           </section>
         )}
 
-        {showBossOperations && (
-          <div className="order-2">
-            <TeamWorkload tasks={tasks} users={users} onCreateTaskFor={openCreateTaskFor} />
-          </div>
+        {showBossOperations ? (
+          <>
+            <div className="inline-flex w-fit rounded-panel border border-line bg-surface p-1 shadow-sm" role="tablist" aria-label={t('Boss dashboard views')}>
+              {([['overview', t('Overview'), LayoutList], ['pulse', t('Agency pulse'), AlertCircle], ['workload', t('Team workload'), Users]] as const).map(([key, label, Icon]) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={bossTab === key}
+                  onClick={() => setBossTab(key)}
+                  className={cn(
+                    'inline-flex min-h-9 items-center gap-2 rounded-control px-3 text-sm font-semibold transition-colors',
+                    bossTab === key ? 'bg-accent text-white' : 'text-muted hover:bg-inset hover:text-ink',
+                  )}
+                >
+                  <Icon className="h-4 w-4" />{label}
+                </button>
+              ))}
+            </div>
+
+            {bossTab === 'overview' && (
+              <div className="space-y-6">
+                {bossBriefing && bossBriefing.pendingRegs.length > 0 && (
+                  <Link to="/approvals" className={cn(cardBase, 'flex flex-wrap items-center gap-4 p-5 transition-colors hover:bg-inset/50')}>
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent"><UserPlus className="h-5 w-5" /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold text-ink">{t('Registrations waiting for approval')}</span>
+                      <span className="mt-0.5 block text-sm text-muted">
+                        {bossBriefing.pendingRegs.length} {t('pending registrations need your review.')}
+                      </span>
+                    </span>
+                    <span className="inline-flex min-h-9 items-center rounded-control bg-accent px-3 text-sm font-semibold text-white">{t('Review')}</span>
+                  </Link>
+                )}
+
+                {bossBriefing && (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Link to="/tasks" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', bossBriefing.overdueCount > 0 ? 'bg-red-50 text-red-700' : 'bg-inset text-muted')}><AlertCircle className="h-4 w-4" /></span>
+                      <span className="min-w-0">
+                        <span className="calm-number block text-xl font-semibold text-ink">{bossBriefing.overdueCount}</span>
+                        <span className="block truncate text-xs text-muted">{t('Overdue tasks')}</span>
+                      </span>
+                    </Link>
+                    <Link to="/tasks" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', bossBriefing.waitingCount > 0 ? 'bg-amber-50 text-amber-700' : 'bg-inset text-muted')}><FileCheck2 className="h-4 w-4" /></span>
+                      <span className="min-w-0">
+                        <span className="calm-number block text-xl font-semibold text-ink">{bossBriefing.waitingCount}</span>
+                        <span className="block truncate text-xs text-muted">{t('Waiting approval')}</span>
+                      </span>
+                    </Link>
+                    <Link to="/clients" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', bossBriefing.renewals.length > 0 ? 'bg-blue-50 text-blue-700' : 'bg-inset text-muted')}><CalendarClock className="h-4 w-4" /></span>
+                      <span className="min-w-0">
+                        <span className="calm-number block text-xl font-semibold text-ink">{bossBriefing.renewals.length}</span>
+                        <span className="block truncate text-xs text-muted">{t('Renewals in 30 days')}</span>
+                      </span>
+                    </Link>
+                  </div>
+                )}
+
+                <ServiceRoleDashboard />
+
+                {bossBriefing && bossBriefing.renewals.length > 0 && (
+                  <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="renewals-title">
+                    <div className="border-b border-line/70 px-5 py-4">
+                      <h2 id="renewals-title" className="text-base font-semibold text-ink">{t('Contract renewals')}</h2>
+                      <p className="mt-1 text-sm text-muted">{t('Active plans ending within 30 days.')}</p>
+                    </div>
+                    <div className="divide-y divide-line/60">
+                      {bossBriefing.renewals.slice(0, 6).map(plan => {
+                        const days = differenceInDays(parseOptionalDate(plan.contractEndDate) || new Date(), new Date());
+                        return (
+                          <div key={plan.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                            <Link to={`/clients/${encodeURIComponent(plan.clientId)}`} className="min-w-0 truncate text-sm font-medium text-ink hover:text-accent">
+                              {plan.clientName} · {plan.name}
+                            </Link>
+                            <span className={cn('shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold', days <= 7 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700')}>
+                              {days === 0 ? t('Ends today') : `${days} ${t('days left')}`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+              </div>
+            )}
+
+            {bossTab === 'pulse' && (
+              <div className="space-y-6">
+                <OperationsGlance tasks={tasks} users={users} scope="agency" />
+              </div>
+            )}
+
+            {bossTab === 'workload' && (
+              <TeamWorkload tasks={tasks} users={users} onCreateTaskFor={openCreateTaskFor} />
+            )}
+          </>
+        ) : (
+          <>
+            <div className="order-1">
+              <ServiceRoleDashboard />
+            </div>
+            {showStaffOperations ? (
+              <div className="order-2">
+                <OperationsGlance tasks={staffAssignedTasks} users={users} scope="staff" />
+              </div>
+            ) : (
+              <section className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3', prioritizePersonalWork ? 'order-2' : 'order-1')} aria-label="Workspace metrics">
+                <StatCard title="Active Companies" value={stats.activeProjects} icon={LayoutList} tone="blue" to="/projects" />
+                <StatCard title="Pending Tasks" value={stats.pendingTasks} icon={Clock} tone="amber" to="/tasks" />
+                <StatCard title="Completed Tasks" value={stats.completedTasks} icon={CheckCircle2} tone="emerald" to="/tasks" />
+                <StatCard title="Overdue Tasks" value={stats.overdueTasks} icon={AlertCircle} tone="red" to="/tasks" />
+                <StatCard title="Due Today" value={stats.dueTodayTasks} icon={Calendar} tone="blue" to="/calendar" />
+                <StatCard title="Due This Week" value={stats.dueThisWeekTasks} icon={CalendarDays} tone="slate" to="/calendar" />
+              </section>
+            )}
+          </>
         )}
 
         {hasTaskData && (

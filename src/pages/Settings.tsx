@@ -1,7 +1,7 @@
 import React from 'react';
-import { AlertTriangle, ArrowRight, Bell, CheckCircle2, Cloud, Database, Lock, PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserCircle, Volume2, VolumeX, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Bell, CheckCircle2, Cloud, Database, Download, Lock, PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserCircle, Volume2, VolumeX, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../store';
+import { useStore, selectPersistedWorkspaceState } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { useToastStore } from '../store/useToastStore';
 import { useI18n } from '../components/I18nProvider';
@@ -996,6 +996,24 @@ const Settings: React.FC = () => {
                   Check now
                 </Button>
               )}
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const snapshot = selectPersistedWorkspaceState(useStore.getState());
+                  const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const anchor = document.createElement('a');
+                  anchor.href = url;
+                  anchor.download = `aitask-workspace-${new Date().toISOString().slice(0, 10)}.json`;
+                  anchor.click();
+                  URL.revokeObjectURL(url);
+                  useToastStore.getState().addToast('Workspace exported as JSON', 'success');
+                }}
+                className="min-h-9 px-3 py-1.5 text-xs"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export workspace
+              </Button>
               <Badge tone={backendStatus.ready ? 'emerald' : 'amber'}>
                 {backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
               </Badge>

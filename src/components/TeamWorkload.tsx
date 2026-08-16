@@ -142,6 +142,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
   const [query, setQuery] = useState('');
   const [department, setDepartment] = useState<Department | 'All'>('All');
   const [sort, setSort] = useState<TeamSort>('attention');
+  const [view, setView] = useState<'person' | 'department'>('person');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const titleId = React.useId();
   const descriptionId = React.useId();
@@ -173,6 +174,37 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
     });
   }, [department, query, rawSummaries, sort]);
 
+  const departmentSummaries = useMemo(() => {
+    if (view !== 'department') return [];
+    const byDepartment = new Map<Department, typeof summaries[number] & { members: number }>();
+    summaries.forEach(summary => {
+      const primary = getMemberDepartments(summary.member)[0];
+      if (!primary) return;
+      const existing = byDepartment.get(primary);
+      if (!existing) {
+        byDepartment.set(primary, {
+          ...summary,
+          member: { ...summary.member, name: primary },
+          members: 1,
+        });
+        return;
+      }
+      existing.open += summary.open;
+      existing.overdue += summary.overdue;
+      existing.dueToday += summary.dueToday;
+      existing.dueThisWeek += summary.dueThisWeek;
+      existing.waitingApproval += summary.waitingApproval;
+      existing.completedThisWeek += summary.completedThisWeek;
+      existing.periodOpen += summary.periodOpen;
+      existing.members += 1;
+    });
+    return Array.from(byDepartment.values()).sort((left, right) => (
+      right.overdue - left.overdue
+      || right.periodOpen - left.periodOpen
+      || left.member.name.localeCompare(right.member.name)
+    ));
+  }, [summaries, view]);
+
   const selectedSummary = useMemo(
     () => rawSummaries.find(summary => summary.member.id === selectedMemberId),
     [rawSummaries, selectedMemberId],
@@ -187,12 +219,30 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
 
   const openMember = (memberId: string) => setSelectedMemberId(memberId);
 
+  const visibleSummaries = view === 'department' ? departmentSummaries : summaries;
+
   return (
     <section className="space-y-4" aria-labelledby="team-workload-title">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 id="team-workload-title" className="text-lg font-semibold text-slate-950">Team workload</h2>
           <p className="mt-1 text-sm text-slate-500">See assigned work by person, grouped by day, week, and open review state.</p>
+        </div>
+        <div className="inline-flex w-fit rounded-lg border border-slate-200 bg-slate-50 p-1" aria-label="Workload view">
+          {([['person', 'By person'], ['department', 'By department']] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={view === value}
+              onClick={() => setView(value)}
+              className={cn(
+                'min-h-8 rounded-md px-3 text-xs font-semibold text-slate-600 transition focus:outline-none focus:ring-2 focus:ring-blue-200',
+                view === value && 'bg-white text-blue-700 shadow-sm',
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -245,17 +295,26 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {summaries.map(summary => (
+              {visibleSummaries.map(summary => (
                 <tr key={summary.member.id} className="transition-colors hover:bg-slate-50">
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => openMember(summary.member.id)}
-                      className="w-full rounded-md text-left focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      aria-label={`View ${summary.member.name} workload`}
-                    >
-                      <MemberIdentity member={summary.member} />
-                    </button>
+                    {view === 'person' ? (
+                      <button
+                        type="button"
+                        onClick={() => openMember(summary.member.id)}
+                        className="w-full rounded-md text-left focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        aria-label={`View ${summary.member.name} workload`}
+                      >
+                        <MemberIdentity member={summary.member} />
+                      </button>
+                    ) : (
+                      <span className="flex items-center gap-3">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">
+                          {summary.member.name.slice(0, 1).toUpperCase()}
+                        </span>
+                        <span data-i18n-skip className="text-sm font-semibold text-slate-900">{summary.member.name}</span>
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-3 text-center font-semibold text-slate-700">{summary.dueToday}</td>
                   <td className="px-3 py-3 text-center font-semibold text-slate-700">{summary.dueThisWeek}</td>
@@ -264,9 +323,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                   <td className={cn('px-3 py-3 text-center font-semibold text-slate-700', summary.waitingApproval > 0 && 'text-amber-700')}>{summary.waitingApproval}</td>
                   <td className="px-3 py-3 text-center font-semibold text-emerald-700">{summary.completedThisWeek}</td>
                   <td className="px-4 py-3 text-right">
-                    <button type="button" onClick={() => openMember(summary.member.id)} className="rounded-md focus:outline-none focus:ring-2 focus:ring-blue-200" aria-label={`Open ${summary.member.name} task details`}>
-                      <WorkloadSignal summary={summary} />
-                    </button>
+                    <WorkloadSignal summary={summary} />
                   </td>
                 </tr>
               ))}
@@ -275,7 +332,8 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
         </div>
 
         <div className="grid gap-3 p-3 sm:grid-cols-2 xl:hidden">
-          {summaries.map(summary => (
+          {visibleSummaries.map(summary => (
+            view === 'person' ? (
             <button
               key={summary.member.id}
               type="button"
@@ -296,10 +354,26 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                 <Metric label="Done week" value={summary.completedThisWeek} />
               </div>
             </button>
+            ) : (
+            <div key={summary.member.id} className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 text-left">
+              <div className="flex items-start justify-between gap-3">
+                <span data-i18n-skip className="text-sm font-semibold text-slate-900">{summary.member.name}</span>
+                <WorkloadSignal summary={summary} />
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-3 border-t border-slate-100 pt-3">
+                <Metric label="Today" value={summary.dueToday} />
+                <Metric label="This week" value={summary.dueThisWeek} />
+                <Metric label="Open" value={summary.open} />
+                <Metric label="Overdue" value={summary.overdue} danger />
+                <Metric label="Review" value={summary.waitingApproval} />
+                <Metric label="Done week" value={summary.completedThisWeek} />
+              </div>
+            </div>
+            )
           ))}
         </div>
 
-        {summaries.length === 0 && (
+        {visibleSummaries.length === 0 && (
           <div className="px-5 py-12 text-center">
             <Users className="mx-auto h-6 w-6 text-slate-400" aria-hidden="true" />
             <p className="mt-2 text-sm font-semibold text-slate-700">No matching team members</p>

@@ -67,9 +67,11 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.getByRole('button', { name: 'Continue for now' }).click();
   await expect(page).toHaveURL(/\/$/);
 
+  await page.getByRole('tab', { name: 'Agency pulse' }).click();
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Needs attention' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Recent completions' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Team workload' }).click();
   const teamWorkload = page.getByRole('region', { name: 'Team workload' });
   await expect(teamWorkload).toBeVisible();
   await teamWorkload.getByRole('button', { name: 'View Staff Demo workload' }).click();
@@ -138,6 +140,7 @@ test('first login reaches the app and critical responsive routes remain usable',
     const boss = current.users.find(user => user.name === 'Boss Koo');
     useStore.setState({ currentUser: boss });
   });
+  await page.getByRole('tab', { name: 'Agency pulse' }).click();
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toBeVisible();
 
   await page.goto('/approvals');
