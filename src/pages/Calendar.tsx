@@ -820,7 +820,7 @@ const Calendar: React.FC = () => {
                       <div
                         key={`${task.id}-${week.layout.weekStart}`}
                         role="group"
-                        aria-label={`${task.title}. ${title}`}
+                        aria-label={`${task.title}. ${title}`} data-i18n-skip
                         title={`${task.clientName} · ${task.title} · ${title}`}
                         className={clsx(
                           'pointer-events-auto mx-0.5 flex min-w-0 items-stretch overflow-hidden border text-[10px] font-semibold shadow-sm transition-colors',
@@ -842,7 +842,7 @@ const Calendar: React.FC = () => {
                             onClick={event => event.stopPropagation()}
                             onDragStart={event => startTaskDrag(event, task, 'start', range?.startDate || task.startDate)}
                             onDragEnd={handleDragEnd}
-                            aria-label={`Adjust start date for ${task.title}`}
+                            aria-label={`Adjust start date for ${task.title}`} data-i18n-skip
                             title="Drag to adjust start date"
                             className="flex w-2.5 shrink-0 cursor-ew-resize items-center justify-center border-r border-current/10 bg-white/35 hover:bg-white/70"
                           >
@@ -860,14 +860,14 @@ const Calendar: React.FC = () => {
                             'flex min-w-0 flex-1 items-center gap-1 px-1.5 text-left outline-none',
                             editable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
                           )}
-                          aria-label={`${editable ? 'Edit dates for' : 'Open'} ${task.title}. ${title}`}
+                          aria-label={`${editable ? 'Edit dates for' : 'Open'} ${task.title}. ${title}`} data-i18n-skip
                         >
                           {savingTaskId === task.id ? (
                             <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
                           ) : (
                             <span className={clsx('h-2 w-2 shrink-0 rounded-full', isClientUser ? 'bg-accent' : getDeptDot(task.department))} />
                           )}
-                          <span className="min-w-0 flex-1 truncate">
+                          <span data-i18n-skip className="min-w-0 flex-1 truncate">
                             {!isClientUser && task.clientName && segment.spanDays > 1 ? `${task.clientName} · ` : ''}
                             {task.title}
                           </span>
@@ -880,7 +880,7 @@ const Calendar: React.FC = () => {
                             onClick={event => event.stopPropagation()}
                             onDragStart={event => startTaskDrag(event, task, 'due', range?.endDate || task.startDate)}
                             onDragEnd={handleDragEnd}
-                            aria-label={`Adjust due date for ${task.title}`}
+                            aria-label={`Adjust due date for ${task.title}`} data-i18n-skip
                             title={range?.hasDueDate ? 'Drag to adjust due date' : 'Drag to add a due date'}
                             className="flex w-2.5 shrink-0 cursor-ew-resize items-center justify-center border-l border-current/10 bg-white/35 hover:bg-white/70"
                           >
@@ -998,6 +998,7 @@ const Calendar: React.FC = () => {
                         <span className={clsx('mt-1.5 h-2 w-2 shrink-0 rounded-full', isClientUser ? 'bg-accent' : getDeptDot(task.department))} />
                         <div className="min-w-0 flex-1">
                           <Link
+                            data-i18n-skip
                             to={`/tasks?taskId=${encodeURIComponent(task.id)}`}
                             className={clsx(
                               'text-sm font-semibold leading-snug text-slate-800 transition-colors hover:text-blue-700',
@@ -1007,7 +1008,7 @@ const Calendar: React.FC = () => {
                           >
                             {task.title}
                           </Link>
-                          <p className="mt-0.5 truncate text-[10px] text-slate-400">{isClientUser ? task.serviceType : task.clientName}</p>
+                          <p data-i18n-skip className="mt-0.5 truncate text-[10px] text-slate-400">{isClientUser ? task.serviceType : task.clientName}</p>
                         </div>
                         {!isClientUser && (
                         <Badge tone={task.isCompleted ? 'emerald' : task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : 'slate'}>
@@ -1037,7 +1038,7 @@ const Calendar: React.FC = () => {
                           type="button"
                           onClick={() => openDateEditor(task)}
                           disabled={savingTaskId === task.id || hasBlockedMutation}
-                          aria-label={`Edit dates for ${task.title}`}
+                          aria-label={`Edit dates for ${task.title}`} data-i18n-skip
                           className="mt-3 flex w-full items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-left transition-colors hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {savingTaskId === task.id ? (

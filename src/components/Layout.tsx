@@ -409,7 +409,7 @@ const Layout: React.FC = () => {
                       <p className="truncate text-xs font-medium text-slate-500">
                         {notif.title}
                       </p>
-                      <p className="mt-0.5 text-sm font-semibold leading-snug text-slate-950">
+                      <p data-i18n-skip className="mt-0.5 text-sm font-semibold leading-snug text-slate-950">
                         {notif.message}
                       </p>
                       <p className="mt-1 text-[10px] text-slate-400">

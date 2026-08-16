@@ -96,7 +96,7 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-950">{notification.title}</p>
-              <p className="mt-1 line-clamp-3 text-sm leading-5 text-slate-600">{notification.message}</p>
+              <p data-i18n-skip className="mt-1 line-clamp-3 text-sm leading-5 text-slate-600">{notification.message}</p>
             </div>
             <button
               type="button"

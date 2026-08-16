@@ -275,7 +275,7 @@ const Navbar: React.FC<NavbarProps> = ({
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium text-slate-500">{notif.title}</p>
-                      <p className="mt-0.5 text-sm font-semibold leading-5 text-slate-950">{notif.message}</p>
+                      <p data-i18n-skip className="mt-0.5 text-sm font-semibold leading-5 text-slate-950">{notif.message}</p>
                       <p className="mt-1 text-xs text-slate-400">{formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}</p>
                     </div>
                     <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true"></div>

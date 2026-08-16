@@ -529,7 +529,7 @@ const Clients: React.FC = () => {
                 return (
                   <tr key={client.name} className="border-b border-line/70 bg-surface text-ink transition-colors duration-160 hover:bg-inset/60">
                     <td className="px-5 py-6 align-top">
-                      <div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{client.name.slice(0, 2).toUpperCase()}</span><div><div className="font-semibold text-ink">{client.name}</div>{serviceContext?.plan && <StatusChip className="mt-1.5" tone={serviceContext.plan.status === 'Active' ? 'emerald' : serviceContext.plan.status === 'Paused' ? 'amber' : 'slate'}>{serviceContext.plan.status}</StatusChip>}</div></div>
+                      <div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{client.name.slice(0, 2).toUpperCase()}</span><div><div data-i18n-skip className="font-semibold text-ink">{client.name}</div>{serviceContext?.plan && <StatusChip className="mt-1.5" tone={serviceContext.plan.status === 'Active' ? 'emerald' : serviceContext.plan.status === 'Paused' ? 'amber' : 'slate'}>{serviceContext.plan.status}</StatusChip>}</div></div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {Array.from(client.sources).map(source => (
                           <span key={source} className={cn('rounded-md border px-2 py-0.5 text-[10px] font-medium', sourceClasses[source])}>
@@ -628,7 +628,7 @@ const Clients: React.FC = () => {
               <div key={client.name} className="bg-surface p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h2 className="truncate font-semibold text-slate-950">{client.name}</h2>
+                    <h2 data-i18n-skip className="truncate font-semibold text-slate-950">{client.name}</h2>
                     <p className="mt-1 text-xs text-slate-500">Updated {formatLastActivity(client.lastActivity)}</p>
                   </div>
                   <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
@@ -690,7 +690,7 @@ const Clients: React.FC = () => {
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50/80 px-6 py-4">
               <div className="min-w-0">
                 <p className="text-xs font-medium text-blue-700">Client profile</p>
-                <h2 id={clientDialogTitleId} className="mt-1 truncate text-xl font-semibold text-slate-950">{selectedClient.name}</h2>
+                <h2 data-i18n-skip id={clientDialogTitleId} className="mt-1 truncate text-xl font-semibold text-slate-950">{selectedClient.name}</h2>
                 <p className="mt-1 text-sm text-slate-500">
                   {selectedClient.taskCount} linked task{selectedClient.taskCount === 1 ? '' : 's'} · {selectedClient.projectIds.size} company record{selectedClient.projectIds.size === 1 ? '' : 's'}
                 </p>

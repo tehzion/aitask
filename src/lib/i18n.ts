@@ -551,6 +551,79 @@ const zhCopyExtras: Record<string, string> = {
   'No changes to save': '没有需要保存的更改',
 };
 
+const zhCopyAdditions: Record<string, string> = {
+  // Toasts (static)
+  'Attachment updated successfully': '附件已更新',
+  'Choose a valid due date.': '请选择有效的截止日期。',
+  'Choose a valid priority.': '请选择有效的优先级。',
+  'Choose a valid task status.': '请选择有效的任务状态。',
+  'Due date cannot be earlier than the start date.': '截止日期不能早于开始日期。',
+  'Revision requested successfully': '已成功请求修改',
+  'Status added successfully': '状态已添加',
+  'Sync resolved: concurrent edits merged.': '同步已解决：并发编辑已合并。',
+  'Another notification update is still saving.': '另一项通知更新仍在保存中。',
+  'Recovered local workspace changes and queued them for Supabase sync.': '已恢复本地工作区更改并加入 Supabase 同步队列。',
+  'Stored workspace data was corrupted and has been reset.': '存储的工作区数据已损坏并重置。',
+  'Browser storage is full. Recent changes may not survive a reload.': '浏览器存储已满；最近的更改可能无法在刷新后保留。',
+  'Due date cleared': '已清除截止日期',
+  'Member Removed': '成员已移除',
+  'Task Status Updated': '任务状态已更新',
+  'Task Ready for Approval': '任务已可审批',
+  'Task Completed': '任务已完成',
+  'Client Approved Task': '客户已批准任务',
+  'New Registration': '新注册申请',
+  'Revision Requested': '已请求修改',
+  'New Comment': '新评论',
+  'Client Feedback': '客户反馈',
+  'Team Update': '团队动态',
+  // Aria / placeholder / title gaps
+  'Enter your account email': '输入您的账号邮箱',
+  'Enter your password': '输入您的密码',
+  'Use at least 12 characters.': '请使用至少 12 个字符。',
+  'Loading Dashboard...': '正在加载仪表板…',
+  'Active Companies': '启用中的公司',
+  'Pending Tasks': '待处理任务',
+  'Completed Tasks': '已完成任务',
+  'Overdue Tasks': '逾期任务',
+  'Due Today': '今日到期',
+  'Due This Week': '本周到期',
+  'Newly created work will appear here first.': '新建的工作会先在这里显示。',
+  'Due work, overdue items, and actions requiring attention.': '即将到期的工作、逾期项目和需要处理的事项。',
+  'Toggle sound notifications': '切换声音通知',
+  'Visible Tasks': '可见任务',
+  'Visible Companies': '可见公司',
+  'Unread Notices': '未读通知',
+  'Backend': '后端',
+  'Notifications, workflow preferences, and operational status.': '通知、工作流偏好和运营状态。',
+  'Upload a photo, generate an avatar, or use a Supabase image URL': '上传照片、生成头像，或使用 Supabase 图片链接',
+  'New status': '新状态',
+  'System Role': '系统角色',
+  'Edit departments': '编辑部门',
+  'Generate a strong password and copy it': '生成强密码并复制',
+  'At least 12 characters. The member must change it after login.': '至少 12 个字符；成员登录后必须修改。',
+  'Share it privately. AiTask does not store the password.': '请私下分享；AiTask 不会存储该密码。',
+  'Create named roles with core app permissions. Super admin access stays protected.': '创建带有核心应用权限的角色；超级管理员权限始终受保护。',
+  'Short internal note': '简短内部备注',
+  'Remove User': '移除用户',
+  'User Approvals': '用户审批',
+  'Enable this after SMTP is configured.': '配置 SMTP 后启用此选项。',
+  'This links the client to their specific companies.': '这会将客户关联到其所属公司。',
+  'Close task details': '关闭任务详情',
+  'Task status': '任务状态',
+  'Attachment URL': '附件链接',
+  'Attachment label': '附件名称',
+  'Optional revision note...': '可选修改说明…',
+  'Optional approval or revision note...': '可选审批或修改说明…',
+  'Send comment': '发送评论',
+  'Close create task modal': '关闭创建任务窗口',
+  'Describe the task requirements...': '描述任务要求…',
+  'New client or brand': '新客户或品牌',
+  'Custom service': '自定义服务',
+  'Brief, artwork, source folder...': '简报、素材、源文件…',
+  'Any context the team should keep visible': '团队需要留意的任何上下文',
+  'Assign work to a specific department or position.': '将工作分配给特定部门或职位。',
+};
+
 const preserveWhitespace = (value: string, replacement: string) => {
   const leading = value.match(/^\s*/)?.[0] || '';
   const trailing = value.match(/\s*$/)?.[0] || '';
@@ -578,6 +651,39 @@ const translatePattern = (value: string) => {
     [/^(.+) · dates updated$/, title => `${title} · 日期已更新`],
     [/^(\d+) linked task\(s\) · (.+)$/, (count, name) => `${count} 个关联任务 · ${name}`],
     [/^(.+) · rev (\d+) · (\d+) tasks$/, (name, revision, steps) => `${name} · 第 ${revision} 版 · ${steps} 个任务`],
+    // Confirm dialogs (wrapped with useI18n().t)
+    [/^Delete "(.+)"\? This removes the task from the workspace\.$/, title => `确定删除“${title}”？该任务将从工作区移除。`],
+    [/^This step still has (\d+) incomplete predecessor task\(s\)\. Start it anyway\?$/, count => `此步骤仍有 ${count} 个未完成的前置任务。仍然开始吗？`],
+    [/^Delete "(.+)"\? Existing tasks will be kept and unlinked from this company\.$/, name => `确定删除“${name}”？现有任务将保留并解除与该公司的关联。`],
+    [/^Delete the "(.+)" status\?$/, status => `确定删除“${status}”状态？`],
+    [/^Reset the local sample workspace\? This recreates the UrbanEats, TechNova, and EcoLife demo records without deleting your other local records\.$/, () => '确定重置本地示例工作区？将重建 UrbanEats、TechNova 和 EcoLife 演示记录，且不会删除您的其他本地记录。'],
+    [/^Delete the "(.+)" package from the catalog\? Existing client plans keep their own snapshots and are unaffected\.$/, name => `确定从目录中删除“${name}”配套？现有客户方案会保留自己的快照，不受影响。`],
+    [/^Delete the "(.+)" workflow template\? Plans that already froze this workflow keep their copy\.$/, name => `确定删除“${name}”工作流模板？已冻结此工作流的方案会保留其副本。`],
+    [/^Reject (.+)'s registration\? They will need to apply again\.$/, name => `确定拒绝 ${name} 的注册申请？其需要重新申请。`],
+    [/^Pause the "(.+)" plan\? The current cycle stays unchanged and future cycles stop generating\.$/, name => `确定暂停“${name}”方案？当前周期保持不变，后续周期将停止生成。`],
+    [/^End the "(.+)" plan\? This cannot be reopened; the client keeps access to completed work\.$/, name => `确定结束“${name}”方案？此操作不可撤销；客户仍可查看已完成的工作。`],
+    [/^Delete "(.+)"\?(?: (\d+) member(s)? will revert to their base role\.)?$/, (name, count) => (
+      count ? `确定删除“${name}”角色？${count} 位成员将恢复为基础角色。` : `确定删除“${name}”角色？`
+    )],
+    // Toast messages (interpolated)
+    [/^Status "(.+)" deleted successfully$/, status => `状态“${status}”已删除`],
+    [/^Status updated to "(.+)"$/, status => `状态已更新为“${status}”`],
+    [/^Company "(.+)" created successfully$/, name => `公司“${name}”已创建`],
+    [/^Company "(.+)" updated successfully$/, name => `公司“${name}”已更新`],
+    [/^Company "(.+)" deleted\. Existing tasks were kept\.$/, name => `公司“${name}”已删除；现有任务已保留。`],
+    [/^Task "(.+)" deleted$/, title => `任务“${title}”已删除`],
+    [/^Task "(.+)" created successfully$/, title => `任务“${title}”已创建`],
+    [/^Task "(.+)" updated successfully$/, title => `任务“${title}”已更新`],
+    [/^Priority updated to "(.+)"$/, priority => `优先级已更新为“${priority}”`],
+    [/^Task assigned to (.+)$/, name => `任务已分配给 ${name}`],
+    [/^Package "(.+)" saved\.$/, name => `配套“${name}”已保存`],
+    [/^Package "(.+)" deleted\. Existing client plans keep their own snapshots\.$/, name => `配套“${name}”已删除；现有客户方案保留自己的快照。`],
+    [/^Workflow template "(.+)" deleted\.$/, name => `工作流模板“${name}”已删除`],
+    [/^Client details saved for "(.+)"\.$/, name => `客户资料“${name}”已保存`],
+    [/^Client profile for "(.+)" deleted\.$/, name => `客户档案“${name}”已删除`],
+    [/^Client renamed to "(.+)"\.$/, name => `客户已重命名为“${name}”`],
+    [/^Due date updated to (.+)$/, date => `截止日期已更新为 ${date}`],
+    [/^(.+) is not assigned to (.+)\.$/, (user, dept) => `${user} 未被分配到 ${dept}。`],
   ];
   for (const [pattern, replace] of patterns) {
     const match = value.match(pattern);
@@ -634,7 +740,7 @@ const translatePattern = (value: string) => {
 export const translateUiText = (value: string, locale: AppLocale) => {
   if (locale !== 'zh' || !value) return value;
   const core = value.trim();
-  const translated = zhCopy[core] || zhCopyExtras[core] || translatePattern(core);
+  const translated = zhCopy[core] || zhCopyExtras[core] || zhCopyAdditions[core] || translatePattern(core);
   return translated === core ? value : preserveWhitespace(value, translated);
 };
 

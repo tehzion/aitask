@@ -395,7 +395,7 @@ const Tasks: React.FC = () => {
     canEditTask(task) ? (
       <div className="relative inline-block">
         <select
-          aria-label={`Change status for ${task.title}`}
+          aria-label={`Change status for `} data-i18n-skip
           className={`text-xs pl-2.5 pr-6 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none ${getStatusColor(task.status)}`}
           value={task.status}
           disabled={backend.isSaving}
@@ -751,12 +751,12 @@ const Tasks: React.FC = () => {
                           onContextMenu={(e) => handleRowContextMenu(e, task)}
                         >
                           <td className="max-w-[200px] px-3 py-3">
-                            <div className={cn("font-semibold truncate", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
-                            <div className="text-xs text-slate-500 mt-0.5">{task.id} - {task.serviceType}</div>
+                            <div data-i18n-skip className={cn("font-semibold truncate", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
+                            <div data-i18n-skip className="text-xs text-slate-500 mt-0.5">{task.id} - {task.serviceType}</div>
                           </td>
 	                          {!isClientUser && <td className="max-w-[150px] px-3 py-3">
-                            <div className="font-medium text-slate-800 truncate">{task.clientName}</div>
-                            <div className="text-xs text-slate-500 truncate mt-0.5">{task.projectName || 'Independent task'}</div>
+                            <div data-i18n-skip className="font-medium text-slate-800 truncate">{task.clientName}</div>
+                            <div data-i18n-skip className="text-xs text-slate-500 truncate mt-0.5">{task.projectName || 'Independent task'}</div>
 	                          </td>}
 	                          {!isClientUser && <td className="whitespace-nowrap px-3 py-3">
                             <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-md font-medium border border-slate-200">{task.department}</span>
@@ -802,7 +802,7 @@ const Tasks: React.FC = () => {
 	                                {canEditTask(task) && <button
                                   className="rounded-md p-1 transition-colors hover:bg-slate-200 hover:text-slate-700"
                                   title="Quick Edit"
-                                  aria-label={`Quick edit ${task.title}`}
+                                  aria-label={`Quick edit `} data-i18n-skip
                                   onClick={(e) => handleQuickEditClick(e, task)}
                                 >
                                   <MoreHorizontal className="w-4 h-4" />
@@ -858,12 +858,12 @@ const Tasks: React.FC = () => {
                         type="button"
                         onClick={() => setSelectedTask(task)}
                         className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-                        aria-label={`View task ${task.title}`}
+                        aria-label={`View task `} data-i18n-skip
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className={cn("font-semibold leading-5", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
-                            <div className="text-xs text-slate-500 mt-1 leading-5">{task.id} - {task.clientName} - {task.projectName || 'Independent task'}</div>
+                            <div data-i18n-skip className={cn("font-semibold leading-5", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
+                            <div data-i18n-skip className="text-xs text-slate-500 mt-1 leading-5">{task.id} - {task.clientName} - {task.projectName || 'Independent task'}</div>
                           </div>
 	                          {!isClientUser && <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>}
                         </div>
@@ -975,7 +975,7 @@ const Tasks: React.FC = () => {
                               )}
 
                               <div className="flex justify-between items-start gap-1">
-                                <h4 className={cn("text-xs font-bold leading-5 truncate flex-1", isOverdue ? "text-red-900" : "text-slate-800")}>
+                                <h4 data-i18n-skip className={cn("text-xs font-bold leading-5 truncate flex-1", isOverdue ? "text-red-900" : "text-slate-800")}>
                                   {task.title}
                                 </h4>
                                 {!isClientUser && <Badge tone={task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : task.priority === 'Medium' ? 'blue' : 'slate'} className="text-[9px] px-1.5 py-0 shrink-0">
@@ -983,7 +983,7 @@ const Tasks: React.FC = () => {
                                 </Badge>}
                               </div>
 
-                              <div className="text-[10px] text-slate-500 mt-1.5 truncate">
+                              <div data-i18n-skip className="text-[10px] text-slate-500 mt-1.5 truncate">
                                 {task.id}{isClientUser ? ` · ${task.serviceType}` : ` · ${task.clientName}`}
                               </div>
 

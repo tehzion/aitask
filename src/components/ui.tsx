@@ -236,7 +236,7 @@ export const ProgressBar: React.FC<{ value: number; max?: number; label: string;
 
 export const DataRow: React.FC<Omit<React.HTMLAttributes<HTMLElement>, 'title'> & { title: React.ReactNode; description?: React.ReactNode; meta?: React.ReactNode; action?: React.ReactNode }> = ({ title, description, meta, action, className, ...props }) => (
   <article className={cn('grid gap-3 px-4 py-4 transition-colors duration-160 hover:bg-inset/70 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5', className)} {...props}>
-    <div className="min-w-0"><div className="font-semibold text-ink">{title}</div>{description && <div className="mt-1 text-sm leading-5 text-muted">{description}</div>}{meta && <div className="mt-2 text-xs text-muted">{meta}</div>}</div>
+    <div className="min-w-0"><div data-i18n-skip className="font-semibold text-ink">{title}</div>{description && <div data-i18n-skip className="mt-1 text-sm leading-5 text-muted">{description}</div>}{meta && <div className="mt-2 text-xs text-muted">{meta}</div>}</div>
     {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
   </article>
 );

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { useToastStore } from '../store/useToastStore';
+import { useI18n } from '../components/I18nProvider';
 import type { User } from '../types';
 import { getMemberDepartments } from '../lib/departments';
 import { Badge, Button, MetricCard, PageHeader } from '../components/ui';
@@ -75,6 +76,7 @@ const resizeAvatarImage = async (file: File) => {
 };
 
 const Settings: React.FC = () => {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const {
     currentUser,
@@ -170,7 +172,7 @@ const Settings: React.FC = () => {
   };
 
   const handleDeleteStatus = async (status: string) => {
-    const confirmed = window.confirm(`Delete the "${status}" status?`);
+    const confirmed = window.confirm(t(`Delete the "${status}" status?`));
     if (!confirmed) return;
     const previousStatuses = useStore.getState().taskStatuses;
     const result = deleteTaskStatus(status);

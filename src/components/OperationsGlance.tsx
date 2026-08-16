@@ -73,7 +73,7 @@ const TaskEntry = ({
               : <Clock3 className="h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
           )}
           {mode === 'completion' && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />}
-          <p className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
+          <p data-i18n-skip className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
         </div>
         <p className="mt-1 truncate text-xs text-slate-500">{context}</p>
       </div>

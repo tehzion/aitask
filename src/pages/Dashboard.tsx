@@ -418,7 +418,7 @@ const Dashboard: React.FC = () => {
 
               return (
                 <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="min-w-0 rounded-control bg-inset/70 p-3 transition-colors hover:bg-inset">
-                  <p className={cn('truncate text-sm font-semibold text-slate-900', isOverdue && 'text-red-700')}>{task.title}</p>
+                  <p data-i18n-skip className={cn('truncate text-sm font-semibold text-slate-900', isOverdue && 'text-red-700')}>{task.title}</p>
                   <p className="mt-1 truncate text-xs text-slate-500">{task.clientName} - {task.projectName || 'Independent'}</p>
                   <div className="mt-3 flex items-center justify-between gap-2 text-[11px]">
                     <span className={cn('truncate text-slate-500', isOverdue && 'font-semibold text-red-600')}>
@@ -474,7 +474,7 @@ const Dashboard: React.FC = () => {
                 <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
                   {myTasks.dueToday.map(task => (
                     <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-control bg-inset/55 p-3 transition-colors hover:bg-inset">
-                      <p className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
+                      <p data-i18n-skip className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
                       <div className="mt-1 flex justify-between gap-2 text-xs text-slate-500">
                         <span>{task.id}</span>
                         <span className="truncate font-medium">{task.clientName}</span>
@@ -495,7 +495,7 @@ const Dashboard: React.FC = () => {
                     const days = dueDate ? Math.max(1, differenceInDays(new Date(), dueDate)) : 0;
                     return (
                       <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-control bg-red-50/30 p-3 transition-colors hover:bg-red-50/60" title={dueDate ? `Due: ${format(dueDate, 'yyyy-MM-dd')}` : 'No due date'}>
-                        <p className="truncate text-sm font-semibold text-red-900">{task.title}</p>
+                        <p data-i18n-skip className="truncate text-sm font-semibold text-red-900">{task.title}</p>
                         <div className="mt-1 flex justify-between gap-2 text-xs text-red-700">
                           <span>{days} day{days === 1 ? '' : 's'} overdue</span>
                           <span className="truncate font-medium">{task.clientName}</span>
@@ -514,7 +514,7 @@ const Dashboard: React.FC = () => {
                 <div className="max-h-64 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
                   {myTasks.actionRequired.map(task => (
                     <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="block rounded-control bg-inset/55 p-3 transition-colors hover:bg-inset">
-                      <p className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
+                      <p data-i18n-skip className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
                       <div className="mt-1 flex justify-between gap-2 text-xs text-slate-500">
                         <span>{task.status}</span>
                         <span className="truncate font-medium">{task.clientName}</span>

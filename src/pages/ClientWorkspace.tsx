@@ -45,6 +45,7 @@ import {
   hasPermission,
 } from "../lib/access";
 import { SECURE_WORKSPACE_ID } from "../lib/secureWorkspace";
+import { useI18n } from "../components/I18nProvider";
 import { downloadServiceFile, uploadServiceFile } from "../lib/serviceFiles";
 import DraftServicePlanEditor from "../components/DraftServicePlanEditor";
 import SideSheet from "../components/SideSheet";
@@ -60,6 +61,7 @@ const deliverableStatuses: DeliverableStatus[] = [
 ];
 
 const ClientWorkspace = () => {
+  const { t } = useI18n();
   const { clientId = "" } = useParams();
   const store = useStore();
   const client = store.clients.find((item) => item.id === clientId);
@@ -471,9 +473,9 @@ const ClientWorkspace = () => {
                 <Button
                   variant="secondary"
                   onClick={() => {
-                    const confirmed = window.confirm(
+                    const confirmed = window.confirm(t(
                       `Pause the "${activePlan.name}" plan? The current cycle stays unchanged and future cycles stop generating.`,
-                    );
+                    ));
                     if (!confirmed) return;
                     void saveAndCommit(
                       store.setClientPlanStatus(activePlan.id, "Paused"),
@@ -487,9 +489,9 @@ const ClientWorkspace = () => {
                 <Button
                   variant="secondary"
                   onClick={() => {
-                    const confirmed = window.confirm(
+                    const confirmed = window.confirm(t(
                       `End the "${activePlan.name}" plan? This cannot be reopened; the client keeps access to completed work.`,
-                    );
+                    ));
                     if (!confirmed) return;
                     void saveAndCommit(
                       store.setClientPlanStatus(activePlan.id, "Ended"),
@@ -850,12 +852,13 @@ const ClientWorkspace = () => {
                   </p>
                   {!isClient && <Badge tone="slate">{item.visibility}</Badge>}
                 </div>
-                <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
+                <p data-i18n-skip className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
                   {item.text}
                 </p>
                 {item.attachments.map((attachment) => (
                   <button
                     key={attachment.id}
+                    data-i18n-skip
                     onClick={async () => {
                       const downloaded = await downloadServiceFile(attachment);
                       if (!downloaded.ok) setMessage(downloaded.error);

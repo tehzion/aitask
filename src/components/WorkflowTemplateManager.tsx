@@ -6,6 +6,7 @@ import { STAFF_DEPARTMENTS } from '../lib/departments';
 import { Button } from './ui';
 import { cardBase, inputBase } from './uiTokens';
 import { cn } from '../lib/utils';
+import { useI18n } from './I18nProvider';
 
 const stepKinds: { value: WorkflowStepKind; label: string }[] = [
   { value: 'work', label: 'Work' },
@@ -23,6 +24,7 @@ const blankTemplate = (): Omit<ServiceWorkflowTemplate, 'id' | 'revision' | 'cre
 });
 
 const WorkflowTemplateManager = () => {
+  const { t } = useI18n();
   const { serviceWorkflowTemplates, saveWorkflowTemplate, deleteWorkflowTemplate, commitPendingMutation } = useStore();
   const [editingId, setEditingId] = React.useState<string>();
   const [draft, setDraft] = React.useState(blankTemplate);
@@ -31,7 +33,7 @@ const WorkflowTemplateManager = () => {
 
   const handleDelete = async (template: ServiceWorkflowTemplate) => {
     const confirmed = window.confirm(
-      `Delete the "${template.name}" workflow template? Plans that already froze this workflow keep their copy.`,
+      t(`Delete the "${template.name}" workflow template? Plans that already froze this workflow keep their copy.`),
     );
     if (!confirmed) return;
     const result = deleteWorkflowTemplate(template.id);

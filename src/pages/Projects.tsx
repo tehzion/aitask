@@ -8,9 +8,11 @@ import { Badge, Button, EmptyState, PageHeader, ProgressBar } from '../component
 import { pageShell, tableShell } from '../components/uiTokens';
 import { canDeleteProject, canEditProject, canManageProjects, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { isTaskOpen } from '../lib/taskReporting';
+import { useI18n } from '../components/I18nProvider';
 import { Project } from '../types';
 
 const Projects: React.FC = () => {
+  const { t } = useI18n();
   const { projects: allProjects, tasks: allTasks, users, currentUser, rolePermissions, deleteProject, commitPendingMutation } = useStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -41,7 +43,7 @@ const Projects: React.FC = () => {
   };
 
   const handleDeleteProject = async (project: Project) => {
-    const confirmed = window.confirm(`Delete "${project.clientName}"? Existing tasks will be kept and unlinked from this company.`);
+    const confirmed = window.confirm(t(`Delete "${project.clientName}"? Existing tasks will be kept and unlinked from this company.`));
     if (!confirmed) return;
     const result = deleteProject(project.id);
     if (!result.ok) {
@@ -108,7 +110,7 @@ const Projects: React.FC = () => {
                     <FolderKanban className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <h2 className="truncate text-base font-semibold text-ink">{project.clientName}</h2>
+                    <h2 data-i18n-skip className="truncate text-base font-semibold text-ink">{project.clientName}</h2>
                     <p className="mt-0.5 text-sm text-muted">{hasLegacyProjectName ? project.projectName : 'Company'}</p>
                   </div>
                 </div>

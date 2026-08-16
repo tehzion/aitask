@@ -6,6 +6,7 @@ import { Button } from './ui';
 import { cardBase, inputBase } from './uiTokens';
 import { formatMoney, snapshotWorkflow } from '../lib/serviceManagement';
 import { cn } from '../lib/utils';
+import { useI18n } from './I18nProvider';
 
 const blankItem = (): ServiceItem => ({
   id: crypto.randomUUID(), name: '', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 0,
@@ -16,6 +17,7 @@ const blankPackage = (): Omit<ServicePackage, 'id' | 'revision' | 'createdAt' | 
 });
 
 const ServicePackageManager = () => {
+  const { t } = useI18n();
   const { servicePackages, serviceWorkflowTemplates, saveServicePackage, deleteServicePackage, commitPendingMutation } = useStore();
   const [editingId, setEditingId] = React.useState<string>();
   const [draft, setDraft] = React.useState(blankPackage);
@@ -24,7 +26,7 @@ const ServicePackageManager = () => {
 
   const handleDelete = async (pkg: ServicePackage) => {
     const confirmed = window.confirm(
-      `Delete the "${pkg.name}" package from the catalog? Existing client plans keep their own snapshots and are unaffected.`,
+      t(`Delete the "${pkg.name}" package from the catalog? Existing client plans keep their own snapshots and are unaffected.`),
     );
     if (!confirmed) return;
     const result = deleteServicePackage(pkg.id);

@@ -372,7 +372,7 @@ const Notifications: React.FC = () => {
                               return (
                                 <div key={notification.id} className="flex flex-col gap-2 border-b border-slate-200/70 py-3 last:border-b-0 sm:flex-row sm:items-center">
                                   <div className="min-w-0 flex-1">
-                                    <p className={cn('text-sm text-slate-700', !isRead && 'font-semibold text-slate-950')}>{notification.message}</p>
+                                    <p data-i18n-skip className={cn('text-sm text-slate-700', !isRead && 'font-semibold text-slate-950')}>{notification.message}</p>
                                     <p className="mt-1 text-xs text-slate-400">{formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}</p>
                                   </div>
                                   <button

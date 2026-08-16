@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
+import { useI18n } from '../components/I18nProvider';
 import { canDeleteUser, defaultRolePermissions, getEffectiveRoleName, isBossKoo, permissionGroups, permissionLabels } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
@@ -19,6 +20,7 @@ const ROLES: Role[] = ['Admin', 'Staff', 'Client'];
 const clonePermissions = (permissions: RolePermissions): RolePermissions => ({ ...permissions });
 
 const Approvals: React.FC = () => {
+  const { t } = useI18n();
   const addMemberTitleId = React.useId();
   const approvalTitleId = React.useId();
   const deleteMemberTitleId = React.useId();
@@ -281,9 +283,9 @@ const Approvals: React.FC = () => {
     const targetRole = useStore.getState().rolePermissions.find(customRole => customRole.id === customRoleId);
     if (!targetRole) return;
     const affectedMembers = useStore.getState().users.filter(user => user.customRoleId === customRoleId).length;
-    const confirmed = window.confirm(
+    const confirmed = window.confirm(t(
       `Delete "${targetRole.name}"?${affectedMembers > 0 ? ` ${affectedMembers} member${affectedMembers === 1 ? '' : 's'} will revert to their base role.` : ''}`
-    );
+    ));
     if (!confirmed) return;
 
     const previousRoles = useStore.getState().rolePermissions;
@@ -455,7 +457,7 @@ const Approvals: React.FC = () => {
               <div key={reg.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-800">{reg.name}</p>
+                    <p data-i18n-skip className="font-semibold text-slate-800">{reg.name}</p>
                     <p className="mt-0.5 text-xs text-slate-500">Applied {format(new Date(reg.createdAt), 'MMM dd, yyyy')}</p>
                   </div>
                   <span className={`inline-flex shrink-0 px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
@@ -466,8 +468,8 @@ const Approvals: React.FC = () => {
                     {reg.requestedRole || 'Staff'}
                   </span>
                 </div>
-                <p className="mt-2 text-sm text-slate-600">{reg.email}</p>
-                <p className="mt-0.5 text-sm text-slate-500">{reg.phone}{reg.jobPosition ? ` · ${reg.jobPosition}` : ''}</p>
+                <p data-i18n-skip className="mt-2 text-sm text-slate-600">{reg.email}</p>
+                <p data-i18n-skip className="mt-0.5 text-sm text-slate-500">{reg.phone}{reg.jobPosition ? ` · ${reg.jobPosition}` : ''}</p>
                 <div className="mt-3 flex gap-2">
                   {superAdmin ? (
                     <>
@@ -481,7 +483,7 @@ const Approvals: React.FC = () => {
                       <button
                         onClick={async () => {
                           if (isActionSaving) return;
-                          const confirmed = window.confirm(`Reject ${reg.name}'s registration? They will need to apply again.`);
+                          const confirmed = window.confirm(t(`Reject ${reg.name}'s registration? They will need to apply again.`));
                           if (!confirmed) return;
                           const previousRegistrations = useStore.getState().registrations;
                           rejectRegistration(reg.id);
@@ -522,12 +524,12 @@ const Approvals: React.FC = () => {
                 {pendingRegs.map(reg => (
                   <tr key={reg.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-800">{reg.name}</div>
+                      <div data-i18n-skip className="font-semibold text-slate-800">{reg.name}</div>
                       <div className="text-xs text-slate-500 mt-0.5">Applied: {format(new Date(reg.createdAt), 'MMM dd, yyyy')}</div>
                     </td>
                     <td className="px-6 py-4 text-sm">
-                      <div>{reg.email}</div>
-                      <div className="text-slate-500 mt-0.5">{reg.phone}</div>
+                      <div data-i18n-skip>{reg.email}</div>
+                      <div data-i18n-skip className="text-slate-500 mt-0.5">{reg.phone}</div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
@@ -683,7 +685,7 @@ const Approvals: React.FC = () => {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold text-slate-900">{customRole.name}</h3>
+                      <h3 data-i18n-skip className="font-semibold text-slate-900">{customRole.name}</h3>
                       <Badge tone="slate">Base: {customRole.baseRole}</Badge>
                     </div>
                     {customRole.description && <p className="mt-1 text-sm text-slate-500">{customRole.description}</p>}
@@ -717,8 +719,8 @@ const Approvals: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {historyRegs.map(reg => (
                   <tr key={reg.id}>
-                    <td className="px-6 py-3 font-medium text-slate-700">{reg.name}</td>
-                    <td className="px-6 py-3 text-slate-500">{reg.email}</td>
+                    <td data-i18n-skip className="px-6 py-3 font-medium text-slate-700">{reg.name}</td>
+                    <td data-i18n-skip className="px-6 py-3 text-slate-500">{reg.email}</td>
                     <td className="px-6 py-3">
                       <span className={`inline-flex px-2 py-1 rounded-md text-xs font-semibold ${
                         reg.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
@@ -777,10 +779,10 @@ const Approvals: React.FC = () => {
                       <img src={u.avatar} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-200" />
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-semibold text-slate-800">{u.name}</span>
+                          <span data-i18n-skip className="font-semibold text-slate-800">{u.name}</span>
                           {isBossKoo(u) && <Badge tone="purple">Super Admin</Badge>}
                         </div>
-                        {u.email && <div className="text-xs text-slate-500 mt-0.5">{u.email}</div>}
+                        {u.email && <div data-i18n-skip className="text-xs text-slate-500 mt-0.5">{u.email}</div>}
                       </div>
                     </div>
                   </td>

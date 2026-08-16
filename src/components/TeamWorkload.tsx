@@ -64,7 +64,7 @@ const MemberIdentity = ({ member }: { member: User }) => (
       </span>
     )}
     <div className="min-w-0">
-      <p className="truncate text-sm font-semibold text-slate-900">{member.name}</p>
+      <p data-i18n-skip className="truncate text-sm font-semibold text-slate-900">{member.name}</p>
       <p className="truncate text-xs text-slate-500">{getMemberDepartments(member).join(' · ') || member.role}</p>
     </div>
   </div>
@@ -120,7 +120,7 @@ const TaskGroup = ({
             className="group grid gap-2 px-4 py-3 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-200 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"
           >
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
+              <p data-i18n-skip className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
               <p className="mt-1 truncate text-xs text-slate-500">{task.clientName} · {task.status}</p>
             </div>
             <div className="flex items-center justify-between gap-3 sm:justify-end">

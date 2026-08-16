@@ -10,6 +10,7 @@ import { getTodayInputDate, parseOptionalDate, cn } from '../lib/utils';
 import { isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
 import type { SecureCommandType } from '../lib/secureWorkspace';
 import ModalShell from './ModalShell';
+import { useI18n } from './I18nProvider';
 import { ProgressBar } from './ui';
 import { fieldLabel, inputBase } from './uiTokens';
 
@@ -51,6 +52,7 @@ const ExternalTaskLink: React.FC<{ value: string; label: string }> = ({ value, l
 };
 
 const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
+  const { t } = useI18n();
   const {
     users,
     tasks,
@@ -224,7 +226,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   };
 
   const handleDeleteTask = async () => {
-    const confirmed = window.confirm(`Delete "${task.title}"? This removes the task from the workspace.`);
+    const confirmed = window.confirm(t(`Delete "${task.title}"? This removes the task from the workspace.`));
     if (!confirmed) return;
 
     const result = deleteTask(task.id);
@@ -259,9 +261,9 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">{task.id}</span>
-              <span className="text-xs font-medium text-slate-500">{task.clientName}</span>
+              <span data-i18n-skip className="text-xs font-medium text-slate-500">{task.clientName}</span>
             </div>
-            <h2 id={titleId} className="break-words text-xl font-semibold text-slate-950">{task.title}</h2>
+            <h2 data-i18n-skip id={titleId} className="break-words text-xl font-semibold text-slate-950">{task.title}</h2>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {canEditTask && (
@@ -315,7 +317,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                           if (isSubmitting) return;
                           const nextStatus = e.target.value as TaskStatus;
                           if (incompletePredecessors.length > 0 && nextStatus !== 'Pending' && nextStatus !== 'Cancelled') {
-                            const confirmed = window.confirm(`This step still has ${incompletePredecessors.length} incomplete predecessor task(s). Start it anyway?`);
+                            const confirmed = window.confirm(t(`This step still has ${incompletePredecessors.length} incomplete predecessor task(s). Start it anyway?`));
                             if (!confirmed) return;
                           }
                           updateTaskStatus(task.id, nextStatus);
@@ -540,7 +542,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
 
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1.5">Description</label>
-                <div className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">
+                <div data-i18n-skip className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">
                   {task.description || 'No description provided.'}
                 </div>
               </div>
@@ -548,7 +550,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
               {!isClientTaskViewer && task.notes && (
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Internal Notes</label>
-                  <div className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">
+                  <div data-i18n-skip className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">
                     {task.notes}
                   </div>
                 </div>
@@ -686,7 +688,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                 {task.approvalHistory.slice().reverse().map(event => (
                   <div key={event.id} className="text-xs text-slate-600">
                     <span className="font-semibold text-slate-800">{getUserName(event.userId)}</span> marked {event.status} {formatDistanceToNow(new Date(event.createdAt), { addSuffix: true })}
-                    {event.note && <div className="mt-1 bg-slate-50 border border-slate-100 rounded-md p-2 text-slate-700">{event.note}</div>}
+                    {event.note && <div data-i18n-skip className="mt-1 bg-slate-50 border border-slate-100 rounded-md p-2 text-slate-700">{event.note}</div>}
                   </div>
                 ))}
               </div>
@@ -712,10 +714,10 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                     )}
                     <div className="flex-1">
                       <div className="flex items-baseline justify-between mb-1">
-                        <span className="text-sm font-semibold text-slate-800">{getUserName(comment.userId)}</span>
+                        <span data-i18n-skip className="text-sm font-semibold text-slate-800">{getUserName(comment.userId)}</span>
                         <span className="text-xs text-slate-400">{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</span>
                       </div>
-                      <div className="text-sm text-slate-700 bg-white p-3 rounded-lg border border-slate-200 shadow-sm whitespace-pre-wrap">
+                      <div data-i18n-skip className="text-sm text-slate-700 bg-white p-3 rounded-lg border border-slate-200 shadow-sm whitespace-pre-wrap">
                         {comment.text}
                       </div>
                     </div>
