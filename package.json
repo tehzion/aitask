@@ -8,6 +8,16 @@
     "pnpm": ">=10.0.0"
   },
   "packageManager": "pnpm@10.4.1",
+  "pnpm": {
+    "overrides": {
+      "@babel/core@<=7.29.0": "7.29.7",
+      "brace-expansion@>=5.0.0 <5.0.6": "5.0.6",
+      "js-yaml@>=4.0.0 <=4.1.1": "4.3.0"
+    },
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
