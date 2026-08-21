@@ -13,6 +13,8 @@ vi.mock('./supabaseClient', () => ({
 
 import {
   buildOperations,
+  acknowledgeSecureReleaseNotice,
+  getSecureReleaseNoticeAcknowledgement,
   inferSecureCommandType,
   isSecureCommandType,
   isWorkspaceConflict,
@@ -512,6 +514,60 @@ describe('secure notification transport', () => {
     expect(retry).toMatchObject({ ok: true, workspaceVersion: 44 });
     expect(rpc.mock.calls[1][0]).toBe('aitask_set_notifications_read');
     expect(rpc.mock.calls[1][1].p_command_id).toBe(firstCommandId);
+  });
+});
+
+describe('secure release notice acknowledgement transport', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    refreshSession.mockReset();
+    from.mockReset();
+  });
+
+  it('checks the fixed notice for the current secure workspace', async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ok: true, noticeId: '2026-08-service-operations', acknowledged: false },
+      error: null,
+    });
+
+    const result = await getSecureReleaseNoticeAcknowledgement('2026-08-service-operations');
+
+    expect(result).toEqual({ ok: true, acknowledged: false });
+    expect(rpc).toHaveBeenCalledWith('aitask_get_release_notice_acknowledgement', {
+      p_workspace_id: 'aitask-main',
+      p_notice_id: '2026-08-service-operations',
+    });
+  });
+
+  it('refreshes an expired session before acknowledging the notice', async () => {
+    rpc
+      .mockResolvedValueOnce({ data: null, error: { code: 'PGRST301', message: 'JWT expired' } })
+      .mockResolvedValueOnce({
+        data: { ok: true, noticeId: '2026-08-service-operations', acknowledged: true },
+        error: null,
+      });
+    refreshSession.mockResolvedValueOnce({ data: { session: { access_token: 'refreshed' } }, error: null });
+
+    const result = await acknowledgeSecureReleaseNotice('2026-08-service-operations');
+
+    expect(result).toEqual({ ok: true, acknowledged: true });
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc).toHaveBeenLastCalledWith('aitask_acknowledge_release_notice', {
+      p_workspace_id: 'aitask-main',
+      p_notice_id: '2026-08-service-operations',
+    });
+  });
+
+  it('does not accept an acknowledgement response for a different release', async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ok: true, noticeId: 'unexpected-release', acknowledged: true },
+      error: null,
+    });
+
+    await expect(acknowledgeSecureReleaseNotice('2026-08-service-operations')).resolves.toMatchObject({
+      ok: false,
+      code: 'VALIDATION',
+    });
   });
 });
 

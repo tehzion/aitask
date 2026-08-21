@@ -66,6 +66,9 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.getByRole('button', { name: 'Continue for now' }).click();
   await expect(page).toHaveURL(/\/$/);
+  const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
+  await expect(releaseNotice).toBeVisible();
+  await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
 
   await page.getByRole('tab', { name: 'Agency pulse' }).click();
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toBeVisible();
@@ -97,6 +100,7 @@ test('first login reaches the app and critical responsive routes remain usable',
     const { useStore } = await import(storePath);
     const current = useStore.getState();
     const ordinaryAdmin = current.users.find(user => user.name === 'Admin Demo');
+    if (ordinaryAdmin) localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${ordinaryAdmin.id}`, 'acknowledged');
     useStore.setState({
       currentUser: ordinaryAdmin ? { ...ordinaryAdmin, mustResetPassword: false } : null,
     });
@@ -115,6 +119,7 @@ test('first login reaches the app and critical responsive routes remain usable',
       department: 'Designer' as const,
       mustResetPassword: false,
     };
+    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${staff.id}`, 'acknowledged');
     useStore.setState({
       users: current.users.some(user => user.id === staff.id) ? current.users : [...current.users, staff],
       currentUser: { ...staff, mustResetPassword: false },
@@ -138,6 +143,7 @@ test('first login reaches the app and critical responsive routes remain usable',
     const { useStore } = await import(storePath);
     const current = useStore.getState();
     const boss = current.users.find(user => user.name === 'Boss Koo');
+    if (boss) localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: boss });
   });
   await page.getByRole('tab', { name: 'Agency pulse' }).click();
@@ -661,6 +667,7 @@ test('first login reaches the app and critical responsive routes remain usable',
       approvalHistory: [],
       updatedAt: '2026-08-02T04:00:00.000Z',
     };
+    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${client.id}`, 'acknowledged');
     useStore.setState({
       users: current.users.some(user => user.id === contact.id) ? current.users : [...current.users, contact],
       tasks: [...current.tasks.filter(task => task.id !== clientTask.id), clientTask],
@@ -752,6 +759,10 @@ test('first login reaches the app and critical responsive routes remain usable',
         clientReview: false,
       },
     };
+    localStorage.setItem(
+      'aitask:release-notice:2026-08-service-operations:e2e-task-only-role',
+      'acknowledged',
+    );
     window.localStorage.setItem('market-task-storage', JSON.stringify(stored));
     window.sessionStorage.clear();
   });

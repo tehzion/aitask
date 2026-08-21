@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import { ToastContainer } from './Toast';
 import { NotificationPopupHost } from './NotificationPopupHost';
+import ReleaseNotice from './ReleaseNotice';
 import CreateTaskModal from './CreateTaskModal';
 import { useStore } from '../store';
 import { useNotificationReadActions } from '../hooks/useNotificationReadActions';
@@ -463,6 +464,10 @@ const Layout: React.FC = () => {
         notifications={notifications}
         isReady={!backend.isLoading && backend.status !== 'loading'}
         readActions={notificationReadActions}
+      />
+      <ReleaseNotice
+        currentUser={currentUser}
+        isReady={!backend.isLoading && backend.status !== 'loading'}
       />
       <ToastContainer />
       <CreateTaskModal isOpen={isCreateTaskModalOpen} onClose={() => setCreateTaskModalOpen(false)} />

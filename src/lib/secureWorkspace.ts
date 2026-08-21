@@ -91,6 +91,10 @@ export type MutationResult<T> =
   | { ok: true; data: T; commandId: string; workspaceVersion: number; replayed?: boolean }
   | { ok: false; code: MutationErrorCode; error: string; conflict?: MutationConflict };
 
+export type ReleaseNoticeAcknowledgementResult =
+  | { ok: true; acknowledged: boolean }
+  | { ok: false; code: MutationErrorCode; error: string };
+
 type MemberRow = {
   id: string;
   workspace_id: string;
@@ -875,6 +879,101 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
 const cleanPortalText = (value: unknown, maxLength: number) => (
   typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 );
+
+const releaseNoticeFailure = (
+  code: MutationErrorCode,
+  error: string,
+): ReleaseNoticeAcknowledgementResult => ({ ok: false, code, error });
+
+const readReleaseNoticeResponse = (
+  value: unknown,
+  noticeId: string,
+): ReleaseNoticeAcknowledgementResult => {
+  if (!isRecord(value) || value.ok !== true) {
+    return releaseNoticeFailure(
+      isRecord(value) && typeof value.code === 'string' && value.code === 'FORBIDDEN'
+        ? 'FORBIDDEN'
+        : 'RETRY_REQUIRED',
+      isRecord(value) && typeof value.error === 'string'
+        ? value.error
+        : 'Supabase returned an invalid release notice response.',
+    );
+  }
+  if (cleanPortalText(value.noticeId, 80) !== noticeId) {
+    return releaseNoticeFailure('VALIDATION', 'The release notice response did not match this update.');
+  }
+  return { ok: true, acknowledged: value.acknowledged === true };
+};
+
+export const getSecureReleaseNoticeAcknowledgement = async (
+  noticeId: string,
+): Promise<ReleaseNoticeAcknowledgementResult> => {
+  const normalizedNoticeId = cleanPortalText(noticeId, 80);
+  if (!normalizedNoticeId) return releaseNoticeFailure('VALIDATION', 'Choose a release notice.');
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return releaseNoticeFailure('OFFLINE', 'Reconnect before checking the release notice.');
+  }
+
+  const invoke = () => withSyncTimeout(supabase.rpc('aitask_get_release_notice_acknowledgement', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+    p_notice_id: normalizedNoticeId,
+  }));
+
+  let result: Awaited<ReturnType<typeof invoke>>;
+  try {
+    result = await invoke();
+    if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
+  } catch (error) {
+    return releaseNoticeFailure(
+      typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
+      error instanceof SyncRequestTimeoutError
+        ? 'Release notice verification timed out. It will be checked again next time.'
+        : 'Supabase could not verify the release notice.',
+    );
+  }
+  if (result.error) {
+    return releaseNoticeFailure(
+      isAuthError(result.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
+      result.error.message || 'Supabase could not verify the release notice.',
+    );
+  }
+  return readReleaseNoticeResponse(result.data, normalizedNoticeId);
+};
+
+export const acknowledgeSecureReleaseNotice = async (
+  noticeId: string,
+): Promise<ReleaseNoticeAcknowledgementResult> => {
+  const normalizedNoticeId = cleanPortalText(noticeId, 80);
+  if (!normalizedNoticeId) return releaseNoticeFailure('VALIDATION', 'Choose a release notice.');
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return releaseNoticeFailure('OFFLINE', 'Reconnect before saving the release notice acknowledgement.');
+  }
+
+  const invoke = () => withSyncTimeout(supabase.rpc('aitask_acknowledge_release_notice', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+    p_notice_id: normalizedNoticeId,
+  }));
+
+  let result: Awaited<ReturnType<typeof invoke>>;
+  try {
+    result = await invoke();
+    if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
+  } catch (error) {
+    return releaseNoticeFailure(
+      typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
+      error instanceof SyncRequestTimeoutError
+        ? 'Release notice acknowledgement timed out. It will be checked again next time.'
+        : 'Supabase could not save the release notice acknowledgement.',
+    );
+  }
+  if (result.error) {
+    return releaseNoticeFailure(
+      isAuthError(result.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
+      result.error.message || 'Supabase could not save the release notice acknowledgement.',
+    );
+  }
+  return readReleaseNoticeResponse(result.data, normalizedNoticeId);
+};
 
 const parseNotificationFeedItem = (
   value: unknown,

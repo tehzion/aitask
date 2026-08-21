@@ -6,6 +6,7 @@ const setDemoUser = async (page: import('@playwright/test').Page, userId: string
   await page.evaluate(async id => {
     const { useStore } = await import('/src/store/index.ts');
     const user = useStore.getState().users.find(candidate => candidate.id === id)!;
+    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...user, mustResetPassword: false } });
   }, userId);
 };

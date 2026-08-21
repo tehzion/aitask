@@ -31,6 +31,8 @@ test('user-authored task content stays exactly as typed in Chinese mode', async 
     await expect(continueButton).toBeVisible();
     await continueButton.click();
   }
+  await page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' })
+    .getByRole('button', { name: 'Happy working' }).click();
 
   // Seed a task whose title collides with UI dictionary keys, plus a client named "Settings".
   await page.evaluate(async () => {
@@ -87,6 +89,8 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
     await expect(continueButton).toBeVisible();
     await continueButton.click();
   }
+  await page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' })
+    .getByRole('button', { name: 'Happy working' }).click();
 
   const seeded = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -119,6 +123,7 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
 
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
+    localStorage.setItem('aitask:release-notice:2026-08-service-operations:client-i18n', 'acknowledged');
     useStore.setState({ currentUser: { id: 'client-i18n', name: 'Client I18N', role: 'Client', departments: ['Client'], department: 'Client', companyName: 'Settings', permissions: { viewDashboard: true } } });
   });
   await page.goto('/');
