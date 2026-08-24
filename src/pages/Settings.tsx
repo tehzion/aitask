@@ -17,6 +17,7 @@ import { getSoundEnabled, setSoundEnabled, SOUND_PREF_EVENT } from '../lib/sound
 import { canUsePasswordResetBypass, enablePasswordResetBypass, hasPasswordResetBypass } from '../lib/auth';
 import { APP_BUILD_CHANNEL, APP_BUILD_LABEL, APP_BUILD_TIME, APP_COMMIT, APP_VERSION_LABEL } from '../lib/appVersion';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
+import { discardSecureWorkspaceCommand } from '../lib/secureWorkspace';
 import ServicePackageManager from '../components/ServicePackageManager';
 import WorkflowTemplateManager from '../components/WorkflowTemplateManager';
 import { isLocalServiceDemoEnabled } from '../mock/localServiceDemo';
@@ -492,6 +493,7 @@ const Settings: React.FC = () => {
                 variant="secondary"
                 onClick={() => {
                   if (secureAccounts) {
+                    discardSecureWorkspaceCommand();
                     void signOutSecureSession();
                   }
                   useStore.setState({ currentUser: null });

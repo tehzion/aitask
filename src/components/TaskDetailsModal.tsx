@@ -67,6 +67,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     commitPendingMutation,
     rolePermissions,
     taskStatuses,
+    upgradeRequired,
   } = useStore(useShallow(state => ({
     users: state.users,
     tasks: state.tasks,
@@ -81,6 +82,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     commitPendingMutation: state.commitPendingMutation,
     rolePermissions: state.rolePermissions,
     taskStatuses: state.taskStatuses,
+    upgradeRequired: state.backend.upgradeRequired === true,
   })));
   const [commentText, setCommentText] = useState('');
   const [attachmentLink, setAttachmentLink] = useState('');
@@ -136,9 +138,9 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
 
   const assignee = users.find(u => u.id === task.assignedTo);
   const creator = users.find(u => u.id === task.createdBy);
-  const canEditTask = canEditTaskByRole(currentUser, task, rolePermissions);
-  const canAddComment = canCommentOnTask(currentUser, task, rolePermissions);
-  const canClientReview = canReviewTaskAsClient(currentUser, task, rolePermissions);
+  const canEditTask = !upgradeRequired && canEditTaskByRole(currentUser, task, rolePermissions);
+  const canAddComment = !upgradeRequired && canCommentOnTask(currentUser, task, rolePermissions);
+  const canClientReview = !upgradeRequired && canReviewTaskAsClient(currentUser, task, rolePermissions);
   const isClientTaskViewer = currentUser?.role === 'Client';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
   const incompletePredecessors = (task.predecessorTaskIds || [])

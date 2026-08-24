@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import { ToastContainer } from './Toast';
 import { NotificationPopupHost } from './NotificationPopupHost';
+import ReleaseNotice from './ReleaseNotice';
 import CreateTaskModal from './CreateTaskModal';
 import { useStore } from '../store';
 import { useNotificationReadActions } from '../hooks/useNotificationReadActions';
@@ -205,13 +206,16 @@ const Layout: React.FC = () => {
   const backendStatus = getBackendStatus();
   const hostedLocalBuild = backendStatus.mode === 'local' && backendStatus.isHostedRuntime;
   const missingSupabaseConfig = backendStatus.mode === 'supabase' && !backendStatus.ready;
-  const pendingResolution = backend.status === 'conflict' || backend.status === 'retry_required' || (backend.status === 'offline' && backend.hasLocalChanges);
-  const syncNeedsAttention = hostedLocalBuild || missingSupabaseConfig || Boolean(backend.error) || backend.hasRemoteUpdate || pendingResolution;
+  const upgradeRequired = backend.upgradeRequired === true;
+  const pendingResolution = !upgradeRequired && (backend.status === 'conflict' || backend.status === 'retry_required' || (backend.status === 'offline' && backend.hasLocalChanges));
+  const syncNeedsAttention = hostedLocalBuild || missingSupabaseConfig || upgradeRequired || Boolean(backend.error) || backend.hasRemoteUpdate || pendingResolution;
   const syncBannerTitle = hostedLocalBuild
     ? 'Sync is local on this deployed build'
     : missingSupabaseConfig
       ? 'Supabase sync is not configured'
-      : backend.status === 'conflict'
+      : upgradeRequired
+        ? 'System update in progress'
+        : backend.status === 'conflict'
         ? 'Sync conflict needs review'
         : backend.status === 'retry_required'
           ? 'A change needs to be retried'
@@ -463,6 +467,10 @@ const Layout: React.FC = () => {
         notifications={notifications}
         isReady={!backend.isLoading && backend.status !== 'loading'}
         readActions={notificationReadActions}
+      />
+      <ReleaseNotice
+        currentUser={currentUser}
+        isReady={!backend.isLoading && backend.status !== 'loading'}
       />
       <ToastContainer />
       <CreateTaskModal isOpen={isCreateTaskModalOpen} onClose={() => setCreateTaskModalOpen(false)} />

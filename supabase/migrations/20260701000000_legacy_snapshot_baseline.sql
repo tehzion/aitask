@@ -9,6 +9,7 @@ alter table public.aitask_app_state
   add column if not exists version bigint not null default 1;
 
 alter table public.aitask_app_state enable row level security;
+alter table public.aitask_app_state force row level security;
 
 grant select, insert, update on public.aitask_app_state to anon, authenticated, service_role;
 grant delete, truncate, references, trigger on public.aitask_app_state to service_role;
@@ -92,6 +93,7 @@ as $$
   from request_origin;
 $$;
 
+revoke all on function public.aitask_is_internal_app_origin() from public;
 grant execute on function public.aitask_is_internal_app_origin() to anon, authenticated, service_role;
 
 -- Interim snapshot policies:

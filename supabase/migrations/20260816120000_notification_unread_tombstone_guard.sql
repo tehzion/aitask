@@ -84,8 +84,14 @@ begin
       and (p_old_data - 'readByUserIds' - 'isRead' - 'unreadByUserIds') = (p_new_data - 'readByUserIds' - 'isRead' - 'unreadByUserIds')
       and (
         v_new_reads = v_old_reads
-        or v_new_reads = (v_old_reads - jsonb_build_array(v_member_id))
-        or v_new_reads = (v_old_reads || jsonb_build_array(v_member_id))
+        or (
+          v_old_reads ? v_member_id
+          and v_new_reads = (v_old_reads - v_member_id)
+        )
+        or (
+          not (v_old_reads ? v_member_id)
+          and v_new_reads = (v_old_reads || jsonb_build_array(v_member_id))
+        )
       );
   end if;
 

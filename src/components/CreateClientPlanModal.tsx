@@ -13,7 +13,14 @@ const blankItem = (): ServiceItem => ({ id: crypto.randomUUID(), name: '', platf
 
 const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
   const navigate = useNavigate();
-  const { servicePackages, serviceWorkflowTemplates, createClientWithPlan, commitPendingMutation } = useStore();
+  const {
+    servicePackages,
+    serviceWorkflowTemplates,
+    createClientWithPlan,
+    commitPendingMutation,
+    retryMutation,
+    backend,
+  } = useStore();
   const [step, setStep] = React.useState(1);
   const [mode, setMode] = React.useState<PlanOrigin>('standard');
   const [packageId, setPackageId] = React.useState(servicePackages.find(item => item.isActive)?.id || '');
@@ -96,6 +103,10 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
   };
   const save = async () => {
     if (saving) return;
+    if (backend.upgradeRequired && !createdClientIdRef.current) {
+      setError(backend.error || backend.message);
+      return;
+    }
     for (let candidate = 1; candidate <= 4; candidate += 1) {
       const validationError = validateStep(candidate);
       if (validationError) {
@@ -129,7 +140,9 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
         }
         createdClientIdRef.current = result.clientId;
       }
-      const committed = await commitPendingMutation('client_plan.manage');
+      const committed = createdClientIdRef.current && backend.pendingMutations > 0
+        ? await retryMutation()
+        : await commitPendingMutation('client_plan.manage');
       if (!committed.ok) {
         setError(committed.error || 'The client is waiting to be saved. Retry to finish syncing this same Draft.');
         return;
@@ -176,14 +189,14 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
 
           {step === 4 && <section aria-labelledby="plan-terms-step"><h3 id="plan-terms-step" className="text-lg font-semibold text-ink">Plan terms</h3><p className="mt-1 text-sm text-muted">Set the operating dates and internal pricing rules.</p><div className="mt-6 grid gap-4 md:grid-cols-2"><label className="text-sm font-medium text-ink">Plan name<input className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.name} onChange={e=>setPlan({...plan,name:e.target.value})}/></label><label className="text-sm font-medium text-ink">Start date<input type="date" className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.startDate} onChange={e=>setPlan({...plan,startDate:e.target.value})}/></label><label className="text-sm font-medium text-ink">Monthly billing day<input type="number" min="1" max="31" className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.billingDay} onChange={e=>setPlan({...plan,billingDay:Number(e.target.value)})}/></label><label className="text-sm font-medium text-ink">Contract end date (reminder only)<input type="date" min={plan.startDate} className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.contractEndDate} onChange={e=>setPlan({...plan,contractEndDate:e.target.value})}/></label><label className="text-sm font-medium text-ink">Tax rate (%)<input type="number" min="0" max="100" step="0.01" className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.taxRateBps/100} onChange={e=>setPlan({...plan,taxRateBps:Math.round(Number(e.target.value)*100)})}/></label><label className="text-sm font-medium text-ink">Discount type<select className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.discountType} onChange={e=>setPlan({...plan,discountType:e.target.value as typeof plan.discountType,discountValue:0})}><option value="none">None</option><option value="percent">Percent</option><option value="fixed">Fixed MYR</option></select></label><label className="text-sm font-medium text-ink">Discount value<input type="number" min="0" step="0.01" disabled={plan.discountType==='none'} className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.discountValue/100} onChange={e=>setPlan({...plan,discountValue:Math.round(Number(e.target.value)*100)})}/></label></div></section>}
 
-          {step === 5 && <section aria-labelledby="review-step"><h3 id="review-step" className="text-lg font-semibold text-ink">Review the Draft plan</h3><div className="mt-5 rounded-panel bg-accent-soft p-5 text-ink ring-1 ring-accent/25"><p className="font-semibold">Ready to save as Draft</p><p className="mt-1 text-sm text-muted"><span data-i18n-skip>{profile.clientName}</span> · {mode} · {items.length} services · starts {plan.startDate}</p></div><div className="mt-4 grid gap-px overflow-hidden rounded-panel bg-line sm:grid-cols-4">{Object.entries(totals).map(([key,value])=><div key={key} className="bg-surface p-4"><p className="text-xs capitalize text-muted">{key}</p><p className="calm-number mt-2 font-semibold text-ink">{formatMoney(value)}</p></div>)}</div><p className="mt-5 text-sm text-muted">No service cycle is created until an administrator activates the plan.</p></section>}
+          {step === 5 && <section aria-labelledby="review-step"><h3 id="review-step" className="text-lg font-semibold text-ink">Review the Draft plan</h3><div className="mt-5 rounded-panel bg-accent-soft p-5 text-ink ring-1 ring-accent/25"><p className="font-semibold">Ready to save as Draft</p><p className="mt-1 text-sm text-muted"><span data-i18n-skip>{profile.clientName}</span> · {mode} · {items.length} services · starts {plan.startDate}</p></div><div className="mt-4 grid gap-px overflow-hidden rounded-panel bg-line sm:grid-cols-4">{Object.entries(totals).map(([key,value])=><div key={key} className="bg-surface p-4"><p className="text-xs capitalize text-muted">{key}</p><p className="calm-number mt-2 font-semibold text-ink">{formatMoney(value)}</p></div>)}</div><p className="mt-5 text-sm text-muted">No service cycle is created until an administrator activates the plan.</p>{backend.upgradeRequired && !createdClientIdRef.current && <p className="mt-5 rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900" role="status">{backend.message}</p>}</section>}
           {error && <p className="mt-6 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert">{error}</p>}
         </main>
 
         <aside className="hidden border-l border-line bg-inset/45 p-5 lg:block" aria-label="Draft summary"><p className="calm-eyebrow">Draft summary</p><h3 className="mt-2 truncate font-semibold text-ink">{profile.clientName || 'Unnamed client'}</h3><p className="mt-1 text-xs capitalize text-muted">{mode} plan · {items.length} service{items.length === 1 ? '' : 's'}</p><dl className="mt-6 space-y-4 text-sm"><div><dt className="text-muted">Start date</dt><dd className="calm-number mt-1 font-medium text-ink">{plan.startDate}</dd></div><div><dt className="text-muted">Billing day</dt><dd className="calm-number mt-1 font-medium text-ink">Day {plan.billingDay}</dd></div><div><dt className="text-muted">Internal total</dt><dd className="calm-number mt-1 text-lg font-semibold text-ink">{formatMoney(totals.total)}</dd></div></dl><div className="mt-6 border-t border-line pt-5"><p className="text-xs leading-5 text-muted">Scope, workflow and price are frozen when this Draft is saved.</p></div></aside>
       </div>
 
-      <footer className="sticky bottom-0 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-t border-line bg-surface px-5 py-3 sm:px-6"><Button variant="secondary" onClick={() => step === 1 ? onClose() : setStep(value => value - 1)} disabled={saving}><ArrowLeft className="h-4 w-4" />{step === 1 ? 'Cancel' : 'Back'}</Button><p className="min-w-0 text-center text-xs leading-5 text-muted"><span className="font-semibold text-ink">Step {step}/5</span><span aria-hidden="true"> · </span>{serviceSlots} service slot{serviceSlots === 1 ? '' : 's'}<span className="hidden sm:inline"><span aria-hidden="true"> · </span>Internal total <strong className="calm-number text-ink">{formatMoney(totals.total)}</strong></span></p>{step < 5 ? <Button onClick={next} disabled={saving}>Continue<ArrowRight className="h-4 w-4" /></Button> : <Button onClick={save} disabled={saving}><Check className="h-4 w-4" />{saving ? 'Saving…' : createdClientIdRef.current ? 'Retry save' : 'Save draft plan'}</Button>}</footer>
+      <footer className="sticky bottom-0 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-t border-line bg-surface px-5 py-3 sm:px-6"><Button variant="secondary" onClick={() => step === 1 ? onClose() : setStep(value => value - 1)} disabled={saving}><ArrowLeft className="h-4 w-4" />{step === 1 ? 'Cancel' : 'Back'}</Button><p className="min-w-0 text-center text-xs leading-5 text-muted"><span className="font-semibold text-ink">Step {step}/5</span><span aria-hidden="true"> · </span>{serviceSlots} service slot{serviceSlots === 1 ? '' : 's'}<span className="hidden sm:inline"><span aria-hidden="true"> · </span>Internal total <strong className="calm-number text-ink">{formatMoney(totals.total)}</strong></span></p>{step < 5 ? <Button onClick={next} disabled={saving}>Continue<ArrowRight className="h-4 w-4" /></Button> : <Button onClick={save} disabled={saving || (backend.upgradeRequired === true && !createdClientIdRef.current)}><Check className="h-4 w-4" />{saving ? 'Saving…' : createdClientIdRef.current ? 'Retry save' : 'Save draft plan'}</Button>}</footer>
     </ModalShell>
   );
 };

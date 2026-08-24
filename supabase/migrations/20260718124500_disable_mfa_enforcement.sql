@@ -18,6 +18,7 @@ $$;
 
 drop policy if exists "mfa admins can read audit events" on public.aitask_audit_events;
 drop policy if exists "admins can read audit events" on public.aitask_audit_events;
-create policy "admins can read audit events" on public.aitask_audit_events
+drop policy if exists "super admins can read audit events" on public.aitask_audit_events;
+create policy "super admins can read audit events" on public.aitask_audit_events
   for select to authenticated
-  using (private.aitask_is_admin(workspace_id));
+  using (private.aitask_is_super_admin(workspace_id));

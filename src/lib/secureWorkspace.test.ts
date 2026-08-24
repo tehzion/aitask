@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PersistedWorkspaceState } from './supabaseSnapshot';
 
 const { rpc, refreshSession, from } = vi.hoisted(() => ({
@@ -12,14 +12,20 @@ vi.mock('./supabaseClient', () => ({
 }));
 
 import {
+  BACKEND_UPGRADE_REQUIRED_MESSAGE,
   buildOperations,
+  acknowledgeSecureReleaseNotice,
+  discardSecureWorkspaceCommand,
+  getSecureReleaseNoticeAcknowledgement,
   inferSecureCommandType,
   isSecureCommandType,
   isWorkspaceConflict,
+  loadSecureBackendCapabilities,
   loadSecureNotificationPage,
   loadSecureWorkspace,
   overlayRetainedWorkspaceEntities,
   rebaseRetryableCommand,
+  restoreSecureWorkspaceCommand,
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
   saveSecureWorkspace,
@@ -27,6 +33,11 @@ import {
   setSecureNotificationsRead,
   type WorkspaceOperation,
 } from './secureWorkspace';
+
+afterEach(() => {
+  discardSecureWorkspaceCommand();
+  vi.unstubAllGlobals();
+});
 
 describe('Client portal command projection', () => {
   it('serializes only allowlisted client-visible task fields', () => {
@@ -241,6 +252,66 @@ describe('secure command retry identity', () => {
     expect(rpc.mock.calls[1][1].p_command_id).toBe(firstCommandId);
   });
 
+  it('keeps one retry command in account-scoped session storage', async () => {
+    const values = new Map<string, string>();
+    const sessionStorage: Storage = {
+      get length() { return values.size; },
+      clear: () => values.clear(),
+      getItem: key => values.get(key) ?? null,
+      key: index => [...values.keys()][index] ?? null,
+      removeItem: key => { values.delete(key); },
+      setItem: (key, value) => { values.set(key, value); },
+    };
+    vi.stubGlobal('window', { sessionStorage });
+    restoreSecureWorkspaceCommand('auth-user-9');
+    rpc.mockRejectedValueOnce(new Error('fetch failed'));
+
+    const result = await saveSecureWorkspace(stateWithUser('9'));
+
+    expect(result).toMatchObject({ ok: false, code: 'RETRY_REQUIRED' });
+    expect(sessionStorage.length).toBe(1);
+    expect(restoreSecureWorkspaceCommand('auth-user-9')).not.toBeNull();
+    discardSecureWorkspaceCommand();
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it('clears a retained command when the authenticated account changes', async () => {
+    const values = new Map<string, string>();
+    const sessionStorage: Storage = {
+      get length() { return values.size; },
+      clear: () => values.clear(),
+      getItem: key => values.get(key) ?? null,
+      key: index => [...values.keys()][index] ?? null,
+      removeItem: key => { values.delete(key); },
+      setItem: (key, value) => { values.set(key, value); },
+    };
+    vi.stubGlobal('window', { sessionStorage });
+    restoreSecureWorkspaceCommand('auth-user-a');
+    rpc.mockRejectedValueOnce(new Error('fetch failed'));
+    await saveSecureWorkspace(stateWithUser('10'));
+
+    expect(sessionStorage.length).toBe(1);
+    expect(restoreSecureWorkspaceCommand('auth-user-b')).toBeNull();
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it('translates a missing command signature without exposing PostgREST internals', async () => {
+    restoreSecureWorkspaceCommand('auth-user-11');
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: 'PGRST202', message: 'Could not find the function public.aitask_execute_command in the schema cache.' },
+    });
+
+    const result = await saveSecureWorkspace(stateWithUser('11'));
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'RETRY_REQUIRED',
+      error: BACKEND_UPGRADE_REQUIRED_MESSAGE,
+    });
+    expect(JSON.stringify(result)).not.toContain('schema cache');
+  });
+
   it('reuses the command ID after an uncertain request', async () => {
     rpc
       .mockResolvedValueOnce({ data: null, error: { message: 'Network response was interrupted.' } })
@@ -282,6 +353,48 @@ describe('secure command retry identity', () => {
     expect(retry.ok).toBe(true);
     expect(rpc.mock.calls[1][1].p_command_id).not.toBe(firstCommandId);
     expect(rpc.mock.calls[1][1].p_operations[0].expectedVersion).toBe(4);
+  });
+});
+
+describe('secure backend compatibility', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    refreshSession.mockReset();
+    from.mockReset();
+  });
+
+  it('enables writes only after the complete capability contract is confirmed', async () => {
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        schemaVersion: 2,
+        workspaceOptimisticLock: true,
+        serviceOperations: true,
+        releaseNoticeAcknowledgements: true,
+      },
+      error: null,
+    });
+
+    const result = await loadSecureBackendCapabilities();
+
+    expect(result).toMatchObject({ compatible: true, capabilities: { schemaVersion: 2 } });
+    expect(rpc).toHaveBeenCalledWith('aitask_get_backend_capabilities', { p_workspace_id: 'aitask-main' });
+  });
+
+  it('turns a missing PostgREST function into a read-only upgrade state', async () => {
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: 'PGRST202', message: 'Could not find the function in the schema cache.' },
+    });
+
+    const result = await loadSecureBackendCapabilities();
+
+    expect(result).toEqual({
+      compatible: false,
+      code: 'PGRST202',
+      error: BACKEND_UPGRADE_REQUIRED_MESSAGE,
+    });
+    expect(JSON.stringify(result)).not.toContain('schema cache');
   });
 });
 
@@ -402,6 +515,24 @@ describe('overlayRetainedWorkspaceEntities', () => {
     expect((merged.tasks as { id: string; title: string }[]).find(item => item.id === 'task-2')?.title).toBe('Untouched');
   });
 
+  it('reconstructs a retained edit from command data after a page reload', () => {
+    const operations: WorkspaceOperation[] = [
+      {
+        kind: 'entity',
+        action: 'update',
+        entityType: 'task',
+        entityId: 'task-1',
+        expectedVersion: 2,
+        data: { id: 'task-1', title: 'Recovered from session storage' },
+      },
+    ];
+
+    const merged = overlayRetainedWorkspaceEntities(remote(), remote(), operations);
+
+    expect((merged.tasks as { id: string; title: string }[]).find(item => item.id === 'task-1')?.title)
+      .toBe('Recovered from session storage');
+  });
+
   it('re-adds inserted entities and honours deletions', () => {
     const operations: WorkspaceOperation[] = [
       { kind: 'entity', action: 'insert', entityType: 'task', entityId: 'task-4', expectedVersion: 0, data: { title: 'Fresh insert' } },
@@ -512,6 +643,60 @@ describe('secure notification transport', () => {
     expect(retry).toMatchObject({ ok: true, workspaceVersion: 44 });
     expect(rpc.mock.calls[1][0]).toBe('aitask_set_notifications_read');
     expect(rpc.mock.calls[1][1].p_command_id).toBe(firstCommandId);
+  });
+});
+
+describe('secure release notice acknowledgement transport', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    refreshSession.mockReset();
+    from.mockReset();
+  });
+
+  it('checks the fixed notice for the current secure workspace', async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ok: true, noticeId: '2026-08-service-operations', acknowledged: false },
+      error: null,
+    });
+
+    const result = await getSecureReleaseNoticeAcknowledgement('2026-08-service-operations');
+
+    expect(result).toEqual({ ok: true, acknowledged: false });
+    expect(rpc).toHaveBeenCalledWith('aitask_get_release_notice_acknowledgement', {
+      p_workspace_id: 'aitask-main',
+      p_notice_id: '2026-08-service-operations',
+    });
+  });
+
+  it('refreshes an expired session before acknowledging the notice', async () => {
+    rpc
+      .mockResolvedValueOnce({ data: null, error: { code: 'PGRST301', message: 'JWT expired' } })
+      .mockResolvedValueOnce({
+        data: { ok: true, noticeId: '2026-08-service-operations', acknowledged: true },
+        error: null,
+      });
+    refreshSession.mockResolvedValueOnce({ data: { session: { access_token: 'refreshed' } }, error: null });
+
+    const result = await acknowledgeSecureReleaseNotice('2026-08-service-operations');
+
+    expect(result).toEqual({ ok: true, acknowledged: true });
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc).toHaveBeenLastCalledWith('aitask_acknowledge_release_notice', {
+      p_workspace_id: 'aitask-main',
+      p_notice_id: '2026-08-service-operations',
+    });
+  });
+
+  it('does not accept an acknowledgement response for a different release', async () => {
+    rpc.mockResolvedValueOnce({
+      data: { ok: true, noticeId: 'unexpected-release', acknowledged: true },
+      error: null,
+    });
+
+    await expect(acknowledgeSecureReleaseNotice('2026-08-service-operations')).resolves.toMatchObject({
+      ok: false,
+      code: 'VALIDATION',
+    });
   });
 });
 

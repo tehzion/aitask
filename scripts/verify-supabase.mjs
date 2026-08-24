@@ -86,29 +86,75 @@ const collectForbiddenKeys = (value, found = new Set()) => {
   return found;
 };
 
-const commandUrl = new URL('/rest/v1/rpc/aitask_execute_command', baseUrl);
-const commandResponse = await request(commandUrl, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    p_workspace_id: 'aitask-main',
-    p_command_id: crypto.randomUUID(),
-    p_command_type: 'workspace.patch',
-    p_operations: [],
-  }),
-});
+const protectedRpcProbes = [
+  {
+    name: 'aitask_execute_command (legacy)',
+    path: 'aitask_execute_command',
+    body: {
+      p_workspace_id: 'aitask-main',
+      p_command_id: crypto.randomUUID(),
+      p_command_type: 'workspace.patch',
+      p_operations: [],
+    },
+  },
+  {
+    name: 'aitask_execute_command (workspace lock)',
+    path: 'aitask_execute_command',
+    body: {
+      p_workspace_id: 'aitask-main',
+      p_command_id: crypto.randomUUID(),
+      p_command_type: 'workspace.patch',
+      p_operations: [],
+      p_expected_workspace_version: 1,
+    },
+  },
+  {
+    name: 'aitask_execute_service_command',
+    path: 'aitask_execute_service_command',
+    body: {
+      p_workspace_id: 'aitask-main',
+      p_command_id: crypto.randomUUID(),
+      p_command_type: 'service_cycle.manage',
+      p_operations: [],
+      p_expected_workspace_version: 1,
+    },
+  },
+  {
+    name: 'aitask_generate_deliverable_task_chain',
+    path: 'aitask_generate_deliverable_task_chain',
+    body: {
+      p_workspace_id: 'aitask-main',
+      p_command_id: crypto.randomUUID(),
+      p_operations: [],
+      p_expected_workspace_version: 1,
+    },
+  },
+  {
+    name: 'aitask_get_backend_capabilities',
+    path: 'aitask_get_backend_capabilities',
+    body: { p_workspace_id: 'aitask-main' },
+  },
+];
 
-if (commandResponse.ok) {
-  console.error('Security failure: anon can execute aitask_execute_command. Revoke EXECUTE from PUBLIC and anon.');
-  process.exit(1);
+for (const probe of protectedRpcProbes) {
+  const url = new URL(`/rest/v1/rpc/${probe.path}`, baseUrl);
+  const response = await request(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(probe.body),
+  });
+  if (response.ok) {
+    console.error(`Security failure: anon can execute ${probe.name}. Revoke EXECUTE from PUBLIC and anon.`);
+    process.exit(1);
+  }
+  if (![401, 403, 404].includes(response.status)) {
+    console.error(`Unexpected anon response for ${probe.name}: ${await responseDetail(response)}`);
+    process.exit(1);
+  }
 }
-if (![401, 403, 404].includes(commandResponse.status)) {
-  console.error(`Unexpected anon command response: ${await responseDetail(commandResponse)}`);
-  process.exit(1);
-}
-console.log('Command API check passed: anonymous callers cannot execute workspace commands.');
+console.log('Command API check passed: anonymous callers cannot execute workspace, service, task-chain, or capability RPCs.');
 
-for (const secureTable of ['aitask_workspaces', 'aitask_members', 'aitask_entities', 'aitask_command_receipts', 'aitask_audit_events']) {
+for (const secureTable of ['aitask_workspaces', 'aitask_members', 'aitask_entities', 'aitask_command_receipts', 'aitask_audit_events', 'aitask_release_notice_acknowledgements']) {
   const url = new URL(`/rest/v1/${secureTable}`, baseUrl);
   url.searchParams.set('select', '*');
   url.searchParams.set('limit', '1');

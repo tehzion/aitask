@@ -373,13 +373,11 @@ set search_path = ''
 as $$
 begin
   new.updated_at := now();
-  if (select auth.uid()) = old.auth_user_id and not private.aitask_is_super_admin(old.workspace_id) then
+  if (select auth.uid()) = old.auth_user_id and not private.aitask_is_admin(old.workspace_id) then
     if new.workspace_id is distinct from old.workspace_id
       or new.auth_user_id is distinct from old.auth_user_id
-      or new.email is distinct from old.email
       or new.role is distinct from old.role
       or new.department is distinct from old.department
-      or new.departments is distinct from old.departments
       or new.client_name is distinct from old.client_name
       or new.is_super_admin is distinct from old.is_super_admin
       or (new.must_reset_password is distinct from old.must_reset_password and not (old.must_reset_password and not new.must_reset_password))

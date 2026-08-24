@@ -1,0 +1,137 @@
+{
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "preparedAt": "2026-08-24",
+  "status": "backup_and_repair_review_required",
+  "metadataOnly": true,
+  "warning": "Schema equivalence is verified, but do not run migration repair from this manifest until a restorable production backup is verified and the metadata changes receive final review.",
+  "schemaEquivalence": {
+    "status": "verified",
+    "verifiedAt": "2026-08-24",
+    "baselineThrough": "20260802121500_notification_center",
+    "method": "Exact object-count and MD5 fingerprint comparison between production and a clean local reset stopped immediately before the client-service migration.",
+    "fingerprints": {
+      "columns": { "count": 73, "md5": "5ce36dda0e52a8febaef366041b2d185" },
+      "constraints": { "count": 31, "md5": "0dc48563b96976a701edf43aea96aa00" },
+      "function_grants": { "count": 86, "md5": "e5fa73bea338ad70605a58493c75df23" },
+      "functions": { "count": 45, "md5": "321341fada02f2b1c5fb183a6310842e" },
+      "indexes": { "count": 25, "md5": "384d565297f3154903a1cf9fed8c01cc" },
+      "policies": { "count": 10, "md5": "5a4448e9a2537299255cc0c555d46b25" },
+      "relation_grants": { "count": 97, "md5": "e477d8c402c14170d7306b324a253cca" },
+      "relations": { "count": 7, "md5": "945c808d21cbc648653e8a0cdff78c6f" },
+      "triggers": { "count": 9, "md5": "e725aa096b78b4ffb07a097746506af4" }
+    }
+  },
+  "equivalentHistoryGroups": [
+    {
+      "localVersion": "20260701000000",
+      "localName": "legacy_snapshot_baseline",
+      "remoteVersions": [
+        "20260610081034",
+        "20260610081156",
+        "20260610081259",
+        "20260610081406",
+        "20260610082617",
+        "20260610082740",
+        "20260615154115",
+        "20260615164031"
+      ]
+    },
+    {
+      "localVersion": "20260701010000",
+      "localName": "secure_auth_baseline",
+      "remoteVersions": [
+        "20260713144931",
+        "20260713145817",
+        "20260713150101",
+        "20260713150432"
+      ]
+    },
+    {
+      "localVersion": "20260715090000",
+      "localName": "reliable_workspace_commands",
+      "remoteVersions": ["20260715093602"]
+    },
+    {
+      "localVersion": "20260715090100",
+      "localName": "reliable_workspace_command_cutover",
+      "remoteVersions": ["20260715110720"]
+    },
+    {
+      "localVersion": "20260715093000",
+      "localName": "harden_reliable_workspace_commands",
+      "remoteVersions": ["20260715104528"]
+    },
+    {
+      "localVersion": "20260715110000",
+      "localName": "add_reliable_workspace_indexes",
+      "remoteVersions": ["20260715110144"]
+    },
+    {
+      "localVersion": "20260718005102",
+      "localName": "production_login_readiness",
+      "remoteVersions": ["20260718005558"]
+    },
+    {
+      "localVersion": "20260718094000",
+      "localName": "public_feedback_collection",
+      "remoteVersions": ["20260718033949"]
+    },
+    {
+      "localVersion": "20260718120000",
+      "localName": "feedback_single_submission",
+      "remoteVersions": ["20260718035533"]
+    },
+    {
+      "localVersion": "20260718124500",
+      "localName": "disable_mfa_enforcement",
+      "remoteVersions": ["20260718043547"]
+    },
+    {
+      "localVersion": "20260718125450",
+      "localName": "restrict_registration_visibility_to_super_admin",
+      "remoteVersions": ["20260718131228"]
+    },
+    {
+      "localVersion": "20260718131500",
+      "localName": "link_adminmojo_auth",
+      "remoteVersions": ["20260718045230"]
+    },
+    {
+      "localVersion": "20260729100000",
+      "localName": "multi_department_membership",
+      "remoteVersions": ["20260729071759"]
+    },
+    {
+      "localVersion": "20260729112000",
+      "localName": "enforce_staff_task_department_membership",
+      "remoteVersions": ["20260729073846"]
+    },
+    {
+      "localVersion": "20260731130000",
+      "localName": "task_completion_timestamps",
+      "remoteVersions": ["20260731124053"]
+    },
+    {
+      "localVersion": "20260801191419",
+      "localName": "client_portal_projection",
+      "remoteVersions": ["20260801192040"]
+    },
+    {
+      "localVersion": "20260801191430",
+      "localName": "restrict_client_direct_reads",
+      "remoteVersions": ["20260802034146"]
+    },
+    {
+      "localVersion": "20260802121500",
+      "localName": "notification_center",
+      "remoteVersions": ["20260802044305"]
+    }
+  ],
+  "expectedDryRunMigrations": [
+    "20260815042430_client_service_management",
+    "20260816120000_notification_unread_tombstone_guard",
+    "20260816220000_notification_feed_cursor_precision",
+    "20260816230000_workspace_optimistic_lock",
+    "20260821075407_add_release_notice_acknowledgements"
+  ]
+}

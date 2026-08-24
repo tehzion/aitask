@@ -8,6 +8,7 @@ import { canAccessPath } from './lib/access';
 import { hasPasswordResetBypass } from './lib/auth';
 import { RefreshCw, WifiOff } from 'lucide-react';
 import { shouldUseSecureSupabase, supabase } from './lib/supabaseClient';
+import { discardSecureWorkspaceCommand } from './lib/secureWorkspace';
 import { useAppNoticeState } from './hooks/useAppNoticeState';
 
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
@@ -65,6 +66,7 @@ function App() {
     if (!shouldUseSecureSupabase()) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session?.user) {
+        discardSecureWorkspaceCommand();
         useStore.setState({ currentUser: null });
         return;
       }

@@ -553,6 +553,14 @@ const zhCopyExtras: Record<string, string> = {
 
 const zhCopyAdditions: Record<string, string> = {
   // Toasts (static)
+  'System update in progress': '系统正在更新',
+  'Read only': '只读',
+  'AiTask is completing a system update. Your workspace is read-only for a moment; no changes have been submitted.': 'AiTask 正在完成系统更新。工作区暂时为只读状态，尚未提交任何更改。',
+  'Changes are temporarily unavailable while AiTask resolves a pending save or completes a system update.': 'AiTask 正在处理待保存的更改或完成系统更新，暂时无法进行修改。',
+  'Your pending change was restored in this browser tab. Review and retry it when ready.': '已在此浏览器标签页恢复待保存的更改。请检查后再重试。',
+  'Secure session restored. Review and retry the retained change.': '安全会话已恢复。请检查并重试保留的更改。',
+  'There is no retained change to retry.': '没有可重试的保留更改。',
+  'Use the latest saved workspace? Your pending change in this browser tab will be permanently discarded.': '要使用最新保存的工作区吗？此浏览器标签页中待保存的更改将被永久放弃。',
   'Attachment updated successfully': '附件已更新',
   'Choose a valid due date.': '请选择有效的截止日期。',
   'Choose a valid priority.': '请选择有效的优先级。',

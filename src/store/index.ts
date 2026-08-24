@@ -76,15 +76,19 @@ import {
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
+import { getInitialLocale, translateUiText } from '../lib/i18n';
 import {
+  BACKEND_UPGRADE_REQUIRED_MESSAGE,
   discardSecureWorkspaceCommand,
   completeSecurePasswordSetup,
   getRetainedSecureCommand,
   isWorkspaceConflict,
+  loadSecureBackendCapabilities,
   loadSecureWorkspace,
   loadSecureWorkspaceRevision,
   overlayRetainedWorkspaceEntities,
   rebaseRetryableCommand,
+  restoreSecureWorkspaceCommand,
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
   saveSecureWorkspace,
@@ -115,7 +119,7 @@ import {
   SHORT_VIDEO_WORKFLOW_TEMPLATE,
 } from '../lib/serviceManagement';
 
-export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required';
+export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required' | 'upgrade_required';
 
 interface BackendRuntimeState {
   mode: 'local' | 'supabase';
@@ -133,6 +137,7 @@ interface BackendRuntimeState {
   hasRemoteUpdate: boolean;
   hasLocalChanges: boolean;
   pendingMutations: number;
+  upgradeRequired?: boolean;
   conflict?: MutationConflict;
   error?: string;
   message: string;
@@ -298,11 +303,16 @@ interface StoreState {
 }
 
 const nowId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-const pendingMutationMessage = 'Resolve the pending Supabase change with Retry or Discard before editing another record.';
+const pendingMutationMessage = 'Changes are temporarily unavailable while AiTask resolves a pending save or completes a system update.';
 const isWorkspaceMutationLocked = (state: StoreState) => (
   shouldUseSecureSupabase()
-  && state.backend.pendingMutations > 0
-  && ['offline', 'conflict', 'retry_required'].includes(state.backend.status)
+  && (
+    state.backend.upgradeRequired === true
+    || (
+      state.backend.pendingMutations > 0
+      && ['offline', 'conflict', 'retry_required'].includes(state.backend.status)
+    )
+  )
 );
 let isApplyingRemoteSnapshot = false;
 let isApplyingNotificationRead = false;
@@ -397,6 +407,7 @@ const makeBackendRuntimeState = (): BackendRuntimeState => {
     hasRemoteUpdate: false,
     hasLocalChanges: false,
     pendingMutations: 0,
+    upgradeRequired: false,
     message: status.message,
   };
 };
@@ -1002,6 +1013,7 @@ export const useStore = create<StoreState>()(
             hasRemoteUpdate: false,
             hasLocalChanges: false,
             pendingMutations: 0,
+            upgradeRequired: false,
             message: status.message,
             error: status.ready ? undefined : status.message,
           }
@@ -1030,31 +1042,48 @@ export const useStore = create<StoreState>()(
             if (userError) throw userError;
             if (!verifiedUser) throw new Error('Your session has expired. Sign in again.');
 
-            const secure = await loadSecureWorkspace(verifiedUser);
+            const retained = restoreSecureWorkspaceCommand(verifiedUser.id);
+            const [secure, compatibility] = await Promise.all([
+              loadSecureWorkspace(verifiedUser, { preserveRetainedCommand: true }),
+              loadSecureBackendCapabilities(),
+            ]);
+            const restoredWorkspace = retained
+              ? overlayRetainedWorkspaceEntities(secure.state, secure.state, retained.operations)
+              : secure.state;
+            const restoredCurrentUser = restoredWorkspace.users.find(member => member.id === secure.currentUser.id)
+              || secure.currentUser;
             const loadedAt = new Date().toISOString();
             isApplyingRemoteSnapshot = true;
             set((state) => ({
               ...makeWorkspacePatch(state, {
-                state: secure.state,
+                state: restoredWorkspace,
                 source: 'supabase',
                 version: 1,
                 message: 'Secure workspace loaded.',
                 updatedAt: loadedAt,
               }),
-              currentUser: secure.currentUser,
+              currentUser: restoredCurrentUser,
               notificationUnreadCount: secure.notificationFeed.unreadCount,
               backend: {
                 ...state.backend,
-                status: 'live',
+                status: compatibility.compatible
+                  ? (retained ? 'retry_required' : 'live')
+                  : 'upgrade_required',
                 isLoading: false,
                 lastSyncedAt: loadedAt,
                 lastPulledAt: loadedAt,
                 workspaceVersion: secure.revision.version,
                 remoteVersion: secure.revision.version,
                 remoteUpdatedAt: secure.revision.updatedAt,
-                hasLocalChanges: false,
-                pendingMutations: 0,
-                message: 'Secure Supabase session is active.',
+                hasLocalChanges: Boolean(retained),
+                pendingMutations: retained ? 1 : 0,
+                upgradeRequired: !compatibility.compatible,
+                error: compatibility.compatible ? undefined : compatibility.error,
+                message: compatibility.compatible
+                  ? retained
+                    ? 'Your pending change was restored in this browser tab. Review and retry it when ready.'
+                    : 'Secure Supabase session is active.'
+                  : compatibility.error,
               },
             }));
             isApplyingRemoteSnapshot = false;
@@ -1125,7 +1154,13 @@ export const useStore = create<StoreState>()(
         if (!shouldUseSupabase()) return;
 
         const current = get();
-        if (current.backend.isLoading || current.backend.isPulling || current.backend.isSaving || !current.backend.hasLocalChanges) {
+        if (
+          current.backend.upgradeRequired === true
+          || current.backend.isLoading
+          || current.backend.isPulling
+          || current.backend.isSaving
+          || !current.backend.hasLocalChanges
+        ) {
           return;
         }
         if (current.backend.hasRemoteUpdate && !shouldUseSecureSupabase()) {
@@ -1154,14 +1189,18 @@ export const useStore = create<StoreState>()(
               stateToSave.backend.workspaceVersion,
             );
             if (result.ok === false) {
+              const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
               set((state) => ({
                 backend: {
                   ...state.backend,
-                  status: result.code === 'CONFLICT'
+                  status: upgradeRequired
+                    ? 'upgrade_required'
+                    : result.code === 'CONFLICT'
                     ? 'conflict'
                     : result.code === 'OFFLINE'
                       ? 'offline'
                       : 'retry_required',
+                  upgradeRequired,
                   isSaving: false,
                   pendingMutations: 1,
                   conflict: result.conflict,
@@ -1293,6 +1332,24 @@ export const useStore = create<StoreState>()(
 
         try {
           if (shouldUseSecureSupabase()) {
+            const { data: { user: capabilityUser }, error: capabilityUserError } = await supabase.auth.getUser();
+            if (capabilityUserError) throw capabilityUserError;
+            if (!capabilityUser) throw new Error('Your session has expired. Sign in again.');
+            restoreSecureWorkspaceCommand(capabilityUser.id);
+            const compatibility = await loadSecureBackendCapabilities();
+            if (!compatibility.compatible) {
+              set((state) => ({
+                backend: {
+                  ...state.backend,
+                  status: 'upgrade_required',
+                  isPulling: false,
+                  upgradeRequired: true,
+                  error: compatibility.error,
+                  message: compatibility.error,
+                },
+              }));
+              return;
+            }
             const revision = await loadSecureWorkspaceRevision();
             const pulledAt = new Date().toISOString();
             const current = get();
@@ -1303,8 +1360,13 @@ export const useStore = create<StoreState>()(
               set((state) => ({
                 backend: {
                   ...state.backend,
-                  status: state.backend.status === 'conflict' ? 'conflict' : state.backend.status,
+                  status: state.backend.status === 'conflict'
+                    ? 'conflict'
+                    : state.backend.hasLocalChanges
+                      ? 'retry_required'
+                      : 'live',
                   isPulling: false,
+                  upgradeRequired: false,
                   lastPulledAt: pulledAt,
                   remoteVersion: revision.version,
                   remoteUpdatedAt: revision.updatedAt,
@@ -1323,6 +1385,7 @@ export const useStore = create<StoreState>()(
                   ...state.backend,
                   status: 'live',
                   isPulling: false,
+                  upgradeRequired: false,
                   lastPulledAt: pulledAt,
                   remoteVersion: revision.version,
                   remoteUpdatedAt: revision.updatedAt,
@@ -1333,10 +1396,7 @@ export const useStore = create<StoreState>()(
               return;
             }
 
-            const { data: { user }, error: userError } = await supabase.auth.getUser();
-            if (userError) throw userError;
-            if (!user) throw new Error('Your session has expired. Sign in again.');
-            const secure = await loadSecureWorkspace(user);
+            const secure = await loadSecureWorkspace(capabilityUser, { preserveRetainedCommand: true });
             const latest = get();
             if (!options.force && (latest.backend.hasLocalChanges || latest.backend.pendingMutations > 0)) {
               set((state) => ({
@@ -1368,6 +1428,7 @@ export const useStore = create<StoreState>()(
                 ...state.backend,
                 status: 'live',
                 isPulling: false,
+                upgradeRequired: false,
                 lastPulledAt: pulledAt,
                 lastSyncedAt: pulledAt,
                 workspaceVersion: secure.revision.version,
@@ -1538,6 +1599,25 @@ export const useStore = create<StoreState>()(
         if (current.backend.isSaving || current.backend.isPulling) {
           return { ok: false, error: 'Another synchronization request is still running.' };
         }
+        if (shouldUseSecureSupabase()) {
+          const compatibility = await loadSecureBackendCapabilities();
+          if (!compatibility.compatible) {
+            set((state) => ({
+              backend: {
+                ...state.backend,
+                status: 'upgrade_required',
+                isSaving: false,
+                upgradeRequired: true,
+                error: compatibility.error,
+                message: compatibility.error,
+              },
+            }));
+            return { ok: false, error: compatibility.error };
+          }
+        }
+        if (!getRetainedSecureCommand()) {
+          return { ok: false, error: 'There is no retained change to retry.' };
+        }
         const conflict = current.backend.conflict;
         if (conflict && isWorkspaceConflict(conflict) && getRetainedSecureCommand()) {
           return get().reapplyMutationOnLatestWorkspace();
@@ -1557,14 +1637,18 @@ export const useStore = create<StoreState>()(
 
         const result = await retrySecureWorkspaceCommand(get().backend.workspaceVersion || undefined);
         if (result.ok === false) {
+          const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
           set((state) => ({
             backend: {
               ...state.backend,
-              status: result.code === 'CONFLICT'
+              status: upgradeRequired
+                ? 'upgrade_required'
+                : result.code === 'CONFLICT'
                 ? 'conflict'
                 : result.code === 'OFFLINE'
                   ? 'offline'
                   : 'retry_required',
+              upgradeRequired,
               isSaving: false,
               conflict: result.conflict,
               error: result.error,
@@ -1584,6 +1668,7 @@ export const useStore = create<StoreState>()(
             ...state.backend,
             status: 'live',
             isSaving: false,
+            upgradeRequired: false,
             workspaceVersion: Math.max(state.backend.workspaceVersion || 0, result.workspaceVersion),
             remoteVersion: Math.max(state.backend.remoteVersion || 0, result.workspaceVersion),
             lastSavedAt: savedAt,
@@ -1601,6 +1686,17 @@ export const useStore = create<StoreState>()(
       },
 
       discardMutation: async (options = {}) => {
+        if (
+          shouldUseSecureSupabase()
+          && get().backend.pendingMutations > 0
+          && typeof window !== 'undefined'
+          && !window.confirm(translateUiText(
+            'Use the latest saved workspace? Your pending change in this browser tab will be permanently discarded.',
+            getInitialLocale(),
+          ))
+        ) {
+          return;
+        }
         discardSecureWorkspaceCommand();
         set((state) => ({
           backend: {
@@ -1624,6 +1720,9 @@ export const useStore = create<StoreState>()(
       commitPendingMutation: async (commandType) => {
         if (!shouldUseSupabase()) return { ok: true };
         const before = get().backend;
+        if (before.status === 'upgrade_required') {
+          return { ok: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE };
+        }
         if (
           before.hasLocalChanges &&
           (before.status === 'conflict' || before.status === 'retry_required' || before.status === 'offline')
@@ -1651,21 +1750,31 @@ export const useStore = create<StoreState>()(
           if (error || !data.user) return false;
 
           try {
-            const retainedBeforeLogin = await getRetainedSecureCommand();
-            const secure = await loadSecureWorkspace(data.user, { preserveRetainedCommand: true });
+            const retainedBeforeLogin = restoreSecureWorkspaceCommand(data.user.id);
+            const [secure, compatibility] = await Promise.all([
+              loadSecureWorkspace(data.user, { preserveRetainedCommand: true }),
+              loadSecureBackendCapabilities(),
+            ]);
+            const restoredWorkspace = retainedBeforeLogin
+              ? overlayRetainedWorkspaceEntities(secure.state, secure.state, retainedBeforeLogin.operations)
+              : secure.state;
+            const restoredCurrentUser = restoredWorkspace.users.find(member => member.id === secure.currentUser.id)
+              || secure.currentUser;
             isApplyingRemoteSnapshot = true;
             const hasRetainedChange = retainedBeforeLogin !== null;
             set((state) => ({
               ...makeWorkspacePatch(state, {
-                state: secure.state,
+                state: restoredWorkspace,
                 source: 'supabase',
                 version: 1,
                 message: 'Secure workspace loaded.',
               }),
-              currentUser: secure.currentUser,
+              currentUser: restoredCurrentUser,
               backend: {
                 ...state.backend,
-                status: hasRetainedChange ? 'retry_required' : 'live',
+                status: compatibility.compatible
+                  ? (hasRetainedChange ? 'retry_required' : 'live')
+                  : 'upgrade_required',
                 isLoading: false,
                 workspaceVersion: secure.revision.version,
                 remoteVersion: secure.revision.version,
@@ -1673,9 +1782,13 @@ export const useStore = create<StoreState>()(
                 lastPulledAt: new Date().toISOString(),
                 pendingMutations: hasRetainedChange ? 1 : 0,
                 hasLocalChanges: hasRetainedChange,
-                message: hasRetainedChange
-                  ? 'Secure session restored. Review and retry the change you made before signing out.'
-                  : 'Secure Supabase session is active.',
+                upgradeRequired: !compatibility.compatible,
+                error: compatibility.compatible ? undefined : compatibility.error,
+                message: compatibility.compatible
+                  ? hasRetainedChange
+                    ? 'Secure session restored. Review and retry the retained change.'
+                    : 'Secure Supabase session is active.'
+                  : compatibility.error,
               },
             }));
             isApplyingRemoteSnapshot = false;
@@ -4482,6 +4595,42 @@ export const startBackendAutoSync = () => {
       state.servicePricingSnapshots !== previousState.servicePricingSnapshots;
 
     if (!workspaceChanged && !serviceWorkspaceChanged && !serviceMetadataChanged) return;
+
+    if (state.backend.upgradeRequired === true) {
+      isApplyingRemoteSnapshot = true;
+      useStore.setState({
+        users: previousState.users,
+        clients: previousState.clients,
+        projects: previousState.projects,
+        tasks: previousState.tasks,
+        notifications: previousState.notifications,
+        registrations: previousState.registrations,
+        rolePermissions: previousState.rolePermissions,
+        taskStatuses: previousState.taskStatuses,
+        deletedUserIds: previousState.deletedUserIds,
+        deletedRoleIds: previousState.deletedRoleIds,
+        deletedTaskStatuses: previousState.deletedTaskStatuses,
+        deletedClientIds: previousState.deletedClientIds,
+        servicePackages: previousState.servicePackages,
+        clientPlans: previousState.clientPlans,
+        serviceCycles: previousState.serviceCycles,
+        deliverables: previousState.deliverables,
+        cycleComments: previousState.cycleComments,
+        addons: previousState.addons,
+        serviceWorkflowTemplates: previousState.serviceWorkflowTemplates,
+        servicePricingSnapshots: previousState.servicePricingSnapshots,
+        backend: {
+          ...state.backend,
+          hasLocalChanges: state.backend.hasLocalChanges,
+          pendingMutations: state.backend.pendingMutations,
+          error: BACKEND_UPGRADE_REQUIRED_MESSAGE,
+          message: BACKEND_UPGRADE_REQUIRED_MESSAGE,
+        },
+      });
+      isApplyingRemoteSnapshot = false;
+      useToastStore.getState().addToast(BACKEND_UPGRADE_REQUIRED_MESSAGE, 'warning');
+      return;
+    }
 
     if (!state.backend.hasLocalChanges) {
       useStore.setState((current) => ({
