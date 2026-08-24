@@ -5,6 +5,12 @@ describe('Chinese UI translations', () => {
   it('keeps English as the default and translates shared interface copy to Simplified Chinese', () => {
     expect(translateUiText('Clients', 'en')).toBe('Clients');
     expect(translateUiText('Clients', 'zh')).toBe('客户');
+    expect(translateUiText('System update in progress', 'zh')).toBe('系统正在更新');
+    expect(translateUiText('Read only', 'zh')).toBe('只读');
+    expect(translateUiText(
+      'AiTask is completing a system update. Your workspace is read-only for a moment; no changes have been submitted.',
+      'zh',
+    )).toBe('AiTask 正在完成系统更新。工作区暂时为只读状态，尚未提交任何更改。');
     expect(translateUiText('  New client  ', 'zh')).toBe('  新建客户  ');
     expect(translateUiText('Duplicate as Custom Plan', 'zh')).toBe('复制为自定义方案');
   });

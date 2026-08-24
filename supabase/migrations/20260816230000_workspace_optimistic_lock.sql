@@ -15,7 +15,7 @@ create or replace function public.aitask_execute_command(
   p_command_id uuid,
   p_command_type text,
   p_operations jsonb,
-  p_expected_workspace_version bigint default null
+  p_expected_workspace_version bigint
 )
 returns jsonb
 language plpgsql
@@ -167,7 +167,7 @@ create or replace function public.aitask_execute_service_command(
   p_command_id uuid,
   p_command_type text,
   p_operations jsonb,
-  p_expected_workspace_version bigint default null
+  p_expected_workspace_version bigint
 )
 returns jsonb
 language plpgsql
@@ -335,7 +335,7 @@ grant execute on function public.aitask_execute_service_command(text, uuid, text
 
 create or replace function public.aitask_generate_deliverable_task_chain(
   p_workspace_id text, p_command_id uuid, p_operations jsonb,
-  p_expected_workspace_version bigint default null
+  p_expected_workspace_version bigint
 )
 returns jsonb language sql security definer set search_path='' as $$
   select public.aitask_execute_service_command(p_workspace_id, p_command_id, 'deliverable.workflow.generate', p_operations, p_expected_workspace_version);

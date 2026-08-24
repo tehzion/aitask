@@ -21,7 +21,7 @@ const formatSyncTime = (value?: string) => {
 };
 
 const getFreshnessTone = (backend: ReturnType<typeof useStore.getState>['backend']) => {
-  if (backend.status === 'conflict' || backend.status === 'retry_required' || backend.error) return 'amber';
+  if (backend.upgradeRequired || backend.status === 'conflict' || backend.status === 'retry_required' || backend.error) return 'amber';
   if (backend.status === 'offline') return 'slate';
   if (backend.status === 'loading' || backend.status === 'saving') return 'blue';
   return 'emerald';
@@ -29,6 +29,7 @@ const getFreshnessTone = (backend: ReturnType<typeof useStore.getState>['backend
 
 const getFreshnessLabel = (backend: ReturnType<typeof useStore.getState>['backend'], isLocal: boolean) => {
   if (isLocal) return 'Local';
+  if (backend.upgradeRequired) return 'Read only';
   if (backend.status === 'conflict') return 'Conflict';
   if (backend.status === 'retry_required') return 'Retry required';
   if (backend.status === 'offline') return 'Offline';
@@ -44,7 +45,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
   const isLocal = backendStatus.mode === 'local';
   const label = isLocal && backendStatus.isHostedRuntime ? 'Local build' : getFreshnessLabel(backend, isLocal);
   const tone = isLocal ? 'slate' : getFreshnessTone(backend);
-  const needsResolution = backend.status === 'conflict' || backend.status === 'retry_required' || (backend.status === 'offline' && backend.hasLocalChanges);
+  const needsResolution = !backend.upgradeRequired && (backend.status === 'conflict' || backend.status === 'retry_required' || (backend.status === 'offline' && backend.hasLocalChanges));
   const Icon = isLocal || backend.status === 'offline'
     ? CloudOff
     : needsResolution || backend.error
@@ -53,7 +54,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
         ? RefreshCw
         : Cloud;
   const lastChecked = backend.lastPulledAt || backend.lastSavedAt || backend.lastSyncedAt || backend.remoteUpdatedAt;
-  const showRefresh = !isLocal && !needsResolution && (backend.hasRemoteUpdate || backend.error || !compact);
+  const showRefresh = !isLocal && !needsResolution && (backend.upgradeRequired || backend.hasRemoteUpdate || backend.error || !compact);
 
   return (
     <div className={cn('flex flex-wrap items-center gap-2', className)} aria-live="polite">

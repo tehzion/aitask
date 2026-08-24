@@ -6,6 +6,7 @@ import clsx from 'clsx';
 import { canAccessPath, getVisibleNavigation } from '../lib/access';
 import { clearPasswordResetBypass } from '../lib/auth';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
+import { discardSecureWorkspaceCommand } from '../lib/secureWorkspace';
 
 const navIcons = {
   Dashboard: LayoutDashboard,
@@ -32,7 +33,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
   const navigate = useNavigate();
   const handleLogout = async () => {
     const signingOutUser = useStore.getState().currentUser;
-    if (shouldUseSecureSupabase()) await signOutSecureSession();
+    if (shouldUseSecureSupabase()) {
+      discardSecureWorkspaceCommand();
+      await signOutSecureSession();
+    }
     clearPasswordResetBypass(signingOutUser?.id);
     stopBackendAutoSync();
     useStore.setState({ currentUser: null });

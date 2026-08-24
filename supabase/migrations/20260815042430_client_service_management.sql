@@ -134,6 +134,44 @@ create trigger aitask_project_service_entity
 revoke all on function private.aitask_project_service_entity() from public, anon, authenticated;
 
 -- Create canonical client records for legacy name-only work, then link tasks and projects.
+-- Abort transactionally if the live legacy data cannot be mapped without guessing.
+do $$
+begin
+  if exists (
+    select 1
+    from public.aitask_entities work
+    where work.entity_type in ('task', 'project')
+      and coalesce(work.data ->> 'clientId', '') = ''
+      and coalesce(work.client_key, '') = ''
+  ) then
+    raise exception 'Client backfill aborted: work records without a client key were found.';
+  end if;
+
+  if exists (
+    select 1
+    from public.aitask_entities work
+    where work.entity_type in ('task', 'project')
+      and coalesce(work.data ->> 'clientId', '') = ''
+      and coalesce(work.client_key, '') <> ''
+    group by work.workspace_id, work.client_key
+    having count(distinct nullif(btrim(work.data ->> 'clientName'), '')) <> 1
+  ) then
+    raise exception 'Client backfill aborted: an ambiguous client-name mapping was found.';
+  end if;
+
+  if exists (
+    select 1
+    from public.aitask_entities client
+    where client.entity_type = 'client'
+      and coalesce(client.client_key, '') <> ''
+    group by client.workspace_id, client.client_key
+    having count(*) > 1
+  ) then
+    raise exception 'Client backfill aborted: duplicate canonical client profiles were found.';
+  end if;
+end;
+$$;
+
 with discovered as (
   select workspace_id, client_key, max(data ->> 'clientName') as client_name
   from public.aitask_entities

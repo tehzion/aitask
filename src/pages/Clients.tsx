@@ -130,6 +130,7 @@ const Clients: React.FC = () => {
     upsertClientProfile,
     renameClient,
     commitPendingMutation,
+    upgradeRequired,
   } = useStore(useShallow(state => ({
     clients: state.clients,
     tasks: state.tasks,
@@ -144,6 +145,7 @@ const Clients: React.FC = () => {
     upsertClientProfile: state.upsertClientProfile,
     renameClient: state.renameClient,
     commitPendingMutation: state.commitPendingMutation,
+    upgradeRequired: state.backend.upgradeRequired === true,
   })));
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedClientName, setSelectedClientName] = React.useState('');
@@ -193,7 +195,7 @@ const Clients: React.FC = () => {
     () => getVisibleProjects(currentUser, allProjects, allTasks, rolePermissions),
     [allProjects, allTasks, currentUser, rolePermissions]
   );
-  const canAddTasks = canCreateTasks(currentUser, rolePermissions);
+  const canAddTasks = !upgradeRequired && canCreateTasks(currentUser, rolePermissions);
 
   const clients = React.useMemo(() => {
     const summaries = new Map<string, ClientSummary>();
@@ -367,10 +369,10 @@ const Clients: React.FC = () => {
   }, [clientPlans, clients, deliverables, serviceCycles]);
   const getServiceContext = (client: ClientSummary) => serviceContextByClientKey.get(getClientKey(client.name)) ?? null;
   const selectedClientCanRename = selectedClient
-    ? canRenameClient(currentUser)
+    ? !upgradeRequired && canRenameClient(currentUser)
     : false;
   const selectedClientCanEditProfile = selectedClient
-    ? canEditClientProfile(currentUser, selectedClient.name, allTasks, rolePermissions)
+    ? !upgradeRequired && canEditClientProfile(currentUser, selectedClient.name, allTasks, rolePermissions)
     : false;
 
   const openClientPanel = (client: ClientSummary, edit = false) => {
@@ -380,7 +382,7 @@ const Clients: React.FC = () => {
     setRenameValue(client.name);
     setRenameError('');
     setIsRenamingClient(false);
-    setIsEditingProfile(Boolean(edit && canEditClientProfile(currentUser, client.name, allTasks, rolePermissions)));
+    setIsEditingProfile(Boolean(edit && !upgradeRequired && canEditClientProfile(currentUser, client.name, allTasks, rolePermissions)));
   };
 
   const closeClientPanel = () => {
@@ -479,7 +481,7 @@ const Clients: React.FC = () => {
         description="Client scope, current delivery progress, contacts and linked work in one place."
         meta={<><span>{clients.length} visible clients</span><span aria-hidden="true">·</span><span>{totalTasks} linked tasks</span></>}
         action={<div className="flex flex-wrap gap-2">
-          {(currentUser?.role === 'Admin' || currentUser?.isSuperAdmin) && <Button onClick={() => setIsCreateClientOpen(true)}><Building2 className="h-4 w-4" />New client</Button>}
+          {(currentUser?.role === 'Admin' || currentUser?.isSuperAdmin) && <Button onClick={() => setIsCreateClientOpen(true)} disabled={upgradeRequired}><Building2 className="h-4 w-4" />New client</Button>}
           {canAddTasks && <Button variant="secondary" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />New task</Button>}
         </div>}
       />

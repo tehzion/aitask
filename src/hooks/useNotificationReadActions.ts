@@ -5,7 +5,10 @@ import {
   createNotificationMutationLock,
   restoreNotificationReadState,
 } from '../lib/notificationReads';
-import { setSecureNotificationsRead } from '../lib/secureWorkspace';
+import {
+  BACKEND_UPGRADE_REQUIRED_MESSAGE,
+  setSecureNotificationsRead,
+} from '../lib/secureWorkspace';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { useStore } from '../store';
 import { useToastStore } from '../store/useToastStore';
@@ -27,6 +30,7 @@ export const useNotificationReadActions = (): NotificationReadActions => {
   const markNotificationRead = useStore(state => state.markNotificationRead);
   const markNotificationUnread = useStore(state => state.markNotificationUnread);
   const markAllNotificationsRead = useStore(state => state.markAllNotificationsRead);
+  const upgradeRequired = useStore(state => state.backend.upgradeRequired === true);
 
   const persistChange = useCallback(async (
     notificationIds: string[],
@@ -35,6 +39,10 @@ export const useNotificationReadActions = (): NotificationReadActions => {
     change: () => void,
   ) => {
     if (!markAll && notificationIds.length === 0) return true;
+    if (shouldUseSecureSupabase() && useStore.getState().backend.upgradeRequired === true) {
+      useToastStore.getState().addToast(BACKEND_UPGRADE_REQUIRED_MESSAGE, 'warning');
+      return false;
+    }
     if (!notificationMutationLock.tryAcquire()) {
       useToastStore.getState().addToast('Another notification update is still saving.', 'warning');
       return false;
@@ -100,6 +108,6 @@ export const useNotificationReadActions = (): NotificationReadActions => {
       return persistChange(ids, false, false, () => ids.forEach(markNotificationUnread));
     },
     markAllRead: () => persistChange([], true, true, markAllNotificationsRead),
-    isUpdating,
-  }), [isUpdating, markAllNotificationsRead, markNotificationRead, markNotificationUnread, persistChange]);
+    isUpdating: isUpdating || upgradeRequired,
+  }), [isUpdating, markAllNotificationsRead, markNotificationRead, markNotificationUnread, persistChange, upgradeRequired]);
 };

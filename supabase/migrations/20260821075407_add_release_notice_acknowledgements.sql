@@ -10,6 +10,9 @@ create table if not exists public.aitask_release_notice_acknowledgements (
   primary key (workspace_id, member_id, notice_id)
 );
 
+create index if not exists aitask_release_notice_acknowledgements_member_idx
+  on public.aitask_release_notice_acknowledgements(member_id);
+
 alter table public.aitask_release_notice_acknowledgements enable row level security;
 
 revoke all on table public.aitask_release_notice_acknowledgements from public, anon, authenticated;
@@ -89,3 +92,53 @@ revoke all on function public.aitask_get_release_notice_acknowledgement(text, te
 revoke all on function public.aitask_acknowledge_release_notice(text, text) from public, anon;
 grant execute on function public.aitask_get_release_notice_acknowledgement(text, text) to authenticated, service_role;
 grant execute on function public.aitask_acknowledge_release_notice(text, text) to authenticated, service_role;
+
+-- Positive compatibility handshake used by the web client before enabling any
+-- workspace mutations. A missing or older function leaves the app read-only.
+create or replace function public.aitask_get_backend_capabilities(
+  p_workspace_id text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_member_id text;
+  v_workspace_optimistic_lock boolean;
+  v_service_operations boolean;
+  v_release_notice_acknowledgements boolean;
+begin
+  if (select auth.uid()) is null then
+    return jsonb_build_object('ok', false, 'code', 'FORBIDDEN', 'error', 'Authentication is required.');
+  end if;
+
+  v_member_id := private.aitask_member_id(p_workspace_id);
+  if v_member_id is null then
+    return jsonb_build_object('ok', false, 'code', 'FORBIDDEN', 'error', 'Workspace membership is required.');
+  end if;
+
+  v_workspace_optimistic_lock :=
+    pg_catalog.to_regprocedure('public.aitask_execute_command(text,uuid,text,jsonb)') is not null
+    and pg_catalog.to_regprocedure('public.aitask_execute_command(text,uuid,text,jsonb,bigint)') is not null;
+  v_service_operations :=
+    pg_catalog.to_regprocedure('public.aitask_execute_service_command(text,uuid,text,jsonb,bigint)') is not null
+    and pg_catalog.to_regprocedure('public.aitask_generate_deliverable_task_chain(text,uuid,jsonb,bigint)') is not null;
+  v_release_notice_acknowledgements :=
+    pg_catalog.to_regclass('public.aitask_release_notice_acknowledgements') is not null;
+
+  return jsonb_build_object(
+    'ok', v_workspace_optimistic_lock and v_service_operations and v_release_notice_acknowledgements,
+    'schemaVersion', 2,
+    'workspaceOptimisticLock', v_workspace_optimistic_lock,
+    'serviceOperations', v_service_operations,
+    'releaseNoticeAcknowledgements', v_release_notice_acknowledgements
+  );
+end;
+$$;
+
+revoke all on function public.aitask_get_backend_capabilities(text) from public, anon;
+grant execute on function public.aitask_get_backend_capabilities(text) to authenticated, service_role;
+
+notify pgrst, 'reload schema';

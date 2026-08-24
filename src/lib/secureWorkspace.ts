@@ -34,7 +34,11 @@ import { stripServiceItemPrices } from './serviceManagement';
 
 export const SECURE_WORKSPACE_ID = 'aitask-main';
 export const SECURE_SYNC_PROTOCOL_VERSION = 1;
+export const SECURE_BACKEND_SCHEMA_VERSION = 2;
+export const BACKEND_UPGRADE_REQUIRED_MESSAGE = 'AiTask is completing a system update. Your workspace is read-only for a moment; no changes have been submitted.';
 const SYNC_REQUEST_TIMEOUT_MS = 20_000;
+const PENDING_COMMAND_STORAGE_VERSION = 1;
+const PENDING_COMMAND_STORAGE_PREFIX = 'aitask:secure-pending-command';
 
 export const SECURE_COMMAND_TYPES = [
   'workspace.patch',
@@ -194,8 +198,27 @@ export type SecureCommand = {
   operations: WorkspaceOperation[];
 };
 
+export type SecureBackendCapabilities = {
+  schemaVersion: number;
+  workspaceOptimisticLock: boolean;
+  serviceOperations: boolean;
+  releaseNoticeAcknowledgements: boolean;
+};
+
+export type SecureBackendCompatibility =
+  | { compatible: true; capabilities: SecureBackendCapabilities; error?: undefined }
+  | { compatible: false; error: string; code?: string };
+
+type PendingCommandEnvelope = {
+  version: number;
+  workspaceId: string;
+  authUserId: string;
+  command: SecureCommand;
+};
+
 let baseline = new Map<string, BaselineRow>();
 let retryableCommand: SecureCommand | null = null;
+let activeSecureAuthUserId: string | null = null;
 let retryableMemberDepartments: {
   id: string;
   memberId: string;
@@ -212,6 +235,111 @@ let retryableNotificationMutation: {
 const entityKey = (type: string, id: string) => `${type}:${id}`;
 const stable = (value: unknown) => JSON.stringify(value);
 const commandId = () => crypto.randomUUID();
+
+const pendingCommandStorageKey = (authUserId: string) => (
+  `${PENDING_COMMAND_STORAGE_PREFIX}:v${PENDING_COMMAND_STORAGE_VERSION}:${SECURE_WORKSPACE_ID}:${authUserId}`
+);
+
+const getSessionStorage = (): Storage | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+const isWorkspaceOperation = (value: unknown): value is WorkspaceOperation => {
+  if (!value || typeof value !== 'object') return false;
+  const operation = value as Partial<WorkspaceOperation>;
+  return (operation.kind === 'member' || operation.kind === 'entity')
+    && (operation.action === 'insert' || operation.action === 'update' || operation.action === 'delete')
+    && typeof operation.entityType === 'string'
+    && operation.entityType.length > 0
+    && operation.entityType.length <= 80
+    && typeof operation.entityId === 'string'
+    && operation.entityId.length > 0
+    && operation.entityId.length <= 240
+    && Number.isInteger(operation.expectedVersion)
+    && operation.expectedVersion! >= 0
+    && (operation.parentId === undefined || (typeof operation.parentId === 'string' && operation.parentId.length <= 240))
+    && (operation.data === undefined || (typeof operation.data === 'object' && operation.data !== null && !Array.isArray(operation.data)));
+};
+
+const isSecureCommand = (value: unknown): value is SecureCommand => {
+  if (!value || typeof value !== 'object') return false;
+  const command = value as Partial<SecureCommand>;
+  return typeof command.id === 'string'
+    && command.id.length > 0
+    && command.id.length <= 160
+    && isSecureCommandType(command.type)
+    && Array.isArray(command.operations)
+    && command.operations.length > 0
+    && command.operations.length <= 500
+    && command.operations.every(isWorkspaceOperation);
+};
+
+const persistRetryableCommand = () => {
+  if (!retryableCommand || !activeSecureAuthUserId) return;
+  const storage = getSessionStorage();
+  if (!storage) return;
+  const envelope: PendingCommandEnvelope = {
+    version: PENDING_COMMAND_STORAGE_VERSION,
+    workspaceId: SECURE_WORKSPACE_ID,
+    authUserId: activeSecureAuthUserId,
+    command: retryableCommand,
+  };
+  try {
+    storage.setItem(pendingCommandStorageKey(activeSecureAuthUserId), JSON.stringify(envelope));
+  } catch {
+    // In-memory retry remains available when browser storage is unavailable.
+  }
+};
+
+const retainSecureWorkspaceCommand = (command: SecureCommand) => {
+  retryableCommand = command;
+  persistRetryableCommand();
+};
+
+const clearPersistedRetryableCommand = (authUserId = activeSecureAuthUserId) => {
+  if (!authUserId) return;
+  try {
+    getSessionStorage()?.removeItem(pendingCommandStorageKey(authUserId));
+  } catch {
+    // The in-memory command is still cleared by the caller.
+  }
+};
+
+export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand | null => {
+  if (!authUserId) return null;
+  if (activeSecureAuthUserId && activeSecureAuthUserId !== authUserId) {
+    clearPersistedRetryableCommand(activeSecureAuthUserId);
+    retryableCommand = null;
+  }
+  activeSecureAuthUserId = authUserId;
+  if (retryableCommand) return retryableCommand;
+  const storage = getSessionStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(pendingCommandStorageKey(authUserId));
+    if (!raw) return null;
+    const envelope = JSON.parse(raw) as Partial<PendingCommandEnvelope>;
+    if (
+      envelope.version !== PENDING_COMMAND_STORAGE_VERSION
+      || envelope.workspaceId !== SECURE_WORKSPACE_ID
+      || envelope.authUserId !== authUserId
+      || !isSecureCommand(envelope.command)
+    ) {
+      storage.removeItem(pendingCommandStorageKey(authUserId));
+      return null;
+    }
+    retryableCommand = envelope.command;
+    return retryableCommand;
+  } catch {
+    storage.removeItem(pendingCommandStorageKey(authUserId));
+    return null;
+  }
+};
 
 class SyncRequestTimeoutError extends Error {
   constructor() {
@@ -602,10 +730,30 @@ export const overlayRetainedWorkspaceEntities = (
     const deleted = new Set(ops.filter(operation => operation.action === 'delete').map(operation => operation.entityId));
     const touched = new Set(ops.filter(operation => operation.action !== 'delete').map(operation => operation.entityId));
     const localById = new Map(localItems.map(item => [item.id, item]));
+    const operationById = new Map(ops.map(operation => [operation.entityId, operation]));
+    const retainedItem = (id: string, remoteItem?: T): T | undefined => {
+      const localItem = localById.get(id);
+      const operation = operationById.get(id);
+      if (!localItem && !operation?.data) return remoteItem;
+      return {
+        ...(remoteItem || {} as T),
+        ...(localItem || {} as T),
+        ...(operation?.data || {}),
+        id,
+        version: operation
+          ? Math.max(1, operation.expectedVersion + 1)
+          : Math.max(1, Number((localItem as { version?: number } | undefined)?.version) || 1),
+      } as T;
+    };
     const merged = remoteItems
       .filter(item => !deleted.has(item.id))
-      .map(item => touched.has(item.id) && localById.has(item.id) ? localById.get(item.id)! : item);
-    const inserts = localItems.filter(item => touched.has(item.id) && !merged.some(existing => existing.id === item.id));
+      .map(item => touched.has(item.id) ? retainedItem(item.id, item) || item : item);
+    const insertedIds = ops
+      .filter(operation => operation.action === 'insert' && !merged.some(existing => existing.id === operation.entityId))
+      .map(operation => operation.entityId);
+    const inserts = insertedIds
+      .map(id => retainedItem(id))
+      .filter((item): item is T => Boolean(item));
     return [...merged, ...inserts];
   };
 
@@ -631,11 +779,61 @@ export const overlayRetainedWorkspaceEntities = (
     const deleted = new Set(effectiveTaskOps.filter(operation => operation.action === 'delete').map(operation => operation.entityId));
     const touched = new Set(effectiveTaskOps.filter(operation => operation.action !== 'delete').map(operation => operation.entityId));
     const localById = new Map(local.tasks.map(item => [item.id, item]));
-    const merged = remote.tasks
+    const taskOperationById = new Map(
+      (opsByType.get('task') || []).map(operation => [operation.entityId, operation]),
+    );
+    const retainedTask = (id: string, remoteTask?: Task): Task | undefined => {
+      const localTask = localById.get(id);
+      const operation = taskOperationById.get(id);
+      if (!localTask && !operation?.data) return remoteTask;
+      return {
+        ...(remoteTask || {} as Task),
+        ...(localTask || {} as Task),
+        ...(operation?.data || {}),
+        id,
+        version: operation
+          ? Math.max(1, operation.expectedVersion + 1)
+          : Math.max(1, Number(localTask?.version) || 1),
+      } as Task;
+    };
+    let merged = remote.tasks
       .filter(item => !deleted.has(item.id))
-      .map(item => touched.has(item.id) && localById.has(item.id) ? localById.get(item.id)! : item);
-    const inserts = local.tasks.filter(item => touched.has(item.id) && !merged.some(existing => existing.id === item.id));
-    return [...merged, ...inserts];
+      .map(item => touched.has(item.id) ? retainedTask(item.id, item) || item : item);
+    const inserts = (opsByType.get('task') || [])
+      .filter(operation => operation.action === 'insert' && !merged.some(existing => existing.id === operation.entityId))
+      .map(operation => retainedTask(operation.entityId))
+      .filter((item): item is Task => Boolean(item));
+    merged = [...merged, ...inserts];
+
+    const applyChildOperations = (
+      task: Task,
+      type: 'comment' | 'approval',
+      field: 'comments' | 'approvalHistory',
+    ): Task => {
+      const childOps = (opsByType.get(type) || []).filter(operation => operation.parentId === task.id);
+      if (childOps.length === 0) return task;
+      const existing = [...(task[field] || [])] as unknown as Array<Record<string, unknown> & { id: string }>;
+      childOps.forEach(operation => {
+        const index = existing.findIndex(item => item.id === operation.entityId);
+        if (operation.action === 'delete') {
+          if (index >= 0) existing.splice(index, 1);
+          return;
+        }
+        const next = {
+          ...(index >= 0 ? existing[index] : {}),
+          ...(operation.data || {}),
+          id: operation.entityId,
+          version: Math.max(1, operation.expectedVersion + 1),
+        } as Record<string, unknown> & { id: string };
+        if (index >= 0) existing[index] = next;
+        else existing.push(next);
+      });
+      return { ...task, [field]: existing } as Task;
+    };
+
+    return merged.map(task => (
+      applyChildOperations(applyChildOperations(task, 'comment', 'comments'), 'approval', 'approvalHistory')
+    ));
   })();
 
   const statuses = (() => {
@@ -679,7 +877,7 @@ const executeCommand = async (
   expectedWorkspaceVersion?: number,
 ): Promise<MutationResult<CommandResponse>> => {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    retryableCommand = command;
+    retainSecureWorkspaceCommand(command);
     return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before retrying this change.' };
   }
 
@@ -710,7 +908,7 @@ const executeCommand = async (
       rpcResult = await invoke();
     }
   } catch (error) {
-    retryableCommand = command;
+    retainSecureWorkspaceCommand(command);
     const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
     return {
       ok: false,
@@ -726,11 +924,13 @@ const executeCommand = async (
   const { data, error } = rpcResult;
 
   if (error) {
-    retryableCommand = command;
+    retainSecureWorkspaceCommand(command);
     console.error('[AiTask sync] Supabase RPC failed.', JSON.stringify({ ...commandDiagnostic(command), code: error.code }));
     return isAuthError(error)
       ? { ok: false, code: 'FORBIDDEN', error: 'Your session expired. Sign in again, then retry the retained change.' }
-      : { ok: false, code: 'RETRY_REQUIRED', error: error.message || 'The command could not be confirmed.' };
+      : error.code === 'PGRST202'
+        ? { ok: false, code: 'RETRY_REQUIRED', error: BACKEND_UPGRADE_REQUIRED_MESSAGE }
+        : { ok: false, code: 'RETRY_REQUIRED', error: error.message || 'The command could not be confirmed.' };
   }
 
   const response = data as CommandResponse;
@@ -742,7 +942,11 @@ const executeCommand = async (
     const conflict = response.conflict && operation
       ? { ...response.conflict, attempted: operation.data, changedFields: changedFieldsForConflict(operation, response.conflict.current) }
       : response.conflict;
-    retryableCommand = response.code === 'CONFLICT' || response.code === 'RETRY_REQUIRED' ? command : null;
+    if (response.code === 'CONFLICT' || response.code === 'RETRY_REQUIRED') retainSecureWorkspaceCommand(command);
+    else {
+      retryableCommand = null;
+      clearPersistedRetryableCommand();
+    }
     return {
       ok: false,
       code: response.code || 'RETRY_REQUIRED',
@@ -753,6 +957,7 @@ const executeCommand = async (
 
   applyCommandVersions(command, response);
   retryableCommand = null;
+  clearPersistedRetryableCommand();
   return {
     ok: true,
     data: response,
@@ -760,6 +965,43 @@ const executeCommand = async (
     workspaceVersion: Number(response.workspaceVersion) || 1,
     replayed: response.replayed,
   };
+};
+
+export const loadSecureBackendCapabilities = async (): Promise<SecureBackendCompatibility> => {
+  const invoke = () => withSyncTimeout(supabase.rpc('aitask_get_backend_capabilities', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+  }));
+  let result: Awaited<ReturnType<typeof invoke>>;
+  try {
+    result = await invoke();
+    if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
+  } catch {
+    return { compatible: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE };
+  }
+
+  if (result.error) {
+    return {
+      compatible: false,
+      code: result.error.code,
+      error: BACKEND_UPGRADE_REQUIRED_MESSAGE,
+    };
+  }
+
+  const response = result.data as Partial<SecureBackendCapabilities> & { ok?: boolean };
+  const capabilities: SecureBackendCapabilities = {
+    schemaVersion: Number(response?.schemaVersion) || 0,
+    workspaceOptimisticLock: response?.workspaceOptimisticLock === true,
+    serviceOperations: response?.serviceOperations === true,
+    releaseNoticeAcknowledgements: response?.releaseNoticeAcknowledgements === true,
+  };
+  const compatible = response?.ok === true
+    && capabilities.schemaVersion >= SECURE_BACKEND_SCHEMA_VERSION
+    && capabilities.workspaceOptimisticLock
+    && capabilities.serviceOperations
+    && capabilities.releaseNoticeAcknowledgements;
+  return compatible
+    ? { compatible: true, capabilities }
+    : { compatible: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE };
 };
 
 export const loadSecureWorkspaceRevision = async () => {
@@ -1226,7 +1468,16 @@ const projectionToEntityRow = (
 };
 
 export const loadSecureWorkspace = async (authUser: User, options: { preserveRetainedCommand?: boolean } = {}) => {
-  const retainedBeforeLoad = options.preserveRetainedCommand ? retryableCommand : null;
+  const retainedBeforeLoad = options.preserveRetainedCommand
+    ? restoreSecureWorkspaceCommand(authUser.id)
+    : null;
+  if (!options.preserveRetainedCommand) {
+    if (activeSecureAuthUserId && activeSecureAuthUserId !== authUser.id) {
+      clearPersistedRetryableCommand(activeSecureAuthUserId);
+      retryableCommand = null;
+    }
+    activeSecureAuthUserId = authUser.id;
+  }
   const [{ data: members, error: memberError }, { data: entities, error: entityError }, revision, notificationFeed] = await Promise.all([
     supabase.from('aitask_members').select('*').eq('workspace_id', SECURE_WORKSPACE_ID),
     supabase.from('aitask_entities')
@@ -1343,8 +1594,13 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
     effectiveEntityRows,
   );
   alignBaselineToCanonicalState(state);
-  if (!options.preserveRetainedCommand) retryableCommand = null;
-  else if (retainedBeforeLoad) retryableCommand = retainedBeforeLoad;
+  if (!options.preserveRetainedCommand) {
+    retryableCommand = null;
+    clearPersistedRetryableCommand();
+  } else if (retainedBeforeLoad) {
+    retryableCommand = retainedBeforeLoad;
+    persistRetryableCommand();
+  }
   return { state, currentUser, revision, notificationFeed };
 };
 
@@ -1452,11 +1708,14 @@ export const rebaseRetryableCommand = (conflict: MutationConflict) => {
       return { ...operation, data: mergedData, expectedVersion: conflict.actualVersion };
     }),
   };
+  persistRetryableCommand();
   return true;
 };
 
 export const discardSecureWorkspaceCommand = () => {
   retryableCommand = null;
+  clearPersistedRetryableCommand();
+  activeSecureAuthUserId = null;
 };
 
 export const getRetainedSecureCommand = (): SecureCommand | null => retryableCommand;

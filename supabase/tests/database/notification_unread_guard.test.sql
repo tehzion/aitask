@@ -20,7 +20,7 @@ select ok(
 
 select ok(
   position(
-    'v_new_reads = (v_old_reads - jsonb_build_array(v_member_id))' in pg_get_functiondef('private.aitask_can_mutate_entity(text,text,text,text,text,jsonb,jsonb)'::regprocedure)
+    'v_new_reads = (v_old_reads - v_member_id)' in pg_get_functiondef('private.aitask_can_mutate_entity(text,text,text,text,text,jsonb,jsonb)'::regprocedure)
   ) > 0,
   'notification guard allows the acting member to mark unread'
 );

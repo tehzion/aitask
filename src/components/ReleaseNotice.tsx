@@ -17,6 +17,7 @@ import {
 import { useI18n } from './I18nProvider';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
+import { useStore } from '../store';
 
 interface ReleaseNoticeProps {
   currentUser: User | null;
@@ -28,12 +29,13 @@ const ReleaseNotice: React.FC<ReleaseNoticeProps> = ({ currentUser, isReady }) =
   const location = useLocation();
   const [isOpen, setIsOpen] = React.useState(false);
   const dismissedThisSession = React.useRef(new Set<string>());
+  const upgradeRequired = useStore(state => state.backend.upgradeRequired === true);
 
   React.useEffect(() => {
     const requiresPasswordSetup = Boolean(
       currentUser?.mustResetPassword && !hasPasswordResetBypass(currentUser.id),
     );
-    if (!currentUser || !isReady || requiresPasswordSetup) {
+    if (!currentUser || !isReady || requiresPasswordSetup || upgradeRequired) {
       setIsOpen(false);
       return;
     }
@@ -58,7 +60,7 @@ const ReleaseNotice: React.FC<ReleaseNoticeProps> = ({ currentUser, isReady }) =
   // Choosing "Continue for now" changes the password-setup bypass in session
   // storage, then routes the user away from Settings. Re-check on that route
   // change so the release note appears only after the required gate is passed.
-  }, [currentUser, isReady, location.pathname]);
+  }, [currentUser, isReady, location.pathname, upgradeRequired]);
 
   const dismiss = React.useCallback(() => {
     if (!currentUser || dismissedThisSession.current.has(currentUser.id)) return;
@@ -66,13 +68,15 @@ const ReleaseNotice: React.FC<ReleaseNoticeProps> = ({ currentUser, isReady }) =
     setIsOpen(false);
 
     if (shouldUseSecureSupabase()) {
-      // The notice is already closed for this session if the network request
-      // fails; the acknowledgement is checked again on the next sign-in.
-      void acknowledgeSecureReleaseNotice(RELEASE_NOTICE_ID);
+      if (!upgradeRequired) {
+        // The notice is already closed for this session if the network request
+        // fails; the acknowledgement is checked again on the next sign-in.
+        void acknowledgeSecureReleaseNotice(RELEASE_NOTICE_ID);
+      }
       return;
     }
     acknowledgeLocalReleaseNotice(currentUser.id);
-  }, [currentUser]);
+  }, [currentUser, upgradeRequired]);
 
   if (!currentUser || !isOpen) return null;
   const copy = getReleaseNoticeCopy(currentUser, locale);
