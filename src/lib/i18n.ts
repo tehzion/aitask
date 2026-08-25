@@ -718,6 +718,9 @@ const zhCopyAdditions: Record<string, string> = {
   'Service plan, monthly cycles, deliverables and client files.': '服务方案、月度周期、交付物与客户文件。',
   'Service context': '服务背景',
   'Monthly deliverables': '月度交付物',
+  'Current cycle delivery progress for each active company.': '各活跃公司当前周期的交付进度。',
+  'No active companies yet.': '暂无活跃公司。',
+  'No published cycle for this month': '本月暂无已发布周期',
   'Contract reminder': '合同到期提醒',
   'deliverables completed': '个交付物已完成',
   'No plan': '暂无方案',
@@ -828,6 +831,10 @@ const zhCopyAdditions: Record<string, string> = {
   'Updates': '工作更新',
   'No updates yet. Add the first work note below.': '尚无更新。请在下方添加第一条工作记录。',
   'Add a work update…': '添加工作更新…',
+  'History': '历史记录',
+  'marked client review': '将客户审阅标记为',
+  'Task updated': '任务已更新',
+  'No recorded history yet.': '尚无历史记录。',
   'More': '更多',
   'Inbox': '收件箱',
   'Schedule': '日程',
@@ -878,6 +885,8 @@ const zhCopyAdditions: Record<string, string> = {
   'Create client plan': '创建客户方案',
   'Only Boss Koo can manage roles and members. The controls below are read-only for your account.': '只有 Boss Koo 可以管理角色与成员。以下控件在您的账户中为只读。',
   'Registrations are approved as Staff.': '注册将以员工身份批准。',
+  'Base role only': '仅基础角色',
+  'Assign role and departments': '分配角色与部门',
 };
 
 const preserveWhitespace = (value: string, replacement: string) => {
