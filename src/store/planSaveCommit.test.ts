@@ -129,3 +129,94 @@ describe('plan wizard degraded-sync recovery', () => {
     expect(useStore.getState().clients).toEqual([]);
   });
 });
+
+describe('retryPendingSave', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    from.mockReset();
+    refreshSession.mockReset();
+    useStore.setState({
+      ...initialState,
+      currentUser: boss,
+      users: [boss],
+      clients: [],
+      projects: [],
+      tasks: [],
+      notifications: [],
+      registrations: [],
+      rolePermissions: [],
+      taskStatuses: ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'],
+      servicePackages: [],
+      clientPlans: [],
+      serviceCycles: [],
+      deliverables: [],
+      cycleComments: [],
+      addons: [],
+      serviceWorkflowTemplates: [],
+      servicePricingSnapshots: [],
+      backend: {
+        ...initialState.backend,
+        mode: 'supabase',
+        status: 'retry_required',
+        isConfigured: true,
+        isLoading: false,
+        isSaving: false,
+        isPulling: false,
+        hasLocalChanges: true,
+        pendingMutations: 0,
+        hasRemoteUpdate: false,
+        upgradeRequired: false,
+        workspaceVersion: 5,
+        remoteVersion: 5,
+        conflict: undefined,
+        error: undefined,
+      },
+    });
+  });
+
+  it('syncs the local diff directly when no command is retained', async () => {
+    const created = useStore.getState().createClientWithPlan(planInput);
+    expect(created.ok).toBe(true);
+
+    rpc.mockResolvedValueOnce({
+      data: { ok: true, commandId: '00000000-0000-4000-8000-000000000211', workspaceVersion: 6, changed: [] },
+      error: null,
+    });
+    const result = await useStore.getState().retryPendingSave('client_plan.manage');
+
+    expect(result).toMatchObject({ ok: true });
+    expect(useStore.getState().backend.status).toBe('live');
+    expect(useStore.getState().backend.hasLocalChanges).toBe(false);
+    expect(rpc).toHaveBeenCalledWith('aitask_execute_service_command', expect.objectContaining({
+      p_command_type: 'client_plan.manage',
+      p_expected_workspace_version: 5,
+    }));
+  });
+
+  it('retries the retained command when one exists', async () => {
+    useStore.getState().createClientWithPlan(planInput);
+    rpc.mockRejectedValueOnce(new Error('fetch failed'));
+    await useStore.getState().syncBackendNow('client_plan.manage');
+    expect(useStore.getState().backend.status).toBe('retry_required');
+
+    rpc
+      .mockResolvedValueOnce({
+        data: { ok: true, schemaVersion: 2, workspaceOptimisticLock: true, serviceOperations: true, releaseNoticeAcknowledgements: true },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { ok: true, commandId: '00000000-0000-4000-8000-000000000212', workspaceVersion: 7, changed: [] },
+        error: null,
+      });
+    const result = await useStore.getState().retryPendingSave('client_plan.manage');
+
+    expect(result).toMatchObject({ ok: true });
+    expect(useStore.getState().backend.hasLocalChanges).toBe(false);
+    expect(useStore.getState().backend.pendingMutations).toBe(0);
+    expect(rpc).toHaveBeenNthCalledWith(2, 'aitask_get_backend_capabilities', expect.objectContaining({
+      p_workspace_id: 'aitask-main',
+    }));
+    expect(rpc.mock.calls[3]).toBeUndefined();
+    expect(rpc.mock.calls[2][0]).toBe('aitask_execute_service_command');
+  });
+});

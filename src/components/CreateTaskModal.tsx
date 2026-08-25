@@ -22,7 +22,7 @@ const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, commitPendingMutation } = useStore(useShallow(state => ({
+  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, retryPendingSave } = useStore(useShallow(state => ({
     users: state.users,
     currentUser: state.currentUser,
     addTask: state.addTask,
@@ -36,7 +36,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     createTaskInitialCycleId: state.createTaskInitialCycleId,
     createTaskInitialDeliverableId: state.createTaskInitialDeliverableId,
     rolePermissions: state.rolePermissions,
-    commitPendingMutation: state.commitPendingMutation,
+    retryPendingSave: state.retryPendingSave,
   })));
   const navigate = useNavigate();
   const clientListId = React.useId();
@@ -292,7 +292,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     if (pendingTaskId) {
       setIsSubmitting(true);
-      const pendingResult = await commitPendingMutation();
+      const pendingResult = await retryPendingSave('task.create');
       setIsSubmitting(false);
       if (!pendingResult.ok) {
         setFormError(pendingResult.error || 'The task is still waiting to be saved.');
@@ -393,7 +393,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    const saveResult = await commitPendingMutation('task.create');
+    const saveResult = await retryPendingSave('task.create');
     setIsSubmitting(false);
     if (!saveResult.ok) {
       setPendingTaskId(taskId);

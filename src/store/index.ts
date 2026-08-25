@@ -240,6 +240,7 @@ interface StoreState {
   pullBackendNow: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
   retryMutation: () => Promise<{ ok: boolean; error?: string }>;
   reapplyMutationOnLatestWorkspace: () => Promise<{ ok: boolean; error?: string }>;
+  retryPendingSave: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string }>;
   discardMutation: (options?: { reload?: boolean }) => Promise<void>;
   commitPendingMutation: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string }>;
   login: (name: string, password?: string) => Promise<boolean>;
@@ -1721,6 +1722,18 @@ export const useStore = create<StoreState>()(
         if (options.reload !== false || shouldUseSecureSupabase()) {
           await get().pullBackendNow({ force: true, silent: false });
         }
+      },
+
+      retryPendingSave: async (commandType) => {
+        if (!shouldUseSupabase()) return { ok: true };
+        if (getRetainedSecureCommand()) {
+          return get().retryMutation();
+        }
+        await get().syncBackendNow(commandType);
+        const after = get().backend;
+        return !after.hasLocalChanges && after.status === 'live'
+          ? { ok: true }
+          : { ok: false, error: after.error || after.message || 'The change has not been saved yet.' };
       },
 
       commitPendingMutation: async (commandType) => {

@@ -16,13 +16,13 @@ interface Props {
 }
 
 const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProjectCreated, onProjectUpdated }) => {
-  const { addProject, updateProject, projects, tasks, users, commitPendingMutation } = useStore(useShallow(state => ({
+  const { addProject, updateProject, projects, tasks, users, retryPendingSave } = useStore(useShallow(state => ({
     addProject: state.addProject,
     updateProject: state.updateProject,
     projects: state.projects,
     tasks: state.tasks,
     users: state.users,
-    commitPendingMutation: state.commitPendingMutation,
+    retryPendingSave: state.retryPendingSave,
   })));
   const clientListId = React.useId();
   const titleId = React.useId();
@@ -134,7 +134,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
 
     if (pendingProjectId) {
       setIsSubmitting(true);
-      const pendingResult = await commitPendingMutation();
+      const pendingResult = await retryPendingSave();
       setIsSubmitting(false);
       if (!pendingResult.ok) {
         setFormError(pendingResult.error || 'The company is still waiting to be saved.');
@@ -176,7 +176,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
       }
 
       setIsSubmitting(true);
-      const saveResult = await commitPendingMutation();
+      const saveResult = await retryPendingSave();
       setIsSubmitting(false);
       if (!saveResult.ok) {
         setPendingProjectId(project.id);
@@ -203,7 +203,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
     }
 
     setIsSubmitting(true);
-    const saveResult = await commitPendingMutation();
+    const saveResult = await retryPendingSave();
     setIsSubmitting(false);
     if (!saveResult.ok) {
       setPendingProjectId(newProjectId);
