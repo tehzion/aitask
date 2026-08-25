@@ -194,7 +194,7 @@ const Dashboard: React.FC = () => {
 
   const recentTasks = useMemo(
     () => [...tasks]
-      .sort((a, b) => (parseOptionalDate(b.startDate)?.getTime() || 0) - (parseOptionalDate(a.startDate)?.getTime() || 0))
+      .sort((a, b) => (parseOptionalDate(b.updatedAt)?.getTime() || 0) - (parseOptionalDate(a.updatedAt)?.getTime() || 0))
       .slice(0, 5),
     [tasks]
   );

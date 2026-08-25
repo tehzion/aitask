@@ -626,11 +626,7 @@ const Approvals: React.FC = () => {
                     {days > 7 && (
                       <span className="rounded-md bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">{days}d</span>
                     )}
-                    <span className={`inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
-                      reg.requestedRole === 'Admin' ? 'bg-purple-100 text-purple-700' :
-                      reg.requestedRole === 'Client' ? 'bg-amber-100 text-amber-700' :
-                      'bg-blue-100 text-blue-700'
-                    }`}>
+                    <span className="inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
                       {reg.requestedRole || 'Staff'}
                     </span>
                   </div>
@@ -722,11 +718,7 @@ const Approvals: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <span className={`inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
-                          reg.requestedRole === 'Admin' ? 'bg-purple-100 text-purple-700' :
-                          reg.requestedRole === 'Client' ? 'bg-amber-100 text-amber-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
+                        <span className="inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
                           {reg.requestedRole || 'Staff'}
                         </span>
                         <span className="text-sm font-medium text-slate-600">
@@ -940,12 +932,6 @@ const Approvals: React.FC = () => {
             <Users className="w-5 h-5 text-blue-600" />
             <h2 className="text-lg font-semibold text-slate-800">Active System Users</h2>
           </div>
-          {superAdmin && (
-            <Button variant="secondary" onClick={() => setIsAddUserOpen(true)}>
-              <UserPlus className="w-4 h-4" />
-              Add Member
-            </Button>
-          )}
         </div>
         {deleteUserError && (
           <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
