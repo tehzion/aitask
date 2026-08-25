@@ -313,7 +313,6 @@ const clearPersistedRetryableCommand = (authUserId = activeSecureAuthUserId) => 
 export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand | null => {
   if (!authUserId) return null;
   if (activeSecureAuthUserId && activeSecureAuthUserId !== authUserId) {
-    clearPersistedRetryableCommand(activeSecureAuthUserId);
     retryableCommand = null;
   }
   activeSecureAuthUserId = authUserId;

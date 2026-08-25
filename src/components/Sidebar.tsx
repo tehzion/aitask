@@ -6,7 +6,8 @@ import clsx from 'clsx';
 import { canAccessPath, getVisibleNavigation } from '../lib/access';
 import { clearPasswordResetBypass } from '../lib/auth';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
-import { discardSecureWorkspaceCommand } from '../lib/secureWorkspace';
+import { discardSecureWorkspaceCommand, getRetainedSecureCommand } from '../lib/secureWorkspace';
+import { useI18n } from './I18nProvider';
 
 const navIcons = {
   Dashboard: LayoutDashboard,
@@ -31,9 +32,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
   ));
   const sidebarRef = React.useRef<HTMLElement>(null);
   const navigate = useNavigate();
+  const { t } = useI18n();
   const handleLogout = async () => {
     const signingOutUser = useStore.getState().currentUser;
     if (shouldUseSecureSupabase()) {
+      const backend = useStore.getState().backend;
+      const hasPendingChange = backend.pendingMutations > 0 || getRetainedSecureCommand() !== null;
+      if (hasPendingChange && !window.confirm(t('Sign out anyway? Your pending change in this browser tab will be permanently discarded.'))) {
+        return;
+      }
       discardSecureWorkspaceCommand();
       await signOutSecureSession();
     }

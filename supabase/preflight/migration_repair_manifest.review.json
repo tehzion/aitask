@@ -1,9 +1,34 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "backup_and_repair_review_required",
+  "status": "production_aligned_postflight_verified",
   "metadataOnly": true,
-  "warning": "Schema equivalence is verified, but do not run migration repair from this manifest until a restorable production backup is verified and the metadata changes receive final review.",
+  "warning": "Production migration history already contains every repository migration through 20260821075407. Do not run migration repair or reapply the rollout migrations. Restorable-backup evidence remains unverified.",
+  "productionVerification": {
+    "verifiedAt": "2026-08-25",
+    "historyThrough": "20260821075407_add_release_notice_acknowledgements",
+    "historyAligned": true,
+    "rolloutResult": {
+      "tasks": 189,
+      "projects": 62,
+      "clients": 59,
+      "workStillMissingClientId": 0,
+      "taskProjectBusinessHash": "794fe323c64ee57e517ef0432afefb42"
+    },
+    "capabilityProbe": {
+      "schemaVersion": 2,
+      "rolesVerified": ["Super Admin", "Admin", "Staff", "Client"],
+      "crossWorkspaceResult": "FORBIDDEN"
+    },
+    "serviceInfrastructure": {
+      "privateBucket": true,
+      "fileSizeLimit": 104857600,
+      "storagePolicies": 4,
+      "cronJobs": 1,
+      "cronHardCodesWorkspace": false
+    },
+    "backupRestoreEvidence": "unverified"
+  },
   "schemaEquivalence": {
     "status": "verified",
     "verifiedAt": "2026-08-24",
