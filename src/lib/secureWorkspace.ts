@@ -31,6 +31,7 @@ import { parseNotification, parseWorkspaceSnapshot, safeAvatarSource } from './s
 import { enrichNotificationMetadata } from './notificationCenter';
 import { supabase } from './supabaseClient';
 import { stripServiceItemPrices } from './serviceManagement';
+import { useToastStore } from '../store/useToastStore';
 
 export const SECURE_WORKSPACE_ID = 'aitask-main';
 export const SECURE_SYNC_PROTOCOL_VERSION = 1;
@@ -292,7 +293,8 @@ const persistRetryableCommand = () => {
   try {
     storage.setItem(pendingCommandStorageKey(activeSecureAuthUserId), JSON.stringify(envelope));
   } catch {
-    // In-memory retry remains available when browser storage is unavailable.
+    // In-memory retry remains available; large payloads may exceed session storage quota.
+    useToastStore.getState().addToast('Browser storage is full. The pending change survives in this tab only until it is saved.', 'warning');
   }
 };
 
@@ -1672,6 +1674,13 @@ export const saveSecureWorkspace = async (
   if (operations.length === 0) {
     const revision = await loadSecureWorkspaceRevision();
     return { ok: true, data: { ok: true, workspaceVersion: revision.version }, commandId: commandId(), workspaceVersion: revision.version };
+  }
+  if (operations.length > 500) {
+    return {
+      ok: false,
+      code: 'VALIDATION',
+      error: 'This change touches too many records. Save it in smaller steps.',
+    };
   }
   const command: SecureCommand = { id: commandId(), type: type || inferSecureCommandType(operations), operations };
   return executeCommand(command, expectedWorkspaceVersion);

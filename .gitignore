@@ -30,6 +30,8 @@ supabase/.temp
 !.vscode/extensions.json
 .idea
 .trae
+.agents
+skills-lock.json
 .DS_Store
 *.suo
 *.ntvs*
