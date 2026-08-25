@@ -11,7 +11,7 @@ import { useStore } from '../store';
 import { useNotificationReadActions } from '../hooks/useNotificationReadActions';
 import { canAccessPath, canCreateTasks, getUnreadNotifications } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
-import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw, Settings as SettingsIcon, UserPlus } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw, Settings as SettingsIcon, UserPlus, Menu } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
 import { notificationRouteToPath } from '../lib/security';
@@ -189,17 +189,24 @@ const Layout: React.FC = () => {
 
   const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : unreadNotifs.length;
   const previewNotifications = unreadNotifs.slice(0, 5);
-  const mobileNavItems = useMemo(() => [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/tasks', label: 'Tasks', icon: CheckSquare },
-    { path: '/calendar', label: 'Calendar', icon: CalendarDays },
-    ...(canAccessPath(currentUser, '/approvals', rolePermissions)
-      ? [{ path: '/approvals', label: 'Approvals', icon: UserPlus }]
-      : []),
-    ...(canAccessPath(currentUser, '/settings', rolePermissions)
-      ? [{ path: '/settings', label: 'Settings', icon: SettingsIcon }]
-      : []),
-  ].filter(item => canAccessPath(currentUser, item.path, rolePermissions)), [currentUser, rolePermissions]);
+  const isStaff = currentUser?.role === 'Staff';
+  const mobileNavItems = useMemo(() => isStaff
+    ? [
+        { path: '/', label: 'My work', icon: LayoutDashboard },
+        { path: '/calendar', label: 'Schedule', icon: CalendarDays },
+        { path: '/notifications', label: 'Inbox', icon: Bell },
+      ].filter(item => item.path === '/notifications' || canAccessPath(currentUser, item.path, rolePermissions))
+    : [
+        { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+        { path: '/tasks', label: 'Tasks', icon: CheckSquare },
+        { path: '/calendar', label: 'Calendar', icon: CalendarDays },
+        ...(canAccessPath(currentUser, '/approvals', rolePermissions)
+          ? [{ path: '/approvals', label: 'Approvals', icon: UserPlus }]
+          : []),
+        ...(canAccessPath(currentUser, '/settings', rolePermissions)
+          ? [{ path: '/settings', label: 'Settings', icon: SettingsIcon }]
+          : []),
+      ].filter(item => canAccessPath(currentUser, item.path, rolePermissions)), [currentUser, isStaff, rolePermissions]);
   const canOpenSettings = Boolean(currentUser?.mustResetPassword)
     || canAccessPath(currentUser, '/settings', rolePermissions);
 
@@ -349,25 +356,37 @@ const Layout: React.FC = () => {
             );
           })}
 
-          <button
-            type="button"
-            onClick={() => setIsMobileNotifOpen(true)}
-            aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
-            className={cn(
-              "relative flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
-              isMobileNotifOpen && "font-semibold text-accent"
-            )}
-          >
-            <div className="relative">
-              <Bell className="w-5 h-5 mb-0.5" />
-              {unreadCount > 0 && (
-                <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-surface bg-accent text-[8px] font-black text-white">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
+          {isStaff ? (
+            <button
+              type="button"
+              onClick={openMobileMenu}
+              aria-label="Open more staff actions"
+              className="flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors hover:text-accent"
+            >
+              <Menu className="mb-0.5 h-5 w-5" />
+              <span className="text-[10px]">More</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsMobileNotifOpen(true)}
+              aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+              className={cn(
+                "relative flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
+                isMobileNotifOpen && "font-semibold text-accent"
               )}
-            </div>
-            <span className="text-[10px]">Notifications</span>
-          </button>
+            >
+              <div className="relative">
+                <Bell className="mb-0.5 h-5 w-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-surface bg-accent text-[8px] font-black text-white">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px]">Notifications</span>
+            </button>
+          )}
         </nav>
       </div>
 

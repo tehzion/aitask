@@ -16,6 +16,7 @@ import { safeHttpsUrl } from '../lib/security';
 import { DEPARTMENTS } from '../lib/departments';
 import { getOperationsPeriod, type TeamWorkloadPeriod } from '../lib/taskReporting';
 import { getClientTaskStage } from '../lib/clientPortal';
+import StaffAllWork from '../components/StaffAllWork';
 
 const CLIENT_BOARD_COLUMNS = [
   { value: 'active', label: 'In progress' },
@@ -418,6 +419,8 @@ const Tasks: React.FC = () => {
       </span>
     )
   );
+
+  if (currentUser?.role === 'Staff') return <StaffAllWork />;
 
   return (
     <div className={pageShell}>

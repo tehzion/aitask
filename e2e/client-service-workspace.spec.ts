@@ -103,8 +103,9 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
     useStore.setState({ currentUser: { id: 'operation-e2e', name: 'Operation E2E', role: 'Staff', departments: ['Operation'], department: 'Operation', workerType: 'employee', permissions: { manageServiceCycles: true, viewAllServiceClients: true, viewDashboard: true, viewTasks: true, viewCalendar: true, viewProjects: true } } });
   });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Operation workbench' })).toBeVisible();
-  await expect(page.getByText('Pricing is not shown.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Operation context' })).toBeVisible();
+  await expect(page.getByText('Pricing is not shown.')).toHaveCount(0);
   await page.goto(`/clients/${seeded.clientId}`);
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
   await expect(page.getByText('Internal monthly total')).toHaveCount(0);
@@ -116,8 +117,9 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
     useStore.setState({ currentUser: { id: 'account-e2e', name: 'Account E2E', role: 'Staff', departments: ['Account & Finance'], department: 'Account & Finance', workerType: 'employee', permissions: { viewDashboard: true, viewAllServiceClients: true, viewServicePrices: true, viewProductionReports: true } } });
   });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Account & Finance workbench' })).toBeVisible();
-  await expect(page.getByText('Monthly management value')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Account context' })).toBeVisible();
+  await expect(page.getByText('Monthly management value')).toHaveCount(0);
   await expect(page.getByText('Invoice', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Outstanding', { exact: true })).toHaveCount(0);
   await expectNoAxeViolations(page, 'Account dashboard');

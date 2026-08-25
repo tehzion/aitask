@@ -56,15 +56,17 @@ test('local service demo makes plans, delivery, files, roles, and price isolatio
 
   await setDemoUser(page, 'u-operation-demo-local');
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Operation workbench' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Operation context' })).toBeVisible();
   await page.goto(urbanWorkspace);
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
   await expect(page.getByText('Internal monthly total')).toHaveCount(0);
 
   await setDemoUser(page, 'u-account-demo-local');
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Account & Finance workbench' })).toBeVisible();
-  await expect(page.getByText('Monthly management value')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Account context' })).toBeVisible();
+  await expect(page.getByText('Monthly management value')).toHaveCount(0);
 
   await setDemoUser(page, 'u-client-urban');
   await page.goto(urbanWorkspace);

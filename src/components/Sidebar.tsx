@@ -1,9 +1,9 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, CalendarDays, FolderKanban, BarChart3, Settings, LogOut, UserPlus, Users, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, CheckSquare, CalendarDays, FolderKanban, BarChart3, Settings, LogOut, UserPlus, Users, PanelLeftClose, PanelLeftOpen, Bell, MoreHorizontal, Plus } from 'lucide-react';
 import { useStore, stopBackendAutoSync } from '../store';
 import clsx from 'clsx';
-import { canAccessPath, getVisibleNavigation } from '../lib/access';
+import { canAccessPath, canCreateTasks, getVisibleNavigation } from '../lib/access';
 import { clearPasswordResetBypass } from '../lib/auth';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
 import { discardSecureWorkspaceCommand, getRetainedSecureCommand } from '../lib/secureWorkspace';
@@ -32,6 +32,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
   ));
   const sidebarRef = React.useRef<HTMLElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useI18n();
   const handleLogout = async () => {
     const signingOutUser = useStore.getState().currentUser;
@@ -52,12 +53,37 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
 
   const currentUser     = useStore((state) => state.currentUser);
   const rolePermissions = useStore((state) => state.rolePermissions);
+  const setCreateTaskModalOpen = useStore((state) => state.setCreateTaskModalOpen);
+  const isStaff = currentUser?.role === 'Staff';
+  const staffMoreActive = ['/tasks', '/clients', '/projects', '/reports', '/settings'].some(path => location.pathname === path || location.pathname.startsWith(`${path}/`));
+  const [staffMoreOpen, setStaffMoreOpen] = React.useState(staffMoreActive);
 
-  const filteredNavItems = getVisibleNavigation(currentUser, rolePermissions).map(item => ({
-    ...item,
-    icon: navIcons[item.label as keyof typeof navIcons],
-  }));
+  const filteredNavItems = isStaff
+    ? [
+        { path: '/', label: 'My work', icon: LayoutDashboard },
+        { path: '/calendar', label: 'Schedule', icon: CalendarDays },
+        { path: '/notifications', label: 'Inbox', icon: Bell },
+      ].filter(item => item.path === '/notifications' || canAccessPath(currentUser, item.path, rolePermissions))
+    : getVisibleNavigation(currentUser, rolePermissions).map(item => ({
+        ...item,
+        icon: navIcons[item.label as keyof typeof navIcons],
+      }));
+  const staffMoreItems = [
+    { path: '/tasks', label: 'All work', icon: CheckSquare },
+    { path: '/clients', label: 'Assigned clients', icon: Users },
+    { path: '/projects', label: 'Companies', icon: FolderKanban },
+    { path: '/reports', label: 'Reports', icon: BarChart3 },
+    { path: '/settings', label: 'Settings', icon: Settings },
+  ].filter(item => canAccessPath(currentUser, item.path, rolePermissions));
   const canViewSettings = canAccessPath(currentUser, '/settings', rolePermissions);
+
+  React.useEffect(() => {
+    if (staffMoreActive) setStaffMoreOpen(true);
+  }, [staffMoreActive]);
+
+  React.useEffect(() => {
+    if (isStaff && isOpen && !isDesktop) setStaffMoreOpen(true);
+  }, [isDesktop, isOpen, isStaff]);
 
   React.useEffect(() => {
     const media = window.matchMedia('(min-width: 768px)');
@@ -171,6 +197,55 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
               )}
             </NavLink>
           ))}
+          {isStaff && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setStaffMoreOpen(value => !value)}
+                aria-expanded={staffMoreOpen}
+                className={clsx(
+                  'group flex min-h-11 w-full items-center rounded-control px-3 py-2.5 transition-colors duration-160',
+                  isCollapsed && 'md:justify-center md:px-2',
+                  staffMoreActive ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-inset hover:text-ink',
+                )}
+              >
+                <MoreHorizontal className={clsx('h-[19px] w-[19px] shrink-0', !isCollapsed && 'mr-3', isCollapsed && 'md:mr-0')} />
+                <span className={clsx('flex-1 text-left text-sm font-medium', isCollapsed && 'md:hidden')}>More</span>
+                <span className={clsx('text-xs transition-transform', staffMoreOpen && 'rotate-180', isCollapsed && 'md:hidden')}>⌄</span>
+              </button>
+              {staffMoreOpen && (
+                <div className={clsx('mt-1 space-y-1', !isCollapsed && 'ml-4 border-l border-line pl-2')}>
+                  {canCreateTasks(currentUser, rolePermissions) && (
+                    <button
+                      type="button"
+                      onClick={() => { setCreateTaskModalOpen(true); onClose(); }}
+                      title={isCollapsed ? 'Create task' : undefined}
+                      className={clsx('flex min-h-11 w-full items-center rounded-control px-3 py-2.5 text-accent transition-colors duration-160 hover:bg-accent-soft', isCollapsed && 'md:justify-center md:px-2')}
+                    >
+                      <Plus className={clsx('h-[19px] w-[19px]', !isCollapsed && 'mr-3', isCollapsed && 'md:mr-0')} />
+                      <span className={clsx('text-sm font-semibold', isCollapsed && 'md:hidden')}>Create task</span>
+                    </button>
+                  )}
+                  {staffMoreItems.map(item => (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      onClick={onClose}
+                      title={isCollapsed ? item.label : undefined}
+                      className={({ isActive }) => clsx(
+                        'group flex min-h-11 items-center rounded-control px-3 py-2.5 transition-colors duration-160',
+                        isCollapsed && 'md:justify-center md:px-2',
+                        isActive ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-inset hover:text-ink',
+                      )}
+                    >
+                      <item.icon className={clsx('h-[18px] w-[18px] shrink-0', !isCollapsed && 'mr-3', isCollapsed && 'md:mr-0')} />
+                      <span className={clsx('text-sm font-medium', isCollapsed && 'md:hidden')}>{item.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -184,7 +259,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
             <LogOut className={clsx('h-[19px] w-[19px]', !isCollapsed && 'mr-3', isCollapsed && 'md:mr-0')} />
             <span className={clsx('text-sm font-medium', isCollapsed && 'md:hidden')}>Logout</span>
           </button>
-          {canViewSettings && (
+          {canViewSettings && !isStaff && (
             <NavLink
               to="/settings"
               onClick={onClose}
