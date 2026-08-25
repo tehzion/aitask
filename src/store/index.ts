@@ -303,7 +303,7 @@ interface StoreState {
 }
 
 const nowId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-const pendingMutationMessage = 'Changes are temporarily unavailable while AiTask resolves a pending save or completes a system update.';
+export const pendingMutationMessage = 'Changes are temporarily unavailable while AiTask resolves a pending save or completes a system update.';
 const isWorkspaceMutationLocked = (state: StoreState) => (
   shouldUseSecureSupabase()
   && (

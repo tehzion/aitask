@@ -1,7 +1,8 @@
 import React from 'react';
 import { ArrowLeft, ArrowRight, Check, Copy, PackageCheck, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../store';
+import { useStore, pendingMutationMessage } from '../store';
+import { getRetainedSecureCommand } from '../lib/secureWorkspace';
 import type { PlanOrigin, ServiceItem } from '../types';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
@@ -10,6 +11,7 @@ import { cn } from '../lib/utils';
 import { calculatePlanTotalMinor, formatMoney, snapshotWorkflow } from '../lib/serviceManagement';
 
 const blankItem = (): ServiceItem => ({ id: crypto.randomUUID(), name: '', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 0 });
+const WIZARD_BLOCKED_MESSAGE = 'An earlier change is still waiting to sync. Use “Retry my changes” or “Use latest” in the banner above this dialog, then save this draft again.';
 
 const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
   const navigate = useNavigate();
@@ -119,32 +121,51 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
     setError('');
     try {
       if (!createdClientIdRef.current) {
-        const pkg = selectedPackage;
-        const result = createClientWithPlan({
-          ...profile,
-          planName: plan.name || `${profile.clientName} Service Plan`,
-          origin: mode,
-          sourcePackageId: mode === 'custom' ? undefined : pkg?.id,
-          sourcePackageRevision: mode === 'custom' ? undefined : pkg?.revision,
-          serviceItems: items,
-          startDate: plan.startDate,
-          billingDay: plan.billingDay,
-          contractEndDate: plan.contractEndDate || undefined,
-          discountType: plan.discountType,
-          discountValue: plan.discountValue,
-          taxRateBps: plan.taxRateBps,
-        });
+        const buildInput = () => {
+          const pkg = selectedPackage;
+          return {
+            ...profile,
+            planName: plan.name || `${profile.clientName} Service Plan`,
+            origin: mode,
+            sourcePackageId: mode === 'custom' ? undefined : pkg?.id,
+            sourcePackageRevision: mode === 'custom' ? undefined : pkg?.revision,
+            serviceItems: items,
+            startDate: plan.startDate,
+            billingDay: plan.billingDay,
+            contractEndDate: plan.contractEndDate || undefined,
+            discountType: plan.discountType,
+            discountValue: plan.discountValue,
+            taxRateBps: plan.taxRateBps,
+          };
+        };
+        let result = createClientWithPlan(buildInput());
+        if (!result.ok && result.error === pendingMutationMessage && getRetainedSecureCommand()) {
+          const recovered = await retryMutation();
+          if (recovered.ok) result = createClientWithPlan(buildInput());
+        }
         if (!result.ok || !result.clientId) {
-          setError(result.error || 'Unable to create the client.');
+          setError(result.error === pendingMutationMessage
+            ? WIZARD_BLOCKED_MESSAGE
+            : result.error || 'Unable to create the client.');
           return;
         }
         createdClientIdRef.current = result.clientId;
       }
-      const committed = createdClientIdRef.current && backend.pendingMutations > 0
+      const fresh = useStore.getState();
+      let committed = createdClientIdRef.current && (fresh.backend.pendingMutations > 0 || getRetainedSecureCommand())
         ? await retryMutation()
         : await commitPendingMutation('client_plan.manage');
+      if (!committed.ok && committed.error === pendingMutationMessage) {
+        await fresh.syncBackendNow('client_plan.manage');
+        const after = useStore.getState().backend;
+        committed = !after.hasLocalChanges && after.status === 'live'
+          ? { ok: true }
+          : { ok: false, error: after.error || after.message || 'The client is waiting to be saved. Retry to finish syncing this same Draft.' };
+      }
       if (!committed.ok) {
-        setError(committed.error || 'The client is waiting to be saved. Retry to finish syncing this same Draft.');
+        setError(committed.error === pendingMutationMessage
+          ? WIZARD_BLOCKED_MESSAGE
+          : committed.error || 'The client is waiting to be saved. Retry to finish syncing this same Draft.');
         return;
       }
       const createdClientId = createdClientIdRef.current;

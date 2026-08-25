@@ -772,6 +772,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Save was not confirmed. Your pending change is retained for retry.': '未能确认保存。您的更改已保留以供重试。',
   'Browser storage is full. The pending change survives in this tab only until it is saved.': '浏览器存储空间不足。待保存的更改仅保留在当前标签页中，保存前请勿关闭。',
   'This change touches too many records. Save it in smaller steps.': '此更改涉及的记录过多，请分批保存。',
+  'An earlier change is still waiting to sync. Use “Retry my changes” or “Use latest” in the banner above this dialog, then save this draft again.': '较早的更改仍在等待同步。请使用此对话框上方横幅中的“重试我的更改”或“使用最新版本”，然后重新保存此草稿。',
 };
 
 const preserveWhitespace = (value: string, replacement: string) => {
