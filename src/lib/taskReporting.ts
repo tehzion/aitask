@@ -80,7 +80,7 @@ const sortByDueDate = (left: Task, right: Task) => (
   - (parseOptionalDate(right.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER)
 );
 
-const getWorkloadSignal = (
+export const getWorkloadSignal = (
   period: TeamWorkloadPeriod,
   periodOpen: number,
   overdue: number,

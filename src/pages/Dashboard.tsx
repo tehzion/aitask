@@ -11,7 +11,7 @@ import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, A
 import { Link } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
-import { canCreateTasks, getClientKey, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
+import { canCreateTasks, canManageClientPlans, getClientKey, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import { getClientTaskStage } from '../lib/clientPortal';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate, themeTokenColor } from '../lib/utils';
@@ -23,7 +23,9 @@ import { getTrackedMonthlyCompletions, isTaskOpen } from '../lib/taskReporting';
 import ClientPortalDashboard from '../components/ClientPortalDashboard';
 import TeamWorkload from '../components/TeamWorkload';
 import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
+import StaffMyWork from '../components/StaffMyWork';
 import { useI18n } from '../components/I18nProvider';
+import CreateClientPlanModal from '../components/CreateClientPlanModal';
 import { isLocalServiceDemoEnabled, LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID } from '../mock/localServiceDemo';
 
 type BossTab = 'overview' | 'pulse' | 'workload';
@@ -58,6 +60,7 @@ const Dashboard: React.FC = () => {
   })));
   const { t } = useI18n();
   const [bossTab, setBossTab] = useState<BossTab>('overview');
+  const [createClientOpen, setCreateClientOpen] = useState(false);
 
   const tasks = useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions),
@@ -116,14 +119,15 @@ const Dashboard: React.FC = () => {
     const passwordDone = !currentUser?.mustResetPassword;
     const membersDone = users.filter(user => user.id !== currentUser?.id && !user.directoryOnly).length > 0;
     const tasksDone = tasks.length > 0;
-    const clientsDone = (clientPlans || []).length > 0 || serviceCycles.length > 0 || hasLocalServiceDemo;
+    const clientsDone = (clientPlans || []).some(plan => plan.status === 'Active' || plan.status === 'Paused')
+      || serviceCycles.some(cycle => cycle.status === 'Published' || cycle.status === 'Completed');
     return [
       { key: 'password', label: t('Set your own password'), done: passwordDone, to: '/settings' },
       { key: 'members', label: t('Add your first member'), done: membersDone, to: '/approvals' },
       { key: 'tasks', label: t('Create the first task'), done: tasksDone, to: '/tasks' },
       { key: 'clients', label: t('Create the first client plan'), done: clientsDone, to: '/clients' },
     ].filter(step => !step.done);
-  }, [clientPlans, currentUser, hasLocalServiceDemo, serviceCycles.length, showBossOperations, t, tasks.length, users]);
+  }, [clientPlans, currentUser, serviceCycles, showBossOperations, t, tasks.length, users]);
 
   const openCreateTaskFor = React.useCallback((member: User) => {
     useStore.setState({ createTaskInitialAssignee: member.id });
@@ -321,7 +325,10 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  if (showStaffOperations) return <StaffMyWork />;
+
   return (
+    <>
     <div className={pageShell}>
       <PageHeader
         title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Admin' ? 'Admin Dashboard' : showClientPortal ? 'Client Portal' : 'My Dashboard'}
@@ -331,6 +338,12 @@ const Dashboard: React.FC = () => {
         action={(
           <div className="flex flex-wrap items-center gap-2.5">
             <BackendFreshness />
+            {canManageClientPlans(currentUser, rolePermissions) && !showClientPortal && (
+              <Button variant="secondary" onClick={() => setCreateClientOpen(true)}>
+                <Plus className="h-4 w-4" />
+                New client plan
+              </Button>
+            )}
             {canCreateTask && (
               <Button onClick={() => setCreateTaskModalOpen(true)}>
                 <Plus className="h-4 w-4" />
@@ -427,13 +440,21 @@ const Dashboard: React.FC = () => {
 
         {showBossOperations ? (
           <>
-            <div className="inline-flex w-fit rounded-panel border border-line bg-surface p-1 shadow-sm" role="tablist" aria-label={t('Boss dashboard views')}>
+            <div className="inline-flex w-fit rounded-panel border border-line bg-surface p-1 shadow-sm" role="tablist" aria-label={t('Boss dashboard views')} onKeyDown={e => {
+              const keys = ['overview', 'pulse', 'workload'] as const;
+              const index = keys.indexOf(bossTab);
+              if (e.key === 'ArrowRight') { e.preventDefault(); setBossTab(keys[(index + 1) % keys.length]); }
+              else if (e.key === 'ArrowLeft') { e.preventDefault(); setBossTab(keys[(index + keys.length - 1) % keys.length]); }
+            }}>
               {([['overview', t('Overview'), LayoutList], ['pulse', t('Agency pulse'), AlertCircle], ['workload', t('Team workload'), Users]] as const).map(([key, label, Icon]) => (
                 <button
                   key={key}
                   type="button"
                   role="tab"
+                  id={`boss-tab-${key}`}
                   aria-selected={bossTab === key}
+                  aria-controls={`boss-panel-${key}`}
+                  tabIndex={bossTab === key ? 0 : -1}
                   onClick={() => setBossTab(key)}
                   className={cn(
                     'inline-flex min-h-9 items-center gap-2 rounded-control px-3 text-sm font-semibold transition-colors',
@@ -446,7 +467,7 @@ const Dashboard: React.FC = () => {
             </div>
 
             {bossTab === 'overview' && (
-              <div className="space-y-6">
+              <div id="boss-panel-overview" role="tabpanel" aria-labelledby="boss-tab-overview" tabIndex={0} className="space-y-6">
                 {bossBriefing && bossBriefing.pendingRegs.length > 0 && (
                   <Link to="/approvals" className={cn(cardBase, 'flex flex-wrap items-center gap-4 p-5 transition-colors hover:bg-inset/50')}>
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent"><UserPlus className="h-5 w-5" /></span>
@@ -515,13 +536,15 @@ const Dashboard: React.FC = () => {
             )}
 
             {bossTab === 'pulse' && (
-              <div className="space-y-6">
+              <div id="boss-panel-pulse" role="tabpanel" aria-labelledby="boss-tab-pulse" tabIndex={0} className="space-y-6">
                 <OperationsGlance tasks={tasks} users={users} scope="agency" />
               </div>
             )}
 
             {bossTab === 'workload' && (
-              <TeamWorkload tasks={tasks} users={users} onCreateTaskFor={openCreateTaskFor} />
+              <div id="boss-panel-workload" role="tabpanel" aria-labelledby="boss-tab-workload" tabIndex={0}>
+                <TeamWorkload tasks={tasks} users={users} onCreateTaskFor={openCreateTaskFor} />
+              </div>
             )}
           </>
         ) : (
@@ -761,6 +784,8 @@ const Dashboard: React.FC = () => {
       </div>
       )}
     </div>
+    {createClientOpen && <CreateClientPlanModal onClose={() => setCreateClientOpen(false)} />}
+    </>
   );
 };
 
