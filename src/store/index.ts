@@ -1598,7 +1598,7 @@ export const useStore = create<StoreState>()(
           useToastStore.getState().addToast('Your change was reapplied on the latest workspace.', 'success');
           return { ok: true };
         }
-        return { ok: false, error: after.error || after.message || 'Your change could not be reapplied.' };
+        return { ok: false, error: after.error || 'Your change could not be reapplied.' };
       },
 
       retryMutation: async () => {
@@ -1733,7 +1733,7 @@ export const useStore = create<StoreState>()(
         const after = get().backend;
         return !after.hasLocalChanges && after.status === 'live'
           ? { ok: true }
-          : { ok: false, error: after.error || after.message || 'The change has not been saved yet.' };
+          : { ok: false, error: after.error || 'The change has not been saved yet.' };
       },
 
       commitPendingMutation: async (commandType) => {
@@ -1756,7 +1756,7 @@ export const useStore = create<StoreState>()(
         if (!backend.hasLocalChanges && backend.status === 'live') return { ok: true };
         return {
           ok: false,
-          error: backend.error || backend.message || 'The change has not been saved yet.',
+          error: backend.error || 'The change has not been saved yet.',
         };
       },
 
