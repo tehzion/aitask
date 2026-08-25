@@ -728,6 +728,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Your change was reapplied on the latest workspace.': '您的更改已在最新工作区上重新应用。',
   'Your change could not be reapplied.': '无法重新应用您的更改。',
   'Sign out anyway? Your pending change in this browser tab will be permanently discarded.': '确定退出登录？此浏览器标签页中的待保存更改将被永久丢弃。',
+  'The workspace is still loading. Try again in a moment.': '工作区仍在加载中，请稍后再试。',
 };
 
 const preserveWhitespace = (value: string, replacement: string) => {

@@ -1558,6 +1558,12 @@ export const useStore = create<StoreState>()(
         const localSnapshot = selectPersistedWorkspaceState(current);
         await get().pullBackendNow({ force: true, silent: true });
         const fresh = get();
+        if (fresh.backend.upgradeRequired === true || fresh.backend.status === 'upgrade_required') {
+          return { ok: false, error: fresh.backend.error || BACKEND_UPGRADE_REQUIRED_MESSAGE };
+        }
+        if (fresh.backend.isPulling) {
+          return { ok: false, error: fresh.backend.error || 'Unable to load the latest workspace right now. Try again shortly.' };
+        }
         const merged = overlayRetainedWorkspaceEntities(
           selectPersistedWorkspaceState(fresh),
           localSnapshot,
@@ -4661,26 +4667,32 @@ export const startBackendAutoSync = () => {
   };
 
   const handleOffline = () => {
-    useStore.setState((state) => ({
-      backend: {
-        ...state.backend,
-        status: 'offline',
-        message: state.backend.hasLocalChanges
-          ? 'Offline. A local change is waiting for your retry.'
-          : 'Offline. Live sync will resume when you reconnect.',
-      },
-    }));
+    useStore.setState((state) => {
+      if (state.backend.upgradeRequired === true) return state;
+      return {
+        backend: {
+          ...state.backend,
+          status: 'offline',
+          message: state.backend.hasLocalChanges
+            ? 'Offline. A local change is waiting for your retry.'
+            : 'Offline. Live sync will resume when you reconnect.',
+        },
+      };
+    });
   };
   const handleOnline = () => {
-    useStore.setState((state) => ({
-      backend: {
-        ...state.backend,
-        status: state.backend.hasLocalChanges ? 'retry_required' : 'loading',
-        message: state.backend.hasLocalChanges
-          ? 'Back online. Review and retry the pending change.'
-          : 'Back online. Checking the latest workspace.',
-      },
-    }));
+    useStore.setState((state) => {
+      if (state.backend.upgradeRequired === true) return state;
+      return {
+        backend: {
+          ...state.backend,
+          status: state.backend.hasLocalChanges ? 'retry_required' : 'loading',
+          message: state.backend.hasLocalChanges
+            ? 'Back online. Review and retry the pending change.'
+            : 'Back online. Checking the latest workspace.',
+        },
+      };
+    });
     const state = useStore.getState();
     if (!shouldUseSecureSupabase() || state.currentUser) {
       void state.pullBackendNow({ silent: true });
