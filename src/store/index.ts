@@ -1942,7 +1942,9 @@ export const useStore = create<StoreState>()(
               lastSyncedAt: now,
             },
           }));
-          await get().pullBackendNow({ force: true, silent: true });
+          if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
+            await get().pullBackendNow({ force: true, silent: true });
+          }
         }
 
         clearPasswordSetupMode();
@@ -2043,7 +2045,9 @@ export const useStore = create<StoreState>()(
         if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to update the login email.') };
 
         await supabase.auth.refreshSession();
-        await get().pullBackendNow({ force: true, silent: true });
+        if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
+          await get().pullBackendNow({ force: true, silent: true });
+        }
         return { ok: true };
       },
 
@@ -2089,7 +2093,9 @@ export const useStore = create<StoreState>()(
               lastSyncedAt: now,
             },
           }));
-          await get().pullBackendNow({ force: true, silent: true });
+          if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
+            await get().pullBackendNow({ force: true, silent: true });
+          }
           return { ok: true };
         }
 
@@ -3474,6 +3480,7 @@ export const useStore = create<StoreState>()(
 
       setClientPlanStatus: (planId, status) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const actor = state.currentUser;
         if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot change plan status.' };
         const plan = state.clientPlans.find(item => item.id === planId);
@@ -3486,6 +3493,7 @@ export const useStore = create<StoreState>()(
 
       setServiceCycleStatus: (cycleId, status) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const cycle = state.serviceCycles.find(item => item.id === cycleId);
         const actor = state.currentUser;
         if (!cycle || !actor) return { ok: false, error: 'Cycle not found.' };
@@ -3498,6 +3506,7 @@ export const useStore = create<StoreState>()(
 
       updateDeliverableStatus: (deliverableId, status) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const deliverable = state.deliverables.find(item => item.id === deliverableId);
         const actor = state.currentUser;
         if (!deliverable || !actor) return { ok: false, error: 'Deliverable not found.' };
@@ -3513,6 +3522,7 @@ export const useStore = create<StoreState>()(
 
       linkTaskToDeliverable: (taskId, cycleId, deliverableId) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const task = state.tasks.find(item => item.id === taskId);
         if (!task || !canEditTask(state.currentUser, task, state.rolePermissions)) return { ok: false, error: 'You cannot edit this task.' };
         const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
@@ -3597,6 +3607,7 @@ export const useStore = create<StoreState>()(
 
       addCycleComment: (cycleId, text, visibility) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const cycle = state.serviceCycles.find(item => item.id === cycleId);
         const actor = state.currentUser;
         if (!cycle || !actor || actor.role === 'Client') return { ok: false, error: 'You cannot comment on this cycle.' };
@@ -3611,6 +3622,7 @@ export const useStore = create<StoreState>()(
 
       addCycleCommentAttachment: (commentId, attachment) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const comment = state.cycleComments.find(item => item.id === commentId);
         if (!comment || comment.userId !== state.currentUser?.id) return { ok: false, error: 'You cannot attach a file to this comment.' };
         set(current => ({ cycleComments: current.cycleComments.map(item => item.id === commentId ? { ...item, attachments: [...item.attachments, attachment], updatedAt: new Date().toISOString() } : item) }));
@@ -3619,6 +3631,7 @@ export const useStore = create<StoreState>()(
 
       addAddon: (data) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const actor = state.currentUser;
         if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot manage add-ons.' };
         if (!state.clientPlans.some(plan => plan.id === data.planId && plan.clientId === data.clientId)) return { ok: false, error: 'Client plan not found.' };
@@ -3942,7 +3955,9 @@ export const useStore = create<StoreState>()(
             },
           });
           if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to send the invitation.') };
-          await get().pullBackendNow({ force: true });
+          if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
+            await get().pullBackendNow({ force: true });
+          }
           return { ok: true };
         }
 
@@ -4327,7 +4342,9 @@ export const useStore = create<StoreState>()(
           } catch {
             /* credential storage unavailable */
           }
-          await get().pullBackendNow({ force: true, silent: true });
+          if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
+            await get().pullBackendNow({ force: true, silent: true });
+          }
           return { ok: true };
         }
 
