@@ -41,8 +41,8 @@ if (manifest.projectRef !== expectedProjectRef) {
 }
 
 const expectedMigrations = manifest.expectedDryRunMigrations;
-if (!Array.isArray(expectedMigrations) || expectedMigrations.length !== 5) {
-  fail('The repair manifest must define exactly five expected dry-run migrations.');
+if (!Array.isArray(expectedMigrations) || expectedMigrations.length === 0) {
+  fail('The repair manifest must define at least one expected dry-run migration.');
 }
 
 const migrationNames = readdirSync(join(supabaseSource, 'migrations'))

@@ -12,9 +12,12 @@ select has_function(
 );
 
 select ok(
-  position(
-    'taskIds' in pg_get_functiondef('private.aitask_client_deliverable_projection(text,jsonb)'::regprocedure)
-  ) = 0,
+  not (
+    private.aitask_client_deliverable_projection(
+      'pgtap-client-read-privacy',
+      '{"taskIds":["internal-task-id"]}'::jsonb
+    ) ? 'taskIds'
+  ),
   'client deliverable projection never exposes the task-chain list'
 );
 
@@ -62,11 +65,14 @@ select ok(
 
 select ok(
   position(
-    'member_role(workspace_id) <> ''Client''' in pg_get_functiondef('public.aitask_read_client_portal(text)'::regprocedure)
-  ) >= 0
-  and position(
-    'entity_type in (''comment'', ''approval'') and private.aitask_member_role(workspace_id) <> ''Client'''
-    in (select pg_get_policy_def('public.aitask_entities', 'members can read scoped entities'))
+    '(entity_type=ANY(ARRAY[''comment''::text,''approval''::text]))AND(private.aitask_member_role(workspace_id)<>''Client''::text)'
+    in (
+      select regexp_replace(qual, '\s+', '', 'g')
+      from pg_policies
+      where schemaname = 'public'
+        and tablename = 'aitask_entities'
+        and policyname = 'members can read scoped entities'
+    )
   ) > 0,
   'comment/approval RLS branch is no longer readable by clients'
 );

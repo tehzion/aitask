@@ -1,9 +1,9 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "production_aligned_postflight_verified",
+  "status": "production_aligned_pending_client_read_privacy",
   "metadataOnly": true,
-  "warning": "Production migration history already contains every repository migration through 20260821075407. Do not run migration repair or reapply the rollout migrations. Restorable-backup evidence remains unverified.",
+  "warning": "Production migration history contains every repository migration through 20260821075407. Do not run migration repair or reapply those rollout migrations. Only 20260826230000_client_read_privacy is pending. Restorable-backup evidence remains unverified.",
   "productionVerification": {
     "verifiedAt": "2026-08-25",
     "historyThrough": "20260821075407_add_release_notice_acknowledgements",
@@ -153,10 +153,6 @@
     }
   ],
   "expectedDryRunMigrations": [
-    "20260815042430_client_service_management",
-    "20260816120000_notification_unread_tombstone_guard",
-    "20260816220000_notification_feed_cursor_precision",
-    "20260816230000_workspace_optimistic_lock",
-    "20260821075407_add_release_notice_acknowledgements"
+    "20260826230000_client_read_privacy"
   ]
 }
