@@ -45,9 +45,15 @@ const ClientServiceWorkspace = () => {
     { id: 'activity' as const, label: 'Files & updates', compactLabel: 'Updates' },
     { id: 'services' as const, label: 'Services' },
   ];
-  const taskForDeliverable = (taskIds: string[]) => tasks
-    .filter(task => taskIds.includes(task.id))
-    .sort((left, right) => (right.workflowStepOrder || 0) - (left.workflowStepOrder || 0))[0];
+  const taskForDeliverable = (deliverable: { primaryTaskId?: string; taskIds?: string[] }) => {
+    const byPrimary = deliverable.primaryTaskId ? tasks.find(task => task.id === deliverable.primaryTaskId) : undefined;
+    if (byPrimary) return byPrimary;
+    const ids = deliverable.taskIds || [];
+    if (ids.length === 0) return undefined;
+    return tasks
+      .filter(task => ids.includes(task.id))
+      .sort((left, right) => (right.workflowStepOrder || 0) - (left.workflowStepOrder || 0))[0];
+  };
 
   const download = async (attachment: Parameters<typeof downloadServiceFile>[0]) => {
     const result = await downloadServiceFile(attachment);
@@ -86,7 +92,7 @@ const ClientServiceWorkspace = () => {
         <div id={`${TABS_ID}-panel-deliveries`} role="tabpanel" aria-labelledby={`${TABS_ID}-tab-deliveries`} tabIndex={0} className="scroll-mt-36 space-y-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           {cycles.map(cycle => {
             const cycleDeliverables = deliverables.filter(item => item.cycleId === cycle.id);
-            return <section key={cycle.id} className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-4 py-4 sm:px-5"><div><p className="text-sm font-semibold text-ink">{format(parseOptionalDate(cycle.periodStart)!, 'MMMM yyyy')}</p><p className="mt-1 text-xs text-muted">{cycleDeliverables.filter(item => item.status === 'Delivered').length} of {cycleDeliverables.length} delivered</p></div><StatusChip tone="emerald">{cycle.status}</StatusChip></header><div className="divide-y divide-line/70">{cycleDeliverables.map(deliverable => { const task = taskForDeliverable(deliverable.taskIds); const dueDate = task ? parseOptionalDate(task.dueDate) : null; return <article key={deliverable.id} className="grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{deliverable.title}</p><StatusChip tone={deliverable.status === 'Delivered' ? 'emerald' : deliverable.status === 'Ready' ? 'amber' : 'slate'}>{task ? getClientDeliveryStageLabel(task) : deliverable.status}</StatusChip></div><p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted"><CalendarDays className="h-3.5 w-3.5" />{dueDate ? format(dueDate, 'd MMM yyyy') : 'Date to be confirmed'}</p></div>{task && <Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control px-3 text-sm font-semibold text-accent transition-colors duration-160 hover:bg-accent-soft">View delivery<ArrowRight className="h-4 w-4" /></Link>}</article>; })}{cycleDeliverables.length === 0 && <p className="px-5 py-8 text-sm text-muted">No deliveries have been published for this period.</p>}</div></section>;
+            return <section key={cycle.id} className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-4 py-4 sm:px-5"><div><p className="text-sm font-semibold text-ink">{format(parseOptionalDate(cycle.periodStart)!, 'MMMM yyyy')}</p><p className="mt-1 text-xs text-muted">{cycleDeliverables.filter(item => item.status === 'Delivered').length} of {cycleDeliverables.length} delivered</p></div><StatusChip tone="emerald">{cycle.status}</StatusChip></header><div className="divide-y divide-line/70">{cycleDeliverables.map(deliverable => { const task = taskForDeliverable(deliverable); const dueDate = task ? parseOptionalDate(task.dueDate) : null; return <article key={deliverable.id} className="grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{deliverable.title}</p><StatusChip tone={deliverable.status === 'Delivered' ? 'emerald' : deliverable.status === 'Ready' ? 'amber' : 'slate'}>{task ? getClientDeliveryStageLabel(task) : deliverable.status}</StatusChip></div><p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted"><CalendarDays className="h-3.5 w-3.5" />{dueDate ? format(dueDate, 'd MMM yyyy') : 'Date to be confirmed'}</p></div>{task && <Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control px-3 text-sm font-semibold text-accent transition-colors duration-160 hover:bg-accent-soft">View delivery<ArrowRight className="h-4 w-4" /></Link>}</article>; })}{cycleDeliverables.length === 0 && <p className="px-5 py-8 text-sm text-muted">No deliveries have been published for this period.</p>}</div></section>;
           })}
           {cycles.length === 0 && <EmptyState title="No published deliveries yet" description="Published service periods will appear here without exposing the agency's internal workflow." />}
         </div>

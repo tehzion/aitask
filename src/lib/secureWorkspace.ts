@@ -405,7 +405,6 @@ const CLIENT_TASK_PROJECTION_KEYS = [
   'id',
   'clientName',
   'projectId',
-  'serviceCycleId',
   'deliverableId',
   'projectName',
   'serviceType',
@@ -422,11 +421,8 @@ const CLIENT_TASK_PROJECTION_KEYS = [
   'facebookPage',
   'isCompleted',
   'completedAt',
-  'revisionCount',
   'clientApprovalStatus',
   'visibility',
-  'workflowStepOrder',
-  'workflowStepRequired',
 ] as const;
 
 export const serializeClientProjectedTask = (task: Task): Record<string, unknown> => {
@@ -1436,8 +1432,14 @@ const loadClientPortalPayload = async (expectedClientName?: string): Promise<Cli
   const cycleComments = portalRecords(result.data.cycleComments)
     .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
     .map(item => ({ ...item })) as unknown as ClientPortalPayload['cycleComments'];
+  const taskComments = portalRecords(result.data.taskComments)
+    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.taskId, 160))
+    .map(item => ({ ...item })) as unknown as ClientPortalPayload['taskComments'];
+  const taskApprovals = portalRecords(result.data.taskApprovals)
+    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.taskId, 160))
+    .map(item => ({ ...item })) as unknown as ClientPortalPayload['taskApprovals'];
 
-  return { workspaceId, clientName, tasks, projects, clients, contacts, clientPlans, serviceCycles, deliverables, cycleComments };
+  return { workspaceId, clientName, tasks, projects, clients, contacts, clientPlans, serviceCycles, deliverables, cycleComments, taskComments, taskApprovals };
 };
 
 const projectionToEntityRow = (
@@ -1515,7 +1517,7 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
   const clientCustomRoleId = authenticatedMemberRow?.custom_role_id;
   const visibleEntityRows = currentUser.role === 'Client'
     ? entityRows.filter(row => (
-        !['task', 'project', 'client', 'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon', 'service_package', 'service_workflow_template', 'service_pricing_snapshot', 'registration', 'task_status'].includes(row.entity_type)
+        !['task', 'project', 'client', 'comment', 'approval', 'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon', 'service_package', 'service_workflow_template', 'service_pricing_snapshot', 'registration', 'task_status'].includes(row.entity_type)
         && (row.entity_type !== 'custom_role' || row.entity_id === clientCustomRoleId)
       ))
     : entityRows;
@@ -1547,19 +1549,30 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
 
   const comments = new Map<string, Task['comments']>();
   const approvals = new Map<string, Task['approvalHistory']>();
-  visibleEntityRows.forEach(row => {
-    if (!row.parent_id) return;
-    if (row.entity_type === 'comment') {
-      const comment: Record<string, unknown> = { ...row.data, version: Number(row.version) || 1, updatedAt: row.updated_at };
-      delete comment.taskId;
-      comments.set(row.parent_id, [...(comments.get(row.parent_id) || []), comment as unknown as NonNullable<Task['comments']>[number]]);
-    }
-    if (row.entity_type === 'approval') {
-      const approval: Record<string, unknown> = { ...row.data, version: Number(row.version) || 1, updatedAt: row.updated_at };
-      delete approval.taskId;
-      approvals.set(row.parent_id, [...(approvals.get(row.parent_id) || []), approval as unknown as NonNullable<Task['approvalHistory']>[number]]);
-    }
-  });
+  if (currentUser.role === 'Client' && clientPortal) {
+    clientPortal.taskComments.forEach(item => {
+      const { taskId, ...comment } = item;
+      comments.set(taskId, [...(comments.get(taskId) || []), comment as unknown as NonNullable<Task['comments']>[number]]);
+    });
+    clientPortal.taskApprovals.forEach(item => {
+      const { taskId, ...approval } = item;
+      approvals.set(taskId, [...(approvals.get(taskId) || []), approval as unknown as NonNullable<Task['approvalHistory']>[number]]);
+    });
+  } else {
+    visibleEntityRows.forEach(row => {
+      if (!row.parent_id) return;
+      if (row.entity_type === 'comment') {
+        const comment: Record<string, unknown> = { ...row.data, version: Number(row.version) || 1, updatedAt: row.updated_at };
+        delete comment.taskId;
+        comments.set(row.parent_id, [...(comments.get(row.parent_id) || []), comment as unknown as NonNullable<Task['comments']>[number]]);
+      }
+      if (row.entity_type === 'approval') {
+        const approval: Record<string, unknown> = { ...row.data, version: Number(row.version) || 1, updatedAt: row.updated_at };
+        delete approval.taskId;
+        approvals.set(row.parent_id, [...(approvals.get(row.parent_id) || []), approval as unknown as NonNullable<Task['approvalHistory']>[number]]);
+      }
+    });
+  }
 
   const dataFor = <T>(type: string) => effectiveEntityRows
     .filter(row => row.entity_type === type)
