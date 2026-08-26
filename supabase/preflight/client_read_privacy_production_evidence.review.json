@@ -1,0 +1,30 @@
+{
+  "verifiedAt": "2026-08-27",
+  "releaseCommit": "03fa62957c7a7b661ef4dd6554cb0616de8d95f3",
+  "migration": "20260826230000_client_read_privacy",
+  "backup": {
+    "kind": "public-schema logical backup",
+    "permissions": "0600",
+    "restoredInIsolation": true
+  },
+  "approvedPreflightAndRestoredBaselineMatched": true,
+  "validation": {
+    "localPgTap": "179 passed",
+    "restoredClientPrivacyPgTap": "9 passed",
+    "schemaLint": "passed",
+    "applicationTests": "193 passed",
+    "playwright": "16 passed",
+    "anonymousSecurityProbe": "passed",
+    "postflightCountsAndHashUnchanged": true,
+    "postgrestSchemaCacheReloaded": true,
+    "privateStorageBucket": true,
+    "storagePolicies": 4,
+    "serviceCycleCronJobs": 1,
+    "cronHardCodesWorkspace": false
+  },
+  "vercelProduction": {
+    "commit": "03fa62957c7a7b661ef4dd6554cb0616de8d95f3",
+    "status": "READY",
+    "customDomain": "https://aitask-virid.vercel.app"
+  }
+}

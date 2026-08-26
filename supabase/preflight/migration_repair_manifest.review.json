@@ -1,19 +1,16 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "production_aligned_pending_client_read_privacy",
+  "status": "production_aligned_postflight_verified",
   "metadataOnly": true,
-  "warning": "Production migration history contains every repository migration through 20260821075407. Do not run migration repair or reapply those rollout migrations. Only 20260826230000_client_read_privacy is pending. Restorable-backup evidence remains unverified.",
+  "warning": "Production migration history contains every repository migration through 20260826230000. Do not run migration repair or reapply the rollout migrations. The client-read privacy migration, logical backup restore, and production postflight are verified.",
   "productionVerification": {
-    "verifiedAt": "2026-08-25",
-    "historyThrough": "20260821075407_add_release_notice_acknowledgements",
+    "verifiedAt": "2026-08-27",
+    "historyThrough": "20260826230000_client_read_privacy",
     "historyAligned": true,
     "rolloutResult": {
-      "tasks": 189,
-      "projects": 62,
-      "clients": 59,
-      "workStillMissingClientId": 0,
-      "taskProjectBusinessHash": "794fe323c64ee57e517ef0432afefb42"
+      "approvedBaselineMatchedAfterRestore": true,
+      "postflightUnchanged": true
     },
     "capabilityProbe": {
       "schemaVersion": 2,
@@ -27,7 +24,12 @@
       "cronJobs": 1,
       "cronHardCodesWorkspace": false
     },
-    "backupRestoreEvidence": "unverified"
+    "backupRestoreEvidence": {
+      "verifiedAt": "2026-08-27",
+      "method": "Production public-schema logical backup restored into a disposable clean Supabase stack through 20260826230000.",
+      "restoredCountsAndHashMatchedPreflight": true,
+      "clientPrivacyPgTapPassed": 9
+    }
   },
   "schemaEquivalence": {
     "status": "verified",
