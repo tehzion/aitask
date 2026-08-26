@@ -10,6 +10,7 @@ import { getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { inputBase } from './uiTokens';
 import { Button, ProgressBar, StatusChip } from './ui';
 import SideSheet from './SideSheet';
+import { useI18n } from './I18nProvider';
 
 interface StaffTaskFocusProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ interface StaffTaskFocusProps {
 }
 
 const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose }) => {
+  const { t } = useI18n();
   const {
     tasks,
     users,
@@ -66,7 +68,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose }
   const persistStatus = async (status: TaskStatus) => {
     if (mutationLocked || status === liveTask.status) return;
     if (incompletePredecessors.length > 0 && !['Pending', 'Cancelled'].includes(status)) {
-      const confirmed = window.confirm(`This task still has ${incompletePredecessors.length} incomplete predecessor task(s). Start it anyway?`);
+      const confirmed = window.confirm(t(`This task still has ${incompletePredecessors.length} incomplete predecessor task(s). Start it anyway?`));
       if (!confirmed) return;
     }
     setIsSaving(true);

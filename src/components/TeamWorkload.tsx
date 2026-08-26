@@ -292,7 +292,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                 <th className="px-3 py-3 text-center font-semibold">This week</th>
                 <th className="px-3 py-3 text-center font-semibold">Open</th>
                 <th className="px-3 py-3 text-center font-semibold">Overdue</th>
-                <th className="px-3 py-3 text-center font-semibold">Review</th>
+                <th className="px-3 py-3 text-center font-semibold">Waiting review</th>
                 <th className="px-3 py-3 text-center font-semibold">Done this week</th>
                 <th className="px-4 py-3 text-right font-semibold">Workload</th>
               </tr>
@@ -353,7 +353,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                 <Metric label="This week" value={summary.dueThisWeek} />
                 <Metric label="Open" value={summary.open} />
                 <Metric label="Overdue" value={summary.overdue} danger />
-                <Metric label="Review" value={summary.waitingApproval} />
+                <Metric label="Waiting review" value={summary.waitingApproval} />
                 <Metric label="Done week" value={summary.completedThisWeek} />
               </div>
             </button>
@@ -368,7 +368,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                 <Metric label="This week" value={summary.dueThisWeek} />
                 <Metric label="Open" value={summary.open} />
                 <Metric label="Overdue" value={summary.overdue} danger />
-                <Metric label="Review" value={summary.waitingApproval} />
+                <Metric label="Waiting review" value={summary.waitingApproval} />
                 <Metric label="Done week" value={summary.completedThisWeek} />
               </div>
             </div>
