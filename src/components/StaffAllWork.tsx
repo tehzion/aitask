@@ -107,11 +107,15 @@ const StaffAllWork: React.FC = () => {
           {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')} className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-4 w-4" /></button>}
         </div>
 
-        <div role="tablist" aria-label="All work queues" className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
+        <div role="tablist" aria-label="All work queues" className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line" onKeyDown={event => {
+          const index = buckets.indexOf(bucket);
+          if (event.key === 'ArrowRight') { event.preventDefault(); setBucket(buckets[(index + 1) % buckets.length]); }
+          else if (event.key === 'ArrowLeft') { event.preventDefault(); setBucket(buckets[(index + buckets.length - 1) % buckets.length]); }
+        }}>
           {buckets.map(item => {
             const count = item === 'all' ? tasks.length : queue[item].length;
             const label = item === 'all' ? 'All' : getStaffBucketLabel(item);
-            return <button key={item} type="button" role="tab" aria-selected={bucket === item} onClick={() => setBucket(item)} className={`relative min-h-11 shrink-0 px-3 text-sm font-semibold transition-colors duration-160 ${bucket === item ? 'text-accent after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent' : 'text-muted hover:text-ink'}`}>{label} <span className="calm-number ml-1 text-xs">{count}</span></button>;
+            return <button key={item} type="button" role="tab" id={`all-work-tab-${item}`} aria-selected={bucket === item} aria-controls="all-work-panel" tabIndex={bucket === item ? 0 : -1} onClick={() => setBucket(item)} className={`relative min-h-11 shrink-0 px-3 text-sm font-semibold transition-colors duration-160 ${bucket === item ? 'text-accent after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent' : 'text-muted hover:text-ink'}`}>{label} <span className="calm-number ml-1 text-xs">{count}</span></button>;
           })}
         </div>
 
@@ -122,7 +126,7 @@ const StaffAllWork: React.FC = () => {
           </div>
         )}
 
-        <Surface className="overflow-hidden divide-y divide-line/70">
+        <Surface id="all-work-panel" role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={tasks} onOpen={item => setTaskId(item.id)} />)}
           {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">No assigned work matches this view</p><p className="mt-1 text-sm text-muted">Clear a filter or choose another queue.</p></div>}
         </Surface>

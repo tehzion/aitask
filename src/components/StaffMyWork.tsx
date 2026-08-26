@@ -106,14 +106,18 @@ const StaffMyWork: React.FC = () => {
           <div><h2 id="staff-queue-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">Assigned queue</h2><p className="mt-1 text-sm text-muted">Work is ordered by revision, deadline, state, and priority.</p></div>
           <Link to="/tasks" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline">All work <ArrowRight className="h-4 w-4" /></Link>
         </div>
-        <div role="tablist" aria-label="Staff work queue" className="no-scrollbar mt-4 flex gap-1 overflow-x-auto border-b border-line">
+        <div role="tablist" aria-label="Staff work queue" className="no-scrollbar mt-4 flex gap-1 overflow-x-auto border-b border-line" onKeyDown={event => {
+          const index = bucketOrder.indexOf(activeBucket);
+          if (event.key === 'ArrowRight') { event.preventDefault(); setActiveBucket(bucketOrder[(index + 1) % bucketOrder.length]); }
+          else if (event.key === 'ArrowLeft') { event.preventDefault(); setActiveBucket(bucketOrder[(index + bucketOrder.length - 1) % bucketOrder.length]); }
+        }}>
           {bucketOrder.map(bucket => (
-            <button key={bucket} type="button" role="tab" aria-selected={activeBucket === bucket} onClick={() => setActiveBucket(bucket)} className={`relative min-h-11 shrink-0 px-3 text-sm font-semibold transition-colors duration-160 ${activeBucket === bucket ? 'text-accent after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent' : 'text-muted hover:text-ink'}`}>
+            <button key={bucket} type="button" role="tab" id={`staff-queue-tab-${bucket}`} aria-selected={activeBucket === bucket} aria-controls="staff-queue-panel" tabIndex={activeBucket === bucket ? 0 : -1} onClick={() => setActiveBucket(bucket)} className={`relative min-h-11 shrink-0 px-3 text-sm font-semibold transition-colors duration-160 ${activeBucket === bucket ? 'text-accent after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent' : 'text-muted hover:text-ink'}`}>
               {getStaffBucketLabel(bucket)} <span className="calm-number ml-1 text-xs">{queue[bucket].length}</span>
             </button>
           ))}
         </div>
-        <Surface className="mt-3 overflow-hidden divide-y divide-line/70">
+        <Surface id="staff-queue-panel" role="tabpanel" aria-labelledby={`staff-queue-tab-${activeBucket}`} tabIndex={0} className="mt-3 overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           {queue[activeBucket].slice(0, 8).map(task => <StaffWorkItem key={task.id} task={task} allTasks={tasks} onOpen={item => openTask(item.id)} />)}
           {queue[activeBucket].length === 0 && <div className="px-5 py-12 text-center"><ListChecks className="mx-auto h-7 w-7 text-muted/60" /><p className="mt-3 text-sm font-semibold text-ink">Nothing in {getStaffBucketLabel(activeBucket).toLowerCase()}</p><p className="mt-1 text-sm text-muted">Choose another queue to review your work.</p></div>}
         </Surface>
