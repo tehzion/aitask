@@ -26,6 +26,7 @@
     "check": "tsc -b --noEmit",
     "test": "vitest run src",
     "test:e2e": "playwright test",
+    "test:e2e:login-i18n": "playwright test -c playwright.login-i18n.config.ts",
     "test:e2e:pwa": "pnpm build && playwright test -c playwright.pwa.config.ts",
     "verify:pwa": "pnpm build && node scripts/verify-pwa.mjs",
     "verify:supabase": "node scripts/verify-supabase.mjs",

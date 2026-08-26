@@ -41,6 +41,7 @@ test('day/night mode and keyboard shortcuts remain accessible', async ({ page })
 
   await page.reload();
   await expect(root).toHaveClass(/dark/);
+  await expect(page.getByRole('button', { name: 'Keyboard shortcuts' })).toBeVisible();
 
   await page.keyboard.press('?');
   const guide = page.getByRole('dialog', { name: 'Keyboard shortcuts' });

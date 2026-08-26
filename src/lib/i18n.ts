@@ -263,6 +263,7 @@ const zhCopy: Record<string, string> = {
   'Choose your password': '设置您的密码',
   'Set password': '设置密码',
   'Reset your password': '重设您的密码',
+  'Forgot password?': '忘记密码？',
   'Send recovery email': '发送恢复邮件',
   'Back to Login': '返回登录',
   'Return to Login': '返回登录',
