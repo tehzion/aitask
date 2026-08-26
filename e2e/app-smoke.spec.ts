@@ -649,10 +649,10 @@ test('first login reaches the app and critical responsive routes remain usable',
     });
   });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Client Portal' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Ready for your review' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Upcoming deliveries' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Latest updates' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Needs your review' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'In delivery' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Shared updates' })).toBeVisible();
   await expect(page.getByText('Workspace analytics')).toHaveCount(0);
   for (const viewport of publicViewports) {
     await page.setViewportSize(viewport);
@@ -665,20 +665,20 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.setViewportSize({ width: 1536, height: 864 });
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: 'Company Tasks' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Deliveries' })).toBeVisible();
   await expect(page.getByText('All departments')).toHaveCount(0);
   await expect(page.getByText('All priorities')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Quick edit/i })).toHaveCount(0);
   await page.getByText('Review campaign artwork', { exact: true }).first().click();
-  const clientTaskDialog = page.getByRole('dialog', { name: 'Review campaign artwork' });
+  const clientTaskDialog = page.getByRole('dialog', { name: 'Delivery details' });
   await expect(clientTaskDialog).toBeVisible();
-  await expect(clientTaskDialog.getByText('Deliverables & Links')).toBeVisible();
-  await expect(clientTaskDialog.getByText('Assigned Contact', { exact: true })).toBeVisible();
+  await expect(clientTaskDialog.getByText('Preview and files')).toBeVisible();
+  await expect(clientTaskDialog.getByText('Agency contact', { exact: true })).toBeVisible();
   await expect(clientTaskDialog.getByText('Internal Notes')).toHaveCount(0);
   await expect(clientTaskDialog.getByText('Created By')).toHaveCount(0);
   await expect(clientTaskDialog.getByText('Priority')).toHaveCount(0);
-  await expect(clientTaskDialog.getByPlaceholder('Share feedback for the team...')).toBeVisible();
-  await expect(clientTaskDialog.getByRole('button', { name: 'Approve' })).toBeVisible();
+  await expect(clientTaskDialog.getByPlaceholder('Share feedback with the team…')).toBeVisible();
+  await expect(clientTaskDialog.getByRole('button', { name: 'Approve delivery' })).toBeVisible();
   await page.keyboard.press('Escape');
 
   const viewports = [

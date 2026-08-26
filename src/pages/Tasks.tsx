@@ -17,6 +17,7 @@ import { DEPARTMENTS } from '../lib/departments';
 import { getOperationsPeriod, type TeamWorkloadPeriod } from '../lib/taskReporting';
 import { getClientTaskStage } from '../lib/clientPortal';
 import StaffAllWork from '../components/StaffAllWork';
+import ClientDeliveries from '../components/ClientDeliveries';
 
 const CLIENT_BOARD_COLUMNS = [
   { value: 'active', label: 'In progress' },
@@ -47,7 +48,7 @@ const priorityColors: Record<Priority, string> = {
   'Urgent': 'bg-red-50 text-red-700',
 };
 
-const Tasks: React.FC = () => {
+const TasksWorkspace: React.FC = () => {
   const { t } = useI18n();
   const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore(useShallow(state => ({
     tasks: state.tasks,
@@ -419,8 +420,6 @@ const Tasks: React.FC = () => {
       </span>
     )
   );
-
-  if (currentUser?.role === 'Staff') return <StaffAllWork />;
 
   return (
     <div className={pageShell}>
@@ -1227,6 +1226,13 @@ const Tasks: React.FC = () => {
       })()}
     </div>
   );
+};
+
+const Tasks: React.FC = () => {
+  const currentUser = useStore(state => state.currentUser);
+  if (currentUser?.role === 'Client') return <ClientDeliveries />;
+  if (currentUser?.role === 'Staff') return <StaffAllWork />;
+  return <TasksWorkspace />;
 };
 
 export default Tasks;

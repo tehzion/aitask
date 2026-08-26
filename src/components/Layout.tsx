@@ -190,12 +190,19 @@ const Layout: React.FC = () => {
   const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : unreadNotifs.length;
   const previewNotifications = unreadNotifs.slice(0, 5);
   const isStaff = currentUser?.role === 'Staff';
+  const isClient = currentUser?.role === 'Client';
   const mobileNavItems = useMemo(() => isStaff
     ? [
         { path: '/', label: 'My work', icon: LayoutDashboard },
         { path: '/calendar', label: 'Schedule', icon: CalendarDays },
         { path: '/notifications', label: 'Inbox', icon: Bell },
       ].filter(item => item.path === '/notifications' || canAccessPath(currentUser, item.path, rolePermissions))
+    : isClient
+      ? [
+          { path: '/', label: 'Home', icon: LayoutDashboard },
+          { path: '/tasks', label: 'Deliveries', icon: CheckSquare },
+          { path: '/notifications', label: 'Inbox', icon: Bell },
+        ].filter(item => item.path === '/notifications' || canAccessPath(currentUser, item.path, rolePermissions))
     : [
         { path: '/', label: 'Dashboard', icon: LayoutDashboard },
         { path: '/tasks', label: 'Tasks', icon: CheckSquare },
@@ -206,7 +213,7 @@ const Layout: React.FC = () => {
         ...(canAccessPath(currentUser, '/settings', rolePermissions)
           ? [{ path: '/settings', label: 'Settings', icon: SettingsIcon }]
           : []),
-      ].filter(item => canAccessPath(currentUser, item.path, rolePermissions)), [currentUser, isStaff, rolePermissions]);
+      ].filter(item => canAccessPath(currentUser, item.path, rolePermissions)), [currentUser, isClient, isStaff, rolePermissions]);
   const canOpenSettings = Boolean(currentUser?.mustResetPassword)
     || canAccessPath(currentUser, '/settings', rolePermissions);
 
@@ -350,17 +357,20 @@ const Layout: React.FC = () => {
                   isActive && "font-semibold text-accent"
                 )}
               >
+              <span className="relative">
                 <Icon className="mb-0.5 h-5 w-5" />
-                <span className="text-[10px]">{item.label}</span>
+                {item.path === '/notifications' && unreadCount > 0 && <span className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-surface bg-accent px-0.5 text-[8px] font-black text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+              </span>
+              <span className="text-[10px]">{item.label}</span>
               </NavLink>
             );
           })}
 
-          {isStaff ? (
+          {isStaff || isClient ? (
             <button
               type="button"
               onClick={openMobileMenu}
-              aria-label="Open more staff actions"
+              aria-label={isClient ? 'Open more client destinations' : 'Open more staff actions'}
               className="flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors hover:text-accent"
             >
               <Menu className="mb-0.5 h-5 w-5" />

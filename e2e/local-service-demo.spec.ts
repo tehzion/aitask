@@ -70,9 +70,9 @@ test('local service demo makes plans, delivery, files, roles, and price isolatio
 
   await setDemoUser(page, 'u-client-urban');
   await page.goto(urbanWorkspace);
-  await page.getByRole('tab', { name: 'Activity / Files' }).click();
+  await page.getByRole('tab', { name: 'Files & updates' }).click();
   await expect(page.getByText('The monthly content brief is ready.')).toBeVisible();
   await expect(page.getByText('hidden from the client portal')).toHaveCount(0);
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Services' }).click();
   await expect(page.getByText('Internal monthly total')).toHaveCount(0);
 });

@@ -130,9 +130,9 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
     useStore.setState({ currentUser: { id: 'client-e2e', name: 'Customized Client', role: 'Client', departments: ['Client'], department: 'Client', companyName: 'Customized Co', permissions: { viewDashboard: true } } });
   });
   await page.goto(`/clients/${seeded.clientId}`);
-  await page.getByRole('tab', { name: 'Cycles', exact: true }).click();
-  await expect(page.getByText('3 linked task(s)')).toBeVisible();
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Deliveries', exact: true }).click();
+  await expect(page.getByText(/linked task/i)).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Services', exact: true }).click();
   await expect(page.getByText('Internal monthly total')).toHaveCount(0);
   await expect(page.getByText(/each$/)).toHaveCount(0);
   await expectNoAxeViolations(page, 'Client workspace plan');

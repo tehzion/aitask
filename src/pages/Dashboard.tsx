@@ -331,9 +331,9 @@ const Dashboard: React.FC = () => {
     <>
     <div className={pageShell}>
       <PageHeader
-        title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Admin' ? 'Admin Dashboard' : showClientPortal ? 'Client Portal' : 'My Dashboard'}
+        title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Admin' ? 'Admin Dashboard' : showClientPortal ? 'Home' : 'My Dashboard'}
         description={showClientPortal
-          ? `${currentUser?.companyName || 'Your company'} work, deliveries, feedback, and approvals.`
+          ? `Your next decision, delivery timing, and shared updates for ${currentUser?.companyName || 'your company'}.`
           : dashboardDescription}
         action={(
           <div className="flex flex-wrap items-center gap-2.5">
@@ -354,7 +354,7 @@ const Dashboard: React.FC = () => {
         )}
       />
 
-      {isLocalServiceDemoEnabled() && backend.mode === 'local' && hasLocalServiceDemo && (
+      {!showClientPortal && isLocalServiceDemoEnabled() && backend.mode === 'local' && hasLocalServiceDemo && (
         <section className={cn(cardBase, 'mt-5 overflow-hidden')} aria-labelledby="local-service-demo-heading">
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -373,7 +373,7 @@ const Dashboard: React.FC = () => {
         </section>
       )}
 
-      {!hasTaskData && (
+      {!showClientPortal && !hasTaskData && (
         <section className={cn(cardBase, 'overflow-hidden')}>
           <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-center">
             <div className="flex min-w-0 gap-4">

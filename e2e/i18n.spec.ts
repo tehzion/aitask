@@ -127,23 +127,22 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
     useStore.setState({ currentUser: { id: 'client-i18n', name: 'Client I18N', role: 'Client', departments: ['Client'], department: 'Client', companyName: 'Settings', permissions: { viewDashboard: true } } });
   });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Client Portal' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
   await expect(page.locator('main').getByText('Dashboard', { exact: true }).first()).toBeVisible();
 
   await page.getByRole('button', { name: '切换为中文' }).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
-  await expect(page.getByRole('heading', { name: '客户门户' })).toBeVisible();
-  await expect(page.locator('main').getByText('等待您审批', { exact: true }).first()).toBeVisible();
-  await expect(page.locator('main').getByText('即将到期', { exact: true }).first()).toBeVisible();
-  await expect(page.locator('main').getByText('1 项服务 · 1 个已发布周期').first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: '首页' })).toBeVisible();
+  await expect(page.locator('main').getByText('需要您审阅', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('main').getByText('交付进行中', { exact: true }).first()).toBeVisible();
   await expect(page.locator('main').getByText('Dashboard', { exact: true }).first()).toBeVisible();
 
   await page.goto(`/clients/${seeded.clientId}`);
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-  await expect(page.getByText('已完成 0 / 1 个交付物').first()).toBeVisible();
-  await page.getByRole('tab', { name: '周期', exact: true }).click();
+  await expect(page.getByText('本周期已交付 0 / 1 项').first()).toBeVisible();
+  await page.getByRole('tab', { name: '交付内容', exact: true }).click();
   await expect(page.locator('main').getByText('Dashboard', { exact: true }).first()).toBeVisible();
-  await expect(page.locator('main').getByText(/个关联任务 · Short Video Production/).first()).toBeVisible();
+  await expect(page.locator('main').getByText(/关联任务/)).toHaveCount(0);
 
   const axeResults = await new AxeBuilder({ page }).include('main').analyze();
   expect(axeResults.violations, `Client portal zh: ${axeResults.violations.map(item => `${item.id} (${item.nodes.length})`).join(', ')}`).toEqual([]);
