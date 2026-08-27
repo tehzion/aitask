@@ -4,6 +4,31 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [2.1.0] - 2026-08-27
+
+### Added
+
+- Client Workspace 2.0: approval-first Home, Deliveries, Delivery Focus, and
+  simplified service views for client users.
+- Action-first Staff workspace: My work and All work queues, focused task
+  actions, and mobile-friendly navigation.
+- Build provenance at `/build-info.json`, exposing only the release version,
+  Git commit, build channel, and build time for deployment verification.
+
+### Security
+
+- Client-read privacy hardened so client projections exclude internal task-chain
+  details, revision counters, and private comments or approvals.
+- Service commands now enforce permission checks consistently, and pending edits
+  are retained during safe refresh and retry recovery.
+
+### Changed
+
+- Boss and account workbenches, approvals, client delivery pages, and Simplified
+  Chinese coverage were refined for clearer day-to-day operation.
+- Production releases are governed by the tagged-release workflow and verified
+  against their published build provenance.
+
 ## [2.0.0] - 2026-08-21
 
 ### Added

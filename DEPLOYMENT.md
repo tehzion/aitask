@@ -47,6 +47,16 @@ pnpm test:e2e
 - `verify:supabase` checks that anonymous callers cannot execute workspace commands or read the secure tables, that the legacy snapshot guard trigger exists, and that a spoofed `Origin` cannot write the legacy snapshot. Set `AITASK_EXPECT_SECURE_CUTOVER=true` once `secure-cutover.sql` has been applied.
 - `verify:pwa` rebuilds `dist/` and checks the generated manifest/service worker.
 - `pnpm verify:supabase:rollout` (requires Docker) validates all migrations, pgTAP tests, lint, advisors, and postflight SQL against a disposable local Supabase stack.
+- `pnpm verify:release-provenance -- --url https://your-release.example --version 2.1.0 --commit <full-sha>` confirms a deployed build’s public version and immutable Git commit.
+
+## Tagged production releases
+
+Do not allow ordinary Git pushes to update the production alias. Configure Vercel
+to reserve production promotion for `.github/workflows/release.yml`, which is
+triggered by matching `vX.Y.Z` tags and deploys a prebuilt artifact only after
+the local, database, staging, and provenance gates pass. Configure the required
+Vercel and staging QA secrets as described in
+[`docs/staging-release-setup.md`](docs/staging-release-setup.md).
 
 ## Backend migrations and upgrade runbook
 

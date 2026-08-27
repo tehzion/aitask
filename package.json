@@ -1,7 +1,7 @@
 {
   "name": "workspace",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "engines": {
     "node": "22.x",
@@ -31,6 +31,7 @@
     "verify:pwa": "pnpm build && node scripts/verify-pwa.mjs",
     "verify:supabase": "node scripts/verify-supabase.mjs",
     "verify:supabase:rollout": "node scripts/verify-supabase-rollout.mjs",
+    "verify:release-provenance": "node scripts/verify-release-provenance.mjs",
     "release:patch": "pnpm version patch --no-git-tag-version",
     "release:minor": "pnpm version minor --no-git-tag-version",
     "release:major": "pnpm version major --no-git-tag-version"

@@ -6,8 +6,8 @@ proving that the live schema and the repository baseline are equivalent.
 
 ## Current production state
 
-- Verified on 25 August 2026: production migration history matches all 31
-  repository migrations through `20260821075407_add_release_notice_acknowledgements`.
+- Verified on 27 August 2026: production migration history matches all 32
+  repository migrations through `20260826230000_client_read_privacy`.
 - The legacy and workspace-locked command signatures, service commands,
   deliverable task-chain functions, and schema-version-2 capability RPC exist.
 - Postflight matches the approved business checksum, all task/project records
@@ -16,8 +16,12 @@ proving that the live schema and the repository baseline are equivalent.
 - Super Admin, Admin, Staff, and Client capability probes pass for their own
   workspace and return `FORBIDDEN` for a cross-workspace probe.
 - Do not repair migration history or reapply the five rollout migrations.
-- Restorable-backup evidence is still unverified, and production Auth still
-  reports leaked-password protection as disabled.
+- A public-schema logical backup was restored into a disposable clean stack and
+  its counts and fingerprints matched production. This is data-restore evidence,
+  not proof that a platform-level point-in-time backup can be restored.
+- Recheck Supabase Auth leaked-password protection directly in the dashboard
+  before every production release; enable it in staging and production before
+  release sign-off if it is disabled.
 
 ## Stop conditions
 

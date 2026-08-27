@@ -1,0 +1,142 @@
+name: Tagged Production Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  validate-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      VERCEL_CLI_VERSION: ${{ vars.VERCEL_CLI_VERSION }}
+      STAGING_E2E_BASE_URL: ${{ vars.STAGING_E2E_BASE_URL }}
+      STAGING_QA_SUPER_ADMIN_EMAIL: ${{ secrets.STAGING_QA_SUPER_ADMIN_EMAIL }}
+      STAGING_QA_SUPER_ADMIN_PASSWORD: ${{ secrets.STAGING_QA_SUPER_ADMIN_PASSWORD }}
+      STAGING_QA_OPERATION_EMAIL: ${{ secrets.STAGING_QA_OPERATION_EMAIL }}
+      STAGING_QA_OPERATION_PASSWORD: ${{ secrets.STAGING_QA_OPERATION_PASSWORD }}
+      STAGING_QA_PRODUCTION_EMAIL: ${{ secrets.STAGING_QA_PRODUCTION_EMAIL }}
+      STAGING_QA_PRODUCTION_PASSWORD: ${{ secrets.STAGING_QA_PRODUCTION_PASSWORD }}
+      STAGING_QA_ACCOUNT_EMAIL: ${{ secrets.STAGING_QA_ACCOUNT_EMAIL }}
+      STAGING_QA_ACCOUNT_PASSWORD: ${{ secrets.STAGING_QA_ACCOUNT_PASSWORD }}
+      STAGING_QA_CLIENT_EMAIL: ${{ secrets.STAGING_QA_CLIENT_EMAIL }}
+      STAGING_QA_CLIENT_PASSWORD: ${{ secrets.STAGING_QA_CLIENT_PASSWORD }}
+      STAGING_QA_CLIENT_ID: ${{ vars.STAGING_QA_CLIENT_ID }}
+      STAGING_QA_CLIENT_NAME: ${{ vars.STAGING_QA_CLIENT_NAME }}
+      STAGING_QA_CLIENT_TASK_ID: ${{ vars.STAGING_QA_CLIENT_TASK_ID }}
+      STAGING_QA_FOREIGN_TASK_ID: ${{ vars.STAGING_QA_FOREIGN_TASK_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Validate release identity and required configuration
+        run: |
+          test -n "$VERCEL_CLI_VERSION"
+          VERSION="$(node -p \"require('./package.json').version\")"
+          test "$GITHUB_REF_NAME" = "v$VERSION"
+          grep -F "## [$VERSION]" CHANGELOG.md
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit and validate source
+        run: |
+          pnpm audit --prod --audit-level high
+          pnpm check
+          pnpm lint
+          pnpm test
+          pnpm build
+          pnpm verify:pwa
+          pnpm verify:release-provenance -- --file dist/build-info.json --version "$(node -p \"require('./package.json').version\")" --commit "$GITHUB_SHA"
+
+      - name: Validate Supabase rollout in a disposable stack
+        run: pnpm verify:supabase:rollout
+
+      - name: Install browser runtime
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run local browser gates
+        run: |
+          pnpm test:e2e:pwa
+          pnpm test:e2e
+          pnpm test:e2e:login-i18n
+
+      - name: Pull staging environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.STAGING_VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.STAGING_VERCEL_PROJECT_ID }}
+        run: pnpm dlx --yes "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build and deploy staging artifact
+        id: staging
+        env:
+          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.STAGING_VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.STAGING_VERCEL_PROJECT_ID }}
+        run: |
+          pnpm dlx --yes "vercel@$VERCEL_CLI_VERSION" build --prod --token="$VERCEL_TOKEN"
+          echo "url=$(pnpm dlx --yes \"vercel@$VERCEL_CLI_VERSION\" deploy --prebuilt --prod --yes --token=\"$VERCEL_TOKEN\")" >> "$GITHUB_OUTPUT"
+
+      - name: Verify staging release provenance and Supabase cutover
+        env:
+          RELEASE_URL: ${{ steps.staging.outputs.url }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          VITE_AITASK_BACKEND: supabase
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          AITASK_EXPECT_SECURE_CUTOVER: 'true'
+        run: |
+          pnpm verify:release-provenance -- --url "$RELEASE_URL" --version "${RELEASE_VERSION#v}" --commit "$GITHUB_SHA"
+          pnpm verify:supabase
+
+      - name: Run authenticated staging release QA
+        run: pnpm exec playwright test -c playwright.staging.config.ts
+
+      - name: Pull production environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: pnpm dlx --yes "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build and deploy production artifact
+        id: production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          pnpm dlx --yes "vercel@$VERCEL_CLI_VERSION" build --prod --token="$VERCEL_TOKEN"
+          echo "url=$(pnpm dlx --yes \"vercel@$VERCEL_CLI_VERSION\" deploy --prebuilt --prod --yes --token=\"$VERCEL_TOKEN\")" >> "$GITHUB_OUTPUT"
+
+      - name: Verify production provenance and Supabase cutover
+        env:
+          RELEASE_URL: ${{ steps.production.outputs.url }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          VITE_AITASK_BACKEND: supabase
+          AITASK_EXPECT_SECURE_CUTOVER: 'true'
+        run: |
+          pnpm verify:release-provenance -- --url "$RELEASE_URL" --version "${RELEASE_VERSION#v}" --commit "$GITHUB_SHA"
+          pnpm verify:supabase

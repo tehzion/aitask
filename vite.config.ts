@@ -21,6 +21,23 @@ const fullCommit = process.env.VERCEL_GIT_COMMIT_SHA || readGitValue(['rev-parse
 const shortCommit = fullCommit.slice(0, 7);
 const commitLabel = shortCommit || (process.env.VERCEL ? 'release' : 'local');
 const hasLocalChanges = !process.env.VERCEL && Boolean(readGitValue(['status', '--porcelain']));
+const buildTime = new Date().toISOString();
+
+const buildInfoPlugin = (channel: string) => ({
+  name: 'aitask-build-info',
+  generateBundle() {
+    this.emitFile({
+      type: 'asset',
+      fileName: 'build-info.json',
+      source: `${JSON.stringify({
+        version: packageJson.version,
+        commit: fullCommit || null,
+        channel,
+        builtAt: buildTime,
+      }, null, 2)}\n`,
+    });
+  },
+});
 
 const verifyProductionBackend = (mode: string) => {
   if (mode !== 'production') return;
@@ -48,6 +65,7 @@ const verifyProductionBackend = (mode: string) => {
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   verifyProductionBackend(mode);
+  const buildChannel = process.env.VERCEL_ENV || mode;
   return {
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
@@ -55,8 +73,8 @@ export default defineConfig(({ mode }) => {
     __APP_BUILD_ID__: JSON.stringify(shortCommit
       ? `${packageJson.version}+${shortCommit}${hasLocalChanges ? '.dev' : ''}`
       : process.env.VERCEL ? packageJson.version : `${packageJson.version}+local${hasLocalChanges ? '.dev' : ''}`),
-    __APP_BUILD_TIME__: JSON.stringify(new Date().toISOString()),
-    __APP_BUILD_CHANNEL__: JSON.stringify(process.env.VERCEL_ENV || mode),
+    __APP_BUILD_TIME__: JSON.stringify(buildTime),
+    __APP_BUILD_CHANNEL__: JSON.stringify(buildChannel),
   },
   server: {
     watch: {
@@ -80,6 +98,7 @@ export default defineConfig(({ mode }) => {
     },
   },
   plugins: [
+    buildInfoPlugin(buildChannel),
     react({
       babel: {
         plugins: [

@@ -61,6 +61,12 @@ pnpm release:major
 - Minor: backward-compatible features (`1.0.0` to `1.1.0`).
 - Major: breaking data, API, or workflow changes (`1.0.0` to `2.0.0`).
 
+Production promotion is tag-only. Create a matching `v<version>` tag after the
+release checks pass; the tagged workflow verifies the generated
+`/build-info.json` version and full Git commit before and after deployment. See
+[`docs/staging-release-setup.md`](docs/staging-release-setup.md) for the required
+staging tenant, CI secrets, and rollback procedure.
+
 ## Original Vite Notes
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

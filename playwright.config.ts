@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: ['**/pwa-install.spec.ts', '**/login-recovery-i18n.spec.ts'],
+  testIgnore: ['**/pwa-install.spec.ts', '**/login-recovery-i18n.spec.ts', '**/staging-release.spec.ts'],
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 2 : 0,
