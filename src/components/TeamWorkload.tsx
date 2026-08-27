@@ -15,6 +15,7 @@ import { getMemberDepartments } from '../lib/departments';
 import {
   getTeamMemberTaskGroups,
   getTeamWorkloadSummaries,
+  getWorkloadSignal,
   type TeamTaskGroups,
   type TeamWorkloadPeriod,
   type TeamWorkloadSignal,
@@ -161,7 +162,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
     const normalizedQuery = query.trim().toLowerCase();
     const filtered = rawSummaries.filter(summary => (
       (!normalizedQuery || summary.member.name.toLowerCase().includes(normalizedQuery))
-      && (department === 'All' || getMemberDepartments(summary.member).includes(department))
+      && (department === 'All' || getMemberDepartments(summary.member)[0] === department)
     ));
 
     return [...filtered].sort((left, right) => {
@@ -198,12 +199,14 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
       existing.periodOpen += summary.periodOpen;
       existing.members += 1;
     });
-    return Array.from(byDepartment.values()).sort((left, right) => (
-      right.overdue - left.overdue
-      || right.periodOpen - left.periodOpen
-      || left.member.name.localeCompare(right.member.name)
-    ));
-  }, [summaries, view]);
+    return Array.from(byDepartment.values())
+      .map(entry => ({ ...entry, signal: getWorkloadSignal(period, entry.periodOpen, entry.overdue) }))
+      .sort((left, right) => (
+        right.overdue - left.overdue
+        || right.periodOpen - left.periodOpen
+        || left.member.name.localeCompare(right.member.name)
+      ));
+  }, [period, summaries, view]);
 
   const selectedSummary = useMemo(
     () => rawSummaries.find(summary => summary.member.id === selectedMemberId),
@@ -289,7 +292,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                 <th className="px-3 py-3 text-center font-semibold">This week</th>
                 <th className="px-3 py-3 text-center font-semibold">Open</th>
                 <th className="px-3 py-3 text-center font-semibold">Overdue</th>
-                <th className="px-3 py-3 text-center font-semibold">Review</th>
+                <th className="px-3 py-3 text-center font-semibold">Waiting review</th>
                 <th className="px-3 py-3 text-center font-semibold">Done this week</th>
                 <th className="px-4 py-3 text-right font-semibold">Workload</th>
               </tr>
@@ -350,7 +353,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                 <Metric label="This week" value={summary.dueThisWeek} />
                 <Metric label="Open" value={summary.open} />
                 <Metric label="Overdue" value={summary.overdue} danger />
-                <Metric label="Review" value={summary.waitingApproval} />
+                <Metric label="Waiting review" value={summary.waitingApproval} />
                 <Metric label="Done week" value={summary.completedThisWeek} />
               </div>
             </button>
@@ -365,7 +368,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                 <Metric label="This week" value={summary.dueThisWeek} />
                 <Metric label="Open" value={summary.open} />
                 <Metric label="Overdue" value={summary.overdue} danger />
-                <Metric label="Review" value={summary.waitingApproval} />
+                <Metric label="Waiting review" value={summary.waitingApproval} />
                 <Metric label="Done week" value={summary.completedThisWeek} />
               </div>
             </div>

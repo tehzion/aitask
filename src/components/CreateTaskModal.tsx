@@ -22,7 +22,7 @@ const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, commitPendingMutation } = useStore(useShallow(state => ({
+  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, retryPendingSave } = useStore(useShallow(state => ({
     users: state.users,
     currentUser: state.currentUser,
     addTask: state.addTask,
@@ -36,7 +36,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     createTaskInitialCycleId: state.createTaskInitialCycleId,
     createTaskInitialDeliverableId: state.createTaskInitialDeliverableId,
     rolePermissions: state.rolePermissions,
-    commitPendingMutation: state.commitPendingMutation,
+    retryPendingSave: state.retryPendingSave,
   })));
   const navigate = useNavigate();
   const clientListId = React.useId();
@@ -101,6 +101,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     [currentUser, rolePermissions, tasks],
   );
   const selectedProject = projectId ? assignableProjects.find(project => project.id === projectId) : undefined;
+  const linkedTaskContext = Boolean(createTaskInitialClientId || createTaskInitialClientName);
+  const showCompanyLink = isStaffTaskCreator || linkedTaskContext;
   const clientOptions = React.useMemo(
     () => getClientOptions(assignableProjects, visibleTasksForChoices, users),
     [assignableProjects, users, visibleTasksForChoices],
@@ -292,7 +294,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     if (pendingTaskId) {
       setIsSubmitting(true);
-      const pendingResult = await commitPendingMutation();
+      const pendingResult = await retryPendingSave('task.create');
       setIsSubmitting(false);
       if (!pendingResult.ok) {
         setFormError(pendingResult.error || 'The task is still waiting to be saved.');
@@ -393,7 +395,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    const saveResult = await commitPendingMutation('task.create');
+    const saveResult = await retryPendingSave('task.create');
     setIsSubmitting(false);
     if (!saveResult.ok) {
       setPendingTaskId(taskId);
@@ -438,6 +440,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-slate-900">Task details</h3>
               
+              {showCompanyLink && (
               <div>
                 <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                   <label className="block text-sm font-medium text-slate-700">
@@ -467,6 +470,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                 </div>
               </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Task Title <span className="text-red-500">*</span></label>

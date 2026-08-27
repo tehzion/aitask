@@ -46,6 +46,36 @@ pnpm test:e2e
 
 - `verify:supabase` checks that anonymous callers cannot execute workspace commands or read the secure tables, that the legacy snapshot guard trigger exists, and that a spoofed `Origin` cannot write the legacy snapshot. Set `AITASK_EXPECT_SECURE_CUTOVER=true` once `secure-cutover.sql` has been applied.
 - `verify:pwa` rebuilds `dist/` and checks the generated manifest/service worker.
+- `pnpm verify:supabase:rollout` (requires Docker) validates all migrations, pgTAP tests, lint, advisors, and postflight SQL against a disposable local Supabase stack.
+- `pnpm verify:release-provenance -- --url https://your-release.example --version <version> --commit <full-sha>` confirms a deployed build’s public version and immutable Git commit.
+
+## Tagged production releases
+
+Do not allow ordinary Git pushes to update the production alias. Configure Vercel
+to reserve production promotion for `.github/workflows/release.yml`, which is
+triggered by matching `vX.Y.Z` tags and deploys a prebuilt artifact only after
+the local, database, staging, and provenance gates pass. Configure the required
+Vercel and staging QA secrets as described in
+[`docs/staging-release-setup.md`](docs/staging-release-setup.md).
+
+The v2.1.1 release has an explicit one-time exception that uses the existing
+Vercel Git production integration and performs the same source gates plus live
+post-deploy verification. It performs no database migration or authenticated
+production test. The exception does not apply to any later tag.
+
+## Backend migrations and upgrade runbook
+
+New migrations must reach production through `supabase db push` — never by
+running migration files manually. The app verifies backend capabilities at
+startup and switches to a read-only "system update" state when the deployed
+schema is older than the frontend expects.
+
+Before applying migrations to a live project, follow
+[`docs/production-rpc-mismatch-recovery.md`](docs/production-rpc-mismatch-recovery.md):
+it defines fail-closed stop conditions (verified restorable backup, preflight
+counts/checksums, schema-equivalence evidence), the preflight/postflight SQL in
+`supabase/preflight/`, and the post-rollout validation steps. Do not redeploy a
+frontend that requires newer RPCs before those gates pass.
 
 ## If Vercel Does Not Show Live
 

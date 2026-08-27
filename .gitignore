@@ -14,8 +14,10 @@ dist
 dist-ssr
 *.zip
 .tmp-responsive-profile
+.vercel
 playwright-report
 test-results
+.release-backups
 supabase/.branches
 supabase/.temp
 
@@ -30,6 +32,8 @@ supabase/.temp
 !.vscode/extensions.json
 .idea
 .trae
+.agents
+skills-lock.json
 .DS_Store
 *.suo
 *.ntvs*

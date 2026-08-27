@@ -49,6 +49,7 @@ import { useI18n } from "../components/I18nProvider";
 import { downloadServiceFile, uploadServiceFile } from "../lib/serviceFiles";
 import DraftServicePlanEditor from "../components/DraftServicePlanEditor";
 import SideSheet from "../components/SideSheet";
+import ClientServiceWorkspace from "../components/ClientServiceWorkspace";
 
 type Tab = "overview" | "plan" | "cycles" | "addons" | "activity";
 const CLIENT_WORKSPACE_TABS_ID = "client-workspace";
@@ -60,7 +61,7 @@ const deliverableStatuses: DeliverableStatus[] = [
   "Delivered",
 ];
 
-const ClientWorkspace = () => {
+const OperationsClientWorkspace = () => {
   const { t } = useI18n();
   const { clientId = "" } = useParams();
   const store = useStore();
@@ -917,6 +918,12 @@ const ClientWorkspace = () => {
       </SideSheet>
     </div>
   );
+};
+
+const ClientWorkspace = () => {
+  const currentUser = useStore(state => state.currentUser);
+  if (currentUser?.role === "Client") return <ClientServiceWorkspace />;
+  return <OperationsClientWorkspace />;
 };
 
 export default ClientWorkspace;

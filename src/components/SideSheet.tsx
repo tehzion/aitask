@@ -22,7 +22,7 @@ const SideSheet: React.FC<SideSheetProps> = ({ isOpen, title, description, onClo
       <button type="button" aria-label={`Close ${title}`} onClick={onClose} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-5 w-5" /></button>
     </header>
     <div className="custom-scrollbar flex-1 overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
-    {footer && <footer className="border-t border-line bg-inset/80 px-5 py-4 sm:px-6">{footer}</footer>}
+    {footer && <footer className="border-t border-line bg-inset/80 px-5 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pb-4">{footer}</footer>}
   </ModalShell>;
 };
 

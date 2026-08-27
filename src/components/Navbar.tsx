@@ -134,6 +134,7 @@ const Navbar: React.FC<NavbarProps> = ({
 
   const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : unreadNotifs.length;
   const previewNotifications = unreadNotifs.slice(0, 5);
+  const isClient = currentUser?.role === 'Client';
 
   const handleBellClick = () => {
     setShowNotifs(!showNotifs);
@@ -181,11 +182,11 @@ const Navbar: React.FC<NavbarProps> = ({
           </span>
           <input
             type="text"
-            aria-label="Search tasks"
+            aria-label={isClient ? 'Search deliveries' : 'Search tasks'}
             aria-keyshortcuts="/"
             data-global-search
             className={cn(inputBase, 'border-transparent bg-inset py-2.5 pl-10 pr-3 shadow-none focus:bg-surface')}
-            placeholder="Search tasks..."
+            placeholder={isClient ? 'Search deliveries…' : 'Search tasks...'}
             value={globalSearch}
             onChange={(event) => setGlobalSearch(event.target.value)}
           />
@@ -332,11 +333,11 @@ const Navbar: React.FC<NavbarProps> = ({
               ref={mobileSearchRef}
               type="text"
               autoFocus
-              aria-label="Search tasks"
+              aria-label={isClient ? 'Search deliveries' : 'Search tasks'}
               aria-keyshortcuts="/"
               data-global-search
               className={cn(inputBase, 'py-2.5 pl-10 pr-3')}
-              placeholder="Search tasks..."
+              placeholder={isClient ? 'Search deliveries…' : 'Search tasks...'}
               value={globalSearch}
               onChange={(event) => setGlobalSearch(event.target.value)}
             />

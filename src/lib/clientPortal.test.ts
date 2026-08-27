@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../types';
 import {
+  getClientDeliveryStage,
+  getClientDeliveryStageLabel,
+  getClientFocusTask,
   getClientLatestUpdates,
   getClientProgress,
   getClientReviewReadyTasks,
   getClientTaskStage,
   getClientUpcomingDeliveries,
+  groupClientDeliveries,
 } from './clientPortal';
 
 const makeTask = (overrides: Partial<Task> = {}): Task => ({
@@ -79,5 +83,39 @@ describe('Client portal reporting', () => {
     ];
 
     expect(getClientLatestUpdates(tasks).map(task => task.id)).toEqual(['newer', 'older']);
+  });
+
+  it('derives client delivery stages without exposing internal task statuses', () => {
+    const now = new Date(2026, 7, 10, 12);
+    expect(getClientDeliveryStage(makeTask({ status: 'Waiting Approval' }), now)).toBe('needs_review');
+    expect(getClientDeliveryStage(makeTask({ status: 'In Progress' }), now)).toBe('timing_changed');
+    expect(getClientDeliveryStage(makeTask({ status: 'In Progress', dueDate: '2026-08-12' }), now)).toBe('in_delivery');
+    expect(getClientDeliveryStage(makeTask({ status: 'Pending', dueDate: '2026-08-12' }), now)).toBe('scheduled');
+    expect(getClientDeliveryStage(makeTask({ clientApprovalStatus: 'Approved' }), now)).toBe('delivered');
+    expect(getClientDeliveryStage(makeTask({ status: 'Cancelled' }), now)).toBe('cancelled');
+    expect(getClientDeliveryStageLabel(makeTask({ status: 'Custom production', dueDate: '2026-08-12' }), now)).toBe('In delivery');
+  });
+
+  it('selects review work before the earliest expected delivery and breaks ties by update time', () => {
+    const now = new Date(2026, 7, 1, 12);
+    const tasks = [
+      makeTask({ id: 'delivery', dueDate: '2026-08-02' }),
+      makeTask({ id: 'review-older', status: 'Waiting Approval', dueDate: '2026-08-05', updatedAt: '2026-08-01T09:00:00.000Z' }),
+      makeTask({ id: 'review-newer', status: 'Waiting Approval', dueDate: '2026-08-05', updatedAt: '2026-08-01T11:00:00.000Z' }),
+    ];
+    expect(getClientFocusTask(tasks, now)?.id).toBe('review-newer');
+    expect(getClientFocusTask(tasks.filter(task => task.status !== 'Waiting Approval'), now)?.id).toBe('delivery');
+  });
+
+  it('groups timing changes separately from scheduled and active delivery work', () => {
+    const now = new Date(2026, 7, 10, 12);
+    const groups = groupClientDeliveries([
+      makeTask({ id: 'late', dueDate: '2026-08-09' }),
+      makeTask({ id: 'active', dueDate: '2026-08-11' }),
+      makeTask({ id: 'scheduled', status: 'Pending', dueDate: '2026-08-12' }),
+    ], now);
+    expect(groups.timing_changed.map(task => task.id)).toEqual(['late']);
+    expect(groups.in_delivery.map(task => task.id)).toEqual(['active']);
+    expect(groups.scheduled.map(task => task.id)).toEqual(['scheduled']);
   });
 });

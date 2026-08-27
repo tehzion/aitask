@@ -6,14 +6,22 @@ proving that the live schema and the repository baseline are equivalent.
 
 ## Current production state
 
-- The browser is sending the five-argument workspace command.
-- Production exposes only the legacy four-argument command.
-- The service-management and backend-capabilities RPCs are absent.
-- A PostgREST `PGRST202`/HTTP 404 happens before SQL is executed, so the failed
-  requests do not represent partially applied writes.
-- The five service/update migrations listed in
-  `supabase/preflight/migration_repair_manifest.review.json` are not recorded in
-  production.
+- Verified on 27 August 2026: production migration history matches all 32
+  repository migrations through `20260826230000_client_read_privacy`.
+- The legacy and workspace-locked command signatures, service commands,
+  deliverable task-chain functions, and schema-version-2 capability RPC exist.
+- Postflight matches the approved business checksum, all task/project records
+  have canonical client IDs, Storage is private, and the service cron is not
+  tied to a hard-coded workspace.
+- Super Admin, Admin, Staff, and Client capability probes pass for their own
+  workspace and return `FORBIDDEN` for a cross-workspace probe.
+- Do not repair migration history or reapply the five rollout migrations.
+- A public-schema logical backup was restored into a disposable clean stack and
+  its counts and fingerprints matched production. This is data-restore evidence,
+  not proof that a platform-level point-in-time backup can be restored.
+- Recheck Supabase Auth leaked-password protection directly in the dashboard
+  before every production release; enable it in staging and production before
+  release sign-off if it is disabled.
 
 ## Stop conditions
 
@@ -34,12 +42,15 @@ Do not apply production DDL if any of these conditions is true:
 Use the repository-pinned Node, pnpm, and Supabase CLI versions. Discover CLI
 flags from the installed CLI help before running them.
 
-1. Start Docker and perform a complete local database reset.
-2. Run every SQL file under `supabase/tests/database` with pgTAP.
-3. Run database lint and advisors.
-4. Run `pnpm verify:supabase` and the application release gate.
-5. Run `supabase/preflight/service_rollout_postflight.sql` against the local
-   database and retain the output.
+1. Start Docker and run `pnpm verify:supabase:rollout`. This creates an unlinked,
+   disposable Supabase workspace so a production-linked checkout cannot affect
+   local reset or migration-history validation. It verifies the five-migration
+   manifest tail, applies every migration, runs every pgTAP file, runs database
+   lint and advisors, executes the postflight SQL, and removes its containers.
+2. Run `pnpm check`, `pnpm lint`, `pnpm test`, `pnpm build`, and
+   `node scripts/verify-pwa.mjs`.
+3. Run `pnpm verify:supabase` against the deployed environment and retain all
+   command output with the release record.
 
 The old four-argument command, the new five-argument command, both service
 command signatures, both task-chain signatures, and the capability RPC must all
@@ -61,7 +72,11 @@ service entities. The task/project business-field checksum was
 `794fe323c64ee57e517ef0432afefb42`. These values are a review baseline, not
 values hard-coded into the migration.
 
-## 3. Migration-history reconciliation
+## 3. Historical migration-history reconciliation
+
+This section records the recovery procedure that was prepared before production
+history became aligned. It is retained for audit only and must not be executed
+against the current production state.
 
 The schema-equivalence comparison completed on 2026-08-24. A clean local
 database reset stopped at `20260802121500_notification_center`, immediately

@@ -60,3 +60,6 @@ jobs:
 
       - name: Browser smoke test
         run: pnpm test:e2e
+
+      - name: Hosted login localization
+        run: pnpm test:e2e:login-i18n

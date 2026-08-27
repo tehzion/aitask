@@ -39,8 +39,13 @@ export const useNotificationReadActions = (): NotificationReadActions => {
     change: () => void,
   ) => {
     if (!markAll && notificationIds.length === 0) return true;
-    if (shouldUseSecureSupabase() && useStore.getState().backend.upgradeRequired === true) {
+    const backendState = shouldUseSecureSupabase() ? useStore.getState().backend : null;
+    if (backendState?.upgradeRequired === true) {
       useToastStore.getState().addToast(BACKEND_UPGRADE_REQUIRED_MESSAGE, 'warning');
+      return false;
+    }
+    if (backendState?.isLoading === true) {
+      useToastStore.getState().addToast('The workspace is still loading. Try again in a moment.', 'warning');
       return false;
     }
     if (!notificationMutationLock.tryAcquire()) {

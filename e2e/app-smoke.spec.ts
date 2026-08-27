@@ -1,5 +1,18 @@
 import { expect, test } from '@playwright/test';
 
+const switchDemoAccount = async (page: import('@playwright/test').Page, username: string) => {
+  await page.getByRole('button', { name: 'Logout' }).click();
+  await expect(page.getByRole('heading', { name: 'Sign in to AiTask' })).toBeVisible();
+  await page.getByLabel('Email or username').fill(username);
+  await page.getByLabel('Password').fill('password123');
+  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await expect(page).toHaveURL(/\/(?:settings)?$/);
+  if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
+  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
+  await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
+  if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
+};
+
 test('first login reaches the app and critical responsive routes remain usable', async ({ page }) => {
   test.setTimeout(180_000);
 
@@ -95,40 +108,16 @@ test('first login reaches the app and critical responsive routes remain usable',
     expect(widths.content, `Boss dashboard should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(widths.viewport);
   }
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
-    const current = useStore.getState();
-    const ordinaryAdmin = current.users.find(user => user.name === 'Admin Demo');
-    if (ordinaryAdmin) localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${ordinaryAdmin.id}`, 'acknowledged');
-    useStore.setState({
-      currentUser: ordinaryAdmin ? { ...ordinaryAdmin, mustResetPassword: false } : null,
-    });
-  });
+  await switchDemoAccount(page, 'Admin Demo');
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Workspace metrics' })).toBeVisible();
-  await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
-    const current = useStore.getState();
-    const staff = current.users.find(user => user.role === 'Staff') || {
-      id: 'e2e-staff',
-      name: 'QA Staff',
-      role: 'Staff' as const,
-      departments: ['Designer' as const],
-      department: 'Designer' as const,
-      mustResetPassword: false,
-    };
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${staff.id}`, 'acknowledged');
-    useStore.setState({
-      users: current.users.some(user => user.id === staff.id) ? current.users : [...current.users, staff],
-      currentUser: { ...staff, mustResetPassword: false },
-    });
-  });
-  await expect(page.getByRole('region', { name: 'My work pulse' })).toBeVisible();
+  await switchDemoAccount(page, 'Staff Demo');
+  await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
+  await expect(page.getByText('Your next move')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'My work pulse' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Workspace metrics' })).toHaveCount(0);
-  await expect(page.getByText('Your assigned workload')).toBeVisible();
+  await expect(page.getByText('Your assigned workload')).toHaveCount(0);
   for (const viewport of publicViewports) {
     await page.setViewportSize(viewport);
     const widths = await page.evaluate(() => ({
@@ -138,13 +127,10 @@ test('first login reaches the app and critical responsive routes remain usable',
     expect(widths.content, `Staff dashboard should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(widths.viewport);
   }
   await page.setViewportSize({ width: 1280, height: 800 });
+  await switchDemoAccount(page, 'Boss Koo');
   await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
-    const current = useStore.getState();
-    const boss = current.users.find(user => user.name === 'Boss Koo');
-    if (boss) localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
-    useStore.setState({ currentUser: boss });
+    const { stopBackendAutoSync } = await import('/src/store/index.ts');
+    stopBackendAutoSync();
   });
   await page.getByRole('tab', { name: 'Agency pulse' }).click();
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toBeVisible();
@@ -162,8 +148,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.goto('/');
 
   await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
+    const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ notifications: [] });
   });
   await expect(page.locator('[aria-label="New notifications"]')).toHaveAttribute('data-popup-ready', 'true');
@@ -171,8 +156,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(headerNotificationButton.locator('span')).toHaveCount(0);
 
   await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
+    const { useStore } = await import('/src/store/index.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
@@ -193,14 +177,12 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByRole('article', { name: 'New notification: Task Status Updated' })).toHaveCount(0);
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
   await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
+    const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ notifications: [] });
   });
 
   await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
+    const { useStore } = await import('/src/store/index.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
@@ -228,8 +210,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
 
   await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
+    const { useStore } = await import('/src/store/index.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
@@ -260,15 +241,13 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(lockedPopup).toBeHidden();
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
   const pendingTaskMutation = await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
+    const { useStore } = await import('/src/store/index.ts');
     const backend = useStore.getState().backend;
     return { status: backend.status, pendingMutations: backend.pendingMutations, hasLocalChanges: backend.hasLocalChanges };
   });
   expect(pendingTaskMutation).toEqual({ status: 'retry_required', pendingMutations: 1, hasLocalChanges: true });
   await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
+    const { useStore } = await import('/src/store/index.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: current.notifications.filter(notification => notification.id !== 'popup-notification-locked'),
@@ -285,8 +264,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(lockedPopup).toBeHidden();
 
   await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
+    const { useStore } = await import('/src/store/index.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
@@ -315,8 +293,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(headerNotificationButton.locator('span')).toHaveCount(0);
 
   await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
+    const { useStore } = await import('/src/store/index.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
@@ -342,8 +319,7 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
+    const { useStore } = await import('/src/store/index.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
@@ -393,8 +369,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await mobilePopup.getByRole('button', { name: 'Dismiss notification: Mobile Popup QA' }).click();
 
   await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
+    const { useStore } = await import('/src/store/index.ts');
     const current = useStore.getState();
     const now = Date.now();
     useStore.setState({
@@ -629,8 +604,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByRole('heading', { name: 'Clients' })).toBeVisible();
 
   await page.evaluate(async () => {
-    const storePath = '/src/store/index.ts';
-    const { useStore } = await import(storePath);
+    const { useStore } = await import('/src/store/index.ts');
     const current = useStore.getState();
     const client = current.users.find(user => user.role === 'Client');
     if (!client) throw new Error('Expected a Client demo account');
@@ -675,10 +649,10 @@ test('first login reaches the app and critical responsive routes remain usable',
     });
   });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Client Portal' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Ready for your review' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Upcoming deliveries' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Latest updates' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Needs your review' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'In delivery' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Shared updates' })).toBeVisible();
   await expect(page.getByText('Workspace analytics')).toHaveCount(0);
   for (const viewport of publicViewports) {
     await page.setViewportSize(viewport);
@@ -691,20 +665,20 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.setViewportSize({ width: 1536, height: 864 });
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: 'Company Tasks' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Deliveries' })).toBeVisible();
   await expect(page.getByText('All departments')).toHaveCount(0);
   await expect(page.getByText('All priorities')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Quick edit/i })).toHaveCount(0);
   await page.getByText('Review campaign artwork', { exact: true }).first().click();
-  const clientTaskDialog = page.getByRole('dialog', { name: 'Review campaign artwork' });
+  const clientTaskDialog = page.getByRole('dialog', { name: 'Delivery details' });
   await expect(clientTaskDialog).toBeVisible();
-  await expect(clientTaskDialog.getByText('Deliverables & Links')).toBeVisible();
-  await expect(clientTaskDialog.getByText('Assigned Contact', { exact: true })).toBeVisible();
+  await expect(clientTaskDialog.getByText('Preview and files')).toBeVisible();
+  await expect(clientTaskDialog.getByText('Agency contact', { exact: true })).toBeVisible();
   await expect(clientTaskDialog.getByText('Internal Notes')).toHaveCount(0);
   await expect(clientTaskDialog.getByText('Created By')).toHaveCount(0);
   await expect(clientTaskDialog.getByText('Priority')).toHaveCount(0);
-  await expect(clientTaskDialog.getByPlaceholder('Share feedback for the team...')).toBeVisible();
-  await expect(clientTaskDialog.getByRole('button', { name: 'Approve' })).toBeVisible();
+  await expect(clientTaskDialog.getByPlaceholder('Share feedback with the team…')).toBeVisible();
+  await expect(clientTaskDialog.getByRole('button', { name: 'Approve delivery' })).toBeVisible();
   await page.keyboard.press('Escape');
 
   const viewports = [
@@ -770,11 +744,13 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
   const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
   await expect(mobileNav.getByText('Dashboard', { exact: true })).toHaveCount(0);
-  await expect(mobileNav.getByText('Tasks', { exact: true })).toBeVisible();
+  await expect(mobileNav.getByText('Inbox', { exact: true })).toBeVisible();
+  await mobileNav.getByRole('button', { name: 'Open more staff actions' }).click();
+  await expect(page.getByRole('link', { name: 'All work' })).toBeVisible();
   await expect(mobileNav.getByText('Calendar', { exact: true })).toHaveCount(0);
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: 'Tasks Management' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'All work' })).toBeVisible();
   await page.evaluate(() => {
     const raw = window.localStorage.getItem('market-task-storage');
     if (!raw) throw new Error('Expected local AiTask state');

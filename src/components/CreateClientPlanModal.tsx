@@ -1,7 +1,8 @@
 import React from 'react';
 import { ArrowLeft, ArrowRight, Check, Copy, PackageCheck, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../store';
+import { useStore, pendingMutationMessage } from '../store';
+import { getRetainedSecureCommand } from '../lib/secureWorkspace';
 import type { PlanOrigin, ServiceItem } from '../types';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
@@ -10,6 +11,7 @@ import { cn } from '../lib/utils';
 import { calculatePlanTotalMinor, formatMoney, snapshotWorkflow } from '../lib/serviceManagement';
 
 const blankItem = (): ServiceItem => ({ id: crypto.randomUUID(), name: '', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 0 });
+const WIZARD_BLOCKED_MESSAGE = 'An earlier change is still waiting to sync. Use “Retry my changes” or “Use latest” in the banner above this dialog, then save this draft again.';
 
 const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
   const navigate = useNavigate();
@@ -119,32 +121,51 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
     setError('');
     try {
       if (!createdClientIdRef.current) {
-        const pkg = selectedPackage;
-        const result = createClientWithPlan({
-          ...profile,
-          planName: plan.name || `${profile.clientName} Service Plan`,
-          origin: mode,
-          sourcePackageId: mode === 'custom' ? undefined : pkg?.id,
-          sourcePackageRevision: mode === 'custom' ? undefined : pkg?.revision,
-          serviceItems: items,
-          startDate: plan.startDate,
-          billingDay: plan.billingDay,
-          contractEndDate: plan.contractEndDate || undefined,
-          discountType: plan.discountType,
-          discountValue: plan.discountValue,
-          taxRateBps: plan.taxRateBps,
-        });
+        const buildInput = () => {
+          const pkg = selectedPackage;
+          return {
+            ...profile,
+            planName: plan.name || `${profile.clientName} Service Plan`,
+            origin: mode,
+            sourcePackageId: mode === 'custom' ? undefined : pkg?.id,
+            sourcePackageRevision: mode === 'custom' ? undefined : pkg?.revision,
+            serviceItems: items,
+            startDate: plan.startDate,
+            billingDay: plan.billingDay,
+            contractEndDate: plan.contractEndDate || undefined,
+            discountType: plan.discountType,
+            discountValue: plan.discountValue,
+            taxRateBps: plan.taxRateBps,
+          };
+        };
+        let result = createClientWithPlan(buildInput());
+        if (!result.ok && result.error === pendingMutationMessage && getRetainedSecureCommand()) {
+          const recovered = await retryMutation();
+          if (recovered.ok) result = createClientWithPlan(buildInput());
+        }
         if (!result.ok || !result.clientId) {
-          setError(result.error || 'Unable to create the client.');
+          setError(result.error === pendingMutationMessage
+            ? WIZARD_BLOCKED_MESSAGE
+            : result.error || 'Unable to create the client.');
           return;
         }
         createdClientIdRef.current = result.clientId;
       }
-      const committed = createdClientIdRef.current && backend.pendingMutations > 0
+      const fresh = useStore.getState();
+      let committed = createdClientIdRef.current && (fresh.backend.pendingMutations > 0 || getRetainedSecureCommand())
         ? await retryMutation()
         : await commitPendingMutation('client_plan.manage');
+      if (!committed.ok && committed.error === pendingMutationMessage) {
+        await fresh.syncBackendNow('client_plan.manage');
+        const after = useStore.getState().backend;
+        committed = !after.hasLocalChanges && after.status === 'live'
+          ? { ok: true }
+          : { ok: false, error: after.error || after.message || 'The client is waiting to be saved. Retry to finish syncing this same Draft.' };
+      }
       if (!committed.ok) {
-        setError(committed.error || 'The client is waiting to be saved. Retry to finish syncing this same Draft.');
+        setError(committed.error === pendingMutationMessage
+          ? WIZARD_BLOCKED_MESSAGE
+          : committed.error || 'The client is waiting to be saved. Retry to finish syncing this same Draft.');
         return;
       }
       const createdClientId = createdClientIdRef.current;
@@ -185,7 +206,7 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
 
           {step === 2 && <section aria-labelledby="plan-source-step"><h3 id="plan-source-step" className="text-lg font-semibold text-ink">Choose a plan source</h3><p className="mt-1 text-sm text-muted">The selected scope and workflow are frozen when you save.</p><p className="mt-3 rounded-control bg-inset px-3 py-2 text-sm leading-6 text-muted">Duplicating Growth Plan creates this client’s own Custom Service Plan. Later quantity, platform, or price changes never modify the original Growth Plan.</p><div className="mt-6 grid gap-3 xl:grid-cols-3">{modeOptions.map(option => <button type="button" key={option.value} onClick={() => chooseMode(option.value)} aria-pressed={mode === option.value} className={cn('min-h-44 rounded-panel p-5 text-left ring-1 transition-[background-color,box-shadow,transform] duration-160 active:scale-[0.99]', mode === option.value ? 'bg-accent-soft text-ink ring-accent/45' : 'bg-surface text-ink ring-line hover:bg-inset')}><span className={cn('flex h-10 w-10 items-center justify-center rounded-control', mode === option.value ? 'bg-accent text-white' : 'bg-inset text-muted')}><option.icon className="h-5 w-5" /></span><span className="mt-5 block font-semibold">{option.title}</span><span className="mt-1 block text-sm leading-5 text-muted">{option.text}</span></button>)}</div>{mode !== 'custom' && <label className="mt-6 block text-sm font-medium text-ink">Standard package<select className={cn(inputBase, 'mt-1.5 px-3 py-2.5')} value={packageId} onChange={e => setPackageId(e.target.value)}><option value="">Choose package</option>{servicePackages.filter(item => item.isActive).map(pkg => <option key={pkg.id} value={pkg.id} data-i18n-skip>{pkg.name} · rev {pkg.revision}</option>)}</select></label>}</section>}
 
-          {step === 3 && <section aria-labelledby="service-scope-step"><h3 id="service-scope-step" className="text-lg font-semibold text-ink">Service scope</h3><p className="mt-1 text-sm text-muted">{readOnlyItems ? 'Standard package items and task workflows are frozen and read-only.' : 'Adjust quantity, platform, price and the internal task workflow.'}</p><div className="mt-6 space-y-3">{items.map((item, index) => <article key={item.id} className="rounded-panel bg-inset/60 p-4 ring-1 ring-line/70"><div className="mb-3 flex items-center justify-between"><p className="calm-eyebrow">Service {index + 1}</p>{!readOnlyItems && <button type="button" aria-label="Remove service" onClick={()=>setItems(current=>current.filter(value=>value.id!==item.id))} className="flex h-9 w-9 items-center justify-center rounded-control text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4"/></button>}</div><div className="grid gap-3 md:grid-cols-12"><input disabled={readOnlyItems} aria-label="Service name" placeholder="Service" className={cn(inputBase,'px-3 py-2.5 md:col-span-4')} value={item.name} onChange={e=>updateItem(item.id,{name:e.target.value})}/><input disabled={readOnlyItems} aria-label="Platforms" placeholder="Platforms" className={cn(inputBase,'px-3 py-2.5 md:col-span-3')} value={item.platforms.join(', ')} onChange={e=>updateItem(item.id,{platforms:e.target.value.split(',').map(v=>v.trim()).filter(Boolean)})}/><input disabled={readOnlyItems} aria-label="Unit" className={cn(inputBase,'px-3 py-2.5 md:col-span-2')} value={item.unit} onChange={e=>updateItem(item.id,{unit:e.target.value})}/><input disabled={readOnlyItems} aria-label="Quantity" type="number" min="1" className={cn(inputBase,'px-3 py-2.5 md:col-span-1')} value={item.quantity} onChange={e=>updateItem(item.id,{quantity:Number(e.target.value)})}/><input disabled={readOnlyItems} aria-label="Price" type="number" min="0" step="0.01" className={cn(inputBase,'px-3 py-2.5 md:col-span-2')} value={item.unitPriceMinor/100} onChange={e=>updateItem(item.id,{unitPriceMinor:Math.round(Number(e.target.value)*100)})}/><label className="text-xs font-semibold text-muted md:col-span-12">Task workflow<select disabled={readOnlyItems} className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={item.workflow?.templateId || ''} onChange={e=>{const template=serviceWorkflowTemplates.find(value=>value.id===e.target.value);updateItem(item.id,{workflow:template?snapshotWorkflow(template):undefined});}}><option value="">No automatic task chain</option>{serviceWorkflowTemplates.filter(value=>value.isActive).map(template=><option key={template.id} value={template.id}>{template.name} · rev {template.revision} · {template.steps.length} steps</option>)}</select></label></div></article>)}{!readOnlyItems && <Button variant="secondary" onClick={()=>setItems(current=>[...current,blankItem()])}><Plus className="h-4 w-4"/>Add service</Button>}</div></section>}
+          {step === 3 && <section aria-labelledby="service-scope-step"><h3 id="service-scope-step" className="text-lg font-semibold text-ink">Service scope</h3><p className="mt-1 text-sm text-muted">{readOnlyItems ? 'Standard package items and task workflows are frozen and read-only.' : 'Adjust quantity, platform, price and the internal task workflow.'}</p><div className="mt-6 space-y-3">{items.map((item, index) => <article key={item.id} className="rounded-panel bg-inset/60 p-4 ring-1 ring-line/70"><div className="mb-3 flex items-center justify-between"><p className="calm-eyebrow">Service {index + 1}</p>{!readOnlyItems && <button type="button" aria-label="Remove service" onClick={()=>setItems(current=>current.filter(value=>value.id!==item.id))} className="flex h-9 w-9 items-center justify-center rounded-control text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4"/></button>}</div><div className="grid gap-3 md:grid-cols-12"><label className="md:col-span-4"><span className="text-xs font-semibold text-muted">Service name</span><input disabled={readOnlyItems} aria-label="Service name" placeholder="Service" className={cn(inputBase,'mt-1.5 px-3 py-2.5 w-full')} value={item.name} onChange={e=>updateItem(item.id,{name:e.target.value})}/></label><label className="md:col-span-3"><span className="text-xs font-semibold text-muted">Platforms</span><input disabled={readOnlyItems} aria-label="Platforms" placeholder="Platforms" className={cn(inputBase,'mt-1.5 px-3 py-2.5 w-full')} value={item.platforms.join(', ')} onChange={e=>updateItem(item.id,{platforms:e.target.value.split(',').map(v=>v.trim()).filter(Boolean)})}/></label><label className="md:col-span-2"><span className="text-xs font-semibold text-muted">Unit</span><input disabled={readOnlyItems} aria-label="Unit" placeholder="Item" className={cn(inputBase,'mt-1.5 px-3 py-2.5 w-full')} value={item.unit} onChange={e=>updateItem(item.id,{unit:e.target.value})}/></label><label className="md:col-span-1"><span className="text-xs font-semibold text-muted">Quantity</span><input disabled={readOnlyItems} aria-label="Quantity" type="number" min="1" className={cn(inputBase,'mt-1.5 px-3 py-2.5 w-full')} value={item.quantity} onChange={e=>updateItem(item.id,{quantity:Number(e.target.value)})}/></label><label className="md:col-span-2"><span className="text-xs font-semibold text-muted">Price</span><input disabled={readOnlyItems} aria-label="Price" type="number" min="0" step="0.01" className={cn(inputBase,'mt-1.5 px-3 py-2.5 w-full')} value={item.unitPriceMinor/100} onChange={e=>updateItem(item.id,{unitPriceMinor:Math.round(Number(e.target.value)*100)})}/></label><label className="text-xs font-semibold text-muted md:col-span-12">Task workflow<select disabled={readOnlyItems} className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={item.workflow?.templateId || ''} onChange={e=>{const template=serviceWorkflowTemplates.find(value=>value.id===e.target.value);updateItem(item.id,{workflow:template?snapshotWorkflow(template):undefined});}}><option value="">No automatic task chain</option>{serviceWorkflowTemplates.filter(value=>value.isActive).map(template=><option key={template.id} value={template.id}>{template.name} · rev {template.revision} · {template.steps.length} steps</option>)}</select></label></div></article>)}{!readOnlyItems && <Button variant="secondary" onClick={()=>setItems(current=>[...current,blankItem()])}><Plus className="h-4 w-4"/>Add service</Button>}</div></section>}
 
           {step === 4 && <section aria-labelledby="plan-terms-step"><h3 id="plan-terms-step" className="text-lg font-semibold text-ink">Plan terms</h3><p className="mt-1 text-sm text-muted">Set the operating dates and internal pricing rules.</p><div className="mt-6 grid gap-4 md:grid-cols-2"><label className="text-sm font-medium text-ink">Plan name<input className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.name} onChange={e=>setPlan({...plan,name:e.target.value})}/></label><label className="text-sm font-medium text-ink">Start date<input type="date" className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.startDate} onChange={e=>setPlan({...plan,startDate:e.target.value})}/></label><label className="text-sm font-medium text-ink">Monthly billing day<input type="number" min="1" max="31" className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.billingDay} onChange={e=>setPlan({...plan,billingDay:Number(e.target.value)})}/></label><label className="text-sm font-medium text-ink">Contract end date (reminder only)<input type="date" min={plan.startDate} className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.contractEndDate} onChange={e=>setPlan({...plan,contractEndDate:e.target.value})}/></label><label className="text-sm font-medium text-ink">Tax rate (%)<input type="number" min="0" max="100" step="0.01" className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.taxRateBps/100} onChange={e=>setPlan({...plan,taxRateBps:Math.round(Number(e.target.value)*100)})}/></label><label className="text-sm font-medium text-ink">Discount type<select className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.discountType} onChange={e=>setPlan({...plan,discountType:e.target.value as typeof plan.discountType,discountValue:0})}><option value="none">None</option><option value="percent">Percent</option><option value="fixed">Fixed MYR</option></select></label><label className="text-sm font-medium text-ink">Discount value<input type="number" min="0" step="0.01" disabled={plan.discountType==='none'} className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.discountValue/100} onChange={e=>setPlan({...plan,discountValue:Math.round(Number(e.target.value)*100)})}/></label></div></section>}
 

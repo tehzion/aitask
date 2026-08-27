@@ -240,6 +240,7 @@ interface StoreState {
   pullBackendNow: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
   retryMutation: () => Promise<{ ok: boolean; error?: string }>;
   reapplyMutationOnLatestWorkspace: () => Promise<{ ok: boolean; error?: string }>;
+  retryPendingSave: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string }>;
   discardMutation: (options?: { reload?: boolean }) => Promise<void>;
   commitPendingMutation: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string }>;
   login: (name: string, password?: string) => Promise<boolean>;
@@ -303,7 +304,7 @@ interface StoreState {
 }
 
 const nowId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-const pendingMutationMessage = 'Changes are temporarily unavailable while AiTask resolves a pending save or completes a system update.';
+export const pendingMutationMessage = 'Changes are temporarily unavailable while AiTask resolves a pending save or completes a system update.';
 const isWorkspaceMutationLocked = (state: StoreState) => (
   shouldUseSecureSupabase()
   && (
@@ -1558,6 +1559,12 @@ export const useStore = create<StoreState>()(
         const localSnapshot = selectPersistedWorkspaceState(current);
         await get().pullBackendNow({ force: true, silent: true });
         const fresh = get();
+        if (fresh.backend.upgradeRequired === true || fresh.backend.status === 'upgrade_required') {
+          return { ok: false, error: fresh.backend.error || BACKEND_UPGRADE_REQUIRED_MESSAGE };
+        }
+        if (fresh.backend.isPulling) {
+          return { ok: false, error: fresh.backend.error || 'Unable to load the latest workspace right now. Try again shortly.' };
+        }
         const merged = overlayRetainedWorkspaceEntities(
           selectPersistedWorkspaceState(fresh),
           localSnapshot,
@@ -1591,7 +1598,7 @@ export const useStore = create<StoreState>()(
           useToastStore.getState().addToast('Your change was reapplied on the latest workspace.', 'success');
           return { ok: true };
         }
-        return { ok: false, error: after.error || after.message || 'Your change could not be reapplied.' };
+        return { ok: false, error: after.error || 'Your change could not be reapplied.' };
       },
 
       retryMutation: async () => {
@@ -1717,6 +1724,18 @@ export const useStore = create<StoreState>()(
         }
       },
 
+      retryPendingSave: async (commandType) => {
+        if (!shouldUseSupabase()) return { ok: true };
+        if (getRetainedSecureCommand()) {
+          return get().retryMutation();
+        }
+        await get().syncBackendNow(commandType);
+        const after = get().backend;
+        return !after.hasLocalChanges && after.status === 'live'
+          ? { ok: true }
+          : { ok: false, error: after.error || 'The change has not been saved yet.' };
+      },
+
       commitPendingMutation: async (commandType) => {
         if (!shouldUseSupabase()) return { ok: true };
         const before = get().backend;
@@ -1737,7 +1756,7 @@ export const useStore = create<StoreState>()(
         if (!backend.hasLocalChanges && backend.status === 'live') return { ok: true };
         return {
           ok: false,
-          error: backend.error || backend.message || 'The change has not been saved yet.',
+          error: backend.error || 'The change has not been saved yet.',
         };
       },
 
@@ -1923,7 +1942,9 @@ export const useStore = create<StoreState>()(
               lastSyncedAt: now,
             },
           }));
-          await get().pullBackendNow({ force: true, silent: true });
+          if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
+            await get().pullBackendNow({ force: true, silent: true });
+          }
         }
 
         clearPasswordSetupMode();
@@ -2024,7 +2045,9 @@ export const useStore = create<StoreState>()(
         if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to update the login email.') };
 
         await supabase.auth.refreshSession();
-        await get().pullBackendNow({ force: true, silent: true });
+        if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
+          await get().pullBackendNow({ force: true, silent: true });
+        }
         return { ok: true };
       },
 
@@ -2070,7 +2093,9 @@ export const useStore = create<StoreState>()(
               lastSyncedAt: now,
             },
           }));
-          await get().pullBackendNow({ force: true, silent: true });
+          if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
+            await get().pullBackendNow({ force: true, silent: true });
+          }
           return { ok: true };
         }
 
@@ -3455,6 +3480,7 @@ export const useStore = create<StoreState>()(
 
       setClientPlanStatus: (planId, status) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const actor = state.currentUser;
         if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot change plan status.' };
         const plan = state.clientPlans.find(item => item.id === planId);
@@ -3467,6 +3493,7 @@ export const useStore = create<StoreState>()(
 
       setServiceCycleStatus: (cycleId, status) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const cycle = state.serviceCycles.find(item => item.id === cycleId);
         const actor = state.currentUser;
         if (!cycle || !actor) return { ok: false, error: 'Cycle not found.' };
@@ -3479,6 +3506,7 @@ export const useStore = create<StoreState>()(
 
       updateDeliverableStatus: (deliverableId, status) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const deliverable = state.deliverables.find(item => item.id === deliverableId);
         const actor = state.currentUser;
         if (!deliverable || !actor) return { ok: false, error: 'Deliverable not found.' };
@@ -3494,6 +3522,7 @@ export const useStore = create<StoreState>()(
 
       linkTaskToDeliverable: (taskId, cycleId, deliverableId) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const task = state.tasks.find(item => item.id === taskId);
         if (!task || !canEditTask(state.currentUser, task, state.rolePermissions)) return { ok: false, error: 'You cannot edit this task.' };
         const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
@@ -3578,6 +3607,7 @@ export const useStore = create<StoreState>()(
 
       addCycleComment: (cycleId, text, visibility) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const cycle = state.serviceCycles.find(item => item.id === cycleId);
         const actor = state.currentUser;
         if (!cycle || !actor || actor.role === 'Client') return { ok: false, error: 'You cannot comment on this cycle.' };
@@ -3592,6 +3622,7 @@ export const useStore = create<StoreState>()(
 
       addCycleCommentAttachment: (commentId, attachment) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const comment = state.cycleComments.find(item => item.id === commentId);
         if (!comment || comment.userId !== state.currentUser?.id) return { ok: false, error: 'You cannot attach a file to this comment.' };
         set(current => ({ cycleComments: current.cycleComments.map(item => item.id === commentId ? { ...item, attachments: [...item.attachments, attachment], updatedAt: new Date().toISOString() } : item) }));
@@ -3600,6 +3631,7 @@ export const useStore = create<StoreState>()(
 
       addAddon: (data) => {
         const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const actor = state.currentUser;
         if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot manage add-ons.' };
         if (!state.clientPlans.some(plan => plan.id === data.planId && plan.clientId === data.clientId)) return { ok: false, error: 'Client plan not found.' };
@@ -3923,7 +3955,9 @@ export const useStore = create<StoreState>()(
             },
           });
           if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to send the invitation.') };
-          await get().pullBackendNow({ force: true });
+          if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
+            await get().pullBackendNow({ force: true });
+          }
           return { ok: true };
         }
 
@@ -4308,7 +4342,9 @@ export const useStore = create<StoreState>()(
           } catch {
             /* credential storage unavailable */
           }
-          await get().pullBackendNow({ force: true, silent: true });
+          if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
+            await get().pullBackendNow({ force: true, silent: true });
+          }
           return { ok: true };
         }
 
@@ -4661,26 +4697,32 @@ export const startBackendAutoSync = () => {
   };
 
   const handleOffline = () => {
-    useStore.setState((state) => ({
-      backend: {
-        ...state.backend,
-        status: 'offline',
-        message: state.backend.hasLocalChanges
-          ? 'Offline. A local change is waiting for your retry.'
-          : 'Offline. Live sync will resume when you reconnect.',
-      },
-    }));
+    useStore.setState((state) => {
+      if (state.backend.upgradeRequired === true) return state;
+      return {
+        backend: {
+          ...state.backend,
+          status: 'offline',
+          message: state.backend.hasLocalChanges
+            ? 'Offline. A local change is waiting for your retry.'
+            : 'Offline. Live sync will resume when you reconnect.',
+        },
+      };
+    });
   };
   const handleOnline = () => {
-    useStore.setState((state) => ({
-      backend: {
-        ...state.backend,
-        status: state.backend.hasLocalChanges ? 'retry_required' : 'loading',
-        message: state.backend.hasLocalChanges
-          ? 'Back online. Review and retry the pending change.'
-          : 'Back online. Checking the latest workspace.',
-      },
-    }));
+    useStore.setState((state) => {
+      if (state.backend.upgradeRequired === true) return state;
+      return {
+        backend: {
+          ...state.backend,
+          status: state.backend.hasLocalChanges ? 'retry_required' : 'loading',
+          message: state.backend.hasLocalChanges
+            ? 'Back online. Review and retry the pending change.'
+            : 'Back online. Checking the latest workspace.',
+        },
+      };
+    });
     const state = useStore.getState();
     if (!shouldUseSecureSupabase() || state.currentUser) {
       void state.pullBackendNow({ silent: true });

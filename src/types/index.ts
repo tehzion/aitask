@@ -325,6 +325,7 @@ export interface Deliverable {
   attachments: AttachmentRef[];
   workflowGeneratedAt?: string;
   workflowGenerationId?: string;
+  primaryTaskId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -460,11 +461,8 @@ export type ClientTaskProjection = Pick<Task,
   | 'clientName'
   | 'projectId'
   | 'projectName'
-  | 'serviceCycleId'
   | 'deliverableId'
   | 'visibility'
-  | 'workflowStepOrder'
-  | 'workflowStepRequired'
   | 'serviceType'
   | 'title'
   | 'description'
@@ -479,10 +477,45 @@ export type ClientTaskProjection = Pick<Task,
   | 'facebookPage'
   | 'isCompleted'
   | 'completedAt'
-  | 'revisionCount'
   | 'clientApprovalStatus'
   | 'updatedAt'
 >;
+
+export interface ClientTaskCommentProjection {
+  id: string;
+  taskId: string;
+  userId: string;
+  text: string;
+  createdAt: string;
+  version?: number;
+  updatedAt?: string;
+}
+
+export interface ClientTaskApprovalProjection {
+  id: string;
+  taskId: string;
+  userId: string;
+  status: ClientApprovalStatus;
+  note?: string;
+  createdAt: string;
+  version?: number;
+  updatedAt?: string;
+}
+
+export interface ClientDeliverableProjection {
+  id: string;
+  version?: number;
+  updatedAt?: string;
+  clientId: string;
+  clientName: string;
+  planId: string;
+  cycleId: string;
+  sequence: number;
+  title: string;
+  status: DeliverableStatus;
+  attachments: AttachmentRef[];
+  primaryTaskId?: string;
+}
 
 export interface ClientPortalPayload {
   workspaceId: string;
@@ -493,6 +526,8 @@ export interface ClientPortalPayload {
   contacts: ClientContact[];
   clientPlans: ClientServicePlan[];
   serviceCycles: ServiceCycle[];
-  deliverables: Deliverable[];
+  deliverables: ClientDeliverableProjection[];
   cycleComments: CycleComment[];
+  taskComments: ClientTaskCommentProjection[];
+  taskApprovals: ClientTaskApprovalProjection[];
 }

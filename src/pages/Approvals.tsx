@@ -12,6 +12,7 @@ import { canDeleteUser, defaultRolePermissions, getEffectiveRoleName, isBossKoo,
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
+import { useToastStore } from '../store/useToastStore';
 import ModalShell from '../components/ModalShell';
 import DepartmentMultiSelect from '../components/DepartmentMultiSelect';
 
@@ -143,10 +144,53 @@ const Approvals: React.FC = () => {
     const count = targets.length;
     const confirmed = window.confirm(t(`Approve ${count} registrations as Staff with their requested departments?`));
     if (!confirmed) return;
+
+    if (secureAccounts) {
+      setIsActionSaving(true);
+      setActionError('');
+      const failures: string[] = [];
+      for (const reg of targets) {
+        const requestedDepartment = normalizeDepartment(reg.jobPosition);
+        const departments = requestedDepartment && requestedDepartment !== 'Client' ? [requestedDepartment] : [];
+        if (departments.length === 0) {
+          failures.push(reg.name);
+          continue;
+        }
+        const result = await addUserBySuperAdmin({
+          name: reg.name,
+          email: reg.email,
+          role: 'Staff',
+          departments,
+          registrationId: reg.id,
+          sendInvitation: false,
+        });
+        if (!result.ok) failures.push(reg.name);
+      }
+      setIsActionSaving(false);
+      setSelectedBulkRegIds(new Set());
+      if (failures.length > 0) {
+        const done = count - failures.length;
+        useToastStore.getState().addToast(
+          done > 0
+            ? `${done} registration(s) approved; ${failures.length} could not be approved. ${failures.slice(0, 3).join(', ')}`
+            : `No registrations could be approved. ${failures.slice(0, 3).join(', ')}`,
+          'error',
+        );
+        setActionError(failures.length > 0
+          ? `Unable to approve: ${failures.slice(0, 3).join(', ')}${failures.length > 3 ? '…' : ''}`
+          : 'No registrations were approved.');
+        return;
+      }
+      useToastStore.getState().addToast(`${count} registration(s) approved.`, 'success');
+      return;
+    }
+
     const previousRegistrations = useStore.getState().registrations;
     const previousUsers = useStore.getState().users;
+    const fallbackPositions: string[] = [];
     targets.forEach(reg => {
       const requestedDepartment = normalizeDepartment(reg.jobPosition);
+      if (!requestedDepartment) fallbackPositions.push(reg.jobPosition || reg.name);
       approveRegistration(reg.id, reg.requestedRole || 'Staff', requestedDepartment ? [requestedDepartment] : ['Designer'], undefined, undefined);
     });
     setIsActionSaving(true);
@@ -156,6 +200,16 @@ const Approvals: React.FC = () => {
     if (!saved.ok) {
       useStore.setState({ registrations: previousRegistrations, users: previousUsers });
       setActionError(saved.error || 'The approvals were rolled back. Use Retry required to confirm them.');
+      return;
+    }
+    if (fallbackPositions.length > 0) {
+      const uniq = Array.from(new Set(fallbackPositions));
+      useToastStore.getState().addToast(
+        `${targets.length} approved. ${uniq.slice(0, 3).join(', ')} ${uniq.length === 1 ? 'has' : 'have'} no matching department and ${uniq.length === 1 ? 'was' : 'were'} assigned to Designer.`,
+        'warning',
+      );
+    } else {
+      useToastStore.getState().addToast(`${count} registration(s) approved.`, 'success');
     }
   };
 
@@ -572,11 +626,7 @@ const Approvals: React.FC = () => {
                     {days > 7 && (
                       <span className="rounded-md bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">{days}d</span>
                     )}
-                    <span className={`inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
-                      reg.requestedRole === 'Admin' ? 'bg-purple-100 text-purple-700' :
-                      reg.requestedRole === 'Client' ? 'bg-amber-100 text-amber-700' :
-                      'bg-blue-100 text-blue-700'
-                    }`}>
+                    <span className="inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
                       {reg.requestedRole || 'Staff'}
                     </span>
                   </div>
@@ -668,11 +718,7 @@ const Approvals: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <span className={`inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
-                          reg.requestedRole === 'Admin' ? 'bg-purple-100 text-purple-700' :
-                          reg.requestedRole === 'Client' ? 'bg-amber-100 text-amber-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
+                        <span className="inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
                           {reg.requestedRole || 'Staff'}
                         </span>
                         <span className="text-sm font-medium text-slate-600">
@@ -735,6 +781,12 @@ const Approvals: React.FC = () => {
           </div>
         </div>
 
+        {!superAdmin && (
+          <div className="border-b border-slate-100 bg-amber-50 px-6 py-3 text-sm text-amber-800" role="status">
+            Only Boss Koo can manage roles and members. The controls below are read-only for your account.
+          </div>
+        )}
+        <fieldset disabled={!superAdmin} className="p-0 m-0 border-0 min-w-0">
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-0">
           <form onSubmit={handleSaveRole} className="p-6 border-b xl:border-b-0 xl:border-r border-slate-100 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -842,6 +894,7 @@ const Approvals: React.FC = () => {
             ))}
           </div>
         </div>
+        </fieldset>
       </div>
 
       {/* History */}
@@ -879,12 +932,6 @@ const Approvals: React.FC = () => {
             <Users className="w-5 h-5 text-blue-600" />
             <h2 className="text-lg font-semibold text-slate-800">Active System Users</h2>
           </div>
-          {superAdmin && (
-            <Button variant="secondary" onClick={() => setIsAddUserOpen(true)}>
-              <UserPlus className="w-4 h-4" />
-              Add Member
-            </Button>
-          )}
         </div>
         {deleteUserError && (
           <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -1262,31 +1309,19 @@ const Approvals: React.FC = () => {
                 <select 
                   aria-label="System Role"
                   className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
-                  value={secureAccounts ? 'Staff' : role}
-                  disabled={secureAccounts}
-                  onChange={e => {
-                    const nextRole = e.target.value as Role;
-                    setRole(nextRole);
-                    setApprovalDepartments(nextRole === 'Client' ? ['Client'] : []);
-                  }}
+                  value="Staff"
+                  disabled
                 >
-                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                  <option value="Staff">Staff</option>
                 </select>
-                {secureAccounts && <p className="mt-1 text-xs text-slate-500">Registrations are approved as Staff.</p>}
+                <p className="mt-1 text-xs text-slate-500">Registrations are approved as Staff.</p>
               </div>
 
-              {role === 'Client' ? (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <p className="text-sm font-medium text-slate-700">Department</p>
-                  <p className="mt-0.5 text-sm text-slate-600">Client</p>
-                </div>
-              ) : (
-                <DepartmentMultiSelect
-                  value={approvalDepartments}
-                  onChange={setApprovalDepartments}
-                  description="The requested position is preselected when it matches an active department. Review all selections before approval."
-                />
-              )}
+              <DepartmentMultiSelect
+                value={approvalDepartments}
+                onChange={setApprovalDepartments}
+                description="The requested position is preselected when it matches an active department. Review all selections before approval."
+              />
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Custom Role</label>
@@ -1300,19 +1335,6 @@ const Approvals: React.FC = () => {
                   {rolePermissions.map(customRole => <option key={customRole.id} value={customRole.id}>{customRole.name}</option>)}
                 </select>
               </div>
-
-              {role === 'Client' && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Company Name</label>
-                  <input 
-                    type="text" required
-                    placeholder="e.g. TechNova"
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
-                    value={companyName} onChange={e => setCompanyName(e.target.value)}
-                  />
-                  <p className="text-xs text-slate-500 mt-1">This links the client to their specific companies.</p>
-                </div>
-              )}
 
               {secureAccounts && (
                 <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">

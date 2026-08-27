@@ -4,18 +4,29 @@ AiTask is a React, TypeScript, Vite, Tailwind, and Zustand task-management SPA f
 
 ## Supabase Readiness
 
-The app runs in local demo mode by default and now includes an opt-in Supabase snapshot backend.
+The app runs in local demo mode by default. Production deployments use the
+secure identity-based Supabase backend: Supabase Auth, normalized RLS-protected
+tables, file storage, and versioned command RPCs with per-entity and
+workspace-level optimistic concurrency.
 
-1. Copy `.env.example` to `.env.local`.
-2. Run `supabase/schema.sql` in your Supabase SQL editor.
+1. Copy `.env.example` to `.env.local` (or configure `.env.production` for a hosted build).
+2. Apply `supabase/secure-auth-schema.sql` plus every migration under
+   `supabase/migrations/` in filename order (`supabase db push` does both).
 3. Set `VITE_AITASK_BACKEND=supabase`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_PUBLISHABLE_KEY`.
    Keep `VITE_AITASK_SHOW_DEMO_LOGIN=false` for hosted/client-facing builds.
-4. Restart the Vite dev server.
+4. Restart the Vite dev server (or redeploy).
 
-Settings shows the active backend, snapshot table, and last sync time.
+Settings shows the active backend, sync status, and last sync time.
 
-The current Supabase bridge stores the working mock app state in `public.aitask_app_state` so existing UI workflows continue to work while backend migration is staged. Before production, move to Supabase Auth, normalized tables, file storage, and stricter RLS policies. See `supabase/README.md`.
-The bridge must never store passwords or secret-like fields; `supabase/schema.sql` includes a guard trigger and `pnpm verify:supabase` checks the deployed table/policies.
+The legacy JSON-snapshot bridge (`public.aitask_app_state`, `supabase/schema.sql`)
+is an interim compatibility path used only while migrating an old snapshot
+deployment; `supabase/secure-cutover.sql` revokes anonymous access to it.
+`pnpm verify:supabase` validates the deployed tables, policies, and RPC surface.
+
+Before upgrading a live deployment, read
+`docs/production-rpc-mismatch-recovery.md`: the app fails closed into a
+read-only state until the backend exposes the required schema-version RPCs, and
+the runbook defines the backup/preflight gates for applying new migrations.
 
 ## Vercel Deployment
 
@@ -49,6 +60,12 @@ pnpm release:major
 - Patch: fixes and small polish (`1.0.0` to `1.0.1`).
 - Minor: backward-compatible features (`1.0.0` to `1.1.0`).
 - Major: breaking data, API, or workflow changes (`1.0.0` to `2.0.0`).
+
+Production promotion is tag-only. Create a matching `v<version>` tag after the
+release checks pass; the tagged workflow verifies the generated
+`/build-info.json` version and full Git commit before and after deployment. See
+[`docs/staging-release-setup.md`](docs/staging-release-setup.md) for the required
+staging tenant, CI secrets, and rollback procedure.
 
 ## Original Vite Notes
 

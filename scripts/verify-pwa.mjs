@@ -3,16 +3,20 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../dist/${path}`, import.meta.url), 'utf8');
 
-const [manifestSource, indexHtml, serviceWorker, serviceWorkerSource, vercelSource] = await Promise.all([
+const [manifestSource, indexHtml, serviceWorker, serviceWorkerSource, vercelSource, buildInfoSource, packageSource] = await Promise.all([
   read('manifest.webmanifest'),
   read('index.html'),
   read('sw.js'),
   readFile(new URL('../src/sw.ts', import.meta.url), 'utf8'),
   readFile(new URL('../vercel.json', import.meta.url), 'utf8'),
+  read('build-info.json'),
+  readFile(new URL('../package.json', import.meta.url), 'utf8'),
 ]);
 
 const manifest = JSON.parse(manifestSource);
 const vercelConfig = JSON.parse(vercelSource);
+const buildInfo = JSON.parse(buildInfoSource);
+const packageJson = JSON.parse(packageSource);
 assert.equal(manifest.name, 'AiTask - Marketing Agency Task Management');
 assert.equal(manifest.short_name, 'AiTask');
 assert.equal(manifest.start_url, '/');
@@ -30,6 +34,10 @@ assert.match(indexHtml, /<link rel="manifest" href="\/manifest[.]webmanifest"/);
 assert.match(indexHtml, /<link rel="apple-touch-icon" href="\/apple-touch-icon[.]png"/);
 assert.match(indexHtml, /<meta name="theme-color" content="#1D6B5D"/);
 assert.match(indexHtml, /id="root"/);
+assert.equal(buildInfo.version, packageJson.version, 'Build-info version must match package.json.');
+assert.match(buildInfo.commit || '', /^[0-9a-f]{7,40}$/i, 'Build-info must include the Git commit.');
+assert.equal(typeof buildInfo.channel, 'string', 'Build-info must include the build channel.');
+assert(!Number.isNaN(Date.parse(buildInfo.builtAt)), 'Build-info must include a valid build timestamp.');
 
 for (const asset of [
   'pwa-192x192.png',

@@ -275,7 +275,7 @@ describe('secure command retry identity', () => {
     expect(sessionStorage.length).toBe(0);
   });
 
-  it('clears a retained command when the authenticated account changes', async () => {
+  it('keeps each account’s retained command when the authenticated account changes', async () => {
     const values = new Map<string, string>();
     const sessionStorage: Storage = {
       get length() { return values.size; },
@@ -292,7 +292,10 @@ describe('secure command retry identity', () => {
 
     expect(sessionStorage.length).toBe(1);
     expect(restoreSecureWorkspaceCommand('auth-user-b')).toBeNull();
-    expect(sessionStorage.length).toBe(0);
+    expect(sessionStorage.length).toBe(1);
+    const restoredForA = restoreSecureWorkspaceCommand('auth-user-a');
+    expect(restoredForA).not.toBeNull();
+    expect(restoredForA?.operations[0]?.entityId).toBe('10');
   });
 
   it('translates a missing command signature without exposing PostgREST internals', async () => {

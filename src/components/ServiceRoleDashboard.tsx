@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileCheck2, UsersRound, WalletCards } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { isBefore, isToday } from 'date-fns';
+import { isBefore, isToday, format } from 'date-fns';
 import { useStore } from '../store';
 import { canViewServicePrices, getClientKey, getDashboardPersona, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { formatMoney } from '../lib/serviceManagement';
@@ -72,6 +72,26 @@ const ServiceRoleDashboard = () => {
     completed: serviceTasks.filter(task => task.assignedTo === user.id && task.isCompleted).length,
     delivered: delivered.filter(item => serviceTasks.some(task => task.assignedTo === user.id && task.deliverableId === item.id)).length,
   }));
+  const activeCompanies = React.useMemo(() => activePlans.map(plan => {
+    const currentCycle = store.serviceCycles
+      .filter(cycle => cycle.clientId === plan.clientId && (cycle.status === 'Published' || cycle.status === 'Completed'))
+      .sort((a, b) => b.periodStart.localeCompare(a.periodStart))[0];
+    const cycleDeliverables = currentCycle
+      ? store.deliverables.filter(item => item.cycleId === currentCycle.id)
+      : [];
+    const count = (status: string) => cycleDeliverables.filter(item => item.status === status).length;
+    return {
+      clientId: plan.clientId,
+      clientName: plan.clientName,
+      plan,
+      currentCycle,
+      total: cycleDeliverables.length,
+      delivered: count('Delivered'),
+      ready: count('Ready'),
+      inProgress: count('In Progress'),
+      planned: count('Planned'),
+    };
+  }), [activePlans, store.deliverables, store.serviceCycles]);
 
   if (persona === 'client') return null;
 
@@ -100,6 +120,32 @@ const ServiceRoleDashboard = () => {
   return <section className="space-y-5" aria-labelledby="management-workbench-title">
     <WorkbenchHeader id="management-workbench-title" title="Service management overview" description="Company-wide client delivery, workload, output and contracted monthly value." />
     <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label="Contracted monthly value" value={formatMoney(contractedMonthly)} icon={WalletCards} detail={`${activePlans.length} active client${activePlans.length === 1 ? '' : 's'} under management.`} /><StatGroup className="grid-cols-3"><CompactStat label="Active clients" value={activePlans.length} icon={UsersRound} /><CompactStat label="Overdue production" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Delivered outputs" value={delivered.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
+    <Surface className="overflow-hidden">
+      <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
+        <div><h3 className="font-semibold text-ink">Monthly deliverables</h3><p className="mt-1 text-sm text-muted">Current cycle delivery progress for each active company.</p></div>
+        <StatusChip tone="slate">{activeCompanies.length}</StatusChip>
+      </div>
+      <div className="divide-y divide-line/60">
+        {activeCompanies.map(item => (
+          <div key={item.clientId} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
+            <div className="min-w-0">
+              <Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="truncate text-sm font-semibold text-ink hover:text-accent">{item.clientName}</Link>
+              <p data-i18n-skip className="mt-1 truncate text-xs text-muted">{item.plan.name}{item.currentCycle ? ` · ${format(parseOptionalDate(item.currentCycle.periodStart)!, 'd MMM')} – ${format(parseOptionalDate(item.currentCycle.periodEnd)!, 'd MMM yyyy')}` : ' · No published cycle for this month'}</p>
+            </div>
+            <div className="min-w-0">
+              <ProgressBar className="mb-1.5" label={`Deliverables ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />
+              <div className="flex flex-wrap gap-1.5 text-[11px] text-muted">
+                <StatusChip tone="emerald">{item.delivered} Delivered</StatusChip>
+                <StatusChip tone="blue">{item.ready} Ready</StatusChip>
+                <StatusChip tone="indigo">{item.inProgress} In progress</StatusChip>
+                <StatusChip tone="slate">{item.planned} Planned</StatusChip>
+              </div>
+            </div>
+          </div>
+        ))}
+        {activeCompanies.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">No active companies yet.</p>}
+      </div>
+    </Surface>
   </section>;
 };
 
