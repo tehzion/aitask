@@ -78,15 +78,15 @@ jobs:
           pnpm test:e2e:login-i18n
 
       - name: Pull production environment
-        run: pnpm dlx --yes "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN"
+        run: pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build and deploy the tagged artifact to production
         id: production
         env:
           VERCEL_GIT_COMMIT_SHA: ${{ env.RELEASE_COMMIT }}
         run: |
-          pnpm dlx --yes "vercel@$VERCEL_CLI_VERSION" build --prod --token="$VERCEL_TOKEN"
-          echo "url=$(pnpm dlx --yes \"vercel@$VERCEL_CLI_VERSION\" deploy --prebuilt --prod --yes --token=\"$VERCEL_TOKEN\")" >> "$GITHUB_OUTPUT"
+          pnpm dlx "vercel@$VERCEL_CLI_VERSION" build --prod --token="$VERCEL_TOKEN"
+          echo "url=$(pnpm dlx \"vercel@$VERCEL_CLI_VERSION\" deploy --prebuilt --prod --yes --token=\"$VERCEL_TOKEN\")" >> "$GITHUB_OUTPUT"
 
       - name: Verify live production release and security
         env:
