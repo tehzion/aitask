@@ -219,4 +219,30 @@ describe('retryPendingSave', () => {
     expect(rpc.mock.calls[3]).toBeUndefined();
     expect(rpc.mock.calls[2][0]).toBe('aitask_execute_service_command');
   });
+
+  it('rebuilds the same typed save instead of replacing a rejected error with no retained change', async () => {
+    const created = useStore.getState().createClientWithPlan(planInput);
+    expect(created.ok).toBe(true);
+
+    rpc.mockResolvedValueOnce({
+      data: { ok: false, code: 'VALIDATION', error: 'The service plan could not be validated.' },
+      error: null,
+    });
+    const first = await useStore.getState().retryPendingSave('client_plan.manage');
+    expect(first).toMatchObject({ ok: false, error: 'The service plan could not be validated.' });
+    expect(useStore.getState().backend.pendingCommandType).toBe('client_plan.manage');
+
+    rpc.mockResolvedValueOnce({
+      data: { ok: false, code: 'VALIDATION', error: 'The service plan could not be validated.' },
+      error: null,
+    });
+    const retried = await useStore.getState().retryMutation();
+
+    expect(retried).toMatchObject({ ok: false, error: 'The service plan could not be validated.' });
+    expect(retried.error).not.toContain('no retained change');
+    expect(rpc).toHaveBeenLastCalledWith('aitask_execute_service_command', expect.objectContaining({
+      p_command_type: 'client_plan.manage',
+      p_expected_workspace_version: 5,
+    }));
+  });
 });

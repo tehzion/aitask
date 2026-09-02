@@ -2,7 +2,6 @@ import React from 'react';
 import { ArrowLeft, ArrowRight, Check, Copy, PackageCheck, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, pendingMutationMessage } from '../store';
-import { getRetainedSecureCommand } from '../lib/secureWorkspace';
 import type { PlanOrigin, ServiceItem } from '../types';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
@@ -19,8 +18,7 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
     servicePackages,
     serviceWorkflowTemplates,
     createClientWithPlan,
-    commitPendingMutation,
-    retryMutation,
+    retryPendingSave,
     backend,
   } = useStore();
   const [step, setStep] = React.useState(1);
@@ -139,8 +137,8 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
           };
         };
         let result = createClientWithPlan(buildInput());
-        if (!result.ok && result.error === pendingMutationMessage && getRetainedSecureCommand()) {
-          const recovered = await retryMutation();
+        if (!result.ok && result.error === pendingMutationMessage) {
+          const recovered = await retryPendingSave();
           if (recovered.ok) result = createClientWithPlan(buildInput());
         }
         if (!result.ok || !result.clientId) {
@@ -151,17 +149,7 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
         }
         createdClientIdRef.current = result.clientId;
       }
-      const fresh = useStore.getState();
-      let committed = createdClientIdRef.current && (fresh.backend.pendingMutations > 0 || getRetainedSecureCommand())
-        ? await retryMutation()
-        : await commitPendingMutation('client_plan.manage');
-      if (!committed.ok && committed.error === pendingMutationMessage) {
-        await fresh.syncBackendNow('client_plan.manage');
-        const after = useStore.getState().backend;
-        committed = !after.hasLocalChanges && after.status === 'live'
-          ? { ok: true }
-          : { ok: false, error: after.error || after.message || 'The client is waiting to be saved. Retry to finish syncing this same Draft.' };
-      }
+      const committed = await retryPendingSave('client_plan.manage');
       if (!committed.ok) {
         setError(committed.error === pendingMutationMessage
           ? WIZARD_BLOCKED_MESSAGE

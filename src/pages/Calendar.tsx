@@ -96,7 +96,7 @@ const Calendar: React.FC = () => {
     updateTask,
     setCreateTaskModalOpen,
     commitPendingMutation,
-    retryMutation,
+    retryPendingSave,
     discardMutation,
   } = useStore(useShallow(state => ({
     tasks: state.tasks,
@@ -107,7 +107,7 @@ const Calendar: React.FC = () => {
     updateTask: state.updateTask,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
     commitPendingMutation: state.commitPendingMutation,
-    retryMutation: state.retryMutation,
+    retryPendingSave: state.retryPendingSave,
     discardMutation: state.discardMutation,
   })));
   const navigate = useNavigate();
@@ -329,7 +329,7 @@ const Calendar: React.FC = () => {
     if (!editingPendingAttempt || savingTaskId === editingPendingAttempt.taskId) return;
     setSavingTaskId(editingPendingAttempt.taskId);
     setDateDraftError('');
-    const result = await retryMutation();
+    const result = await retryPendingSave('task.update');
     setSavingTaskId(null);
     if (!result.ok) {
       setDateDraftError(result.error || 'The date change still needs attention.');

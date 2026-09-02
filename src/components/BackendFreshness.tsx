@@ -40,7 +40,7 @@ const getFreshnessLabel = (backend: ReturnType<typeof useStore.getState>['backen
 };
 
 const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, className }) => {
-  const { backend, pullBackendNow, retryMutation, discardMutation } = useStore();
+  const { backend, pullBackendNow, retryPendingSave, discardMutation } = useStore();
   const backendStatus = getBackendStatus();
   const isLocal = backendStatus.mode === 'local';
   const label = isLocal && backendStatus.isHostedRuntime ? 'Local build' : getFreshnessLabel(backend, isLocal);
@@ -89,7 +89,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
         <div className="flex flex-wrap items-center gap-1.5">
           <Button
             variant="secondary"
-            onClick={() => void retryMutation()}
+            onClick={() => void retryPendingSave()}
             disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
             className="min-h-7 px-2 py-1 text-[11px]"
             title="Retry my pending changes"

@@ -51,7 +51,7 @@ const Layout: React.FC = () => {
     currentUser,
     backend,
     pullBackendNow,
-    retryMutation,
+    retryPendingSave,
     discardMutation,
     rolePermissions,
   } = useStore(useShallow(state => ({
@@ -62,7 +62,7 @@ const Layout: React.FC = () => {
     currentUser: state.currentUser,
     backend: state.backend,
     pullBackendNow: state.pullBackendNow,
-    retryMutation: state.retryMutation,
+    retryPendingSave: state.retryPendingSave,
     discardMutation: state.discardMutation,
     rolePermissions: state.rolePermissions,
   })));
@@ -305,7 +305,7 @@ const Layout: React.FC = () => {
                   <>
                     <button
                       type="button"
-                      onClick={() => void retryMutation()}
+                      onClick={() => void retryPendingSave()}
                       disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
                       className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >

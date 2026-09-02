@@ -137,6 +137,7 @@ interface BackendRuntimeState {
   hasRemoteUpdate: boolean;
   hasLocalChanges: boolean;
   pendingMutations: number;
+  pendingCommandType?: SecureCommandType;
   upgradeRequired?: boolean;
   conflict?: MutationConflict;
   error?: string;
@@ -1155,6 +1156,7 @@ export const useStore = create<StoreState>()(
         if (!shouldUseSupabase()) return;
 
         const current = get();
+        const pendingCommandType = commandType || current.backend.pendingCommandType;
         if (
           current.backend.upgradeRequired === true
           || current.backend.isLoading
@@ -1175,6 +1177,7 @@ export const useStore = create<StoreState>()(
             status: 'saving',
             isSaving: true,
             pendingMutations: Math.max(1, state.backend.pendingMutations),
+            pendingCommandType,
             error: undefined,
           }
         }));
@@ -1186,7 +1189,7 @@ export const useStore = create<StoreState>()(
             const savedWorkspace = selectPersistedWorkspaceState(stateToSave);
             const result = await saveSecureWorkspace(
               savedWorkspace,
-              commandType,
+              pendingCommandType,
               stateToSave.backend.workspaceVersion,
             );
             if (result.ok === false) {
@@ -1228,12 +1231,13 @@ export const useStore = create<StoreState>()(
                 hasRemoteUpdate: false,
                 hasLocalChanges: hasChangesAfterSave,
                 pendingMutations: hasChangesAfterSave ? 1 : 0,
+                pendingCommandType: hasChangesAfterSave ? pendingCommandType : undefined,
                 conflict: undefined,
                 error: undefined,
                 message: hasChangesAfterSave ? 'Saving newer changes.' : 'Saved.',
               },
             }));
-            if (hasChangesAfterSave) queueMicrotask(() => void get().syncBackendNow());
+            if (hasChangesAfterSave) queueMicrotask(() => void get().syncBackendNow(pendingCommandType));
             else if (hadRemoteUpdate) await get().pullBackendNow({ force: true, silent: true });
             return;
           }
@@ -1300,6 +1304,7 @@ export const useStore = create<StoreState>()(
               hasRemoteUpdate: false,
               hasLocalChanges: false,
               pendingMutations: 0,
+              pendingCommandType: undefined,
               message: result.message,
             }
           }));
@@ -1606,6 +1611,9 @@ export const useStore = create<StoreState>()(
         if (current.backend.isSaving || current.backend.isPulling) {
           return { ok: false, error: 'Another synchronization request is still running.' };
         }
+        if (!getRetainedSecureCommand()) {
+          return get().retryPendingSave(current.backend.pendingCommandType);
+        }
         if (shouldUseSecureSupabase()) {
           const compatibility = await loadSecureBackendCapabilities();
           if (!compatibility.compatible) {
@@ -1622,9 +1630,6 @@ export const useStore = create<StoreState>()(
             return { ok: false, error: compatibility.error };
           }
         }
-        if (!getRetainedSecureCommand()) {
-          return { ok: false, error: 'There is no retained change to retry.' };
-        }
         const conflict = current.backend.conflict;
         if (conflict && isWorkspaceConflict(conflict) && getRetainedSecureCommand()) {
           return get().reapplyMutationOnLatestWorkspace();
@@ -1637,6 +1642,7 @@ export const useStore = create<StoreState>()(
             status: 'saving',
             isSaving: true,
             pendingMutations: 1,
+            pendingCommandType: getRetainedSecureCommand()?.type || state.backend.pendingCommandType,
             error: undefined,
             message: 'Retrying pending change.',
           },
@@ -1685,6 +1691,7 @@ export const useStore = create<StoreState>()(
             hasRemoteUpdate: false,
             hasLocalChanges: false,
             pendingMutations: 0,
+            pendingCommandType: undefined,
             message: 'Saved.',
           },
         }));
@@ -1716,6 +1723,7 @@ export const useStore = create<StoreState>()(
             hasRemoteUpdate: false,
             hasLocalChanges: false,
             pendingMutations: 0,
+            pendingCommandType: undefined,
             message: options.reload === false ? 'Pending change discarded.' : 'Loading the latest saved workspace.',
           },
         }));
@@ -1726,14 +1734,23 @@ export const useStore = create<StoreState>()(
 
       retryPendingSave: async (commandType) => {
         if (!shouldUseSupabase()) return { ok: true };
+        const before = get().backend;
+        if (before.isSaving || before.isPulling) {
+          return { ok: false, error: 'Another synchronization request is still running.' };
+        }
         if (getRetainedSecureCommand()) {
           return get().retryMutation();
         }
-        await get().syncBackendNow(commandType);
+        if (!before.hasLocalChanges) {
+          return before.status === 'live'
+            ? { ok: true }
+            : { ok: false, error: before.error || before.message || 'The change has not been saved yet.' };
+        }
+        await get().syncBackendNow(commandType || before.pendingCommandType);
         const after = get().backend;
         return !after.hasLocalChanges && after.status === 'live'
           ? { ok: true }
-          : { ok: false, error: after.error || 'The change has not been saved yet.' };
+          : { ok: false, error: after.error || before.error || after.message || 'The change has not been saved yet.' };
       },
 
       commitPendingMutation: async (commandType) => {
