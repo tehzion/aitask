@@ -3,7 +3,7 @@ name: Tagged Production Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v*'
 
 permissions:
   contents: read
@@ -13,161 +13,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  one-time-v2-1-1-direct-production:
-    if: github.ref_name == 'v2.1.1'
+  validate-stage-and-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      RELEASE_TAG: v2.1.1
-      RELEASE_VERSION: 2.1.1
-      PRODUCTION_URL: https://aitask-virid.vercel.app
-      VERCEL_GIT_COMMIT_SHA: ${{ github.sha }}
-      VITE_AITASK_BACKEND: supabase
-      VITE_SUPABASE_URL: ${{ secrets.PRODUCTION_SUPABASE_URL }}
-      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PRODUCTION_SUPABASE_PUBLISHABLE_KEY }}
-      AITASK_EXPECT_SECURE_CUTOVER: 'true'
-      AITASK_VERIFY_ORIGIN: https://aitask-virid.vercel.app
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.4.1
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Validate the one-time immutable release target
-        run: |
-          test "$GITHUB_REF_NAME" = "$RELEASE_TAG"
-          test "$(node -p 'require("./package.json").version')" = "$RELEASE_VERSION"
-          test -n "$VITE_SUPABASE_URL"
-          test -n "$VITE_SUPABASE_PUBLISHABLE_KEY"
-          PROJECT_REF="$(node -p 'require("./supabase/preflight/migration_repair_manifest.review.json").projectRef')"
-          test "$VITE_SUPABASE_URL" = "https://$PROJECT_REF.supabase.co"
-          case "$VITE_SUPABASE_PUBLISHABLE_KEY" in
-            sb_publishable_*) ;;
-            *) echo "Production Supabase key must be a publishable key."; exit 1 ;;
-          esac
-          curl --fail --silent --show-error --output /dev/null \
-            --header "apikey: $VITE_SUPABASE_PUBLISHABLE_KEY" \
-            "$VITE_SUPABASE_URL/auth/v1/settings"
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          git fetch origin master --no-tags
-          test "$(git rev-parse origin/master)" = "$GITHUB_SHA"
-          grep -F "## [$RELEASE_VERSION]" CHANGELOG.md
-          test ! -e .github/workflows/emergency-v2.1.0-production.yml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run the complete source and build gate
-        run: |
-          pnpm audit --prod --audit-level high
-          pnpm check
-          pnpm lint
-          pnpm test
-          pnpm build
-          pnpm verify:pwa
-          pnpm verify:release-provenance -- --file dist/build-info.json --version "$RELEASE_VERSION" --commit "$GITHUB_SHA"
-
-      - name: Validate Supabase rollout in a disposable stack
-        run: pnpm verify:supabase:rollout
-
-      - name: Install browser runtime
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run unauthenticated local browser gates
-        run: |
-          pnpm test:e2e:pwa
-          pnpm test:e2e
-          pnpm test:e2e:login-i18n
-
-      - name: Wait for the Vercel Git production deployment
-        run: |
-          attempt=1
-          until pnpm verify:release-provenance -- --url "$PRODUCTION_URL" --version "$RELEASE_VERSION" --commit "$GITHUB_SHA" > "$RUNNER_TEMP/release-provenance.log" 2>&1; do
-            if [ "$attempt" -ge 60 ]; then
-              cat "$RUNNER_TEMP/release-provenance.log"
-              echo "Production did not publish the tagged v2.1.1 commit within 15 minutes."
-              exit 1
-            fi
-            echo "Waiting for the Vercel Git production deployment ($attempt/60)."
-            attempt=$((attempt + 1))
-            sleep 15
-          done
-          cat "$RUNNER_TEMP/release-provenance.log"
-
-      - name: Verify live routes, PWA assets, provenance, and Supabase security
-        run: |
-          mkdir -p release-evidence
-          verify_live_route() {
-            route="$1"
-            expected_type="$2"
-            label="$3"
-            body_path="release-evidence/$label.body"
-            header_path="release-evidence/$label.headers"
-            status="$(curl --location --silent --show-error --retry 3 \
-              --dump-header "$header_path" \
-              --output "$body_path" \
-              --write-out '%{http_code}' \
-              "$PRODUCTION_URL$route")"
-            test "$status" = "200"
-            content_type="$(awk 'BEGIN { IGNORECASE=1 } /^content-type:/ { value=$0 } END { sub(/^[^:]*:[[:space:]]*/, "", value); sub(/\r$/, "", value); print value }' "$header_path")"
-            case "$content_type" in
-              "$expected_type"*) ;;
-              *) echo "$route returned unexpected content type: $content_type"; exit 1 ;;
-            esac
-            grep --ignore-case --quiet '^content-security-policy:' "$header_path"
-            grep --ignore-case --quiet '^strict-transport-security:' "$header_path"
-            grep --ignore-case --quiet '^x-content-type-options: *nosniff' "$header_path"
-            grep --ignore-case --quiet '^cache-control:.*no-store' "$header_path"
-          }
-          verify_live_route / text/html root
-          verify_live_route /login text/html login
-          verify_live_route /account/password text/html account-password
-          verify_live_route /manifest.webmanifest application/manifest+json manifest
-          verify_live_route /sw.js application/javascript service-worker
-          verify_live_route /build-info.json application/json build-info
-          grep --quiet 'id="root"' release-evidence/root.body
-          grep --quiet 'id="root"' release-evidence/login.body
-          grep --quiet 'id="root"' release-evidence/account-password.body
-          node --input-type=module --eval '
-            import { readFileSync } from "node:fs";
-            const manifest = JSON.parse(readFileSync("release-evidence/manifest.body", "utf8"));
-            if (manifest.name !== "AiTask - Marketing Agency Task Management" || manifest.start_url !== "/" || manifest.scope !== "/") process.exit(1);
-          '
-          grep --quiet 'aitask-navigation' release-evidence/service-worker.body
-          grep --ignore-case --quiet '^service-worker-allowed: */' release-evidence/service-worker.headers
-          cp release-evidence/build-info.body release-evidence/build-info.json
-          pnpm verify:release-provenance -- --file release-evidence/build-info.json --version "$RELEASE_VERSION" --commit "$GITHUB_SHA"
-          curl --fail --silent --show-error --output /dev/null \
-            --header "apikey: $VITE_SUPABASE_PUBLISHABLE_KEY" \
-            "$VITE_SUPABASE_URL/auth/v1/settings"
-          pnpm verify:supabase | tee release-evidence/supabase-security.log
-          git fetch origin master --no-tags
-          test "$(git rev-parse origin/master)" = "$GITHUB_SHA"
-
-      - name: Retain one-time release evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: v2.1.1-production-release-evidence
-          path: release-evidence/
-          if-no-files-found: ignore
-          retention-days: 90
-
-  validate-and-release:
-    if: github.ref_name != 'v2.1.1'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       VERCEL_CLI_VERSION: ${{ vars.VERCEL_CLI_VERSION }}
+      PRODUCTION_URL: https://aitask-virid.vercel.app
 
     steps:
       - uses: actions/checkout@v4
@@ -184,16 +35,59 @@ jobs:
           cache: pnpm
 
       - name: Validate release identity and required configuration
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          STAGING_VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
+          STAGING_VERCEL_ORG_ID: ${{ secrets.STAGING_VERCEL_ORG_ID }}
+          STAGING_VERCEL_PROJECT_ID: ${{ secrets.STAGING_VERCEL_PROJECT_ID }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
+          PRODUCTION_SUPABASE_URL: ${{ secrets.PRODUCTION_SUPABASE_URL }}
+          PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PRODUCTION_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_QA_SUPER_ADMIN_EMAIL: ${{ secrets.STAGING_QA_SUPER_ADMIN_EMAIL }}
+          STAGING_QA_SUPER_ADMIN_PASSWORD: ${{ secrets.STAGING_QA_SUPER_ADMIN_PASSWORD }}
+          STAGING_QA_OPERATION_EMAIL: ${{ secrets.STAGING_QA_OPERATION_EMAIL }}
+          STAGING_QA_OPERATION_PASSWORD: ${{ secrets.STAGING_QA_OPERATION_PASSWORD }}
+          STAGING_QA_PRODUCTION_EMAIL: ${{ secrets.STAGING_QA_PRODUCTION_EMAIL }}
+          STAGING_QA_PRODUCTION_PASSWORD: ${{ secrets.STAGING_QA_PRODUCTION_PASSWORD }}
+          STAGING_QA_ACCOUNT_EMAIL: ${{ secrets.STAGING_QA_ACCOUNT_EMAIL }}
+          STAGING_QA_ACCOUNT_PASSWORD: ${{ secrets.STAGING_QA_ACCOUNT_PASSWORD }}
+          STAGING_QA_CLIENT_EMAIL: ${{ secrets.STAGING_QA_CLIENT_EMAIL }}
+          STAGING_QA_CLIENT_PASSWORD: ${{ secrets.STAGING_QA_CLIENT_PASSWORD }}
         run: |
-          test -n "$VERCEL_CLI_VERSION"
           VERSION="$(node -p 'require("./package.json").version')"
           test "$GITHUB_REF_NAME" = "v$VERSION"
           grep -F "## [$VERSION]" CHANGELOG.md
+          grep -F "## v$VERSION" docs/client-release-notes-2026-08.md
+          test -n "$VERCEL_CLI_VERSION"
+          for value in \
+            "$VERCEL_TOKEN" "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" \
+            "$STAGING_VERCEL_TOKEN" "$STAGING_VERCEL_ORG_ID" "$STAGING_VERCEL_PROJECT_ID" \
+            "$STAGING_SUPABASE_URL" "$STAGING_SUPABASE_PUBLISHABLE_KEY" \
+            "$STAGING_SUPABASE_SERVICE_ROLE_KEY" "$STAGING_SUPABASE_PROJECT_REF" \
+            "$PRODUCTION_SUPABASE_URL" "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" \
+            "$STAGING_QA_SUPER_ADMIN_EMAIL" "$STAGING_QA_SUPER_ADMIN_PASSWORD" \
+            "$STAGING_QA_OPERATION_EMAIL" "$STAGING_QA_OPERATION_PASSWORD" \
+            "$STAGING_QA_PRODUCTION_EMAIL" "$STAGING_QA_PRODUCTION_PASSWORD" \
+            "$STAGING_QA_ACCOUNT_EMAIL" "$STAGING_QA_ACCOUNT_PASSWORD" \
+            "$STAGING_QA_CLIENT_EMAIL" "$STAGING_QA_CLIENT_PASSWORD"; do
+            test -n "$value"
+          done
+          test "$STAGING_SUPABASE_URL" != "$PRODUCTION_SUPABASE_URL"
+          case "$STAGING_SUPABASE_PUBLISHABLE_KEY" in sb_publishable_*) ;; *) exit 1 ;; esac
+          case "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" in sb_publishable_*) ;; *) exit 1 ;; esac
+          git fetch origin master --no-tags
+          test "$(git rev-parse origin/master)" = "$GITHUB_SHA"
+          test -z "$(git diff --name-only v2.1.1..HEAD -- supabase/migrations)"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Audit and validate source
+      - name: Run complete source and build gate
         run: |
           pnpm audit --prod --audit-level high
           pnpm check
@@ -201,7 +95,7 @@ jobs:
           pnpm test
           pnpm build
           pnpm verify:pwa
-          pnpm verify:release-provenance -- --file dist/build-info.json --version "$(node -p 'require("./package.json").version')" --commit "$GITHUB_SHA"
+          pnpm verify:release-provenance -- --file dist/build-info.json --version "${GITHUB_REF_NAME#v}" --commit "$GITHUB_SHA"
 
       - name: Validate Supabase rollout in a disposable stack
         run: pnpm verify:supabase:rollout
@@ -215,7 +109,7 @@ jobs:
           pnpm test:e2e
           pnpm test:e2e:login-i18n
 
-      - name: Pull staging environment
+      - name: Pull isolated staging environment
         env:
           VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.STAGING_VERCEL_ORG_ID }}
@@ -235,22 +129,24 @@ jobs:
           case "$deployment_url" in https://*) ;; *) echo "Vercel returned an invalid staging URL."; exit 1 ;; esac
           printf 'url=%s\n' "$deployment_url" >> "$GITHUB_OUTPUT"
 
-      - name: Verify staging release provenance and Supabase cutover
+      - name: Verify staging provenance and Supabase cutover
         env:
           RELEASE_URL: ${{ steps.staging.outputs.url }}
-          RELEASE_VERSION: ${{ github.ref_name }}
-          GITHUB_SHA: ${{ github.sha }}
           VITE_AITASK_BACKEND: supabase
           VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
           AITASK_EXPECT_SECURE_CUTOVER: 'true'
         run: |
-          pnpm verify:release-provenance -- --url "$RELEASE_URL" --version "${RELEASE_VERSION#v}" --commit "$GITHUB_SHA"
+          pnpm verify:release-provenance -- --url "$RELEASE_URL" --version "${GITHUB_REF_NAME#v}" --commit "$GITHUB_SHA"
           pnpm verify:supabase
 
-      - name: Run authenticated staging release QA
+      - name: Seed isolated staging QA fixture
+        id: staging_fixture
         env:
-          STAGING_E2E_BASE_URL: ${{ vars.STAGING_E2E_BASE_URL }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
+          PRODUCTION_SUPABASE_URL: ${{ secrets.PRODUCTION_SUPABASE_URL }}
           STAGING_QA_SUPER_ADMIN_EMAIL: ${{ secrets.STAGING_QA_SUPER_ADMIN_EMAIL }}
           STAGING_QA_SUPER_ADMIN_PASSWORD: ${{ secrets.STAGING_QA_SUPER_ADMIN_PASSWORD }}
           STAGING_QA_OPERATION_EMAIL: ${{ secrets.STAGING_QA_OPERATION_EMAIL }}
@@ -261,11 +157,60 @@ jobs:
           STAGING_QA_ACCOUNT_PASSWORD: ${{ secrets.STAGING_QA_ACCOUNT_PASSWORD }}
           STAGING_QA_CLIENT_EMAIL: ${{ secrets.STAGING_QA_CLIENT_EMAIL }}
           STAGING_QA_CLIENT_PASSWORD: ${{ secrets.STAGING_QA_CLIENT_PASSWORD }}
-          STAGING_QA_CLIENT_ID: ${{ vars.STAGING_QA_CLIENT_ID }}
-          STAGING_QA_CLIENT_NAME: ${{ vars.STAGING_QA_CLIENT_NAME }}
-          STAGING_QA_CLIENT_TASK_ID: ${{ vars.STAGING_QA_CLIENT_TASK_ID }}
-          STAGING_QA_FOREIGN_TASK_ID: ${{ vars.STAGING_QA_FOREIGN_TASK_ID }}
+        run: node scripts/reset-staging-qa.mjs seed | tee staging-fixture.json
+
+      - name: Run authenticated staging release QA
+        env:
+          STAGING_E2E_BASE_URL: ${{ steps.staging.outputs.url }}
+          STAGING_QA_SUPER_ADMIN_EMAIL: ${{ secrets.STAGING_QA_SUPER_ADMIN_EMAIL }}
+          STAGING_QA_SUPER_ADMIN_PASSWORD: ${{ secrets.STAGING_QA_SUPER_ADMIN_PASSWORD }}
+          STAGING_QA_OPERATION_EMAIL: ${{ secrets.STAGING_QA_OPERATION_EMAIL }}
+          STAGING_QA_OPERATION_PASSWORD: ${{ secrets.STAGING_QA_OPERATION_PASSWORD }}
+          STAGING_QA_PRODUCTION_EMAIL: ${{ secrets.STAGING_QA_PRODUCTION_EMAIL }}
+          STAGING_QA_PRODUCTION_PASSWORD: ${{ secrets.STAGING_QA_PRODUCTION_PASSWORD }}
+          STAGING_QA_ACCOUNT_EMAIL: ${{ secrets.STAGING_QA_ACCOUNT_EMAIL }}
+          STAGING_QA_ACCOUNT_PASSWORD: ${{ secrets.STAGING_QA_ACCOUNT_PASSWORD }}
+          STAGING_QA_CLIENT_EMAIL: ${{ secrets.STAGING_QA_CLIENT_EMAIL }}
+          STAGING_QA_CLIENT_PASSWORD: ${{ secrets.STAGING_QA_CLIENT_PASSWORD }}
         run: pnpm exec playwright test -c playwright.staging.config.ts
+
+      - name: Clean isolated staging QA fixture
+        if: always() && steps.staging_fixture.outcome == 'success'
+        env:
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
+          PRODUCTION_SUPABASE_URL: ${{ secrets.PRODUCTION_SUPABASE_URL }}
+          STAGING_QA_SUPER_ADMIN_EMAIL: ${{ secrets.STAGING_QA_SUPER_ADMIN_EMAIL }}
+          STAGING_QA_SUPER_ADMIN_PASSWORD: ${{ secrets.STAGING_QA_SUPER_ADMIN_PASSWORD }}
+          STAGING_QA_OPERATION_EMAIL: ${{ secrets.STAGING_QA_OPERATION_EMAIL }}
+          STAGING_QA_OPERATION_PASSWORD: ${{ secrets.STAGING_QA_OPERATION_PASSWORD }}
+          STAGING_QA_PRODUCTION_EMAIL: ${{ secrets.STAGING_QA_PRODUCTION_EMAIL }}
+          STAGING_QA_PRODUCTION_PASSWORD: ${{ secrets.STAGING_QA_PRODUCTION_PASSWORD }}
+          STAGING_QA_ACCOUNT_EMAIL: ${{ secrets.STAGING_QA_ACCOUNT_EMAIL }}
+          STAGING_QA_ACCOUNT_PASSWORD: ${{ secrets.STAGING_QA_ACCOUNT_PASSWORD }}
+          STAGING_QA_CLIENT_EMAIL: ${{ secrets.STAGING_QA_CLIENT_EMAIL }}
+          STAGING_QA_CLIENT_PASSWORD: ${{ secrets.STAGING_QA_CLIENT_PASSWORD }}
+        run: node scripts/reset-staging-qa.mjs cleanup
+
+      - name: Capture production rollback provenance
+        id: rollback
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          mkdir -p release-evidence
+          curl --fail --silent --show-error "$PRODUCTION_URL/build-info.json" \
+            --output release-evidence/rollback-build-info.json
+          node scripts/verify-release-provenance.mjs \
+            --file release-evidence/rollback-build-info.json \
+            --version 2.1.1 \
+            --commit c1f0a34d1c22800020467a25de7c78dd2ec9aacd
+          rollback_url="$(pnpm dlx "vercel@$VERCEL_CLI_VERSION" inspect "$PRODUCTION_URL" --json --token="$VERCEL_TOKEN" | jq -r '.url')"
+          case "$rollback_url" in *.vercel.app) ;; *) echo "Unable to capture the production rollback URL."; exit 1 ;; esac
+          printf 'url=https://%s\n' "$rollback_url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$rollback_url" > release-evidence/rollback-deployment-url.txt
 
       - name: Pull production environment
         env:
@@ -287,15 +232,72 @@ jobs:
           case "$deployment_url" in https://*) ;; *) echo "Vercel returned an invalid production URL."; exit 1 ;; esac
           printf 'url=%s\n' "$deployment_url" >> "$GITHUB_OUTPUT"
 
-      - name: Verify production provenance and Supabase cutover
+      - name: Verify production provenance, routes, PWA, and Supabase security
         env:
           RELEASE_URL: ${{ steps.production.outputs.url }}
-          RELEASE_VERSION: ${{ github.ref_name }}
-          GITHUB_SHA: ${{ github.sha }}
           VITE_AITASK_BACKEND: supabase
           VITE_SUPABASE_URL: ${{ secrets.PRODUCTION_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PRODUCTION_SUPABASE_PUBLISHABLE_KEY }}
           AITASK_EXPECT_SECURE_CUTOVER: 'true'
         run: |
-          pnpm verify:release-provenance -- --url "$RELEASE_URL" --version "${RELEASE_VERSION#v}" --commit "$GITHUB_SHA"
-          pnpm verify:supabase
+          pnpm verify:release-provenance -- --url "$RELEASE_URL" --version "${GITHUB_REF_NAME#v}" --commit "$GITHUB_SHA"
+          pnpm verify:release-provenance -- --url "$PRODUCTION_URL" --version "${GITHUB_REF_NAME#v}" --commit "$GITHUB_SHA"
+          verify_live_route() {
+            route="$1"
+            expected_type="$2"
+            label="$3"
+            status="$(curl --location --silent --show-error --retry 3 \
+              --dump-header "release-evidence/$label.headers" \
+              --output "release-evidence/$label.body" \
+              --write-out '%{http_code}' "$PRODUCTION_URL$route")"
+            test "$status" = "200"
+            grep --ignore-case --quiet "^content-type: *$expected_type" "release-evidence/$label.headers"
+            grep --ignore-case --quiet '^content-security-policy:' "release-evidence/$label.headers"
+            grep --ignore-case --quiet '^strict-transport-security:' "release-evidence/$label.headers"
+            grep --ignore-case --quiet '^x-content-type-options: *nosniff' "release-evidence/$label.headers"
+            grep --ignore-case --quiet '^cache-control:.*no-store' "release-evidence/$label.headers"
+          }
+          verify_live_route / text/html root
+          verify_live_route /login text/html login
+          verify_live_route /account/password text/html account-password
+          verify_live_route /manifest.webmanifest application/manifest+json manifest
+          verify_live_route /sw.js application/javascript service-worker
+          verify_live_route /build-info.json application/json build-info
+          grep --quiet 'id="root"' release-evidence/root.body
+          grep --quiet 'id="root"' release-evidence/login.body
+          grep --quiet 'id="root"' release-evidence/account-password.body
+          node --input-type=module --eval '
+            import { readFileSync } from "node:fs";
+            const manifest = JSON.parse(readFileSync("release-evidence/manifest.body", "utf8"));
+            if (manifest.name !== "AiTask - Marketing Agency Task Management" || manifest.start_url !== "/" || manifest.scope !== "/") process.exit(1);
+          '
+          grep --quiet 'aitask-navigation' release-evidence/service-worker.body
+          grep --ignore-case --quiet '^service-worker-allowed: */' release-evidence/service-worker.headers
+          pnpm verify:supabase | tee release-evidence/supabase-security.log
+          git fetch origin master --no-tags
+          test "$(git rev-parse origin/master)" = "$GITHUB_SHA"
+
+      - name: Roll back production after a failed post-deploy gate
+        if: failure() && steps.production.outcome == 'success'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          pnpm dlx "vercel@$VERCEL_CLI_VERSION" rollback "${{ steps.rollback.outputs.url }}" --token="$VERCEL_TOKEN"
+          pnpm verify:release-provenance -- --url "$PRODUCTION_URL" \
+            --version 2.1.1 \
+            --commit c1f0a34d1c22800020467a25de7c78dd2ec9aacd
+
+      - name: Retain release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.ref_name }}-production-release-evidence
+          path: |
+            release-evidence/
+            staging-fixture.json
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 90

@@ -58,10 +58,9 @@ the local, database, staging, and provenance gates pass. Configure the required
 Vercel and staging QA secrets as described in
 [`docs/staging-release-setup.md`](docs/staging-release-setup.md).
 
-The v2.1.1 release has an explicit one-time exception that uses the existing
-Vercel Git production integration and performs the same source gates plus live
-post-deploy verification. It performs no database migration or authenticated
-production test. The exception does not apply to any later tag.
+The v2.1.1 direct-production path was a historical one-time exception and is no
+longer present in the workflow. Every later tag must pass the isolated staging
+deployment and authenticated role QA before production deployment.
 
 ## Backend migrations and upgrade runbook
 

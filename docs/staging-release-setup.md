@@ -4,31 +4,31 @@ This repository can enforce the release gate only after the following project se
 
 ## 1. Isolate staging
 
-Create a separate Supabase project and a separate Vercel project for staging. Apply the complete migration history to the empty staging database, deploy the two Edge Functions, use the staging origin for `AITASK_PUBLIC_URL`, and allow that origin’s `/account/password` redirect.
+Create a Supabase project named `aitask-staging` and a separate Vercel project with the same name. Apply the complete migration history to the empty staging database, deploy the two Edge Functions, use the staging origin for `AITASK_PUBLIC_URL`, and allow that origin’s `/account/password` redirect.
 
 Set `VITE_AITASK_BACKEND=supabase`, the staging Supabase URL, and the staging publishable key only in the staging Vercel project. Keep production values exclusively in the production Vercel project. Enable Supabase Auth leaked-password protection in both projects and use non-production email delivery for staging.
 
 ## 2. Prevent unversioned production deployments
 
-In the production Vercel project, change the Git production branch to a branch that is never pushed, such as `production-managed-by-tags`. Pushes to normal branches may keep creating previews, but must never update the production alias.
+In the canonical production Vercel project, change the Git production branch to `production-managed-by-tags`. Disconnect the duplicate `aitask-master` project from Git or give it the same non-existent production branch. Pushes to normal branches may keep creating previews, but must never update either production alias.
 
-Add these GitHub secrets for the production project: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`. Add separate `STAGING_VERCEL_TOKEN`, `STAGING_VERCEL_ORG_ID`, and `STAGING_VERCEL_PROJECT_ID` secrets for staging. Set repository variable `VERCEL_CLI_VERSION` to an approved pinned Vercel CLI version.
+Add these GitHub secrets for the production project: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`. Add separate `STAGING_VERCEL_TOKEN`, `STAGING_VERCEL_ORG_ID`, and `STAGING_VERCEL_PROJECT_ID` secrets for staging. Add `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_PUBLISHABLE_KEY`, and `STAGING_SUPABASE_SERVICE_ROLE_KEY`; the service credential is used only by the fixture reset script and must never use a `VITE_` prefix. Set repository variables `VERCEL_CLI_VERSION` and `STAGING_SUPABASE_PROJECT_REF`.
 
 ## 3. Configure the staging QA fixture
 
-Create one resettable workspace named `Release QA`, with non-client accounts for Super Admin, Operations, Production, and Account, plus one Client account. The fixture must include:
+The tagged workflow runs `scripts/reset-staging-qa.mjs` to create one resettable workspace named `Release QA`, with non-client accounts for Super Admin, Operations, Production, and Account, plus one Client account. The fixture includes:
 
 - one known client plan with a published service cycle and a client-visible delivery awaiting review;
 - one client-visible delivery belonging to another company, used only to verify denial;
-- a documented reset operation that removes or restores only the `Release QA` workspace after every run.
+- deterministic client, plan, cycle, deliverable, task-chain, notification, and foreign-company records;
+- a cleanup operation that refuses production, checks the staging project reference, and removes only workspace `aitask-main` when its name is `AiTask` or `Release QA`, plus the five exact QA emails.
 
-Store account credentials in the `STAGING_QA_*_EMAIL` and `STAGING_QA_*_PASSWORD` secrets. Store the fixture identifiers and base URL in the similarly named repository variables used by `.github/workflows/release.yml`. The release workflow fails if any required value is absent.
+Store account credentials in the `STAGING_QA_*_EMAIL` and `STAGING_QA_*_PASSWORD` secrets. Fixture identifiers are non-secret deterministic constants shared by the reset script and staging suite. The release workflow uses the exact deployment URL returned by Vercel and fails before deployment if required configuration is absent.
 
 ## 4. Release and rollback
 
-The v2.1.1 tag is a documented one-time direct-production exception. It skips
-staging and Vercel CLI deployment, waits for the existing Git integration, and
-runs only unauthenticated live verification. It performs no database migration.
+The v2.1.1 tag was a historical one-time direct-production exception. That job
+has been removed; v2.1.2 and every later release use the staging-first path.
 
 For every later release:
 

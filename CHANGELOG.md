@@ -4,6 +4,23 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [2.1.2] - 2026-09-02
+
+### Fixed
+
+- Saving now follows one recovery path across client setup, companies, tasks,
+  schedule changes, and the shared sync controls.
+- Interrupted saves can rebuild the same typed operation when no retained
+  command is available, avoiding duplicate client, plan, company, or task work.
+- Retry keeps the original backend error visible instead of replacing it with a
+  misleading "no retained change" message.
+
+### Changed
+
+- Later releases now use only the staging-first tagged production gate; the
+  historical v2.1.1 direct-production exception has been removed.
+- No database migration or public API change is included in this release.
+
 ## [2.1.1] - 2026-08-27
 
 ### Added

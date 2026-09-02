@@ -1,6 +1,12 @@
 # AiTask client release notes
 
-**Coverage:** the four latest deployed releases: v2.1.1 (27 August 2026), v2.0.0 (21 August 2026), v1.6.18 (9 August 2026), and v1.6.16 (2 August 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+**Coverage:** the four latest client releases: v2.1.2 (2 September 2026), v2.1.1 (27 August 2026), v2.0.0 (21 August 2026), and v1.6.18 (9 August 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+
+## v2.1.2 — 2 September 2026
+
+- **More dependable saving.** Client setup, companies, tasks, schedules, and shared retry controls now follow the same reliable save process.
+- **Safer recovery after an interruption.** AiTask resumes the same pending change without creating duplicate client, plan, company, or task work.
+- **Clearer action when something fails.** The original save error stays visible so users know what needs attention.
 
 ## v2.1.1 — 27 August 2026
 
@@ -38,13 +44,13 @@
 
 | Release | Formal release commit | Verification basis |
 | --- | --- | --- |
+| v2.1.2 | Release tag `v2.1.2` | Shared save/retry recovery, typed resubmission, original-error preservation, authenticated staging QA, and production provenance. |
 | v2.1.1 | Release tag `v2.1.1` | Client and role workspaces, privacy, permissions, sync recovery, mobile polish, and Chinese coverage; one-time direct-production verification gate. |
 | v2.0.0 | `6d2348b` | Service-plan, client-workspace, delivery, approval, and sync behavior; release notice and unit coverage. |
 | v1.6.18 | `9934dab` | Workload reporting and task-assignment behavior; component and reporting tests. |
-| v1.6.16 | `fe7cb19` | Notification-centre behavior and notification tests. |
 
 - Release-boundary integrity check passed with `git diff --check 0722323..6d2348b`.
 - Changes committed after `6d2348b` are covered by v2.1.1. The immutable v2.1.0 candidate at `5cdcfb7` was superseded after its deployment gate stopped before production.
-- The local quality gate passed 193 tests, typecheck, lint, production build, PWA verification, and local build-provenance verification. The release workflow repeats those checks under the pinned Node.js 22.x and pnpm 10.4.1 toolchain.
+- The v2.1.2 source gate includes 194 tests, typecheck, lint, production build, PWA verification, local build provenance, disposable Supabase/pgTAP validation, and authenticated staging QA. The release workflow repeats those checks under the pinned Node.js 22.x and pnpm 10.4.1 toolchain.
 - **27 August one-time release waiver:** authenticated staging-role QA is waived for v2.1.1 only. No production-authenticated test and no database migration are performed. All later releases remain staging-gated.
-- Do not announce v2.1.1 until the live `/build-info.json` reports v2.1.1 and the exact `v2.1.1` tag commit.
+- Do not announce v2.1.2 until the live `/build-info.json` reports v2.1.2 and the exact `v2.1.2` tag commit.
