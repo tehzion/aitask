@@ -44,13 +44,14 @@
 
 | Release | Formal release commit | Verification basis |
 | --- | --- | --- |
-| v2.1.2 | Release tag `v2.1.2` | Shared save/retry recovery, typed resubmission, original-error preservation, authenticated staging QA, and production provenance. |
+| v2.1.2 | Release tag `v2.1.2` | Shared save/retry recovery, typed resubmission, original-error preservation, and production provenance; staging QA waived by one-time direct-production gate. |
 | v2.1.1 | Release tag `v2.1.1` | Client and role workspaces, privacy, permissions, sync recovery, mobile polish, and Chinese coverage; one-time direct-production verification gate. |
 | v2.0.0 | `6d2348b` | Service-plan, client-workspace, delivery, approval, and sync behavior; release notice and unit coverage. |
 | v1.6.18 | `9934dab` | Workload reporting and task-assignment behavior; component and reporting tests. |
 
 - Release-boundary integrity check passed with `git diff --check 0722323..6d2348b`.
 - Changes committed after `6d2348b` are covered by v2.1.1. The immutable v2.1.0 candidate at `5cdcfb7` was superseded after its deployment gate stopped before production.
-- The v2.1.2 source gate includes 194 tests, typecheck, lint, production build, PWA verification, local build provenance, disposable Supabase/pgTAP validation, and authenticated staging QA. The release workflow repeats those checks under the pinned Node.js 22.x and pnpm 10.4.1 toolchain.
-- **27 August one-time release waiver:** authenticated staging-role QA is waived for v2.1.1 only. No production-authenticated test and no database migration are performed. All later releases remain staging-gated.
+- The v2.1.2 source gate includes 194 tests, typecheck, lint, production build, PWA verification, local build provenance, disposable Supabase/pgTAP validation, and live production verification. The release workflow repeats those checks under the pinned Node.js 22.x and pnpm 10.4.1 toolchain.
+- **27 August one-time release waiver:** authenticated staging-role QA is waived for v2.1.1 only. No production-authenticated test and no database migration are performed.
+- **2 September one-time release waiver:** authenticated staging-role QA is waived for v2.1.2 only because the isolated staging environment was not yet provisioned. No database migration and no authenticated production test are performed; the release is verified against live production provenance after the Vercel Git integration deploys `master`. The exception does not apply to any later tag.
 - Do not announce v2.1.2 until the live `/build-info.json` reports v2.1.2 and the exact `v2.1.2` tag commit.

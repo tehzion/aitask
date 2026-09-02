@@ -17,8 +17,12 @@ number remain uniquely identifiable.
 
 ### Changed
 
-- Later releases now use only the staging-first tagged production gate; the
-  historical v2.1.1 direct-production exception has been removed.
+- Later releases use the staging-first tagged production gate; the historical
+  v2.1.1 direct-production exception has been removed.
+- v2.1.2 was itself released through a one-time direct-production gate because
+  the isolated staging environment was not yet provisioned. It performs no
+  database migration and no authenticated production test; the exception does
+  not apply to any later tag.
 - No database migration or public API change is included in this release.
 
 ## [2.1.1] - 2026-08-27
