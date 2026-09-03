@@ -1,9 +1,9 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "production_aligned_postflight_verified",
-  "metadataOnly": true,
-  "warning": "Production migration history contains every repository migration through 20260826230000. Do not run migration repair or reapply the rollout migrations. The client-read privacy migration, logical backup restore, and production postflight are verified.",
+  "status": "production_aligned_through_20260826230000_new_migration_pending",
+  "metadataOnly": false,
+  "warning": "Production migration history is verified through 20260826230000_client_read_privacy. Do not repair or reapply that historical rollout. Apply 20260903160806_harden_staff_command_authorization as a normal forward migration after its release gate passes.",
   "productionVerification": {
     "verifiedAt": "2026-08-27",
     "historyThrough": "20260826230000_client_read_privacy",
@@ -155,6 +155,6 @@
     }
   ],
   "expectedDryRunMigrations": [
-    "20260826230000_client_read_privacy"
+    "20260903160806_harden_staff_command_authorization"
   ]
 }

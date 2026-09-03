@@ -2631,12 +2631,13 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'You do not have permission to delete this task.' };
         }
 
-        const notifications = currentUser.role !== 'Admin'
+        const serverGeneratesStaffDeleteNotification = shouldUseSecureSupabase() && currentUser.role === 'Staff';
+        const notifications = currentUser.role !== 'Admin' && !serverGeneratesStaffDeleteNotification
           ? [makeNotification({
               targetRole: 'Admin' as Role,
               title: 'Task Deleted',
               message: `${currentUser.name} deleted "${task.title}".`,
-              route: { page: 'tasks' },
+              route: { page: 'tasks', entityId: taskId },
               iconType: 'alert' as const
             })]
           : [];
