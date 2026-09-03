@@ -31,8 +31,6 @@ jobs:
     steps:
       - name: Map release version
         run: echo "RELEASE_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
-
-    steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
