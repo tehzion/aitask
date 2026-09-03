@@ -47,6 +47,11 @@ number remain uniquely identifiable.
   the isolated staging environment was not yet provisioned. It performs no
   database migration and no authenticated production test; the exception does
   not apply to any later tag.
+- v2.1.3 also uses the one-time direct-production gate because staging is still
+  not provisioned. This release **does** include a database migration (the staff
+  command authorization hardening); it is validated in the disposable-stack
+  pgTAP gate before the release proceeds, and no authenticated production test
+  is performed. The exception does not apply to any later tag.
 - No database migration or public API change is included in this release.
 
 ## [2.1.1] - 2026-08-27
