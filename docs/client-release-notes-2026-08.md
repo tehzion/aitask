@@ -1,6 +1,11 @@
 # AiTask client release notes
 
-**Coverage:** the four latest client releases: v2.1.2 (2 September 2026), v2.1.1 (27 August 2026), v2.0.0 (21 August 2026), and v1.6.18 (9 August 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+**Coverage:** the latest client releases: v2.1.3 (3 September 2026), v2.1.2 (2 September 2026), v2.1.1 (27 August 2026), and v2.0.0 (21 August 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+
+## v2.1.3 — 3 September 2026
+
+- **Safer permissions for staff work.** The agency, its staff, and its reviewers keep a clearer boundary: staff can create and update work within their own assignments, and service delivery records accept only execution changes staff are allowed to make.
+- **Trusted, task-linked notifications.** When work moves, the notification is linked to that task so staff see only relevant updates and unrelated notices are blocked.
 
 ## v2.1.2 — 2 September 2026
 

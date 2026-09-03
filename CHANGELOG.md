@@ -4,6 +4,30 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [2.1.3] - 2026-09-03
+
+### Security
+
+- Hardened Staff command authorization at the database boundary: Staff may
+  create work only for themselves (or with the edit-tasks capability), may
+  update only execution fields on service records, and may emit only canonical
+  task-linked notifications. Task-deletion notifications are generated
+  server-side; standalone or off-target Staff notifications are rejected.
+- The first migration requires a database change and is applied through the
+  tagged release gate's disposable-stack pgTAP validation.
+
+### Added
+
+- Service catalog end-to-end coverage: creating a task workflow template, using
+  it in a package, and the delete guard for frozen workflows.
+- Boss overview "Monthly deliverables" and the registration approval flow are
+  now asserted by the smoke suite.
+
+### Changed
+
+- Service package and workflow template managers are fully translated to
+  Simplified Chinese and route saves through the unified save-retry path.
+
 ## [2.1.2] - 2026-09-02
 
 ### Fixed
