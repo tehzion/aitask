@@ -1079,6 +1079,7 @@ export const useStore = create<StoreState>()(
                 remoteUpdatedAt: secure.revision.updatedAt,
                 hasLocalChanges: Boolean(retained),
                 pendingMutations: retained ? 1 : 0,
+                pendingCommandType: retained ? retained.type : undefined,
                 upgradeRequired: !compatibility.compatible,
                 error: compatibility.compatible ? undefined : compatibility.error,
                 message: compatibility.compatible
@@ -1817,6 +1818,7 @@ export const useStore = create<StoreState>()(
                 remoteUpdatedAt: secure.revision.updatedAt,
                 lastPulledAt: new Date().toISOString(),
                 pendingMutations: hasRetainedChange ? 1 : 0,
+                pendingCommandType: hasRetainedChange ? retainedBeforeLogin?.type : undefined,
                 hasLocalChanges: hasRetainedChange,
                 upgradeRequired: !compatibility.compatible,
                 error: compatibility.compatible ? undefined : compatibility.error,
