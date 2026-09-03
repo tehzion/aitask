@@ -123,16 +123,22 @@ select is(
 
 select ok(
   position(
-    'for update' in pg_get_functiondef('public.aitask_execute_command(text,uuid,text,jsonb,bigint)'::regprocedure)
+    'aitask_execute_command_with_lock_before_staff_context'
+    in pg_get_functiondef('public.aitask_execute_command(text,uuid,text,jsonb,bigint)'::regprocedure)
+  ) > 0
+  and position(
+    'for update'
+    in pg_get_functiondef('public.aitask_execute_command_with_lock_before_staff_context(text,uuid,text,jsonb,bigint)'::regprocedure)
   ) > 0,
-  'command entry point locks the workspace row before checking the expected version'
+  'command entry point delegates to the workspace-lock implementation'
 );
 
 select ok(
   position(
-    '''entityType'', ''workspace''' in pg_get_functiondef('public.aitask_execute_command(text,uuid,text,jsonb,bigint)'::regprocedure)
+    '''entityType'', ''workspace'''
+    in pg_get_functiondef('public.aitask_execute_command_with_lock_before_staff_context(text,uuid,text,jsonb,bigint)'::regprocedure)
   ) > 0,
-  'command entry point returns a workspace-scoped conflict payload'
+  'delegated command implementation returns a workspace-scoped conflict payload'
 );
 
 select ok(
