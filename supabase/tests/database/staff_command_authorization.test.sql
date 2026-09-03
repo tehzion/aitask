@@ -315,22 +315,33 @@ select is(
     'pgtap-staff-authorization', gen_random_uuid(), 'comment.add',
     jsonb_build_array(
       jsonb_build_object(
+        'kind', 'entity', 'action', 'update', 'entityType', 'task',
+        'entityId', 'pgtap-assigned-task',
+        'expectedVersion', (select version from public.aitask_entities
+          where workspace_id = 'pgtap-staff-authorization'
+            and entity_type = 'task' and entity_id = 'pgtap-assigned-task'),
+        'data', (select data || jsonb_build_object('updatedAt', now())
+          from public.aitask_entities
+          where workspace_id = 'pgtap-staff-authorization'
+            and entity_type = 'task' and entity_id = 'pgtap-assigned-task')
+      ),
+      jsonb_build_object(
         'kind', 'entity', 'action', 'insert', 'entityType', 'comment',
-        'entityId', 'pgtap-coworker-comment', 'parentId', 'pgtap-coworker-task',
+        'entityId', 'pgtap-self-comment', 'parentId', 'pgtap-assigned-task',
         'expectedVersion', 0,
         'data', jsonb_build_object(
-          'id', 'pgtap-coworker-comment', 'taskId', 'pgtap-coworker-task',
-          'userId', 'pgtap-staff-actor', 'text', 'Reviewing for you',
+          'id', 'pgtap-self-comment', 'taskId', 'pgtap-assigned-task',
+          'userId', 'pgtap-staff-actor', 'text', 'A note on my task',
           'createdAt', now()
         )
       ),
       jsonb_build_object(
         'kind', 'entity', 'action', 'insert', 'entityType', 'notification',
-        'entityId', 'pgtap-coworker-comment-notice', 'expectedVersion', 0,
+        'entityId', 'pgtap-self-comment-notice', 'expectedVersion', 0,
         'data', jsonb_build_object(
-          'id', 'pgtap-coworker-comment-notice', 'targetUserId', 'pgtap-staff-coworker',
-          'title', 'New Comment', 'message', 'You have a new comment on "Coworker task".',
-          'route', jsonb_build_object('page', 'tasks', 'entityId', 'pgtap-coworker-task'),
+          'id', 'pgtap-self-comment-notice', 'targetUserId', 'pgtap-staff-actor',
+          'title', 'New Comment', 'message', 'You have a new comment on "Assigned task".',
+          'route', jsonb_build_object('page', 'tasks', 'entityId', 'pgtap-assigned-task'),
           'isRead', false, 'readByUserIds', jsonb_build_array(),
           'createdAt', now(), 'iconType', 'status'
         )
@@ -341,11 +352,65 @@ select is(
   'assignee-targeted New Comment from Staff is permitted'
 );
 
+-- A 'New Comment' targeted at a member who is not the task assignee is rejected.
+select is(
+  (public.aitask_execute_command(
+    'pgtap-staff-authorization', gen_random_uuid(), 'comment.add',
+    jsonb_build_array(
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'update', 'entityType', 'task',
+        'entityId', 'pgtap-assigned-task',
+        'expectedVersion', (select version from public.aitask_entities
+          where workspace_id = 'pgtap-staff-authorization'
+            and entity_type = 'task' and entity_id = 'pgtap-assigned-task'),
+        'data', (select data || jsonb_build_object('updatedAt', now())
+          from public.aitask_entities
+          where workspace_id = 'pgtap-staff-authorization'
+            and entity_type = 'task' and entity_id = 'pgtap-assigned-task')
+      ),
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'insert', 'entityType', 'comment',
+        'entityId', 'pgtap-bad-comment', 'parentId', 'pgtap-assigned-task',
+        'expectedVersion', 0,
+        'data', jsonb_build_object(
+          'id', 'pgtap-bad-comment', 'taskId', 'pgtap-assigned-task',
+          'userId', 'pgtap-staff-actor', 'text', 'Sneaky mention',
+          'createdAt', now()
+        )
+      ),
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'insert', 'entityType', 'notification',
+        'entityId', 'pgtap-bad-comment-notice', 'expectedVersion', 0,
+        'data', jsonb_build_object(
+          'id', 'pgtap-bad-comment-notice', 'targetUserId', 'pgtap-staff-coworker',
+          'title', 'New Comment', 'message', 'Sneaky mention',
+          'route', jsonb_build_object('page', 'tasks', 'entityId', 'pgtap-assigned-task'),
+          'isRead', false, 'readByUserIds', jsonb_build_array(),
+          'createdAt', now(), 'iconType', 'status'
+        )
+      )
+    )
+  ) ->> 'ok')::boolean,
+  false,
+  'a New Comment targeted at a non-assignee member is rejected'
+);
+
 -- A 'New Comment' targeted at an unrelated member is not a trusted shape.
 select is(
   (public.aitask_execute_command(
     'pgtap-staff-authorization', gen_random_uuid(), 'comment.add',
     jsonb_build_array(
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'update', 'entityType', 'task',
+        'entityId', 'pgtap-coworker-task',
+        'expectedVersion', (select version from public.aitask_entities
+          where workspace_id = 'pgtap-staff-authorization'
+            and entity_type = 'task' and entity_id = 'pgtap-coworker-task'),
+        'data', (select data || jsonb_build_object('updatedAt', now())
+          from public.aitask_entities
+          where workspace_id = 'pgtap-staff-authorization'
+            and entity_type = 'task' and entity_id = 'pgtap-coworker-task')
+      ),
       jsonb_build_object(
         'kind', 'entity', 'action', 'insert', 'entityType', 'comment',
         'entityId', 'pgtap-bad-comment', 'parentId', 'pgtap-coworker-task',
