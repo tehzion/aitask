@@ -83,6 +83,10 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(releaseNotice).toBeVisible();
   await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
 
+  await expect(page.getByRole('region', { name: /Service management overview/ })).toBeVisible();
+  await expect(page.getByText('Contracted monthly value', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Monthly deliverables' })).toBeVisible();
+
   await page.getByRole('tab', { name: 'Agency pulse' }).click();
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Needs attention' })).toBeVisible();
@@ -602,6 +606,31 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByText('View all tasks', { exact: true })).toBeVisible();
   await expect(page.getByText('View all clients', { exact: true })).toBeVisible();
   await expect(page.getByText('Manage assigned clients', { exact: true })).toBeVisible();
+
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    const kept = state.registrations.filter(reg => (
+      reg.id !== 'e2e-reg-qa'
+      && reg.name !== 'QA Staff Applicant'
+      && reg.email !== 'qa.staff@example.com'
+    ));
+    useStore.setState({
+      registrations: [{
+        id: 'e2e-reg-qa', name: 'QA Staff Applicant', email: 'qa.staff@example.com', phone: '+60120000000',
+        jobPosition: 'Designer', requestedRole: 'Staff', status: 'Pending',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      }, ...kept],
+    });
+  });
+  const applicantRow = page.locator('main').locator('tr').filter({ hasText: 'QA Staff Applicant' });
+  await expect(applicantRow.getByRole('button', { name: 'Approve' })).toBeVisible();
+  await applicantRow.getByRole('button', { name: 'Approve' }).click();
+  const approveDialog = page.getByRole('dialog', { name: 'Assign role and departments' });
+  await expect(approveDialog).toBeVisible();
+  await expect(approveDialog.getByLabel('System Role')).toHaveValue('Staff');
+  await approveDialog.getByRole('button', { name: 'Confirm & Approve' }).click();
+  await expect(approveDialog).toBeHidden();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/clients');
