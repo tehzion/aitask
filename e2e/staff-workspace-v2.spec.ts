@@ -38,6 +38,13 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   await expect(page.getByRole('link', { name: 'Schedule', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Inbox', exact: true })).toBeVisible();
 
+  const quickFilters = page.getByRole('group', { name: 'Quick task filters' });
+  if (await quickFilters.count().then(count => count > 0)) {
+    await expect(quickFilters.getByRole('button', { name: 'Due today' })).toBeVisible();
+    await expect(quickFilters.getByRole('button', { name: 'Overdue' })).toBeVisible();
+    await expect(quickFilters.getByRole('button', { name: 'Waiting approval' })).toBeVisible();
+  }
+
   if (hasCommittedVisualBaseline) {
     await expect(page).toHaveScreenshot('staff-v2-dashboard-desktop-light.png', screenshotOptions(page));
   }

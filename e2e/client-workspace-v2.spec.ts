@@ -34,13 +34,25 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
       updatedAt: '2026-08-26T08:00:00.000Z',
     };
     const foreignTask = { ...reviewTask, id: 'client-v2-foreign', clientName: 'Another Company', title: 'Private foreign delivery' };
+    const seededClientId = current.clients.find(item => item.clientName.trim().toLowerCase() === client.companyName?.trim().toLowerCase())?.id;
+    const now = new Date().toISOString();
+    const seededPlan = seededClientId ? {
+      id: 'e2e-cvp-plan', clientId: seededClientId, clientName: client.companyName || 'UrbanEats',
+      name: 'Growth Plan', origin: 'custom' as const, sourcePackageId: undefined, sourcePackageRevision: undefined,
+      revision: 1, status: 'Active' as const, currency: 'MYR' as const,
+      serviceItems: [{ id: 'e2e-svc', name: 'Short Video', platforms: ['TikTok'], unit: 'video', quantity: 2, unitPriceMinor: 0 }],
+      discountType: 'none' as const, discountValue: 0, taxRateBps: 0,
+      startDate: '2026-08-01', billingDay: 15, contractEndDate: '2027-08-14',
+      createdBy: contact.id, createdAt: now, updatedAt: now,
+    } : null;
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${client.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...client, mustResetPassword: false },
       tasks: [...current.tasks.filter(task => ![reviewTask.id, foreignTask.id].includes(task.id)), reviewTask, foreignTask],
+      clientPlans: seededPlan ? [...current.clientPlans.filter(plan => plan.id !== 'e2e-cvp-plan'), seededPlan] : current.clientPlans,
       backend: { ...current.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
-    return { clientId: current.clients.find(item => item.clientName.trim().toLowerCase() === client.companyName?.trim().toLowerCase())?.id };
+    return { clientId: seededClientId };
   });
 
   await page.goto('/');
@@ -67,6 +79,8 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
   await focus.getByRole('button', { name: 'Request changes' }).click();
   await expect(focus.getByRole('button', { name: 'Request changes' })).toHaveCount(0);
   await expect(focus.getByText('Review actions will appear when the delivery is ready.')).toBeVisible();
+  await expect(focus.getByText('Decision history')).toBeVisible();
+  await expect(focus.getByText('requested changes', { exact: false })).toBeVisible();
   await focus.getByRole('button', { name: 'Close', exact: true }).click();
 
   await page.goto('/tasks?taskId=client-v2-foreign');
@@ -86,6 +100,11 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
     await expect(page.getByRole('tab', { name: 'Services' })).toBeVisible();
     await expect(page.getByText(/linked task/i)).toHaveCount(0);
     await expect(page.getByText(/Internal monthly total/i)).toHaveCount(0);
+    await page.getByRole('tab', { name: 'Services' }).click();
+    await expect(page.getByText('Short Video', { exact: true }).first()).toBeVisible();
+    await expect(page.locator('main article').first().getByText(/video/)).toBeVisible();
+    await expect(page.getByText(/Billing day/)).toBeVisible();
+    await expect(page.getByText(/Day \d+/).first()).toBeVisible();
   }
 
   await page.getByRole('button', { name: '切换为中文' }).click();
