@@ -18,7 +18,7 @@ const blankPackage = (): Omit<ServicePackage, 'id' | 'revision' | 'createdAt' | 
 
 const ServicePackageManager = () => {
   const { t } = useI18n();
-  const { servicePackages, serviceWorkflowTemplates, saveServicePackage, deleteServicePackage, commitPendingMutation } = useStore();
+  const { servicePackages, serviceWorkflowTemplates, saveServicePackage, deleteServicePackage, retryPendingSave } = useStore();
   const [editingId, setEditingId] = React.useState<string>();
   const [draft, setDraft] = React.useState(blankPackage);
   const [message, setMessage] = React.useState('');
@@ -32,7 +32,7 @@ const ServicePackageManager = () => {
     const result = deleteServicePackage(pkg.id);
     if (!result.ok) return setMessage(result.error || 'Unable to delete the package.');
     setSaving(true);
-    const committed = await commitPendingMutation('service_package.manage');
+    const committed = await retryPendingSave('service_package.manage');
     setSaving(false);
     if (!committed.ok) {
       setMessage(committed.error || 'The deletion is waiting to be saved.');
@@ -68,7 +68,7 @@ const ServicePackageManager = () => {
     const result = saveServicePackage({ ...draft, id: editingId });
     if (!result.ok) return setMessage(result.error || 'Unable to save the package.');
     setSaving(true);
-    const committed = await commitPendingMutation('service_package.manage');
+    const committed = await retryPendingSave('service_package.manage');
     setSaving(false);
     if (!committed.ok) return setMessage(committed.error || 'The package is waiting to be saved.');
     edit();

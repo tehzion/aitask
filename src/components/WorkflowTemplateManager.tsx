@@ -25,7 +25,7 @@ const blankTemplate = (): Omit<ServiceWorkflowTemplate, 'id' | 'revision' | 'cre
 
 const WorkflowTemplateManager = () => {
   const { t } = useI18n();
-  const { serviceWorkflowTemplates, saveWorkflowTemplate, deleteWorkflowTemplate, commitPendingMutation } = useStore();
+  const { serviceWorkflowTemplates, saveWorkflowTemplate, deleteWorkflowTemplate, retryPendingSave } = useStore();
   const [editingId, setEditingId] = React.useState<string>();
   const [draft, setDraft] = React.useState(blankTemplate);
   const [message, setMessage] = React.useState('');
@@ -39,7 +39,7 @@ const WorkflowTemplateManager = () => {
     const result = deleteWorkflowTemplate(template.id);
     if (!result.ok) return setMessage(result.error || 'Unable to delete the workflow template.');
     setSaving(true);
-    const committed = await commitPendingMutation('service_workflow.manage');
+    const committed = await retryPendingSave('service_workflow.manage');
     setSaving(false);
     if (!committed.ok) {
       setMessage(committed.error || 'The deletion is waiting to be saved.');
@@ -78,7 +78,7 @@ const WorkflowTemplateManager = () => {
     const result = saveWorkflowTemplate({ ...draft, id: editingId });
     if (!result.ok) return setMessage(result.error || 'Unable to save the workflow template.');
     setSaving(true);
-    const committed = await commitPendingMutation('service_workflow.manage');
+    const committed = await retryPendingSave('service_workflow.manage');
     setSaving(false);
     if (!committed.ok) return setMessage(committed.error || 'The workflow is waiting to be saved.');
     edit();
