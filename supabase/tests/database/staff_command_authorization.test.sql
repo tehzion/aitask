@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(25);
 
 select has_function(
   'private',
@@ -306,6 +306,72 @@ select is(
   'the database creates one canonical Admin notice for a Staff task deletion'
 );
 set local role authenticated;
+
+-- The store emits a 'New Comment' notification targeted at the task assignee
+-- whenever Staff comment on a task assigned to someone else (editTasks scope).
+-- The guard must accept this trusted shape, not reject the whole command.
+select is(
+  (public.aitask_execute_command(
+    'pgtap-staff-authorization', gen_random_uuid(), 'comment.add',
+    jsonb_build_array(
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'insert', 'entityType', 'comment',
+        'entityId', 'pgtap-coworker-comment', 'parentId', 'pgtap-coworker-task',
+        'expectedVersion', 0,
+        'data', jsonb_build_object(
+          'id', 'pgtap-coworker-comment', 'taskId', 'pgtap-coworker-task',
+          'userId', 'pgtap-staff-actor', 'text', 'Reviewing for you',
+          'createdAt', now()
+        )
+      ),
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'insert', 'entityType', 'notification',
+        'entityId', 'pgtap-coworker-comment-notice', 'expectedVersion', 0,
+        'data', jsonb_build_object(
+          'id', 'pgtap-coworker-comment-notice', 'targetUserId', 'pgtap-staff-coworker',
+          'title', 'New Comment', 'message', 'You have a new comment on "Coworker task".',
+          'route', jsonb_build_object('page', 'tasks', 'entityId', 'pgtap-coworker-task'),
+          'isRead', false, 'readByUserIds', jsonb_build_array(),
+          'createdAt', now(), 'iconType', 'status'
+        )
+      )
+    )
+  ) ->> 'ok')::boolean,
+  true,
+  'assignee-targeted New Comment from Staff is permitted'
+);
+
+-- A 'New Comment' targeted at an unrelated member is not a trusted shape.
+select is(
+  (public.aitask_execute_command(
+    'pgtap-staff-authorization', gen_random_uuid(), 'comment.add',
+    jsonb_build_array(
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'insert', 'entityType', 'comment',
+        'entityId', 'pgtap-bad-comment', 'parentId', 'pgtap-coworker-task',
+        'expectedVersion', 0,
+        'data', jsonb_build_object(
+          'id', 'pgtap-bad-comment', 'taskId', 'pgtap-coworker-task',
+          'userId', 'pgtap-staff-actor', 'text', 'Sneaky mention',
+          'createdAt', now()
+        )
+      ),
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'insert', 'entityType', 'notification',
+        'entityId', 'pgtap-bad-comment-notice', 'expectedVersion', 0,
+        'data', jsonb_build_object(
+          'id', 'pgtap-bad-comment-notice', 'targetUserId', 'pgtap-staff-actor',
+          'title', 'New Comment', 'message', 'Sneaky mention',
+          'route', jsonb_build_object('page', 'tasks', 'entityId', 'pgtap-coworker-task'),
+          'isRead', false, 'readByUserIds', jsonb_build_array(),
+          'createdAt', now(), 'iconType', 'status'
+        )
+      )
+    )
+  ) ->> 'ok')::boolean,
+  false,
+  'a New Comment targeted at an unrelated member is rejected'
+);
 
 select is(
   (public.aitask_execute_command(

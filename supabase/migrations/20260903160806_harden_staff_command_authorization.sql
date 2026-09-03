@@ -249,6 +249,9 @@ begin
       and v_command_type in ('task.update', 'workspace.patch')
       and coalesce(v_task ->> 'status', '') in ('Completed', 'Waiting Approval')
       then '"' || left(coalesce(v_task ->> 'title', 'Task'), 160) || '" is ready for client review.'
+    when v_title = 'New Comment' and v_target_user is not null
+      and v_command_type in ('comment.add', 'workspace.patch')
+      then 'You have a new comment on "' || left(coalesce(v_task ->> 'title', 'Task'), 160) || '".'
     when v_title = 'New Comment' and v_target_role = 'Admin'
       and v_command_type in ('comment.add', 'workspace.patch')
       then v_actor_name || ' commented on "' || left(coalesce(v_task ->> 'title', 'Task'), 160) || '".'
