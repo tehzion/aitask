@@ -40,17 +40,25 @@ if (manifest.projectRef !== expectedProjectRef) {
   fail(`Manifest project ref ${manifest.projectRef || '(missing)'} does not match ${expectedProjectRef}.`);
 }
 
-const expectedMigrations = manifest.expectedDryRunMigrations;
-if (!Array.isArray(expectedMigrations) || expectedMigrations.length === 0) {
-  fail('The repair manifest must define at least one expected dry-run migration.');
+const validatedMigrations = manifest.validatedMigrationTail;
+if (!Array.isArray(validatedMigrations) || validatedMigrations.length === 0) {
+  fail('The repair manifest must define at least one validated migration tail entry.');
+}
+
+const pendingProductionMigrations = manifest.pendingProductionMigrations;
+if (!Array.isArray(pendingProductionMigrations)) {
+  fail('The repair manifest must define pendingProductionMigrations as an array.');
+}
+if (pendingProductionMigrations.some((migration) => !validatedMigrations.includes(migration))) {
+  fail('Every pending production migration must be present in the validated migration tail.');
 }
 
 const migrationNames = readdirSync(join(supabaseSource, 'migrations'))
   .filter((name) => name.endsWith('.sql'))
   .map((name) => name.slice(0, -4))
   .sort();
-const migrationTail = migrationNames.slice(-expectedMigrations.length);
-if (JSON.stringify(migrationTail) !== JSON.stringify(expectedMigrations)) {
+const migrationTail = migrationNames.slice(-validatedMigrations.length);
+if (JSON.stringify(migrationTail) !== JSON.stringify(validatedMigrations)) {
   fail(`Migration tail does not match the repair manifest. Found: ${migrationTail.join(', ')}`);
 }
 
@@ -92,7 +100,7 @@ const supabase = (...args) => run(supabaseCli, ['--workdir', validationRoot, ...
 });
 
 try {
-  console.log(`[rollout] Validating ${expectedMigrations.join(', ')} in ${validationRoot}`);
+  console.log(`[rollout] Validating ${validatedMigrations.join(', ')} in ${validationRoot}`);
   run(supabaseCli, ['--workdir', validationRoot, 'start'], {
     cwd: validationRoot,
     capture: true,

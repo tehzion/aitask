@@ -98,8 +98,11 @@ operations.
 4. Only after equivalence is proven, mark the equivalent local versions applied
    and the superseded remote-only versions reverted in migration history.
 5. Run migration list and a database-push dry run.
-6. Abort unless the dry run lists exactly the five entries in
-   `expectedDryRunMigrations`, in that order.
+6. Abort unless the dry run lists exactly the entries in
+   `pendingProductionMigrations`, in that order. The separately recorded
+   `validatedMigrationTail` identifies the migration tail covered by the clean
+   replay, pgTAP, lint, advisor, and postflight gate; an empty pending list means
+   production is already aligned.
 
 Do not run the five migration files manually and do not edit production data to
 make the history appear aligned.
@@ -107,7 +110,7 @@ make the history appear aligned.
 ## 4. Rollout and validation
 
 1. Keep secure workspaces in `upgrade_required` read-only mode.
-2. Apply the five migrations sequentially, without seed data.
+2. Apply the pending migrations sequentially, without seed data.
 3. Reload the PostgREST schema cache after the final migration.
 4. Run `supabase/preflight/service_rollout_postflight.sql` and compare counts and
    business checksums with the saved preflight output.

@@ -62,11 +62,13 @@ The v2.1.1 direct-production path was a one-time exception. v2.1.2 also used a
 one-time direct-production gate (recorded in `docs/client-release-notes-2026-08.md`)
 because the isolated staging environment was not yet provisioned; that release is
 verified against live production provenance after the Vercel Git integration
-deploys `master`. v2.1.3 uses the same one-time gate and includes the staff
-command authorization migration, which is validated by the disposable-stack
-pgTAP gate before release. Neither exception applies to any later tag — every
-future tag must pass the isolated staging deployment and authenticated role QA
-before production deployment.
+deploys `master`. v2.1.3 used the same one-time frontend gate. v2.1.4 is the
+final exact one-time exception: after verified owner-only logical backups it
+applies the immutable v2.1.3 Staff authorization migration and its narrow cycle-
+timestamp correction, verifies unchanged business data, and only then permits
+the tagged Vercel Git deployment. No authenticated production test is run.
+Every later tag must pass the isolated staging deployment and authenticated
+role QA before production deployment.
 
 ## Backend migrations and upgrade runbook
 

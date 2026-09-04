@@ -1,4 +1,4 @@
--- Read-only verification after the five production migrations are committed.
+-- Read-only verification after the pending production migrations are committed.
 
 select jsonb_build_object(
   'tasks', count(*) filter (where entity_type = 'task'),

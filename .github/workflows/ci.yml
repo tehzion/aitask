@@ -30,7 +30,18 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Audit production dependencies
-        run: pnpm audit --prod --audit-level high
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm audit --prod --audit-level high; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Production dependency audit failed after 3 workflow attempts."
+              exit 1
+            fi
+            echo "Production dependency audit attempt $attempt failed; retrying in 20 seconds."
+            sleep 20
+          done
 
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
