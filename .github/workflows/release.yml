@@ -73,7 +73,12 @@ jobs:
 
       - name: Run the complete source and build gate
         run: |
-          pnpm audit --prod --audit-level high
+          for attempt in 1 2 3; do
+            if pnpm audit --prod --audit-level high; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            echo "Production dependency audit attempt $attempt failed; retrying in 20 seconds."
+            sleep 20
+          done
           pnpm check
           pnpm lint
           pnpm test
@@ -258,7 +263,12 @@ jobs:
 
       - name: Run complete source and build gate
         run: |
-          pnpm audit --prod --audit-level high
+          for attempt in 1 2 3; do
+            if pnpm audit --prod --audit-level high; then break; fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            echo "Production dependency audit attempt $attempt failed; retrying in 20 seconds."
+            sleep 20
+          done
           pnpm check
           pnpm lint
           pnpm test
