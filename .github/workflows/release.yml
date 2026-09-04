@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   one-time-direct-production:
-    if: github.ref_name == 'v2.1.2' || github.ref_name == 'v2.1.3'
+    if: github.ref_name == 'v2.1.2' || github.ref_name == 'v2.1.3' || github.ref_name == 'v2.1.4'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
@@ -64,6 +64,9 @@ jobs:
           test "$(git rev-parse origin/master)" = "$GITHUB_SHA"
           grep -F "## [$RELEASE_VERSION]" CHANGELOG.md
           grep -F "## v$RELEASE_VERSION" docs/client-release-notes-2026-08.md
+          if [ "$GITHUB_REF_NAME" = "v2.1.4" ]; then
+            node scripts/verify-release-db-alignment.mjs
+          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -89,6 +92,20 @@ jobs:
           pnpm test:e2e:pwa
           pnpm test:e2e
           pnpm test:e2e:login-i18n
+
+      - name: Capture production rollback provenance
+        run: |
+          mkdir -p release-evidence
+          curl --fail --silent --show-error "$PRODUCTION_URL/build-info.json" \
+            --output release-evidence/rollback-build-info.json
+          rollback_version="$(jq -r '.version // empty' release-evidence/rollback-build-info.json)"
+          rollback_commit="$(jq -r '.commit // empty' release-evidence/rollback-build-info.json)"
+          test -n "$rollback_version"
+          test -n "$rollback_commit"
+          pnpm verify:release-provenance -- \
+            --file release-evidence/rollback-build-info.json \
+            --version "$rollback_version" \
+            --commit "$rollback_commit"
 
       - name: Wait for the Vercel Git production deployment
         run: |
@@ -165,7 +182,7 @@ jobs:
           retention-days: 90
 
   validate-stage-and-release:
-    if: github.ref_name != 'v2.1.2' && github.ref_name != 'v2.1.3'
+    if: github.ref_name != 'v2.1.2' && github.ref_name != 'v2.1.3' && github.ref_name != 'v2.1.4'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -234,7 +251,7 @@ jobs:
           case "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" in sb_publishable_*) ;; *) exit 1 ;; esac
           git fetch origin master --no-tags
           test "$(git rev-parse origin/master)" = "$GITHUB_SHA"
-          test -z "$(git diff --name-only v2.1.1..HEAD -- supabase/migrations)"
+          node scripts/verify-release-db-alignment.mjs
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -355,13 +372,19 @@ jobs:
           mkdir -p release-evidence
           curl --fail --silent --show-error "$PRODUCTION_URL/build-info.json" \
             --output release-evidence/rollback-build-info.json
+          rollback_version="$(jq -r '.version // empty' release-evidence/rollback-build-info.json)"
+          rollback_commit="$(jq -r '.commit // empty' release-evidence/rollback-build-info.json)"
+          test -n "$rollback_version"
+          test -n "$rollback_commit"
           node scripts/verify-release-provenance.mjs \
             --file release-evidence/rollback-build-info.json \
-            --version 2.1.1 \
-            --commit c1f0a34d1c22800020467a25de7c78dd2ec9aacd
+            --version "$rollback_version" \
+            --commit "$rollback_commit"
           rollback_url="$(pnpm dlx "vercel@$VERCEL_CLI_VERSION" inspect "$PRODUCTION_URL" --json --token="$VERCEL_TOKEN" | jq -r '.url')"
           case "$rollback_url" in *.vercel.app) ;; *) echo "Unable to capture the production rollback URL."; exit 1 ;; esac
           printf 'url=https://%s\n' "$rollback_url" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "$rollback_version" >> "$GITHUB_OUTPUT"
+          printf 'commit=%s\n' "$rollback_commit" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$rollback_url" > release-evidence/rollback-deployment-url.txt
 
       - name: Pull production environment
@@ -438,8 +461,8 @@ jobs:
         run: |
           pnpm dlx "vercel@$VERCEL_CLI_VERSION" rollback "${{ steps.rollback.outputs.url }}" --token="$VERCEL_TOKEN"
           pnpm verify:release-provenance -- --url "$PRODUCTION_URL" \
-            --version 2.1.1 \
-            --commit c1f0a34d1c22800020467a25de7c78dd2ec9aacd
+            --version "${{ steps.rollback.outputs.version }}" \
+            --commit "${{ steps.rollback.outputs.commit }}"
 
       - name: Retain release evidence
         if: always()

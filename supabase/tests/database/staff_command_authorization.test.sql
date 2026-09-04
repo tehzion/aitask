@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(29);
 
 select has_function(
   'private',
@@ -203,12 +203,28 @@ select is(
     jsonb_build_array(jsonb_build_object(
       'kind', 'entity', 'action', 'update', 'entityType', 'service_cycle', 'entityId', 'pgtap-cycle',
       'parentId', null, 'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-staff-authorization' and entity_type = 'service_cycle' and entity_id = 'pgtap-cycle'),
-      'data', (select data || jsonb_build_object('status', 'Published', 'updatedAt', now()) from public.aitask_entities where workspace_id = 'pgtap-staff-authorization' and entity_type = 'service_cycle' and entity_id = 'pgtap-cycle')
+      'data', (select data || jsonb_build_object('status', 'Published', 'publishedAt', now(), 'updatedAt', now()) from public.aitask_entities where workspace_id = 'pgtap-staff-authorization' and entity_type = 'service_cycle' and entity_id = 'pgtap-cycle')
     )), null
   ) ->> 'ok')::boolean,
   false,
   'scoped Staff cannot publish a service cycle through the RPC'
 );
+
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claim.role', '', true);
+update public.aitask_entities
+set data = data || jsonb_build_object(
+  'status', 'Published',
+  'publishedAt', '2099-01-14T00:00:00.000Z',
+  'updatedAt', '2099-01-14T00:00:00.000Z'
+)
+where workspace_id = 'pgtap-staff-authorization'
+  and entity_type = 'service_cycle'
+  and entity_id = 'pgtap-cycle';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000912', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
 
 select is(
   (public.aitask_execute_service_command(
@@ -249,6 +265,50 @@ select is(
   ) ->> 'ok')::boolean,
   true,
   'scoped Staff can still update assigned deliverable progress'
+);
+
+select is(
+  (public.aitask_execute_service_command(
+    'pgtap-staff-authorization', gen_random_uuid(), 'deliverable.manage',
+    jsonb_build_array(
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'update', 'entityType', 'deliverable', 'entityId', 'pgtap-deliverable',
+        'parentId', 'pgtap-cycle', 'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-staff-authorization' and entity_type = 'deliverable' and entity_id = 'pgtap-deliverable'),
+        'data', (select data || jsonb_build_object('status', 'Delivered', 'updatedAt', '2099-01-15T00:00:00.000Z') from public.aitask_entities where workspace_id = 'pgtap-staff-authorization' and entity_type = 'deliverable' and entity_id = 'pgtap-deliverable')
+      ),
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'update', 'entityType', 'service_cycle', 'entityId', 'pgtap-cycle',
+        'parentId', null, 'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-staff-authorization' and entity_type = 'service_cycle' and entity_id = 'pgtap-cycle'),
+        'data', (select data || jsonb_build_object('status', 'Completed', 'publishedAt', '2099-01-15T00:00:00.000Z', 'updatedAt', '2099-01-15T00:00:00.000Z') from public.aitask_entities where workspace_id = 'pgtap-staff-authorization' and entity_type = 'service_cycle' and entity_id = 'pgtap-cycle')
+      )
+    ), null
+  ) ->> 'ok')::boolean,
+  true,
+  'scoped Staff can complete an assigned deliverable and persist the derived cycle transition with publishedAt'
+);
+
+reset role;
+select is(
+  (select jsonb_build_object('status', data ->> 'status', 'publishedAt', data ->> 'publishedAt')
+   from public.aitask_entities
+   where workspace_id = 'pgtap-staff-authorization'
+     and entity_type = 'service_cycle' and entity_id = 'pgtap-cycle'),
+  jsonb_build_object('status', 'Completed', 'publishedAt', '2099-01-15T00:00:00.000Z'),
+  'the derived cycle transition stores its status and publishedAt timestamp'
+);
+set local role authenticated;
+
+select is(
+  (public.aitask_execute_service_command(
+    'pgtap-staff-authorization', gen_random_uuid(), 'service_cycle.manage',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'update', 'entityType', 'service_cycle', 'entityId', 'pgtap-cycle',
+      'parentId', null, 'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-staff-authorization' and entity_type = 'service_cycle' and entity_id = 'pgtap-cycle'),
+      'data', (select data || jsonb_build_object('status', 'Published', 'publishedAt', '2099-01-16T00:00:00.000Z', 'clientName', 'Forged Client', 'updatedAt', '2099-01-16T00:00:00.000Z') from public.aitask_entities where workspace_id = 'pgtap-staff-authorization' and entity_type = 'service_cycle' and entity_id = 'pgtap-cycle')
+    )), null
+  ) ->> 'ok')::boolean,
+  false,
+  'scoped Staff cannot change unrelated cycle fields during an otherwise valid derived transition'
 );
 
 select is(

@@ -345,8 +345,8 @@ begin
 
   if v_entity_type = 'service_cycle' then
     if tg_op <> 'UPDATE'
-      or (old.data - array['status', 'publishedAt', 'updatedAt']::text[])
-        is distinct from (new.data - array['status', 'publishedAt', 'updatedAt']::text[]) then
+      or (old.data - array['status', 'updatedAt']::text[])
+        is distinct from (new.data - array['status', 'updatedAt']::text[]) then
       raise check_violation using message = 'Staff cannot administer service cycles.';
     end if;
 

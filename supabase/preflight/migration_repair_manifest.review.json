@@ -1,9 +1,9 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "production_aligned_through_20260826230000_new_migration_pending",
+  "status": "production_aligned_through_20260826230000_two_forward_migrations_pending",
   "metadataOnly": false,
-  "warning": "Production migration history is verified through 20260826230000_client_read_privacy. Do not repair or reapply that historical rollout. Apply 20260903160806_harden_staff_command_authorization as a normal forward migration after its release gate passes.",
+  "warning": "Production migration history is verified through 20260826230000_client_read_privacy. Do not repair or reapply that historical rollout. Apply the two pending migrations in order as normal forward migrations only after the v2.1.4 release gate passes.",
   "productionVerification": {
     "verifiedAt": "2026-08-27",
     "historyThrough": "20260826230000_client_read_privacy",
@@ -154,7 +154,12 @@
       "remoteVersions": ["20260802044305"]
     }
   ],
-  "expectedDryRunMigrations": [
-    "20260903160806_harden_staff_command_authorization"
+  "validatedMigrationTail": [
+    "20260903160806_harden_staff_command_authorization",
+    "20260904104435_allow_staff_cycle_published_at"
+  ],
+  "pendingProductionMigrations": [
+    "20260903160806_harden_staff_command_authorization",
+    "20260904104435_allow_staff_cycle_published_at"
   ]
 }

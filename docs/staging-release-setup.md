@@ -27,8 +27,10 @@ Store account credentials in the `STAGING_QA_*_EMAIL` and `STAGING_QA_*_PASSWORD
 
 ## 4. Release and rollback
 
-The v2.1.1 tag was a historical one-time direct-production exception. That job
-has been removed; v2.1.2 and every later release use the staging-first path.
+The v2.1.1, v2.1.2, and v2.1.3 tags were historical one-time direct-production
+exceptions. v2.1.4 is the final exact exception and may proceed only after its
+two pending production migrations and business-data integrity checks pass.
+Every later release uses the staging-first path.
 
 For every later release:
 
@@ -39,4 +41,10 @@ For every later release:
 
 ## 5. Supabase evidence
 
-Production is already aligned through `20260826230000_client_read_privacy`. Do not use migration repair or manually replay migrations. Each release still runs the disposable local migration/pgTAP/advisor gate, the staging authenticated suite, and the anonymous production security verifier.
+Production alignment is recorded explicitly in
+`supabase/preflight/migration_repair_manifest.review.json`. Do not use migration
+repair or manually replay migrations: apply only the ordered entries in
+`pendingProductionMigrations`, and require that list to be empty before creating
+a release tag. Each release still runs the disposable local migration/pgTAP/
+advisor gate, the staging authenticated suite, and the anonymous production
+security verifier.

@@ -4,6 +4,30 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [2.1.4] - 2026-09-04
+
+### Fixed
+
+- Staff deliverable completion can now save its automatically derived service-
+  cycle status together with `publishedAt`, preventing valid progress updates
+  from failing at the database boundary.
+- Manual cycle publication and unrelated service-cycle field changes remain
+  rejected for Staff users.
+
+### Security
+
+- Completes the production rollout of the Staff command-authorization boundary
+  introduced in v2.1.3, using the immutable v2.1.3 migration followed by a
+  narrowly scoped forward correction. No business-data transformation is
+  included.
+
+### Release
+
+- v2.1.4 uses an exact one-time direct-production gate after verified logical
+  schema and data backups, an exact two-migration dry run, production migration
+  verification, and unchanged business-data checks. Authenticated production
+  testing remains disabled. All later tags remain staging-gated.
+
 ## [2.1.3] - 2026-09-03
 
 ### Security
@@ -13,8 +37,8 @@ number remain uniquely identifiable.
   update only execution fields on service records, and may emit only canonical
   task-linked notifications. Task-deletion notifications are generated
   server-side; standalone or off-target Staff notifications are rejected.
-- The first migration requires a database change and is applied through the
-  tagged release gate's disposable-stack pgTAP validation.
+- The authorization migration was validated in the tagged release gate's
+  disposable database suite; its production rollout is completed by v2.1.4.
 
 ### Added
 
