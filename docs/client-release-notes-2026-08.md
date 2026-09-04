@@ -1,6 +1,13 @@
 # AiTask client release notes
 
-**Coverage:** the latest client releases: v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), v2.1.2 (2 September 2026), and v2.1.1 (27 August 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+**Coverage:** the latest client releases: v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+
+## v2.1.5 — 5 September 2026
+
+- **More confidence in account setup.** Secure first-login password setup now has deeper automated checks covering completion, safe retry, and account readiness.
+- **Verified role-based reporting.** Account team reports are checked to include assigned work while excluding work outside the user’s role and responsibilities.
+- **Verified client approvals.** Client delivery approval is checked through submission, confirmation history, and refresh so the decision remains reliable.
+- **Release-assurance update.** This release adds testing and deployment safeguards without changing client workflows, public interfaces, or production data.
 
 ## v2.1.4 — 4 September 2026
 
@@ -55,6 +62,7 @@
 
 | Release | Formal release commit | Verification basis |
 | --- | --- | --- |
+| v2.1.5 | Release tag `v2.1.5` | Password-setup RPC authorization and idempotency, Account report isolation, persisted client approval, authenticated staging QA, and automatic `master` deployment provenance. |
 | v2.1.4 | Release tag `v2.1.4` | Staff cycle-progress correction, complete Staff authorization rollout, immutable forward migrations, production data-integrity checks, and exact deployment provenance; authenticated staging QA waived by the exact one-time direct-production gate. |
 | v2.1.3 | Release tag `v2.1.3` | Staff command authorization, canonical task-linked notifications, service-catalog flows, Boss deliverables, registration approval, and Chinese coverage. |
 | v2.1.2 | Release tag `v2.1.2` | Shared save/retry recovery, typed resubmission, original-error preservation, and production provenance; staging QA waived by one-time direct-production gate. |
@@ -69,4 +77,4 @@
 - **2 September one-time release waiver:** authenticated staging-role QA is waived for v2.1.2 only because the isolated staging environment was not yet provisioned. No database migration and no authenticated production test are performed; the release is verified against live production provenance after the Vercel Git integration deploys `master`. The exception does not apply to any later tag.
 - **3 September one-time release waiver:** authenticated staging-role QA is waived for v2.1.3 for the same reason. v2.1.3 includes the staff command authorization migration, which is validated by the disposable-stack pgTAP gate before release; no authenticated production test is performed. The exception does not apply to any later tag.
 - **4 September one-time release waiver:** authenticated staging-role QA is waived for v2.1.4 only. The two forward migrations are backed up, applied, and verified before the tag is created; no authenticated production test or business-data transformation is performed. Every later tag remains blocked on isolated staging.
-- Do not announce v2.1.4 until the production migration history is aligned and live `/build-info.json` reports v2.1.4 with the exact `v2.1.4` tag commit.
+- **5 September release policy:** reviewed `master` updates continue to deploy automatically to production. Pull requests must pass isolated authenticated staging QA before merge, and release tags verify the exact deployed commit afterward.

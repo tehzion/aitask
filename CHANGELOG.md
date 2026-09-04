@@ -4,6 +4,27 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [2.1.5] - 2026-09-05
+
+### Quality
+
+- Added database-level verification for secure first-login password completion,
+  including authorization, one-time workspace revision, audit history, and safe
+  repeated submission.
+- Added browser coverage for Account-role report isolation and persistent client
+  delivery approval, plus authenticated staging coverage of the real hosted
+  password form.
+
+### Release
+
+- Pull requests now run authenticated QA against the isolated staging projects
+  before merge. The tagged workflow repeats the full gate and verifies the exact
+  commit deployed automatically from `master`.
+- Historical direct-production exceptions were removed. Production continues to
+  deploy automatically from reviewed `master` updates, as requested.
+- No application feature, public API, database migration, or production-data
+  change is included in this assurance release.
+
 ## [2.1.4] - 2026-09-04
 
 ### Fixed

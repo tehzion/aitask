@@ -33,6 +33,9 @@ const signIn = async (page: Page, role: QaRole) => {
   if (/\/settings$/.test(page.url())) {
     throw new Error(`${role} staging account requires a password reset and cannot be used for release verification.`);
   }
+  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
+  await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
+  if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
 };
 
 const advanceClientWizard = async (page: Page, clientName: string) => {
@@ -85,6 +88,21 @@ test('internal roles can follow the deterministic delivery task chain', async ({
   }
 });
 
+test('Account reports remain scoped to assigned work', async ({ page }) => {
+  await signIn(page, 'ACCOUNT');
+  await page.goto('/reports');
+  const reportHeading = page.getByRole('heading', { name: 'Four-Week Performance Report' });
+  await expect(reportHeading).toBeVisible();
+  await expect(reportHeading.locator('..').getByText('your accessible workspace tasks', { exact: false })).toBeVisible();
+
+  const pendingMetric = page.getByText('Pending', { exact: true }).locator('..');
+  await expect(pendingMetric.getByText('1', { exact: true })).toBeVisible();
+  const accountRow = page.getByRole('row').filter({ hasText: 'Account & Finance' });
+  await expect(accountRow).toContainText('1');
+  await expect(page.getByRole('row').filter({ hasText: 'Video Editor' })).toHaveCount(0);
+  await expect(page.getByRole('row').filter({ hasText: 'Operation' })).toHaveCount(0);
+});
+
 test('client workspace, review actions, isolation, and notification read state work', async ({ page }) => {
   await signIn(page, 'CLIENT');
 
@@ -109,6 +127,11 @@ test('client workspace, review actions, isolation, and notification read state w
   await expect(approval).toBeVisible();
   await approval.getByRole('button', { name: 'Approve' }).click();
   await expect(approval.getByText('Approved', { exact: true })).toBeVisible();
+  await page.reload();
+  const persistedApproval = page.getByRole('dialog', { name: 'Delivery details' });
+  await expect(persistedApproval).toBeVisible();
+  await expect(persistedApproval.getByText('Approved', { exact: true })).toBeVisible();
+  await expect(persistedApproval.getByRole('button', { name: 'Approve' })).toHaveCount(0);
 
   await page.goto('/notifications');
   const notificationTitle = page.getByRole('heading', { name: 'Release QA delivery ready' });
@@ -141,4 +164,36 @@ test('an interrupted client-plan save retries the same change without a duplicat
 
   await page.goto('/clients');
   await expect(page.getByText('Release QA Retry Client', { exact: true })).toHaveCount(1);
+});
+
+test('a real hosted password setup updates Auth and finalizes the member account', async ({ page }) => {
+  const email = required('STAGING_QA_PASSWORD_SETUP_EMAIL');
+  const initialPassword = required('STAGING_QA_PASSWORD_SETUP_PASSWORD');
+  const newPassword = required('STAGING_QA_PASSWORD_SETUP_NEW_PASSWORD');
+
+  await page.goto('/login');
+  await page.getByLabel('Email or username').fill(email);
+  await page.getByLabel('Password').fill(initialPassword);
+  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.waitForURL(url => !/\/login$/.test(url.pathname));
+
+  await page.goto('/account/password?type=invite');
+  await expect(page.getByRole('heading', { name: 'Choose your password' })).toBeVisible();
+  await page.getByLabel('New password').fill(newPassword);
+  await page.getByLabel('Confirm password').fill(`${newPassword}-mismatch`);
+  await page.getByRole('button', { name: 'Set password' }).click();
+  await expect(page.getByRole('alert')).toHaveText('Passwords do not match.');
+
+  await page.getByLabel('Confirm password').fill(newPassword);
+  await page.getByRole('button', { name: 'Set password' }).click();
+  await expect(page.getByRole('heading', { name: 'Password ready' })).toBeVisible();
+  await page.getByRole('button', { name: 'Continue to AiTask' }).click();
+  await expect(page).not.toHaveURL(/\/settings$/);
+
+  await page.getByRole('button', { name: 'Logout' }).click();
+  await page.getByLabel('Email or username').fill(email);
+  await page.getByLabel('Password').fill(newPassword);
+  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.waitForURL(url => !/\/(?:login|settings)$/.test(url.pathname));
+  await expect(page.locator('main')).toBeVisible();
 });
