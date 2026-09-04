@@ -1,16 +1,20 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "production_aligned_through_20260826230000_two_forward_migrations_pending",
+  "status": "production_aligned_through_20260904104435",
   "metadataOnly": false,
-  "warning": "Production migration history is verified through 20260826230000_client_read_privacy. Do not repair or reapply that historical rollout. Apply the two pending migrations in order as normal forward migrations only after the v2.1.4 release gate passes.",
+  "warning": "Production migration history is aligned through 20260904104435_allow_staff_cycle_published_at. Do not repair or reapply the historical rollout; use normal immutable forward migrations for future changes.",
   "productionVerification": {
-    "verifiedAt": "2026-08-27",
-    "historyThrough": "20260826230000_client_read_privacy",
+    "verifiedAt": "2026-09-04",
+    "historyThrough": "20260904104435_allow_staff_cycle_published_at",
     "historyAligned": true,
     "rolloutResult": {
       "approvedBaselineMatchedAfterRestore": true,
-      "postflightUnchanged": true
+      "postflightUnchanged": true,
+      "staffAuthorizationPgTapPassed": 29,
+      "completePgTapSuitePassed": 208,
+      "anonymousIsolationPassed": true,
+      "secureCutoverPassed": true
     },
     "capabilityProbe": {
       "schemaVersion": 2,
@@ -25,10 +29,32 @@
       "cronHardCodesWorkspace": false
     },
     "backupRestoreEvidence": {
-      "verifiedAt": "2026-08-27",
-      "method": "Production public-schema logical backup restored into a disposable clean Supabase stack through 20260826230000.",
+      "verifiedAt": "2026-09-04",
+      "method": "Owner-only production public/private application-schema logical backup and public data backup; the data backup was restored transactionally into a disposable clean Supabase stack through 20260904104435.",
+      "applicationSchemaSha256": "2463e1bfef5f73ffb28ca161cf447a5feaaa5be6dd8a8d13949b126d8bf8dd75",
+      "publicDataSha256": "752a671520677d7a6a0a74a0f5b2649ee66217f4080c5f3d71fbe1dc5b46164d",
       "restoredCountsAndHashMatchedPreflight": true,
-      "clientPrivacyPgTapPassed": 9
+      "clientPrivacyPgTapPassed": 9,
+      "platformBackupClaimed": false
+    },
+    "v214ProductionRollout": {
+      "dryRunMigrations": [
+        "20260903160806_harden_staff_command_authorization",
+        "20260904104435_allow_staff_cycle_published_at"
+      ],
+      "businessCounts": {
+        "tasks": 0,
+        "projects": 0,
+        "clients": 0,
+        "notifications": 0,
+        "registrations": 0,
+        "serviceEntities": 0
+      },
+      "taskProjectBusinessHashBefore": "d41d8cd98f00b204e9800998ecf8427e",
+      "taskProjectBusinessHashAfter": "d41d8cd98f00b204e9800998ecf8427e",
+      "schemaLintErrors": 0,
+      "staffGuardTriggerEnabled": true,
+      "staffGuardDirectExecuteRevoked": true
     }
   },
   "schemaEquivalence": {
@@ -158,8 +184,5 @@
     "20260903160806_harden_staff_command_authorization",
     "20260904104435_allow_staff_cycle_published_at"
   ],
-  "pendingProductionMigrations": [
-    "20260903160806_harden_staff_command_authorization",
-    "20260904104435_allow_staff_cycle_published_at"
-  ]
+  "pendingProductionMigrations": []
 }
