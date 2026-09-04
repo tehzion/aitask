@@ -55,6 +55,7 @@ const roles = [
   { key: 'PRODUCTION', id: `${FIXTURE_PREFIX}production`, name: 'Release QA Production', role: 'Staff', department: 'Video Editor', departments: ['Video Editor'], isSuperAdmin: false, clientName: null },
   { key: 'ACCOUNT', id: `${FIXTURE_PREFIX}account`, name: 'Release QA Account', role: 'Staff', department: 'Account & Finance', departments: ['Account & Finance'], isSuperAdmin: false, clientName: null },
   { key: 'CLIENT', id: `${FIXTURE_PREFIX}client`, name: 'Release QA Client User', role: 'Client', department: 'Client', departments: ['Client'], isSuperAdmin: false, clientName: 'Release QA Client' },
+  { key: 'PASSWORD_SETUP', id: `${FIXTURE_PREFIX}password-setup`, name: 'Release QA Password Setup', role: 'Staff', department: 'Designer', departments: ['Designer'], isSuperAdmin: false, clientName: null, mustResetPassword: true },
 ].map((role) => ({
   ...role,
   email: required(`STAGING_QA_${role.key}_EMAIL`).toLowerCase(),
@@ -147,7 +148,7 @@ for (const role of roles) {
     departments: role.departments,
     client_name: role.clientName,
     is_super_admin: role.isSuperAdmin,
-    must_reset_password: false,
+    must_reset_password: role.mustResetPassword === true,
     permissions: {},
     version: 1,
     updated_at: NOW,

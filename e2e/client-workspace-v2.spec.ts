@@ -33,6 +33,12 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
       approvalHistory: [],
       updatedAt: '2026-08-26T08:00:00.000Z',
     };
+    const approveTask = {
+      ...reviewTask,
+      id: 'client-v2-approve',
+      title: 'Approve launch artwork',
+      approvalHistory: [],
+    };
     const foreignTask = { ...reviewTask, id: 'client-v2-foreign', clientName: 'Another Company', title: 'Private foreign delivery' };
     const seededClientId = current.clients.find(item => item.clientName.trim().toLowerCase() === client.companyName?.trim().toLowerCase())?.id;
     const now = new Date().toISOString();
@@ -48,7 +54,7 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${client.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...client, mustResetPassword: false },
-      tasks: [...current.tasks.filter(task => ![reviewTask.id, foreignTask.id].includes(task.id)), reviewTask, foreignTask],
+      tasks: [...current.tasks.filter(task => ![reviewTask.id, approveTask.id, foreignTask.id].includes(task.id)), reviewTask, approveTask, foreignTask],
       clientPlans: seededPlan ? [...current.clientPlans.filter(plan => plan.id !== 'e2e-cvp-plan'), seededPlan] : current.clientPlans,
       backend: { ...current.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
@@ -82,6 +88,20 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
   await expect(focus.getByText('Decision history')).toBeVisible();
   await expect(focus.getByText('requested changes', { exact: false })).toBeVisible();
   await focus.getByRole('button', { name: 'Close', exact: true }).click();
+
+  await page.goto('/tasks?taskId=client-v2-approve');
+  const approvalFocus = page.getByRole('dialog', { name: 'Delivery details' });
+  await expect(approvalFocus.getByText('Approve launch artwork', { exact: true })).toBeVisible();
+  await approvalFocus.getByLabel('Decision note').fill('Approved for launch.');
+  await approvalFocus.getByRole('button', { name: 'Approve delivery' }).click();
+  await expect(approvalFocus.getByText('This delivery is approved.')).toBeVisible();
+  await expect(approvalFocus.getByText('approved the delivery', { exact: false })).toBeVisible();
+  await expect(approvalFocus.getByText('Approved for launch.')).toBeVisible();
+  await page.reload();
+  const persistedApproval = page.getByRole('dialog', { name: 'Delivery details' });
+  await expect(persistedApproval.getByText('This delivery is approved.')).toBeVisible();
+  await expect(persistedApproval.getByText('approved the delivery', { exact: false })).toHaveCount(1);
+  await persistedApproval.getByRole('button', { name: 'Close', exact: true }).click();
 
   await page.goto('/tasks?taskId=client-v2-foreign');
   await expect(page.getByText('This delivery is not available for your company.')).toBeVisible();

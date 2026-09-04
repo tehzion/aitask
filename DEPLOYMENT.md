@@ -51,11 +51,11 @@ pnpm test:e2e
 
 ## Tagged production releases
 
-Do not allow ordinary Git pushes to update the production alias. Configure Vercel
-to reserve production promotion for `.github/workflows/release.yml`, which is
-triggered by matching `vX.Y.Z` tags and deploys a prebuilt artifact only after
-the local, database, staging, and provenance gates pass. Configure the required
-Vercel and staging QA secrets as described in
+Keep the canonical Vercel project connected to `master` for automatic production
+deployments. Protect `master` with required pull-request checks so the local,
+database, and authenticated staging gates pass before a merge reaches Vercel.
+Matching `vX.Y.Z` tags rerun the gate and verify the automatically deployed commit.
+Configure the required Vercel and staging QA secrets as described in
 [`docs/staging-release-setup.md`](docs/staging-release-setup.md).
 
 The v2.1.1 direct-production path was a one-time exception. v2.1.2 also used a
@@ -67,8 +67,8 @@ final exact one-time exception: after verified owner-only logical backups it
 applies the immutable v2.1.3 Staff authorization migration and its narrow cycle-
 timestamp correction, verifies unchanged business data, and only then permits
 the tagged Vercel Git deployment. No authenticated production test is run.
-Every later tag must pass the isolated staging deployment and authenticated
-role QA before production deployment.
+Every later release must pass isolated authenticated staging QA before its
+reviewed `master` merge triggers the automatic production deployment.
 
 ## Backend migrations and upgrade runbook
 
