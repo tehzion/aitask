@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "production_aligned_through_20260904104435",
+  "status": "production_aligned_through_20260907120000",
   "metadataOnly": false,
-  "warning": "Production migration history is aligned through 20260904104435_allow_staff_cycle_published_at. Do not repair or reapply the historical rollout; use normal immutable forward migrations for future changes.",
+  "warning": "Production migration history is aligned through 20260907120000_harden_legacy_access_privileges. Do not repair or reapply the historical rollout; use normal immutable forward migrations for future changes.",
   "productionVerification": {
-    "verifiedAt": "2026-09-04",
-    "historyThrough": "20260904104435_allow_staff_cycle_published_at",
+    "verifiedAt": "2026-09-07",
+    "historyThrough": "20260907120000_harden_legacy_access_privileges",
     "historyAligned": true,
     "rolloutResult": {
       "approvedBaselineMatchedAfterRestore": true,
@@ -17,8 +17,8 @@
       "secureCutoverPassed": true
     },
     "capabilityProbe": {
-      "schemaVersion": 2,
-      "rolesVerified": ["Super Admin", "Admin", "Staff", "Client"],
+      "schemaVersion": 3,
+      "rolesVerified": ["Super Admin", "Admin", "HOD", "Staff", "Client"],
       "crossWorkspaceResult": "FORBIDDEN"
     },
     "serviceInfrastructure": {
@@ -55,6 +55,54 @@
       "schemaLintErrors": 0,
       "staffGuardTriggerEnabled": true,
       "staffGuardDirectExecuteRevoked": true
+    },
+    "v220ProductionRollout": {
+      "dryRunMigrations": [
+        "20260903160806_harden_staff_command_authorization",
+        "20260904104435_allow_staff_cycle_published_at",
+        "20260907043633_hod_task_ownership_permissions",
+        "20260907120000_harden_legacy_access_privileges"
+      ],
+      "preflightCounts": {
+        "workspaces": 1,
+        "members": 11,
+        "entities": 1415,
+        "tasks": 189,
+        "projects": 62,
+        "clients": 62,
+        "notifications": 1069,
+        "registrations": 6,
+        "customRoles": 0,
+        "serviceEntities": 22
+      },
+      "postflightCounts": {
+        "workspaces": 1,
+        "members": 11,
+        "entities": 1416,
+        "tasks": 189,
+        "projects": 62,
+        "clients": 62,
+        "notifications": 1069,
+        "registrations": 6,
+        "customRoles": 1,
+        "serviceEntities": 22
+      },
+      "taskProjectBusinessHashBefore": "0529533f41898ac5af543dd88cee3476",
+      "taskProjectBusinessHashAfter": "0529533f41898ac5af543dd88cee3476",
+      "hodRoleCount": 1,
+      "hodAssignedMembers": 0,
+      "productionMigrationHistoryAligned": true,
+      "anonymousIsolationPassed": true,
+      "legacyHealthRpcRevoked": true,
+      "inviteEdgeFunctionVersion": 17,
+      "logicalBackup": {
+        "applicationSchemaBytes": 210309,
+        "applicationSchemaSha256": "3465ae7c9c93cf7aedcbefdfda6f49ff4d8aca38cea46a997eb8b83449b12207",
+        "publicDataBytes": 2198197,
+        "publicDataSha256": "8757912577b1ac9958704af80b40a592a1984b8ebacf709586474fbe30d0597e",
+        "platformBackupClaimed": false
+      },
+      "leakedPasswordProtectionEnabled": false
     }
   },
   "schemaEquivalence": {
@@ -186,8 +234,5 @@
     "20260907043633_hod_task_ownership_permissions",
     "20260907120000_harden_legacy_access_privileges"
   ],
-  "pendingProductionMigrations": [
-    "20260907043633_hod_task_ownership_permissions",
-    "20260907120000_harden_legacy_access_privileges"
-  ]
+  "pendingProductionMigrations": []
 }

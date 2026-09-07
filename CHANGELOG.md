@@ -26,8 +26,11 @@ number remain uniquely identifiable.
 
 ### Release
 
-- v2.2.0 remains subject to the standard staging-first release gate. No production
-  migration, role assignment, or authenticated production test has been performed.
+- v2.2.0 used a one-time user-authorized direct-production cutover after an
+  owner-only logical backup, an exact four-migration dry run, unchanged business
+  counts/hash verification, and anonymous security probes. No member role was
+  assigned and no authenticated production test was performed. Later releases
+  remain staging-gated.
 
 ## [2.1.5] - 2026-09-05
 
