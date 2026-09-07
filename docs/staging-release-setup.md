@@ -12,7 +12,7 @@ Set `VITE_AITASK_BACKEND=supabase`, the staging Supabase URL, and the staging pu
 
 Keep `master` as the canonical production branch in the `aitask` Vercel project. Protect `master` in GitHub so production changes arrive through reviewed pull requests, and require Quality and Security plus Authenticated Staging QA before merge. Disconnect the duplicate `aitask-master` project from Git so a single Vercel project owns the production alias.
 
-Add these GitHub secrets for the production project: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`. Add separate `STAGING_VERCEL_TOKEN`, `STAGING_VERCEL_ORG_ID`, and `STAGING_VERCEL_PROJECT_ID` secrets for staging. Add `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_PUBLISHABLE_KEY`, and `STAGING_SUPABASE_SERVICE_ROLE_KEY`; the service credential is used only by the fixture reset script and must never use a `VITE_` prefix. Set repository variables `VERCEL_CLI_VERSION` and `STAGING_SUPABASE_PROJECT_REF`.
+Add these GitHub secrets for Vercel: the account-scoped `VERCEL_TOKEN`, production `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`, plus `STAGING_VERCEL_ORG_ID` and `STAGING_VERCEL_PROJECT_ID`. The workflows pair the same account token with the explicit staging IDs, so staging remains a separate project. Add `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_PUBLISHABLE_KEY`, and `STAGING_SUPABASE_SERVICE_ROLE_KEY`; the service credential is used only by the fixture reset script and must never use a `VITE_` prefix. Set repository variables `VERCEL_CLI_VERSION` and `STAGING_SUPABASE_PROJECT_REF`.
 
 ## 3. Configure the staging QA fixture
 
