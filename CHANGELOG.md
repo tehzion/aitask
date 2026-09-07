@@ -4,6 +4,31 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [2.2.0] - 2026-09-07
+
+### Changed
+
+- Added a protected HOD role for Staff-based task ownership. HOD users can manage
+  tasks they create after assignment, while ordinary Staff retain their assigned-task
+  controls and Boss Koo retains unrestricted task control.
+- Standard Admin users continue to see the full task list, but can edit only tasks
+  they created or that are assigned to them; unrelated tasks are read-only.
+- Legacy global task-editing data remains compatible but is no longer an editable
+  permission for non-Boss users.
+
+### Security
+
+- Task ownership, creator immutability, department membership, assignment scope,
+  protected-role rules, and the HOD capability version are enforced in Supabase as
+  well as in the client interface.
+- Existing workspaces receive the protected HOD role without automatically changing
+  any member role or task ownership.
+
+### Release
+
+- v2.2.0 remains subject to the standard staging-first release gate. No production
+  migration, role assignment, or authenticated production test has been performed.
+
 ## [2.1.5] - 2026-09-05
 
 ### Quality
@@ -19,8 +44,6 @@ number remain uniquely identifiable.
 - Added coverage for email-only hosted login/recovery, Boss-only custom-role
   administration, assigned Staff service-client access, department compatibility,
   and Staff-owned task deletion.
-- Added the protected Staff HOD role and task-ownership checks, including creator
-  immutability, department-scoped assignment, and safe capability-version cutover.
 
 ### Release
 
@@ -38,8 +61,6 @@ number remain uniquely identifiable.
 - Production release remains gated on backup/checksum verification, leaked-
   password protection, exact tag provenance, and removal of only the verified
   orphan test account. Authenticated production tests remain prohibited.
-- Existing workspaces receive the protected HOD role without automatic member
-  promotion or business-record transformation.
 
 ## [2.1.4] - 2026-09-04
 

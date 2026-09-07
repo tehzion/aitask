@@ -1,6 +1,14 @@
 # AiTask client release notes
 
-**Coverage:** the latest client releases: v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+**Coverage:** the latest client releases: v2.2.0 (7 September 2026), v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+
+## v2.2.0 — 7 September 2026
+
+- **A clearer HOD responsibility boundary.** HODs can create work for their own departments and continue managing the tasks they created, even after handing those tasks to another team member.
+- **Staff controls stay focused.** Staff can continue working on tasks assigned to them, while HOD-created work remains under the HOD’s ownership without opening unrelated work.
+- **Admin visibility with safer editing.** Admins can still review the full task list, but unrelated tasks are protected from changes unless they created the task or are assigned to it.
+- **Boss Koo retains full control.** Only Boss Koo can manage every task and assign the protected HOD role to Staff accounts.
+- **Same protection in every path.** These boundaries are checked when work is opened, edited, reassigned, or removed, including after a refresh or retry.
 
 ## v2.1.5 — 5 September 2026
 
@@ -9,7 +17,6 @@
 - **Verified client approvals.** Client delivery approval is checked through submission, confirmation history, and refresh so the decision remains reliable.
 - **Safer hosted access.** Login and recovery now use account email addresses and distinguish invalid credentials, unapproved accounts, expired sessions, and temporary workspace-loading failures.
 - **Tighter role boundaries.** Boss Koo remains the only role that can administer members or assign protected custom-role permissions; assigned Staff can open only the service-client workspaces they are allowed to see.
-- **Clearer task ownership.** The protected HOD role can manage work it created after reassignment, while ordinary Staff remain limited to assigned work and Boss Koo retains unrestricted control.
 - **Release-assurance update.** This release includes a privilege-only database hardening migration and verification safeguards. It does not rewrite business records.
 
 ## v2.1.4 — 4 September 2026
@@ -65,6 +72,7 @@
 
 | Release | Formal release commit | Verification basis |
 | --- | --- | --- |
+| v2.2.0 | Pending release tag | Protected HOD role, created-task ownership after reassignment, scoped Admin editing, creator immutability, assignment/department enforcement, protected-role guards, capability-version cutover, and local pgTAP/client permission tests. Production promotion remains pending the staging-first gate. |
 | v2.1.5 | Release tag `v2.1.5` | Structured hosted auth failures and email-only recovery, Boss-only administration, assigned-service isolation, privilege-only database hardening, authenticated staging QA, and exact automatic `master` deployment provenance. |
 | v2.1.4 | Release tag `v2.1.4` | Staff cycle-progress correction, complete Staff authorization rollout, immutable forward migrations, production data-integrity checks, and exact deployment provenance; authenticated staging QA waived by the exact one-time direct-production gate. |
 | v2.1.3 | Release tag `v2.1.3` | Staff command authorization, canonical task-linked notifications, service-catalog flows, Boss deliverables, registration approval, and Chinese coverage. |
