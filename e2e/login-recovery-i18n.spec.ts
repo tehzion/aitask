@@ -13,8 +13,8 @@ test('the hosted password recovery entry is complete in English and Chinese', as
 
   await page.getByRole('button', { name: '忘记密码？' }).click();
   await expect(page.getByRole('heading', { name: '重设您的密码' })).toBeVisible();
-  await expect(page.getByText('输入您的账号邮箱或用户名以接收安全恢复链接。')).toBeVisible();
-  await expect(page.getByLabel('邮箱或用户名')).toBeVisible();
+  await expect(page.getByText('输入您的账号邮箱以接收安全恢复链接。')).toBeVisible();
+  await expect(page.getByLabel('邮箱')).toBeVisible();
   await expect(page.getByRole('button', { name: '发送恢复邮件' })).toBeVisible();
   await expect(page.getByRole('button', { name: '返回登录' })).toBeVisible();
 

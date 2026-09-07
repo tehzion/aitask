@@ -332,6 +332,7 @@ const TasksWorkspace: React.FC = () => {
   const activeClientWebsite = safeHttpsUrl(activeClientProfile?.website || activeClientTasks.find(task => task.website)?.website);
   const activeClientFacebook = safeHttpsUrl(activeClientProfile?.facebookPage || activeClientTasks.find(task => task.facebookPage)?.facebookPage);
   const selectedLiveTask = allTasks.find(t => t.id === selectedTask?.id) || null;
+  const activeQuickTask = activeQuickEdit ? allTasks.find(t => t.id === activeQuickEdit.taskId) : undefined;
 
   useEffect(() => {
     if (!taskIdFilter) return;
@@ -351,7 +352,7 @@ const TasksWorkspace: React.FC = () => {
     : task.comments?.length
       ? 'Leave feedback'
       : 'View details';
-  const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
+  const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions, activeQuickTask);
   const TABLE_COLUMN_COUNT = isClientUser ? 5 : 8;
   const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient, assigneeRouteFilter, periodRouteFilter].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
   const activeFilterLabels = [

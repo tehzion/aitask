@@ -189,6 +189,10 @@ if (!healthResponse.ok) {
     process.exit(1);
   }
 } else {
+  if (expectSecureCutover) {
+    console.error('Security failure: retired public.aitask_app_state_health remains callable after secure cutover.');
+    process.exit(1);
+  }
   const health = await healthResponse.json();
   const policies = Array.isArray(health?.policies) ? health.policies : [];
   const demoPolicies = Array.isArray(health?.demo_policies) ? health.demo_policies : [];
@@ -208,6 +212,24 @@ if (!healthResponse.ok) {
     process.exit(1);
   }
   console.log('Guard trigger and policy audit passed.');
+}
+
+if (expectSecureCutover) {
+  const originHelperUrl = new URL('/rest/v1/rpc/aitask_is_internal_app_origin', baseUrl);
+  const originHelperResponse = await request(originHelperUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  if (originHelperResponse.ok) {
+    console.error('Security failure: retired public.aitask_is_internal_app_origin remains callable after secure cutover.');
+    process.exit(1);
+  }
+  if (![401, 403, 404].includes(originHelperResponse.status)) {
+    console.error(`Unexpected response for retired origin helper: ${await responseDetail(originHelperResponse)}`);
+    process.exit(1);
+  }
+  console.log('Retired helper check passed: anonymous legacy origin/health helpers are unavailable.');
 }
 
 const snapshotUrl = new URL(`/rest/v1/${encodeURIComponent(table)}`, baseUrl);

@@ -52,8 +52,8 @@ if (stagingUrl === productionUrl) {
 const roles = [
   { key: 'SUPER_ADMIN', id: `${FIXTURE_PREFIX}super-admin`, name: 'Release QA Super Admin', role: 'Admin', department: 'Management', departments: ['Management'], isSuperAdmin: true, clientName: null },
   { key: 'OPERATION', id: `${FIXTURE_PREFIX}operation`, name: 'Release QA Operation', role: 'Staff', department: 'Operation', departments: ['Operation'], isSuperAdmin: false, clientName: null },
-  { key: 'PRODUCTION', id: `${FIXTURE_PREFIX}production`, name: 'Release QA Production', role: 'Staff', department: 'Video Editor', departments: ['Video Editor'], isSuperAdmin: false, clientName: null },
-  { key: 'ACCOUNT', id: `${FIXTURE_PREFIX}account`, name: 'Release QA Account', role: 'Staff', department: 'Account & Finance', departments: ['Account & Finance'], isSuperAdmin: false, clientName: null },
+  { key: 'PRODUCTION', id: `${FIXTURE_PREFIX}production`, name: 'Release QA Production', role: 'Staff', department: 'Video Editor', departments: ['Video Editor'], workerType: 'supplier', isSuperAdmin: false, clientName: null },
+  { key: 'ACCOUNT', id: `${FIXTURE_PREFIX}account`, name: 'Release QA Account', role: 'Staff', department: 'Account & Finance', departments: ['Account & Finance'], workerType: 'freelancer', isSuperAdmin: false, clientName: null },
   { key: 'CLIENT', id: `${FIXTURE_PREFIX}client`, name: 'Release QA Client User', role: 'Client', department: 'Client', departments: ['Client'], isSuperAdmin: false, clientName: 'Release QA Client' },
   { key: 'PASSWORD_SETUP', id: `${FIXTURE_PREFIX}password-setup`, name: 'Release QA Password Setup', role: 'Staff', department: 'Designer', departments: ['Designer'], isSuperAdmin: false, clientName: null, mustResetPassword: true },
 ].map((role) => ({
@@ -146,6 +146,7 @@ for (const role of roles) {
     role: role.role,
     department: role.department,
     departments: role.departments,
+    worker_type: role.workerType || 'employee',
     client_name: role.clientName,
     is_super_admin: role.isSuperAdmin,
     must_reset_password: role.mustResetPassword === true,

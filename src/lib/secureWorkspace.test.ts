@@ -370,7 +370,7 @@ describe('secure backend compatibility', () => {
     rpc.mockResolvedValueOnce({
       data: {
         ok: true,
-        schemaVersion: 2,
+        schemaVersion: 3,
         workspaceOptimisticLock: true,
         serviceOperations: true,
         releaseNoticeAcknowledgements: true,
@@ -380,7 +380,7 @@ describe('secure backend compatibility', () => {
 
     const result = await loadSecureBackendCapabilities();
 
-    expect(result).toMatchObject({ compatible: true, capabilities: { schemaVersion: 2 } });
+    expect(result).toMatchObject({ compatible: true, capabilities: { schemaVersion: 3 } });
     expect(rpc).toHaveBeenCalledWith('aitask_get_backend_capabilities', { p_workspace_id: 'aitask-main' });
   });
 

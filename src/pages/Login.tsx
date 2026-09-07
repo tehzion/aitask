@@ -113,14 +113,14 @@ const Login: React.FC = () => {
     }
 
     if (!username.trim()) {
-      setLoginError('Please enter your email or username.');
+      setLoginError(secureAccounts ? 'Please enter your email.' : 'Please enter your email or username.');
       return;
     }
 
     setIsLoggingIn(true);
-    let loginSucceeded = false;
+    let loginResult: Awaited<ReturnType<typeof login>>;
     try {
-      loginSucceeded = await login(username, password);
+      loginResult = await login(username, password);
     } catch {
       setLoginError('This browser could not verify the account. Please try again.');
       return;
@@ -128,13 +128,17 @@ const Login: React.FC = () => {
       setIsLoggingIn(false);
     }
 
-    if (loginSucceeded) {
+    if (loginResult.ok) {
       attemptsRef.current = 0;
       const user = useStore.getState().currentUser;
       if (user) {
         setTimeout(() => navigate(getLoginDestination(Boolean(user.mustResetPassword), user.id, requestedPath), { replace: true }), 50);
       }
-    } else {
+      return;
+    }
+
+    const loginFailureResult = loginResult as Extract<Awaited<ReturnType<typeof login>>, { ok: false }>;
+    if (loginFailureResult.code === 'invalid_credentials') {
       attemptsRef.current += 1;
       if (attemptsRef.current >= MAX_ATTEMPTS) {
         const until = Date.now() + LOCKOUT_SECONDS * 1000;
@@ -143,8 +147,10 @@ const Login: React.FC = () => {
         setLoginError(`Too many failed attempts. Please wait ${LOCKOUT_SECONDS} seconds.`);
         setTimeout(() => setLockedUntil(null), LOCKOUT_SECONDS * 1000);
       } else {
-        setLoginError('Incorrect username or password. Please try again.');
+        setLoginError(loginFailureResult.error);
       }
+    } else {
+      setLoginError(loginFailureResult.error);
     }
   };
 
@@ -206,10 +212,10 @@ const Login: React.FC = () => {
         </h1>
         <p className="mt-2 text-center text-sm text-slate-600">
           {isRecovering
-            ? 'Enter your account email or username to receive a secure recovery link.'
+            ? 'Enter your account email to receive a secure recovery link.'
             : isRegistering
             ? 'Fill in your details. An admin will review and approve your account.'
-            : 'Enter your username and password to access the dashboard.'}
+            : secureAccounts ? 'Enter your account email and password to access the dashboard.' : 'Enter your username and password to access the dashboard.'}
         </p>
       </div>
 
@@ -240,11 +246,11 @@ const Login: React.FC = () => {
             ) : (
               <form className="space-y-5" onSubmit={handleRecovery}>
                 <div>
-                  <label htmlFor="recovery-identifier" className="block text-sm font-medium text-slate-700">Email or username</label>
+                  <label htmlFor="recovery-identifier" className="block text-sm font-medium text-slate-700">Email</label>
                   <input
                     id="recovery-identifier"
-                    type="text"
-                    autoComplete="username"
+                    type="email"
+                    autoComplete="email"
                     required
                     className={cn(inputBase, 'mt-2 px-4 py-3')}
                     value={recoveryIdentifier}
@@ -269,12 +275,12 @@ const Login: React.FC = () => {
             <>
               <form className="space-y-5" onSubmit={handleLogin}>
                 <div>
-                  <label htmlFor="username" className="block text-sm font-medium text-slate-700">Email or username</label>
+                  <label htmlFor="username" className="block text-sm font-medium text-slate-700">{secureAccounts ? 'Email' : 'Email or username'}</label>
                   <input
                     id="username"
                     name="username"
-                    type="text"
-                    autoComplete="username"
+                    type={secureAccounts ? 'email' : 'text'}
+                    autoComplete={secureAccounts ? 'email' : 'username'}
                     required
                     placeholder="Enter your account email"
                     className={cn(inputBase, 'mt-2 py-3 px-4')}

@@ -142,7 +142,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   const canAddComment = !upgradeRequired && canCommentOnTask(currentUser, task, rolePermissions);
   const canClientReview = !upgradeRequired && canReviewTaskAsClient(currentUser, task, rolePermissions);
   const isClientTaskViewer = currentUser?.role === 'Client';
-  const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
+  const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions, task);
   const incompletePredecessors = (task.predecessorTaskIds || [])
     .map(id => tasks.find(item => item.id === id))
     .filter((item): item is Task => Boolean(item && !item.isCompleted));

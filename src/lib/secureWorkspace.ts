@@ -35,7 +35,7 @@ import { useToastStore } from '../store/useToastStore';
 
 export const SECURE_WORKSPACE_ID = 'aitask-main';
 export const SECURE_SYNC_PROTOCOL_VERSION = 1;
-export const SECURE_BACKEND_SCHEMA_VERSION = 2;
+export const SECURE_BACKEND_SCHEMA_VERSION = 3;
 export const BACKEND_UPGRADE_REQUIRED_MESSAGE = 'AiTask is completing a system update. Your workspace is read-only for a moment; no changes have been submitted.';
 const SYNC_REQUEST_TIMEOUT_MS = 20_000;
 const PENDING_COMMAND_STORAGE_VERSION = 1;
@@ -992,7 +992,7 @@ export const loadSecureBackendCapabilities = async (): Promise<SecureBackendComp
     releaseNoticeAcknowledgements: response?.releaseNoticeAcknowledgements === true,
   };
   const compatible = response?.ok === true
-    && capabilities.schemaVersion >= SECURE_BACKEND_SCHEMA_VERSION
+    && capabilities.schemaVersion === SECURE_BACKEND_SCHEMA_VERSION
     && capabilities.workspaceOptimisticLock
     && capabilities.serviceOperations
     && capabilities.releaseNoticeAcknowledgements;

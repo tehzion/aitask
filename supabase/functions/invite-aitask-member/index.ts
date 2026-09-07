@@ -246,6 +246,17 @@ Deno.serve(async (request) => {
       .eq('entity_id', customRoleId)
       .maybeSingle();
     if (error || !customRole) return json({ error: 'Custom role not found' }, 400);
+    const customRoleData = customRole.data && typeof customRole.data === 'object' ? customRole.data as Record<string, unknown> : {};
+    if (customRoleData.baseRole !== role) {
+      return json({ error: `This custom role can only be assigned to ${String(customRoleData.baseRole || 'its configured base role')} accounts` }, 400);
+    }
+    const customRolePermissions = customRoleData.permissions && typeof customRoleData.permissions === 'object'
+      ? customRoleData.permissions as Record<string, unknown>
+      : {};
+    const protectedPermissionKeys = ['editTasks', 'manageUsers', 'approveRegistrations', 'deleteUsers', 'viewProductionReports'];
+    if (protectedPermissionKeys.some(key => customRolePermissions[key] === true)) {
+      return json({ error: 'Protected account-management and global-report permissions are reserved for Boss Koo' }, 403);
+    }
     customRoleName = typeof customRole.data?.name === 'string' ? customRole.data.name : null;
   }
 

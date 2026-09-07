@@ -25,6 +25,17 @@ The pull-request and tagged workflows run `scripts/reset-staging-qa.mjs` to crea
 
 Store account credentials in the `STAGING_QA_*_EMAIL` and `STAGING_QA_*_PASSWORD` secrets, including `STAGING_QA_PASSWORD_SETUP_NEW_PASSWORD`. Fixture identifiers are non-secret deterministic constants shared by the reset script and staging suite. Both workflows use the exact deployment URL returned by Vercel and fail before verification if required configuration is absent.
 
+The reset fixture also persists one `supplier` and one `freelancer` member through
+the same `worker_type` field used by `invite-aitask-member`. Staging QA must verify
+those values after sign-in, verify Staff approval and successful hosted login,
+verify assigned-service access and denial for an unrelated client, and confirm
+that one Staff member cannot read another Staff member's assigned service data.
+
+If the staging Vercel project or token is unavailable, repair the account-scoped
+token and the explicit `STAGING_VERCEL_ORG_ID`/`STAGING_VERCEL_PROJECT_ID`
+secrets before merging. Do not substitute production project IDs or a production
+token; the workflow is expected to fail closed when staging access is ambiguous.
+
 ## 4. Release and rollback
 
 The v2.1.1, v2.1.2, and v2.1.3 tags were historical one-time direct-production

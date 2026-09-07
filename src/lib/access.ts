@@ -27,7 +27,8 @@ export const permissionLabels: Record<RolePermissionKey, string> = {
   viewApprovals: 'Approvals access',
   viewSettings: 'Settings access',
   createTasks: 'Create tasks',
-  editTasks: 'Edit all tasks',
+  editTasks: 'Edit every task (Boss Koo only)',
+  manageCreatedTasks: 'Manage tasks I create',
   createProjects: 'Create companies',
   manageUsers: 'Manage users',
   approveRegistrations: 'Approve registrations',
@@ -45,10 +46,10 @@ export const permissionLabels: Record<RolePermissionKey, string> = {
 
 export const permissionGroups: { title: string; keys: RolePermissionKey[] }[] = [
   { title: 'Page Access', keys: ['viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects', 'viewReports', 'viewApprovals', 'viewSettings'] },
-  { title: 'Task Access', keys: ['viewAllTasks', 'createTasks', 'editTasks'] },
+  { title: 'Task Access', keys: ['viewAllTasks', 'createTasks', 'manageCreatedTasks'] },
   { title: 'Client Access', keys: ['viewAllClients', 'manageAssignedClients', 'viewAllServiceClients', 'viewAssignedServiceClients', 'viewServicePrices'] },
-  { title: 'Service Management', keys: ['manageServiceCatalog', 'manageTaskTemplates', 'manageClientPlans', 'manageServiceCycles', 'viewProductionReports'] },
-  { title: 'Workflow Actions', keys: ['createProjects', 'manageUsers', 'approveRegistrations', 'deleteUsers', 'clientReview'] },
+  { title: 'Service Management', keys: ['manageServiceCatalog', 'manageTaskTemplates', 'manageClientPlans', 'manageServiceCycles'] },
+  { title: 'Workflow Actions', keys: ['createProjects', 'clientReview'] },
 ];
 
 const makePermissions = (enabled: RolePermissionKey[]): RolePermissions => {
@@ -60,6 +61,21 @@ const makePermissions = (enabled: RolePermissionKey[]): RolePermissions => {
 };
 
 export const allPermissions: RolePermissions = makePermissions(Object.keys(permissionLabels) as RolePermissionKey[]);
+export const nonSuperAdminOnlyPermissionKeys: RolePermissionKey[] = [
+  'editTasks',
+  'manageUsers',
+  'approveRegistrations',
+  'deleteUsers',
+  'viewProductionReports',
+];
+
+export const sanitizeNonSuperAdminPermissions = (permissions: RolePermissions): RolePermissions => {
+  const sanitized = { ...permissions };
+  nonSuperAdminOnlyPermissionKeys.forEach(key => {
+    sanitized[key] = false;
+  });
+  return sanitized;
+};
 
 export const defaultRolePermissions: Record<Role, RolePermissions> = {
   Admin: makePermissions([
@@ -73,7 +89,7 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewReports',
     'viewSettings',
     'createTasks',
-    'editTasks',
+    'manageCreatedTasks',
     'createProjects',
     'manageServiceCatalog',
     'manageTaskTemplates',
@@ -82,7 +98,6 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewAllServiceClients',
     'viewAssignedServiceClients',
     'viewServicePrices',
-    'viewProductionReports',
   ]),
   Staff: makePermissions([
     'viewDashboard',
@@ -93,7 +108,6 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewSettings',
     'createTasks',
     'viewAssignedServiceClients',
-    'viewProductionReports',
   ]),
   Client: makePermissions([
     'viewDashboard',
@@ -119,6 +133,7 @@ const routePermission: Record<AppPath, RolePermissionKey> = {
 
 export const isBossKoo = (user: User | null | undefined) => Boolean(user?.isSuperAdmin);
 export const isAdmin = (user: User | null | undefined) => user?.role === 'Admin';
+export const SYSTEM_HOD_ROLE_ID = 'system-hod';
 
 export const getDashboardPersona = (user: User | null | undefined): DashboardPersona => {
   if (isBossKoo(user)) return 'boss';
@@ -145,10 +160,19 @@ export const getEffectivePermissions = (
     ? user.permissions
     : undefined;
   const source = directPermissions || customRole?.permissions || defaultRolePermissions[user.role];
-  return makePermissions(
+  const permissions = makePermissions(
     (Object.keys(permissionLabels) as RolePermissionKey[]).filter(key => source[key] === true)
   );
+  return sanitizeNonSuperAdminPermissions(permissions);
 };
+
+export const isHodRole = (role: CustomRole | null | undefined) => role?.id === SYSTEM_HOD_ROLE_ID;
+export const isHodUser = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
+  Boolean(user?.role === 'Staff' && user.customRoleId && customRoles.some(role => role.id === user.customRoleId && isHodRole(role)))
+);
+export const getAssignableCustomRoles = (userRole: Role, customRoles: CustomRole[] = []) => (
+  customRoles.filter(role => role.baseRole === userRole)
+);
 
 export const getEffectiveRoleName = (user: User | null | undefined, customRoles: CustomRole[] = []) => {
   if (!user) return 'Unknown';
@@ -183,7 +207,9 @@ export const canViewAllTasks = (user: User | null | undefined, customRoles: Cust
   hasPermission(user, 'viewAllTasks', customRoles) || hasPermission(user, 'editTasks', customRoles)
 );
 export const canManageTasks = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
-  hasPermission(user, 'createTasks', customRoles) || hasPermission(user, 'editTasks', customRoles)
+  hasPermission(user, 'createTasks', customRoles)
+  || hasPermission(user, 'manageCreatedTasks', customRoles)
+  || hasPermission(user, 'editTasks', customRoles)
 );
 export const canManageProjects = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'createProjects', customRoles);
 export const canManageServiceCatalog = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'manageServiceCatalog', customRoles);
@@ -192,6 +218,19 @@ export const canManageClientPlans = (user: User | null | undefined, customRoles:
 export const canManageServiceCycles = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'manageServiceCycles', customRoles);
 export const canViewServicePrices = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'viewServicePrices', customRoles);
 export const canViewProductionReports = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'viewProductionReports', customRoles);
+export const canOpenServiceClient = (
+  user: User | null | undefined,
+  clientName: string,
+  tasks: Task[] = [],
+  customRoles: CustomRole[] = [],
+) => {
+  if (!user) return false;
+  if (user.role === 'Client') return getClientKey(user.companyName) === getClientKey(clientName);
+  if (isBossKoo(user) || user.role === 'Admin' || hasPermission(user, 'viewAllServiceClients', customRoles)) return true;
+  if (user.role !== 'Staff' || !hasPermission(user, 'viewAssignedServiceClients', customRoles)) return false;
+  const clientKey = getClientKey(clientName);
+  return Boolean(clientKey) && tasks.some(task => task.assignedTo === user.id && getClientKey(task.clientName) === clientKey);
+};
 export const canManageClientProfiles = (user: User | null | undefined) => Boolean(user && (isBossKoo(user) || user.role === 'Admin'));
 export const getClientKey = (value: string | null | undefined) => value?.trim().toLowerCase() || '';
 export const canEditClientProfile = (
@@ -246,12 +285,18 @@ export const getVisibleClientNames = (
 export const canRenameClient = (
   user: User | null | undefined
 ) => canManageClientProfiles(user);
-export const canAssignTasksToOthers = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
+export const canAssignTasksToOthers = (
+  user: User | null | undefined,
+  customRoles: CustomRole[] = [],
+  task?: Task,
+) => (
   hasPermission(user, 'editTasks', customRoles)
+  || (hasPermission(user, 'manageCreatedTasks', customRoles) && (!task || task.createdBy === user?.id))
 );
 export const canEditTask = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
   hasPermission(user, 'editTasks', customRoles) ||
-  (user?.role === 'Staff' && task.assignedTo === user.id)
+  ((user?.role === 'Staff' || user?.role === 'Admin') && task.assignedTo === user.id) ||
+  ((user?.role === 'Staff' || user?.role === 'Admin') && hasPermission(user, 'manageCreatedTasks', customRoles) && task.createdBy === user.id)
 );
 export const canDeleteTask = canEditTask;
 export const isProjectParticipant = (user: User | null | undefined, project: Project, tasks: Task[] = []) => {
@@ -324,7 +369,8 @@ export const getVisibleTasks = (
   if (user.role === 'Client') return tasks.filter(task => getClientKey(task.clientName) === getClientKey(user.companyName) && task.visibility !== 'internal');
   if (user.role === 'Admin' || isBossKoo(user) || canViewAllTasks(user, customRoles)) return tasks;
   if (user.role === 'Staff') {
-    return tasks.filter(task => task.assignedTo === user.id);
+    const canManageCreated = hasPermission(user, 'manageCreatedTasks', customRoles);
+    return tasks.filter(task => task.assignedTo === user.id || (canManageCreated && task.createdBy === user.id));
   }
   return [];
 };

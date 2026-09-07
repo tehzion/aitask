@@ -26,7 +26,7 @@ const fixture = {
 const signIn = async (page: Page, role: QaRole) => {
   const account = credentials(role);
   await page.goto('/login');
-  await page.getByLabel('Email or username').fill(account.email);
+  await page.getByLabel('Email').fill(account.email);
   await page.getByLabel('Password').fill(account.password);
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => !/\/login$/.test(url.pathname));
@@ -103,6 +103,22 @@ test('Account reports remain scoped to assigned work', async ({ page }) => {
   await expect(page.getByRole('row').filter({ hasText: 'Operation' })).toHaveCount(0);
 });
 
+test('assigned Staff can open only the service client linked to their work', async ({ page }) => {
+  await signIn(page, 'OPERATION');
+  await page.goto(`/clients/${encodeURIComponent(fixture.clientId)}`);
+  await expect(page.getByText(fixture.clientName, { exact: true })).toBeVisible();
+
+  await page.goto(`/clients/${encodeURIComponent('CL-release-qa-foreign')}`);
+  await expect(page).toHaveURL(/\/clients$/);
+  await expect(page.getByText('Release QA Foreign Company', { exact: true })).toHaveCount(0);
+});
+
+test('staging workspace preserves supplier and freelancer worker types', async ({ page }) => {
+  await signIn(page, 'ACCOUNT');
+  await expect(page.getByText('supplier', { exact: true })).toBeVisible();
+  await expect(page.getByText('freelancer', { exact: true })).toBeVisible();
+});
+
 test('client workspace, review actions, isolation, and notification read state work', async ({ page }) => {
   await signIn(page, 'CLIENT');
 
@@ -172,7 +188,7 @@ test('a real hosted password setup updates Auth and finalizes the member account
   const newPassword = required('STAGING_QA_PASSWORD_SETUP_NEW_PASSWORD');
 
   await page.goto('/login');
-  await page.getByLabel('Email or username').fill(email);
+  await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(initialPassword);
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => !/\/login$/.test(url.pathname));
@@ -191,7 +207,7 @@ test('a real hosted password setup updates Auth and finalizes the member account
   await expect(page).not.toHaveURL(/\/settings$/);
 
   await page.getByRole('button', { name: 'Logout' }).click();
-  await page.getByLabel('Email or username').fill(email);
+  await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(newPassword);
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => !/\/(?:login|settings)$/.test(url.pathname));

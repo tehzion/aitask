@@ -30,6 +30,7 @@ import {
   AttachmentRef,
   ServiceWorkflowTemplate,
   ServicePricingSnapshot,
+  LoginResult,
 } from '../types';
 import { legacyDemoTaskIds, mockUsers, mockProjects, mockTasks, retiredDemoUserIds } from '../mock';
 import {
@@ -39,7 +40,7 @@ import {
   LOCAL_SERVICE_DEMO_VERSION,
   LOCAL_SERVICE_DEMO_VERSION_KEY,
 } from '../mock/localServiceDemo';
-import { canLoginWithSeedAccount, DEFAULT_USER_PASSWORD, shouldShowDemoLogin } from '../lib/auth';
+import { canLoginWithSeedAccount, classifyLoginFailure, DEFAULT_USER_PASSWORD, loginFailure, shouldShowDemoLogin } from '../lib/auth';
 import { clearLocalUserPassword, getLocalUserPassword, setLocalUserPassword, verifyLocalUserPassword } from '../lib/localCredentials';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
 import {
@@ -73,6 +74,8 @@ import {
   isNotificationReadByUser,
   isNotificationVisible,
   isBossKoo,
+  isHodRole,
+  sanitizeNonSuperAdminPermissions,
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
@@ -101,6 +104,7 @@ import {
   getPasswordSetupMode,
   passwordSetupRedirectUrl,
 } from '../lib/authRecovery';
+import { isValidRecoveryEmail } from '../lib/auth';
 import {
   DEPARTMENTS,
   getLegacyDepartmentMirror,
@@ -244,8 +248,8 @@ interface StoreState {
   retryPendingSave: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string }>;
   discardMutation: (options?: { reload?: boolean }) => Promise<void>;
   commitPendingMutation: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string }>;
-  login: (name: string, password?: string) => Promise<boolean>;
-  requestPasswordRecovery: (identifier: string) => Promise<{ ok: boolean; error?: string }>;
+  login: (name: string, password?: string) => Promise<LoginResult>;
+  requestPasswordRecovery: (email: string) => Promise<{ ok: boolean; error?: string }>;
   completePasswordSetup: (data: { newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
   updateCurrentUserProfile: (data: Pick<User, 'name' | 'email' | 'avatar'>) => { ok: boolean; error?: string };
   updateCurrentUserEmail: (email: string, currentPassword: string) => Promise<{ ok: boolean; error?: string }>;
@@ -1778,13 +1782,15 @@ export const useStore = create<StoreState>()(
         };
       },
 
-      login: async (name, password) => {
+      login: async (name, password): Promise<LoginResult> => {
         if (shouldUseSecureSupabase()) {
           const { data, error } = await supabase.auth.signInWithPassword({
             email: resolveAuthEmail(name),
             password: password || '',
           });
-          if (error || !data.user) return false;
+          if (error || !data.user) {
+            return loginFailure(classifyLoginFailure(error?.message || ''));
+          }
 
           try {
             const retainedBeforeLogin = restoreSecureWorkspaceCommand(data.user.id);
@@ -1830,17 +1836,18 @@ export const useStore = create<StoreState>()(
               },
             }));
             isApplyingRemoteSnapshot = false;
-            return true;
-          } catch {
+            return { ok: true };
+          } catch (loadError) {
             await supabase.auth.signOut({ scope: 'local' });
-            return false;
+            const message = loadError instanceof Error ? loadError.message : String(loadError || '');
+            return loginFailure(classifyLoginFailure(message, 'workspace'));
           }
         }
 
         // Match by name (case-insensitive) — never expose user IDs to the login UI
         const user = get().users.find(u => u.name.toLowerCase() === name.trim().toLowerCase());
-        if (!user) return false;
-        if (!canLoginWithSeedAccount(user.id)) return false;
+        if (!user) return loginFailure('invalid_credentials');
+        if (!canLoginWithSeedAccount(user.id)) return loginFailure('invalid_credentials');
 
         const normalizedUser = normalizeUserAccount(user);
         let isValid = false;
@@ -1849,10 +1856,10 @@ export const useStore = create<StoreState>()(
             allowDefaultPassword: shouldShowDemoLogin() && !getBackendStatus().isHostedRuntime,
           });
         } catch {
-          return false;
+          return loginFailure('workspace_load_failed');
         }
         if (!isValid) {
-          return false;
+          return loginFailure('invalid_credentials');
         }
 
         const nextUser = {
@@ -1867,16 +1874,13 @@ export const useStore = create<StoreState>()(
             account.id === user.id ? nextUser : account
           )),
         }));
-        return true;
+        return { ok: true };
       },
 
-      requestPasswordRecovery: async (identifier) => {
+      requestPasswordRecovery: async (email) => {
         if (!shouldUseSecureSupabase()) {
-          const normalized = identifier.trim().toLowerCase();
-          const localAccount = get().users.find(user => (
-            user.name.trim().toLowerCase() === normalized ||
-            (user.email && user.email.trim().toLowerCase() === normalized)
-          ));
+          const normalized = email.trim().toLowerCase();
+          const localAccount = get().users.find(user => user.email?.trim().toLowerCase() === normalized);
           if (localAccount?.isSuperAdmin) {
             return {
               ok: false,
@@ -1889,15 +1893,11 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'You are offline. Reconnect before requesting a password email.' };
         }
 
-        const normalizedIdentifier = identifier.trim().toLowerCase();
-        const matchingMember = normalizedIdentifier.includes('@')
-          ? undefined
-          : get().users.find(user => user.name.trim().toLowerCase() === normalizedIdentifier);
-        const email = resolveAuthEmail(matchingMember?.email || identifier);
-        if (!profileEmailPattern.test(email)) return { ok: true };
+        const normalizedEmail = email.trim().toLowerCase();
+        if (!isValidRecoveryEmail(normalizedEmail)) return { ok: true };
 
         try {
-          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
             redirectTo: passwordSetupRedirectUrl(),
           });
           if (error && /fetch|network|offline/i.test(error.message)) {
@@ -2370,7 +2370,7 @@ export const useStore = create<StoreState>()(
         const currentUser = state.currentUser;
         if (!task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
         if (assignedTo === task.assignedTo) return state;
-        if (!canAssignTasksToOthers(currentUser, state.rolePermissions)) return state;
+        if (!canAssignTasksToOthers(currentUser, state.rolePermissions, task)) return state;
 
         const assigneeUser = state.users.find(u => u.id === assignedTo && u.role !== 'Client');
         if (!assigneeUser) return state;
@@ -2463,7 +2463,7 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'You do not have permission to edit this task.' };
         }
 
-        const canAssignOthers = canAssignTasksToOthers(currentUser, state.rolePermissions);
+        const canAssignOthers = canAssignTasksToOthers(currentUser, state.rolePermissions, task);
         const nextAssigneeId = data.assignedTo ?? task.assignedTo;
         if (!canAssignOthers && nextAssigneeId !== task.assignedTo) {
           return { ok: false, error: 'You do not have permission to reassign this task.' };
@@ -2472,6 +2472,9 @@ export const useStore = create<StoreState>()(
         const nextDepartment = data.department ?? task.department;
         if (!canAssignOthers && nextDepartment !== task.department) {
           return { ok: false, error: 'You do not have permission to change the task department.' };
+        }
+        if (canAssignOthers && currentUser.role === 'Staff' && !isBossKoo(currentUser) && !isMemberInDepartment(currentUser, nextDepartment)) {
+          return { ok: false, error: 'You can only manage tasks within your departments.' };
         }
         const requestedClientName = data.clientName !== undefined ? data.clientName.trim() : task.clientName;
         if (!canAssignOthers && requestedClientName.toLowerCase() !== task.clientName.toLowerCase()) {
@@ -3906,6 +3909,16 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'Client company is required for Client users.' };
         }
 
+        const selectedCustomRole = data.customRoleId
+          ? get().rolePermissions.find(role => role.id === data.customRoleId)
+          : undefined;
+        if (data.customRoleId && !selectedCustomRole) {
+          return { ok: false, error: 'Custom role was not found.' };
+        }
+        if (selectedCustomRole && selectedCustomRole.baseRole !== data.role) {
+          return { ok: false, error: `This role can only be assigned to ${selectedCustomRole.baseRole} members.` };
+        }
+
         const duplicate = !data.memberId && !data.registrationId && get().users.some(user => (
           user.name.toLowerCase() === name.toLowerCase() ||
           (email && user.email?.toLowerCase() === email.toLowerCase())
@@ -3981,9 +3994,7 @@ export const useStore = create<StoreState>()(
           return { ok: true };
         }
 
-        const customRole = data.customRoleId
-          ? get().rolePermissions.find(role => role.id === data.customRoleId)
-          : undefined;
+        const customRole = selectedCustomRole;
 
         const userId = nowId('U');
         try {
@@ -4037,7 +4048,8 @@ export const useStore = create<StoreState>()(
 
         const name = data.name.trim();
         if (!name) return { ok: false, error: 'Role name is required.' };
-        const hasAnyPermission = data.permissions && Object.values(data.permissions).some(Boolean);
+        const permissions = sanitizeNonSuperAdminPermissions(data.permissions);
+        const hasAnyPermission = permissions && Object.values(permissions).some(Boolean);
         if (!hasAnyPermission) return { ok: false, error: 'Choose at least one permission so members with this role keep workspace access.' };
 
         const duplicate = get().rolePermissions.some(role => role.name.toLowerCase() === name.toLowerCase());
@@ -4047,6 +4059,7 @@ export const useStore = create<StoreState>()(
         const id = nowId('CR');
         const customRole: CustomRole = {
           ...data,
+          permissions,
           id,
           name,
           description: data.description?.trim() || undefined,
@@ -4072,12 +4085,12 @@ export const useStore = create<StoreState>()(
 
         const targetRole = get().rolePermissions.find(role => role.id === id);
         if (!targetRole) return { ok: false, error: 'Custom role was not found.' };
-        if (targetRole.isProtected) return { ok: false, error: 'Protected roles cannot be changed.' };
+        if (targetRole.isProtected || isHodRole(targetRole)) return { ok: false, error: 'Protected roles cannot be changed.' };
 
         const nextName = data.name?.trim() || targetRole.name;
         const duplicate = get().rolePermissions.some(role => role.id !== id && role.name.toLowerCase() === nextName.toLowerCase());
         if (duplicate) return { ok: false, error: 'A role with this name already exists.' };
-        const nextPermissions = data.permissions ?? targetRole.permissions;
+        const nextPermissions = sanitizeNonSuperAdminPermissions(data.permissions ?? targetRole.permissions);
         if (!Object.values(nextPermissions).some(Boolean)) {
           return { ok: false, error: 'Choose at least one permission so members with this role keep workspace access.' };
         }
@@ -4088,6 +4101,7 @@ export const useStore = create<StoreState>()(
               ? {
                   ...role,
                   ...data,
+                  permissions: nextPermissions,
                   name: nextName,
                   description: data.description?.trim() || undefined,
                   updatedAt: new Date().toISOString(),
@@ -4118,7 +4132,7 @@ export const useStore = create<StoreState>()(
 
         const targetRole = get().rolePermissions.find(role => role.id === id);
         if (!targetRole) return { ok: false, error: 'Custom role was not found.' };
-        if (targetRole.isProtected) return { ok: false, error: 'Protected roles cannot be deleted.' };
+        if (targetRole.isProtected || isHodRole(targetRole)) return { ok: false, error: 'Protected roles cannot be deleted.' };
 
         set((state) => ({
           rolePermissions: state.rolePermissions.filter(role => role.id !== id),
@@ -4150,6 +4164,9 @@ export const useStore = create<StoreState>()(
           : undefined;
 
         if (customRoleId && !customRole) return { ok: false, error: 'Custom role was not found.' };
+        if (customRole && customRole.baseRole !== targetUser.role) {
+          return { ok: false, error: `This role can only be assigned to ${customRole.baseRole} members.` };
+        }
 
         set((state) => ({
           users: state.users.map(user => (
@@ -4275,15 +4292,20 @@ export const useStore = create<StoreState>()(
         const reg = state.registrations.find(r => r.id === id);
         if (!reg) return { ok: false, error: 'Registration not found.' };
         if (reg.status !== 'Pending') return { ok: false, error: 'This registration has already been reviewed.' };
+        const selectedCustomRole = customRoleId
+          ? state.rolePermissions.find(item => item.id === customRoleId)
+          : undefined;
+        if (customRoleId && !selectedCustomRole) return { ok: false, error: 'Custom role was not found.' };
+        if (selectedCustomRole && selectedCustomRole.baseRole !== role) {
+          return { ok: false, error: `This role can only be assigned to ${selectedCustomRole.baseRole} members.` };
+        }
         if (shouldUseSecureSupabase()) {
           set(current => ({
             registrations: current.registrations.map(r => r.id === id ? { ...r, status: 'Approved' } : r),
           }));
           return { ok: true };
         }
-        const customRole = customRoleId
-          ? state.rolePermissions.find(role => role.id === customRoleId)
-          : undefined;
+        const customRole = selectedCustomRole;
         const departments = normalizeMemberDepartments(role, departmentsInput);
         if (departments.length === 0) return { ok: false, error: 'Choose at least one department before approving this member.' };
 

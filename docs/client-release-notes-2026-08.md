@@ -7,7 +7,10 @@
 - **More confidence in account setup.** Secure first-login password setup now has deeper automated checks covering completion, safe retry, and account readiness.
 - **Verified role-based reporting.** Account team reports are checked to include assigned work while excluding work outside the user’s role and responsibilities.
 - **Verified client approvals.** Client delivery approval is checked through submission, confirmation history, and refresh so the decision remains reliable.
-- **Release-assurance update.** This release adds testing and deployment safeguards without changing client workflows, public interfaces, or production data.
+- **Safer hosted access.** Login and recovery now use account email addresses and distinguish invalid credentials, unapproved accounts, expired sessions, and temporary workspace-loading failures.
+- **Tighter role boundaries.** Boss Koo remains the only role that can administer members or assign protected custom-role permissions; assigned Staff can open only the service-client workspaces they are allowed to see.
+- **Clearer task ownership.** The protected HOD role can manage work it created after reassignment, while ordinary Staff remain limited to assigned work and Boss Koo retains unrestricted control.
+- **Release-assurance update.** This release includes a privilege-only database hardening migration and verification safeguards. It does not rewrite business records.
 
 ## v2.1.4 — 4 September 2026
 
@@ -62,7 +65,7 @@
 
 | Release | Formal release commit | Verification basis |
 | --- | --- | --- |
-| v2.1.5 | Release tag `v2.1.5` | Password-setup RPC authorization and idempotency, Account report isolation, persisted client approval, authenticated staging QA, and automatic `master` deployment provenance. |
+| v2.1.5 | Release tag `v2.1.5` | Structured hosted auth failures and email-only recovery, Boss-only administration, assigned-service isolation, privilege-only database hardening, authenticated staging QA, and exact automatic `master` deployment provenance. |
 | v2.1.4 | Release tag `v2.1.4` | Staff cycle-progress correction, complete Staff authorization rollout, immutable forward migrations, production data-integrity checks, and exact deployment provenance; authenticated staging QA waived by the exact one-time direct-production gate. |
 | v2.1.3 | Release tag `v2.1.3` | Staff command authorization, canonical task-linked notifications, service-catalog flows, Boss deliverables, registration approval, and Chinese coverage. |
 | v2.1.2 | Release tag `v2.1.2` | Shared save/retry recovery, typed resubmission, original-error preservation, and production provenance; staging QA waived by one-time direct-production gate. |

@@ -1,3 +1,5 @@
+import type { LoginFailureCode, LoginResult } from '../types';
+
 const env = (key: string) => (import.meta.env[key] as string | undefined)?.trim() || '';
 
 // Local demo credentials must never be emitted into hosted production bundles.
@@ -12,6 +14,29 @@ export const validateStaffSignupPassword = (password: string, confirmation: stri
   if (password.length < 12) return 'Use a password with at least 12 characters.';
   if (password !== confirmation) return 'Passwords do not match.';
   return '';
+};
+
+export const isValidRecoveryEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
+export const classifyLoginFailure = (
+  message: string,
+  phase: 'authentication' | 'workspace' = 'authentication',
+): LoginFailureCode => {
+  if (/expired|jwt/i.test(message)) return 'session_expired';
+  if (phase === 'workspace' && /not an AiTask workspace member|not linked|not approved/i.test(message)) {
+    return 'account_unapproved_or_unlinked';
+  }
+  return phase === 'workspace' ? 'workspace_load_failed' : 'invalid_credentials';
+};
+
+export const loginFailure = (code: LoginFailureCode): LoginResult => {
+  const messages: Record<LoginFailureCode, string> = {
+    invalid_credentials: 'The email or password is incorrect. Check both and try again.',
+    account_unapproved_or_unlinked: 'Your account is not approved or linked to an AiTask workspace. Ask Boss Koo to confirm your access.',
+    session_expired: 'Your session has expired. Sign in again.',
+    workspace_load_failed: 'Your password was accepted, but the workspace could not be loaded. Please try again shortly.',
+  };
+  return { ok: false, code, error: messages[code] };
 };
 
 const isEnabled = (value: string) => ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());

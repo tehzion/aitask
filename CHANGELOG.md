@@ -14,6 +14,13 @@ number remain uniquely identifiable.
 - Added browser coverage for Account-role report isolation and persistent client
   delivery approval, plus authenticated staging coverage of the real hosted
   password form.
+- Added structured hosted-login failures for invalid credentials, unapproved or
+  unlinked accounts, expired sessions, and temporary workspace-load failures.
+- Added coverage for email-only hosted login/recovery, Boss-only custom-role
+  administration, assigned Staff service-client access, department compatibility,
+  and Staff-owned task deletion.
+- Added the protected Staff HOD role and task-ownership checks, including creator
+  immutability, department-scoped assignment, and safe capability-version cutover.
 
 ### Release
 
@@ -22,8 +29,17 @@ number remain uniquely identifiable.
   commit deployed automatically from `master`.
 - Historical direct-production exceptions were removed. Production continues to
   deploy automatically from reviewed `master` updates, as requested.
-- No application feature, public API, database migration, or production-data
-  change is included in this assurance release.
+- Added a forward privilege-only Supabase migration that retires anonymous
+  helper access and removes unnecessary authenticated table privileges. No
+  business-record rewrite is included.
+- Member invitations retain `employee`, `supplier`, and `freelancer` worker
+  types, with JWT verification required for invitations and intentionally
+  disabled for public feedback.
+- Production release remains gated on backup/checksum verification, leaked-
+  password protection, exact tag provenance, and removal of only the verified
+  orphan test account. Authenticated production tests remain prohibited.
+- Existing workspaces receive the protected HOD role without automatic member
+  promotion or business-record transformation.
 
 ## [2.1.4] - 2026-09-04
 

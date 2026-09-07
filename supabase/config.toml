@@ -1,2 +1,5 @@
 [functions.invite-aitask-member]
 verify_jwt = true
+
+[functions.aitask-feedback]
+verify_jwt = false

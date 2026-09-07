@@ -9,6 +9,7 @@ import {
   canEditClientProfile,
   canEditProject,
   canEditTask,
+  canOpenServiceClient,
   canRenameClient,
   canReviewTaskAsClient,
   canViewAllClients,
@@ -22,6 +23,7 @@ import {
   getVisibleTasks,
   getUnreadNotifications,
   isNotificationReadByUser,
+  SYSTEM_HOD_ROLE_ID,
 } from './access';
 
 const admin: User = { id: 'admin-1', name: 'Admin', role: 'Admin', departments: ['Management'], department: 'Management' };
@@ -237,6 +239,14 @@ describe('staff permission matrix', () => {
     expect(canRenameClient(elevatedStaff)).toBe(false);
   });
 
+  it('requires assigned-service permission before Staff can open a service client', () => {
+    const assigned = makeTask({ clientName: 'Acme', assignedTo: staff.id });
+    const withoutPermission = { ...staff, permissions: { ...defaultRolePermissions.Staff, viewAssignedServiceClients: false } };
+    expect(canOpenServiceClient(withoutPermission, 'Acme', [assigned])).toBe(false);
+    expect(canOpenServiceClient(staff, 'Acme', [assigned])).toBe(true);
+    expect(canOpenServiceClient(staff, 'Beta', [assigned])).toBe(false);
+  });
+
   it('grants broad reads without broad edits through View all tasks', () => {
     const viewingStaff: User = {
       ...staff,
@@ -249,14 +259,71 @@ describe('staff permission matrix', () => {
     expect(canEditTask(viewingStaff, tasks[1])).toBe(false);
   });
 
-  it('treats Edit all tasks as broad task visibility and editing', () => {
+  it('does not let legacy Edit all tasks data broaden non-Boss access', () => {
     const editingStaff: User = {
       ...staff,
       permissions: { ...defaultRolePermissions.Staff, editTasks: true },
     };
 
-    expect(getVisibleTasks(editingStaff, tasks).map(task => task.id)).toEqual(['task-1', 'task-2']);
-    expect(canEditTask(editingStaff, tasks[1])).toBe(true);
+    expect(getVisibleTasks(editingStaff, tasks).map(task => task.id)).toEqual(['task-1']);
+    expect(canEditTask(editingStaff, tasks[1])).toBe(false);
+  });
+
+  it('removes protected account-management and retired report permissions from non-super-admin roles', () => {
+    const unsafeStaff: User = {
+      ...staff,
+      permissions: {
+        ...defaultRolePermissions.Staff,
+        editTasks: true,
+        manageUsers: true,
+        approveRegistrations: true,
+        deleteUsers: true,
+        viewProductionReports: true,
+      },
+    };
+    const effective = getEffectivePermissions(unsafeStaff);
+    expect(effective.editTasks).toBe(false);
+    expect(effective.manageUsers).toBe(false);
+    expect(effective.approveRegistrations).toBe(false);
+    expect(effective.deleteUsers).toBe(false);
+    expect(effective.viewProductionReports).toBe(false);
+  });
+
+  it('gives the protected HOD scope to created and assigned tasks only', () => {
+    const hodRole: CustomRole = {
+      id: SYSTEM_HOD_ROLE_ID,
+      name: 'HOD',
+      baseRole: 'Staff',
+      isProtected: true,
+      permissions: { ...defaultRolePermissions.Staff, manageCreatedTasks: true },
+      createdAt: '2026-09-07T00:00:00.000Z',
+      updatedAt: '2026-09-07T00:00:00.000Z',
+    };
+    const hod: User = { ...staff, customRoleId: hodRole.id, customRoleName: hodRole.name };
+    const createdAndReassigned = makeTask({ id: 'hod-created', createdBy: hod.id, assignedTo: otherStaff.id });
+    const assignedToHod = makeTask({ id: 'hod-assigned', createdBy: otherStaff.id, assignedTo: hod.id });
+    const unrelated = makeTask({ id: 'hod-unrelated', createdBy: otherStaff.id, assignedTo: otherStaff.id });
+    const visible = getVisibleTasks(hod, [createdAndReassigned, assignedToHod, unrelated], [hodRole]);
+
+    expect(visible.map(task => task.id)).toEqual(['hod-created', 'hod-assigned']);
+    expect(canEditTask(hod, createdAndReassigned, [hodRole])).toBe(true);
+    expect(canEditTask(hod, assignedToHod, [hodRole])).toBe(true);
+    expect(canEditTask(hod, unrelated, [hodRole])).toBe(false);
+    expect(canAssignTasksToOthers(hod, [hodRole], createdAndReassigned)).toBe(true);
+    expect(canAssignTasksToOthers(hod, [hodRole], assignedToHod)).toBe(false);
+  });
+
+  it('keeps Admin task visibility broad but task editing scoped', () => {
+    const adminCreated = makeTask({ id: 'admin-created', createdBy: admin.id, assignedTo: otherStaff.id });
+    const adminAssigned = makeTask({ id: 'admin-assigned', createdBy: otherStaff.id, assignedTo: admin.id });
+    const unrelated = makeTask({ id: 'admin-unrelated', createdBy: otherStaff.id, assignedTo: otherStaff.id });
+
+    expect(getVisibleTasks(admin, [adminCreated, adminAssigned, unrelated]).map(task => task.id)).toEqual([
+      'admin-created', 'admin-assigned', 'admin-unrelated',
+    ]);
+    expect(canEditTask(admin, adminCreated)).toBe(true);
+    expect(canEditTask(admin, adminAssigned)).toBe(true);
+    expect(canEditTask(admin, unrelated)).toBe(false);
   });
 
   it('keeps missing permissions disabled for existing persisted roles', () => {

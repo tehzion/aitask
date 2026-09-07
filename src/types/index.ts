@@ -1,4 +1,12 @@
 export type Role = 'Admin' | 'Staff' | 'Client';
+export type LoginFailureCode =
+  | 'invalid_credentials'
+  | 'account_unapproved_or_unlinked'
+  | 'session_expired'
+  | 'workspace_load_failed';
+export type LoginResult =
+  | { ok: true }
+  | { ok: false; code: LoginFailureCode; error: string };
 export type Department =
   | 'Operation'
   | 'Management'
@@ -29,6 +37,7 @@ export type RolePermissionKey =
   | 'viewSettings'
   | 'createTasks'
   | 'editTasks'
+  | 'manageCreatedTasks'
   | 'createProjects'
   | 'manageUsers'
   | 'approveRegistrations'

@@ -8,7 +8,7 @@ import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { useI18n } from '../components/I18nProvider';
-import { canDeleteUser, defaultRolePermissions, getEffectiveRoleName, isBossKoo, permissionGroups, permissionLabels } from '../lib/access';
+import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getEffectiveRoleName, isBossKoo, permissionGroups, permissionLabels } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
@@ -875,12 +875,13 @@ const Approvals: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 data-i18n-skip className="font-semibold text-slate-900">{customRole.name}</h3>
                       <Badge tone="slate">Base: {customRole.baseRole}</Badge>
+                      {customRole.isProtected && <Badge tone="purple">Protected</Badge>}
                     </div>
                     {customRole.description && <p className="mt-1 text-sm text-slate-500">{customRole.description}</p>}
                   </div>
                   <div className="flex gap-2">
-                    <Button type="button" variant="secondary" onClick={() => handleEditRole(customRole.id)}>Edit</Button>
-                    <Button type="button" variant="danger" onClick={() => void handleDeleteRole(customRole.id)} disabled={isActionSaving}>Delete</Button>
+                    <Button type="button" variant="secondary" onClick={() => handleEditRole(customRole.id)} disabled={customRole.isProtected}>Edit</Button>
+                    <Button type="button" variant="danger" onClick={() => void handleDeleteRole(customRole.id)} disabled={isActionSaving || customRole.isProtected}>Delete</Button>
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1023,7 +1024,7 @@ const Approvals: React.FC = () => {
                         disabled={isActionSaving}
                       >
                         <option value="">Base role only ({getEffectiveRoleName(u, rolePermissions)})</option>
-                        {rolePermissions.map(customRole => (
+                        {getAssignableCustomRoles(u.role, rolePermissions).map(customRole => (
                           <option key={customRole.id} data-i18n-skip value={customRole.id}>{customRole.name}</option>
                         ))}
                       </select>
@@ -1167,6 +1168,7 @@ const Approvals: React.FC = () => {
                         ...newUser,
                         role: nextRole,
                         departments: nextRole === 'Client' ? ['Client'] : [],
+                        customRoleId: '',
                       });
                     }}
                   >
@@ -1182,7 +1184,7 @@ const Approvals: React.FC = () => {
                     onChange={e => setNewUser({ ...newUser, customRoleId: e.target.value })}
                   >
                     <option value="">Base role only</option>
-                    {rolePermissions.map(customRole => <option key={customRole.id} data-i18n-skip value={customRole.id}>{customRole.name}</option>)}
+                    {getAssignableCustomRoles(newUser.role, rolePermissions).map(customRole => <option key={customRole.id} data-i18n-skip value={customRole.id}>{customRole.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -1332,7 +1334,7 @@ const Approvals: React.FC = () => {
                   onChange={e => setApprovalCustomRoleId(e.target.value)}
                 >
                   <option value="">Base role only</option>
-                  {rolePermissions.map(customRole => <option key={customRole.id} value={customRole.id}>{customRole.name}</option>)}
+                  {getAssignableCustomRoles('Staff', rolePermissions).map(customRole => <option key={customRole.id} value={customRole.id}>{customRole.name}</option>)}
                 </select>
               </div>
 

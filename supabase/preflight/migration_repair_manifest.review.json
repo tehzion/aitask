@@ -182,7 +182,12 @@
   ],
   "validatedMigrationTail": [
     "20260903160806_harden_staff_command_authorization",
-    "20260904104435_allow_staff_cycle_published_at"
+    "20260904104435_allow_staff_cycle_published_at",
+    "20260907043633_hod_task_ownership_permissions",
+    "20260907120000_harden_legacy_access_privileges"
   ],
-  "pendingProductionMigrations": []
+  "pendingProductionMigrations": [
+    "20260907043633_hod_task_ownership_permissions",
+    "20260907120000_harden_legacy_access_privileges"
+  ]
 }

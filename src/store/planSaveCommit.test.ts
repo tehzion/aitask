@@ -201,7 +201,7 @@ describe('retryPendingSave', () => {
 
     rpc
       .mockResolvedValueOnce({
-        data: { ok: true, schemaVersion: 2, workspaceOptimisticLock: true, serviceOperations: true, releaseNoticeAcknowledgements: true },
+        data: { ok: true, schemaVersion: 3, workspaceOptimisticLock: true, serviceOperations: true, releaseNoticeAcknowledgements: true },
         error: null,
       })
       .mockResolvedValueOnce({

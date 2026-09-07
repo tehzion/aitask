@@ -41,6 +41,7 @@ import {
 import {
   canManageClientPlans,
   canManageServiceCycles,
+  canOpenServiceClient,
   canViewServicePrices,
   hasPermission,
 } from "../lib/access";
@@ -107,26 +108,8 @@ const OperationsClientWorkspace = () => {
     store.currentUser,
     store.rolePermissions,
   );
-  const canSeeAllServiceClients = hasPermission(
-    store.currentUser,
-    "viewAllServiceClients",
-    store.rolePermissions,
-  );
   const isClient = store.currentUser?.role === "Client";
-  const assignedStaff =
-    store.currentUser?.role === "Staff" &&
-    store.tasks.some(
-      (task) =>
-        task.clientId === client.id &&
-        task.assignedTo === store.currentUser?.id,
-    );
-  if (
-    !canSeeAllServiceClients &&
-    !canManagePlans &&
-    !canManageCycles &&
-    !isClient &&
-    !assignedStaff
-  )
+  if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions))
     return <Navigate to="/clients" replace />;
   if (
     isClient &&

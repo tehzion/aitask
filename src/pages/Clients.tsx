@@ -21,7 +21,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { Badge, Button, PageHeader, ProgressBar, StatGroup, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
-import { canCreateTasks, canEditClientProfile, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { canCreateTasks, canEditClientProfile, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
@@ -527,6 +527,7 @@ const Clients: React.FC = () => {
                 const website = safeHttpsUrl(contact.website);
                 const facebookPage = safeHttpsUrl(contact.facebookPage);
                 const serviceContext = getServiceContext(client);
+                const canOpenWorkspace = canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions);
 
                 return (
                   <tr key={client.name} className="border-b border-line/70 bg-surface text-ink transition-colors duration-160 hover:bg-inset/60">
@@ -590,7 +591,7 @@ const Clients: React.FC = () => {
                     </td>
                     <td className="px-5 py-6 align-top">
                       <div className="flex min-w-[150px] items-center gap-2">
-                        {client.profile ? <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>Workspace <ArrowRight className="h-4 w-4" /></Link> : <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>View tasks</Link>}
+                        {client.profile && canOpenWorkspace ? <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>Workspace <ArrowRight className="h-4 w-4" /></Link> : <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>View tasks</Link>}
                         <div className="relative">
                           <button
                             type="button"
@@ -650,7 +651,7 @@ const Clients: React.FC = () => {
                 </div>
 
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                  {client.profile && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>Workspace <ArrowRight className="h-4 w-4" /></Link>}
+                  {client.profile && canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions) && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>Workspace <ArrowRight className="h-4 w-4" /></Link>}
                   <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>
                     View tasks <ArrowRight className="h-4 w-4" />
                   </Link>
