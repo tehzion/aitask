@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "production_aligned_through_20260910120000_pending_20260910144226",
+  "status": "production_aligned_through_20260910144226",
   "metadataOnly": false,
-  "warning": "Production history is aligned through 20260910120000_client_project_link_authorization. The reviewed forward migration 20260910144226_member_permission_realtime_refresh is pending deployment; historical rollout repair remains prohibited.",
+  "warning": "Production history is aligned through 20260910144226_member_permission_realtime_refresh after the reviewed forward migration push. Historical rollout repair remains prohibited.",
   "productionVerification": {
     "verifiedAt": "2026-09-10",
-    "historyThrough": "20260910120000_client_project_link_authorization",
+    "historyThrough": "20260910144226_member_permission_realtime_refresh",
     "historyAligned": true,
     "rolloutResult": {
       "approvedBaselineMatchedAfterRestore": true,
@@ -110,6 +110,15 @@
         "platformBackupClaimed": false
       },
       "leakedPasswordProtectionEnabled": false
+    },
+    "v230RealtimeRefreshRollout": {
+      "migration": "20260910144226_member_permission_realtime_refresh",
+      "realtimePublicationTables": [
+        "aitask_entities",
+        "aitask_members"
+      ],
+      "anonymousIsolationPassed": true,
+      "advisorErrorCount": 0
     }
   },
   "schemaEquivalence": {
@@ -303,7 +312,5 @@
     "20260910120000_client_project_link_authorization",
     "20260910144226_member_permission_realtime_refresh"
   ],
-  "pendingProductionMigrations": [
-    "20260910144226_member_permission_realtime_refresh"
-  ]
+  "pendingProductionMigrations": []
 }
