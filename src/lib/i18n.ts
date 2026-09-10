@@ -1107,6 +1107,17 @@ const zhCopyAdditions: Record<string, string> = {
   'Add client': '添加客户',
   'Manage client plans': '管理客户服务方案',
   'View companies': '查看公司',
+  'Add member': '添加成员',
+  'Add the first client': '添加第一个客户',
+  'Due today': '今日到期',
+  'Overdue tasks': '逾期任务',
+  'Facebook page': 'Facebook 页面',
+  'Switch to day mode': '切换至日间模式',
+  'Switch to night mode': '切换至夜间模式',
+  'Switched to day mode.': '已切换至日间模式。',
+  'Switched to night mode.': '已切换至夜间模式。',
+  'Go to: press a page shortcut key.': '前往：请按页面快捷键。',
+  'Navigation shortcut cancelled.': '导航快捷键已取消。',
 };
 
 const preserveWhitespace = (value: string, replacement: string) => {

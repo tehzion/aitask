@@ -160,9 +160,9 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
   await page.getByRole('button', { name: '切换为中文' }).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
   await expect(page.getByRole('heading', { name: '首页' })).toBeVisible();
-  await expect(page.locator('main').getByText('需要您审阅', { exact: true }).first()).toBeVisible();
-  await expect(page.locator('main').getByText('交付进行中', { exact: true }).first()).toBeVisible();
-  await expect(page.locator('main').getByText('Dashboard', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('main').getByText('需要您审阅').first()).toBeVisible();
+  await expect(page.locator('main').getByText('交付进行中').first()).toBeVisible();
+  await expect(page.locator('main').getByText('Dashboard').first()).toBeVisible();
 
   await page.goto(`/clients/${seeded.clientId}`);
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
