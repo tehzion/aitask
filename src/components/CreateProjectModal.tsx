@@ -3,33 +3,42 @@ import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { Check, X, Plus } from 'lucide-react';
 import { Project, ServiceType } from '../types';
-import { getClientOptions, getServiceOptions, hasChoice, PRESET_SERVICES } from '../lib/choiceOptions';
+import { getServiceOptions, hasChoice, PRESET_SERVICES } from '../lib/choiceOptions';
 import ModalShell from './ModalShell';
 import { fieldLabel, modalFooter } from './uiTokens';
+import { canManageClientProfiles, canViewAllClients, getVisibleClientNames } from '../lib/access';
+import CreateClientProfileModal from './CreateClientProfileModal';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   project?: Project | null;
+  initialClientId?: string;
   onProjectCreated?: (projectId: string) => void;
   onProjectUpdated?: (projectId: string) => void;
 }
 
-const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProjectCreated, onProjectUpdated }) => {
-  const { addProject, updateProject, projects, tasks, users, retryPendingSave } = useStore(useShallow(state => ({
+const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initialClientId, onProjectCreated, onProjectUpdated }) => {
+  const { addProject, updateProject, projects, clients, tasks, currentUser, rolePermissions, retryPendingSave } = useStore(useShallow(state => ({
     addProject: state.addProject,
     updateProject: state.updateProject,
     projects: state.projects,
+    clients: state.clients,
     tasks: state.tasks,
-    users: state.users,
+    currentUser: state.currentUser,
+    rolePermissions: state.rolePermissions,
     retryPendingSave: state.retryPendingSave,
   })));
-  const clientListId = React.useId();
   const titleId = React.useId();
   const descriptionId = React.useId();
+  const clientSelectId = React.useId();
+  const projectNameId = React.useId();
   const isEditing = Boolean(project);
 
-  const [clientName, setClientName]         = useState('');
+  const [clientId, setClientId] = useState('');
+  const [projectName, setProjectName] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [deadline, setDeadline] = useState('');
   const [selectedServices, setSelectedServices] = useState<ServiceType[]>([]);
   const [customServices, setCustomServices] = useState<string[]>([]);
   const [customInput, setCustomInput]       = useState('');
@@ -37,8 +46,20 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
   const [formError, setFormError]           = useState('');
   const [isSubmitting, setIsSubmitting]     = useState(false);
   const [pendingProjectId, setPendingProjectId] = useState('');
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const customInputRef = useRef<HTMLInputElement>(null);
-  const clientOptions = React.useMemo(() => getClientOptions(projects, tasks, users), [projects, tasks, users]);
+  const initializedFormKeyRef = useRef('');
+  const clientOptions = React.useMemo(() => {
+    const visibleKeys = new Set(getVisibleClientNames(currentUser, tasks, projects, rolePermissions).map(value => value.trim().toLowerCase()));
+    const byName = new Map(clients
+      .filter(client => canViewAllClients(currentUser, rolePermissions) || visibleKeys.has(client.clientName.trim().toLowerCase()))
+      .map(client => [client.clientName.trim().toLowerCase(), { id: client.id, name: client.clientName }]));
+    if (project) {
+      const key = project.clientName.trim().toLowerCase();
+      if (!byName.has(key)) byName.set(key, { id: project.clientId || '', name: project.clientName });
+    }
+    return Array.from(byName.values()).sort((left, right) => left.name.localeCompare(right.name));
+  }, [clients, currentUser, projects, project, rolePermissions, tasks]);
   const serviceOptions = React.useMemo(() => getServiceOptions(projects, tasks), [projects, tasks]);
   const savedCustomServices = React.useMemo(
     () => serviceOptions.filter(service => !hasChoice(PRESET_SERVICES, service)),
@@ -58,7 +79,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
   }, [selectedServices, customServices]);
 
   React.useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initializedFormKeyRef.current = '';
+      return;
+    }
+    const formKey = `${project?.id || 'new'}:${initialClientId || ''}`;
+    if (initializedFormKeyRef.current === formKey) return;
+    initializedFormKeyRef.current = formKey;
     setFormError('');
     setIsSubmitting(false);
     setPendingProjectId('');
@@ -67,13 +94,19 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
     setCustomServices([]);
 
     if (project) {
-      setClientName(project.clientName);
+      setClientId(project.clientId || clientOptions.find(option => option.name.toLowerCase() === project.clientName.trim().toLowerCase())?.id || '');
+      setProjectName(project.projectName);
+      setStartDate(project.startDate || new Date().toISOString().slice(0, 10));
+      setDeadline(project.deadline || '');
       setSelectedServices(project.services || []);
     } else {
-      setClientName('');
+      setClientId(initialClientId || '');
+      setProjectName('');
+      setStartDate(new Date().toISOString().slice(0, 10));
+      setDeadline('');
       setSelectedServices([]);
     }
-  }, [isOpen, project]);
+  }, [clientOptions, initialClientId, isOpen, project]);
 
   if (!isOpen) return null;
 
@@ -117,7 +150,10 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
   };
 
   const resetForm = () => {
-    setClientName('');
+    setClientId('');
+    setProjectName('');
+    setStartDate('');
+    setDeadline('');
     setSelectedServices([]);
     setCustomServices([]);
     setCustomInput('');
@@ -137,7 +173,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
       const pendingResult = await retryPendingSave();
       setIsSubmitting(false);
       if (!pendingResult.ok) {
-        setFormError(pendingResult.error || 'The company is still waiting to be saved.');
+        setFormError(pendingResult.error || 'The project is still waiting to be saved.');
         return;
       }
       if (project) onProjectUpdated?.(pendingProjectId);
@@ -146,13 +182,18 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
       return;
     }
 
-    const trimmedClientName = clientName.trim();
+    const selectedClient = clientOptions.find(option => option.id === clientId);
+    const trimmedProjectName = projectName.trim();
     const today = new Date().toISOString().split('T')[0];
-    const finalStartDate = project?.startDate || today;
-    const finalDeadline = project?.deadline || '';
+    const finalStartDate = startDate || today;
+    const finalDeadline = deadline;
 
-    if (!trimmedClientName) {
-      setFormError('Company or brand name is required.');
+    if (!selectedClient || (!isEditing && !selectedClient.id)) {
+      setFormError('Choose a company from the Companies database.');
+      return;
+    }
+    if (!trimmedProjectName) {
+      setFormError('Project name is required.');
       return;
     }
 
@@ -160,18 +201,27 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
       setFormError('Select or add at least one service.');
       return;
     }
+    if (!startDate) {
+      setFormError('Choose a project start date.');
+      return;
+    }
+    if (deadline && deadline < startDate) {
+      setFormError('Project deadline cannot be before the start date.');
+      return;
+    }
 
     if (project) {
       const result = updateProject(project.id, {
-        clientName: trimmedClientName,
-        projectName: trimmedClientName,
+        clientId: selectedClient.id || undefined,
+        clientName: selectedClient.name,
+        projectName: trimmedProjectName,
         startDate: finalStartDate,
         deadline: finalDeadline,
         services: allServices,
       });
 
       if (!result.ok) {
-        setFormError(result.error || 'Unable to update this company.');
+        setFormError(result.error || 'Unable to update this project.');
         return;
       }
 
@@ -180,7 +230,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
       setIsSubmitting(false);
       if (!saveResult.ok) {
         setPendingProjectId(project.id);
-        setFormError(saveResult.error || 'The company update is waiting to be saved.');
+        setFormError(saveResult.error || 'The project update is waiting to be saved.');
         return;
       }
 
@@ -190,15 +240,16 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
     }
 
     const newProjectId = addProject({
-      clientName: trimmedClientName,
-      projectName: trimmedClientName,
+      clientId: selectedClient.id,
+      clientName: selectedClient.name,
+      projectName: trimmedProjectName,
       startDate: finalStartDate,
       deadline: finalDeadline,
       services: allServices,
     });
 
     if (!newProjectId) {
-      setFormError('You do not have permission to create companies.');
+        setFormError('You do not have permission to create projects.');
       return;
     }
 
@@ -207,7 +258,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
     setIsSubmitting(false);
     if (!saveResult.ok) {
       setPendingProjectId(newProjectId);
-      setFormError(saveResult.error || 'The company is waiting to be saved.');
+      setFormError(saveResult.error || 'The project is waiting to be saved.');
       return;
     }
 
@@ -216,6 +267,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
   };
 
   return (
+    <>
     <ModalShell
       labelledBy={titleId}
       describedBy={descriptionId}
@@ -227,8 +279,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
           <div>
-            <h2 id={titleId} className="text-xl font-semibold text-slate-950">{isEditing ? 'Edit company' : 'Create company'}</h2>
-            <p id={descriptionId} className="mt-0.5 text-xs text-slate-500">{isEditing ? 'Update the company name and service scope.' : 'Add a company for task assignment.'}</p>
+            <h2 id={titleId} className="text-xl font-semibold text-slate-950">{isEditing ? 'Edit project' : 'Create project'}</h2>
+            <p id={descriptionId} className="mt-0.5 text-xs text-slate-500">{isEditing ? 'Update the project name, company, dates, and services.' : 'Add a named project under an existing company.'}</p>
           </div>
           <button
             onClick={handleClose}
@@ -244,20 +296,32 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
           <form id="create-project-form" onSubmit={handleSubmit} className="space-y-5">
 
             <div>
-              <label className={fieldLabel}>
-                Company name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text" required
-                value={clientName} onChange={e => { setClientName(e.target.value); setFormError(''); }}
-                list={clientListId}
-                maxLength={80}
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <label htmlFor={clientSelectId} className={fieldLabel}>
+                  Company name <span className="text-red-500">*</span>
+                </label>
+                {canManageClientProfiles(currentUser) && <button type="button" onClick={() => setIsClientModalOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">+ Add client</button>}
+              </div>
+              <select
+                required
+                id={clientSelectId}
+                value={clientId} onChange={e => { setClientId(e.target.value); setFormError(''); }}
                 className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
-                placeholder="e.g., TechNova"
-              />
-              <datalist id={clientListId}>
-                {clientOptions.map(option => <option key={option} value={option} />)}
-              </datalist>
+              >
+                <option value="">Choose a company</option>
+                {clientOptions.map(option => <option key={option.id || option.name} value={option.id}>{option.name}</option>)}
+              </select>
+              {clientOptions.length === 0 && <p className="mt-2 text-xs text-amber-700">{canManageClientProfiles(currentUser) ? 'Add a client profile first, then continue creating this project.' : 'Ask an administrator to add or assign a company before creating this project.'}</p>}
+            </div>
+
+            <div>
+              <label htmlFor={projectNameId} className={fieldLabel}>Project name <span className="text-red-500">*</span></label>
+              <input id={projectNameId} type="text" required maxLength={160} value={projectName} onChange={e => { setProjectName(e.target.value); setFormError(''); }} placeholder="e.g., Q4 Social Campaign" className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm" />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className={fieldLabel}>Start date <span className="text-red-500">*</span><input type="date" required value={startDate} onChange={e => { setStartDate(e.target.value); setFormError(''); }} className="mt-1.5 w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg p-2.5 outline-none shadow-sm" /></label>
+              <label className={fieldLabel}>Deadline<input type="date" min={startDate || undefined} value={deadline} onChange={e => { setDeadline(e.target.value); setFormError(''); }} className="mt-1.5 w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg p-2.5 outline-none shadow-sm" /></label>
             </div>
 
             {/* Required Services */}
@@ -393,10 +457,19 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, onProje
             disabled={isSubmitting}
             className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? 'Saving...' : pendingProjectId ? 'Retry saving' : isEditing ? 'Save changes' : 'Create company'}
+        {isSubmitting ? 'Saving...' : pendingProjectId ? 'Retry saving' : isEditing ? 'Save changes' : 'Create project'}
           </button>
         </div>
-    </ModalShell>
+      </ModalShell>
+      {isClientModalOpen && <CreateClientProfileModal
+        onClose={() => setIsClientModalOpen(false)}
+        onCreated={(newClientId) => {
+          setClientId(newClientId);
+          setFormError('');
+          setIsClientModalOpen(false);
+        }}
+      />}
+    </>
   );
 };
 

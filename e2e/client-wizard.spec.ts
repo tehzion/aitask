@@ -35,73 +35,65 @@ const seedAdminAndPackage = async (page: Page) => {
   });
 };
 
-test('keyboard completes standard, duplicated and fully custom client creation', async ({ page }) => {
+test('creates a client profile first, then a named project', async ({ page }) => {
   test.setTimeout(120_000);
   await seedAdminAndPackage(page);
+  await page.goto('/projects');
 
-  const cases = [
-    { name: 'Keyboard Standard Co', mode: 'Use standard package', origin: 'standard', quantity: 1 },
-    { name: 'Keyboard Duplicate Co', mode: 'Duplicate as Custom Plan', origin: 'customized', quantity: 2 },
-    { name: 'Keyboard Custom Co', mode: 'Fully custom', origin: 'custom', quantity: 3 },
-  ] as const;
+  await page.getByRole('button', { name: 'New client' }).click();
+  const clientDialog = page.getByRole('dialog', { name: 'Add a client company' });
+  await clientDialog.getByLabel('Company name *').fill('Flow Test Company');
+  await clientDialog.getByLabel('Email').fill('contact@flow-test.example');
+  await clientDialog.getByRole('button', { name: 'Save client' }).click();
+  const clientAddedDialog = page.getByRole('dialog', { name: 'Client added' });
+  await expect(clientAddedDialog).toBeVisible();
 
-  for (const [index, item] of cases.entries()) {
-    await page.goto('/clients');
-    const newClient = page.getByRole('button', { name: 'New client' });
-    await expect(newClient).toBeVisible();
-    await newClient.focus();
-    await page.keyboard.press('Enter');
-    const dialog = page.getByRole('dialog', { name: 'Create client and service plan' });
-    await expect(dialog).toBeVisible();
+  await clientAddedDialog.getByRole('button', { name: 'Create project' }).click();
+  const projectDialog = page.getByRole('dialog', { name: 'Create project' });
+  await expect(projectDialog.getByLabel('Company name *')).toHaveValue(/CL-/);
+  await projectDialog.getByLabel('Project name *').fill('Q4 Launch');
+  await projectDialog.getByRole('button', { name: 'Design' }).click();
+  await projectDialog.getByRole('button', { name: 'Create project', exact: true }).click();
+  await expect(projectDialog).toBeHidden();
+  await expect(page.getByText('Projects: Q4 Launch', { exact: true }).last()).toBeVisible();
 
-    await dialog.getByLabel('Client / company name *').fill(item.name);
-    await dialog.getByLabel('Email').fill(index === 0 ? 'invalid-email' : `client${index}@example.com`);
-    await dialog.getByLabel('Website').fill('https://example.com');
-    await dialog.getByRole('button', { name: 'Continue' }).focus();
-    await page.keyboard.press('Enter');
-    if (index === 0) {
-      await expect(dialog.getByRole('alert')).toContainText('valid email');
-      await dialog.getByLabel('Email').fill('standard@example.com');
-      await dialog.getByRole('button', { name: 'Continue' }).focus();
-      await page.keyboard.press('Enter');
-    }
+  const project = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    return useStore.getState().projects.find(item => item.projectName === 'Q4 Launch');
+  });
+  expect(project).toMatchObject({ clientName: 'Flow Test Company', projectName: 'Q4 Launch' });
 
-    const mode = dialog.getByRole('button', { name: new RegExp(`^${item.mode}`) });
-    await mode.focus();
-    await page.keyboard.press('Enter');
-    await expect(mode).toHaveAttribute('aria-pressed', 'true');
-    await dialog.getByRole('button', { name: 'Continue' }).focus();
-    await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'New task' }).click();
+  const taskDialog = page.getByRole('dialog', { name: 'Create task' });
+  await taskDialog.getByLabel(/Link to Company \/ Brand/).selectOption(project!.id);
+  await taskDialog.getByLabel('Task Title').fill('Launch creative brief');
+  await taskDialog.getByLabel(/Assign to Position\/Department/).selectOption('Designer');
+  await taskDialog.getByRole('button', { name: 'Create & open task' }).click();
+  await expect(taskDialog).toBeHidden();
+  await expect(page).toHaveURL(/\/tasks\?taskId=/);
 
-    if (item.origin === 'custom') {
-      await dialog.getByLabel('Service name').fill('Custom Content');
-      await dialog.getByLabel('Unit').fill('asset');
-    }
-    if (item.origin !== 'standard') {
-      await dialog.getByLabel('Quantity').fill(String(item.quantity));
-      await dialog.getByLabel('Price').fill(item.origin === 'customized' ? '320' : '180');
-    }
-    await dialog.getByRole('button', { name: 'Continue' }).focus();
-    await page.keyboard.press('Enter');
+  const task = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    return useStore.getState().tasks.find(item => item.title === 'Launch creative brief');
+  });
+  expect(task).toMatchObject({ clientId: project!.clientId, clientName: 'Flow Test Company', projectId: project!.id, projectName: 'Q4 Launch' });
+});
 
-    await dialog.getByLabel('Monthly billing day').fill('31');
-    await dialog.getByLabel('Contract end date (reminder only)').fill('2027-08-15');
-    await dialog.getByRole('button', { name: 'Continue' }).focus();
-    await page.keyboard.press('Enter');
-    await expect(dialog.getByText(/Ready to save as Draft/)).toBeVisible();
+test('can add a client inside project creation and continue the same form', async ({ page }) => {
+  test.setTimeout(120_000);
+  await seedAdminAndPackage(page);
+  await page.goto('/projects');
 
-    const save = dialog.getByRole('button', { name: 'Save draft plan' });
-    await save.focus();
-    await page.keyboard.press('Enter');
-    await expect(dialog).toBeHidden();
-    await expect(page).toHaveURL(/\/clients\/CL-/);
-    await expect(page.getByRole('heading', { name: item.name })).toBeVisible();
-
-    const saved = await page.evaluate(async clientName => {
-      const { useStore } = await import('/src/store/index.ts');
-      const plan = useStore.getState().clientPlans.find(candidate => candidate.clientName === clientName);
-      return plan ? { origin: plan.origin, quantity: plan.serviceItems[0]?.quantity, billingDay: plan.billingDay } : null;
-    }, item.name);
-    expect(saved).toEqual({ origin: item.origin, quantity: item.quantity, billingDay: 31 });
-  }
+  await page.getByRole('button', { name: 'New project' }).click();
+  const projectDialog = page.getByRole('dialog', { name: 'Create project' });
+  await projectDialog.getByRole('button', { name: '+ Add client' }).click();
+  const clientDialog = page.getByRole('dialog', { name: 'Add a client company' });
+  await clientDialog.getByLabel('Company name *').fill('Inline Company');
+  await clientDialog.getByRole('button', { name: 'Save client' }).click();
+  await expect(projectDialog.getByLabel('Company name *')).toHaveValue(/CL-/);
+  await projectDialog.getByLabel('Project name *').fill('Inline Project');
+  await projectDialog.getByRole('button', { name: 'Design' }).click();
+  await projectDialog.getByRole('button', { name: 'Create project', exact: true }).click();
+  await expect(projectDialog).toBeHidden();
+  await expect(page.getByText('Projects: Inline Project', { exact: true }).last()).toBeVisible();
 });

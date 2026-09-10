@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(30);
 
 select is(
   (select data -> 'permissions' ->> 'manageCreatedTasks'
@@ -30,7 +30,7 @@ values (
   'pgtap-hod-authorization', 'custom_role', 'system-hod',
   jsonb_build_object(
     'id', 'system-hod', 'name', 'HOD', 'baseRole', 'Staff', 'isProtected', true,
-    'permissions', jsonb_build_object('createTasks', true, 'manageCreatedTasks', true),
+    'permissions', jsonb_build_object('createTasks', true, 'manageCreatedTasks', true, 'createProjects', true),
     'createdAt', now(), 'updatedAt', now()
   )
 );
@@ -47,6 +47,7 @@ insert into public.aitask_members(
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values
   ('pgtap-hod-authorization', 'client', 'pgtap-hod-client', '{"id":"pgtap-hod-client","clientName":"HOD Test Client"}'::jsonb),
+  ('pgtap-hod-authorization', 'client', 'pgtap-hidden-client', '{"id":"pgtap-hidden-client","clientName":"Hidden Client"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-created', '{"id":"pgtap-hod-created","title":"HOD created task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-assigned', '{"id":"pgtap-hod-assigned","title":"HOD assigned task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod","createdBy":"pgtap-hod-staff","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-unrelated', '{"id":"pgtap-hod-unrelated","title":"Unrelated task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-staff","status":"Pending","visibility":"internal"}'::jsonb),
@@ -56,6 +57,57 @@ values
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000920', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
+
+select is(
+  (public.aitask_execute_command(
+    'pgtap-hod-authorization', gen_random_uuid(), 'project.create',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'project', 'entityId', 'pgtap-hod-visible-project',
+      'expectedVersion', 0,
+      'data', jsonb_build_object(
+        'id', 'pgtap-hod-visible-project', 'clientId', 'pgtap-hod-client', 'clientName', 'HOD Test Client',
+        'projectName', 'Visible HOD Project', 'services', jsonb_build_array('Design'),
+        'startDate', '2026-09-10', 'deadline', '', 'createdBy', 'pgtap-hod'
+      )
+    ))
+  ) ->> 'ok')::boolean,
+  true,
+  'HOD can create a project for a visible client when granted project creation'
+);
+
+select is(
+  (public.aitask_execute_command(
+    'pgtap-hod-authorization', gen_random_uuid(), 'project.create',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'project', 'entityId', 'pgtap-hod-hidden-project',
+      'expectedVersion', 0,
+      'data', jsonb_build_object(
+        'id', 'pgtap-hod-hidden-project', 'clientId', 'pgtap-hidden-client', 'clientName', 'Hidden Client',
+        'projectName', 'Hidden HOD Project', 'services', jsonb_build_array('Design'),
+        'startDate', '2026-09-10', 'deadline', '', 'createdBy', 'pgtap-hod'
+      )
+    ))
+  ) ->> 'ok')::boolean,
+  false,
+  'HOD cannot create a project for a hidden client'
+);
+
+select is(
+  (public.aitask_execute_command(
+    'pgtap-hod-authorization', gen_random_uuid(), 'project.create',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'project', 'entityId', 'pgtap-hod-missing-project',
+      'expectedVersion', 0,
+      'data', jsonb_build_object(
+        'id', 'pgtap-hod-missing-project', 'clientId', 'does-not-exist', 'clientName', 'HOD Test Client',
+        'projectName', 'Missing HOD Project', 'services', jsonb_build_array('Design'),
+        'startDate', '2026-09-10', 'deadline', '', 'createdBy', 'pgtap-hod'
+      )
+    ))
+  ) ->> 'ok')::boolean,
+  false,
+  'HOD cannot create a project for a nonexistent client record'
+);
 
 select ok(private.aitask_can_view_task('pgtap-hod-authorization', 'pgtap-hod-created'), 'HOD can view a task they created');
 select ok(private.aitask_can_view_task('pgtap-hod-authorization', 'pgtap-hod-assigned'), 'HOD can view a task assigned to them');
@@ -126,6 +178,53 @@ select ok(not private.aitask_can_edit_task('pgtap-hod-authorization', 'pgtap-hod
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000923', true);
 select ok(private.aitask_can_edit_task('pgtap-hod-authorization', 'pgtap-hod-unrelated'), 'Boss Koo retains unrestricted task editing');
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000921', true);
+select is(
+  (public.aitask_update_member_permissions(
+    'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000930'::uuid, 'pgtap-hod-staff',
+    jsonb_build_object('viewDeliveryTracker', true),
+    (select version from public.aitask_members where id = 'pgtap-hod-staff')
+  ) ->> 'ok')::boolean,
+  false,
+  'ordinary Staff cannot change Staff or HOD permissions'
+);
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000923', true);
+select is(
+  (public.aitask_update_member_permissions(
+    'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000931'::uuid, 'pgtap-hod-staff',
+    jsonb_build_object('viewDeliveryTracker', true, 'editTasks', true, 'manageUsers', true),
+    (select version from public.aitask_members where id = 'pgtap-hod-staff')
+  ) ->> 'ok')::boolean,
+  true,
+  'Boss Koo can save a safe Staff permission override'
+);
+select is(
+  (select permissions ->> 'viewDeliveryTracker' from public.aitask_members where id = 'pgtap-hod-staff'),
+  'true',
+  'the Staff override persists the dedicated task tracker permission'
+);
+select is(
+  (select permissions ->> 'editTasks' from public.aitask_members where id = 'pgtap-hod-staff'),
+  'false',
+  'protected global task editing remains reserved for Boss Koo'
+);
+select is(
+  (public.aitask_update_member_permissions(
+    'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000932'::uuid, 'pgtap-hod-staff',
+    null,
+    (select version from public.aitask_members where id = 'pgtap-hod-staff')
+  ) ->> 'ok')::boolean,
+  true,
+  'Boss Koo can reset a Staff member to role defaults'
+);
+select is(
+  (select permissions from public.aitask_members where id = 'pgtap-hod-staff'),
+  '{}'::jsonb,
+  'resetting permissions clears the direct override'
+);
+
 select is(
   (public.aitask_execute_command(
     'pgtap-hod-authorization', gen_random_uuid(), 'role.manage',
@@ -135,8 +234,20 @@ select is(
       'data', (select data || jsonb_build_object('description', 'changed') from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'system-hod')
     ))
   ) ->> 'ok')::boolean,
+  true,
+  'Boss Koo can safely update the protected HOD role through generic commands'
+);
+select is(
+  (public.aitask_execute_command(
+    'pgtap-hod-authorization', gen_random_uuid(), 'role.manage',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'update', 'entityType', 'custom_role', 'entityId', 'system-hod',
+      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'system-hod'),
+      'data', (select data || jsonb_build_object('name', 'Not HOD') from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'system-hod')
+    ))
+  ) ->> 'ok')::boolean,
   false,
-  'the protected HOD role cannot be modified even by generic commands'
+  'the protected HOD identity cannot be renamed'
 );
 select is(
   (public.aitask_execute_command(
@@ -161,7 +272,7 @@ select is(
   false,
   'the HOD role cannot be assigned to an Admin account'
 );
-select is((public.aitask_get_backend_capabilities('pgtap-hod-authorization') ->> 'schemaVersion')::integer, 3, 'the HOD authorization contract requires backend schema version 3');
+select is((public.aitask_get_backend_capabilities('pgtap-hod-authorization') ->> 'schemaVersion')::integer, 4, 'the HOD authorization contract requires backend schema version 4');
 
 reset role;
 select * from finish();

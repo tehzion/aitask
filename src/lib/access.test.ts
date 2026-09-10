@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CustomRole, Project, RolePermissions, Task, User } from '../types';
 import {
   canAssignTasksToOthers,
+  canAccessPath,
   canApproveRegistrations,
   canCommentOnTask,
   canCreateUsers,
@@ -226,6 +227,22 @@ describe('staff permission matrix', () => {
     };
 
     expect(getDefaultAccessiblePath(taskOnlyStaff)).toBe('/tasks');
+  });
+
+  it('manages Companies and the client task tracker as separate page permissions', () => {
+    const companiesOnly: User = {
+      ...staff,
+      permissions: { ...defaultRolePermissions.Staff, viewProjects: true, viewDeliveryTracker: false },
+    };
+    const trackerOnly: User = {
+      ...staff,
+      permissions: { ...defaultRolePermissions.Staff, viewProjects: false, viewDeliveryTracker: true },
+    };
+
+    expect(canAccessPath(companiesOnly, '/projects')).toBe(true);
+    expect(canAccessPath(companiesOnly, '/clients')).toBe(false);
+    expect(canAccessPath(trackerOnly, '/projects')).toBe(false);
+    expect(canAccessPath(trackerOnly, '/clients')).toBe(true);
   });
 
   it('honors an explicit View all clients permission', () => {

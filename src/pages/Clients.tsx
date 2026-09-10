@@ -21,14 +21,16 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { Badge, Button, PageHeader, ProgressBar, StatGroup, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
-import { canCreateTasks, canEditClientProfile, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { canCreateTasks, canEditClientProfile, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { ClientProfile, ClientServicePlan, ServiceCycle } from '../types';
 import ModalShell from '../components/ModalShell';
+import CreateClientProfileModal from '../components/CreateClientProfileModal';
 import CreateClientPlanModal from '../components/CreateClientPlanModal';
+import CreateProjectModal from '../components/CreateProjectModal';
 
 type ClientSource = 'Profile' | 'Task' | 'Company' | 'Account';
 
@@ -41,6 +43,7 @@ type ClientSummary = {
   openTaskCount: number;
   projectIds: Set<string>;
   projectNames: Set<string>;
+  assignedUserIds: Set<string>;
   services: Set<string>;
   accountUsers: string[];
   details?: string;
@@ -157,6 +160,9 @@ const Clients: React.FC = () => {
   const [renameError, setRenameError] = React.useState('');
   const [isSavingClient, setIsSavingClient] = React.useState(false);
   const [isCreateClientOpen, setIsCreateClientOpen] = React.useState(false);
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = React.useState(false);
+  const [initialProjectClientId, setInitialProjectClientId] = React.useState('');
+  const [planClientId, setPlanClientId] = React.useState('');
   const [openMenuClientKey, setOpenMenuClientKey] = React.useState<string | null>(null);
   const clientDialogTitleId = React.useId();
 
@@ -196,6 +202,7 @@ const Clients: React.FC = () => {
     [allProjects, allTasks, currentUser, rolePermissions]
   );
   const canAddTasks = !upgradeRequired && canCreateTasks(currentUser, rolePermissions);
+  const canAddProjects = !upgradeRequired && canManageProjects(currentUser, rolePermissions);
 
   const clients = React.useMemo(() => {
     const summaries = new Map<string, ClientSummary>();
@@ -221,6 +228,7 @@ const Clients: React.FC = () => {
         openTaskCount: 0,
         projectIds: new Set(),
         projectNames: new Set(),
+        assignedUserIds: new Set(),
         services: new Set(),
         accountUsers: [],
       };
@@ -270,6 +278,7 @@ const Clients: React.FC = () => {
         if (task.serviceType) summary.services.add(task.serviceType);
         if (task.projectId) summary.projectIds.add(task.projectId);
         if (task.projectName) summary.projectNames.add(task.projectName);
+        if (task.assignedTo) summary.assignedUserIds.add(task.assignedTo);
         if (!summary.details && task.customerDetails) summary.details = task.customerDetails;
         if (!summary.facebookPage && task.facebookPage) summary.facebookPage = task.facebookPage;
         if (!summary.website && task.website) summary.website = task.website;
@@ -477,17 +486,18 @@ const Clients: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title="Clients"
-        description="Client scope, current delivery progress, contacts and linked work in one place."
-        meta={<><span>{clients.length} visible clients</span><span aria-hidden="true">·</span><span>{totalTasks} linked tasks</span></>}
+        title="Companies"
+        description="The complete client database for company details, contacts, accounts, services, and linked work."
+        meta={<><span>{clients.length} visible companies</span><span aria-hidden="true">·</span><span>{totalTasks} linked tasks</span></>}
         action={<div className="flex flex-wrap gap-2">
           {(currentUser?.role === 'Admin' || currentUser?.isSuperAdmin) && <Button onClick={() => setIsCreateClientOpen(true)} disabled={upgradeRequired}><Building2 className="h-4 w-4" />New client</Button>}
+          {canAddProjects && <Button variant="secondary" onClick={() => { setInitialProjectClientId(''); setIsCreateProjectOpen(true); }}><Plus className="h-4 w-4" />New project</Button>}
           {canAddTasks && <Button variant="secondary" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />New task</Button>}
         </div>}
       />
 
       <StatGroup className="grid-cols-2 lg:grid-cols-4" aria-label="Client summary">
-        {[{ label: 'Clients', value: clients.length, icon: Building2 }, { label: 'Saved profiles', value: savedProfiles, icon: FileText }, { label: 'Open tasks', value: openTasks, icon: CheckSquare }, { label: 'Client accounts', value: linkedAccounts, icon: Users }].map(({ label, value, icon: Icon }) => <div key={label} className="flex min-h-28 items-center justify-between gap-4 p-4 sm:p-5"><div><p className="text-xs font-medium text-muted">{label}</p><p className="calm-number mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">{value}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-control bg-accent-soft text-accent"><Icon className="h-4 w-4" /></span></div>)}
+        {[{ label: 'Companies', value: clients.length, icon: Building2 }, { label: 'Saved profiles', value: savedProfiles, icon: FileText }, { label: 'Open tasks', value: openTasks, icon: CheckSquare }, { label: 'Client accounts', value: linkedAccounts, icon: Users }].map(({ label, value, icon: Icon }) => <div key={label} className="flex min-h-28 items-center justify-between gap-4 p-4 sm:p-5"><div><p className="text-xs font-medium text-muted">{label}</p><p className="calm-number mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">{value}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-control bg-accent-soft text-accent"><Icon className="h-4 w-4" /></span></div>)}
       </StatGroup>
 
       <div className={tableShell}>
@@ -499,7 +509,7 @@ const Clients: React.FC = () => {
             <input
               type="text"
               className={cn(inputBase, 'py-2.5 pl-10 pr-3')}
-              placeholder="Search clients, contacts, addresses..."
+              placeholder="Search companies, contacts, addresses..."
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
@@ -513,7 +523,7 @@ const Clients: React.FC = () => {
           <table className="w-full min-w-[1180px] text-left text-sm">
             <thead className="sticky top-0 z-[1] border-b border-line bg-inset text-xs text-muted">
               <tr>
-                <th className="px-5 py-4 font-semibold">Client / Brand</th>
+                <th className="px-5 py-4 font-semibold">Company / Client</th>
                 <th className="px-5 py-4 font-semibold">Contact</th>
                 <th className="px-5 py-4 font-semibold">Services</th>
                 <th className="px-5 py-4 font-semibold">Tasks</th>
@@ -523,16 +533,19 @@ const Clients: React.FC = () => {
             </thead>
             <tbody>
               {filteredClients.map(client => {
-                const contact = getClientContact(client);
-                const website = safeHttpsUrl(contact.website);
-                const facebookPage = safeHttpsUrl(contact.facebookPage);
-                const serviceContext = getServiceContext(client);
-                const canOpenWorkspace = canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions);
+        const contact = getClientContact(client);
+        const website = safeHttpsUrl(contact.website);
+        const facebookPage = safeHttpsUrl(contact.facebookPage);
+        const serviceContext = getServiceContext(client);
+        const canOpenWorkspace = canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions);
+        const assignedTeam = Array.from(client.assignedUserIds)
+          .map(userId => users.find(user => user.id === userId)?.name || userId)
+          .filter(Boolean);
 
                 return (
                   <tr key={client.name} className="border-b border-line/70 bg-surface text-ink transition-colors duration-160 hover:bg-inset/60">
                     <td className="px-5 py-6 align-top">
-                      <div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{client.name.slice(0, 2).toUpperCase()}</span><div><div data-i18n-skip className="font-semibold text-ink">{client.name}</div>{serviceContext?.plan && <StatusChip className="mt-1.5" tone={serviceContext.plan.status === 'Active' ? 'emerald' : serviceContext.plan.status === 'Paused' ? 'amber' : 'slate'}>{serviceContext.plan.status}</StatusChip>}</div></div>
+                      <div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{client.name.slice(0, 2).toUpperCase()}</span><div><div data-i18n-skip className="font-semibold text-ink">{client.name}</div><div className="mt-1.5 flex flex-wrap gap-1.5">{serviceContext?.plan && <StatusChip tone={serviceContext.plan.status === 'Active' ? 'emerald' : serviceContext.plan.status === 'Paused' ? 'amber' : 'slate'}>{serviceContext.plan.status}</StatusChip>}{!client.profile && <StatusChip tone="amber">Needs profile</StatusChip>}</div></div></div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {Array.from(client.sources).map(source => (
                           <span key={source} className={cn('rounded-md border px-2 py-0.5 text-[10px] font-medium', sourceClasses[source])}>
@@ -551,9 +564,12 @@ const Clients: React.FC = () => {
                       )}
                       {client.projectNames.size > 0 && (
                         <p className="mt-1 text-xs text-slate-500">
-                          Company: {Array.from(client.projectNames).slice(0, 2).join(', ')}
+                          Projects: {Array.from(client.projectNames).slice(0, 2).join(', ')}
                           {client.projectNames.size > 2 ? ` +${client.projectNames.size - 2}` : ''}
                         </p>
+                      )}
+                      {assignedTeam.length > 0 && (
+                        <p className="mt-1 text-xs text-slate-500">Assigned staff: {assignedTeam.join(', ')}</p>
                       )}
                     </td>
                     <td className="px-5 py-6 align-top">
@@ -626,6 +642,9 @@ const Clients: React.FC = () => {
             const contact = getClientContact(client);
             const website = safeHttpsUrl(contact.website);
             const facebookPage = safeHttpsUrl(contact.facebookPage);
+            const assignedTeam = Array.from(client.assignedUserIds)
+              .map(userId => users.find(user => user.id === userId)?.name || userId)
+              .filter(Boolean);
 
             return (
               <div key={client.name} className="bg-surface p-5">
@@ -640,6 +659,8 @@ const Clients: React.FC = () => {
                 </div>
 
                 <div className="mt-4">{renderContactSummary(client)}</div>
+                {assignedTeam.length > 0 && <p className="mt-3 text-xs text-slate-500">Assigned staff: {assignedTeam.join(', ')}</p>}
+                {client.projectNames.size > 0 && <p className="mt-1 text-xs text-slate-500">Projects: {Array.from(client.projectNames).join(', ')}</p>}
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {Array.from(client.services).slice(0, 3).map(service => (
@@ -676,9 +697,9 @@ const Clients: React.FC = () => {
 
         {filteredClients.length === 0 && (
           <div className="px-4 py-12 text-center">
-            <p className="text-sm font-semibold text-slate-700">No clients found</p>
+            <p className="text-sm font-semibold text-slate-700">No companies found</p>
             <p className="mt-1 text-sm text-slate-500">
-              Add a client or brand name when creating a task, and it will appear here automatically.
+              Create a client profile and service plan, or clear the current search.
             </p>
           </div>
         )}
@@ -692,7 +713,7 @@ const Clients: React.FC = () => {
         >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50/80 px-6 py-4">
               <div className="min-w-0">
-                <p className="text-xs font-medium text-blue-700">Client profile</p>
+                <p className="text-xs font-medium text-blue-700">Company profile</p>
                 <h2 data-i18n-skip id={clientDialogTitleId} className="mt-1 truncate text-xl font-semibold text-slate-950">{selectedClient.name}</h2>
                 <p className="mt-1 text-sm text-slate-500">
                   {selectedClient.taskCount} linked task{selectedClient.taskCount === 1 ? '' : 's'} · {selectedClient.projectIds.size} company record{selectedClient.projectIds.size === 1 ? '' : 's'}
@@ -838,6 +859,18 @@ const Clients: React.FC = () => {
                         {selectedClient.latestTaskDate ? format(new Date(getActivityTime(selectedClient.latestTaskDate)), 'MMM dd, yyyy') : 'No tasks recorded'}
                       </strong>
                     </p>
+                    <p>
+                      <span className="font-semibold text-slate-500">Assigned Staff:</span>{' '}
+                      <strong className="text-slate-950">
+                        {Array.from(selectedClient.assignedUserIds).map(userId => users.find(user => user.id === userId)?.name || userId).join(', ') || 'No staff assigned'}
+                      </strong>
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-500">Linked Projects:</span>{' '}
+                      <strong className="text-slate-950">
+                        {Array.from(selectedClient.projectNames).join(', ') || 'No projects linked'}
+                      </strong>
+                    </p>
                   </div>
                 </section>
                 <section className="rounded-lg border border-slate-200 bg-white p-4 md:col-span-2">
@@ -936,7 +969,27 @@ const Clients: React.FC = () => {
             </div>
         </ModalShell>
       )}
-      {isCreateClientOpen && <CreateClientPlanModal onClose={() => setIsCreateClientOpen(false)} />}
+      {isCreateClientOpen && <CreateClientProfileModal
+        onClose={() => setIsCreateClientOpen(false)}
+        onCreateProject={(clientId) => {
+          setIsCreateClientOpen(false);
+          setInitialProjectClientId(clientId);
+          setIsCreateProjectOpen(true);
+        }}
+        onAddServicePlan={(clientId) => {
+          setIsCreateClientOpen(false);
+          setPlanClientId(clientId);
+        }}
+      />}
+      <CreateProjectModal
+        isOpen={isCreateProjectOpen}
+        initialClientId={initialProjectClientId}
+        onClose={() => { setIsCreateProjectOpen(false); setInitialProjectClientId(''); }}
+      />
+      {planClientId && <CreateClientPlanModal
+        client={clientProfiles.find(client => client.id === planClientId)}
+        onClose={() => setPlanClientId('')}
+      />}
     </div>
   );
 };

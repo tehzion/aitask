@@ -81,7 +81,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
       }));
   const staffMoreItems = [
     { path: '/tasks', label: 'All work', icon: CheckSquare },
-    { path: '/clients', label: 'Assigned clients', icon: Users },
+    { path: '/clients', label: 'Task tracker', icon: Users },
     { path: '/projects', label: 'Companies', icon: FolderKanban },
     { path: '/reports', label: 'Reports', icon: BarChart3 },
     { path: '/settings', label: 'Settings', icon: Settings },

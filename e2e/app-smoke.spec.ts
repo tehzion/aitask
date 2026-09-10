@@ -578,25 +578,26 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.setViewportSize({ width: 1536, height: 864 });
   await page.goto('/clients');
-  const techNovaRow = page.getByRole('row').filter({ hasText: 'TechNova' });
-  await techNovaRow.getByRole('button', { name: 'More actions for TechNova' }).click();
-  const techNovaDetails = techNovaRow.getByRole('menuitem', { name: 'Details' });
-  await techNovaDetails.click();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Edit details' })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).toBeHidden();
-  await expect(techNovaDetails).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Clients' })).toBeVisible();
+  const deliveryTracker = page.getByRole('region', { name: 'Delivery tracker' });
+  await expect(deliveryTracker).toBeVisible();
+  await deliveryTracker.getByRole('tab', { name: 'Month' }).click();
+  await expect(deliveryTracker.getByRole('tab', { name: 'Month' })).toHaveAttribute('aria-selected', 'true');
+  await deliveryTracker.getByRole('tab', { name: 'Week' }).click();
+  const techNovaCard = deliveryTracker.locator('article').filter({ hasText: 'TechNova' });
+  await expect(techNovaCard).toBeVisible();
+  await techNovaCard.getByRole('button', { name: 'View work' }).click();
+  await expect(techNovaCard.getByRole('heading', { name: 'Tasks' })).toBeVisible();
+  await expect(techNovaCard.getByRole('heading', { name: 'Deliverables' })).toBeVisible();
 
   await page.goto('/projects');
-  const newCompanyButton = page.getByRole('button', { name: 'New company' });
-  await newCompanyButton.click();
-  const createCompanyDialog = page.getByRole('dialog', { name: 'Create company' });
-  await expect(createCompanyDialog).toBeVisible();
-  await expect(createCompanyDialog.getByRole('alert')).toHaveCount(0);
+  const newClientButton = page.getByRole('button', { name: 'New client' });
+  await newClientButton.click();
+  const createClientDialog = page.getByRole('dialog', { name: 'Add a client company' });
+  await expect(createClientDialog).toBeVisible();
+  await expect(createClientDialog.getByRole('alert')).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await expect(createCompanyDialog).toBeHidden();
+  await expect(createClientDialog).toBeHidden();
 
   await page.goto('/approvals');
   await expect(page).toHaveURL(/\/approvals$/);

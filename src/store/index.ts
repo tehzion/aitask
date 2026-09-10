@@ -31,6 +31,7 @@ import {
   ServiceWorkflowTemplate,
   ServicePricingSnapshot,
   LoginResult,
+  RolePermissions,
 } from '../types';
 import { legacyDemoTaskIds, mockUsers, mockProjects, mockTasks, retiredDemoUserIds } from '../mock';
 import {
@@ -69,7 +70,9 @@ import {
   canManageServiceCatalog,
   canManageServiceCycles,
   canManageTaskTemplates,
+  canViewAllClients,
   getAssignableProjects,
+  getVisibleClientNames,
   getVisibleProjects,
   isNotificationReadByUser,
   isNotificationVisible,
@@ -94,6 +97,7 @@ import {
   restoreSecureWorkspaceCommand,
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
+  saveSecureMemberPermissions,
   saveSecureWorkspace,
   type MutationConflict,
   type SecureCommandType,
@@ -197,8 +201,9 @@ export type ClientPlanSetupInput = {
   contractEndDate?: string;
 };
 
-type ProjectUpdateInput = Partial<Pick<Project, 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline'>>;
+type ProjectUpdateInput = Partial<Pick<Project, 'clientId' | 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline'>>;
 type ClientProfileInput = Partial<Pick<ClientProfile, 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes'>>;
+type ClientPlanInput = Omit<ClientPlanSetupInput, 'clientName' | 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes'>;
 type AddMemberInput = Omit<User, 'id' | 'avatar' | 'isSuperAdmin'> & {
   registrationId?: string;
   memberId?: string;
@@ -267,6 +272,7 @@ interface StoreState {
   addProject: (project: Omit<Project, 'id' | 'totalTasks' | 'completedTasks'>) => string;
   updateProject: (projectId: string, data: ProjectUpdateInput) => { ok: boolean; error?: string };
   deleteProject: (projectId: string) => { ok: boolean; error?: string };
+  createClientProfile: (data: { clientName: string } & ClientProfileInput) => { ok: boolean; id?: string; error?: string };
   upsertClientProfile: (clientName: string, data: ClientProfileInput) => { ok: boolean; id?: string; error?: string };
   renameClient: (oldClientName: string, newClientName: string) => { ok: boolean; error?: string };
   deleteClientProfile: (clientId: string) => { ok: boolean; error?: string };
@@ -275,6 +281,7 @@ interface StoreState {
   saveWorkflowTemplate: (data: Omit<ServiceWorkflowTemplate, 'id' | 'revision' | 'createdAt' | 'updatedAt'> & { id?: string }) => { ok: boolean; id?: string; error?: string };
   deleteWorkflowTemplate: (id: string) => { ok: boolean; error?: string };
   createClientWithPlan: (data: ClientPlanSetupInput) => { ok: boolean; clientId?: string; planId?: string; error?: string };
+  createClientPlan: (clientId: string, data: ClientPlanInput) => { ok: boolean; planId?: string; error?: string };
   createClientPlanRevision: (planId: string) => { ok: boolean; planId?: string; error?: string };
   updateDraftClientPlan: (planId: string, data: Partial<Pick<ClientServicePlan, 'name' | 'serviceItems' | 'discountType' | 'discountValue' | 'taxRateBps' | 'contractEndDate'>>) => { ok: boolean; error?: string };
   activateClientPlan: (planId: string) => { ok: boolean; cycleId?: string; error?: string };
@@ -295,6 +302,7 @@ interface StoreState {
   registerUser: (data: Omit<Registration, 'id' | 'status' | 'createdAt'>) => Promise<{ ok: boolean; error?: string }>;
   addUserBySuperAdmin: (data: AddMemberInput) => Promise<{ ok: boolean; error?: string }>;
   updateMemberDepartments: (userId: string, departments: Department[]) => Promise<{ ok: boolean; error?: string }>;
+  updateMemberPermissions: (userId: string, permissions?: RolePermissions) => Promise<{ ok: boolean; error?: string }>;
   addCustomRole: (data: Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt' | 'isProtected'>) => { ok: boolean; id?: string; error?: string };
   updateCustomRole: (id: string, data: Partial<Pick<CustomRole, 'name' | 'description' | 'baseRole' | 'permissions'>>) => { ok: boolean; error?: string };
   deleteCustomRole: (id: string) => { ok: boolean; error?: string };
@@ -527,7 +535,13 @@ const deriveServiceProgress = (tasks: Task[], deliverables: Deliverable[], cycle
   const now = new Date().toISOString();
   const nextDeliverables = deliverables.map(deliverable => {
     const status = resolveDeliverableStatus(deliverable, tasks);
-    return status === deliverable.status ? deliverable : { ...deliverable, status, updatedAt: now };
+    if (status === deliverable.status) return deliverable;
+    return {
+      ...deliverable,
+      status,
+      deliveredAt: status === 'Delivered' ? deliverable.deliveredAt || now : undefined,
+      updatedAt: now,
+    };
   });
   const nextCycles = cycles.map(cycle => {
     if (!['Published', 'Completed'].includes(cycle.status)) return cycle;
@@ -2900,7 +2914,7 @@ export const useStore = create<StoreState>()(
         if (!currentUser || !canManageProjects(currentUser, state.rolePermissions)) return '';
 
         const clientName = projectData.clientName.trim();
-        const projectName = projectData.projectName.trim() || clientName;
+        const projectName = projectData.projectName.trim();
         const services = Array.from(new Map(
           projectData.services.map(service => [service.trim().toLowerCase(), service.trim()])
         ).values()).filter(Boolean);
@@ -2910,6 +2924,16 @@ export const useStore = create<StoreState>()(
         if (!clientName || !projectName || services.length === 0) return '';
         if (!isValidIsoDate(startDate)) return '';
         if (deadline && (!isValidIsoDate(deadline) || new Date(deadline) < new Date(startDate))) return '';
+        if (!projectData.clientId) return '';
+        const client = state.clients.find(item => item.id === projectData.clientId);
+        const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions).map(normalizeClientKey));
+        if (!client || normalizeClientKey(client.clientName) !== normalizeClientKey(clientName) || (!canViewAllClients(currentUser, state.rolePermissions) && !visibleClientKeys.has(normalizeClientKey(clientName)))) return '';
+        if (state.projects.some(item => {
+          const sameClient = projectData.clientId && item.clientId
+            ? item.clientId === projectData.clientId
+            : normalizeClientKey(item.clientName) === normalizeClientKey(clientName);
+          return sameClient && normalizeClientKey(item.projectName) === normalizeClientKey(projectName);
+        })) return '';
 
         const newProject: Project = {
           ...projectData,
@@ -2925,7 +2949,7 @@ export const useStore = create<StoreState>()(
           updatedAt: new Date().toISOString(),
         };
         set((state) => ({ projects: [...state.projects, newProject] }));
-        useToastStore.getState().addToast(`Company "${clientName}" created successfully`, 'success');
+        useToastStore.getState().addToast(`Project "${projectName}" created successfully`, 'success');
         return newProject.id;
       },
 
@@ -2935,11 +2959,11 @@ export const useStore = create<StoreState>()(
         const currentUser = state.currentUser;
         const project = state.projects.find(item => item.id === projectId);
         if (!currentUser || !project || !canEditProject(currentUser, project, state.rolePermissions)) {
-          return { ok: false, error: 'You do not have permission to edit this company.' };
+          return { ok: false, error: 'You do not have permission to edit this project.' };
         }
 
         const clientName = data.clientName !== undefined ? data.clientName.trim() : project.clientName;
-        const projectName = data.projectName !== undefined ? data.projectName.trim() : clientName;
+        const projectName = data.projectName !== undefined ? data.projectName.trim() : project.projectName;
         const services = data.services !== undefined
           ? Array.from(new Map(data.services.map(service => [service.trim().toLowerCase(), service.trim()])).values()).filter(Boolean)
           : project.services;
@@ -2953,9 +2977,27 @@ export const useStore = create<StoreState>()(
         if (deadline && (!isValidIsoDate(deadline) || new Date(deadline) < new Date(startDate))) {
           return { ok: false, error: 'Deadline cannot be earlier than the start date.' };
         }
+        const nextClientId = data.clientId !== undefined ? data.clientId : project.clientId;
+        if (nextClientId) {
+          const client = state.clients.find(item => item.id === nextClientId);
+          const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions).map(normalizeClientKey));
+          if (!client || normalizeClientKey(client.clientName) !== normalizeClientKey(clientName) || (!canViewAllClients(currentUser, state.rolePermissions) && !visibleClientKeys.has(normalizeClientKey(clientName)))) {
+            return { ok: false, error: 'You can only link this project to a company you can access.' };
+          }
+        }
+        if (state.projects.some(item => {
+          if (item.id === projectId) return false;
+          const sameClient = nextClientId && item.clientId
+            ? item.clientId === nextClientId
+            : normalizeClientKey(item.clientName) === normalizeClientKey(clientName);
+          return sameClient && normalizeClientKey(item.projectName) === normalizeClientKey(projectName);
+        })) {
+          return { ok: false, error: 'A project with that name already exists for this company.' };
+        }
 
         const updatedProject: Project = {
           ...project,
+          clientId: nextClientId,
           clientName,
           projectName,
           services,
@@ -2964,12 +3006,12 @@ export const useStore = create<StoreState>()(
           updatedAt: new Date().toISOString(),
         };
 
-        const identityChanged = clientName !== project.clientName || projectName !== project.projectName;
+        const identityChanged = clientName !== project.clientName || projectName !== project.projectName || updatedProject.clientId !== project.clientId;
         const linkedTasks = state.tasks.filter(task => task.projectId === projectId);
         if (identityChanged && linkedTasks.some(task => !canEditTask(currentUser, task, state.rolePermissions))) {
           return {
             ok: false,
-            error: 'Only an admin can rename this company while it contains tasks assigned to other staff.',
+            error: 'Only an admin can edit this project while it contains tasks assigned to other staff.',
           };
         }
 
@@ -2979,12 +3021,12 @@ export const useStore = create<StoreState>()(
           projects: current.projects.map(item => item.id === projectId ? updatedProject : item),
           tasks: identityChanged
             ? current.tasks.map(task => task.projectId === projectId
-              ? { ...task, clientName, projectName, updatedAt: now }
+              ? { ...task, clientId: updatedProject.clientId, clientName, projectName, updatedAt: now }
               : task
             )
             : current.tasks,
         }));
-        useToastStore.getState().addToast(`Company "${clientName}" updated successfully`, 'success');
+        useToastStore.getState().addToast(`Project "${projectName}" updated successfully`, 'success');
         return { ok: true };
       },
 
@@ -2994,13 +3036,13 @@ export const useStore = create<StoreState>()(
         const currentUser = state.currentUser;
         const project = state.projects.find(item => item.id === projectId);
         if (!currentUser || !project || !canDeleteProject(currentUser, project, state.rolePermissions)) {
-          return { ok: false, error: 'You do not have permission to delete this company.' };
+          return { ok: false, error: 'You do not have permission to delete this project.' };
         }
         const linkedTasks = state.tasks.filter(task => task.projectId === projectId);
         if (linkedTasks.some(task => !canEditTask(currentUser, task, state.rolePermissions))) {
           return {
             ok: false,
-            error: 'Only an admin can delete this company while it contains tasks assigned to other staff.',
+            error: 'Only an admin can delete this project while it contains tasks assigned to other staff.',
           };
         }
 
@@ -3011,8 +3053,52 @@ export const useStore = create<StoreState>()(
             : task
           ),
         }));
-        useToastStore.getState().addToast(`Company "${project.clientName}" deleted. Existing tasks were kept.`, 'success');
+        useToastStore.getState().addToast(`Project "${project.projectName}" deleted. Existing tasks were kept.`, 'success');
         return { ok: true };
+      },
+
+      createClientProfile: (data) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const currentUser = state.currentUser;
+        if (!canManageClientProfiles(currentUser)) {
+          return { ok: false, error: 'Only Boss Koo or Admins can create client profiles.' };
+        }
+
+        const name = data.clientName.trim();
+        if (!name) return { ok: false, error: 'Company name is required.' };
+        if (name.length > 240) return { ok: false, error: 'Company name must be 240 characters or less.' };
+        if (state.clients.some(client => normalizeClientKey(client.clientName) === normalizeClientKey(name))) {
+          return { ok: false, error: 'This company already exists in the Companies database.' };
+        }
+        if (data.email?.trim() && !profileEmailPattern.test(data.email.trim())) {
+          return { ok: false, error: 'Enter a valid email address.' };
+        }
+        if (data.phone?.trim() && !PHONE_PATTERN.test(data.phone.trim())) {
+          return { ok: false, error: 'Enter a valid phone number.' };
+        }
+        const website = data.website?.trim() ? safeHttpsUrl(data.website) : undefined;
+        const facebookPage = data.facebookPage?.trim() ? safeHttpsUrl(data.facebookPage) : undefined;
+        if (data.website?.trim() && !website) return { ok: false, error: 'Website must be a valid HTTPS URL.' };
+        if (data.facebookPage?.trim() && !facebookPage) return { ok: false, error: 'Facebook page must be a valid HTTPS URL.' };
+
+        const now = new Date().toISOString();
+        const client: ClientProfile = {
+          id: nowId('CL'),
+          clientName: name,
+          contactPerson: cleanProfileText(data.contactPerson, 160),
+          email: cleanProfileText(data.email, 320),
+          phone: cleanProfileText(data.phone, 80),
+          address: cleanProfileText(data.address, 1000),
+          website,
+          facebookPage,
+          notes: cleanProfileText(data.notes, 5000),
+          createdAt: now,
+          updatedAt: now,
+        };
+        set(current => ({ clients: [...current.clients, client] }));
+        useToastStore.getState().addToast(`Company "${name}" added to the client database.`, 'success');
+        return { ok: true, id: client.id };
       },
 
       upsertClientProfile: (clientName, data) => {
@@ -3110,11 +3196,12 @@ export const useStore = create<StoreState>()(
             const matchesClient = normalizeClientKey(task.clientName) === oldKey;
             const matchesRenamedProject = Boolean(task.projectId && renamedProjectIds.has(task.projectId));
             if (!matchesClient && !matchesRenamedProject) return task;
+            const legacyProjectName = normalizeClientKey(task.projectName) === oldKey;
 
             return {
               ...task,
               clientName: nextName,
-              projectName: matchesRenamedProject || normalizeClientKey(task.projectName) === oldKey
+              projectName: matchesRenamedProject && legacyProjectName
                 ? nextName
                 : task.projectName,
               updatedAt: now,
@@ -3122,7 +3209,7 @@ export const useStore = create<StoreState>()(
           }),
           projects: current.projects.map(project => (
             normalizeClientKey(project.clientName) === oldKey
-              ? { ...project, clientName: nextName, projectName: nextName, updatedAt: now }
+              ? { ...project, clientName: nextName, projectName: normalizeClientKey(project.projectName) === oldKey ? nextName : project.projectName, updatedAt: now }
               : project
           )),
           users: current.users.map(user => (
@@ -3377,6 +3464,65 @@ export const useStore = create<StoreState>()(
         return { ok: true, clientId, planId };
       },
 
+      createClientPlan: (clientId, data) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot create client plans.' };
+        const client = state.clients.find(item => item.id === clientId);
+        if (!client) return { ok: false, error: 'Choose an existing company before creating a plan.' };
+
+        const serviceItems = data.serviceItems.map(item => ({
+          ...item,
+          id: item.id || nowId('SI'),
+          name: item.name.trim().slice(0, 160),
+          platforms: item.platforms.map(value => value.trim()).filter(Boolean).slice(0, 20),
+          unit: item.unit.trim().slice(0, 80) || 'item',
+          quantity: Math.max(1, Math.trunc(item.quantity)),
+          unitPriceMinor: Math.max(0, Math.trunc(item.unitPriceMinor)),
+          description: cleanProfileText(item.description, 2000),
+          workflow: item.workflow ? { ...item.workflow, steps: item.workflow.steps.map(step => ({ ...step })) } : undefined,
+        })).filter(item => item.name);
+        if (!serviceItems.length) return { ok: false, error: 'Add at least one service item.' };
+        if (serviceItems.reduce((sum, item) => sum + item.quantity, 0) > 400) return { ok: false, error: 'A plan can generate at most 400 deliverables per cycle.' };
+        if (!isValidIsoDate(data.startDate)) return { ok: false, error: 'Choose a valid service start date.' };
+
+        const now = new Date().toISOString();
+        const planId = nowId('PLN');
+        const plan: ClientServicePlan = {
+          id: planId,
+          clientId,
+          clientName: client.clientName,
+          name: data.planName.trim().slice(0, 160) || `${client.clientName} Service Plan`,
+          origin: data.origin,
+          sourcePackageId: data.sourcePackageId,
+          sourcePackageRevision: data.sourcePackageRevision,
+          revision: 1,
+          status: 'Draft',
+          currency: 'MYR',
+          serviceItems,
+          discountType: data.discountType,
+          discountValue: Math.max(0, Math.trunc(data.discountValue)),
+          taxRateBps: Math.min(10_000, Math.max(0, Math.trunc(data.taxRateBps))),
+          startDate: data.startDate,
+          billingDay: Math.min(31, Math.max(1, Math.trunc(data.billingDay))),
+          contractEndDate: data.contractEndDate && isValidIsoDate(data.contractEndDate) ? data.contractEndDate : undefined,
+          createdBy: actor.id,
+          createdAt: now,
+          updatedAt: now,
+        };
+        const pricing = makePricingSnapshot({
+          id: nowId('PRICE'), clientId, parentType: 'client_plan', parentId: planId, items: serviceItems,
+          discountType: plan.discountType, discountValue: plan.discountValue, taxRateBps: plan.taxRateBps, now,
+        });
+        set(current => ({
+          clientPlans: [...current.clientPlans, plan],
+          servicePricingSnapshots: [...current.servicePricingSnapshots, pricing],
+        }));
+        useToastStore.getState().addToast(`Draft plan created for "${client.clientName}".`, 'success');
+        return { ok: true, planId };
+      },
+
       createClientPlanRevision: (planId) => {
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
@@ -3536,7 +3682,13 @@ export const useStore = create<StoreState>()(
         const authorized = canManageServiceCycles(actor, state.rolePermissions) || (actor.role === 'Staff' && state.tasks.some(task => task.deliverableId === deliverable.id && task.assignedTo === actor.id));
         if (!authorized) return { ok: false, error: 'You do not have access to this deliverable.' };
         set(current => {
-          const deliverables = current.deliverables.map(item => item.id === deliverableId ? { ...item, status, updatedAt: new Date().toISOString() } : item);
+          const now = new Date().toISOString();
+          const deliverables = current.deliverables.map(item => item.id === deliverableId ? {
+            ...item,
+            status,
+            deliveredAt: status === 'Delivered' ? item.deliveredAt || now : undefined,
+            updatedAt: now,
+          } : item);
           const derived = deriveServiceProgress(current.tasks, deliverables, current.serviceCycles);
           return derived;
         });
@@ -4085,9 +4237,10 @@ export const useStore = create<StoreState>()(
 
         const targetRole = get().rolePermissions.find(role => role.id === id);
         if (!targetRole) return { ok: false, error: 'Custom role was not found.' };
-        if (targetRole.isProtected || isHodRole(targetRole)) return { ok: false, error: 'Protected roles cannot be changed.' };
+        const editingHod = isHodRole(targetRole);
+        if (targetRole.isProtected && !editingHod) return { ok: false, error: 'Protected roles cannot be changed.' };
 
-        const nextName = data.name?.trim() || targetRole.name;
+        const nextName = editingHod ? 'HOD' : data.name?.trim() || targetRole.name;
         const duplicate = get().rolePermissions.some(role => role.id !== id && role.name.toLowerCase() === nextName.toLowerCase());
         if (duplicate) return { ok: false, error: 'A role with this name already exists.' };
         const nextPermissions = sanitizeNonSuperAdminPermissions(data.permissions ?? targetRole.permissions);
@@ -4103,6 +4256,8 @@ export const useStore = create<StoreState>()(
                   ...data,
                   permissions: nextPermissions,
                   name: nextName,
+                  baseRole: editingHod ? 'Staff' : data.baseRole || role.baseRole,
+                  isProtected: editingHod ? true : role.isProtected,
                   description: data.description?.trim() || undefined,
                   updatedAt: new Date().toISOString(),
                 }
@@ -4279,6 +4434,87 @@ export const useStore = create<StoreState>()(
                 department: getLegacyDepartmentMirror(user.role, departments),
                 updatedAt: new Date().toISOString(),
               }
+            : user),
+        }));
+        return { ok: true };
+      },
+
+      updateMemberPermissions: async (userId, requestedPermissions) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!canCreateUsers(state.currentUser, state.rolePermissions)) {
+          return { ok: false, error: 'Only Boss Koo can manage Staff and HOD permissions.' };
+        }
+
+        const targetUser = state.users.find(user => user.id === userId);
+        if (!targetUser) return { ok: false, error: 'User account was not found.' };
+        if (targetUser.role !== 'Staff' || isBossKoo(targetUser)) {
+          return { ok: false, error: 'Only Staff and HOD permissions can be customized.' };
+        }
+
+        const permissions = requestedPermissions
+          ? sanitizeNonSuperAdminPermissions(requestedPermissions)
+          : undefined;
+        if (permissions && !Object.values(permissions).some(Boolean)) {
+          return { ok: false, error: 'Choose at least one permission or reset to role defaults.' };
+        }
+
+        if (shouldUseSecureSupabase()) {
+          set(current => ({
+            backend: {
+              ...current.backend,
+              status: 'saving',
+              isSaving: true,
+              error: undefined,
+              message: 'Saving member permissions.',
+            },
+          }));
+          const result = await saveSecureMemberPermissions(targetUser, permissions || null);
+          if (result.ok === false) {
+            set(current => ({
+              backend: {
+                ...current.backend,
+                status: result.code === 'CONFLICT'
+                  ? 'conflict'
+                  : result.code === 'OFFLINE'
+                    ? 'offline'
+                    : 'retry_required',
+                isSaving: false,
+                error: result.error,
+                conflict: result.conflict,
+                message: result.error,
+              },
+            }));
+            return { ok: false, error: result.error };
+          }
+
+          const updatedAt = result.data.member?.updated_at || new Date().toISOString();
+          const version = Number(result.data.member?.version) || Math.max(1, Number(targetUser.version) || 1) + 1;
+          isApplyingRemoteSnapshot = true;
+          set(current => ({
+            users: current.users.map(user => user.id === userId
+              ? { ...user, permissions, version, updatedAt }
+              : user),
+            backend: {
+              ...current.backend,
+              status: 'live',
+              isSaving: false,
+              workspaceVersion: result.workspaceVersion,
+              remoteVersion: result.workspaceVersion,
+              lastSavedAt: updatedAt,
+              lastSyncedAt: updatedAt,
+              error: undefined,
+              conflict: undefined,
+              message: 'Saved.',
+            },
+          }));
+          isApplyingRemoteSnapshot = false;
+          return { ok: true };
+        }
+
+        set(current => ({
+          users: current.users.map(user => user.id === userId
+            ? { ...user, permissions, updatedAt: new Date().toISOString() }
             : user),
         }));
         return { ok: true };

@@ -1,6 +1,19 @@
 # AiTask client release notes
 
-**Coverage:** the latest client releases: v2.2.0 (7 September 2026), v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+**Coverage:** the latest client releases: v2.3.0 (10 September 2026), v2.2.0 (7 September 2026), v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+
+## v2.3.0 — 10 September 2026
+
+- **One client database.** Companies is now the single place to maintain company details, contacts, client accounts, service plans, cycles, assigned staff, and linked projects.
+- **Weekly and monthly delivery tracking.** The Clients tab now groups tasks and deliverables by company, with period navigation, completion progress, overdue work, deadlines, and expandable work details.
+- **Safer Staff and HOD controls.** Boss Koo can manage safe role defaults and individual overrides while protected identity, global task editing, and account-management permissions remain server-enforced.
+- **A simpler client-first setup.** New client saves the company profile first and does not force a service plan or create a client login. The next screen offers Create project, Add service plan, and Done.
+- **Projects have their own identity.** Every new project uses an existing company record, keeps an independent project name, requires at least one service and a start date, and rejects duplicate names within the same company.
+- **Continue without losing your place.** Boss Koo and Admins can add a company from inside project creation, then continue the same form with that company selected.
+- **Correct task inheritance.** Creating a task from a project carries the canonical client ID, company name, project ID, and project name into the task record.
+- **Historical names remain safe.** Renaming a company preserves custom project names; only legacy project names that exactly followed the old company name continue to follow it.
+- **Database-enforced company visibility.** Staff and HOD project creation requires permission and a real company visible to that person. Hidden and nonexistent client links are rejected server-side.
+- **Clearer navigation.** Client workspaces return to Companies, empty workspaces offer Add service plan, and dashboard links clearly separate the Companies database from the Clients task tracker.
 
 ## v2.2.0 — 7 September 2026
 
@@ -72,7 +85,8 @@
 
 | Release | Formal release commit | Verification basis |
 | --- | --- | --- |
-| v2.2.0 | Pending release tag | Protected HOD role, created-task ownership after reassignment, scoped Admin editing, creator immutability, assignment/department enforcement, protected-role guards, capability-version cutover, and local pgTAP/client permission tests. Production promotion remains pending the staging-first gate. |
+| v2.3.0 | Pending release tag | Companies/client tracker split, profile-only client creation, named projects, canonical client linking, safe Staff/HOD permissions, browser flow verification, and project-link authorization tests. Production promotion remains pending the protected staging-first release gate. |
+| v2.2.0 | Release tag `v2.2.0` | Protected HOD role, created-task ownership after reassignment, scoped Admin editing, creator immutability, assignment/department enforcement, protected-role guards, capability-version cutover, and local pgTAP/client permission tests. |
 | v2.1.5 | Release tag `v2.1.5` | Structured hosted auth failures and email-only recovery, Boss-only administration, assigned-service isolation, privilege-only database hardening, authenticated staging QA, and exact automatic `master` deployment provenance. |
 | v2.1.4 | Release tag `v2.1.4` | Staff cycle-progress correction, complete Staff authorization rollout, immutable forward migrations, production data-integrity checks, and exact deployment provenance; authenticated staging QA waived by the exact one-time direct-production gate. |
 | v2.1.3 | Release tag `v2.1.3` | Staff command authorization, canonical task-linked notifications, service-catalog flows, Boss deliverables, registration approval, and Chinese coverage. |

@@ -5,7 +5,7 @@ import { X, Plus, ChevronDown } from 'lucide-react';
 import { Department, Priority, ServiceType, TaskVisibility } from '../types';
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
-import { getClientOptions, getServiceOptions, hasChoice } from '../lib/choiceOptions';
+import { getServiceOptions, hasChoice } from '../lib/choiceOptions';
 import { canAssignTasksToOthers, canCreateTasks, canManageProjects, getAssignableProjects, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
@@ -22,8 +22,9 @@ const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { users, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, retryPendingSave } = useStore(useShallow(state => ({
+  const { users, clients, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, retryPendingSave } = useStore(useShallow(state => ({
     users: state.users,
+    clients: state.clients,
     currentUser: state.currentUser,
     addTask: state.addTask,
     projects: state.projects,
@@ -39,9 +40,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     retryPendingSave: state.retryPendingSave,
   })));
   const navigate = useNavigate();
-  const clientListId = React.useId();
   const titleId = React.useId();
   const descriptionId = React.useId();
+  const projectSelectId = React.useId();
+  const taskTitleId = React.useId();
+  const clientSelectId = React.useId();
   const departmentId = React.useId();
   const assigneeId = React.useId();
 
@@ -50,9 +53,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [clientName, setClientName] = useState('');
-  const [isAddingCustomClient, setIsAddingCustomClient] = useState(false);
-  const [customClientInput, setCustomClientInput] = useState('');
-  const [customClientError, setCustomClientError] = useState('');
   const [customerDetails, setCustomerDetails] = useState('');
   const [facebookPage, setFacebookPage] = useState('');
   const [website, setWebsite] = useState('');
@@ -102,10 +102,13 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   );
   const selectedProject = projectId ? assignableProjects.find(project => project.id === projectId) : undefined;
   const linkedTaskContext = Boolean(createTaskInitialClientId || createTaskInitialClientName);
-  const showCompanyLink = isStaffTaskCreator || linkedTaskContext;
+  const showCompanyLink = currentUser?.role !== 'Client' || linkedTaskContext;
   const clientOptions = React.useMemo(
-    () => getClientOptions(assignableProjects, visibleTasksForChoices, users),
-    [assignableProjects, users, visibleTasksForChoices],
+    () => Array.from(new Map([
+      ...clients.map(client => client.clientName),
+      ...(selectedProject ? [selectedProject.clientName] : []),
+    ].map(name => [name.trim().toLowerCase(), name.trim()])).values()).sort((left, right) => left.localeCompare(right)),
+    [clients, selectedProject],
   );
   const serviceOptions = React.useMemo(
     () => getServiceOptions(assignableProjects, visibleTasksForChoices),
@@ -121,9 +124,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setTitle('');
     setDescription('');
     setClientName('');
-    setIsAddingCustomClient(false);
-    setCustomClientInput('');
-    setCustomClientError('');
     setCustomerDetails('');
     setFacebookPage('');
     setWebsite('');
@@ -193,44 +193,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const selectProject = (id: string) => {
     setProjectId(id);
-    setIsAddingCustomClient(false);
-    setCustomClientInput('');
-    setCustomClientError('');
     if (!id) return;
 
     const project = assignableProjects.find(item => item.id === id);
     if (project) setClientName(project.clientName);
-  };
-
-  const addCustomClient = () => {
-    const trimmed = customClientInput.trim();
-    if (!trimmed) return;
-
-    if (trimmed.length > 80) {
-      setCustomClientError('Client or brand name must be 80 characters or less.');
-      return;
-    }
-
-    const existingClient = clientOptions.find(choice => choice.toLowerCase() === trimmed.toLowerCase());
-    setClientName(existingClient || trimmed);
-    setIsAddingCustomClient(false);
-    setCustomClientInput('');
-    setCustomClientError('');
-  };
-
-  const handleCustomClientKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addCustomClient();
-    }
-
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsAddingCustomClient(false);
-      setCustomClientInput('');
-      setCustomClientError('');
-    }
   };
 
   const selectService = (value: string) => {
@@ -308,6 +274,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     const trimmedTitle = title.trim();
     const trimmedClientName = clientName.trim();
+    const selectedClient = clients.find(client => client.clientName.trim().toLowerCase() === trimmedClientName.toLowerCase());
     const trimmedServiceType = serviceType.trim();
     const finalStartDate = startDate.trim() || getTodayInputDate();
     const finalDueDate = dueDate.trim();
@@ -323,7 +290,12 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     }
 
     if (!trimmedClientName) {
-      setFormError('Client or brand name is required.');
+      setFormError('Choose a company from the Companies database.');
+      return;
+    }
+
+    if (!selectedClient && !selectedProject) {
+      setFormError('Create this company in the Companies tab before creating tasks for it.');
       return;
     }
 
@@ -360,7 +332,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       title: trimmedTitle,
       description: description.trim(),
       projectId: projectId || undefined,
-      clientId: createTaskInitialClientId,
+      clientId: createTaskInitialClientId || selectedProject?.clientId || selectedClient?.id,
       serviceCycleId: createTaskInitialCycleId,
       deliverableId: createTaskInitialDeliverableId,
       clientName: trimmedClientName,
@@ -443,7 +415,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               {showCompanyLink && (
               <div>
                 <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-                  <label className="block text-sm font-medium text-slate-700">
+                  <label htmlFor={projectSelectId} className="block text-sm font-medium text-slate-700">
                     Link to Company / Brand {isStaffTaskCreator ? <span className="text-red-500">*</span> : '(Optional)'}
                   </label>
                   {canCreateProjects && !isStaffTaskCreator && (
@@ -452,12 +424,13 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       onClick={() => setIsProjectModalOpen(true)}
                       className="flex items-center whitespace-nowrap text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
                     >
-                      <Plus className="mr-0.5 h-3 w-3" /> New company
+                      <Plus className="mr-0.5 h-3 w-3" /> New project
                     </button>
                   )}
                 </div>
                 <div className="relative">
                   <select
+                    id={projectSelectId}
                     value={projectId}
                     onChange={e => selectProject(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
@@ -473,8 +446,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Task Title <span className="text-red-500">*</span></label>
+                <label htmlFor={taskTitleId} className="block text-sm font-medium text-slate-700 mb-1">Task Title <span className="text-red-500">*</span></label>
                 <input 
+                  id={taskTitleId}
                   type="text" required
                   value={title} onChange={e => setTitle(e.target.value)}
                   className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
@@ -500,63 +474,34 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               <div>
                 <div>
                   <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-                    <label className="block text-sm font-medium text-slate-700">Client / Brand Name <span className="text-red-500">*</span></label>
+                    <label htmlFor={clientSelectId} className="block text-sm font-medium text-slate-700">Client / Brand Name <span className="text-red-500">*</span></label>
                     {!isStaffTaskCreator && (
                       <button
                         type="button"
                         onClick={() => {
-                          setIsAddingCustomClient(true);
-                          setCustomClientInput('');
-                          setCustomClientError('');
+                          closeAndReset();
+                          navigate('/projects');
                         }}
-                        disabled={Boolean(selectedProject)}
-                        className="flex items-center whitespace-nowrap text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300"
+                        className="flex items-center whitespace-nowrap text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
                       >
-                        <Plus className="w-3 h-3 mr-0.5" /> New Client / Brand
+                        <Plus className="w-3 h-3 mr-0.5" /> Manage companies
                       </button>
                     )}
                   </div>
-                  <input 
-                    type="text" required
-                    list={selectedProject || isStaffTaskCreator ? undefined : clientListId}
+                  <select
+                    id={clientSelectId}
+                    required
                     disabled={Boolean(selectedProject) || isStaffTaskCreator}
                     value={clientName} onChange={e => setClientName(e.target.value)}
-                    maxLength={80}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
-                    placeholder="e.g., EcoLife"
-                  />
-                  <datalist id={clientListId}>
-                    {clientOptions.map(option => <option key={option} value={option} />)}
-                  </datalist>
+                  >
+                    <option value="">Choose a company</option>
+                    {clientOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                  </select>
                   {selectedProject && (
                     <p className="text-xs text-slate-500 mt-1">
                       Company follows {selectedProject.projectName}.
                     </p>
-                  )}
-                  {isAddingCustomClient && !selectedProject && !isStaffTaskCreator && (
-                    <div className="mt-2 flex gap-2">
-                      <input
-                        type="text"
-                        value={customClientInput}
-                        onChange={e => { setCustomClientInput(e.target.value); setCustomClientError(''); }}
-                        onKeyDown={handleCustomClientKeyDown}
-                        maxLength={80}
-                        autoFocus
-                        className="min-w-0 flex-1 bg-white border border-dashed border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block px-3 py-2 outline-none shadow-sm"
-                        placeholder="New client or brand"
-                      />
-                      <button
-                        type="button"
-                        onClick={addCustomClient}
-                        disabled={!customClientInput.trim()}
-                        className="inline-flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
-                      >
-                        <Plus className="w-4 h-4" /> Add
-                      </button>
-                    </div>
-                  )}
-                  {customClientError && (
-                    <p className="text-xs text-red-500 mt-1">{customClientError}</p>
                   )}
                 </div>
               </div>

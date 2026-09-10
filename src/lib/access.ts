@@ -20,6 +20,7 @@ export const permissionLabels: Record<RolePermissionKey, string> = {
   viewTasks: 'Tasks access',
   viewCalendar: 'Calendar access',
   viewProjects: 'Companies access',
+  viewDeliveryTracker: 'Task tracker access',
   viewAllTasks: 'View all tasks',
   viewAllClients: 'View all clients',
   manageAssignedClients: 'Manage assigned clients',
@@ -45,7 +46,7 @@ export const permissionLabels: Record<RolePermissionKey, string> = {
 };
 
 export const permissionGroups: { title: string; keys: RolePermissionKey[] }[] = [
-  { title: 'Page Access', keys: ['viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects', 'viewReports', 'viewApprovals', 'viewSettings'] },
+  { title: 'Page Access', keys: ['viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects', 'viewDeliveryTracker', 'viewReports', 'viewApprovals', 'viewSettings'] },
   { title: 'Task Access', keys: ['viewAllTasks', 'createTasks', 'manageCreatedTasks'] },
   { title: 'Client Access', keys: ['viewAllClients', 'manageAssignedClients', 'viewAllServiceClients', 'viewAssignedServiceClients', 'viewServicePrices'] },
   { title: 'Service Management', keys: ['manageServiceCatalog', 'manageTaskTemplates', 'manageClientPlans', 'manageServiceCycles'] },
@@ -83,6 +84,7 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewTasks',
     'viewCalendar',
     'viewProjects',
+    'viewDeliveryTracker',
     'viewAllTasks',
     'viewAllClients',
     'manageAssignedClients',
@@ -104,6 +106,7 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewTasks',
     'viewCalendar',
     'viewProjects',
+    'viewDeliveryTracker',
     'viewReports',
     'viewSettings',
     'createTasks',
@@ -114,6 +117,7 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewTasks',
     'viewCalendar',
     'viewProjects',
+    'viewDeliveryTracker',
     'viewReports',
     'viewSettings',
     'clientReview',
@@ -124,7 +128,7 @@ const routePermission: Record<AppPath, RolePermissionKey> = {
   '/': 'viewDashboard',
   '/tasks': 'viewTasks',
   '/calendar': 'viewCalendar',
-  '/clients': 'viewProjects',
+  '/clients': 'viewDeliveryTracker',
   '/projects': 'viewProjects',
   '/reports': 'viewReports',
   '/approvals': 'viewApprovals',
@@ -161,7 +165,10 @@ export const getEffectivePermissions = (
     : undefined;
   const source = directPermissions || customRole?.permissions || defaultRolePermissions[user.role];
   const permissions = makePermissions(
-    (Object.keys(permissionLabels) as RolePermissionKey[]).filter(key => source[key] === true)
+    (Object.keys(permissionLabels) as RolePermissionKey[]).filter(key => (
+      source[key] === true
+      || (key === 'viewDeliveryTracker' && source.viewDeliveryTracker === undefined && source.viewProjects === true)
+    ))
   );
   return sanitizeNonSuperAdminPermissions(permissions);
 };

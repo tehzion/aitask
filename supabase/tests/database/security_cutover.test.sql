@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(14);
+select plan(15);
 
 select ok(
   not has_function_privilege('anon', 'public.aitask_app_state_health()', 'EXECUTE'),
@@ -63,6 +63,12 @@ select ok(
 select ok(
   not has_function_privilege('authenticated', 'public.aitask_update_member_email(text,text)', 'EXECUTE'),
   'direct member email administration is unavailable to authenticated clients'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.aitask_update_member_permissions(text,uuid,text,jsonb,bigint)', 'EXECUTE')
+    and has_function_privilege('service_role', 'public.aitask_update_member_permissions(text,uuid,text,jsonb,bigint)', 'EXECUTE')
+    and not has_function_privilege('anon', 'public.aitask_update_member_permissions(text,uuid,text,jsonb,bigint)', 'EXECUTE'),
+  'member permission changes use the authenticated Boss-only RPC boundary'
 );
 
 select * from finish();

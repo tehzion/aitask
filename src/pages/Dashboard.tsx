@@ -11,7 +11,7 @@ import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, A
 import { Link } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
-import { canCreateTasks, canManageClientPlans, getClientKey, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
+import { canCreateTasks, getClientKey, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import { getClientTaskStage } from '../lib/clientPortal';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate, themeTokenColor } from '../lib/utils';
@@ -25,7 +25,6 @@ import TeamWorkload from '../components/TeamWorkload';
 import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
 import StaffMyWork from '../components/StaffMyWork';
 import { useI18n } from '../components/I18nProvider';
-import CreateClientPlanModal from '../components/CreateClientPlanModal';
 import { isLocalServiceDemoEnabled, LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID } from '../mock/localServiceDemo';
 
 type BossTab = 'overview' | 'pulse' | 'workload';
@@ -60,7 +59,6 @@ const Dashboard: React.FC = () => {
   })));
   const { t } = useI18n();
   const [bossTab, setBossTab] = useState<BossTab>('overview');
-  const [createClientOpen, setCreateClientOpen] = useState(false);
 
   const tasks = useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions),
@@ -125,7 +123,7 @@ const Dashboard: React.FC = () => {
       { key: 'password', label: t('Set your own password'), done: passwordDone, to: '/settings' },
       { key: 'members', label: t('Add your first member'), done: membersDone, to: '/approvals' },
       { key: 'tasks', label: t('Create the first task'), done: tasksDone, to: '/tasks' },
-      { key: 'clients', label: t('Create the first client plan'), done: clientsDone, to: '/clients' },
+      { key: 'clients', label: t('Add the first client'), done: clientsDone, to: '/projects' },
     ].filter(step => !step.done);
   }, [clientPlans, currentUser, serviceCycles, showBossOperations, t, tasks.length, users]);
 
@@ -338,11 +336,11 @@ const Dashboard: React.FC = () => {
         action={(
           <div className="flex flex-wrap items-center gap-2.5">
             <BackendFreshness />
-            {canManageClientPlans(currentUser, rolePermissions) && !showClientPortal && (
-              <Button variant="secondary" onClick={() => setCreateClientOpen(true)}>
+            {!showClientPortal && (
+              <Link to="/projects" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink shadow-sm transition hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
                 <Plus className="h-4 w-4" />
-                New client plan
-              </Button>
+                Add client or plan
+              </Link>
             )}
             {canCreateTask && (
               <Button onClick={() => setCreateTaskModalOpen(true)}>
@@ -367,7 +365,7 @@ const Dashboard: React.FC = () => {
                 Open UrbanEats
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              {currentUser?.role !== 'Client' && <Link to="/clients" className="inline-flex min-h-11 items-center justify-center rounded-control px-4 text-sm font-semibold text-accent transition hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">Browse clients</Link>}
+              {currentUser?.role !== 'Client' && <Link to="/clients" className="inline-flex min-h-11 items-center justify-center rounded-control px-4 text-sm font-semibold text-accent transition hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">Open task tracker</Link>}
             </div>
           </div>
         </section>
@@ -784,7 +782,6 @@ const Dashboard: React.FC = () => {
       </div>
       )}
     </div>
-    {createClientOpen && <CreateClientPlanModal onClose={() => setCreateClientOpen(false)} />}
     </>
   );
 };

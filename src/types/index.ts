@@ -29,6 +29,7 @@ export type RolePermissionKey =
   | 'viewTasks'
   | 'viewCalendar'
   | 'viewProjects'
+  | 'viewDeliveryTracker'
   | 'viewAllTasks'
   | 'viewAllClients'
   | 'manageAssignedClients'
@@ -330,6 +331,7 @@ export interface Deliverable {
   sequence: number;
   title: string;
   status: DeliverableStatus;
+  deliveredAt?: string;
   taskIds: string[];
   attachments: AttachmentRef[];
   workflowGeneratedAt?: string;

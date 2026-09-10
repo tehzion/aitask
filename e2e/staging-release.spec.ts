@@ -39,11 +39,14 @@ const signIn = async (page: Page, role: QaRole) => {
 };
 
 const advanceClientWizard = async (page: Page, clientName: string) => {
-  await page.goto('/clients');
+  await page.goto('/projects');
   await page.getByRole('button', { name: 'New client' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Create client and service plan' });
-  await dialog.getByLabel('Client / company name *').fill(clientName);
-  await dialog.getByLabel('Email').fill('release-save-client@example.test');
+  const clientDialog = page.getByRole('dialog', { name: 'Add a client company' });
+  await clientDialog.getByLabel('Company name *').fill(clientName);
+  await clientDialog.getByLabel('Email').fill('release-save-client@example.test');
+  await clientDialog.getByRole('button', { name: 'Save client' }).click();
+  await clientDialog.getByRole('button', { name: 'Add service plan' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Create service plan' });
   await dialog.getByRole('button', { name: 'Continue' }).click();
   await dialog.getByRole('button', { name: /^Use standard package/ }).click();
   await dialog.getByRole('button', { name: 'Continue' }).click();

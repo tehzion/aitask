@@ -19,6 +19,7 @@ import type {
   NotificationCursor,
   NotificationFeedPage,
   Registration,
+  RolePermissions,
   Task,
   WorkspaceMember,
 } from '../types';
@@ -35,7 +36,7 @@ import { useToastStore } from '../store/useToastStore';
 
 export const SECURE_WORKSPACE_ID = 'aitask-main';
 export const SECURE_SYNC_PROTOCOL_VERSION = 1;
-export const SECURE_BACKEND_SCHEMA_VERSION = 3;
+export const SECURE_BACKEND_SCHEMA_VERSION = 4;
 export const BACKEND_UPGRADE_REQUIRED_MESSAGE = 'AiTask is completing a system update. Your workspace is read-only for a moment; no changes have been submitted.';
 const SYNC_REQUEST_TIMEOUT_MS = 20_000;
 const PENDING_COMMAND_STORAGE_VERSION = 1;
@@ -174,6 +175,15 @@ type MemberDepartmentsResponse = CommandResponse & {
   };
 };
 
+type MemberPermissionsResponse = CommandResponse & {
+  member?: {
+    id: string;
+    permissions: RolePermissions | Record<string, never>;
+    version: number;
+    updated_at: string;
+  };
+};
+
 export interface NotificationFeedQuery {
   cursor?: NotificationCursor;
   limit?: number;
@@ -204,6 +214,7 @@ export type SecureBackendCapabilities = {
   workspaceOptimisticLock: boolean;
   serviceOperations: boolean;
   releaseNoticeAcknowledgements: boolean;
+  memberPermissionManagement: boolean;
 };
 
 export type SecureBackendCompatibility =
@@ -224,6 +235,12 @@ let retryableMemberDepartments: {
   id: string;
   memberId: string;
   departments: Department[];
+  expectedVersion: number;
+} | null = null;
+let retryableMemberPermissions: {
+  id: string;
+  memberId: string;
+  permissions: RolePermissions | null;
   expectedVersion: number;
 } | null = null;
 let retryableNotificationMutation: {
@@ -990,12 +1007,14 @@ export const loadSecureBackendCapabilities = async (): Promise<SecureBackendComp
     workspaceOptimisticLock: response?.workspaceOptimisticLock === true,
     serviceOperations: response?.serviceOperations === true,
     releaseNoticeAcknowledgements: response?.releaseNoticeAcknowledgements === true,
+    memberPermissionManagement: response?.memberPermissionManagement === true,
   };
   const compatible = response?.ok === true
     && capabilities.schemaVersion === SECURE_BACKEND_SCHEMA_VERSION
     && capabilities.workspaceOptimisticLock
     && capabilities.serviceOperations
-    && capabilities.releaseNoticeAcknowledgements;
+    && capabilities.releaseNoticeAcknowledgements
+    && capabilities.memberPermissionManagement;
   return compatible
     ? { compatible: true, capabilities }
     : { compatible: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE };
@@ -1092,6 +1111,94 @@ export const saveSecureMemberDepartments = async (
     ...(previous?.data || memberData(member)),
     departments,
     department: legacyDepartment,
+  };
+  baseline.set(key, {
+    kind: 'member',
+    entityType: 'member',
+    entityId: member.id,
+    version: Number(response.member?.version) || expectedVersion + 1,
+    data: nextData,
+    serialized: stable({ parentId: null, data: nextData }),
+  });
+
+  return {
+    ok: true,
+    data: response,
+    commandId: response.commandId || pending.id,
+    workspaceVersion: Number(response.workspaceVersion) || 1,
+    replayed: response.replayed,
+  };
+};
+
+export const saveSecureMemberPermissions = async (
+  member: WorkspaceMember,
+  permissions: RolePermissions | null,
+): Promise<MutationResult<MemberPermissionsResponse>> => {
+  if (member.role !== 'Staff' || member.isSuperAdmin) {
+    return { ok: false, code: 'VALIDATION', error: 'Only Staff and HOD permissions can be customized.' };
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before saving permissions.' };
+  }
+
+  const expectedVersion = Math.max(1, Number(member.version) || 1);
+  const matchesRetry = retryableMemberPermissions
+    && retryableMemberPermissions.memberId === member.id
+    && retryableMemberPermissions.expectedVersion === expectedVersion
+    && stable(retryableMemberPermissions.permissions) === stable(permissions);
+  const pending = matchesRetry
+    ? retryableMemberPermissions
+    : { id: commandId(), memberId: member.id, permissions, expectedVersion };
+  retryableMemberPermissions = pending;
+
+  const invoke = () => withSyncTimeout(supabase.rpc('aitask_update_member_permissions', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+    p_command_id: pending.id,
+    p_member_id: pending.memberId,
+    p_permissions: pending.permissions,
+    p_expected_version: pending.expectedVersion,
+  }));
+
+  let rpcResult: Awaited<ReturnType<typeof invoke>>;
+  try {
+    rpcResult = await invoke();
+    if (isAuthError(rpcResult.error) && await refreshSecureSession()) rpcResult = await invoke();
+  } catch (error) {
+    return {
+      ok: false,
+      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
+      error: error instanceof SyncRequestTimeoutError
+        ? 'Save confirmation timed out. Submit again to retry the same permission change safely.'
+        : 'Supabase could not confirm the permission change. Submit again to retry.',
+    };
+  }
+
+  if (rpcResult.error) {
+    return {
+      ok: false,
+      code: isAuthError(rpcResult.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
+      error: rpcResult.error.message || 'Unable to update permissions.',
+    };
+  }
+
+  const response = rpcResult.data as MemberPermissionsResponse;
+  if (!response?.ok) {
+    if (response.code !== 'RETRY_REQUIRED') retryableMemberPermissions = null;
+    return {
+      ok: false,
+      code: response.code || 'RETRY_REQUIRED',
+      error: response.error || 'The permission change was rejected.',
+      conflict: response.conflict,
+    };
+  }
+
+  retryableMemberPermissions = null;
+  const nextPermissions = permissions || undefined;
+  const key = entityKey('member', member.id);
+  const previous = baseline.get(key);
+  const nextData = {
+    ...(previous?.data || memberData(member)),
+    permissions: nextPermissions,
   };
   baseline.set(key, {
     kind: 'member',

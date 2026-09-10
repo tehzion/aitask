@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowLeft, ArrowRight, Check, Copy, PackageCheck, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, pendingMutationMessage } from '../store';
-import type { PlanOrigin, ServiceItem } from '../types';
+import type { ClientProfile, PlanOrigin, ServiceItem } from '../types';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
 import { inputBase } from './uiTokens';
@@ -12,12 +12,13 @@ import { calculatePlanTotalMinor, formatMoney, snapshotWorkflow } from '../lib/s
 const blankItem = (): ServiceItem => ({ id: crypto.randomUUID(), name: '', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 0 });
 const WIZARD_BLOCKED_MESSAGE = 'An earlier change is still waiting to sync. Use “Retry my changes” or “Use latest” in the banner above this dialog, then save this draft again.';
 
-const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
+const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; client?: ClientProfile }) => {
   const navigate = useNavigate();
   const {
     servicePackages,
     serviceWorkflowTemplates,
     createClientWithPlan,
+    createClientPlan,
     retryPendingSave,
     backend,
   } = useStore();
@@ -34,6 +35,20 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
   const selectedPackage = servicePackages.find(item => item.id === packageId);
   const readOnlyItems = mode === 'standard';
   const appliedPackageKeyRef = React.useRef('');
+
+  React.useEffect(() => {
+    if (!client) return;
+    setProfile({
+      clientName: client.clientName,
+      contactPerson: client.contactPerson || '',
+      email: client.email || '',
+      phone: client.phone || '',
+      address: client.address || '',
+      website: client.website || '',
+      facebookPage: client.facebookPage || '',
+      notes: client.notes || '',
+    });
+  }, [client]);
 
   const applyPackage = React.useCallback((pkg: typeof selectedPackage) => {
     if (!pkg) return;
@@ -136,18 +151,25 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
             taxRateBps: plan.taxRateBps,
           };
         };
-        let result = createClientWithPlan(buildInput());
-        if (!result.ok && result.error === pendingMutationMessage) {
+        const planInput = buildInput();
+        let result = client
+          ? createClientPlan(client.id, planInput)
+          : createClientWithPlan(planInput);
+        let resultClientId = 'clientId' in result && typeof result.clientId === 'string' ? result.clientId : undefined;
+        if (!client && !result.ok && result.error === pendingMutationMessage) {
           const recovered = await retryPendingSave();
-          if (recovered.ok) result = createClientWithPlan(buildInput());
+          if (recovered.ok) {
+            result = createClientWithPlan(planInput);
+            resultClientId = 'clientId' in result && typeof result.clientId === 'string' ? result.clientId : undefined;
+          }
         }
-        if (!result.ok || !result.clientId) {
+        if (!result.ok || (!client && !resultClientId) || (client && !result.planId)) {
           setError(result.error === pendingMutationMessage
             ? WIZARD_BLOCKED_MESSAGE
-            : result.error || 'Unable to create the client.');
+            : result.error || (client ? 'Unable to create the service plan.' : 'Unable to create the client.'));
           return;
         }
-        createdClientIdRef.current = result.clientId;
+        createdClientIdRef.current = client?.id || resultClientId || '';
       }
       const committed = await retryPendingSave('client_plan.manage');
       if (!committed.ok) {
@@ -179,7 +201,7 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
   return (
     <ModalShell labelledBy={titleId} onClose={() => { if (!saving) onClose(); }} closeOnBackdrop={!saving} panelClassName="h-[min(54rem,calc(100dvh-2rem))] max-w-[88rem]">
       <header className="flex items-start justify-between gap-4 border-b border-line px-5 pb-5 pt-6 sm:px-6">
-        <div><p className="calm-eyebrow">New client · Step {step} of 5</p><h2 id={titleId} className="mt-1 text-2xl font-semibold tracking-[-0.035em] text-ink">Create client and service plan</h2><p className="mt-1 text-sm text-muted">Save the client and a frozen Draft plan in one workflow.</p></div>
+        <div><p className="calm-eyebrow">{client ? 'Service plan' : 'New client'} · Step {step} of 5</p><h2 id={titleId} className="mt-1 text-2xl font-semibold tracking-[-0.035em] text-ink">{client ? 'Create service plan' : 'Create client and service plan'}</h2><p className="mt-1 text-sm text-muted">{client ? 'Create a frozen Draft plan for this existing company.' : 'Save the client and a frozen Draft plan in one workflow.'}</p></div>
         <button type="button" aria-label="Close" onClick={onClose} disabled={saving} className="flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink disabled:cursor-wait disabled:opacity-50"><X className="h-5 w-5" /></button>
       </header>
 
@@ -190,7 +212,7 @@ const CreateClientPlanModal = ({ onClose }: { onClose: () => void }) => {
 
         <main className="custom-scrollbar min-h-0 overflow-y-auto p-5 sm:p-6 lg:p-8">
           <div className="mb-5 flex gap-1 lg:hidden" aria-hidden="true">{steps.map((_, index) => <span key={index} className={cn('h-1.5 flex-1 rounded-full', index + 1 <= step ? 'bg-accent' : 'bg-line')} />)}</div>
-          {step === 1 && <section aria-labelledby="client-details-step"><h3 id="client-details-step" className="text-lg font-semibold text-ink">Client details</h3><p className="mt-1 text-sm text-muted">Start with the primary business and contact information.</p><div className="mt-6 grid gap-4 md:grid-cols-2">{([['clientName','Client / company name'],['contactPerson','Contact person'],['email','Email'],['phone','Phone'],['address','Address'],['website','Website'],['facebookPage','Facebook page']] as const).map(([key,label]) => <label key={key} className="text-sm font-medium text-ink">{label}{key === 'clientName' && ' *'}<input className={cn(inputBase, 'mt-1.5 px-3 py-2.5')} value={profile[key]} onChange={e => setProfile({ ...profile, [key]: e.target.value })} /></label>)}<label className="text-sm font-medium text-ink md:col-span-2">Notes<textarea className={cn(inputBase, 'mt-1.5 min-h-28 px-3 py-2.5')} value={profile.notes} onChange={e => setProfile({ ...profile, notes: e.target.value })} /></label></div></section>}
+          {step === 1 && <section aria-labelledby="client-details-step"><h3 id="client-details-step" className="text-lg font-semibold text-ink">{client ? 'Company' : 'Client details'}</h3><p className="mt-1 text-sm text-muted">{client ? 'This plan will be attached to the selected company.' : 'Start with the primary business and contact information.'}</p><div className="mt-6 grid gap-4 md:grid-cols-2">{([['clientName','Client / company name'],['contactPerson','Contact person'],['email','Email'],['phone','Phone'],['address','Address'],['website','Website'],['facebookPage','Facebook page']] as const).map(([key,label]) => <label key={key} className="text-sm font-medium text-ink">{label}{key === 'clientName' && ' *'}<input disabled={Boolean(client)} className={cn(inputBase, 'mt-1.5 px-3 py-2.5')} value={profile[key]} onChange={e => setProfile({ ...profile, [key]: e.target.value })} /></label>)}<label className="text-sm font-medium text-ink md:col-span-2">Notes<textarea disabled={Boolean(client)} className={cn(inputBase, 'mt-1.5 min-h-28 px-3 py-2.5')} value={profile.notes} onChange={e => setProfile({ ...profile, notes: e.target.value })} /></label></div></section>}
 
           {step === 2 && <section aria-labelledby="plan-source-step"><h3 id="plan-source-step" className="text-lg font-semibold text-ink">Choose a plan source</h3><p className="mt-1 text-sm text-muted">The selected scope and workflow are frozen when you save.</p><p className="mt-3 rounded-control bg-inset px-3 py-2 text-sm leading-6 text-muted">Duplicating Growth Plan creates this client’s own Custom Service Plan. Later quantity, platform, or price changes never modify the original Growth Plan.</p><div className="mt-6 grid gap-3 xl:grid-cols-3">{modeOptions.map(option => <button type="button" key={option.value} onClick={() => chooseMode(option.value)} aria-pressed={mode === option.value} className={cn('min-h-44 rounded-panel p-5 text-left ring-1 transition-[background-color,box-shadow,transform] duration-160 active:scale-[0.99]', mode === option.value ? 'bg-accent-soft text-ink ring-accent/45' : 'bg-surface text-ink ring-line hover:bg-inset')}><span className={cn('flex h-10 w-10 items-center justify-center rounded-control', mode === option.value ? 'bg-accent text-white' : 'bg-inset text-muted')}><option.icon className="h-5 w-5" /></span><span className="mt-5 block font-semibold">{option.title}</span><span className="mt-1 block text-sm leading-5 text-muted">{option.text}</span></button>)}</div>{mode !== 'custom' && <label className="mt-6 block text-sm font-medium text-ink">Standard package<select className={cn(inputBase, 'mt-1.5 px-3 py-2.5')} value={packageId} onChange={e => setPackageId(e.target.value)}><option value="">Choose package</option>{servicePackages.filter(item => item.isActive).map(pkg => <option key={pkg.id} value={pkg.id} data-i18n-skip>{pkg.name} · rev {pkg.revision}</option>)}</select></label>}</section>}
 

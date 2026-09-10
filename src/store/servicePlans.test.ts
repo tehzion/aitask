@@ -45,6 +45,26 @@ describe('client service plan store', () => {
     expect(useStore.getState().clients).toEqual([]);
   });
 
+  it('creates a draft plan for an existing client without creating another client', () => {
+    const client = { id: 'existing-client-plan', clientName: 'Existing Company', createdAt: '2026-09-10', updatedAt: '2026-09-10' };
+    useStore.setState({ clients: [client] });
+
+    const created = useStore.getState().createClientPlan(client.id, {
+      planName: 'Growth',
+      origin: 'custom',
+      serviceItems: [{ id: 'existing-service', name: 'Design', platforms: [], unit: 'post', quantity: 1, unitPriceMinor: 10000 }],
+      startDate: '2026-09-10',
+      billingDay: 10,
+      discountType: 'none',
+      discountValue: 0,
+      taxRateBps: 0,
+    });
+
+    expect(created.ok).toBe(true);
+    expect(useStore.getState().clients).toEqual([client]);
+    expect(useStore.getState().clientPlans[0]).toMatchObject({ clientId: client.id, clientName: client.clientName, name: 'Growth' });
+  });
+
   it('creates an idempotent frozen task chain and derives delivery progress', () => {
     const created = useStore.getState().createClientWithPlan({
       clientName: 'Video Client', planName: 'Video Plan', origin: 'custom',

@@ -8,7 +8,7 @@ import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { useI18n } from '../components/I18nProvider';
-import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getEffectiveRoleName, isBossKoo, permissionGroups, permissionLabels } from '../lib/access';
+import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getEffectivePermissions, getEffectiveRoleName, isBossKoo, permissionGroups, permissionLabels, SYSTEM_HOD_ROLE_ID } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
@@ -26,6 +26,7 @@ const Approvals: React.FC = () => {
   const approvalTitleId = React.useId();
   const deleteMemberTitleId = React.useId();
   const editDepartmentsTitleId = React.useId();
+  const editPermissionsTitleId = React.useId();
   const secureAccounts = shouldUseSecureSupabase();
   const {
     registrations,
@@ -36,6 +37,7 @@ const Approvals: React.FC = () => {
     deleteUser,
     addUserBySuperAdmin,
     updateMemberDepartments,
+    updateMemberPermissions,
     rolePermissions,
     addCustomRole,
     updateCustomRole,
@@ -52,6 +54,7 @@ const Approvals: React.FC = () => {
     deleteUser: state.deleteUser,
     addUserBySuperAdmin: state.addUserBySuperAdmin,
     updateMemberDepartments: state.updateMemberDepartments,
+    updateMemberPermissions: state.updateMemberPermissions,
     rolePermissions: state.rolePermissions,
     addCustomRole: state.addCustomRole,
     updateCustomRole: state.updateCustomRole,
@@ -92,6 +95,10 @@ const Approvals: React.FC = () => {
   const [memberDepartmentsId, setMemberDepartmentsId] = useState<string | null>(null);
   const [memberDepartments, setMemberDepartments] = useState<Department[]>([]);
   const [memberDepartmentsError, setMemberDepartmentsError] = useState('');
+  const [memberPermissionsId, setMemberPermissionsId] = useState<string | null>(null);
+  const [memberPermissionsCustom, setMemberPermissionsCustom] = useState(false);
+  const [memberPermissions, setMemberPermissions] = useState<RolePermissions>(() => clonePermissions(defaultRolePermissions.Staff));
+  const [memberPermissionsError, setMemberPermissionsError] = useState('');
   const superAdmin = isBossKoo(currentUser);
   const [roleForm, setRoleForm] = useState({
     name: '',
@@ -106,6 +113,9 @@ const Approvals: React.FC = () => {
 
   const pendingRegs = (registrations || []).filter(r => r.status === 'Pending');
   const historyRegs = (registrations || []).filter(r => r.status !== 'Pending');
+  const memberPermissionsUser = memberPermissionsId
+    ? users.find(user => user.id === memberPermissionsId)
+    : undefined;
 
   const pendingDays = (reg: Registration) => {
     const created = new Date(reg.createdAt).getTime();
@@ -463,6 +473,37 @@ const Approvals: React.FC = () => {
     setMemberDepartments([]);
   };
 
+  const handleEditPermissions = (userId: string) => {
+    const user = users.find(item => item.id === userId);
+    if (!user || user.role !== 'Staff' || isBossKoo(user)) return;
+    const hasDirectPermissions = Boolean(user.permissions && Object.keys(user.permissions).length > 0);
+    setMemberPermissionsId(user.id);
+    setMemberPermissionsCustom(hasDirectPermissions);
+    setMemberPermissions(clonePermissions(getEffectivePermissions(user, rolePermissions)));
+    setMemberPermissionsError('');
+  };
+
+  const toggleMemberPermission = (key: RolePermissionKey) => {
+    setMemberPermissions(current => ({ ...current, [key]: !current[key] }));
+  };
+
+  const handleSaveMemberPermissions = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!memberPermissionsId) return;
+    setMemberPermissionsError('');
+    setIsActionSaving(true);
+    const result = await updateMemberPermissions(
+      memberPermissionsId,
+      memberPermissionsCustom ? memberPermissions : undefined,
+    );
+    setIsActionSaving(false);
+    if (!result.ok) {
+      setMemberPermissionsError(result.error || 'Unable to update member permissions.');
+      return;
+    }
+    setMemberPermissionsId(null);
+  };
+
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddUserError('');
@@ -777,7 +818,7 @@ const Approvals: React.FC = () => {
           <ShieldCheck className="w-5 h-5 text-blue-600" />
           <div>
             <h2 className="text-lg font-semibold text-slate-800">Roles & Permissions</h2>
-            <p className="text-sm text-slate-500">Create named roles with core app permissions. Super admin access stays protected.</p>
+            <p className="text-sm text-slate-500">Manage safe Staff and HOD access. Boss Koo account powers stay permanently protected.</p>
           </div>
         </div>
 
@@ -797,6 +838,7 @@ const Approvals: React.FC = () => {
                   value={roleForm.name}
                   onChange={e => setRoleForm({ ...roleForm, name: e.target.value })}
                   placeholder="e.g. Account Manager"
+                  disabled={roleEditorId === SYSTEM_HOD_ROLE_ID}
                   required
                 />
               </div>
@@ -807,6 +849,7 @@ const Approvals: React.FC = () => {
                   className={cn(inputBase, 'px-3 py-2.5')}
                   value={roleForm.baseRole}
                   onChange={e => handleRoleBaseChange(e.target.value as Role)}
+                  disabled={roleEditorId === SYSTEM_HOD_ROLE_ID}
                 >
                   {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
@@ -880,7 +923,7 @@ const Approvals: React.FC = () => {
                     {customRole.description && <p className="mt-1 text-sm text-slate-500">{customRole.description}</p>}
                   </div>
                   <div className="flex gap-2">
-                    <Button type="button" variant="secondary" onClick={() => handleEditRole(customRole.id)} disabled={customRole.isProtected}>Edit</Button>
+                    <Button type="button" variant="secondary" onClick={() => handleEditRole(customRole.id)} disabled={customRole.isProtected && customRole.id !== SYSTEM_HOD_ROLE_ID}>Edit permissions</Button>
                     <Button type="button" variant="danger" onClick={() => void handleDeleteRole(customRole.id)} disabled={isActionSaving || customRole.isProtected}>Delete</Button>
                   </div>
                 </div>
@@ -1029,6 +1072,7 @@ const Approvals: React.FC = () => {
                         ))}
                       </select>
                     )}
+                    {!isBossKoo(u) && u.permissions && Object.keys(u.permissions).length > 0 && <Badge className="mt-2" tone="indigo">Custom access</Badge>}
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-500">
                     {u.email || 'No email on file'}
@@ -1045,6 +1089,18 @@ const Approvals: React.FC = () => {
                           aria-label={`Edit departments for ${u.name}`}
                         >
                           <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
+                      {superAdmin && u.role === 'Staff' && !isBossKoo(u) && (
+                        <button
+                          type="button"
+                          onClick={() => handleEditPermissions(u.id)}
+                          disabled={isActionSaving}
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+                          title="Manage permissions"
+                          aria-label={`Manage permissions for ${u.name}`}
+                        >
+                          <ShieldCheck className="h-4 w-4" />
                         </button>
                       )}
                       {canDeleteUser(currentUser, u, rolePermissions) ? (
@@ -1112,6 +1168,58 @@ const Approvals: React.FC = () => {
               <Button type="submit" disabled={isActionSaving || backend.isSaving}>
                 {isActionSaving ? 'Saving...' : 'Save departments'}
               </Button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
+
+      {memberPermissionsUser && (
+        <ModalShell
+          labelledBy={editPermissionsTitleId}
+          onClose={() => {
+            if (isActionSaving) return;
+            setMemberPermissionsId(null);
+            setMemberPermissionsError('');
+          }}
+          panelClassName="max-w-3xl"
+        >
+          <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
+            <h2 id={editPermissionsTitleId} data-i18n-skip className="text-lg font-semibold text-slate-950">Manage access for {memberPermissionsUser.name}</h2>
+            <p className="mt-1 text-sm text-slate-500">Assigned tasks remain editable and deletable. Protected Boss Koo permissions are never delegated.</p>
+          </div>
+          <form onSubmit={handleSaveMemberPermissions} className="space-y-5 p-6">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button type="button" aria-pressed={!memberPermissionsCustom} onClick={() => setMemberPermissionsCustom(false)} className={cn('min-h-20 rounded-lg border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400', !memberPermissionsCustom ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50')}>
+                <span className="block text-sm font-semibold text-slate-900">Use role defaults</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">Follow {getEffectiveRoleName({ ...memberPermissionsUser, permissions: undefined }, rolePermissions)} permissions and future role updates.</span>
+              </button>
+              <button type="button" aria-pressed={memberPermissionsCustom} onClick={() => setMemberPermissionsCustom(true)} className={cn('min-h-20 rounded-lg border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400', memberPermissionsCustom ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50')}>
+                <span className="block text-sm font-semibold text-slate-900">Custom access</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">Save a dedicated permission set for this member.</span>
+              </button>
+            </div>
+
+            <fieldset disabled={!memberPermissionsCustom} className="space-y-4 disabled:opacity-55">
+              <legend className="sr-only">Member permissions</legend>
+              {permissionGroups.map(group => (
+                <div key={group.title}>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{group.title}</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {group.keys.map(key => (
+                      <label key={key} className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                        <input type="checkbox" checked={memberPermissions[key]} onChange={() => toggleMemberPermission(key)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        {permissionLabels[key]}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </fieldset>
+
+            {memberPermissionsError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{memberPermissionsError}</div>}
+            <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-4">
+              <Button type="button" variant="secondary" disabled={isActionSaving} onClick={() => setMemberPermissionsId(null)}>Cancel</Button>
+              <Button type="submit" disabled={isActionSaving || backend.isSaving}>{isActionSaving ? 'Saving...' : memberPermissionsCustom ? 'Save custom access' : 'Reset to role defaults'}</Button>
             </div>
           </form>
         </ModalShell>

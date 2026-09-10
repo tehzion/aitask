@@ -85,4 +85,21 @@ describe('client profile store authorization', () => {
     expect(result).toEqual({ ok: false, error: 'Only admins can rename clients.' });
     expect(useStore.getState().tasks[0]?.clientName).toBe('Acme');
   });
+
+  it('lets an admin create a profile without a service plan and rejects duplicate names', () => {
+    const admin: User = { id: 'admin-client-profile', name: 'Admin', role: 'Admin', departments: ['Management'], department: 'Management' };
+    useStore.setState({ ...initialState, currentUser: admin, users: [admin], clients: [], tasks: [], projects: [], rolePermissions: [] }, true);
+
+    const created = useStore.getState().createClientProfile({
+      clientName: 'New Company',
+      contactPerson: 'Alicia',
+      email: 'alicia@example.com',
+    });
+    expect(created.ok).toBe(true);
+    expect(useStore.getState().clientPlans).toEqual([]);
+    expect(useStore.getState().clients[0]).toMatchObject({ clientName: 'New Company', contactPerson: 'Alicia' });
+
+    const duplicate = useStore.getState().createClientProfile({ clientName: ' new company ' });
+    expect(duplicate).toEqual({ ok: false, error: 'This company already exists in the Companies database.' });
+  });
 });

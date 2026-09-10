@@ -4,6 +4,55 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [2.3.0] - 2026-09-10
+
+### Added
+
+- Companies is now the central client database for company profiles, contacts,
+  client accounts, assigned staff, service plans, active cycles, projects, and
+  related work.
+- Clients is now a weekly and monthly task-and-deliverable tracker with period
+  navigation, completion totals, overdue status, deadlines, team assignments,
+  active service cycles, and expandable work details.
+- New clients can be saved as profile-only records. After saving, administrators
+  can create a project, add a service plan, or return to Companies without
+  creating a login account or plan automatically.
+
+### Changed
+
+- “Work group” has been replaced by “Project” in creation flows. Projects now
+  require an existing company, an independent project name, at least one service,
+  a start date, and an optional valid deadline.
+- Boss Koo and Admins can create a company from inside project creation and then
+  continue the same project form with the new company selected.
+- Internal task creators can select the project explicitly; the resulting task
+  inherits the canonical client ID, company name, project ID, and project name.
+- Company renames preserve custom project names. Only legacy project names that
+  matched the old company name are kept coupled to the renamed company.
+- Client workspaces now return to Companies and offer an Add service plan action
+  when the company has no plan. Dashboard onboarding and navigation copy now
+  distinguish the Companies database from the Clients task tracker.
+
+### Permissions and security
+
+- Companies access and Task Tracker access are separate permissions. Boss Koo can
+  manage safe HOD role defaults and Staff/HOD overrides while account management,
+  global task editing, and protected HOD identity controls remain reserved.
+- New project inserts must reference a real client visible to the actor, with a
+  matching canonical client ID and company name. Client-changing project updates
+  receive the same database-side validation.
+- Staff and HOD project creation continues to require `createProjects` and is
+  limited to companies already visible to that member.
+
+### Quality
+
+- Added unit coverage for profile-only client creation, existing-client service
+  plans, project duplicates, required client links, and rename compatibility.
+- Added browser coverage for Companies → New client → Create project → Create
+  task, including correct client/project inheritance, plus inline client creation.
+- Added pgTAP authorization coverage for visible, hidden, and nonexistent project
+  client links.
+
 ## [2.2.0] - 2026-09-07
 
 ### Changed

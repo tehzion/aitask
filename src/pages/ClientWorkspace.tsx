@@ -51,6 +51,7 @@ import { downloadServiceFile, uploadServiceFile } from "../lib/serviceFiles";
 import DraftServicePlanEditor from "../components/DraftServicePlanEditor";
 import SideSheet from "../components/SideSheet";
 import ClientServiceWorkspace from "../components/ClientServiceWorkspace";
+import CreateClientPlanModal from "../components/CreateClientPlanModal";
 
 type Tab = "overview" | "plan" | "cycles" | "addons" | "activity";
 const CLIENT_WORKSPACE_TABS_ID = "client-workspace";
@@ -68,6 +69,7 @@ const OperationsClientWorkspace = () => {
   const store = useStore();
   const client = store.clients.find((item) => item.id === clientId);
   const [tab, setTab] = React.useState<Tab>("overview");
+  const [planModalOpen, setPlanModalOpen] = React.useState(false);
   const [comment, setComment] = React.useState("");
   const [visibility, setVisibility] =
     React.useState<CommentVisibility>("internal");
@@ -89,7 +91,7 @@ const OperationsClientWorkspace = () => {
     effectiveFrom: new Date().toISOString().slice(0, 10),
     targetCycleId: "",
   });
-  if (!client) return <Navigate to="/clients" replace />;
+  if (!client) return <Navigate to="/projects" replace />;
 
   const canManagePlans = canManageClientPlans(
     store.currentUser,
@@ -110,7 +112,7 @@ const OperationsClientWorkspace = () => {
   );
   const isClient = store.currentUser?.role === "Client";
   if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions))
-    return <Navigate to="/clients" replace />;
+    return <Navigate to="/projects" replace />;
   if (
     isClient &&
     store.currentUser?.companyName?.trim().toLowerCase() !==
@@ -301,11 +303,11 @@ const OperationsClientWorkspace = () => {
   return (
     <div className={pageShell}>
       <Link
-        to="/clients"
+        to="/projects"
         className="inline-flex min-h-11 items-center gap-1 rounded-control text-sm font-semibold text-muted hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent/35"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to clients
+        Back to Companies
       </Link>
       <PageHeader
         compact
@@ -427,9 +429,10 @@ const OperationsClientWorkspace = () => {
                 ))}
               </div>
             ) : (
-              <p className="p-8 text-center text-sm text-slate-500">
-                Create a plan from the Clients page.
-              </p>
+              <div className="space-y-4 p-8 text-center">
+                <p className="text-sm text-slate-500">This company does not have a service plan yet.</p>
+                {canManagePlans && <Button onClick={() => setPlanModalOpen(true)}><Plus className="h-4 w-4" />Add service plan</Button>}
+              </div>
             )}
             {canSeePrices && planTotals && (
               <div className="flex justify-end border-t border-slate-200 bg-slate-50 p-5">
@@ -862,6 +865,8 @@ const OperationsClientWorkspace = () => {
           </section>
         </div>
       )}
+
+      {planModalOpen && <CreateClientPlanModal client={client} onClose={() => setPlanModalOpen(false)} />}
 
       <SideSheet
         isOpen={addonSheetOpen}
