@@ -85,8 +85,10 @@ import { getTodayInputDate } from '../lib/utils';
 import { getInitialLocale, translateUiText } from '../lib/i18n';
 import {
   BACKEND_UPGRADE_REQUIRED_MESSAGE,
+  discardRetainedSecureMemberMutation,
   discardSecureWorkspaceCommand,
   completeSecurePasswordSetup,
+  getRetainedSecureMemberMutation,
   getRetainedSecureCommand,
   isWorkspaceConflict,
   loadSecureBackendCapabilities,
@@ -94,7 +96,9 @@ import {
   loadSecureWorkspaceRevision,
   overlayRetainedWorkspaceEntities,
   rebaseRetryableCommand,
+  restoreSecureMemberMutation,
   restoreSecureWorkspaceCommand,
+  retryRetainedSecureMemberMutation,
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
   saveSecureMemberPermissions,
@@ -102,7 +106,12 @@ import {
   type MutationConflict,
   type SecureCommandType,
 } from '../lib/secureWorkspace';
-import { resolveAuthEmail, shouldUseSecureSupabase, supabase } from '../lib/supabaseClient';
+import {
+  resolveAuthEmail,
+  shouldUseSecureSupabase,
+  subscribeToCurrentMemberAccessChanges,
+  supabase,
+} from '../lib/supabaseClient';
 import {
   clearPasswordSetupMode,
   getPasswordSetupMode,
@@ -1063,6 +1072,8 @@ export const useStore = create<StoreState>()(
             if (!verifiedUser) throw new Error('Your session has expired. Sign in again.');
 
             const retained = restoreSecureWorkspaceCommand(verifiedUser.id);
+            const retainedMemberMutation = restoreSecureMemberMutation(verifiedUser.id);
+            const hasRetainedChange = Boolean(retained || retainedMemberMutation);
             const [secure, compatibility] = await Promise.all([
               loadSecureWorkspace(verifiedUser, { preserveRetainedCommand: true }),
               loadSecureBackendCapabilities(),
@@ -1087,7 +1098,7 @@ export const useStore = create<StoreState>()(
               backend: {
                 ...state.backend,
                 status: compatibility.compatible
-                  ? (retained ? 'retry_required' : 'live')
+                  ? (hasRetainedChange ? 'retry_required' : 'live')
                   : 'upgrade_required',
                 isLoading: false,
                 lastSyncedAt: loadedAt,
@@ -1095,13 +1106,13 @@ export const useStore = create<StoreState>()(
                 workspaceVersion: secure.revision.version,
                 remoteVersion: secure.revision.version,
                 remoteUpdatedAt: secure.revision.updatedAt,
-                hasLocalChanges: Boolean(retained),
-                pendingMutations: retained ? 1 : 0,
+                hasLocalChanges: hasRetainedChange,
+                pendingMutations: hasRetainedChange ? 1 : 0,
                 pendingCommandType: retained ? retained.type : undefined,
                 upgradeRequired: !compatibility.compatible,
                 error: compatibility.compatible ? undefined : compatibility.error,
                 message: compatibility.compatible
-                  ? retained
+                  ? hasRetainedChange
                     ? 'Your pending change was restored in this browser tab. Review and retry it when ready.'
                     : 'Secure Supabase session is active.'
                   : compatibility.error,
@@ -1361,6 +1372,7 @@ export const useStore = create<StoreState>()(
             if (capabilityUserError) throw capabilityUserError;
             if (!capabilityUser) throw new Error('Your session has expired. Sign in again.');
             restoreSecureWorkspaceCommand(capabilityUser.id);
+            restoreSecureMemberMutation(capabilityUser.id);
             const compatibility = await loadSecureBackendCapabilities();
             if (!compatibility.compatible) {
               set((state) => ({
@@ -1630,8 +1642,81 @@ export const useStore = create<StoreState>()(
         if (current.backend.isSaving || current.backend.isPulling) {
           return { ok: false, error: 'Another synchronization request is still running.' };
         }
-        if (!getRetainedSecureCommand()) {
+        const retainedMemberMutation = getRetainedSecureMemberMutation();
+        if (!getRetainedSecureCommand() && !retainedMemberMutation) {
           return get().retryPendingSave(current.backend.pendingCommandType);
+        }
+        if (retainedMemberMutation) {
+          const targetUser = current.users.find(user => user.id === retainedMemberMutation.memberId);
+          if (!targetUser) {
+            set((state) => ({
+              backend: {
+                ...state.backend,
+                status: 'retry_required',
+                isSaving: false,
+                error: 'The member change is waiting, but that member is no longer available. Refresh before retrying.',
+                message: 'The member change is waiting, but that member is no longer available. Refresh before retrying.',
+              },
+            }));
+            return { ok: false, error: 'The member change is waiting, but that member is no longer available. Refresh before retrying.' };
+          }
+
+          set((state) => ({
+            backend: {
+              ...state.backend,
+              status: 'saving',
+              isSaving: true,
+              error: undefined,
+              message: 'Retrying member change.',
+            },
+          }));
+          const result = await retryRetainedSecureMemberMutation(targetUser);
+          if (result.ok === false) {
+            set((state) => ({
+              backend: {
+                ...state.backend,
+                status: result.code === 'CONFLICT' ? 'conflict' : result.code === 'OFFLINE' ? 'offline' : 'retry_required',
+                isSaving: false,
+                conflict: result.conflict,
+                error: result.error,
+                message: result.error,
+              },
+            }));
+            return { ok: false, error: result.error };
+          }
+
+          const updatedAt = result.data.member?.updated_at || new Date().toISOString();
+          const version = Number(result.data.member?.version) || Math.max(1, Number(targetUser.version) || 1) + 1;
+          set((state) => ({
+            users: state.users.map(user => user.id === targetUser.id
+              ? retainedMemberMutation.kind === 'departments'
+                ? {
+                    ...user,
+                    departments: retainedMemberMutation.departments,
+                    department: getLegacyDepartmentMirror(user.role, retainedMemberMutation.departments),
+                    version,
+                    updatedAt,
+                  }
+                : { ...user, permissions: retainedMemberMutation.permissions || undefined, version, updatedAt }
+              : user),
+            backend: {
+              ...state.backend,
+              status: 'live',
+              isSaving: false,
+              hasRemoteUpdate: false,
+              hasLocalChanges: false,
+              pendingMutations: 0,
+              pendingCommandType: undefined,
+              workspaceVersion: Math.max(state.backend.workspaceVersion || 0, result.workspaceVersion),
+              remoteVersion: Math.max(state.backend.remoteVersion || 0, result.workspaceVersion),
+              lastSavedAt: updatedAt,
+              lastSyncedAt: updatedAt,
+              conflict: undefined,
+              error: undefined,
+              message: 'Saved.',
+            },
+          }));
+          return { ok: true };
         }
         if (shouldUseSecureSupabase()) {
           const compatibility = await loadSecureBackendCapabilities();
@@ -1731,6 +1816,7 @@ export const useStore = create<StoreState>()(
           return;
         }
         discardSecureWorkspaceCommand();
+        discardRetainedSecureMemberMutation();
         set((state) => ({
           backend: {
             ...state.backend,
@@ -1757,7 +1843,7 @@ export const useStore = create<StoreState>()(
         if (before.isSaving || before.isPulling) {
           return { ok: false, error: 'Another synchronization request is still running.' };
         }
-        if (getRetainedSecureCommand()) {
+        if (getRetainedSecureCommand() || getRetainedSecureMemberMutation()) {
           return get().retryMutation();
         }
         if (!before.hasLocalChanges) {
@@ -1808,6 +1894,7 @@ export const useStore = create<StoreState>()(
 
           try {
             const retainedBeforeLogin = restoreSecureWorkspaceCommand(data.user.id);
+            const retainedMemberBeforeLogin = restoreSecureMemberMutation(data.user.id);
             const [secure, compatibility] = await Promise.all([
               loadSecureWorkspace(data.user, { preserveRetainedCommand: true }),
               loadSecureBackendCapabilities(),
@@ -1818,7 +1905,7 @@ export const useStore = create<StoreState>()(
             const restoredCurrentUser = restoredWorkspace.users.find(member => member.id === secure.currentUser.id)
               || secure.currentUser;
             isApplyingRemoteSnapshot = true;
-            const hasRetainedChange = retainedBeforeLogin !== null;
+            const hasRetainedChange = retainedBeforeLogin !== null || retainedMemberBeforeLogin !== null;
             set((state) => ({
               ...makeWorkspacePatch(state, {
                 state: restoredWorkspace,
@@ -4413,6 +4500,10 @@ export const useStore = create<StoreState>()(
               ...current.backend,
               status: 'live',
               isSaving: false,
+              hasRemoteUpdate: false,
+              hasLocalChanges: false,
+              pendingMutations: 0,
+              pendingCommandType: undefined,
               workspaceVersion: result.workspaceVersion,
               remoteVersion: result.workspaceVersion,
               lastSavedAt: updatedAt,
@@ -4499,6 +4590,10 @@ export const useStore = create<StoreState>()(
               ...current.backend,
               status: 'live',
               isSaving: false,
+              hasRemoteUpdate: false,
+              hasLocalChanges: false,
+              pendingMutations: 0,
+              pendingCommandType: undefined,
               workspaceVersion: result.workspaceVersion,
               remoteVersion: result.workspaceVersion,
               lastSavedAt: updatedAt,
@@ -4878,6 +4973,36 @@ let backendAutoSyncCleanup: (() => void) | null = null;
 export const startBackendAutoSync = () => {
   if (backendAutoSyncStarted) return;
   backendAutoSyncStarted = true;
+  let accessRealtimeCleanup: (() => void) | null = null;
+  let accessRealtimeKey: string | null = null;
+
+  const syncAccessRealtime = () => {
+    const currentUser = useStore.getState().currentUser;
+    const authUserId = currentUser?.authUserId;
+    const key = authUserId ? `${authUserId}:${currentUser?.customRoleId || ''}` : null;
+    if (key === accessRealtimeKey) return;
+    accessRealtimeCleanup?.();
+    accessRealtimeCleanup = null;
+    accessRealtimeKey = key;
+    if (!shouldUseSecureSupabase() || !authUserId) return;
+    accessRealtimeCleanup = subscribeToCurrentMemberAccessChanges(
+      authUserId,
+      currentUser?.customRoleId,
+      () => {
+        const state = useStore.getState();
+        if (!state.currentUser || state.backend.isPulling || state.backend.isSaving) return;
+        void state.pullBackendNow({ force: true, silent: true });
+      },
+    );
+  };
+
+  syncAccessRealtime();
+  const unsubscribeAccessRealtime = useStore.subscribe((state, previousState) => {
+    if (
+      state.currentUser?.authUserId !== previousState.currentUser?.authUserId
+      || state.currentUser?.customRoleId !== previousState.currentUser?.customRoleId
+    ) syncAccessRealtime();
+  });
 
   useStore.subscribe((state, previousState) => {
     if (!shouldUseSupabase() || state.backend.isLoading || state.backend.isPulling || isApplyingRemoteSnapshot || isApplyingNotificationRead) return;
@@ -5014,6 +5139,10 @@ export const startBackendAutoSync = () => {
   window.addEventListener('online', handleOnline);
 
   backendAutoSyncCleanup = () => {
+    unsubscribeAccessRealtime();
+    accessRealtimeCleanup?.();
+    accessRealtimeCleanup = null;
+    accessRealtimeKey = null;
     window.clearInterval(pullInterval);
     window.removeEventListener('focus', pullLatest);
     document.removeEventListener('visibilitychange', pullLatest);

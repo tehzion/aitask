@@ -1,9 +1,9 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "production_aligned_through_20260910120000",
+  "status": "production_aligned_through_20260910120000_pending_20260910144226",
   "metadataOnly": false,
-  "warning": "Production history is aligned through 20260910120000_client_project_link_authorization after the reviewed forward migration push. Historical rollout repair remains prohibited.",
+  "warning": "Production history is aligned through 20260910120000_client_project_link_authorization. The reviewed forward migration 20260910144226_member_permission_realtime_refresh is pending deployment; historical rollout repair remains prohibited.",
   "productionVerification": {
     "verifiedAt": "2026-09-10",
     "historyThrough": "20260910120000_client_project_link_authorization",
@@ -300,7 +300,10 @@
     "20260907043633_hod_task_ownership_permissions",
     "20260907120000_harden_legacy_access_privileges",
     "20260910010207_company_tracker_member_permissions",
-    "20260910120000_client_project_link_authorization"
+    "20260910120000_client_project_link_authorization",
+    "20260910144226_member_permission_realtime_refresh"
   ],
-  "pendingProductionMigrations": []
+  "pendingProductionMigrations": [
+    "20260910144226_member_permission_realtime_refresh"
+  ]
 }

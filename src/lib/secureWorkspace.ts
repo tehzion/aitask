@@ -41,6 +41,8 @@ export const BACKEND_UPGRADE_REQUIRED_MESSAGE = 'AiTask is completing a system u
 const SYNC_REQUEST_TIMEOUT_MS = 20_000;
 const PENDING_COMMAND_STORAGE_VERSION = 1;
 const PENDING_COMMAND_STORAGE_PREFIX = 'aitask:secure-pending-command';
+const PENDING_MEMBER_MUTATION_STORAGE_VERSION = 1;
+const PENDING_MEMBER_MUTATION_STORAGE_PREFIX = 'aitask:secure-pending-member-mutation';
 
 export const SECURE_COMMAND_TYPES = [
   'workspace.patch',
@@ -228,21 +230,22 @@ type PendingCommandEnvelope = {
   command: SecureCommand;
 };
 
+type RetainedSecureMemberMutationWithId =
+  | { kind: 'departments'; id: string; memberId: string; departments: Department[]; expectedVersion: number }
+  | { kind: 'permissions'; id: string; memberId: string; permissions: RolePermissions | null; expectedVersion: number };
+
+type PendingMemberMutationEnvelope = {
+  version: number;
+  workspaceId: string;
+  authUserId: string;
+  mutation: RetainedSecureMemberMutationWithId;
+};
+
 let baseline = new Map<string, BaselineRow>();
 let retryableCommand: SecureCommand | null = null;
 let activeSecureAuthUserId: string | null = null;
-let retryableMemberDepartments: {
-  id: string;
-  memberId: string;
-  departments: Department[];
-  expectedVersion: number;
-} | null = null;
-let retryableMemberPermissions: {
-  id: string;
-  memberId: string;
-  permissions: RolePermissions | null;
-  expectedVersion: number;
-} | null = null;
+let retryableMemberDepartments: Extract<RetainedSecureMemberMutationWithId, { kind: 'departments' }> | null = null;
+let retryableMemberPermissions: Extract<RetainedSecureMemberMutationWithId, { kind: 'permissions' }> | null = null;
 let retryableNotificationMutation: {
   id: string;
   notificationIds: string[];
@@ -256,6 +259,10 @@ const commandId = () => crypto.randomUUID();
 
 const pendingCommandStorageKey = (authUserId: string) => (
   `${PENDING_COMMAND_STORAGE_PREFIX}:v${PENDING_COMMAND_STORAGE_VERSION}:${SECURE_WORKSPACE_ID}:${authUserId}`
+);
+
+const pendingMemberMutationStorageKey = (authUserId: string) => (
+  `${PENDING_MEMBER_MUTATION_STORAGE_PREFIX}:v${PENDING_MEMBER_MUTATION_STORAGE_VERSION}:${SECURE_WORKSPACE_ID}:${authUserId}`
 );
 
 const getSessionStorage = (): Storage | null => {
@@ -297,6 +304,25 @@ const isSecureCommand = (value: unknown): value is SecureCommand => {
     && command.operations.every(isWorkspaceOperation);
 };
 
+const isRetainedSecureMemberMutation = (value: unknown): value is RetainedSecureMemberMutationWithId => {
+  if (!value || typeof value !== 'object') return false;
+  const mutation = value as Partial<RetainedSecureMemberMutationWithId>;
+  if (
+    (mutation.kind !== 'departments' && mutation.kind !== 'permissions')
+    || typeof mutation.id !== 'string' || mutation.id.length === 0 || mutation.id.length > 160
+    || typeof mutation.memberId !== 'string' || mutation.memberId.length === 0 || mutation.memberId.length > 240
+    || !Number.isInteger(mutation.expectedVersion) || mutation.expectedVersion! < 1
+  ) return false;
+  if (mutation.kind === 'departments') {
+    return Array.isArray(mutation.departments)
+      && mutation.departments.length > 0
+      && mutation.departments.length <= 16
+      && mutation.departments.every(department => typeof department === 'string' && department.length > 0 && department.length <= 80);
+  }
+  return mutation.permissions === null
+    || (typeof mutation.permissions === 'object' && !Array.isArray(mutation.permissions));
+};
+
 const persistRetryableCommand = () => {
   if (!retryableCommand || !activeSecureAuthUserId) return;
   const storage = getSessionStorage();
@@ -329,10 +355,43 @@ const clearPersistedRetryableCommand = (authUserId = activeSecureAuthUserId) => 
   }
 };
 
+const retainedMemberMutationWithId = (): RetainedSecureMemberMutationWithId | null => (
+  retryableMemberDepartments || retryableMemberPermissions
+);
+
+const persistRetryableMemberMutation = () => {
+  const mutation = retainedMemberMutationWithId();
+  if (!mutation || !activeSecureAuthUserId) return;
+  const storage = getSessionStorage();
+  if (!storage) return;
+  const envelope: PendingMemberMutationEnvelope = {
+    version: PENDING_MEMBER_MUTATION_STORAGE_VERSION,
+    workspaceId: SECURE_WORKSPACE_ID,
+    authUserId: activeSecureAuthUserId,
+    mutation,
+  };
+  try {
+    storage.setItem(pendingMemberMutationStorageKey(activeSecureAuthUserId), JSON.stringify(envelope));
+  } catch {
+    useToastStore.getState().addToast('Browser storage is full. The pending member change survives in this tab only until it is saved.', 'warning');
+  }
+};
+
+const clearPersistedRetryableMemberMutation = (authUserId = activeSecureAuthUserId) => {
+  if (!authUserId) return;
+  try {
+    getSessionStorage()?.removeItem(pendingMemberMutationStorageKey(authUserId));
+  } catch {
+    // The in-memory member mutation is still cleared by the caller.
+  }
+};
+
 export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand | null => {
   if (!authUserId) return null;
   if (activeSecureAuthUserId && activeSecureAuthUserId !== authUserId) {
     retryableCommand = null;
+    retryableMemberDepartments = null;
+    retryableMemberPermissions = null;
   }
   activeSecureAuthUserId = authUserId;
   if (retryableCommand) return retryableCommand;
@@ -355,6 +414,40 @@ export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand
     return retryableCommand;
   } catch {
     storage.removeItem(pendingCommandStorageKey(authUserId));
+    return null;
+  }
+};
+
+export const restoreSecureMemberMutation = (authUserId: string): RetainedSecureMemberMutation | null => {
+  if (!authUserId) return null;
+  if (activeSecureAuthUserId && activeSecureAuthUserId !== authUserId) {
+    retryableCommand = null;
+    retryableMemberDepartments = null;
+    retryableMemberPermissions = null;
+  }
+  activeSecureAuthUserId = authUserId;
+  const retained = getRetainedSecureMemberMutation();
+  if (retained) return retained;
+  const storage = getSessionStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(pendingMemberMutationStorageKey(authUserId));
+    if (!raw) return null;
+    const envelope = JSON.parse(raw) as Partial<PendingMemberMutationEnvelope>;
+    if (
+      envelope.version !== PENDING_MEMBER_MUTATION_STORAGE_VERSION
+      || envelope.workspaceId !== SECURE_WORKSPACE_ID
+      || envelope.authUserId !== authUserId
+      || !isRetainedSecureMemberMutation(envelope.mutation)
+    ) {
+      storage.removeItem(pendingMemberMutationStorageKey(authUserId));
+      return null;
+    }
+    if (envelope.mutation.kind === 'departments') retryableMemberDepartments = envelope.mutation;
+    else retryableMemberPermissions = envelope.mutation;
+    return getRetainedSecureMemberMutation();
+  } catch {
+    storage.removeItem(pendingMemberMutationStorageKey(authUserId));
     return null;
   }
 };
@@ -1057,10 +1150,18 @@ export const saveSecureMemberDepartments = async (
     && retryableMemberDepartments.memberId === member.id
     && retryableMemberDepartments.expectedVersion === expectedVersion
     && stable(retryableMemberDepartments.departments) === stable(departments);
+  if (retryableMemberPermissions || (retryableMemberDepartments && !matchesRetry)) {
+    return {
+      ok: false,
+      code: 'RETRY_REQUIRED',
+      error: 'Retry or discard the previous member change before submitting a different one.',
+    };
+  }
   const pending = matchesRetry
     ? retryableMemberDepartments
-    : { id: commandId(), memberId: member.id, departments, expectedVersion };
+    : { kind: 'departments' as const, id: commandId(), memberId: member.id, departments, expectedVersion };
   retryableMemberDepartments = pending;
+  persistRetryableMemberMutation();
 
   const invoke = () => withSyncTimeout(supabase.rpc('aitask_update_member_departments', {
     p_workspace_id: SECURE_WORKSPACE_ID,
@@ -1094,7 +1195,10 @@ export const saveSecureMemberDepartments = async (
 
   const response = rpcResult.data as MemberDepartmentsResponse;
   if (!response?.ok) {
-    if (response.code !== 'RETRY_REQUIRED') retryableMemberDepartments = null;
+    if (response.code !== 'RETRY_REQUIRED') {
+      retryableMemberDepartments = null;
+      clearPersistedRetryableMemberMutation();
+    }
     return {
       ok: false,
       code: response.code || 'RETRY_REQUIRED',
@@ -1104,6 +1208,7 @@ export const saveSecureMemberDepartments = async (
   }
 
   retryableMemberDepartments = null;
+  clearPersistedRetryableMemberMutation();
   const legacyDepartment = getLegacyDepartmentMirror(member.role, departments);
   const key = entityKey('member', member.id);
   const previous = baseline.get(key);
@@ -1146,10 +1251,18 @@ export const saveSecureMemberPermissions = async (
     && retryableMemberPermissions.memberId === member.id
     && retryableMemberPermissions.expectedVersion === expectedVersion
     && stable(retryableMemberPermissions.permissions) === stable(permissions);
+  if (retryableMemberDepartments || (retryableMemberPermissions && !matchesRetry)) {
+    return {
+      ok: false,
+      code: 'RETRY_REQUIRED',
+      error: 'Retry or discard the previous member change before submitting a different one.',
+    };
+  }
   const pending = matchesRetry
     ? retryableMemberPermissions
-    : { id: commandId(), memberId: member.id, permissions, expectedVersion };
+    : { kind: 'permissions' as const, id: commandId(), memberId: member.id, permissions, expectedVersion };
   retryableMemberPermissions = pending;
+  persistRetryableMemberMutation();
 
   const invoke = () => withSyncTimeout(supabase.rpc('aitask_update_member_permissions', {
     p_workspace_id: SECURE_WORKSPACE_ID,
@@ -1183,7 +1296,10 @@ export const saveSecureMemberPermissions = async (
 
   const response = rpcResult.data as MemberPermissionsResponse;
   if (!response?.ok) {
-    if (response.code !== 'RETRY_REQUIRED') retryableMemberPermissions = null;
+    if (response.code !== 'RETRY_REQUIRED') {
+      retryableMemberPermissions = null;
+      clearPersistedRetryableMemberMutation();
+    }
     return {
       ok: false,
       code: response.code || 'RETRY_REQUIRED',
@@ -1193,6 +1309,7 @@ export const saveSecureMemberPermissions = async (
   }
 
   retryableMemberPermissions = null;
+  clearPersistedRetryableMemberMutation();
   const nextPermissions = permissions || undefined;
   const key = entityKey('member', member.id);
   const previous = baseline.get(key);
@@ -1216,6 +1333,48 @@ export const saveSecureMemberPermissions = async (
     workspaceVersion: Number(response.workspaceVersion) || 1,
     replayed: response.replayed,
   };
+};
+
+export type RetainedSecureMemberMutation =
+  | { kind: 'departments'; memberId: string; departments: Department[]; expectedVersion: number }
+  | { kind: 'permissions'; memberId: string; permissions: RolePermissions | null; expectedVersion: number };
+
+export const getRetainedSecureMemberMutation = (): RetainedSecureMemberMutation | null => {
+  if (retryableMemberDepartments) {
+    return {
+      kind: 'departments',
+      memberId: retryableMemberDepartments.memberId,
+      departments: retryableMemberDepartments.departments,
+      expectedVersion: retryableMemberDepartments.expectedVersion,
+    };
+  }
+  if (retryableMemberPermissions) {
+    return {
+      kind: 'permissions',
+      memberId: retryableMemberPermissions.memberId,
+      permissions: retryableMemberPermissions.permissions,
+      expectedVersion: retryableMemberPermissions.expectedVersion,
+    };
+  }
+  return null;
+};
+
+export const retryRetainedSecureMemberMutation = async (
+  member: WorkspaceMember,
+): Promise<MutationResult<MemberDepartmentsResponse | MemberPermissionsResponse>> => {
+  const pending = getRetainedSecureMemberMutation();
+  if (!pending || pending.memberId !== member.id) {
+    return { ok: false, code: 'NOT_FOUND', error: 'There is no member change waiting to retry.' };
+  }
+  return pending.kind === 'departments'
+    ? saveSecureMemberDepartments(member, pending.departments)
+    : saveSecureMemberPermissions(member, pending.permissions);
+};
+
+export const discardRetainedSecureMemberMutation = () => {
+  retryableMemberDepartments = null;
+  retryableMemberPermissions = null;
+  clearPersistedRetryableMemberMutation();
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
@@ -1581,10 +1740,16 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
   const retainedBeforeLoad = options.preserveRetainedCommand
     ? restoreSecureWorkspaceCommand(authUser.id)
     : null;
+  const retainedMemberBeforeLoad = options.preserveRetainedCommand
+    ? restoreSecureMemberMutation(authUser.id)
+    : null;
   if (!options.preserveRetainedCommand) {
     if (activeSecureAuthUserId && activeSecureAuthUserId !== authUser.id) {
       clearPersistedRetryableCommand(activeSecureAuthUserId);
+      clearPersistedRetryableMemberMutation(activeSecureAuthUserId);
       retryableCommand = null;
+      retryableMemberDepartments = null;
+      retryableMemberPermissions = null;
     }
     activeSecureAuthUserId = authUser.id;
   }
@@ -1722,6 +1887,13 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
     retryableCommand = retainedBeforeLoad;
     persistRetryableCommand();
   }
+  if (!options.preserveRetainedCommand) {
+    retryableMemberDepartments = null;
+    retryableMemberPermissions = null;
+    clearPersistedRetryableMemberMutation();
+  } else if (retainedMemberBeforeLoad) {
+    persistRetryableMemberMutation();
+  }
   return { state, currentUser, revision, notificationFeed };
 };
 
@@ -1843,6 +2015,9 @@ export const rebaseRetryableCommand = (conflict: MutationConflict) => {
 export const discardSecureWorkspaceCommand = () => {
   retryableCommand = null;
   clearPersistedRetryableCommand();
+  retryableMemberDepartments = null;
+  retryableMemberPermissions = null;
+  clearPersistedRetryableMemberMutation();
   activeSecureAuthUserId = null;
 };
 

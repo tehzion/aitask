@@ -16,6 +16,8 @@ import {
   buildOperations,
   acknowledgeSecureReleaseNotice,
   discardSecureWorkspaceCommand,
+  discardRetainedSecureMemberMutation,
+  getRetainedSecureMemberMutation,
   getSecureReleaseNoticeAcknowledgement,
   inferSecureCommandType,
   isSecureCommandType,
@@ -26,6 +28,8 @@ import {
   overlayRetainedWorkspaceEntities,
   rebaseRetryableCommand,
   restoreSecureWorkspaceCommand,
+  restoreSecureMemberMutation,
+  retryRetainedSecureMemberMutation,
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
   saveSecureWorkspace,
@@ -296,6 +300,48 @@ describe('secure command retry identity', () => {
     const restoredForA = restoreSecureWorkspaceCommand('auth-user-a');
     expect(restoredForA).not.toBeNull();
     expect(restoredForA?.operations[0]?.entityId).toBe('10');
+  });
+
+  it('keeps a member department retry in account-scoped session storage across a reload', async () => {
+    const values = new Map<string, string>();
+    const sessionStorage: Storage = {
+      get length() { return values.size; },
+      clear: () => values.clear(),
+      getItem: key => values.get(key) ?? null,
+      key: index => [...values.keys()][index] ?? null,
+      removeItem: key => { values.delete(key); },
+      setItem: (key, value) => { values.set(key, value); },
+    };
+    vi.stubGlobal('window', { sessionStorage });
+    const member = stateWithUser('member-retry').users[0];
+    restoreSecureMemberMutation('auth-member-retry');
+    rpc.mockRejectedValueOnce(new Error('response lost'));
+
+    const first = await saveSecureMemberDepartments(member, ['Designer', 'Video Editor']);
+    expect(first).toMatchObject({ ok: false, code: 'RETRY_REQUIRED' });
+    const commandId = rpc.mock.calls[0][1].p_command_id;
+    expect(sessionStorage.length).toBe(1);
+
+    restoreSecureMemberMutation('different-auth-user');
+    expect(getRetainedSecureMemberMutation()).toBeNull();
+    expect(restoreSecureMemberMutation('auth-member-retry')).toMatchObject({
+      kind: 'departments', memberId: member.id, departments: ['Video Editor', 'Designer'],
+    });
+
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        commandId,
+        workspaceVersion: 3,
+        member: { id: member.id, departments: ['Designer', 'Video Editor'], department: 'Designer', version: 2, updated_at: '2026-09-10T00:00:00.000Z' },
+      },
+      error: null,
+    });
+    const retried = await retryRetainedSecureMemberMutation(member);
+    expect(retried.ok).toBe(true);
+    expect(rpc.mock.calls[1][1].p_command_id).toBe(commandId);
+    expect(sessionStorage.length).toBe(0);
+    discardRetainedSecureMemberMutation();
   });
 
   it('translates a missing command signature without exposing PostgREST internals', async () => {

@@ -50,5 +50,6 @@ The cutover revokes direct authenticated writes to members and entities. All bro
 - Never expose a service-role or secret key in Vite environment variables.
 - Never restore anonymous snapshot access as a sync fallback.
 - Apply schema changes through timestamped migrations and keep live migration history aligned with the repository.
+- Review Supabase Security Advisor output against [`docs/supabase-security-advisor-allowlist.md`](../docs/supabase-security-advisor-allowlist.md); it documents only the explicitly expected warnings.
 - Audit events contain identifiers and changed field names only, not comments, approval notes, contact details, descriptions, avatars, or credentials.
 - The PWA service worker may cache the app shell, but it must not cache Supabase REST, Auth, or RPC responses.

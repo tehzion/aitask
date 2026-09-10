@@ -12,6 +12,7 @@ import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getEff
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
+import { getRetainedSecureMemberMutation } from '../lib/secureWorkspace';
 import { useToastStore } from '../store/useToastStore';
 import ModalShell from '../components/ModalShell';
 import DepartmentMultiSelect from '../components/DepartmentMultiSelect';
@@ -45,6 +46,7 @@ const Approvals: React.FC = () => {
     assignCustomRoleToUser,
     backend,
     commitPendingMutation,
+    retryMutation,
   } = useStore(useShallow(state => ({
     registrations: state.registrations,
     approveRegistration: state.approveRegistration,
@@ -62,6 +64,7 @@ const Approvals: React.FC = () => {
     assignCustomRoleToUser: state.assignCustomRoleToUser,
     backend: state.backend,
     commitPendingMutation: state.commitPendingMutation,
+    retryMutation: state.retryMutation,
   })));
   const [selectedReg, setSelectedReg] = useState<Registration | null>(null);
   const [selectedBulkRegIds, setSelectedBulkRegIds] = useState<Set<string>>(new Set());
@@ -116,6 +119,7 @@ const Approvals: React.FC = () => {
   const memberPermissionsUser = memberPermissionsId
     ? users.find(user => user.id === memberPermissionsId)
     : undefined;
+  const retainedMemberMutation = getRetainedSecureMemberMutation();
 
   const pendingDays = (reg: Registration) => {
     const created = new Date(reg.createdAt).getTime();
@@ -502,6 +506,31 @@ const Approvals: React.FC = () => {
       return;
     }
     setMemberPermissionsId(null);
+  };
+
+  const handleRetryMemberMutation = async (kind: 'departments' | 'permissions', memberId: string) => {
+    if (
+      !retainedMemberMutation
+      || retainedMemberMutation.kind !== kind
+      || retainedMemberMutation.memberId !== memberId
+      || isActionSaving
+    ) return;
+    if (kind === 'departments') setMemberDepartmentsError('');
+    else setMemberPermissionsError('');
+    setIsActionSaving(true);
+    const result = await retryMutation();
+    setIsActionSaving(false);
+    if (!result.ok) {
+      if (kind === 'departments') setMemberDepartmentsError(result.error || 'Unable to retry the department change.');
+      else setMemberPermissionsError(result.error || 'Unable to retry the permission change.');
+      return;
+    }
+    if (kind === 'departments') {
+      setMemberDepartmentsId(null);
+      setMemberDepartments([]);
+    } else {
+      setMemberPermissionsId(null);
+    }
   };
 
   const handleAddUser = async (e: React.FormEvent) => {
@@ -1157,6 +1186,16 @@ const Approvals: React.FC = () => {
               </div>
             )}
             <div className="flex justify-end gap-3 pt-2">
+              {retainedMemberMutation?.kind === 'departments' && retainedMemberMutation.memberId === memberDepartmentsId && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={isActionSaving || backend.isSaving}
+                  onClick={() => void handleRetryMemberMutation('departments', memberDepartmentsId)}
+                >
+                  Retry saved change
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="secondary"
@@ -1218,6 +1257,16 @@ const Approvals: React.FC = () => {
 
             {memberPermissionsError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{memberPermissionsError}</div>}
             <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-4">
+              {retainedMemberMutation?.kind === 'permissions' && retainedMemberMutation.memberId === memberPermissionsUser.id && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={isActionSaving || backend.isSaving}
+                  onClick={() => void handleRetryMemberMutation('permissions', memberPermissionsUser.id)}
+                >
+                  Retry saved change
+                </Button>
+              )}
               <Button type="button" variant="secondary" disabled={isActionSaving} onClick={() => setMemberPermissionsId(null)}>Cancel</Button>
               <Button type="submit" disabled={isActionSaving || backend.isSaving}>{isActionSaving ? 'Saving...' : memberPermissionsCustom ? 'Save custom access' : 'Reset to role defaults'}</Button>
             </div>

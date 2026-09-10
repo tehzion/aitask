@@ -32,6 +32,15 @@ const boss: User = {
   isSuperAdmin: true,
 };
 
+const staff: User = {
+  id: 'u-staff',
+  name: 'Staff Member',
+  role: 'Staff',
+  departments: ['Designer'],
+  department: 'Designer',
+  version: 3,
+};
+
 const planInput = {
   clientName: 'Recovery Co',
   planName: 'Recovery Plan',
@@ -218,6 +227,99 @@ describe('retryPendingSave', () => {
     }));
     expect(rpc.mock.calls[3]).toBeUndefined();
     expect(rpc.mock.calls[2][0]).toBe('aitask_execute_service_command');
+  });
+
+  it('retries a timed-out Staff permission update through the global retry control', async () => {
+    useStore.setState(state => ({ users: [...state.users, staff] }));
+    const permissions = {
+      viewDashboard: true,
+      viewTasks: true,
+      viewCalendar: false,
+      viewProjects: false,
+      viewDeliveryTracker: true,
+      viewReports: false,
+      viewApprovals: false,
+      viewSettings: false,
+      viewAllTasks: false,
+      createTasks: true,
+      manageCreatedTasks: false,
+      editTasks: false,
+      createProjects: false,
+      manageUsers: false,
+      approveRegistrations: false,
+      deleteUsers: false,
+      viewAllClients: false,
+      manageAssignedClients: false,
+      clientReview: false,
+      manageServiceCatalog: false,
+      manageTaskTemplates: false,
+      manageClientPlans: false,
+      manageServiceCycles: false,
+      viewAllServiceClients: false,
+      viewAssignedServiceClients: true,
+      viewServicePrices: false,
+      viewProductionReports: false,
+    };
+
+    rpc.mockRejectedValueOnce(new Error('response lost'));
+    const first = await useStore.getState().updateMemberPermissions(staff.id, permissions);
+    expect(first.ok).toBe(false);
+    expect(useStore.getState().backend.status).toBe('retry_required');
+    const firstCommandId = rpc.mock.calls[0][1].p_command_id;
+
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        commandId: firstCommandId,
+        workspaceVersion: 6,
+        replayed: true,
+        member: { id: staff.id, permissions, version: 4, updated_at: '2026-09-10T00:00:00.000Z' },
+      },
+      error: null,
+    });
+    const retried = await useStore.getState().retryPendingSave();
+
+    expect(retried).toMatchObject({ ok: true });
+    expect(rpc).toHaveBeenLastCalledWith('aitask_update_member_permissions', expect.objectContaining({
+      p_command_id: firstCommandId,
+      p_member_id: staff.id,
+    }));
+    expect(useStore.getState().backend.status).toBe('live');
+    expect(useStore.getState().backend.hasLocalChanges).toBe(false);
+    expect(useStore.getState().backend.pendingMutations).toBe(0);
+    expect(useStore.getState().users.find(user => user.id === staff.id)?.permissions).toMatchObject(permissions);
+  });
+
+  it('retries a timed-out Staff department update through the global retry control', async () => {
+    useStore.setState(state => ({ users: [...state.users, staff] }));
+    const departments = ['Designer', 'Video Editor'] as const;
+
+    rpc.mockRejectedValueOnce(new Error('response lost'));
+    const first = await useStore.getState().updateMemberDepartments(staff.id, [...departments]);
+    expect(first.ok).toBe(false);
+    const firstCommandId = rpc.mock.calls[0][1].p_command_id;
+
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        commandId: firstCommandId,
+        workspaceVersion: 6,
+        replayed: true,
+        member: { id: staff.id, departments, department: 'Designer', version: 4, updated_at: '2026-09-10T00:00:00.000Z' },
+      },
+      error: null,
+    });
+    const retried = await useStore.getState().retryPendingSave();
+
+    expect(retried).toMatchObject({ ok: true });
+    expect(rpc).toHaveBeenLastCalledWith('aitask_update_member_departments', expect.objectContaining({
+      p_command_id: firstCommandId,
+      p_member_id: staff.id,
+      p_departments: ['Video Editor', 'Designer'],
+    }));
+    expect(useStore.getState().users.find(user => user.id === staff.id)?.departments).toEqual(['Video Editor', 'Designer']);
+    expect(useStore.getState().backend.hasLocalChanges).toBe(false);
+    expect(useStore.getState().backend.pendingMutations).toBe(0);
   });
 
   it('rebuilds the same typed save instead of replacing a rejected error with no retained change', async () => {
