@@ -1,6 +1,14 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+const dismissReleaseNotice = async (page: import('@playwright/test').Page) => {
+  const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
+  await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
+  if (await releaseNotice.isVisible()) {
+    await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
+  }
+};
+
 test('the interface can switch between English and Simplified Chinese and remembers the choice', async ({ page }) => {
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Sign in to AiTask' })).toBeVisible();
@@ -18,6 +26,25 @@ test('the interface can switch between English and Simplified Chinese and rememb
   await page.getByRole('button', { name: 'Switch to English' }).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.getByRole('heading', { name: 'Sign in to AiTask' })).toBeVisible();
+});
+
+test('the client profile dialog localizes its staged-save state in Chinese', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Use Admin Demo' }).click();
+  await page.getByLabel('Password').fill('password123');
+  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.waitForURL(/\/(?:settings)?$/);
+  if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
+  await dismissReleaseNotice(page);
+
+  await page.goto('/projects');
+  await page.getByRole('button', { name: '切换为中文' }).click();
+  await page.getByRole('button', { name: '新建客户' }).click();
+  const dialog = page.getByRole('dialog', { name: '添加客户公司' });
+
+  await expect(dialog.getByRole('heading', { name: '添加客户公司' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '保存客户' })).toBeVisible();
+  await expect(dialog.getByText('请先保存公司档案，随后可添加服务方案和项目。')).toBeVisible();
 });
 
 test('user-authored task content stays exactly as typed in Chinese mode', async ({ page }) => {

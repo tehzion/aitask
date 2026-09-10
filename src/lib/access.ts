@@ -354,6 +354,19 @@ export const canAccessPath = (user: User | null | undefined, path: string, custo
   return permission ? hasPermission(user, permission, customRoles) : false;
 };
 
+export const getCompaniesDashboardAction = (
+  user: User | null | undefined,
+  customRoles: CustomRole[] = [],
+) => {
+  if (!user || user.role === 'Client' || !canAccessPath(user, '/projects', customRoles)) return null;
+  const canCreateProfile = canManageClientProfiles(user);
+  const canManagePlans = canManageClientPlans(user, customRoles);
+  if (canCreateProfile && canManagePlans) return 'Add client or plan';
+  if (canCreateProfile) return 'Add client';
+  if (canManagePlans) return 'Manage client plans';
+  return 'View companies';
+};
+
 export const getVisibleNavigation = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   appNavigation.filter(item => canAccessPath(user, item.path, customRoles))
 );

@@ -14,6 +14,8 @@
 - **Historical names remain safe.** Renaming a company preserves custom project names; only legacy project names that exactly followed the old company name continue to follow it.
 - **Database-enforced company visibility.** Staff and HOD project creation requires permission and a real company visible to that person. Hidden and nonexistent client links are rejected server-side.
 - **Clearer navigation.** Client workspaces return to Companies, empty workspaces offer Add service plan, and dashboard links clearly separate the Companies database from the Clients task tracker.
+- **Reliable company setup.** If saving a new company is interrupted, AiTask keeps the same company draft ready to retry and never shows a completed setup until it has reached the workspace.
+- **More complete delivery periods.** Open work without a deadline and deliverables without a monthly cycle now remain visible in the appropriate tracker period, including older records with incomplete fields.
 
 ## v2.2.0 — 7 September 2026
 

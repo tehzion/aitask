@@ -169,6 +169,30 @@ test('client-plan save succeeds from the authenticated staging workspace', async
   await expect(page.getByRole('heading', { name: 'Release QA Saved Client' })).toBeVisible();
 });
 
+test('an interrupted client-profile save retries the same company without a false success state', async ({ page }) => {
+  const clientName = 'Release QA Profile Retry Client';
+  await signIn(page, 'SUPER_ADMIN');
+  await page.goto('/projects');
+  await page.getByRole('button', { name: 'New client' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add a client company' });
+  await dialog.getByLabel('Company name *').fill(clientName);
+  await page.route('**/rest/v1/rpc/aitask_execute_command', route => route.abort('failed'), { times: 1 });
+  await dialog.getByRole('button', { name: 'Save client' }).click();
+
+  await expect(dialog.getByRole('heading', { name: 'Add a client company' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Create project' })).toHaveCount(0);
+  await expect(dialog.getByRole('alert')).toContainText(/unable|failed|network|retry|save/i);
+  await expect(dialog.getByRole('button', { name: 'Retry save' })).toBeVisible();
+  await expect(dialog.getByLabel('Company name *')).toBeDisabled();
+
+  await page.unroute('**/rest/v1/rpc/aitask_execute_command');
+  await dialog.getByRole('button', { name: 'Retry save' }).click();
+  await expect(dialog.getByRole('heading', { name: 'Client added' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Create project' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByText(clientName, { exact: true })).toHaveCount(1);
+});
+
 test('an interrupted client-plan save retries the same change without a duplicate', async ({ page }) => {
   await signIn(page, 'SUPER_ADMIN');
   const dialog = await advanceClientWizard(page, 'Release QA Retry Client');

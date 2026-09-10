@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "production_aligned_through_20260907120000",
+  "status": "production_aligned_through_20260910120000",
   "metadataOnly": false,
-  "warning": "Production migration history is aligned through 20260907120000_harden_legacy_access_privileges. Do not repair or reapply the historical rollout; use normal immutable forward migrations for future changes.",
+  "warning": "Production history is aligned through 20260910120000_client_project_link_authorization after the reviewed forward migration push. Historical rollout repair remains prohibited.",
   "productionVerification": {
-    "verifiedAt": "2026-09-07",
-    "historyThrough": "20260907120000_harden_legacy_access_privileges",
+    "verifiedAt": "2026-09-10",
+    "historyThrough": "20260910120000_client_project_link_authorization",
     "historyAligned": true,
     "rolloutResult": {
       "approvedBaselineMatchedAfterRestore": true,
@@ -17,8 +17,15 @@
       "secureCutoverPassed": true
     },
     "capabilityProbe": {
-      "schemaVersion": 3,
-      "rolesVerified": ["Super Admin", "Admin", "HOD", "Staff", "Client"],
+      "schemaVersion": 4,
+      "memberPermissionManagement": true,
+      "rolesVerified": [
+        "Super Admin",
+        "Admin",
+        "HOD",
+        "Staff",
+        "Client"
+      ],
       "crossWorkspaceResult": "FORBIDDEN"
     },
     "serviceInfrastructure": {
@@ -111,15 +118,42 @@
     "baselineThrough": "20260802121500_notification_center",
     "method": "Exact object-count and MD5 fingerprint comparison between production and a clean local reset stopped immediately before the client-service migration.",
     "fingerprints": {
-      "columns": { "count": 73, "md5": "5ce36dda0e52a8febaef366041b2d185" },
-      "constraints": { "count": 31, "md5": "0dc48563b96976a701edf43aea96aa00" },
-      "function_grants": { "count": 86, "md5": "e5fa73bea338ad70605a58493c75df23" },
-      "functions": { "count": 45, "md5": "321341fada02f2b1c5fb183a6310842e" },
-      "indexes": { "count": 25, "md5": "384d565297f3154903a1cf9fed8c01cc" },
-      "policies": { "count": 10, "md5": "5a4448e9a2537299255cc0c555d46b25" },
-      "relation_grants": { "count": 97, "md5": "e477d8c402c14170d7306b324a253cca" },
-      "relations": { "count": 7, "md5": "945c808d21cbc648653e8a0cdff78c6f" },
-      "triggers": { "count": 9, "md5": "e725aa096b78b4ffb07a097746506af4" }
+      "columns": {
+        "count": 73,
+        "md5": "5ce36dda0e52a8febaef366041b2d185"
+      },
+      "constraints": {
+        "count": 31,
+        "md5": "0dc48563b96976a701edf43aea96aa00"
+      },
+      "function_grants": {
+        "count": 86,
+        "md5": "e5fa73bea338ad70605a58493c75df23"
+      },
+      "functions": {
+        "count": 45,
+        "md5": "321341fada02f2b1c5fb183a6310842e"
+      },
+      "indexes": {
+        "count": 25,
+        "md5": "384d565297f3154903a1cf9fed8c01cc"
+      },
+      "policies": {
+        "count": 10,
+        "md5": "5a4448e9a2537299255cc0c555d46b25"
+      },
+      "relation_grants": {
+        "count": 97,
+        "md5": "e477d8c402c14170d7306b324a253cca"
+      },
+      "relations": {
+        "count": 7,
+        "md5": "945c808d21cbc648653e8a0cdff78c6f"
+      },
+      "triggers": {
+        "count": 9,
+        "md5": "e725aa096b78b4ffb07a097746506af4"
+      }
     }
   },
   "equivalentHistoryGroups": [
@@ -150,82 +184,114 @@
     {
       "localVersion": "20260715090000",
       "localName": "reliable_workspace_commands",
-      "remoteVersions": ["20260715093602"]
+      "remoteVersions": [
+        "20260715093602"
+      ]
     },
     {
       "localVersion": "20260715090100",
       "localName": "reliable_workspace_command_cutover",
-      "remoteVersions": ["20260715110720"]
+      "remoteVersions": [
+        "20260715110720"
+      ]
     },
     {
       "localVersion": "20260715093000",
       "localName": "harden_reliable_workspace_commands",
-      "remoteVersions": ["20260715104528"]
+      "remoteVersions": [
+        "20260715104528"
+      ]
     },
     {
       "localVersion": "20260715110000",
       "localName": "add_reliable_workspace_indexes",
-      "remoteVersions": ["20260715110144"]
+      "remoteVersions": [
+        "20260715110144"
+      ]
     },
     {
       "localVersion": "20260718005102",
       "localName": "production_login_readiness",
-      "remoteVersions": ["20260718005558"]
+      "remoteVersions": [
+        "20260718005558"
+      ]
     },
     {
       "localVersion": "20260718094000",
       "localName": "public_feedback_collection",
-      "remoteVersions": ["20260718033949"]
+      "remoteVersions": [
+        "20260718033949"
+      ]
     },
     {
       "localVersion": "20260718120000",
       "localName": "feedback_single_submission",
-      "remoteVersions": ["20260718035533"]
+      "remoteVersions": [
+        "20260718035533"
+      ]
     },
     {
       "localVersion": "20260718124500",
       "localName": "disable_mfa_enforcement",
-      "remoteVersions": ["20260718043547"]
+      "remoteVersions": [
+        "20260718043547"
+      ]
     },
     {
       "localVersion": "20260718125450",
       "localName": "restrict_registration_visibility_to_super_admin",
-      "remoteVersions": ["20260718131228"]
+      "remoteVersions": [
+        "20260718131228"
+      ]
     },
     {
       "localVersion": "20260718131500",
       "localName": "link_adminmojo_auth",
-      "remoteVersions": ["20260718045230"]
+      "remoteVersions": [
+        "20260718045230"
+      ]
     },
     {
       "localVersion": "20260729100000",
       "localName": "multi_department_membership",
-      "remoteVersions": ["20260729071759"]
+      "remoteVersions": [
+        "20260729071759"
+      ]
     },
     {
       "localVersion": "20260729112000",
       "localName": "enforce_staff_task_department_membership",
-      "remoteVersions": ["20260729073846"]
+      "remoteVersions": [
+        "20260729073846"
+      ]
     },
     {
       "localVersion": "20260731130000",
       "localName": "task_completion_timestamps",
-      "remoteVersions": ["20260731124053"]
+      "remoteVersions": [
+        "20260731124053"
+      ]
     },
     {
       "localVersion": "20260801191419",
       "localName": "client_portal_projection",
-      "remoteVersions": ["20260801192040"]
+      "remoteVersions": [
+        "20260801192040"
+      ]
     },
     {
       "localVersion": "20260801191430",
       "localName": "restrict_client_direct_reads",
-      "remoteVersions": ["20260802034146"]
+      "remoteVersions": [
+        "20260802034146"
+      ]
     },
     {
       "localVersion": "20260802121500",
       "localName": "notification_center",
-      "remoteVersions": ["20260802044305"]
+      "remoteVersions": [
+        "20260802044305"
+      ]
     }
   ],
   "validatedMigrationTail": [
@@ -233,9 +299,8 @@
     "20260904104435_allow_staff_cycle_published_at",
     "20260907043633_hod_task_ownership_permissions",
     "20260907120000_harden_legacy_access_privileges",
-    "20260910010207_company_tracker_member_permissions"
+    "20260910010207_company_tracker_member_permissions",
+    "20260910120000_client_project_link_authorization"
   ],
-  "pendingProductionMigrations": [
-    "20260910010207_company_tracker_member_permissions"
-  ]
+  "pendingProductionMigrations": []
 }

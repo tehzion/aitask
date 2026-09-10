@@ -11,7 +11,7 @@ import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, A
 import { Link } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
-import { canCreateTasks, getClientKey, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
+import { canCreateTasks, getClientKey, getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import { getClientTaskStage } from '../lib/clientPortal';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate, themeTokenColor } from '../lib/utils';
@@ -85,6 +85,7 @@ const Dashboard: React.FC = () => {
     [allTasks, currentUser, projects, rolePermissions]
   );
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
+  const companiesDashboardAction = getCompaniesDashboardAction(currentUser, rolePermissions);
   const hasTaskData = tasks.length > 0;
   const showBossOperations = isBossKoo(currentUser);
   const showStaffOperations = currentUser?.role === 'Staff';
@@ -201,7 +202,7 @@ const Dashboard: React.FC = () => {
     if (!currentUser) return { dueToday: [], overdue: [], actionRequired: [] };
     const today = new Date();
     const isPersonalTask = (task: (typeof tasks)[number]) => currentUser.role === 'Client'
-      ? task.clientName === currentUser.companyName
+      ? getClientKey(task.clientName) === getClientKey(currentUser.companyName)
       : task.assignedTo === currentUser.id;
 
     const dueToday = tasks.filter(t => {
@@ -336,10 +337,10 @@ const Dashboard: React.FC = () => {
         action={(
           <div className="flex flex-wrap items-center gap-2.5">
             <BackendFreshness />
-            {!showClientPortal && (
+            {companiesDashboardAction && (
               <Link to="/projects" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink shadow-sm transition hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
                 <Plus className="h-4 w-4" />
-                Add client or plan
+                {t(companiesDashboardAction)}
               </Link>
             )}
             {canCreateTask && (

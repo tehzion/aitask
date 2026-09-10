@@ -19,6 +19,7 @@ import {
   getEffectivePermissions,
   getAssignableProjects,
   getDefaultAccessiblePath,
+  getCompaniesDashboardAction,
   getVisibleClientNames,
   getVisibleProjects,
   getVisibleTasks,
@@ -243,6 +244,32 @@ describe('staff permission matrix', () => {
     expect(canAccessPath(companiesOnly, '/clients')).toBe(false);
     expect(canAccessPath(trackerOnly, '/projects')).toBe(false);
     expect(canAccessPath(trackerOnly, '/clients')).toBe(true);
+  });
+
+  it('uses a Companies dashboard action that matches the member permissions', () => {
+    const profileOnly: User = {
+      ...admin,
+      permissions: { ...defaultRolePermissions.Admin, manageClientPlans: false },
+    };
+    const plansOnly: User = {
+      ...staff,
+      permissions: { ...defaultRolePermissions.Staff, manageClientPlans: true },
+    };
+    const viewOnly: User = {
+      ...staff,
+      permissions: { ...defaultRolePermissions.Staff, manageClientPlans: false },
+    };
+    const blocked: User = {
+      ...staff,
+      permissions: { ...defaultRolePermissions.Staff, viewProjects: false },
+    };
+
+    expect(getCompaniesDashboardAction(superAdmin)).toBe('Add client or plan');
+    expect(getCompaniesDashboardAction(profileOnly)).toBe('Add client');
+    expect(getCompaniesDashboardAction(plansOnly)).toBe('Manage client plans');
+    expect(getCompaniesDashboardAction(viewOnly)).toBe('View companies');
+    expect(getCompaniesDashboardAction(blocked)).toBeNull();
+    expect(getCompaniesDashboardAction(acmeClient)).toBeNull();
   });
 
   it('honors an explicit View all clients permission', () => {

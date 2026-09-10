@@ -60,6 +60,21 @@ describe('delivery tracker periods', () => {
     expect(taskAppearsInDeliveryPeriod(task({ id: 'overdue', clientName: 'Acme', dueDate: '2026-09-01' }), range, new Date(2026, 8, 10))).toBe(true);
   });
 
+  it('keeps no-deadline work in its start period and the active period only', () => {
+    const startedRange = getDeliveryPeriodRange('week', new Date(2026, 8, 10, 12));
+    const laterRange = getDeliveryPeriodRange('week', new Date(2026, 8, 17, 12));
+    const earlierRange = getDeliveryPeriodRange('week', new Date(2026, 7, 12, 12));
+    const started = task({ id: 'no-deadline-started', clientName: 'Acme', startDate: '2026-09-08', dueDate: '' });
+    const noStart = task({ id: 'no-deadline-no-start', clientName: 'Acme', startDate: '', dueDate: '' });
+    const today = new Date(2026, 8, 10);
+
+    expect(taskAppearsInDeliveryPeriod(started, startedRange, today)).toBe(true);
+    expect(taskAppearsInDeliveryPeriod(noStart, startedRange, today)).toBe(true);
+    expect(taskAppearsInDeliveryPeriod(started, laterRange, today)).toBe(false);
+    expect(taskAppearsInDeliveryPeriod(noStart, laterRange, today)).toBe(false);
+    expect(taskAppearsInDeliveryPeriod(noStart, earlierRange, today)).toBe(false);
+  });
+
   it('summarizes monthly cycle deliverables and task status per client', () => {
     const range = getDeliveryPeriodRange('month', new Date(2026, 8, 10, 12));
     const summaries = buildClientDeliverySummaries({
@@ -81,5 +96,53 @@ describe('delivery tracker periods', () => {
 
     expect(summaries[0]).toMatchObject({ open: 1, inProgress: 1, completed: 1, included: 2, delivered: 1, remaining: 1, progress: 50 });
     expect(summaries[0].assigneeIds).toEqual(['staff-1']);
+  });
+
+  it('keeps uncoupled monthly deliverables and ignores malformed legacy fields', () => {
+    const range = getDeliveryPeriodRange('month', new Date(2026, 8, 10, 12));
+    const summaries = buildClientDeliverySummaries({
+      clientNames: ['Acme'],
+      tasks: [
+        task({ id: 'linked', clientName: 'Acme', dueDate: '2026-09-11' }),
+        task({ id: 'legacy-null-client', clientName: null as unknown as string, dueDate: '' }),
+        task({ id: 'late-lexical', clientName: 'Acme', dueDate: '2026-09-02T23:00:00-10:00' }),
+        task({ id: 'early-timestamp', clientName: 'Acme', dueDate: '2026-09-03T01:00:00+08:00' }),
+        task({ id: 'invalid-deadline', clientName: 'Acme', dueDate: 'not-a-date' }),
+      ],
+      deliverables: [
+        deliverable({ id: 'uncoupled', cycleId: '' as never, taskIds: ['linked'] }),
+        deliverable({ id: 'legacy-null-fields', clientName: null as unknown as string, taskIds: null as unknown as string[] }),
+      ],
+      cycles: [],
+      users,
+      period: 'month',
+      range,
+      today: new Date(2026, 8, 10),
+    });
+
+    expect(summaries[0]).toMatchObject({ included: 1, remaining: 1, nextDeadline: '2026-09-03T01:00:00+08:00' });
+  });
+
+  it('falls back to delivery evidence when a legacy monthly cycle link is stale', () => {
+    const range = getDeliveryPeriodRange('month', new Date(2026, 8, 10, 12));
+    const summaries = buildClientDeliverySummaries({
+      clientNames: ['Acme'],
+      tasks: [],
+      deliverables: [
+        deliverable({
+          id: 'stale-cycle',
+          cycleId: 'missing-cycle',
+          status: 'Delivered',
+          deliveredAt: '2026-09-08T08:00:00.000Z',
+        }),
+      ],
+      cycles: [],
+      users,
+      period: 'month',
+      range,
+      today: new Date(2026, 8, 10),
+    });
+
+    expect(summaries[0]).toMatchObject({ included: 1, delivered: 1, remaining: 0, progress: 100 });
   });
 });

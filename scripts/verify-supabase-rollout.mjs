@@ -1,4 +1,5 @@
 import {
+  appendFileSync,
   cpSync,
   existsSync,
   mkdtempSync,
@@ -85,6 +86,7 @@ const validationRoot = mkdtempSync(join(tmpdir(), 'aitask-supabase-validation-')
 const validationSupabase = join(validationRoot, 'supabase');
 const validationProjectId = basename(validationRoot);
 const databaseContainer = `supabase_db_${validationProjectId}`;
+const validationPortBase = 55000 + (process.pid % 500);
 let rolloutError;
 
 cpSync(supabaseSource, validationSupabase, {
@@ -95,6 +97,27 @@ cpSync(supabaseSource, validationSupabase, {
   },
 });
 
+// The developer stack may already own Supabase's default local ports. Give the
+// disposable release gate an isolated port block so it never interrupts it.
+appendFileSync(join(validationSupabase, 'config.toml'), `
+
+[api]
+port = ${validationPortBase}
+
+[db]
+port = ${validationPortBase + 1}
+
+[studio]
+port = ${validationPortBase + 2}
+
+[inbucket]
+port = ${validationPortBase + 3}
+
+[analytics]
+port = ${validationPortBase + 4}
+vector_port = ${validationPortBase + 5}
+`);
+
 const supabase = (...args) => run(supabaseCli, ['--workdir', validationRoot, ...args], {
   cwd: validationRoot,
 });
@@ -103,8 +126,6 @@ try {
   console.log(`[rollout] Validating ${validatedMigrations.join(', ')} in ${validationRoot}`);
   run(supabaseCli, ['--workdir', validationRoot, 'start'], {
     cwd: validationRoot,
-    capture: true,
-    suppressStdoutOnError: true,
   });
   console.log('[rollout] Disposable Supabase stack started.');
   supabase('migration', 'list', '--local');

@@ -15,7 +15,7 @@ import {
 import { format, isValid, parseISO } from 'date-fns';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
-import { canViewAllClients, getVisibleClientNames, getVisibleTasks } from '../lib/access';
+import { canViewAllClients, getClientKey, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import {
   buildClientDeliverySummaries,
   getDeliveryPeriodRange,
@@ -91,8 +91,8 @@ const DeliveryTracker: React.FC = () => {
   const summaries = React.useMemo(() => buildClientDeliverySummaries({
     clientNames: visibleClientNames,
     tasks: visibleTasks,
-    deliverables: deliverables.filter(item => visibleClientKeys.has(item.clientName.trim().toLowerCase())),
-    cycles: serviceCycles.filter(item => visibleClientKeys.has(item.clientName.trim().toLowerCase())),
+    deliverables: deliverables.filter(item => visibleClientKeys.has(getClientKey(item.clientName))),
+    cycles: serviceCycles.filter(item => visibleClientKeys.has(getClientKey(item.clientName))),
     users,
     period,
     range,

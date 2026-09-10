@@ -91,7 +91,17 @@ export const taskAppearsInDeliveryPeriod = (
   const openAndStarted = !isTaskCompleted(task) && (!start || !isAfter(start, end));
   const overdueByPeriodEnd = due && isBefore(atStartOfDay(due), end);
   const selectedPeriodHasStarted = !isAfter(atStartOfDay(range.start), atStartOfDay(today));
-  return Boolean(openAndStarted && overdueByPeriodEnd && selectedPeriodHasStarted);
+  if (openAndStarted && overdueByPeriodEnd && selectedPeriodHasStarted) return true;
+
+  // No-deadline work belongs to the period in which it started and the active
+  // period while it remains open. It must not appear in arbitrary past/future
+  // periods just because it has no deadline.
+  const todayStart = atStartOfDay(today);
+  const startedByToday = !start || !isAfter(atStartOfDay(start), todayStart);
+  const activePeriod = isWithin(todayStart, range);
+  return Boolean(!due && !isTaskCompleted(task) && startedByToday && (
+    isWithin(start, range) || activePeriod
+  ));
 };
 
 const cycleOverlaps = (cycle: ServiceCycle, range: DeliveryPeriodRange) => {
@@ -100,7 +110,7 @@ const cycleOverlaps = (cycle: ServiceCycle, range: DeliveryPeriodRange) => {
   return Boolean(start && end && !isAfter(start, range.end) && !isBefore(end, range.start));
 };
 
-const normalize = (value: string) => value.trim().toLowerCase();
+const normalize = (value: string | null | undefined) => value?.trim().toLowerCase() || '';
 
 export const buildClientDeliverySummaries = ({
   clientNames,
@@ -135,9 +145,15 @@ export const buildClientDeliverySummaries = ({
     const cycleIds = new Set(clientCycles.map(cycle => cycle.id));
     const clientDeliverables = deliverables.filter(deliverable => {
       if (normalize(deliverable.clientName) !== key) return false;
-      if (period === 'month') return cycleIds.has(deliverable.cycleId);
-      if (isWithin(dateValue(deliverable.deliveredAt || (deliverable.status === 'Delivered' ? deliverable.updatedAt : undefined)), range)) return true;
-      return deliverable.taskIds.some(id => clientTaskIds.has(id)) || Boolean(deliverable.primaryTaskId && clientTaskIds.has(deliverable.primaryTaskId));
+      const deliveredInPeriod = isWithin(
+        dateValue(deliverable.deliveredAt || (deliverable.status === 'Delivered' ? deliverable.updatedAt : undefined)),
+        range,
+      );
+      const linkedToTrackedTask = (Array.isArray(deliverable.taskIds) ? deliverable.taskIds : [])
+        .some(id => clientTaskIds.has(id))
+        || Boolean(deliverable.primaryTaskId && clientTaskIds.has(deliverable.primaryTaskId));
+      if (period === 'month' && deliverable.cycleId && cycleIds.has(deliverable.cycleId)) return true;
+      return deliveredInPeriod || linkedToTrackedTask;
     });
 
     const openTasks = clientTasks.filter(task => !isTaskCompleted(task));
@@ -154,9 +170,9 @@ export const buildClientDeliverySummaries = ({
     const totalForProgress = included || clientTasks.length;
     const completeForProgress = included ? delivered : completed;
     const nextDeadline = openTasks
-      .map(task => task.dueDate)
-      .filter(Boolean)
-      .sort()[0];
+      .map(task => ({ raw: task.dueDate, parsed: dateValue(task.dueDate) }))
+      .filter((value): value is { raw: string; parsed: Date } => Boolean(value.raw && value.parsed))
+      .sort((left, right) => left.parsed.getTime() - right.parsed.getTime())[0]?.raw;
 
     return {
       clientName,
