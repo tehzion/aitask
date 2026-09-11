@@ -73,7 +73,6 @@ import {
   canViewAllClients,
   getAssignableProjects,
   getVisibleClientNames,
-  getVisibleProjects,
   isNotificationReadByUser,
   isNotificationVisible,
   isBossKoo,

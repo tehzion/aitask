@@ -1,4 +1,4 @@
-import { AppNotification, CustomRole, Department, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
+import { AppNotification, CustomRole, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
 import { getMemberDepartments, isMemberInDepartment } from './departments';
 
 export type DashboardPersona = 'boss' | 'admin' | 'operation' | 'account' | 'production' | 'client';
