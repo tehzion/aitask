@@ -116,17 +116,21 @@ jobs:
 
       - name: Pull isolated staging environment
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          # The staging project has its own scoped credential. Keep the CLI
+          # variable name conventional, without borrowing the production token.
+          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.STAGING_VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.STAGING_VERCEL_PROJECT_ID }}
         run: |
           node scripts/prepare-vercel-project-link.mjs
+          pnpm dlx "vercel@$VERCEL_CLI_VERSION" whoami --scope "$VERCEL_ORG_ID"
+          pnpm dlx "vercel@$VERCEL_CLI_VERSION" project inspect --scope "$VERCEL_ORG_ID"
           pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --scope "$VERCEL_ORG_ID"
 
       - name: Build and deploy staging artifact
         id: staging
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.STAGING_VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.STAGING_VERCEL_PROJECT_ID }}
         run: |
