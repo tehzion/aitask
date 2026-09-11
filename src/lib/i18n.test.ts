@@ -34,6 +34,17 @@ describe('Chinese UI translations', () => {
     expect(translateUiText('Choose a valid due date.', 'zh')).toBe('请选择有效的截止日期。');
   });
 
+  it('translates shared dynamic summaries and async system responses', () => {
+    expect(translateUiText('overdue', 'zh')).toBe('逾期');
+    expect(translateUiText('Due in 3 days', 'zh')).toBe('3 天后到期');
+    expect(translateUiText('3 days ago', 'zh')).toBe('3 天前');
+    expect(translateUiText('3 shown from 10 total, 4 linked tasks', 'zh')).toBe('显示 3 / 10 个，共关联 4 个任务');
+    expect(translateUiText('Open delivery file', 'zh')).toBe('打开交付文件');
+    expect(translateUiText('Website reference', 'zh')).toBe('网站参考');
+    expect(translateUiText('The recovery service could not be reached. Please try again.', 'zh')).toBe('无法连接密码恢复服务，请重试。');
+    expect(translateUiText('Files must be 100 MB or smaller.', 'zh')).toBe('文件大小必须不超过 100 MB。');
+  });
+
   it('translates interpolated toast messages while keeping user titles intact', () => {
     expect(translateUiText('Task "Due Report" deleted', 'zh')).toBe('任务“Due Report”已删除');
     expect(translateUiText('Status updated to "In Progress"', 'zh')).toBe('状态已更新为“In Progress”');

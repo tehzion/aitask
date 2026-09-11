@@ -126,13 +126,13 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
             <span data-i18n-skip className="text-xs font-medium text-muted">{task.serviceType}</span>
           </div>
           <h3 id="delivery-outcome-title" data-i18n-skip className="mt-4 text-2xl font-semibold tracking-[-0.035em] text-ink text-pretty">{task.title}</h3>
-          <p data-i18n-skip className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted text-pretty">{task.description || 'The requested outcome will appear here when the team adds a brief.'}</p>
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted text-pretty">{task.description ? <span data-i18n-skip>{task.description}</span> : 'The requested outcome will appear here when the team adds a brief.'}</p>
         </section>
 
         <section className="rounded-panel bg-inset p-4 sm:p-5" aria-label="Delivery timing and progress">
           <div className="grid gap-4 sm:grid-cols-3">
             <div><p className="text-xs font-medium text-muted">Expected date</p><p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><CalendarDays className="h-4 w-4 text-accent" />{dueDate ? format(dueDate, 'd MMM yyyy') : 'To be confirmed'}</p></div>
-            <div><p className="text-xs font-medium text-muted">Agency contact</p><p data-i18n-skip className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><UserRound className="h-4 w-4 text-accent" />{contact?.name || 'Agency team'}</p></div>
+            <div><p className="text-xs font-medium text-muted">Agency contact</p><p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><UserRound className="h-4 w-4 text-accent" />{contact?.name ? <span data-i18n-skip>{contact.name}</span> : 'Agency team'}</p></div>
             <div><p className="text-xs font-medium text-muted">Progress</p><p className="calm-number mt-1 text-sm font-semibold text-ink">{task.completionPercentage}%</p></div>
           </div>
           <ProgressBar className="mt-4" value={task.completionPercentage} max={100} label="Delivery progress" />
@@ -142,8 +142,8 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
         <section aria-labelledby="delivery-files-title">
           <div className="flex items-center gap-2"><FileText className="h-4 w-4 text-accent" /><h3 id="delivery-files-title" className="font-semibold text-ink">Preview and files</h3></div>
           <div className="mt-3 space-y-2">
-            {attachmentUrl && <a data-i18n-skip href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center justify-between gap-3 rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"><span className="truncate">{task.attachmentName || 'Open delivery file'}</span><ExternalLink className="h-4 w-4 shrink-0 text-accent" /></a>}
-            {task.website && safeHttpsUrl(task.website) && <a data-i18n-skip href={safeHttpsUrl(task.website)!} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center justify-between gap-3 rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset">Website reference<ExternalLink className="h-4 w-4 shrink-0 text-accent" /></a>}
+            {attachmentUrl && <a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center justify-between gap-3 rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"><span className="truncate">{task.attachmentName ? <span data-i18n-skip>{task.attachmentName}</span> : 'Open delivery file'}</span><ExternalLink className="h-4 w-4 shrink-0 text-accent" /></a>}
+            {task.website && safeHttpsUrl(task.website) && <a href={safeHttpsUrl(task.website)!} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center justify-between gap-3 rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset">Website reference<ExternalLink className="h-4 w-4 shrink-0 text-accent" /></a>}
             {!attachmentUrl && !(task.website && safeHttpsUrl(task.website)) && <p className="rounded-control border border-dashed border-line px-4 py-6 text-sm text-muted">No files have been shared for this delivery yet.</p>}
           </div>
         </section>
@@ -174,7 +174,7 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
           <section aria-labelledby="delivery-history-title">
             <div className="flex items-center gap-2"><History className="h-4 w-4 text-accent" /><h3 id="delivery-history-title" className="font-semibold text-ink">Decision history</h3></div>
             <ol className="mt-4 space-y-3 border-l border-line pl-4">
-              {[...(task.approvalHistory || [])].reverse().map(event => <li key={event.id} className="relative"><span className="absolute -left-[1.32rem] top-1.5 h-2 w-2 rounded-full bg-accent" /><p className="text-sm text-ink"><span data-i18n-skip className="font-semibold">{users.find(user => user.id === event.userId)?.name || 'Client'}</span> {event.status === 'Approved' ? 'approved the delivery' : 'requested changes'}.</p><p className="mt-1 inline-flex items-center gap-1 text-xs text-muted"><Clock3 className="h-3.5 w-3.5" />{formatDistanceToNow(new Date(event.createdAt), { addSuffix: true })}</p>{event.note && <p data-i18n-skip className="mt-2 rounded-control bg-inset px-3 py-2 text-sm text-muted">{event.note}</p>}</li>)}
+              {[...(task.approvalHistory || [])].reverse().map(event => { const eventUser = users.find(user => user.id === event.userId); return <li key={event.id} className="relative"><span className="absolute -left-[1.32rem] top-1.5 h-2 w-2 rounded-full bg-accent" /><p className="text-sm text-ink">{eventUser?.name ? <span data-i18n-skip className="font-semibold">{eventUser.name}</span> : <span className="font-semibold">Client</span>} {event.status === 'Approved' ? 'approved the delivery' : 'requested changes'}.</p><p className="mt-1 inline-flex items-center gap-1 text-xs text-muted"><Clock3 className="h-3.5 w-3.5" />{formatDistanceToNow(new Date(event.createdAt), { addSuffix: true })}</p>{event.note && <p data-i18n-skip className="mt-2 rounded-control bg-inset px-3 py-2 text-sm text-muted">{event.note}</p>}</li>; })}
             </ol>
           </section>
         )}

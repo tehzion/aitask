@@ -356,7 +356,7 @@ const OperationsClientWorkspace = () => {
           <Surface className="p-6">
             <p className="calm-eyebrow">Service context</p>
             <dl className="mt-5 divide-y divide-line/70">
-              {[["Active plan", activePlan?.name || "Not configured"], ["Plan status", activePlan?.status || "None"], ["Service cycles", String(cycles.length)], ["Next key date", activePlan?.contractEndDate || currentCycle?.periodEnd || "Not scheduled"]].map(([label, value]) => <div key={label} className="grid grid-cols-[120px_1fr] gap-3 py-3 text-sm"><dt className="text-muted">{label}</dt><dd data-i18n-skip className="text-right font-medium text-ink">{value}</dd></div>)}
+              {[["Active plan", activePlan?.name || "Not configured"], ["Plan status", activePlan?.status || "None"], ["Service cycles", String(cycles.length)], ["Next key date", activePlan?.contractEndDate || currentCycle?.periodEnd || "Not scheduled"]].map(([label, value]) => <div key={label} className="grid grid-cols-[120px_1fr] gap-3 py-3 text-sm"><dt className="text-muted">{label}</dt><dd className="text-right font-medium text-ink">{label === 'Active plan' && activePlan?.name ? <span data-i18n-skip>{value}</span> : t(String(value))}</dd></div>)}
             </dl>
           </Surface>
         </div>
@@ -367,15 +367,15 @@ const OperationsClientWorkspace = () => {
           <section className={cn(cardBase, "overflow-hidden")}>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
               <div>
-                <h2 data-i18n-skip className="font-semibold text-slate-950">
-                  {activePlan?.name || "No service plan"}
+                <h2 className="font-semibold text-slate-950">
+                  {activePlan?.name ? <span data-i18n-skip>{activePlan.name}</span> : "No service plan"}
                 </h2>
                 {activePlan && (
-                  <p data-i18n-skip className="mt-1 text-sm text-slate-500">
-                    Revision {activePlan.revision} · {activePlan.origin} ·
-                    billing day {activePlan.billingDay}
+                  <p className="mt-1 text-sm text-slate-500">
+                    {t('Revision')} {activePlan.revision} · <span data-i18n-skip>{activePlan.origin}</span> ·
+                    {t('billing day')} {activePlan.billingDay}
                     {activePlan.contractEndDate
-                      ? ` · contract reminder ${activePlan.contractEndDate}`
+                      ? <> · {t('contract reminder')} {activePlan.contractEndDate}</>
                       : ""}
                   </p>
                 )}
