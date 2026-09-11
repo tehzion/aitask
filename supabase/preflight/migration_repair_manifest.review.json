@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "staging_validation_pending_production_20260911020546",
+  "status": "production_aligned_through_20260911020546",
   "metadataOnly": false,
-  "warning": "Production history is aligned through 20260910144226_member_permission_realtime_refresh. The reviewed forward migration 20260911020546_enforce_task_project_link_authorization is pending production deployment; historical rollout repair remains prohibited.",
+  "warning": "Production history is aligned through 20260911020546_enforce_task_project_link_authorization. Historical rollout repair remains prohibited.",
   "productionVerification": {
-    "verifiedAt": "2026-09-10",
-    "historyThrough": "20260910144226_member_permission_realtime_refresh",
+    "verifiedAt": "2026-09-11",
+    "historyThrough": "20260911020546_enforce_task_project_link_authorization",
     "historyAligned": true,
     "rolloutResult": {
       "approvedBaselineMatchedAfterRestore": true,
@@ -119,6 +119,14 @@
       ],
       "anonymousIsolationPassed": true,
       "advisorErrorCount": 0
+    },
+    "v231ProductionRollout": {
+      "migrations": [
+        "20260910144226_member_permission_realtime_refresh",
+        "20260911020546_enforce_task_project_link_authorization"
+      ],
+      "migrationHistoryAligned": true,
+      "authenticatedStagingQa": "Not run: Vercel credential/project access preflight failed and this gate was explicitly skipped by the release owner."
     }
   },
   "schemaEquivalence": {
@@ -313,7 +321,5 @@
     "20260910144226_member_permission_realtime_refresh",
     "20260911020546_enforce_task_project_link_authorization"
   ],
-  "pendingProductionMigrations": [
-    "20260911020546_enforce_task_project_link_authorization"
-  ]
+  "pendingProductionMigrations": []
 }
