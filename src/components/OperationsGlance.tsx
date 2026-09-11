@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { format, isBefore, startOfDay } from 'date-fns';
+import { isBefore, startOfDay } from 'date-fns';
 import { AlertTriangle, CheckCircle2, ChevronRight, CircleDot, Clock3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Task, User } from '../types';
@@ -11,6 +11,8 @@ import {
 } from '../lib/taskReporting';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { cardBase } from './uiTokens';
+import { formatLocalizedDateTime, formatLocalizedWeekdayDate } from '../lib/i18n';
+import { useI18n } from './I18nProvider';
 
 type OperationsScope = 'agency' | 'staff';
 
@@ -49,16 +51,17 @@ const TaskEntry = ({
   mode: 'attention' | 'completion';
   scope: OperationsScope;
 }) => {
+  const { locale, t } = useI18n();
   const dueDate = parseOptionalDate(task.dueDate);
   const completedAt = parseOptionalDate(task.completedAt);
   const isOverdue = Boolean(dueDate && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDate, startOfDay(new Date())));
   const timestamp = mode === 'completion' ? completedAt : dueDate;
   const timing = mode === 'completion'
-    ? completedAt ? `Completed ${format(completedAt, 'd MMM, h:mm a')}` : 'Completion time unavailable'
+    ? completedAt ? <>{t('Completed')} {formatLocalizedDateTime(completedAt, locale)}</> : t('Completion time unavailable')
     : getRelativeDueDateString(task.dueDate, task.isCompleted, task.status);
   const context = scope === 'agency'
-    ? `${task.clientName} · ${usersById.get(task.assignedTo)?.name || 'Unassigned'} · ${task.department}`
-    : `${task.clientName} · ${task.department} · ${task.status}`;
+    ? <><span data-i18n-skip>{task.clientName}</span> · <span data-i18n-skip>{usersById.get(task.assignedTo)?.name || t('Unassigned')}</span> · <span data-i18n-skip>{task.department}</span></>
+    : <><span data-i18n-skip>{task.clientName}</span> · <span data-i18n-skip>{task.department}</span> · <span>{t(task.status)}</span></>;
 
   return (
     <Link
@@ -91,6 +94,7 @@ const TaskEntry = ({
 };
 
 const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope }) => {
+  const { locale } = useI18n();
   const [completionSegment, setCompletionSegment] = useState<CompletionSegment>('today');
   const now = new Date();
   const pulse = getAgencyPulseMetrics(tasks, now);
@@ -113,7 +117,7 @@ const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope
           <h2 id={titleId} className="text-lg font-semibold text-slate-950">
             {isStaffScope ? 'My work pulse' : 'Agency pulse'}
           </h2>
-          <p className="mt-1 text-sm text-slate-600">{format(now, 'EEEE, d MMMM yyyy')} · Week {pulse.period.label}</p>
+          <p className="mt-1 text-sm text-slate-600">{formatLocalizedWeekdayDate(now, locale, true)} · Week {pulse.period.label}</p>
         </div>
         <p className="text-xs text-slate-500">{isStaffScope ? 'Your assigned workload' : 'Agency-wide operational status'}</p>
       </div>
@@ -194,7 +198,7 @@ const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope
                     aria-pressed={completionSegment === segment.value}
                     onClick={() => setCompletionSegment(segment.value)}
                     className={cn(
-                      'min-h-8 rounded-md px-2.5 text-xs font-semibold text-slate-600 transition focus:outline-none focus:ring-2 focus:ring-blue-200',
+                      'min-h-11 rounded-md px-2.5 text-xs font-semibold text-slate-600 transition focus:outline-none focus:ring-2 focus:ring-blue-200',
                       completionSegment === segment.value && 'bg-white text-blue-700 shadow-sm',
                     )}
                   >

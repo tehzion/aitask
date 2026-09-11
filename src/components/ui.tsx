@@ -175,8 +175,8 @@ export const StatusChip: React.FC<React.HTMLAttributes<HTMLSpanElement> & { tone
   </span>
 );
 
-export interface SegmentTab<T extends string> { id: T; label: string; compactLabel?: string; count?: number }
-export const SegmentedTabs = <T extends string,>({ items, value, onChange, label, idPrefix }: { items: SegmentTab<T>[]; value: T; onChange: (value: T) => void; label: string; idPrefix?: string }) => {
+export interface SegmentTab<T extends string> { id: T; label: string; compactLabel?: string; count?: number; icon?: React.ComponentType<{ className?: string }> }
+export const SegmentedTabs = <T extends string,>({ items, value, onChange, label, idPrefix, variant = 'segmented' }: { items: SegmentTab<T>[]; value: T; onChange: (value: T) => void; label: string; idPrefix?: string; variant?: 'segmented' | 'underline' | 'boss' }) => {
   const generatedId = React.useId().replace(/:/g, '');
   const prefix = idPrefix || `segmented-tabs-${generatedId}`;
   const tabsRef = React.useRef<Array<HTMLButtonElement | null>>([]);
@@ -199,8 +199,16 @@ export const SegmentedTabs = <T extends string,>({ items, value, onChange, label
     selectAt(nextIndex);
   };
 
+  const isUnderline = variant === 'underline';
+  const isBoss = variant === 'boss';
   return (
-    <div role="tablist" aria-label={label} className="no-scrollbar flex min-w-0 gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 sm:gap-1 sm:p-1">
+    <div role="tablist" aria-label={label} className={cn(
+      isUnderline
+        ? 'no-scrollbar flex min-w-0 gap-1 overflow-x-auto border-b border-line'
+        : isBoss
+          ? 'inline-flex w-fit rounded-panel border border-line bg-surface p-1 shadow-sm'
+          : 'no-scrollbar flex min-w-0 gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 sm:gap-1 sm:p-1',
+    )}>
       {items.map((item, index) => (
         <button
           key={item.id}
@@ -214,8 +222,20 @@ export const SegmentedTabs = <T extends string,>({ items, value, onChange, label
           aria-controls={`${prefix}-panel-${item.id}`}
           onClick={() => onChange(item.id)}
           onKeyDown={event => handleKeyDown(event, index)}
-          className={cn('min-h-11 shrink-0 rounded-tag px-2 text-xs font-medium transition-[background-color,color,box-shadow] duration-160 sm:px-3 sm:text-sm', value === item.id ? 'bg-surface text-ink ring-1 ring-line/70' : 'text-muted hover:text-ink')}
+          className={cn(
+            isUnderline
+              ? 'relative min-h-11 shrink-0 px-3 text-sm font-semibold transition-colors duration-160'
+              : isBoss
+                ? 'inline-flex min-h-11 items-center gap-2 rounded-control px-3 text-sm font-semibold transition-colors'
+                : 'min-h-11 shrink-0 rounded-tag px-2 text-xs font-medium transition-[background-color,color,box-shadow] duration-160 sm:px-3 sm:text-sm',
+            isUnderline
+              ? value === item.id ? 'text-accent after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent' : 'text-muted hover:text-ink'
+              : isBoss
+                ? value === item.id ? 'bg-accent text-white' : 'text-muted hover:bg-inset hover:text-ink'
+                : value === item.id ? 'bg-surface text-ink ring-1 ring-line/70' : 'text-muted hover:text-ink',
+          )}
         >
+          {item.icon && <item.icon className="h-4 w-4" aria-hidden="true" />}
           {item.compactLabel ? <><span className="sm:hidden" aria-hidden="true">{item.compactLabel}</span><span className="hidden sm:inline">{item.label}</span></> : item.label}
           {typeof item.count === 'number' && <span className="calm-number ml-1.5 text-xs opacity-70">{item.count}</span>}
         </button>
@@ -234,9 +254,9 @@ export const ProgressBar: React.FC<{ value: number; max?: number; label: string;
   </div>;
 };
 
-export const DataRow: React.FC<Omit<React.HTMLAttributes<HTMLElement>, 'title'> & { title: React.ReactNode; description?: React.ReactNode; meta?: React.ReactNode; action?: React.ReactNode }> = ({ title, description, meta, action, className, ...props }) => (
+export const DataRow: React.FC<Omit<React.HTMLAttributes<HTMLElement>, 'title'> & { title: React.ReactNode; description?: React.ReactNode; meta?: React.ReactNode; action?: React.ReactNode; titleI18nSkip?: boolean; descriptionI18nSkip?: boolean }> = ({ title, description, meta, action, titleI18nSkip = true, descriptionI18nSkip = true, className, ...props }) => (
   <article className={cn('grid gap-3 px-4 py-4 transition-colors duration-160 hover:bg-inset/70 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5', className)} {...props}>
-    <div className="min-w-0"><div data-i18n-skip className="font-semibold text-ink">{title}</div>{description && <div data-i18n-skip className="mt-1 text-sm leading-5 text-muted">{description}</div>}{meta && <div className="mt-2 text-xs text-muted">{meta}</div>}</div>
+    <div className="min-w-0"><div {...(titleI18nSkip ? { 'data-i18n-skip': true } : {})} className="font-semibold text-ink">{title}</div>{description && <div {...(descriptionI18nSkip ? { 'data-i18n-skip': true } : {})} className="mt-1 text-sm leading-5 text-muted">{description}</div>}{meta && <div className="mt-2 text-xs text-muted">{meta}</div>}</div>
     {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
   </article>
 );

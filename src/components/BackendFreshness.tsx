@@ -2,22 +2,20 @@ import React from 'react';
 import { AlertCircle, Cloud, CloudOff, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { useStore } from '../store';
 import { getBackendStatus } from '../lib/backend';
+import { formatLocalizedSyncTime, type AppLocale } from '../lib/i18n';
 import { Badge, Button } from './ui';
 import { cn } from '../lib/utils';
+import { useI18n } from './I18nProvider';
 
 interface BackendFreshnessProps {
   compact?: boolean;
   className?: string;
 }
 
-const formatSyncTime = (value?: string) => {
-  if (!value) return 'Never';
+const formatSyncTime = (value: string | undefined, locale: AppLocale) => {
+  if (!value) return locale === 'zh' ? '从未' : 'Never';
   const date = new Date(value);
-  const isToday = new Date().toDateString() === date.toDateString();
-  if (isToday) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  return date.toLocaleDateString([], { month: 'numeric', day: 'numeric' }) + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return formatLocalizedSyncTime(date, locale);
 };
 
 const getFreshnessTone = (backend: ReturnType<typeof useStore.getState>['backend']) => {
@@ -40,6 +38,7 @@ const getFreshnessLabel = (backend: ReturnType<typeof useStore.getState>['backen
 };
 
 const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, className }) => {
+  const { locale, t } = useI18n();
   const { backend, pullBackendNow, retryPendingSave, discardMutation } = useStore();
   const backendStatus = getBackendStatus();
   const isLocal = backendStatus.mode === 'local';
@@ -69,7 +68,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
               ? 'Vercel configuration required'
               : isLocal
                 ? 'Local demo mode'
-                : `Last sync: ${formatSyncTime(lastChecked)}`}
+                : t(`Last sync: ${formatSyncTime(lastChecked, locale)}`)}
           </span>
         )}
       </div>
@@ -78,7 +77,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           variant="secondary"
           onClick={() => pullBackendNow({ silent: false })}
           disabled={backend.isPulling || backend.isSaving}
-          className="h-7 w-7 p-0 rounded-md flex items-center justify-center shrink-0 border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm"
+          className="h-11 w-11 p-0 rounded-md flex items-center justify-center shrink-0 border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm"
           title="Refresh sync status"
           aria-label="Refresh sync status"
         >
@@ -91,7 +90,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
             variant="secondary"
             onClick={() => void retryPendingSave()}
             disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
-            className="min-h-7 px-2 py-1 text-[11px]"
+            className="min-h-11 px-3 py-2 text-xs"
             title="Retry my pending changes"
           >
             <RotateCcw className="h-3 w-3" />
@@ -101,7 +100,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
             variant="secondary"
             onClick={() => void discardMutation()}
             disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
-            className="min-h-7 px-2 py-1 text-[11px]"
+            className="min-h-11 px-3 py-2 text-xs"
             title="Discard pending changes and load the latest saved version"
           >
             <X className="h-3 w-3" />

@@ -1,12 +1,14 @@
 import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileCheck2, UsersRound, WalletCards } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { isBefore, isToday, format } from 'date-fns';
+import { isBefore, isToday } from 'date-fns';
 import { useStore } from '../store';
 import { canViewServicePrices, getClientKey, getDashboardPersona, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { formatMoney } from '../lib/serviceManagement';
 import { parseOptionalDate } from '../lib/utils';
 import { DataRow, ProgressBar, StatGroup, StatusChip, Surface } from './ui';
+import { formatLocalizedDate } from '../lib/i18n';
+import { useI18n } from './I18nProvider';
 
 type WorkspaceTask = ReturnType<typeof useStore.getState>['tasks'][number];
 
@@ -32,17 +34,34 @@ const CompactStat = ({ label, value, icon: Icon, tone = 'neutral' }: { label: st
 };
 
 const TaskQueue = ({ title, tasks, empty, accent = false }: { title: string; tasks: WorkspaceTask[]; empty: string; accent?: boolean }) => (
-  <Surface className="overflow-hidden">
+  <TaskQueueContent title={title} tasks={tasks} empty={empty} accent={accent} />
+);
+
+const TaskQueueContent = ({ title, tasks, empty, accent = false }: { title: string; tasks: WorkspaceTask[]; empty: string; accent?: boolean }) => {
+  const { locale, t } = useI18n();
+  return <Surface className="overflow-hidden">
     <div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{title}</h3><StatusChip tone={accent ? 'amber' : 'slate'}>{tasks.length}</StatusChip></div>
     <div className="divide-y divide-line/60">
-      {tasks.slice(0, 6).map(task => <DataRow key={task.id} title={<Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="hover:text-accent">{task.title}</Link>} description={`${task.clientName} · ${task.dueDate || 'No deadline'}`} meta={task.assignedTo ? 'Assigned' : 'Unassigned'} action={<StatusChip tone={task.isCompleted ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{task.status}</StatusChip>} />)}
+      {tasks.slice(0, 6).map(task => {
+        const dueDate = parseOptionalDate(task.dueDate);
+        return <DataRow
+          key={task.id}
+          titleI18nSkip={false}
+          descriptionI18nSkip={false}
+          title={<Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="hover:text-accent"><span data-i18n-skip>{task.title}</span></Link>}
+          description={<><span data-i18n-skip>{task.clientName}</span> · {dueDate ? formatLocalizedDate(dueDate, locale) : t('No deadline')}</>}
+          meta={task.assignedTo ? t('Assigned') : t('Unassigned')}
+          action={<StatusChip tone={task.isCompleted ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{t(task.status)}</StatusChip>}
+        />;
+      })}
       {tasks.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">{empty}</p>}
     </div>
   </Surface>
-);
+};
 
 const ServiceRoleDashboard = () => {
   const store = useStore();
+  const { locale, t } = useI18n();
   const persona = getDashboardPersona(store.currentUser);
   const canSeePrices = canViewServicePrices(store.currentUser, store.rolePermissions);
   const now = new Date();
@@ -114,7 +133,7 @@ const ServiceRoleDashboard = () => {
   if (persona === 'account') return <section className="space-y-5" aria-labelledby="account-workbench-title">
     <WorkbenchHeader id="account-workbench-title" title="Account & Finance workbench" description="Client packages, internal monthly management fees, renewals and production output." />
     <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label="Monthly management value" value={canSeePrices ? formatMoney(contractedMonthly) : 'Restricted'} icon={WalletCards} detail={`${activePlans.length} active client package${activePlans.length === 1 ? '' : 's'}.`} /><StatGroup className="grid-cols-3"><CompactStat label="Active packages" value={activePlans.length} icon={UsersRound} /><CompactStat label="Contract reminders" value={renewalPlans.length} icon={CalendarDays} tone="warning" /><CompactStat label="Delivered outputs" value={delivered.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
-    <div className="grid gap-4 xl:grid-cols-2"><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">Client package & renewal</h3></div><div className="divide-y divide-line/60">{activePlans.map(plan => <DataRow key={plan.id} title={<Link to={`/clients/${encodeURIComponent(plan.clientId)}`} className="hover:text-accent">{plan.clientName}</Link>} description={`${plan.name} · contract reminder ${plan.contractEndDate || 'not set'}`} action={canSeePrices ? <span className="calm-number text-sm font-semibold text-ink">{formatMoney(store.servicePricingSnapshots.find(item => item.parentId === plan.id)?.totalMinor || 0)}</span> : undefined} />)}</div></Surface><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">Employee / supplier / freelancer output</h3></div><div className="divide-y divide-line/60">{workers.map(item => <DataRow key={item.user.id} title={item.user.name} description={item.user.workerType || 'employee'} action={<span className="calm-number text-xs text-muted">{item.completed} tasks · {item.delivered} delivered</span>} />)}</div></Surface></div>
+    <div className="grid gap-4 xl:grid-cols-2"><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">Client package & renewal</h3></div><div className="divide-y divide-line/60">{activePlans.map(plan => { const contractEnd = parseOptionalDate(plan.contractEndDate); return <DataRow key={plan.id} titleI18nSkip={false} descriptionI18nSkip={false} title={<Link to={`/clients/${encodeURIComponent(plan.clientId)}`} className="hover:text-accent"><span data-i18n-skip>{plan.clientName}</span></Link>} description={<><span data-i18n-skip>{plan.name}</span> · {t('contract reminder')} {contractEnd ? formatLocalizedDate(contractEnd, locale) : t('not set')}</>} action={canSeePrices ? <span className="calm-number text-sm font-semibold text-ink">{formatMoney(store.servicePricingSnapshots.find(item => item.parentId === plan.id)?.totalMinor || 0)}</span> : undefined} />; })}</div></Surface><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">Employee / supplier / freelancer output</h3></div><div className="divide-y divide-line/60">{workers.map(item => <DataRow key={item.user.id} titleI18nSkip={false} descriptionI18nSkip={false} title={<span data-i18n-skip>{item.user.name}</span>} description={<span data-i18n-skip>{item.user.workerType || 'employee'}</span>} action={<span className="calm-number text-xs text-muted">{item.completed} tasks · {item.delivered} delivered</span>} />)}</div></Surface></div>
   </section>;
 
   return <section className="space-y-5" aria-labelledby="management-workbench-title">
@@ -130,7 +149,7 @@ const ServiceRoleDashboard = () => {
           <div key={item.clientId} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
             <div className="min-w-0">
               <Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="truncate text-sm font-semibold text-ink hover:text-accent">{item.clientName}</Link>
-              <p data-i18n-skip className="mt-1 truncate text-xs text-muted">{item.plan.name}{item.currentCycle ? ` · ${format(parseOptionalDate(item.currentCycle.periodStart)!, 'd MMM')} – ${format(parseOptionalDate(item.currentCycle.periodEnd)!, 'd MMM yyyy')}` : ' · No published cycle for this month'}</p>
+              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t('No published cycle for this month')}</>}</p>
             </div>
             <div className="min-w-0">
               <ProgressBar className="mb-1.5" label={`Deliverables ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />

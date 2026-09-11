@@ -14,6 +14,12 @@ number remain uniquely identifiable.
   summaries.
 - Kept Chinese date, count, status, and activity messages readable in the
   context in which they appear, including responsive client-facing screens.
+- Localized Boss Koo and Staff workspace headers, task dates, sync metadata,
+  relative history, and fallback messages without translating task, client,
+  member, plan, note, or filename content.
+- Improved keyboard navigation across Boss and Staff queues, labelled the
+  collapsed Staff navigation menu, and raised recovery, filter, and pulse
+  controls to reliable mobile touch targets.
 
 ## [2.3.1] - 2026-09-11
 

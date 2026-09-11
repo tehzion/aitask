@@ -6,6 +6,8 @@
 
 - **A complete Chinese interface.** Chinese is now carried through the everyday product experience: navigation, task and project actions, company and client workspaces, service deliveries, notifications, feedback, empty states, and accessibility labels.
 - **Natural Chinese status updates.** Relative times, dates, counts, dashboard summaries, and task statuses now remain clear and consistent in Chinese across desktop and mobile layouts.
+- **Clearer Boss Koo and Staff workspaces.** Queue dates, sync times, task history, and fallback messages now follow the selected language, while task titles, client names, member names, plans, notes, and filenames remain unchanged.
+- **More accessible daily operations.** Boss Koo and Staff queue tabs now support predictable keyboard focus movement, collapsed Staff navigation has a clear accessible label, and retry, filter, and dashboard controls are easier to use on touch screens.
 - **No workflow change.** This release improves language coverage without changing client permissions, service scope, or existing task and delivery records.
 
 ## v2.3.1 — 11 September 2026

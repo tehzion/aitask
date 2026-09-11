@@ -1238,6 +1238,7 @@ const zhCopyAdditions: Record<string, string> = {
   'You are all caught up. New assignments, deadlines, and reviews will appear here.': '您已处理完所有事项。新的分配、截止日期和审阅请求会显示在这里。',
   'progress': '进度',
   'No deadline': '无截止日期',
+  'not set': '未设置',
   'Completion time unavailable': '完成时间不可用',
   'Review delivery': '审阅交付内容',
   'This delivery is not available for your company.': '此项交付不适用于贵公司。',
@@ -1666,6 +1667,15 @@ export const formatLocalizedDate = (value: Date, locale: AppLocale) => {
   return format(value, locale === 'zh' ? 'yyyy年M月d日' : 'd MMM yyyy', { locale: DATE_LOCALES[locale] });
 };
 
+/** Formats role-workspace headers with the application locale instead of the browser locale. */
+export const formatLocalizedWeekdayDate = (value: Date, locale: AppLocale, includeYear = false) => {
+  if (!isValidDate(value)) return '';
+  const pattern = locale === 'zh'
+    ? includeYear ? 'yyyy年M月d日 EEEE' : 'M月d日 EEEE'
+    : includeYear ? 'EEEE, d MMMM yyyy' : 'EEEE, d MMMM';
+  return format(value, pattern, { locale: DATE_LOCALES[locale] });
+};
+
 /** Formats a delivery/service period without relying on browser locale defaults. */
 export const formatLocalizedMonth = (value: Date, locale: AppLocale) => {
   if (!isValidDate(value)) return '';
@@ -1676,6 +1686,15 @@ export const formatLocalizedMonth = (value: Date, locale: AppLocale) => {
 export const formatLocalizedDateTime = (value: Date, locale: AppLocale) => {
   if (!isValidDate(value)) return '';
   return format(value, locale === 'zh' ? 'yyyy年M月d日 HH:mm' : 'd MMM yyyy, HH:mm', { locale: DATE_LOCALES[locale] });
+};
+
+/** Formats sync metadata consistently while preserving the existing compact-today behavior. */
+export const formatLocalizedSyncTime = (value: Date, locale: AppLocale, now = new Date()) => {
+  if (!isValidDate(value)) return '';
+  const sameDay = format(value, 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd');
+  return sameDay
+    ? format(value, 'HH:mm', { locale: DATE_LOCALES[locale] })
+    : formatLocalizedDateTime(value, locale);
 };
 
 export const formatLocalizedDistanceToNow = (value: Date, locale: AppLocale) => {
@@ -1742,6 +1761,7 @@ const translatePattern = (value: string) => {
     [/^(\d+) New$/, count => `${count} 条新通知`],
     [/^(\d+) active task$/, count => `${count} 个进行中任务`],
     [/^(\d+) active tasks$/, count => `${count} 个进行中任务`],
+    [/^(\d+) active revisions?$/, count => `${count} 个进行中的版本`],
     [/^Due: (.+)$/, date => `截止：${date}`],
     [/^Starts (.+) · No due date$/, date => `开始：${date} · 无截止日期`],
     [/^(.+) to (.+) · One day$/, (start, end) => `${start} 至 ${end} · 1 天`],

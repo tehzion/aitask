@@ -1,6 +1,5 @@
 import React from 'react';
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Layers3, ListChecks, RotateCcw, Sparkles } from 'lucide-react';
-import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
@@ -8,14 +7,17 @@ import { getDashboardPersona, getVisibleClientNames, getVisibleTasks } from '../
 import { buildStaffWorkQueue, getStaffBucketLabel, getStaffFocusTask, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getRelativeDueDateString, getTodayInputDate } from '../lib/utils';
 import { pageShell } from './uiTokens';
-import { Button, StatusChip, Surface } from './ui';
+import { Button, SegmentedTabs, StatusChip, Surface } from './ui';
 import BackendFreshness from './BackendFreshness';
 import StaffWorkItem from './StaffWorkItem';
+import { formatLocalizedWeekdayDate } from '../lib/i18n';
+import { useI18n } from './I18nProvider';
 
 const bucketOrder: StaffWorkBucketKey[] = ['needs_action', 'up_next', 'waiting', 'done'];
 
 const StaffMyWork: React.FC = () => {
   const navigate = useNavigate();
+  const { locale, t } = useI18n();
   const { currentUser, tasks: allTasks, projects, rolePermissions, clientPlans } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     tasks: state.tasks,
@@ -61,7 +63,7 @@ const StaffMyWork: React.FC = () => {
     <div className={`${pageShell} max-w-6xl space-y-6`}>
       <header className="flex items-start justify-between gap-4 border-b border-line/70 pb-4 sm:items-end">
         <div>
-          <p className="calm-eyebrow">{format(new Date(), 'EEEE, d MMMM')}</p>
+          <p className="calm-eyebrow">{formatLocalizedWeekdayDate(new Date(), locale)}</p>
           <h1 className="mt-1 text-[1.8rem] font-semibold leading-9 tracking-[-0.045em] text-ink sm:text-4xl">My work</h1>
           <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">Start with what needs attention, then move through the rest of your assigned work.</p>
         </div>
@@ -106,18 +108,17 @@ const StaffMyWork: React.FC = () => {
           <div><h2 id="staff-queue-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">Assigned queue</h2><p className="mt-1 text-sm text-muted">Work is ordered by revision, deadline, state, and priority.</p></div>
           <Link to="/tasks" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline">All work <ArrowRight className="h-4 w-4" /></Link>
         </div>
-        <div role="tablist" aria-label="Staff work queue" className="no-scrollbar mt-4 flex gap-1 overflow-x-auto border-b border-line" onKeyDown={event => {
-          const index = bucketOrder.indexOf(activeBucket);
-          if (event.key === 'ArrowRight') { event.preventDefault(); setActiveBucket(bucketOrder[(index + 1) % bucketOrder.length]); }
-          else if (event.key === 'ArrowLeft') { event.preventDefault(); setActiveBucket(bucketOrder[(index + bucketOrder.length - 1) % bucketOrder.length]); }
-        }}>
-          {bucketOrder.map(bucket => (
-            <button key={bucket} type="button" role="tab" id={`staff-queue-tab-${bucket}`} aria-selected={activeBucket === bucket} aria-controls="staff-queue-panel" tabIndex={activeBucket === bucket ? 0 : -1} onClick={() => setActiveBucket(bucket)} className={`relative min-h-11 shrink-0 px-3 text-sm font-semibold transition-colors duration-160 ${activeBucket === bucket ? 'text-accent after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent' : 'text-muted hover:text-ink'}`}>
-              {getStaffBucketLabel(bucket)} <span className="calm-number ml-1 text-xs">{queue[bucket].length}</span>
-            </button>
-          ))}
+        <div className="mt-4">
+          <SegmentedTabs<StaffWorkBucketKey>
+            items={bucketOrder.map(bucket => ({ id: bucket, label: getStaffBucketLabel(bucket), count: queue[bucket].length }))}
+            value={activeBucket}
+            onChange={setActiveBucket}
+            label="Staff work queue"
+            idPrefix="staff-queue"
+            variant="underline"
+          />
         </div>
-        <Surface id="staff-queue-panel" role="tabpanel" aria-labelledby={`staff-queue-tab-${activeBucket}`} tabIndex={0} className="mt-3 overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+        <Surface id={`staff-queue-panel-${activeBucket}`} role="tabpanel" aria-labelledby={`staff-queue-tab-${activeBucket}`} tabIndex={0} className="mt-3 overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           {queue[activeBucket].slice(0, 8).map(task => <StaffWorkItem key={task.id} task={task} allTasks={tasks} onOpen={item => openTask(item.id)} />)}
           {queue[activeBucket].length === 0 && <div className="px-5 py-12 text-center"><ListChecks className="mx-auto h-7 w-7 text-muted/60" /><p className="mt-3 text-sm font-semibold text-ink">Nothing in {getStaffBucketLabel(activeBucket).toLowerCase()}</p><p className="mt-1 text-sm text-muted">Choose another queue to review your work.</p></div>}
         </Surface>
@@ -133,7 +134,7 @@ const StaffMyWork: React.FC = () => {
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <Link to="/calendar" className="inline-flex min-h-11 items-center gap-2 font-semibold text-accent hover:underline"><CalendarDays className="h-4 w-4" />Open schedule</Link>
         <Link to="/notifications" className="inline-flex min-h-11 items-center gap-2 font-semibold text-accent hover:underline"><Clock3 className="h-4 w-4" />Check inbox</Link>
-        {revisions > 0 && <span className="inline-flex items-center gap-2 text-amber-700"><RotateCcw className="h-4 w-4" />{revisions} active revision{revisions === 1 ? '' : 's'}</span>}
+        {revisions > 0 && <span className="inline-flex items-center gap-2 text-amber-700"><RotateCcw className="h-4 w-4" />{t(`${revisions} active revision${revisions === 1 ? '' : 's'}`)}</span>}
       </div>
     </div>
   );

@@ -1,6 +1,5 @@
 import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock3, ExternalLink, FileText, History, MessageSquare, Send, UsersRound } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task, TaskStatus } from '../types';
 import { useStore } from '../store';
@@ -11,6 +10,7 @@ import { inputBase } from './uiTokens';
 import { Button, ProgressBar, StatusChip } from './ui';
 import SideSheet from './SideSheet';
 import { useI18n } from './I18nProvider';
+import { formatLocalizedDate, formatLocalizedDistanceToNow } from '../lib/i18n';
 
 interface StaffTaskFocusProps {
   isOpen: boolean;
@@ -19,7 +19,7 @@ interface StaffTaskFocusProps {
 }
 
 const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose }) => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const {
     tasks,
     users,
@@ -127,6 +127,8 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose }
       onClose={onClose}
       title={liveTask.title}
       description={`${liveTask.clientName} · ${liveTask.serviceType}`}
+      titleIsUserContent
+      descriptionIsUserContent
       className="w-full sm:max-w-xl"
       footer={footer}
     >
@@ -166,7 +168,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose }
         <section aria-labelledby="staff-task-brief">
           <h3 id="staff-task-brief" className="flex items-center gap-2 font-semibold text-ink"><FileText className="h-4 w-4 text-accent" />Brief</h3>
           <div className="mt-3 rounded-panel bg-inset p-4 text-sm leading-6 text-ink">
-            <p data-i18n-skip className="whitespace-pre-wrap">{liveTask.description || 'No task brief has been added.'}</p>
+            <p className="whitespace-pre-wrap">{liveTask.description ? <span data-i18n-skip>{liveTask.description}</span> : t('No task brief has been added.')}</p>
             {liveTask.notes && <p data-i18n-skip className="mt-3 border-t border-line pt-3 text-muted">{liveTask.notes}</p>}
           </div>
         </section>
@@ -178,14 +180,14 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose }
             <div><dt className="text-xs font-medium text-muted">Service</dt><dd data-i18n-skip className="mt-1 font-semibold text-ink">{liveTask.serviceType}</dd></div>
             {deliverable && <div><dt className="text-xs font-medium text-muted">Deliverable</dt><dd data-i18n-skip className="mt-1 font-semibold text-ink">{deliverable.title}</dd></div>}
             {cycle && <div><dt className="text-xs font-medium text-muted">Service cycle</dt><dd className="mt-1 font-semibold text-ink">{cycle.periodStart} – {cycle.periodEnd}</dd></div>}
-            {dueDate && <div><dt className="text-xs font-medium text-muted">Due date</dt><dd className="mt-1 font-semibold text-ink">{format(dueDate, 'd MMM yyyy')}</dd></div>}
+            {dueDate && <div><dt className="text-xs font-medium text-muted">Due date</dt><dd className="mt-1 font-semibold text-ink">{formatLocalizedDate(dueDate, locale)}</dd></div>}
           </dl>
         </section>
 
         {liveTask.attachmentLink && (
           <section aria-labelledby="staff-task-file">
             <h3 id="staff-task-file" className="font-semibold text-ink">File</h3>
-            {attachment ? <a data-i18n-skip href={attachment} target="_blank" rel="noopener noreferrer" className="mt-3 flex min-h-12 items-center justify-between gap-3 rounded-control bg-inset px-4 text-sm font-semibold text-ink hover:bg-accent-soft hover:text-accent"><span className="truncate">{liveTask.attachmentName || 'Open attachment'}</span><ExternalLink className="h-4 w-4 shrink-0" /></a> : <p className="mt-2 text-sm text-red-700">This attachment link is invalid.</p>}
+            {attachment ? <a href={attachment} target="_blank" rel="noopener noreferrer" className="mt-3 flex min-h-12 items-center justify-between gap-3 rounded-control bg-inset px-4 text-sm font-semibold text-ink hover:bg-accent-soft hover:text-accent"><span className="truncate">{liveTask.attachmentName ? <span data-i18n-skip>{liveTask.attachmentName}</span> : t('Open attachment')}</span><ExternalLink className="h-4 w-4 shrink-0" /></a> : <p className="mt-2 text-sm text-red-700">{t('This attachment link is invalid.')}</p>}
           </section>
         )}
 
@@ -194,9 +196,9 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose }
           <div className="mt-3 space-y-3">
             {(liveTask.comments || []).map(item => {
               const author = users.find(user => user.id === item.userId);
-              return <article key={item.id} className="rounded-panel bg-inset p-4"><div className="flex items-baseline justify-between gap-3"><p data-i18n-skip className="text-sm font-semibold text-ink">{author?.name || 'Team member'}</p><time className="shrink-0 text-xs text-muted">{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</time></div><p data-i18n-skip className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink">{item.text}</p></article>;
+              return <article key={item.id} className="rounded-panel bg-inset p-4"><div className="flex items-baseline justify-between gap-3"><p className="text-sm font-semibold text-ink">{author?.name ? <span data-i18n-skip>{author.name}</span> : t('Team member')}</p><time className="shrink-0 text-xs text-muted">{formatLocalizedDistanceToNow(new Date(item.createdAt), locale)}</time></div><p data-i18n-skip className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink">{item.text}</p></article>;
             })}
-            {(liveTask.comments || []).length === 0 && <p className="rounded-panel bg-inset px-4 py-8 text-center text-sm text-muted">No updates yet. Add the first work note below.</p>}
+            {(liveTask.comments || []).length === 0 && <p className="rounded-panel bg-inset px-4 py-8 text-center text-sm text-muted">{t('No updates yet. Add the first work note below.')}</p>}
           </div>
           <form onSubmit={submitComment} className="mt-3 flex items-end gap-2">
             <label className="min-w-0 flex-1"><span className="sr-only">Add work update</span><textarea value={comment} onChange={event => setComment(event.target.value)} rows={2} placeholder="Add a work update…" className={`${inputBase} resize-none px-3 py-2.5`} /></label>
@@ -212,9 +214,9 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose }
               return (
                 <article key={event.id} className="relative text-sm">
                   <span className="absolute -left-[1.31rem] top-1.5 h-2 w-2 rounded-full bg-accent ring-4 ring-surface" />
-                  <p className="text-ink"><span data-i18n-skip className="font-semibold">{author?.name || 'Team member'}</span> marked client review <span className="font-semibold">{event.status}</span>.</p>
+                  <p className="text-ink">{author?.name ? <span data-i18n-skip className="font-semibold">{author.name}</span> : <span className="font-semibold">{t('Team member')}</span>} {t('marked client review')} <span className="font-semibold">{t(event.status)}</span>.</p>
                   {event.note && <p data-i18n-skip className="mt-1 text-muted">{event.note}</p>}
-                  <time className="mt-1 block text-xs text-muted">{formatDistanceToNow(new Date(event.createdAt), { addSuffix: true })}</time>
+                  <time className="mt-1 block text-xs text-muted">{formatLocalizedDistanceToNow(new Date(event.createdAt), locale)}</time>
                 </article>
               );
             })}
@@ -222,10 +224,10 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose }
               <article className="relative text-sm">
                 <span className="absolute -left-[1.31rem] top-1.5 h-2 w-2 rounded-full bg-line ring-4 ring-surface" />
                 <p className="text-ink">Task updated</p>
-                <time className="mt-1 block text-xs text-muted">{formatDistanceToNow(new Date(liveTask.updatedAt), { addSuffix: true })}</time>
+                <time className="mt-1 block text-xs text-muted">{formatLocalizedDistanceToNow(new Date(liveTask.updatedAt), locale)}</time>
               </article>
             )}
-            {!liveTask.updatedAt && (liveTask.approvalHistory || []).length === 0 && <p className="text-sm text-muted">No recorded history yet.</p>}
+            {!liveTask.updatedAt && (liveTask.approvalHistory || []).length === 0 && <p className="text-sm text-muted">{t('No recorded history yet.')}</p>}
           </div>
         </section>
       </div>

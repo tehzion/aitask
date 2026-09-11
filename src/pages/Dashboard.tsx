@@ -9,7 +9,7 @@ import {
 import { isToday, isThisWeek, isBefore, differenceInDays } from 'date-fns';
 import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon, Plus, FolderKanban, UserPlus, Users, FileCheck2, Sparkles, CalendarClock } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
+import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader, SegmentedTabs } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
 import { canCreateTasks, getClientKey, getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import { getClientTaskStage } from '../lib/clientPortal';
@@ -439,31 +439,18 @@ const Dashboard: React.FC = () => {
 
         {showBossOperations ? (
           <>
-            <div className="inline-flex w-fit rounded-panel border border-line bg-surface p-1 shadow-sm" role="tablist" aria-label={t('Boss dashboard views')} onKeyDown={e => {
-              const keys = ['overview', 'pulse', 'workload'] as const;
-              const index = keys.indexOf(bossTab);
-              if (e.key === 'ArrowRight') { e.preventDefault(); setBossTab(keys[(index + 1) % keys.length]); }
-              else if (e.key === 'ArrowLeft') { e.preventDefault(); setBossTab(keys[(index + keys.length - 1) % keys.length]); }
-            }}>
-              {([['overview', t('Overview'), LayoutList], ['pulse', t('Agency pulse'), AlertCircle], ['workload', t('Team workload'), Users]] as const).map(([key, label, Icon]) => (
-                <button
-                  key={key}
-                  type="button"
-                  role="tab"
-                  id={`boss-tab-${key}`}
-                  aria-selected={bossTab === key}
-                  aria-controls={`boss-panel-${key}`}
-                  tabIndex={bossTab === key ? 0 : -1}
-                  onClick={() => setBossTab(key)}
-                  className={cn(
-                    'inline-flex min-h-9 items-center gap-2 rounded-control px-3 text-sm font-semibold transition-colors',
-                    bossTab === key ? 'bg-accent text-white' : 'text-muted hover:bg-inset hover:text-ink',
-                  )}
-                >
-                  <Icon className="h-4 w-4" />{label}
-                </button>
-              ))}
-            </div>
+            <SegmentedTabs<BossTab>
+              items={[
+                { id: 'overview' as const, label: t('Overview'), icon: LayoutList },
+                { id: 'pulse' as const, label: t('Agency pulse'), icon: AlertCircle },
+                { id: 'workload' as const, label: t('Team workload'), icon: Users },
+              ]}
+              value={bossTab}
+              onChange={setBossTab}
+              label={t('Boss dashboard views')}
+              idPrefix="boss"
+              variant="boss"
+            />
 
             {bossTab === 'overview' && (
               <div id="boss-panel-overview" role="tabpanel" aria-labelledby="boss-tab-overview" tabIndex={0} className="space-y-6">

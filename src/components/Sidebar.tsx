@@ -221,6 +221,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
                 type="button"
                 onClick={() => setStaffMoreOpen(value => !value)}
                 aria-expanded={staffMoreOpen}
+                aria-controls="staff-more-menu"
+                aria-label={isCollapsed ? t('More') : undefined}
+                title={isCollapsed ? t('More') : undefined}
                 className={clsx(
                   'group flex min-h-11 w-full items-center rounded-control px-3 py-2.5 transition-colors duration-160',
                   isCollapsed && 'md:justify-center md:px-2',
@@ -231,8 +234,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
                 <span className={clsx('flex-1 text-left text-sm font-medium', isCollapsed && 'md:hidden')}>More</span>
                 <span className={clsx('text-xs transition-transform', staffMoreOpen && 'rotate-180', isCollapsed && 'md:hidden')}>⌄</span>
               </button>
-              {staffMoreOpen && (
-                <div className={clsx('mt-1 space-y-1', !isCollapsed && 'ml-4 border-l border-line pl-2')}>
+              <div id="staff-more-menu" hidden={!staffMoreOpen} className={clsx('mt-1 space-y-1', !isCollapsed && 'ml-4 border-l border-line pl-2')}>
                   {isStaff && canCreateTasks(currentUser, rolePermissions) && (
                     <button
                       type="button"
@@ -260,8 +262,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
                       <span className={clsx('text-sm font-medium', isCollapsed && 'md:hidden')}>{item.label}</span>
                     </NavLink>
                   ))}
-                </div>
-              )}
+              </div>
             </div>
           )}
         </div>

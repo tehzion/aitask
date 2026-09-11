@@ -4,6 +4,8 @@ import {
   formatLocalizedDateTime,
   formatLocalizedDistanceToNow,
   formatLocalizedMonth,
+  formatLocalizedSyncTime,
+  formatLocalizedWeekdayDate,
   translateUiText,
 } from './i18n';
 
@@ -46,6 +48,7 @@ describe('Chinese UI translations', () => {
     expect(translateUiText('3 days ago', 'zh')).toBe('3 天前');
     expect(translateUiText('3 shown from 10 total, 4 linked tasks', 'zh')).toBe('显示 3 / 10 个，共关联 4 个任务');
     expect(translateUiText('Open delivery file', 'zh')).toBe('打开交付文件');
+    expect(translateUiText('1 active revision', 'zh')).toBe('1 个进行中的版本');
     expect(translateUiText('Website reference', 'zh')).toBe('网站参考');
     expect(translateUiText('The recovery service could not be reached. Please try again.', 'zh')).toBe('无法连接密码恢复服务，请重试。');
     expect(translateUiText('Files must be 100 MB or smaller.', 'zh')).toBe('文件大小必须不超过 100 MB。');
@@ -82,6 +85,8 @@ describe('Chinese UI translations', () => {
     const value = new Date(2026, 7, 18, 14, 5);
 
     expect(formatLocalizedDate(value, 'en')).toBe('18 Aug 2026');
+    expect(formatLocalizedWeekdayDate(value, 'en')).toBe('Tuesday, 18 August');
+    expect(formatLocalizedWeekdayDate(value, 'zh')).toBe('8月18日 星期二');
     expect(formatLocalizedMonth(value, 'en')).toBe('August 2026');
     expect(formatLocalizedDateTime(value, 'en')).toBe('18 Aug 2026, 14:05');
     expect(formatLocalizedDistanceToNow(value, 'en')).toBe('3 days ago');
@@ -89,6 +94,8 @@ describe('Chinese UI translations', () => {
     expect(formatLocalizedMonth(value, 'zh')).toBe('2026年8月');
     expect(formatLocalizedDateTime(value, 'zh')).toBe('2026年8月18日 14:05');
     expect(formatLocalizedDistanceToNow(value, 'zh')).toBe('3 天前');
+    expect(formatLocalizedSyncTime(value, 'en')).toBe('18 Aug 2026, 14:05');
+    expect(formatLocalizedSyncTime(new Date(2026, 7, 21, 9, 7), 'zh')).toBe('09:07');
     vi.useRealTimers();
   });
 });
