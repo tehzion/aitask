@@ -33,6 +33,7 @@ const superAdmin: User = { ...admin, id: 'boss-1', name: 'Boss Koo', isSuperAdmi
 const staff: User = { id: 'staff-1', name: 'Staff', role: 'Staff', departments: ['Designer'], department: 'Designer' };
 const otherStaff: User = { id: 'staff-2', name: 'Other Staff', role: 'Staff', departments: ['Video Editor'], department: 'Editor' };
 const acmeClient: User = { id: 'client-1', name: 'Acme Client', role: 'Client', departments: ['Client'], department: 'Client', companyName: 'Acme' };
+const members = [admin, superAdmin, staff, otherStaff];
 
 const makeTask = (overrides: Partial<Task> = {}): Task => ({
   id: 'task-1',
@@ -135,11 +136,12 @@ describe('staff permission matrix', () => {
       { ...projects[0], id: 'project-legacy', clientName: 'Legacy', projectName: 'Legacy', createdBy: undefined },
     ];
 
-    expect(getAssignableProjects(staff, companySet, tasks).map(project => project.id)).toEqual([
+    expect(getAssignableProjects(staff, companySet, tasks, [], members).map(project => project.id)).toEqual([
       'project-acme',
+      'project-beta',
       'project-legacy',
     ]);
-    expect(getAssignableProjects(admin, companySet, tasks)).toEqual(companySet);
+    expect(getAssignableProjects(admin, companySet, tasks, [], members)).toEqual(companySet);
   });
 
   it('hides unrelated Admin-created companies from Staff create-task dropdown', () => {
@@ -167,9 +169,22 @@ describe('staff permission matrix', () => {
       makeTask({ id: 'video-task', projectId: 'project-other-dept', department: 'Video Editor', assignedTo: otherStaff.id }),
     ];
 
-    expect(getAssignableProjects(staff, companySet, staffTasks).map(project => project.id)).toEqual([
+    expect(getAssignableProjects(staff, companySet, staffTasks, [], members).map(project => project.id)).toEqual([
       'project-acme',
       'project-fresh-admin',
+    ]);
+  });
+
+  it('keeps own empty projects available while hiding another Staff member’s empty project', () => {
+    const companySet: Project[] = [
+      { ...projects[0], id: 'project-own-empty', clientName: 'Own Empty', projectName: 'Own Empty', createdBy: staff.id },
+      { ...projects[0], id: 'project-other-empty', clientName: 'Other Empty', projectName: 'Other Empty', createdBy: otherStaff.id },
+      { ...projects[0], id: 'project-admin-empty', clientName: 'Admin Empty', projectName: 'Admin Empty', createdBy: admin.id },
+    ];
+
+    expect(getAssignableProjects(staff, companySet, [], [], members).map(project => project.id)).toEqual([
+      'project-own-empty',
+      'project-admin-empty',
     ]);
   });
 

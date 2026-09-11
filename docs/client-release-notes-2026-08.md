@@ -1,6 +1,12 @@
 # AiTask client release notes
 
-**Coverage:** the latest client releases: v2.3.0 (10 September 2026), v2.2.0 (7 September 2026), v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+**Coverage:** the latest client releases: v2.3.1 (11 September 2026), v2.3.0 (10 September 2026), v2.2.0 (7 September 2026), v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+
+## v2.3.1 — 11 September 2026
+
+- **Safer project links.** Staff and HOD task creation now checks the selected project again in the secure service. A task cannot be used to attach to or reveal another team member’s private project.
+- **A smoother first-task flow.** Staff and HOD can select their own newly created project before it contains any work, while projects owned by other staff stay private.
+- **Stronger release checks.** The release workflow now connects explicitly to its isolated staging project, allowing the complete authenticated role and recovery checks to run before release confirmation.
 
 ## v2.3.0 — 10 September 2026
 
@@ -87,7 +93,7 @@
 
 | Release | Formal release commit | Verification basis |
 | --- | --- | --- |
-| v2.3.0 | Pending release tag | Companies/client tracker split, profile-only client creation, named projects, canonical client linking, safe Staff/HOD permissions, browser flow verification, and project-link authorization tests. Production promotion remains pending the protected staging-first release gate. |
+| v2.3.0 | Release tag `v2.3.0` | Companies/client tracker split, profile-only client creation, named projects, canonical client linking, safe Staff/HOD permissions, browser flow verification, and project-link authorization tests. Production now reports the tagged release provenance. |
 | v2.2.0 | Release tag `v2.2.0` | Protected HOD role, created-task ownership after reassignment, scoped Admin editing, creator immutability, assignment/department enforcement, protected-role guards, capability-version cutover, and local pgTAP/client permission tests. |
 | v2.1.5 | Release tag `v2.1.5` | Structured hosted auth failures and email-only recovery, Boss-only administration, assigned-service isolation, privilege-only database hardening, authenticated staging QA, and exact automatic `master` deployment provenance. |
 | v2.1.4 | Release tag `v2.1.4` | Staff cycle-progress correction, complete Staff authorization rollout, immutable forward migrations, production data-integrity checks, and exact deployment provenance; authenticated staging QA waived by the exact one-time direct-production gate. |

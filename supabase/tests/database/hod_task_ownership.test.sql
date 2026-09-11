@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(34);
 
 select is(
   (select data -> 'permissions' ->> 'manageCreatedTasks'
@@ -48,6 +48,7 @@ insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values
   ('pgtap-hod-authorization', 'client', 'pgtap-hod-client', '{"id":"pgtap-hod-client","clientName":"HOD Test Client"}'::jsonb),
   ('pgtap-hod-authorization', 'client', 'pgtap-hidden-client', '{"id":"pgtap-hidden-client","clientName":"Hidden Client"}'::jsonb),
+  ('pgtap-hod-authorization', 'project', 'pgtap-hod-hidden-staff-project', '{"id":"pgtap-hod-hidden-staff-project","clientId":"pgtap-hod-client","clientName":"HOD Test Client","projectName":"Hidden Staff Project","createdBy":"pgtap-hod-staff","services":["Design"],"startDate":"2026-09-10"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-created', '{"id":"pgtap-hod-created","title":"HOD created task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-assigned', '{"id":"pgtap-hod-assigned","title":"HOD assigned task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod","createdBy":"pgtap-hod-staff","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-unrelated', '{"id":"pgtap-hod-unrelated","title":"Unrelated task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-staff","status":"Pending","visibility":"internal"}'::jsonb),
@@ -271,6 +272,63 @@ select is(
   ) ->> 'ok')::boolean,
   false,
   'the HOD role cannot be assigned to an Admin account'
+);
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000920', true);
+select is(
+  (public.aitask_execute_command(
+    'pgtap-hod-authorization', gen_random_uuid(), 'task.create',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'task', 'entityId', 'pgtap-hod-own-empty-project-task',
+      'parentId', 'pgtap-hod-visible-project', 'expectedVersion', 0,
+      'data', jsonb_build_object(
+        'id', 'pgtap-hod-own-empty-project-task', 'projectId', 'pgtap-hod-visible-project',
+        'clientId', 'pgtap-hod-client', 'clientName', 'HOD Test Client', 'projectName', 'Visible HOD Project',
+        'title', 'First project task', 'department', 'Designer', 'assignedTo', 'pgtap-hod',
+        'createdBy', 'pgtap-hod', 'serviceType', 'Design', 'startDate', '2026-09-10', 'status', 'Pending'
+      )
+    ))
+  ) ->> 'ok')::boolean,
+  true,
+  'HOD can link the first task to their own empty project'
+);
+select is(
+  (public.aitask_execute_command(
+    'pgtap-hod-authorization', gen_random_uuid(), 'task.create',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'task', 'entityId', 'pgtap-hod-hidden-project-task',
+      'parentId', 'pgtap-hod-hidden-staff-project', 'expectedVersion', 0,
+      'data', jsonb_build_object(
+        'id', 'pgtap-hod-hidden-project-task', 'projectId', 'pgtap-hod-hidden-staff-project',
+        'clientId', 'pgtap-hod-client', 'clientName', 'HOD Test Client', 'projectName', 'Hidden Staff Project',
+        'title', 'Forged hidden project task', 'department', 'Designer', 'assignedTo', 'pgtap-hod',
+        'createdBy', 'pgtap-hod', 'serviceType', 'Design', 'startDate', '2026-09-10', 'status', 'Pending'
+      )
+    ))
+  ) ->> 'ok')::boolean,
+  false,
+  'HOD cannot attach a crafted task to another Staff member’s hidden project'
+);
+select ok(
+  not private.aitask_can_view_project('pgtap-hod-authorization', 'pgtap-hod-hidden-staff-project'),
+  'a rejected forged task does not make the hidden project visible'
+);
+select is(
+  (public.aitask_execute_command(
+    'pgtap-hod-authorization', gen_random_uuid(), 'task.create',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'task', 'entityId', 'pgtap-hod-mismatched-project-task',
+      'parentId', 'pgtap-hod-visible-project', 'expectedVersion', 0,
+      'data', jsonb_build_object(
+        'id', 'pgtap-hod-mismatched-project-task', 'projectId', 'pgtap-hod-hidden-staff-project',
+        'clientId', 'pgtap-hod-client', 'clientName', 'HOD Test Client', 'projectName', 'Visible HOD Project',
+        'title', 'Mismatched project task', 'department', 'Designer', 'assignedTo', 'pgtap-hod',
+        'createdBy', 'pgtap-hod', 'serviceType', 'Design', 'startDate', '2026-09-10', 'status', 'Pending'
+      )
+    ))
+  ) ->> 'ok')::boolean,
+  false,
+  'task project data and command parent must agree'
 );
 select is((public.aitask_get_backend_capabilities('pgtap-hod-authorization') ->> 'schemaVersion')::integer, 4, 'the HOD authorization contract requires backend schema version 4');
 

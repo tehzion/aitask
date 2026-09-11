@@ -419,33 +419,45 @@ export const getAssignableProjects = (
   user: User | null | undefined,
   projects: Project[],
   tasks: Task[] = [],
-  customRoles: CustomRole[] = []
+  customRoles: CustomRole[] = [],
+  users: User[] = [],
 ) => {
   if (!user) return [];
   if (user.role !== 'Staff') return getVisibleProjects(user, projects, tasks, customRoles);
-  if (!canCreateTasks(user, customRoles)) return [];
+  return projects.filter(project => canLinkTaskToProject(user, project, tasks, customRoles, users));
+};
 
-  const participationProjectIds = new Set(
-    getVisibleProjects(user, projects, tasks, customRoles).map(project => project.id)
-  );
-  const projectDepartments = new Map<string, Set<string>>();
-  tasks.forEach(task => {
-    if (!task.projectId) return;
-    const departments = projectDepartments.get(task.projectId) || new Set<string>();
-    departments.add(task.department);
-    projectDepartments.set(task.projectId, departments);
-  });
+/**
+ * Task-to-project links are more restrictive than project listing: a Staff
+ * member may use their own project (even before its first task), a project
+ * already connected to work they can see, or an Admin-curated/legacy project
+ * when they may create tasks. This keeps another Staff/HOD member's empty
+ * project out of the task form.
+ */
+export const canLinkTaskToProject = (
+  user: User | null | undefined,
+  project: Project,
+  tasks: Task[] = [],
+  customRoles: CustomRole[] = [],
+  users: User[] = [],
+) => {
+  if (!user || user.role === 'Client') return false;
+  if (isBossKoo(user) || user.role === 'Admin') return true;
+  if (user.role !== 'Staff') return false;
+  if (project.createdBy === user.id) return true;
 
-  return projects.filter(project => {
-    if (participationProjectIds.has(project.id) && project.createdBy !== user.id) return true;
-    if (project.createdBy === user.id) {
-      return tasks.some(task => task.projectId === project.id && task.assignedTo === user.id);
-    }
-    if (!project.createdBy) return true;
-    const departments = projectDepartments.get(project.id);
-    if (!departments || departments.size === 0) return true;
-    return Array.from(departments).some(department => isMemberInDepartment(user, department as Department));
-  });
+  const linkedTasks = tasks.filter(task => task.projectId === project.id);
+  const hasVisibleProjectTask = getVisibleTasks(user, linkedTasks, customRoles).length > 0;
+  if (hasVisibleProjectTask) return true;
+
+  if (linkedTasks.length > 0) {
+    return linkedTasks.some(task => isMemberInDepartment(user, task.department));
+  }
+  if (!canCreateTasks(user, customRoles)) return false;
+
+  if (!project.createdBy) return true;
+  const creator = users.find(member => member.id === project.createdBy);
+  return Boolean(creator && (creator.role === 'Admin' || isBossKoo(creator)));
 };
 
 export const isNotificationVisible = (user: User | null | undefined, notification: AppNotification) => {

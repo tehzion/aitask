@@ -4,6 +4,25 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [2.3.1] - 2026-09-11
+
+### Security and reliability
+
+- Task-to-project links are now enforced by the guarded Supabase command API.
+  A Staff or HOD member cannot attach a crafted task to another member’s hidden
+  project, and the task project ID must agree with the command relationship.
+- Staff and HOD members can now select their own empty project for its first
+  task, while another member’s empty project remains hidden. Admin-curated and
+  existing assigned-project workflows are preserved.
+- Staging and tagged-release workflows now explicitly link the isolated Vercel
+  project before pulling, building, and deploying it, so the authenticated role
+  verification gate can run instead of being skipped by an unlinked project.
+
+### Quality
+
+- Added database authorization probes for crafted hidden-project links,
+  project-ID/parent mismatch, and first-task creation on an owned empty project.
+
 ## [2.3.0] - 2026-09-10
 
 ### Added

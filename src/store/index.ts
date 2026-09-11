@@ -2604,10 +2604,10 @@ export const useStore = create<StoreState>()(
         }
 
         if (requestedProjectId) {
-          const visibleProjectIds = new Set(
-            getVisibleProjects(currentUser, state.projects, state.tasks, state.rolePermissions).map(item => item.id)
+          const assignableProjectIds = new Set(
+            getAssignableProjects(currentUser, state.projects, state.tasks, state.rolePermissions, state.users).map(item => item.id)
           );
-          if (!visibleProjectIds.has(requestedProjectId)) {
+          if (!assignableProjectIds.has(requestedProjectId)) {
             return { ok: false, error: 'You can only link tasks to projects you can access.' };
           }
         }
@@ -2903,7 +2903,7 @@ export const useStore = create<StoreState>()(
         if (taskData.projectId) {
           if (!project) return '';
           const assignableProjectIds = new Set(
-            getAssignableProjects(currentUser, state.projects, state.tasks, state.rolePermissions).map(item => item.id)
+            getAssignableProjects(currentUser, state.projects, state.tasks, state.rolePermissions, state.users).map(item => item.id)
           );
           if (!assignableProjectIds.has(taskData.projectId)) return '';
         }
