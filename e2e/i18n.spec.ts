@@ -138,7 +138,7 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
       tasks: [...useStore.getState().tasks, {
         id: 'T-i18n-client', clientName: 'Settings', serviceType: 'Design', title: 'Dashboard',
         description: 'Client-visible probe.', department: 'Management',
-        assignedTo: state.currentUser.id, createdBy: state.currentUser.id,
+        assignedTo: 'missing-client-contact', createdBy: state.currentUser.id,
         startDate: '2026-08-01', dueDate: '2026-08-18', priority: 'Medium',
         status: 'Waiting Approval', completionPercentage: 100, isCompleted: true,
         revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false,
@@ -151,7 +151,7 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     localStorage.setItem('aitask:release-notice:2026-08-service-operations:client-i18n', 'acknowledged');
-    useStore.setState({ currentUser: { id: 'client-i18n', name: 'Client I18N', role: 'Client', departments: ['Client'], department: 'Client', companyName: 'Settings', permissions: { viewDashboard: true } } });
+    useStore.setState({ currentUser: { id: 'client-i18n', name: 'Client I18N', role: 'Client', departments: ['Client'], department: 'Client', companyName: 'Settings', permissions: { viewDashboard: true, viewTasks: true } } });
   });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
@@ -163,6 +163,21 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
   await expect(page.locator('main').getByText('需要您审阅').first()).toBeVisible();
   await expect(page.locator('main').getByText('交付进行中').first()).toBeVisible();
   await expect(page.locator('main').getByText('Dashboard').first()).toBeVisible();
+  await expect(page.getByText('2026年8月18日', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('代理团队', { exact: true }).first()).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+
+  await page.goto('/tasks?taskId=T-i18n-client');
+  const deliveryDialog = page.getByRole('dialog', { name: '交付详情' });
+  await expect(deliveryDialog).toBeVisible();
+  await expect(deliveryDialog.getByText('2026年8月18日', { exact: true })).toBeVisible();
+  await expect(deliveryDialog.getByText('代理团队', { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '打开交付筛选' }).click();
+  await expect(page.getByRole('dialog', { name: '筛选交付内容' })).toBeVisible();
+  await expect(page.getByText('在不改变您公司可访问内容的前提下缩小列表范围。')).toBeVisible();
 
   await page.goto(`/clients/${seeded.clientId}`);
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
@@ -173,4 +188,16 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
 
   const axeResults = await new AxeBuilder({ page }).include('main').analyze();
   expect(axeResults.violations, `Client portal zh: ${axeResults.violations.map(item => `${item.id} (${item.nodes.length})`).join(', ')}`).toEqual([]);
+});
+
+test('public feedback keeps its language control touch-safe in Chinese', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/feedback?role=Client&lang=zh');
+
+  const languageControl = page.getByRole('button', { name: 'English', exact: true });
+  await expect(languageControl).toBeVisible();
+  const box = await languageControl.boundingBox();
+  expect(box?.width).toBeGreaterThanOrEqual(44);
+  expect(box?.height).toBeGreaterThanOrEqual(44);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });

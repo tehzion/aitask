@@ -124,7 +124,8 @@ const ModalShell: React.FC<ModalShellProps> = ({
   }, []);
 
   React.useLayoutEffect(() => {
-    document.body.appendChild(portalNode);
+    const portalRoot = document.getElementById('i18n-portals') || document.body;
+    portalRoot.appendChild(portalNode);
     return () => portalNode.remove();
   }, [portalNode]);
 

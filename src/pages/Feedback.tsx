@@ -168,7 +168,7 @@ const Feedback: React.FC = () => {
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">AT</div>
             <div><p className="font-semibold text-slate-950">AiTask</p><p className="text-xs text-slate-500">Launch feedback</p></div>
           </div>
-          <button type="button" data-i18n-skip onClick={() => { const next = language === 'en' ? 'zh' : 'en'; setLanguage(next); setLocale(next); }} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <button type="button" data-i18n-skip onClick={() => { const next = language === 'en' ? 'zh' : 'en'; setLanguage(next); setLocale(next); }} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
             <Languages className="h-4 w-4" /> {language === 'en' ? '中文' : 'English'}
           </button>
         </div>

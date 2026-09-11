@@ -1,3 +1,6 @@
+import { format, formatDistanceToNow } from 'date-fns';
+import { enUS, zhCN } from 'date-fns/locale';
+
 export type AppLocale = 'en' | 'zh';
 
 export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
@@ -722,6 +725,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Delivery details': '交付详情',
   'Review the outcome, timing, files, and conversation in one place.': '在一个页面查看成果、时间、文件与沟通记录。',
   'Expected date': '预计日期',
+  'Expected': '预计',
   'Agency contact': '团队联系人',
   'Preview and files': '预览与文件',
   'Your decision': '您的决定',
@@ -739,6 +743,8 @@ const zhCopyAdditions: Record<string, string> = {
   'Search deliveries': '搜索交付内容',
   'Search deliveries…': '搜索交付内容…',
   'Filter deliveries': '筛选交付内容',
+  'Open delivery filters': '打开交付筛选',
+  'active': '已启用',
   'All delivery stages': '所有交付阶段',
   'All services': '所有服务',
   'Any date': '任何日期',
@@ -989,6 +995,9 @@ const zhCopyAdditions: Record<string, string> = {
   // Client Home
   'This delivery is ready for your decision.': '此交付等待您做出决定。',
   'The agency team is preparing this delivery.': '代理团队正在准备此交付。',
+  'The expected date has changed.': '预计日期已有调整。',
+  'The current expected date is': '当前预计日期为',
+  'is your contact for timing.': '是您的进度联系人。',
   'New deliveries and review requests will appear here when the team shares them.': '团队分享后，新的交付与审阅请求将显示在此处。',
   'No active deliveries right now.': '当前没有进行中的交付。',
   // Staff workspace v2
@@ -1647,10 +1656,48 @@ const MONTH_ABBREVIATIONS: Array<[RegExp, string]> = [
   [/\bDec\b/g, '12月'],
 ];
 
-const translateInlineDate = (value: string) => MONTH_ABBREVIATIONS.reduce(
-  (translated, [term, replacement]) => translated.replace(term, replacement),
-  value,
-);
+const DATE_LOCALES = { en: enUS, zh: zhCN } as const;
+
+const isValidDate = (value: Date) => !Number.isNaN(value.getTime());
+
+/** Formats structured dates without translating user-authored text. */
+export const formatLocalizedDate = (value: Date, locale: AppLocale) => {
+  if (!isValidDate(value)) return '';
+  return format(value, locale === 'zh' ? 'yyyy年M月d日' : 'd MMM yyyy', { locale: DATE_LOCALES[locale] });
+};
+
+/** Formats a delivery/service period without relying on browser locale defaults. */
+export const formatLocalizedMonth = (value: Date, locale: AppLocale) => {
+  if (!isValidDate(value)) return '';
+  return format(value, locale === 'zh' ? 'yyyy年M月' : 'MMMM yyyy', { locale: DATE_LOCALES[locale] });
+};
+
+/** Formats feedback timestamps using the application locale. */
+export const formatLocalizedDateTime = (value: Date, locale: AppLocale) => {
+  if (!isValidDate(value)) return '';
+  return format(value, locale === 'zh' ? 'yyyy年M月d日 HH:mm' : 'd MMM yyyy, HH:mm', { locale: DATE_LOCALES[locale] });
+};
+
+export const formatLocalizedDistanceToNow = (value: Date, locale: AppLocale) => {
+  if (!isValidDate(value)) return '';
+  return formatDistanceToNow(value, { addSuffix: true, locale: DATE_LOCALES[locale] });
+};
+
+const translateInlineDate = (value: string) => {
+  const match = /^(\d{1,2})\s+([A-Z][a-z]{2})\s+(\d{4})$/.exec(value.trim());
+  if (match) {
+    const [, day, monthName, year] = match;
+    const month = MONTH_ABBREVIATIONS.find(([pattern]) => {
+      pattern.lastIndex = 0;
+      return pattern.test(monthName);
+    })?.[1];
+    if (month) return `${year}年${month}${Number(day)}日`;
+  }
+  return MONTH_ABBREVIATIONS.reduce(
+    (translated, [term, replacement]) => translated.replace(term, replacement),
+    value,
+  );
+};
 
 const translatePattern = (value: string) => {
   const patterns: Array<[RegExp, (...matches: string[]) => string]> = [

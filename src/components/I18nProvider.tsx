@@ -100,9 +100,13 @@ export const I18nProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en';
     document.documentElement.dataset.locale = locale;
     document.title = translateUiText('AiTask - Marketing Agency Task Management', locale);
-    if (!document.body) return;
+    const localizationRoots = [
+      document.getElementById('root'),
+      document.getElementById('i18n-portals'),
+    ].filter((element): element is HTMLElement => Boolean(element));
+    if (localizationRoots.length === 0) return;
 
-    const translateAll = () => localizeElement(document.body, locale);
+    const translateAll = () => localizationRoots.forEach(root => localizeElement(root, locale));
     translateAll();
     const observer = new MutationObserver(records => {
       records.forEach(record => {
@@ -114,7 +118,7 @@ export const I18nProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         });
       });
     });
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: [...localizedAttributes] });
+    localizationRoots.forEach(root => observer.observe(root, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: [...localizedAttributes] }));
     return () => observer.disconnect();
   }, [locale]);
 

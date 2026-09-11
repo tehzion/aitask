@@ -1,16 +1,17 @@
 import React from 'react';
-import { format, formatDistanceToNow } from 'date-fns';
 import { CalendarDays, CheckCircle2, Clock3, ExternalLink, FileText, History, MessageSquareText, Send, UserRound, XCircle } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
 import { canCommentOnTask, canReviewTaskAsClient } from '../lib/access';
 import { getClientDeliveryStage, getClientDeliveryStageLabel } from '../lib/clientPortal';
+import { formatLocalizedDate, formatLocalizedDistanceToNow } from '../lib/i18n';
 import { safeHttpsUrl } from '../lib/security';
 import { cn, parseOptionalDate } from '../lib/utils';
 import { useStore } from '../store';
 import { Button, ProgressBar, StatusChip } from './ui';
 import { inputBase } from './uiTokens';
 import SideSheet from './SideSheet';
+import { useI18n } from './I18nProvider';
 
 interface ClientDeliveryFocusProps {
   task: Task | null;
@@ -26,6 +27,7 @@ const stageTone = (task: Task): 'amber' | 'emerald' | 'blue' | 'slate' => {
 };
 
 const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
+  const { locale, t } = useI18n();
   const {
     users,
     currentUser,
@@ -131,8 +133,8 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
 
         <section className="rounded-panel bg-inset p-4 sm:p-5" aria-label="Delivery timing and progress">
           <div className="grid gap-4 sm:grid-cols-3">
-            <div><p className="text-xs font-medium text-muted">Expected date</p><p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><CalendarDays className="h-4 w-4 text-accent" />{dueDate ? format(dueDate, 'd MMM yyyy') : 'To be confirmed'}</p></div>
-            <div><p className="text-xs font-medium text-muted">Agency contact</p><p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><UserRound className="h-4 w-4 text-accent" />{contact?.name ? <span data-i18n-skip>{contact.name}</span> : 'Agency team'}</p></div>
+            <div><p className="text-xs font-medium text-muted">Expected date</p><p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><CalendarDays className="h-4 w-4 text-accent" />{dueDate ? formatLocalizedDate(dueDate, locale) : t('To be confirmed')}</p></div>
+            <div><p className="text-xs font-medium text-muted">Agency contact</p><p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><UserRound className="h-4 w-4 text-accent" />{contact?.name ? <span data-i18n-skip>{contact.name}</span> : t('Agency team')}</p></div>
             <div><p className="text-xs font-medium text-muted">Progress</p><p className="calm-number mt-1 text-sm font-semibold text-ink">{task.completionPercentage}%</p></div>
           </div>
           <ProgressBar className="mt-4" value={task.completionPercentage} max={100} label="Delivery progress" />
@@ -163,7 +165,7 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
           <div className="mt-4 space-y-4">
             {(task.comments || []).map(comment => {
               const author = users.find(user => user.id === comment.userId);
-              return <article key={comment.id} className="rounded-control bg-inset px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><p data-i18n-skip className="text-sm font-semibold text-ink">{author?.name || 'Team member'}</p><time className="text-xs text-muted">{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</time></div><p data-i18n-skip className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted">{comment.text}</p></article>;
+              return <article key={comment.id} className="rounded-control bg-inset px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{author?.name ? <span data-i18n-skip>{author.name}</span> : t('Team member')}</p><time className="text-xs text-muted">{formatLocalizedDistanceToNow(new Date(comment.createdAt), locale)}</time></div><p data-i18n-skip className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted">{comment.text}</p></article>;
             })}
             {(task.comments || []).length === 0 && <p className="rounded-control border border-dashed border-line px-4 py-6 text-sm text-muted">No feedback has been shared yet.</p>}
           </div>
@@ -174,7 +176,7 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
           <section aria-labelledby="delivery-history-title">
             <div className="flex items-center gap-2"><History className="h-4 w-4 text-accent" /><h3 id="delivery-history-title" className="font-semibold text-ink">Decision history</h3></div>
             <ol className="mt-4 space-y-3 border-l border-line pl-4">
-              {[...(task.approvalHistory || [])].reverse().map(event => { const eventUser = users.find(user => user.id === event.userId); return <li key={event.id} className="relative"><span className="absolute -left-[1.32rem] top-1.5 h-2 w-2 rounded-full bg-accent" /><p className="text-sm text-ink">{eventUser?.name ? <span data-i18n-skip className="font-semibold">{eventUser.name}</span> : <span className="font-semibold">Client</span>} {event.status === 'Approved' ? 'approved the delivery' : 'requested changes'}.</p><p className="mt-1 inline-flex items-center gap-1 text-xs text-muted"><Clock3 className="h-3.5 w-3.5" />{formatDistanceToNow(new Date(event.createdAt), { addSuffix: true })}</p>{event.note && <p data-i18n-skip className="mt-2 rounded-control bg-inset px-3 py-2 text-sm text-muted">{event.note}</p>}</li>; })}
+              {[...(task.approvalHistory || [])].reverse().map(event => { const eventUser = users.find(user => user.id === event.userId); return <li key={event.id} className="relative"><span className="absolute -left-[1.32rem] top-1.5 h-2 w-2 rounded-full bg-accent" /><p className="text-sm text-ink">{eventUser?.name ? <span data-i18n-skip className="font-semibold">{eventUser.name}</span> : <span className="font-semibold">Client</span>} {event.status === 'Approved' ? 'approved the delivery' : 'requested changes'}.</p><p className="mt-1 inline-flex items-center gap-1 text-xs text-muted"><Clock3 className="h-3.5 w-3.5" />{formatLocalizedDistanceToNow(new Date(event.createdAt), locale)}</p>{event.note && <p data-i18n-skip className="mt-2 rounded-control bg-inset px-3 py-2 text-sm text-muted">{event.note}</p>}</li>; })}
             </ol>
           </section>
         )}

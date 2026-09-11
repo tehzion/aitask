@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { translateUiText } from './i18n';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  formatLocalizedDate,
+  formatLocalizedDateTime,
+  formatLocalizedDistanceToNow,
+  formatLocalizedMonth,
+  translateUiText,
+} from './i18n';
 
 describe('Chinese UI translations', () => {
   it('keeps English as the default and translates shared interface copy to Simplified Chinese', () => {
@@ -56,7 +62,7 @@ describe('Chinese UI translations', () => {
     expect(translateUiText('linked task(s)', 'zh')).toBe('个关联任务');
     expect(translateUiText('1 services · 1 published cycle(s)', 'zh')).toBe('1 项服务 · 1 个已发布周期');
     expect(translateUiText('3 linked task(s) · Short Video Production', 'zh')).toBe('3 个关联任务 · Short Video Production');
-    expect(translateUiText('· Due 18 Aug 2026', 'zh')).toBe('· 截止 18 8月 2026');
+    expect(translateUiText('· Due 18 Aug 2026', 'zh')).toBe('· 截止 2026年8月18日');
     expect(translateUiText('75% of work approved', 'zh')).toBe('75% 的工作已批准');
     expect(translateUiText('Track Settings work, review deliverables, and share feedback.', 'zh')).toBe('跟踪Settings 的工作、审阅交付物并分享反馈。');
     expect(translateUiText('Awaiting your review', 'zh')).toBe('等待您的审阅');
@@ -68,5 +74,21 @@ describe('Chinese UI translations', () => {
     expect(translateUiText('Awaiting review', 'zh')).toBe('待审阅');
     expect(translateUiText('Approved', 'zh')).toBe('已批准');
     expect(translateUiText('Total tasks', 'zh')).toBe('任务总数');
+  });
+
+  it('formats structured dates and relative times in the selected application locale', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 21, 12, 0));
+    const value = new Date(2026, 7, 18, 14, 5);
+
+    expect(formatLocalizedDate(value, 'en')).toBe('18 Aug 2026');
+    expect(formatLocalizedMonth(value, 'en')).toBe('August 2026');
+    expect(formatLocalizedDateTime(value, 'en')).toBe('18 Aug 2026, 14:05');
+    expect(formatLocalizedDistanceToNow(value, 'en')).toBe('3 days ago');
+    expect(formatLocalizedDate(value, 'zh')).toBe('2026年8月18日');
+    expect(formatLocalizedMonth(value, 'zh')).toBe('2026年8月');
+    expect(formatLocalizedDateTime(value, 'zh')).toBe('2026年8月18日 14:05');
+    expect(formatLocalizedDistanceToNow(value, 'zh')).toBe('3 天前');
+    vi.useRealTimers();
   });
 });

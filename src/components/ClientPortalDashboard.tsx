@@ -1,4 +1,3 @@
-import { format, formatDistanceToNow } from 'date-fns';
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, FileCheck2, MessageSquareText, TimerReset } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Task, WorkspaceMember } from '../types';
@@ -9,9 +8,11 @@ import {
   getClientLatestUpdates,
   groupClientDeliveries,
 } from '../lib/clientPortal';
+import { formatLocalizedDate, formatLocalizedDistanceToNow, type AppLocale } from '../lib/i18n';
 import { parseOptionalDate } from '../lib/utils';
 import { useStore } from '../store';
 import { ProgressBar, StatusChip, Surface } from './ui';
+import { useI18n } from './I18nProvider';
 
 interface ClientPortalDashboardProps {
   tasks: Task[];
@@ -28,12 +29,13 @@ const stageTone = (task: Task): 'amber' | 'emerald' | 'blue' | 'slate' => {
   return 'slate';
 };
 
-const expectedDate = (task: Task) => {
+const expectedDate = (task: Task, locale: AppLocale, fallback: string) => {
   const dueDate = parseOptionalDate(task.dueDate);
-  return dueDate ? format(dueDate, 'd MMM yyyy') : 'Date to be confirmed';
+  return dueDate ? formatLocalizedDate(dueDate, locale) : fallback;
 };
 
 const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => {
+  const { locale, t } = useI18n();
   const currentUser = useStore(state => state.currentUser);
   const clients = useStore(state => state.clients);
   const clientPlans = useStore(state => state.clientPlans);
@@ -57,7 +59,10 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
     .slice(0, 6);
   const updates = getClientLatestUpdates(tasks).filter(task => task.id !== focusTask?.id).slice(0, 5);
   const delivered = getClientLatestUpdates(groups.delivered).slice(0, 5);
-  const contactName = (id: string) => users.find(user => user.id === id)?.name || 'Agency team';
+  const contactName = (id: string) => {
+    const name = users.find(user => user.id === id)?.name;
+    return name ? <span data-i18n-skip>{name}</span> : t('Agency team');
+  };
   const latestTeamComment = focusTask?.comments
     ?.filter(comment => comment.userId !== currentUser?.id)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
@@ -72,8 +77,8 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
           <StatusChip tone={stageTone(task)}>{getClientDeliveryStageLabel(task)}</StatusChip>
         </div>
         <p className="mt-1 text-xs leading-5 text-muted">
-          <span data-i18n-skip>{task.serviceType} · {contactName(task.assignedTo)}</span>
-          <span> · {expectedDate(task)}</span>
+          <span data-i18n-skip>{task.serviceType}</span> · {contactName(task.assignedTo)}
+          <span> · {expectedDate(task, locale, t('Date to be confirmed'))}</span>
         </p>
       </div>
       <Link to={taskPath(task)} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control px-3 text-sm font-semibold text-accent transition-colors duration-160 hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 active:translate-y-px">
@@ -94,18 +99,18 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
                 <p className="calm-eyebrow text-current">{focusStage === 'needs_review' ? 'Your next decision' : focusStage === 'timing_changed' ? 'Timing changed' : 'Next delivery'}</p>
               </div>
               <h2 id="client-focus-title" data-i18n-skip className="mt-4 max-w-[22ch] text-pretty text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-3xl">{focusTask.title}</h2>
-              <p data-i18n-skip className="mt-3 max-w-[62ch] text-pretty text-sm leading-6 text-muted">
-                {focusTask.description || (focusStage === 'needs_review' ? 'This delivery is ready for your decision.' : 'The agency team is preparing this delivery.')}
+              <p className="mt-3 max-w-[62ch] text-pretty text-sm leading-6 text-muted">
+                {focusTask.description ? <span data-i18n-skip>{focusTask.description}</span> : t(focusStage === 'needs_review' ? 'This delivery is ready for your decision.' : 'The agency team is preparing this delivery.')}
               </p>
               <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
                 <span data-i18n-skip className="font-medium text-ink">{focusTask.serviceType}</span>
-                <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{expectedDate(focusTask)}</span>
-                <span data-i18n-skip>{contactName(focusTask.assignedTo)}</span>
+                <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{expectedDate(focusTask, locale, t('Date to be confirmed'))}</span>
+                <span>{contactName(focusTask.assignedTo)}</span>
               </div>
               {focusStage === 'timing_changed' && (
                 <div className="mt-5 max-w-2xl rounded-control border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm leading-6 text-amber-900 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100">
                   <p className="font-semibold">Expected timing has changed</p>
-                  <p data-i18n-skip className="mt-1">{latestTeamComment?.text || `The current expected date is ${expectedDate(focusTask)}. ${contactName(focusTask.assignedTo)} is your contact for timing.`}</p>
+                  <p className="mt-1">{latestTeamComment?.text ? <span data-i18n-skip>{latestTeamComment.text}</span> : <>{t('The current expected date is')} {expectedDate(focusTask, locale, t('Date to be confirmed'))}. {contactName(focusTask.assignedTo)} {t('is your contact for timing.')}</>}</p>
                 </div>
               )}
               <Link to={taskPath(focusTask)} className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-control bg-accent px-5 text-sm font-semibold text-white shadow-[0_12px_28px_-18px_rgb(var(--calm-accent)/0.9)] transition duration-160 hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 active:translate-y-px dark:text-[rgb(var(--calm-accent-ink))]">
@@ -157,7 +162,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
         <section className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80" aria-labelledby="shared-updates-title">
           <header className="border-b border-line/70 px-4 py-4 sm:px-5"><div className="flex items-center gap-2"><MessageSquareText className="h-4 w-4 text-accent" /><h2 id="shared-updates-title" className="font-semibold text-ink">Shared updates</h2></div><p className="mt-1 text-sm text-muted">The latest movement across your deliveries.</p></header>
           <div className="divide-y divide-line/70">
-            {updates.map(task => <Link key={task.id} to={taskPath(task)} className="group flex min-h-16 items-center justify-between gap-4 px-4 py-3 transition-colors duration-160 hover:bg-inset sm:px-5"><span className="min-w-0"><span data-i18n-skip className="block truncate text-sm font-medium text-ink">{task.title}</span><span className="mt-1 block text-xs text-muted">{getClientDeliveryStageLabel(task)}</span></span><span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted"><Clock3 className="h-3.5 w-3.5" />{task.updatedAt ? formatDistanceToNow(new Date(task.updatedAt), { addSuffix: true }) : ''}</span></Link>)}
+            {updates.map(task => <Link key={task.id} to={taskPath(task)} className="group flex min-h-16 items-center justify-between gap-4 px-4 py-3 transition-colors duration-160 hover:bg-inset sm:px-5"><span className="min-w-0"><span data-i18n-skip className="block truncate text-sm font-medium text-ink">{task.title}</span><span className="mt-1 block text-xs text-muted">{getClientDeliveryStageLabel(task)}</span></span><span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted"><Clock3 className="h-3.5 w-3.5" />{task.updatedAt ? formatLocalizedDistanceToNow(new Date(task.updatedAt), locale) : ''}</span></Link>)}
             {updates.length === 0 && <p className="px-5 py-8 text-sm text-muted">Updates will appear as work progresses.</p>}
           </div>
         </section>
