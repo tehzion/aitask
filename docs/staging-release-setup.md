@@ -12,7 +12,7 @@ Set `VITE_AITASK_BACKEND=supabase`, the staging Supabase URL, and the staging pu
 
 Keep `master` as the canonical production branch in the `aitask` Vercel project. Protect `master` in GitHub so production changes arrive through reviewed pull requests, and require Quality and Security plus Authenticated Staging QA before merge. Disconnect the duplicate `aitask-master` project from Git so a single Vercel project owns the production alias.
 
-Add these GitHub secrets for Vercel: the account-scoped `VERCEL_TOKEN`, production `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`, plus `STAGING_VERCEL_ORG_ID` and `STAGING_VERCEL_PROJECT_ID`. The workflows pair the same account token with the explicit staging IDs, so staging remains a separate project. Add `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_PUBLISHABLE_KEY`, and `STAGING_SUPABASE_SERVICE_ROLE_KEY`; the service credential is used only by the fixture reset script and must never use a `VITE_` prefix. Set repository variables `VERCEL_CLI_VERSION` and `STAGING_SUPABASE_PROJECT_REF`.
+Add these GitHub secrets for Vercel: the production `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`, plus the staging-scoped `STAGING_VERCEL_TOKEN`, `STAGING_VERCEL_ORG_ID`, and `STAGING_VERCEL_PROJECT_ID`. The workflows expose the staging token only as the conventional `VERCEL_TOKEN` CLI environment variable, link the explicit staging project, and verify both credential and project before a build or deploy. The staging token must have access to the staging organization and project. Add `STAGING_SUPABASE_URL`, `STAGING_SUPABASE_PUBLISHABLE_KEY`, and `STAGING_SUPABASE_SERVICE_ROLE_KEY`; the service credential is used only by the fixture reset script and must never use a `VITE_` prefix. Set repository variables `VERCEL_CLI_VERSION` and `STAGING_SUPABASE_PROJECT_REF`.
 
 ## 3. Configure the staging QA fixture
 
@@ -31,10 +31,12 @@ those values after sign-in, verify Staff approval and successful hosted login,
 verify assigned-service access and denial for an unrelated client, and confirm
 that one Staff member cannot read another Staff member's assigned service data.
 
-If the staging Vercel project or token is unavailable, repair the account-scoped
-token and the explicit `STAGING_VERCEL_ORG_ID`/`STAGING_VERCEL_PROJECT_ID`
-secrets before merging. Do not substitute production project IDs or a production
-token; the workflow is expected to fail closed when staging access is ambiguous.
+If the staging Vercel preflight reports that the account is inaccessible, recreate
+`STAGING_VERCEL_TOKEN` from an account or service account that belongs to the
+staging organization, then set the matching `STAGING_VERCEL_ORG_ID` and
+`STAGING_VERCEL_PROJECT_ID` secrets before merging. Do not substitute production
+project IDs or a production token; the workflow is expected to fail closed when
+staging access is ambiguous.
 
 ## 4. Release and rollback
 
