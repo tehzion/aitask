@@ -4,6 +4,17 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [2.5.0] - 2026-09-11
+
+### Improved
+
+- Completed the Chinese interface across system navigation, task and project
+  flows, company and client workspaces, service delivery views, notifications,
+  feedback, empty states, accessibility labels, relative dates, and dashboard
+  summaries.
+- Kept Chinese date, count, status, and activity messages readable in the
+  context in which they appear, including responsive client-facing screens.
+
 ## [2.3.1] - 2026-09-11
 
 ### Security and reliability

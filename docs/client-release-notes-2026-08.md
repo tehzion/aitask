@@ -1,6 +1,12 @@
 # AiTask client release notes
 
-**Coverage:** the latest client releases: v2.3.1 (11 September 2026), v2.3.0 (10 September 2026), v2.2.0 (7 September 2026), v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+**Coverage:** the latest prepared release is v2.5.0 (11 September 2026), following deployed v2.3.1 (11 September 2026), v2.3.0 (10 September 2026), v2.2.0 (7 September 2026), v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+
+## v2.5.0 — prepared 11 September 2026
+
+- **A complete Chinese interface.** Chinese is now carried through the everyday product experience: navigation, task and project actions, company and client workspaces, service deliveries, notifications, feedback, empty states, and accessibility labels.
+- **Natural Chinese status updates.** Relative times, dates, counts, dashboard summaries, and task statuses now remain clear and consistent in Chinese across desktop and mobile layouts.
+- **No workflow change.** This release improves language coverage without changing client permissions, service scope, or existing task and delivery records.
 
 ## v2.3.1 — 11 September 2026
 
