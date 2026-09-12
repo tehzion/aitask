@@ -180,13 +180,22 @@ export const SegmentedTabs = <T extends string,>({ items, value, onChange, label
   const generatedId = React.useId().replace(/:/g, '');
   const prefix = idPrefix || `segmented-tabs-${generatedId}`;
   const tabsRef = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const pendingFocusId = React.useRef<T | null>(null);
 
   const selectAt = (index: number) => {
     const item = items[index];
     if (!item) return;
+    pendingFocusId.current = item.id;
     onChange(item.id);
-    tabsRef.current[index]?.focus();
   };
+
+  React.useLayoutEffect(() => {
+    if (!pendingFocusId.current || value !== pendingFocusId.current) return;
+    const index = items.findIndex(item => item.id === pendingFocusId.current);
+    if (index < 0) return;
+    tabsRef.current[index]?.focus();
+    pendingFocusId.current = null;
+  }, [items, value]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
     let nextIndex: number | undefined;

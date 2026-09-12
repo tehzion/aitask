@@ -4,6 +4,26 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [2.5.1] - 2026-09-12
+
+### Fixed
+
+- Restored HOD-created task visibility in Staff All Work after delegation while
+  keeping ordinary Staff limited to their assigned or explicitly permitted work.
+- Kept Chinese task filters bound to canonical status and priority values even
+  when their visible labels are translated.
+- Allowed keyboard users to select and review empty Staff queues without the
+  selection being reset after focus moves.
+- Queued permission-refresh events received during saves or pulls so access
+  changes are not silently dropped.
+
+### Release assurance
+
+- Added an explicit isolated Vercel project-link preflight with actionable
+  organization and project-access errors before staging builds or deploys.
+- No Supabase schema, RLS, production business data, or permission policy was
+  changed in this patch.
+
 ## [2.5.0] - 2026-09-11
 
 ### Improved

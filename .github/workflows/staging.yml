@@ -89,9 +89,16 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.STAGING_VERCEL_PROJECT_ID }}
         run: |
           node scripts/prepare-vercel-project-link.mjs
-          pnpm dlx "vercel@$VERCEL_CLI_VERSION" whoami --scope "$VERCEL_ORG_ID"
-          pnpm dlx "vercel@$VERCEL_CLI_VERSION" project inspect --scope "$VERCEL_ORG_ID"
-          pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --scope "$VERCEL_ORG_ID"
+          node scripts/verify-vercel-project-link.mjs
+          if ! pnpm dlx "vercel@$VERCEL_CLI_VERSION" whoami --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"; then
+            echo "The staging Vercel token cannot access organization $VERCEL_ORG_ID. Recreate STAGING_VERCEL_TOKEN from an account or service account in that organization." >&2
+            exit 1
+          fi
+          if ! pnpm dlx "vercel@$VERCEL_CLI_VERSION" project inspect --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"; then
+            echo "The staging Vercel token cannot inspect project $VERCEL_PROJECT_ID in organization $VERCEL_ORG_ID. Check STAGING_VERCEL_PROJECT_ID and token project access." >&2
+            exit 1
+          fi
+          pnpm dlx "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=production --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
 
       - name: Build and deploy staging candidate
         id: staging

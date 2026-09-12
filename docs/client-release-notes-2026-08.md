@@ -1,6 +1,15 @@
 # AiTask client release notes
 
-**Coverage:** the latest prepared release is v2.5.0 (11 September 2026), following deployed v2.3.1 (11 September 2026), v2.3.0 (10 September 2026), v2.2.0 (7 September 2026), v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+**Coverage:** the latest prepared release is v2.5.1 (12 September 2026), following prepared v2.5.0 (11 September 2026), deployed v2.3.1 (11 September 2026), v2.3.0 (10 September 2026), v2.2.0 (7 September 2026), v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+
+## v2.5.1 — prepared 12 September 2026
+
+- **More complete Staff and HOD work queues.** HOD-created tasks remain visible after delegation, while ordinary Staff still see only work allowed by their assignment and permissions.
+- **Reliable Chinese filters.** Translated status and priority labels now continue filtering the correct underlying task values.
+- **Steadier keyboard queue navigation.** Empty queues can be selected and reviewed without unexpectedly moving the user back to another tab.
+- **Safer permission refresh.** Changes to a member’s role or permissions received during a save are queued and applied after synchronization becomes idle.
+- **Clearer staging release failures.** The release workflow now validates the isolated Vercel organization/project link and explains which staging access setting needs correction.
+- **No data or permission-policy migration.** Existing records, Supabase schema, and production authorization rules are unchanged.
 
 ## v2.5.0 — prepared 11 September 2026
 

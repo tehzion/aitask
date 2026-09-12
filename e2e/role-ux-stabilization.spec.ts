@@ -49,16 +49,33 @@ test('Boss and Staff queues move focus with keyboard tabs', async ({ page }) => 
   await expect(nextStaffTab).toHaveAttribute('aria-selected', 'true');
   await expect(nextStaffTab).toBeFocused();
   await page.keyboard.press('End');
-  await expect(page.getByRole('tab', { name: /Done/ })).toBeFocused();
+  const doneTab = page.getByRole('tab', { name: /Done/ });
+  await expect(doneTab).toBeFocused();
+  await expect(doneTab).toHaveAttribute('aria-selected', 'true');
 
   await page.getByRole('button', { name: 'Logout' }).click();
   await signIn(page, 'Boss Koo');
+  await expect(page.getByRole('heading', { name: 'Super Admin Dashboard' })).toBeVisible();
   const bossTabs = page.getByRole('tablist', { name: 'Boss dashboard views' });
   await bossTabs.getByRole('tab', { name: 'Overview' }).focus();
   await page.keyboard.press('ArrowRight');
   const pulseTab = bossTabs.getByRole('tab', { name: 'Agency pulse' });
   await expect(pulseTab).toHaveAttribute('aria-selected', 'true');
   await expect(pulseTab).toBeFocused();
+});
+
+test('Chinese Staff filters keep canonical task values', async ({ page }) => {
+  await signIn(page, 'Staff Demo');
+  await page.evaluate(() => localStorage.setItem('aitask:locale', 'zh'));
+  await page.reload();
+  await page.goto('/tasks');
+
+  await page.getByRole('button', { name: '筛选' }).click();
+  const status = page.getByRole('combobox', { name: '按状态筛选' });
+  await expect(status).toBeVisible();
+  await status.selectOption({ label: '进行中' });
+  await expect(status).toHaveValue('In Progress');
+  await expect(page.getByText('6. Video Editing', { exact: true }).first()).toBeVisible();
 });
 
 test('Staff collapsed navigation is labelled and mobile layout remains accessible', async ({ page }) => {

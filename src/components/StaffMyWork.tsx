@@ -35,11 +35,6 @@ const StaffMyWork: React.FC = () => {
   const defaultBucket = queue.needs_action.length > 0 ? 'needs_action' : queue.up_next.length > 0 ? 'up_next' : queue.waiting.length > 0 ? 'waiting' : 'done';
   const [activeBucket, setActiveBucket] = React.useState<StaffWorkBucketKey>(defaultBucket);
 
-  React.useEffect(() => {
-    if (queue[activeBucket].length > 0) return;
-    setActiveBucket(defaultBucket);
-  }, [activeBucket, defaultBucket, queue]);
-
   const incompleteTaskIds = new Set(tasks.filter(task => !task.isCompleted && task.status !== 'Completed').map(task => task.id));
   const blockedCount = tasks.filter(task => (task.predecessorTaskIds || []).some(id => incompleteTaskIds.has(id))).length;
   const persona = getDashboardPersona(currentUser);

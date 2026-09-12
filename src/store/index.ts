@@ -82,6 +82,7 @@ import {
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
 import { getInitialLocale, translateUiText } from '../lib/i18n';
+import { createAccessRefreshCoordinator } from '../lib/accessRefresh';
 import {
   BACKEND_UPGRADE_REQUIRED_MESSAGE,
   discardRetainedSecureMemberMutation,
@@ -4974,12 +4975,24 @@ export const startBackendAutoSync = () => {
   backendAutoSyncStarted = true;
   let accessRealtimeCleanup: (() => void) | null = null;
   let accessRealtimeKey: string | null = null;
+  const accessRefresh = createAccessRefreshCoordinator(
+    () => {
+      const state = useStore.getState();
+      return {
+        hasCurrentUser: Boolean(state.currentUser),
+        isPulling: state.backend.isPulling,
+        isSaving: state.backend.isSaving,
+      };
+    },
+    () => useStore.getState().pullBackendNow({ force: true, silent: true }),
+  );
 
   const syncAccessRealtime = () => {
     const currentUser = useStore.getState().currentUser;
     const authUserId = currentUser?.authUserId;
     const key = authUserId ? `${authUserId}:${currentUser?.customRoleId || ''}` : null;
     if (key === accessRealtimeKey) return;
+    accessRefresh.reset();
     accessRealtimeCleanup?.();
     accessRealtimeCleanup = null;
     accessRealtimeKey = key;
@@ -4987,11 +5000,7 @@ export const startBackendAutoSync = () => {
     accessRealtimeCleanup = subscribeToCurrentMemberAccessChanges(
       authUserId,
       currentUser?.customRoleId,
-      () => {
-        const state = useStore.getState();
-        if (!state.currentUser || state.backend.isPulling || state.backend.isSaving) return;
-        void state.pullBackendNow({ force: true, silent: true });
-      },
+      accessRefresh.request,
     );
   };
 
@@ -5003,7 +5012,20 @@ export const startBackendAutoSync = () => {
     ) syncAccessRealtime();
   });
 
-  useStore.subscribe((state, previousState) => {
+  const unsubscribeBackendState = useStore.subscribe((state, previousState) => {
+    accessRefresh.onStateChange(
+      {
+        hasCurrentUser: Boolean(previousState.currentUser),
+        isPulling: previousState.backend.isPulling,
+        isSaving: previousState.backend.isSaving,
+      },
+      {
+        hasCurrentUser: Boolean(state.currentUser),
+        isPulling: state.backend.isPulling,
+        isSaving: state.backend.isSaving,
+      },
+    );
+
     if (!shouldUseSupabase() || state.backend.isLoading || state.backend.isPulling || isApplyingRemoteSnapshot || isApplyingNotificationRead) return;
 
     const workspaceChanged =
@@ -5139,9 +5161,11 @@ export const startBackendAutoSync = () => {
 
   backendAutoSyncCleanup = () => {
     unsubscribeAccessRealtime();
+    unsubscribeBackendState();
     accessRealtimeCleanup?.();
     accessRealtimeCleanup = null;
     accessRealtimeKey = null;
+    accessRefresh.reset();
     window.clearInterval(pullInterval);
     window.removeEventListener('focus', pullLatest);
     document.removeEventListener('visibilitychange', pullLatest);

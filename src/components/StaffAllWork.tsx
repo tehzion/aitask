@@ -35,7 +35,7 @@ const StaffAllWork: React.FC = () => {
   const [dueTo, setDueTo] = React.useState('');
 
   const tasks = React.useMemo(
-    () => getVisibleTasks(currentUser, allTasks, rolePermissions).filter(task => task.assignedTo === currentUser?.id),
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
     [allTasks, currentUser, rolePermissions],
   );
   const queue = React.useMemo(() => buildStaffWorkQueue(tasks, getTodayInputDate()), [tasks]);
@@ -85,20 +85,20 @@ const StaffAllWork: React.FC = () => {
       <PageHeader
         compact
         title="All work"
-        description="Every task assigned to you, ordered by what needs attention first."
+        description="Your visible work, ordered by what needs attention first."
         meta={<span className="calm-number">{filteredTasks.length} task{filteredTasks.length === 1 ? '' : 's'}</span>}
         action={<Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>}
       />
 
       <section aria-labelledby="staff-all-work-list" className="space-y-4">
-        <h2 id="staff-all-work-list" className="sr-only">Assigned task list</h2>
+        <h2 id="staff-all-work-list" className="sr-only">Visible task list</h2>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <input
             data-global-search
             data-staff-work-search
             type="search"
-            aria-label="Search assigned work"
+            aria-label="Search visible work"
             value={search}
             onChange={event => setSearch(event.target.value)}
             placeholder="Search tasks, clients, or services…"
@@ -125,21 +125,21 @@ const StaffAllWork: React.FC = () => {
 
         <Surface id={`all-work-panel-${bucket}`} role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={tasks} onOpen={item => setTaskId(item.id)} />)}
-          {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">No assigned work matches this view</p><p className="mt-1 text-sm text-muted">Clear a filter or choose another queue.</p></div>}
+          {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">No visible work matches this view</p><p className="mt-1 text-sm text-muted">Clear a filter or choose another queue.</p></div>}
         </Surface>
       </section>
 
       <SideSheet
         isOpen={filtersOpen}
         onClose={() => setFiltersOpen(false)}
-        title="Filter assigned work"
+        title="Filter visible work"
         description="Narrow your queue without manager-only controls."
         footer={<div className="flex gap-2"><Button variant="secondary" className="flex-1" onClick={clearFilters}>Clear</Button><Button className="flex-1" onClick={() => setFiltersOpen(false)}>Show {filteredTasks.length}</Button></div>}
       >
         <div className="space-y-5">
-          <label className="block text-sm font-medium text-ink">Client<select aria-label="Filter by client" value={client} onChange={event => setClient(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option>All</option>{clients.map(name => <option data-i18n-skip key={name}>{name}</option>)}</select></label>
-          <label className="block text-sm font-medium text-ink">Status<select aria-label="Filter by status" value={status} onChange={event => setStatus(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option>All</option>{taskStatuses.map(name => <option key={name}>{name}</option>)}</select></label>
-          <label className="block text-sm font-medium text-ink">Priority<select aria-label="Filter by priority" value={priority} onChange={event => setPriority(event.target.value as Priority | 'All')} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option>All</option>{priorities.map(name => <option key={name}>{name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">Client<select aria-label="Filter by client" value={client} onChange={event => setClient(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{clients.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">Status<select aria-label="Filter by status" value={status} onChange={event => setStatus(event.target.value as TaskStatus)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{taskStatuses.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">Priority<select aria-label="Filter by priority" value={priority} onChange={event => setPriority(event.target.value as Priority | 'All')} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{priorities.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
           <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium text-ink">Due from<input type="date" aria-label="Due from" value={dueFrom} onChange={event => setDueFrom(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`} /></label><label className="block text-sm font-medium text-ink">Due to<input type="date" aria-label="Due to" value={dueTo} onChange={event => setDueTo(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`} /></label></div>
         </div>
       </SideSheet>

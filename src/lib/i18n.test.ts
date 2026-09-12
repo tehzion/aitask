@@ -49,6 +49,8 @@ describe('Chinese UI translations', () => {
     expect(translateUiText('3 shown from 10 total, 4 linked tasks', 'zh')).toBe('显示 3 / 10 个，共关联 4 个任务');
     expect(translateUiText('Open delivery file', 'zh')).toBe('打开交付文件');
     expect(translateUiText('1 active revision', 'zh')).toBe('1 个进行中的版本');
+    expect(translateUiText('Your visible work, ordered by what needs attention first.', 'zh')).toBe('你可查看的工作，优先显示需要关注的事项。');
+    expect(translateUiText('Filter visible work', 'zh')).toBe('筛选可查看工作');
     expect(translateUiText('Website reference', 'zh')).toBe('网站参考');
     expect(translateUiText('The recovery service could not be reached. Please try again.', 'zh')).toBe('无法连接密码恢复服务，请重试。');
     expect(translateUiText('Files must be 100 MB or smaller.', 'zh')).toBe('文件大小必须不超过 100 MB。');
