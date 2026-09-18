@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { getMemberDepartments } from '../lib/departments';
 import { Bell, Search, Menu, CheckCircle2, Info, AlertCircle, FileText, X, Volume2, VolumeX, Keyboard, Moon, Sun, Monitor, ChevronDown } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { IconButton } from './ui';
 import { inputBase } from './uiTokens';
@@ -58,6 +58,7 @@ const Navbar: React.FC<NavbarProps> = ({
   const appearanceItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const mobileSearchRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const handleSoundPreference = (event: Event) => {
@@ -135,6 +136,7 @@ const Navbar: React.FC<NavbarProps> = ({
   const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : unreadNotifs.length;
   const previewNotifications = unreadNotifs.slice(0, 5);
   const isClient = currentUser?.role === 'Client';
+  const searchesCompanies = !isClient && location.pathname.startsWith('/clients');
 
   const handleBellClick = () => {
     setShowNotifs(!showNotifs);
@@ -144,7 +146,9 @@ const Navbar: React.FC<NavbarProps> = ({
     event.preventDefault();
     const query = globalSearch.trim();
     if (!query) return;
-    navigate(`/tasks?search=${encodeURIComponent(query)}`);
+    navigate(searchesCompanies
+      ? `/clients?search=${encodeURIComponent(query)}`
+      : `/tasks?search=${encodeURIComponent(query)}`);
     setShowMobileSearch(false);
   };
 
@@ -182,11 +186,11 @@ const Navbar: React.FC<NavbarProps> = ({
           </span>
           <input
             type="text"
-            aria-label={isClient ? 'Search deliveries' : 'Search tasks'}
+            aria-label={isClient ? 'Search deliveries' : searchesCompanies ? 'Search companies' : 'Search tasks'}
             aria-keyshortcuts="/"
             data-global-search
             className={cn(inputBase, 'border-transparent bg-inset py-2.5 pl-10 pr-3 shadow-none focus:bg-surface')}
-            placeholder={isClient ? 'Search deliveries…' : 'Search tasks...'}
+            placeholder={isClient ? 'Search deliveries…' : searchesCompanies ? 'Search companies…' : 'Search tasks...'}
             value={globalSearch}
             onChange={(event) => setGlobalSearch(event.target.value)}
           />
@@ -333,11 +337,11 @@ const Navbar: React.FC<NavbarProps> = ({
               ref={mobileSearchRef}
               type="text"
               autoFocus
-              aria-label={isClient ? 'Search deliveries' : 'Search tasks'}
+              aria-label={isClient ? 'Search deliveries' : searchesCompanies ? 'Search companies' : 'Search tasks'}
               aria-keyshortcuts="/"
               data-global-search
               className={cn(inputBase, 'py-2.5 pl-10 pr-3')}
-              placeholder={isClient ? 'Search deliveries…' : 'Search tasks...'}
+              placeholder={isClient ? 'Search deliveries…' : searchesCompanies ? 'Search companies…' : 'Search tasks...'}
               value={globalSearch}
               onChange={(event) => setGlobalSearch(event.target.value)}
             />

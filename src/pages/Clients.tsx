@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
   Building2,
@@ -150,7 +150,9 @@ const Clients: React.FC = () => {
     commitPendingMutation: state.commitPendingMutation,
     upgradeRequired: state.backend.upgradeRequired === true,
   })));
-  const [searchTerm, setSearchTerm] = React.useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const routeSearch = searchParams.get('search') || '';
+  const [searchTerm, setSearchTerm] = React.useState(routeSearch);
   const [selectedClientName, setSelectedClientName] = React.useState('');
   const [isEditingProfile, setIsEditingProfile] = React.useState(false);
   const [isRenamingClient, setIsRenamingClient] = React.useState(false);
@@ -165,6 +167,18 @@ const Clients: React.FC = () => {
   const [planClientId, setPlanClientId] = React.useState('');
   const [openMenuClientKey, setOpenMenuClientKey] = React.useState<string | null>(null);
   const clientDialogTitleId = React.useId();
+
+  React.useEffect(() => {
+    setSearchTerm(routeSearch);
+  }, [routeSearch]);
+
+  const updateSearch = (value: string) => {
+    setSearchTerm(value);
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set('search', value);
+    else next.delete('search');
+    setSearchParams(next, { replace: true });
+  };
 
   React.useEffect(() => {
     if (!openMenuClientKey) return;
@@ -512,7 +526,7 @@ const Clients: React.FC = () => {
               className={cn(inputBase, 'py-2.5 pl-10 pr-3')}
               placeholder="Search companies, contacts, addresses..."
               value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
+              onChange={(event) => updateSearch(event.target.value)}
             />
           </div>
           <p className="text-sm text-slate-500">
