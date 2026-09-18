@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   formatLocalizedDate,
   formatLocalizedDateTime,
@@ -117,5 +119,75 @@ describe('Chinese UI translations', () => {
     expect(formatLocalizedSyncTime(value, 'en')).toBe('18 Aug 2026, 14:05');
     expect(formatLocalizedSyncTime(new Date(2026, 7, 21, 9, 7), 'zh')).toBe('09:07');
     vi.useRealTimers();
+  });
+});
+
+const collectSourceFiles = (dir: string): string[] => {
+  const files: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules') continue;
+      files.push(...collectSourceFiles(fullPath));
+    } else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+};
+
+describe('Chinese translation coverage guards', () => {
+  it('keeps the corrected role and service terminology consistent', () => {
+    expect(translateUiText('Admin', 'zh')).toBe('项目经理');
+    expect(translateUiText('Project Manager', 'zh')).toBe('项目经理');
+    expect(translateUiText('Revision', 'zh')).toBe('修订');
+    expect(translateUiText('Revisions', 'zh')).toBe('修订');
+    expect(translateUiText('Task workflow', 'zh')).toBe('任务工作流');
+    expect(translateUiText('New workflow', 'zh')).toBe('新建工作流');
+    expect(translateUiText('Workflow Statuses', 'zh')).toBe('工作流状态');
+    expect(translateUiText('Deliverable', 'zh')).toBe('交付物');
+    expect(translateUiText('Done', 'zh')).toBe('已完成');
+    expect(translateUiText('Open tasks', 'zh')).toBe('未完成任务');
+  });
+
+  it('has no duplicate dictionary keys with conflicting translations', () => {
+    const source = readFileSync(join(process.cwd(), 'src', 'lib', 'i18n.ts'), 'utf8');
+    const lines = source.split('\n');
+    const followStart = lines.findIndex(line => line.startsWith('const zhCopyFollowups'));
+    const followEnd = lines.findIndex((line, index) => index > followStart && line.startsWith('};'));
+    const ranges: Array<[number, number]> = [[12, 377], [379, 567], [569, 1327], [1337, 1669], [followStart + 1, followEnd]];
+    const entry = /^\s{2}(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*:\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*,?\s*$/;
+    const seen = new Map<string, string>();
+    const conflicts: string[] = [];
+    for (const [start, end] of ranges) {
+      for (let i = start - 1; i < end; i += 1) {
+        const match = lines[i]?.match(entry);
+        if (!match) continue;
+        const key = match[1] ?? match[2] ?? '';
+        const value = match[3] ?? match[4] ?? '';
+        const previous = seen.get(key);
+        if (previous === undefined) seen.set(key, value);
+        else if (previous !== value) conflicts.push(key);
+      }
+    }
+    expect(conflicts).toEqual([]);
+  });
+
+  it('translates every explicit t() literal', () => {
+    const files = collectSourceFiles(join(process.cwd(), 'src'))
+      .filter(file => !/\.test\.tsx?$/.test(file) && !/lib\/i18n\.ts$/.test(file));
+    const literal = /\b(?:t|translateUiText)\(\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*\)/g;
+    const missing = new Set<string>();
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8');
+      let match: RegExpExecArray | null;
+      literal.lastIndex = 0;
+      while ((match = literal.exec(source))) {
+        const value = (match[1] ?? match[2] ?? '').trim();
+        if (value.length < 2) continue;
+        if (translateUiText(value, 'zh') === value) missing.add(value);
+      }
+    }
+    expect([...missing].sort()).toEqual([]);
   });
 });

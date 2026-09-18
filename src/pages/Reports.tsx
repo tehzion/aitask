@@ -92,7 +92,7 @@ const Reports: React.FC = () => {
                 <Legend iconType="circle" wrapperStyle={{fontSize: '12px'}} />
                 <Line type="monotone" dataKey="onTime" name="On time" stroke={chartColors.onTime} strokeWidth={3} activeDot={{ r: 8 }} />
                 <Line type="monotone" dataKey="late" name="Late" stroke={chartColors.late} strokeWidth={3} />
-                <Line type="monotone" dataKey="open" name="Open" stroke={chartColors.open} strokeWidth={3} />
+                <Line type="monotone" dataKey="open" name="Open tasks" stroke={chartColors.open} strokeWidth={3} />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -112,7 +112,7 @@ const Reports: React.FC = () => {
                 <Legend iconType="circle" wrapperStyle={{fontSize: '12px'}} />
                 <Bar dataKey="onTime" name="On time" stackId="a" fill={chartColors.onTime} radius={[0, 0, 0, 0]} />
                 <Bar dataKey="late" name="Late" stackId="a" fill={chartColors.late} radius={[0, 0, 0, 0]} />
-                <Bar dataKey="open" name="Open" stackId="a" fill={chartColors.open} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="open" name="Open tasks" stackId="a" fill={chartColors.open} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
