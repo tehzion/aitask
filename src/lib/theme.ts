@@ -42,7 +42,7 @@ export const applyTheme = (preference: ThemePreference): ResolvedTheme => {
   root.style.colorScheme = resolved;
 
   const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  themeColor?.setAttribute('content', resolved === 'dark' ? '#101618' : '#1D6B5D');
+  themeColor?.setAttribute('content', resolved === 'dark' ? '#101618' : '#E5231B');
   return resolved;
 };
 

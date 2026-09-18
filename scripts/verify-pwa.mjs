@@ -22,7 +22,7 @@ assert.equal(manifest.short_name, 'AiTask');
 assert.equal(manifest.start_url, '/');
 assert.equal(manifest.scope, '/');
 assert.equal(manifest.display, 'standalone');
-assert.equal(manifest.theme_color, '#1D6B5D');
+assert.equal(manifest.theme_color, '#E5231B');
 assert.equal(manifest.background_color, '#F4F6F8');
 
 const iconContracts = new Set(manifest.icons.map(icon => `${icon.src}|${icon.sizes}|${icon.purpose}`));
@@ -32,7 +32,7 @@ assert(iconContracts.has('/pwa-maskable-512x512.png|512x512|maskable'));
 
 assert.match(indexHtml, /<link rel="manifest" href="\/manifest[.]webmanifest"/);
 assert.match(indexHtml, /<link rel="apple-touch-icon" href="\/apple-touch-icon[.]png"/);
-assert.match(indexHtml, /<meta name="theme-color" content="#1D6B5D"/);
+assert.match(indexHtml, /<meta name="theme-color" content="#E5231B"/);
 assert.match(indexHtml, /id="root"/);
 assert.equal(buildInfo.version, packageJson.version, 'Build-info version must match package.json.');
 assert.match(buildInfo.commit || '', /^[0-9a-f]{7,40}$/i, 'Build-info must include the Git commit.');

@@ -11,7 +11,7 @@
 :root {
   /* Asset revision marker: changing this value forces a fresh hashed
      stylesheet URL so clients that cached a broken asset response recover. */
-  --aitask-asset-revision: 2026-09-18-2;
+  --aitask-asset-revision: 2026-09-18-3;
   --calm-canvas:      247 248 248;
   --calm-surface:     255 255 255;
   --calm-inset:       239 243 242;
@@ -19,9 +19,9 @@
   --calm-ink:         23 33 38;
   --calm-muted:       95 108 111;
   --calm-line:        220 227 225;
-  --calm-accent:      29 107 93;
-  --calm-accent-soft: 228 241 237;
-  --calm-accent-ink:  8 34 28;
+  --calm-accent:      229 35 27;
+  --calm-accent-soft: 253 231 229;
+  --calm-accent-ink:  74 11 8;
   --calm-success:     20 113 81;
   --calm-success-soft: 225 244 236;
   --calm-warning:     150 95 18;
@@ -34,10 +34,10 @@
   --color-border:    #dce3e1;
   --color-text:      #172126;
   --color-muted:     #5f6c6f;
-  --color-primary:   #1d6b5d;
-  --color-primary-h: #17574b;
-  --color-primary-l: #e4f1ed;
-  --color-accent:    #1d6b5d;
+  --color-primary:   #e5231b;
+  --color-primary-h: #c11c15;
+  --color-primary-l: #fde7e5;
+  --color-accent:    #e5231b;
 
   font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   line-height: 1.5;
@@ -65,9 +65,9 @@ html.dark {
   --calm-ink:         237 243 241;
   --calm-muted:       169 182 181;
   --calm-line:        50 64 65;
-  --calm-accent:      121 191 174;
-  --calm-accent-soft: 29 66 57;
-  --calm-accent-ink:  8 28 23;
+  --calm-accent:      248 113 113;
+  --calm-accent-soft: 74 24 22;
+  --calm-accent-ink:  40 6 5;
   --calm-success:     113 205 165;
   --calm-success-soft: 22 70 55;
   --calm-warning:     239 193 101;
@@ -80,10 +80,10 @@ html.dark {
   --color-border:    #324041;
   --color-text:      #edf3f1;
   --color-muted:     #a9b6b5;
-  --color-primary:   #79bfae;
-  --color-primary-h: #9bd1c3;
-  --color-primary-l: #1d4239;
-  --color-accent:    #79bfae;
+  --color-primary:   #f87171;
+  --color-primary-h: #fca5a5;
+  --color-primary-l: #4a1816;
+  --color-accent:    #f87171;
 }
 
 /* ── Global workspace background ──────────────────────────────────── */

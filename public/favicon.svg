@@ -1,6 +1,6 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect width="512" height="512" fill="#F6F7F9"/>
-  <rect x="36" y="36" width="440" height="440" rx="96" fill="#2563EB"/>
+  <rect x="36" y="36" width="440" height="440" rx="96" fill="#E5231B"/>
   <path fill-rule="evenodd" clip-rule="evenodd" d="M112 352L190 160H230L308 352H258L242 309H178L162 352H112ZM195 264H225L210 221L195 264Z" fill="white"/>
   <path d="M272 160H416V207H369V352H319V207H272V160Z" fill="white"/>
 </svg>

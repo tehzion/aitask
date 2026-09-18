@@ -70,11 +70,11 @@ const Dashboard: React.FC = () => {
     return {
       grid: themeTokenColor('--calm-line', '#e2e8f0'),
       tick: themeTokenColor('--calm-muted', '#64748b'),
-      accent: themeTokenColor('--calm-accent', '#1d6b5d'),
+      accent: themeTokenColor('--calm-accent', '#e5231b'),
       cursor: themeTokenColor('--calm-inset', '#eff3f2'),
       surface: themeTokenColor('--calm-surface', '#ffffff'),
       series: [
-        themeTokenColor('--calm-accent', '#1d6b5d'),
+        themeTokenColor('--calm-accent', '#e5231b'),
         themeTokenColor('--calm-muted', '#5f6c6f'),
         themeTokenColor('--calm-line', '#dce3e1'),
       ],
