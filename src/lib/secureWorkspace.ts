@@ -1770,11 +1770,13 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
     }
   };
   const [members, entities, revision, notificationFeed] = await Promise.all([
-    loadPages<MemberRow>(() => supabase.from('aitask_members').select('*').eq('workspace_id', SECURE_WORKSPACE_ID)),
+    loadPages<MemberRow>(() => supabase.from('aitask_members').select('*').eq('workspace_id', SECURE_WORKSPACE_ID).order('id')),
     loadPages<EntityRow>(() => supabase.from('aitask_entities')
       .select('workspace_id,entity_type,entity_id,parent_id,data,version,updated_at')
       .eq('workspace_id', SECURE_WORKSPACE_ID)
-      .neq('entity_type', 'notification')),
+      .neq('entity_type', 'notification')
+      .order('entity_type')
+      .order('entity_id')),
     loadSecureWorkspaceRevision(),
     loadSecureNotificationPage({ limit: 50 }),
   ]);

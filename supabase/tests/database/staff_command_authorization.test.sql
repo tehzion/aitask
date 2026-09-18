@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(34);
 
 select has_function(
   'private',
@@ -146,6 +146,60 @@ select is(
   ) ->> 'ok')::boolean,
   true,
   'ordinary Staff can still create a task assigned to themselves'
+);
+
+-- Revoking the Staff/HOD Create tasks permission must be enforced server-side,
+-- beyond the creator-identity check in aitask_can_mutate_entity.
+reset role;
+update public.aitask_members
+set permissions = '{"createTasks": false}'::jsonb
+where workspace_id = 'pgtap-staff-authorization' and id = 'pgtap-staff-actor';
+set local role authenticated;
+
+select is(
+  (public.aitask_execute_command(
+    'pgtap-staff-authorization', gen_random_uuid(), 'task.create',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'task', 'entityId', 'pgtap-revoked-task',
+      'expectedVersion', 0, 'data', jsonb_build_object(
+        'id', 'pgtap-revoked-task', 'title', 'Revoked create task', 'clientName', 'Test Client',
+        'department', 'Designer', 'assignedTo', 'pgtap-staff-actor',
+        'createdBy', 'pgtap-staff-actor', 'status', 'Pending', 'visibility', 'internal'
+      )
+    ))
+  ) ->> 'ok')::boolean,
+  false,
+  'ordinary Staff with Create tasks revoked cannot create a task'
+);
+
+reset role;
+select is(
+  (select count(*)::integer from public.aitask_entities
+   where workspace_id = 'pgtap-staff-authorization'
+     and entity_type = 'task'
+     and entity_id = 'pgtap-revoked-task'),
+  0,
+  'the revoked task creation was not persisted'
+);
+update public.aitask_members
+set permissions = '{}'::jsonb
+where workspace_id = 'pgtap-staff-authorization' and id = 'pgtap-staff-actor';
+set local role authenticated;
+
+select is(
+  (public.aitask_execute_command(
+    'pgtap-staff-authorization', gen_random_uuid(), 'task.create',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'task', 'entityId', 'pgtap-restored-task',
+      'expectedVersion', 0, 'data', jsonb_build_object(
+        'id', 'pgtap-restored-task', 'title', 'Restored create task', 'clientName', 'Test Client',
+        'department', 'Designer', 'assignedTo', 'pgtap-staff-actor',
+        'createdBy', 'pgtap-staff-actor', 'status', 'Pending', 'visibility', 'internal'
+      )
+    ))
+  ) ->> 'ok')::boolean,
+  true,
+  'restoring default permissions re-enables self-assigned task creation'
 );
 
 select is(
