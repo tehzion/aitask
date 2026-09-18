@@ -9,6 +9,9 @@
 
 /* ── Calm Operations design tokens ─────────────────────────────────── */
 :root {
+  /* Asset revision marker: changing this value forces a fresh hashed
+     stylesheet URL so clients that cached a broken asset response recover. */
+  --aitask-asset-revision: 2026-09-18-2;
   --calm-canvas:      247 248 248;
   --calm-surface:     255 255 255;
   --calm-inset:       239 243 242;

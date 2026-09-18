@@ -107,7 +107,7 @@
   ],
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!assets/|sw\\.js|manifest\\.webmanifest|favicon\\.svg|apple-touch-icon\\.png|pwa-|build-info\\.json|workbox-|robots\\.txt).*)",
       "destination": "/index.html"
     }
   ]
