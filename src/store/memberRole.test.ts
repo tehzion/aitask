@@ -67,6 +67,14 @@ describe('member role assignment', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  it('blocks a Project Manager (non-Boss Admin) from changing roles', async () => {
+    const projectManager: User = { id: 'u-pm', name: 'Project Manager', role: 'Admin', departments: [], department: 'Management' };
+    useStore.setState({ currentUser: projectManager });
+    const result = await useStore.getState().changeMemberRole('u-target', 'Admin');
+    expect(result).toEqual({ ok: false, error: 'Only Boss Koo can change member roles.' });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it('allows Admin without departments and requires them for Staff', async () => {
     const adminNoDept: User = { id: 'u-admin2', name: 'Admin Two', role: 'Admin', departments: [], department: 'Management' };
     const staffNoDept: User = { id: 'u-staff2', name: 'Staff Two', role: 'Staff', departments: [], department: '' as Department };

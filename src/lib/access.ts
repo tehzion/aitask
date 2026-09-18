@@ -101,6 +101,10 @@ export const sanitizeNonSuperAdminPermissions = (permissions: RolePermissions): 
   return sanitized;
 };
 
+// Per-role defaults. Project Managers (role 'Admin') are scoped to the
+// companies/projects/clients they own, so their defaults intentionally omit
+// viewAllTasks/viewAllClients and any per-member override of those keys is
+// ignored by the scoped visibility functions; Boss Koo always sees everything.
 export const defaultRolePermissions: Record<Role, RolePermissions> = {
   Admin: makePermissions([
     'viewDashboard',
@@ -108,7 +112,6 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewCalendar',
     'viewProjects',
     'viewDeliveryTracker',
-    'manageAssignedClients',
     'viewReports',
     'viewApprovals',
     'viewSettings',
@@ -122,7 +125,6 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'manageClientPlans',
     'manageServiceCycles',
     'viewAllServiceClients',
-    'viewAssignedServiceClients',
     'viewServicePrices',
   ]),
   Staff: makePermissions([

@@ -451,6 +451,7 @@ const Approvals: React.FC = () => {
   };
 
   const handleChangeRole = async (user: User, value: string) => {
+    if (!superAdmin) return;
     setAssignmentError('');
     if (value === 'role:client') {
       setRoleCompanyUserId(user.id);
@@ -1192,7 +1193,7 @@ const Approvals: React.FC = () => {
                   <td className="px-6 py-4 min-w-[240px]">
                     {isBossKoo(u) ? (
                       <Badge tone="purple">Permanent Super Admin</Badge>
-                    ) : (
+                    ) : superAdmin ? (
                       <div className="space-y-2">
                         <select
                           aria-label={`Role for ${u.name}`}
@@ -1249,6 +1250,8 @@ const Approvals: React.FC = () => {
                           </>
                         )}
                       </div>
+                    ) : (
+                      <Badge tone="slate">{getEffectiveRoleName(u, rolePermissions)}</Badge>
                     )}
                     {!isBossKoo(u) && u.permissions && Object.keys(u.permissions).length > 0 && <Badge className="mt-2" tone="indigo">Custom access</Badge>}
                   </td>
