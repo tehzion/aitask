@@ -121,6 +121,10 @@ describe('inferSecureCommandType', () => {
     expect(inferSecureCommandType([operation('project', 'delete'), operation('task')])).toBe('workspace.patch');
   });
 
+  it('keeps a deliverable and its derived cycle update on the service RPC', () => {
+    expect(inferSecureCommandType([operation('deliverable'), operation('service_cycle')])).toBe('deliverable.manage');
+  });
+
   it('rejects command names that the Supabase RPC does not support', () => {
     expect(isSecureCommandType('task.update')).toBe(true);
     expect(isSecureCommandType('task_date_range')).toBe(false);

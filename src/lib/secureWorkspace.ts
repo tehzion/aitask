@@ -767,6 +767,23 @@ export const inferSecureCommandType = (operations: WorkspaceOperation[]): Secure
   const actions = new Set(operations.map(operation => operation.action));
   const only = (entityType: string) => entityTypes.size === 1 && entityTypes.has(entityType);
 
+  // A deliverable status update may also advance its parent cycle. The store
+  // subscription can save that paired change before its UI handler supplies a
+  // command type, so keep the whole operation on the service RPC.
+  const serviceEntityTypes = new Set([
+    'service_package', 'service_workflow_template', 'service_pricing_snapshot',
+    'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon',
+  ]);
+  if ([...entityTypes].every(entityType => serviceEntityTypes.has(entityType))) {
+    if (entityTypes.has('deliverable')) return 'deliverable.manage';
+    if (entityTypes.has('service_cycle')) return 'service_cycle.manage';
+    if (entityTypes.has('cycle_comment')) return 'cycle_comment.manage';
+    if (entityTypes.has('client_plan')) return 'client_plan.manage';
+    if (entityTypes.has('addon')) return 'addon.manage';
+    if (entityTypes.has('service_workflow_template')) return 'service_workflow.manage';
+    return 'service_package.manage';
+  }
+
   if (entityTypes.has('member')) return entityTypes.size === 1 && actions.size === 1 && actions.has('update')
     ? 'member.update'
     : 'member.manage';
@@ -2000,6 +2017,13 @@ export const retrySecureWorkspaceCommand = async (
     return { ok: false, code: 'NOT_FOUND', error: 'There is no command waiting to retry.' };
   }
   const command = { ...retryableCommand };
+  // Commands retained by older app builds can have a generic workspace.patch
+  // type even when every operation belongs to the service workspace. Upgrade
+  // the envelope before retrying so users can keep their intended change.
+  if (command.type === 'workspace.patch') {
+    const inferredType = inferSecureCommandType(command.operations);
+    if (inferredType !== 'workspace.patch') command.type = inferredType;
+  }
   if (command.operations.some(operation => operation.expectedVersion < 0)) {
     return { ok: false, code: 'CONFLICT', error: 'Review the latest record before retrying.' };
   }
