@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "production_aligned_through_20260918160000",
+  "status": "production_aligned_through_20260918190000",
   "metadataOnly": false,
-  "warning": "Production history is aligned through 20260918160000_admin_department_optional. Historical rollout repair remains prohibited.",
+  "warning": "Production history is aligned through 20260918190000_scope_project_manager_followups. Historical rollout repair remains prohibited.",
   "productionVerification": {
     "verifiedAt": "2026-09-11",
-    "historyThrough": "20260918160000_admin_department_optional",
+    "historyThrough": "20260918190000_scope_project_manager_followups",
     "historyAligned": true,
     "rolloutResult": {
       "approvedBaselineMatchedAfterRestore": true,
@@ -325,7 +325,10 @@
     "20260918130000_company_delete",
     "20260918140000_role_template_fixes",
     "20260918150000_member_role_assignment",
-    "20260918160000_admin_department_optional"
+    "20260918160000_admin_department_optional",
+    "20260918170000_delete_member_unassign_tasks",
+    "20260918180000_scope_project_manager_ownership",
+    "20260918190000_scope_project_manager_followups"
   ],
   "pendingProductionMigrations": []
 }

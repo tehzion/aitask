@@ -82,7 +82,7 @@ describe('client profile store authorization', () => {
   it('keeps global rename admin-only', () => {
     useStore.setState({ currentUser: makeStaff(true) });
     const result = useStore.getState().renameClient('Acme', 'Acme Global');
-    expect(result).toEqual({ ok: false, error: 'Only admins can rename clients.' });
+    expect(result).toEqual({ ok: false, error: 'Only Project Managers can rename their own companies.' });
     expect(useStore.getState().tasks[0]?.clientName).toBe('Acme');
   });
 
@@ -148,7 +148,7 @@ describe('client profile store authorization', () => {
       currentUser: makeStaff(true),
       clients: [{ id: 'CL-keep', clientName: 'Keep Co', createdAt: '2026-01-01', updatedAt: '2026-01-01' }],
     });
-    expect(useStore.getState().deleteClientProfile('CL-keep')).toEqual({ ok: false, error: 'You need permission to delete companies.' });
+    expect(useStore.getState().deleteClientProfile('CL-keep')).toEqual({ ok: false, error: 'You need permission to delete this company.' });
     expect(useStore.getState().clients).toHaveLength(1);
   });
 });

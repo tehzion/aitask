@@ -12,6 +12,7 @@ import {
 import { Link } from 'react-router-dom';
 import type { Department, Task, User } from '../types';
 import { getMemberDepartments } from '../lib/departments';
+import { getRoleDisplayName } from '../lib/access';
 import {
   getTeamMemberTaskGroups,
   getTeamWorkloadSummaries,
@@ -66,7 +67,7 @@ const MemberIdentity = ({ member }: { member: User }) => (
     )}
     <div className="min-w-0">
       <p data-i18n-skip className="truncate text-sm font-semibold text-slate-900">{member.name}</p>
-      <p className="truncate text-xs text-slate-500">{getMemberDepartments(member).join(' · ') || member.role}</p>
+      <p className="truncate text-xs text-slate-500">{getMemberDepartments(member).join(' · ') || getRoleDisplayName(member.role)}</p>
     </div>
   </div>
 );
@@ -398,7 +399,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
               <p className="text-xs font-medium text-blue-700">Team workload</p>
               <h3 id={titleId} data-autofocus tabIndex={-1} className="mt-1 truncate text-xl font-semibold text-slate-950 outline-none">{selectedSummary.member.name}</h3>
               <p id={descriptionId} className="mt-1 text-sm text-slate-500">
-                {getMemberDepartments(selectedSummary.member).join(' · ') || selectedSummary.member.role}
+                {getMemberDepartments(selectedSummary.member).join(' · ') || getRoleDisplayName(selectedSummary.member.role)}
               </p>
             </div>
             <button

@@ -9,7 +9,7 @@ import type { User } from '../types';
 import { getMemberDepartments } from '../lib/departments';
 import { Badge, Button, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
-import { canManageServiceCatalog, canManageTaskTemplates, getDefaultAccessiblePath, getEffectivePermissions, getEffectiveRoleName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
+import { canManageServiceCatalog, canManageTaskTemplates, getDefaultAccessiblePath, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
 import BackendFreshness from '../components/BackendFreshness';
@@ -83,6 +83,7 @@ const Settings: React.FC = () => {
     currentUser,
     tasks,
     projects,
+    clientProfiles,
     notifications,
     notificationUnreadCount,
     backend,
@@ -100,6 +101,7 @@ const Settings: React.FC = () => {
     currentUser: state.currentUser,
     tasks: state.tasks,
     projects: state.projects,
+    clientProfiles: state.clients,
     notifications: state.notifications,
     notificationUnreadCount: state.notificationUnreadCount,
     backend: state.backend,
@@ -196,8 +198,8 @@ const Settings: React.FC = () => {
   };
 
   const backendStatus = getBackendStatus();
-  const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions);
-  const visibleProjects = getVisibleProjects(currentUser, projects, tasks, rolePermissions);
+  const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { clients: clientProfiles, projects });
+  const visibleProjects = getVisibleProjects(currentUser, projects, tasks, rolePermissions, { clients: clientProfiles, projects });
   const effectivePermissions = getEffectivePermissions(currentUser, rolePermissions);
   const effectiveRoleName = getEffectiveRoleName(currentUser, rolePermissions);
   const enabledPermissions = Object.entries(effectivePermissions)
@@ -658,7 +660,7 @@ const Settings: React.FC = () => {
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Role</label>
                   <p className="font-semibold text-slate-900">{effectiveRoleName}</p>
-                  {currentUser?.customRoleId && <p className="mt-1 text-xs text-slate-500">Base role: {currentUser.role}</p>}
+                  {currentUser?.customRoleId && <p className="mt-1 text-xs text-slate-500">Base role: {getRoleDisplayName(currentUser.role)}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Department</label>
@@ -827,7 +829,7 @@ const Settings: React.FC = () => {
             </div>
             <div className="p-6 space-y-3 text-sm text-slate-600">
               <p><strong className="text-slate-800">Boss Koo:</strong> has super admin access to add members, manage users, approve registrations, companies, and all task workflows.</p>
-              <p><strong className="text-slate-800">Admin:</strong> can create and edit all tasks and companies.</p>
+              <p><strong className="text-slate-800">Project Manager:</strong> can create and edit their own projects, companies, and tasks.</p>
               <p><strong className="text-slate-800">Staff and Finance:</strong> can create tasks for internal teammates, update tasks assigned to them, and see companies they created or participate in.</p>
               <p><strong className="text-slate-800">Client:</strong> can view company tasks, calendar, reports, and review completed or waiting-approval work.</p>
               <div className="pt-3 border-t border-slate-100">

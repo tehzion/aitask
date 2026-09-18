@@ -8,7 +8,7 @@ import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { useI18n } from '../components/I18nProvider';
-import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getEffectivePermissions, getEffectiveRoleName, isBossKoo, permissionGroups, permissionLabels, SYSTEM_HOD_ROLE_ID } from '../lib/access';
+import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, isBossKoo, permissionGroups, permissionLabels, SYSTEM_HOD_ROLE_ID } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
@@ -953,7 +953,7 @@ const Approvals: React.FC = () => {
                   onChange={e => handleRoleBaseChange(e.target.value as Role)}
                   disabled={roleEditorId === SYSTEM_HOD_ROLE_ID}
                 >
-                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                  {ROLES.map(r => <option key={r} value={r}>{t(getRoleDisplayName(r))}</option>)}
                 </select>
               </div>
             </div>
@@ -1026,7 +1026,7 @@ const Approvals: React.FC = () => {
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Default roles</p>
               <div className="space-y-2">
-                {([['Admin', defaultRolePermissions.Admin, 'Full operational access. Account and role administration stays with Boss Koo.'],
+                {([['Project Manager', defaultRolePermissions.Admin, 'Full operational access. Account and role administration stays with Boss Koo.'],
                   ['HOD', rolePermissions.find(role => role.id === SYSTEM_HOD_ROLE_ID)?.permissions || defaultRolePermissions.Staff, 'Department lead. Sees and edits work in their own departments.'],
                   ['Staff', defaultRolePermissions.Staff, 'Standard employee access to assigned work.'],
                   ['Client', defaultRolePermissions.Client, 'Reviews and approves their company work.']] as const).map(([name, permissions, description]) => (
@@ -1056,7 +1056,7 @@ const Approvals: React.FC = () => {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 data-i18n-skip className="font-semibold text-slate-900">{customRole.name}</h3>
-                      <Badge tone="slate">Base: {customRole.baseRole}</Badge>
+                      <Badge tone="slate">Base: {t(getRoleDisplayName(customRole.baseRole))}</Badge>
                       {customRole.isProtected && <Badge tone="purple">Protected</Badge>}
                     </div>
                     {customRole.description && <p className="mt-1 text-sm text-slate-500">{customRole.description}</p>}
@@ -1116,11 +1116,6 @@ const Approvals: React.FC = () => {
             <h2 className="text-lg font-semibold text-slate-800">Active System Users</h2>
           </div>
         </div>
-        {deleteUserError && (
-          <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {deleteUserError}
-          </div>
-        )}
         {assignmentError && (
           <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {assignmentError}
@@ -1185,7 +1180,7 @@ const Approvals: React.FC = () => {
                         u.role === 'Client' ? 'bg-amber-100 text-amber-700' :
                         'bg-blue-100 text-blue-700'
                       }`}>
-                        {u.role}
+                        {t(getRoleDisplayName(u.role))}
                       </span>
                       {u.role === 'Client' ? (
                         <span className="text-sm font-medium text-slate-600">({u.companyName})</span>
@@ -1206,7 +1201,7 @@ const Approvals: React.FC = () => {
                           onChange={e => void handleChangeRole(u, e.target.value)}
                           disabled={isActionSaving}
                         >
-                          <option value="role:admin">Admin</option>
+                          <option value="role:admin">{t(getRoleDisplayName('Admin'))}</option>
                           <option value="role:hod">HOD</option>
                           <option value="role:staff">Staff</option>
                           <option value="role:client">Client</option>
@@ -1483,7 +1478,7 @@ const Approvals: React.FC = () => {
                       });
                     }}
                   >
-                    {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                    {ROLES.map(r => <option key={r} value={r}>{t(getRoleDisplayName(r))}</option>)}
                   </select>
                 </div>
                 <div>
@@ -1742,6 +1737,11 @@ const Approvals: React.FC = () => {
               <p className="text-sm text-slate-500">
                 Are you sure you want to permanently delete this user? They will immediately lose access to the system, and their assigned tasks will become unassigned. This action cannot be undone.
               </p>
+              {deleteUserError && (
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+                  {deleteUserError}
+                </div>
+              )}
             </div>
             <div className="px-6 py-4 bg-slate-50 flex gap-3 justify-center">
               <button 

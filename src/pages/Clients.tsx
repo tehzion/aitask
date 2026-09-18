@@ -22,7 +22,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { Badge, Button, PageHeader, ProgressBar, StatGroup, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
-import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfiles, canEditClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
@@ -209,15 +209,15 @@ const Clients: React.FC = () => {
   const canSeeAllClients = canViewAllClients(currentUser, rolePermissions);
   const isClientUser = currentUser?.role === 'Client';
   const visibleClientKeys = React.useMemo(() => new Set(
-    getVisibleClientNames(currentUser, allTasks, allProjects, rolePermissions).map(getClientKey)
-  ), [allProjects, allTasks, currentUser, rolePermissions]);
+    getVisibleClientNames(currentUser, allTasks, allProjects, rolePermissions, { clients: clientProfiles, projects: allProjects }).map(getClientKey)
+  ), [allProjects, allTasks, clientProfiles, currentUser, rolePermissions]);
   const tasks = React.useMemo(
-    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
-    [allTasks, currentUser, rolePermissions]
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects: allProjects }),
+    [allProjects, allTasks, clientProfiles, currentUser, rolePermissions]
   );
   const projects = React.useMemo(
-    () => getVisibleProjects(currentUser, allProjects, allTasks, rolePermissions),
-    [allProjects, allTasks, currentUser, rolePermissions]
+    () => getVisibleProjects(currentUser, allProjects, allTasks, rolePermissions, { clients: clientProfiles, projects: allProjects }),
+    [allProjects, allTasks, clientProfiles, currentUser, rolePermissions]
   );
   const canAddTasks = !upgradeRequired && canCreateTasks(currentUser, rolePermissions);
   const canAddProjects = !upgradeRequired && canManageProjects(currentUser, rolePermissions);
@@ -397,13 +397,13 @@ const Clients: React.FC = () => {
   }, [clientPlans, clients, deliverables, serviceCycles]);
   const getServiceContext = (client: ClientSummary) => serviceContextByClientKey.get(getClientKey(client.name)) ?? null;
   const selectedClientCanRename = selectedClient
-    ? !upgradeRequired && canRenameClient(currentUser)
+    ? !upgradeRequired && canRenameClient(currentUser, selectedClient.name, clientProfiles)
     : false;
   const selectedClientCanEditProfile = selectedClient
-    ? !upgradeRequired && canEditClientProfile(currentUser, selectedClient.name, allTasks, rolePermissions)
+    ? !upgradeRequired && canEditClientProfile(currentUser, selectedClient.name, allTasks, rolePermissions, clientProfiles)
     : false;
   const selectedClientCanDelete = Boolean(
-    selectedClient?.profile && !upgradeRequired && canDeleteClientProfiles(currentUser, rolePermissions),
+    selectedClient?.profile && !upgradeRequired && canDeleteClientProfile(currentUser, selectedClient.profile.clientName, clientProfiles, rolePermissions),
   );
 
   const openClientPanel = (client: ClientSummary, edit = false) => {
@@ -582,7 +582,7 @@ const Clients: React.FC = () => {
         const website = safeHttpsUrl(contact.website);
         const facebookPage = safeHttpsUrl(contact.facebookPage);
         const serviceContext = getServiceContext(client);
-        const canOpenWorkspace = canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions);
+        const canOpenWorkspace = canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles);
         const assignedTeam = Array.from(client.assignedUserIds)
           .map(userId => users.find(user => user.id === userId)?.name || userId)
           .filter(Boolean);
@@ -717,7 +717,7 @@ const Clients: React.FC = () => {
                 </div>
 
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                  {client.profile && canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions) && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>Workspace <ArrowRight className="h-4 w-4" /></Link>}
+                  {client.profile && canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles) && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>Workspace <ArrowRight className="h-4 w-4" /></Link>}
                   <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>
                     View tasks <ArrowRight className="h-4 w-4" />
                   </Link>

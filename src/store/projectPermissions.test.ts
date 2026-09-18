@@ -89,11 +89,11 @@ describe('company store authorization', () => {
 
     expect(rename).toEqual({
       ok: false,
-      error: 'Only an admin can edit this project while it contains tasks assigned to other staff.',
+      error: 'Only a Project Manager or Boss Koo can edit this project while it contains tasks assigned to other staff.',
     });
     expect(deletion).toEqual({
       ok: false,
-      error: 'Only an admin can delete this project while it contains tasks assigned to other staff.',
+      error: 'Only a Project Manager or Boss Koo can delete this project while it contains tasks assigned to other staff.',
     });
     expect(useStore.getState().projects[0]?.clientName).toBe('Acme');
     expect(useStore.getState().tasks[0]?.projectId).toBe(company.id);
@@ -113,7 +113,7 @@ describe('company store authorization', () => {
 
   it('creates separately named projects for an existing client and rejects duplicates', () => {
     const admin: User = { id: 'admin-project-owner', name: 'Admin', role: 'Admin', departments: ['Management'], department: 'Management' };
-    const client: ClientProfile = { id: 'client-project-owner', clientName: 'Acme', createdAt: '2026-09-10', updatedAt: '2026-09-10' };
+    const client: ClientProfile = { id: 'client-project-owner', clientName: 'Acme', createdBy: admin.id, createdAt: '2026-09-10', updatedAt: '2026-09-10' };
     useStore.setState({
       ...initialState,
       currentUser: admin,
@@ -153,7 +153,7 @@ describe('company store authorization', () => {
 
   it('preserves custom project names when the client is renamed', () => {
     const admin: User = { id: 'admin-project-rename', name: 'Admin', role: 'Admin', departments: ['Management'], department: 'Management' };
-    const client: ClientProfile = { id: 'client-project-rename', clientName: 'Acme', createdAt: '2026-09-10', updatedAt: '2026-09-10' };
+    const client: ClientProfile = { id: 'client-project-rename', clientName: 'Acme', createdBy: admin.id, createdAt: '2026-09-10', updatedAt: '2026-09-10' };
     const customProject: Project = { ...company, id: 'custom-project', clientId: client.id, clientName: 'Acme', projectName: 'Q4 Launch', createdBy: admin.id };
     useStore.setState({ ...initialState, currentUser: admin, users: [admin], clients: [client], projects: [customProject], tasks: [], rolePermissions: [] }, true);
 

@@ -1,7 +1,29 @@
-import { AppNotification, CustomRole, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
+import { AppNotification, ClientProfile, CustomRole, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
 import { getMemberDepartments, isMemberInDepartment } from './departments';
 
 export type DashboardPersona = 'boss' | 'admin' | 'operation' | 'account' | 'production' | 'client';
+
+/**
+ * Optional ownership context for scoped-role visibility. When supplied, a
+ * Project Manager (Admin) also sees tasks and projects that belong to the
+ * companies they created. Boss Koo is never scoped.
+ */
+export type VisibilityScope = {
+  clients?: ClientProfile[];
+  projects?: Project[];
+};
+
+const ownedClientKeys = (user: User, scope: VisibilityScope) => new Set(
+  (scope.clients || [])
+    .filter(client => client.createdBy === user.id)
+    .map(client => client.clientName.trim().toLowerCase())
+);
+
+const ownedProjectIds = (user: User, scope: VisibilityScope) => new Set(
+  (scope.projects || [])
+    .filter(project => project.createdBy === user.id)
+    .map(project => project.id)
+);
 
 export type AppPath = '/' | '/tasks' | '/calendar' | '/clients' | '/projects' | '/reports' | '/approvals' | '/settings';
 
@@ -86,8 +108,6 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewCalendar',
     'viewProjects',
     'viewDeliveryTracker',
-    'viewAllTasks',
-    'viewAllClients',
     'manageAssignedClients',
     'viewReports',
     'viewApprovals',
@@ -200,13 +220,18 @@ export const getAssignableCustomRoles = (userRole: Role, customRoles: CustomRole
   customRoles.filter(role => role.baseRole === userRole)
 );
 
+export const getRoleDisplayName = (role: Role | null | undefined) => {
+  if (!role) return '';
+  return role === 'Admin' ? 'Project Manager' : role;
+};
+
 export const getEffectiveRoleName = (user: User | null | undefined, customRoles: CustomRole[] = []) => {
   if (!user) return 'Unknown';
   if (isBossKoo(user)) return 'Super Admin';
   const customRole = user.customRoleId
     ? customRoles.find(role => role.id === user.customRoleId)
     : undefined;
-  return user.customRoleName || customRole?.name || user.role;
+  return user.customRoleName || customRole?.name || getRoleDisplayName(user.role);
 };
 
 export const hasPermission = (
@@ -249,74 +274,125 @@ export const canOpenServiceClient = (
   clientName: string,
   tasks: Task[] = [],
   customRoles: CustomRole[] = [],
+  profiles: ClientProfile[] = [],
 ) => {
   if (!user) return false;
-  if (user.role === 'Client') return getClientKey(user.companyName) === getClientKey(clientName);
-  if (isBossKoo(user) || user.role === 'Admin' || hasPermission(user, 'viewAllServiceClients', customRoles)) return true;
-  if (user.role !== 'Staff' || !hasPermission(user, 'viewAssignedServiceClients', customRoles)) return false;
   const clientKey = getClientKey(clientName);
+  if (user.role === 'Client') return getClientKey(user.companyName) === clientKey;
+  if (isBossKoo(user)) return true;
+  if (user.role === 'Admin') {
+    if (!clientKey) return false;
+    const ownsProfile = profiles.some(profile => profile.createdBy === user.id && getClientKey(profile.clientName) === clientKey);
+    if (ownsProfile) return true;
+    return tasks.some(task => (
+      getClientKey(task.clientName) === clientKey
+      && (task.createdBy === user.id || task.assignedTo === user.id)
+    ));
+  }
+  if (hasPermission(user, 'viewAllServiceClients', customRoles)) return true;
+  if (user.role !== 'Staff' || !hasPermission(user, 'viewAssignedServiceClients', customRoles)) return false;
   return Boolean(clientKey) && tasks.some(task => task.assignedTo === user.id && getClientKey(task.clientName) === clientKey);
 };
-export const canManageClientProfiles = (user: User | null | undefined) => Boolean(user && (isBossKoo(user) || user.role === 'Admin'));
+export const canManageClientProfiles = (
+  user: User | null | undefined,
+  clientName?: string,
+  profiles: ClientProfile[] = []
+) => {
+  if (!user) return false;
+  if (isBossKoo(user)) return true;
+  if (user.role !== 'Admin') return false;
+  if (!clientName) return true;
+  const profile = profiles.find(item => getClientKey(item.clientName) === getClientKey(clientName));
+  return profile?.createdBy === user.id;
+};
 export const canCreateClientProfiles = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   Boolean(user) && (isBossKoo(user) || user.role === 'Admin' || hasPermission(user, 'createClients', customRoles))
 );
 export const canDeleteClientProfiles = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   Boolean(user) && (isBossKoo(user) || user.role === 'Admin' || hasPermission(user, 'deleteClients', customRoles))
 );
+export const canDeleteClientProfile = (
+  user: User | null | undefined,
+  clientName: string,
+  profiles: ClientProfile[] = [],
+  customRoles: CustomRole[] = []
+) => {
+  if (isBossKoo(user)) return true;
+  if (user?.role === 'Admin') {
+    const profile = profiles.find(item => getClientKey(item.clientName) === getClientKey(clientName));
+    return profile?.createdBy === user.id;
+  }
+  return canDeleteClientProfiles(user, customRoles);
+};
 export const getClientKey = (value: string | null | undefined) => value?.trim().toLowerCase() || '';
 export const canEditClientProfile = (
   user: User | null | undefined,
   clientName: string,
   tasks: Task[] = [],
-  customRoles: CustomRole[] = []
+  customRoles: CustomRole[] = [],
+  profiles: ClientProfile[] = []
 ) => {
-  if (canManageClientProfiles(user)) return true;
-  if (user?.role !== 'Staff' || !hasPermission(user, 'manageAssignedClients', customRoles)) return false;
-
+  if (isBossKoo(user)) return true;
   const clientKey = getClientKey(clientName);
+  if (user?.role === 'Admin') {
+    const profile = profiles.find(item => getClientKey(item.clientName) === clientKey);
+    if (profile?.createdBy === user.id) return true;
+    if (profile) return false;
+    return Boolean(clientKey) && tasks.some(task => (
+      getClientKey(task.clientName) === clientKey && (task.createdBy === user.id || task.assignedTo === user.id)
+    ));
+  }
+  if (user?.role !== 'Staff' || !hasPermission(user, 'manageAssignedClients', customRoles)) return false;
   return Boolean(clientKey) && tasks.some(task => (
     task.assignedTo === user.id && getClientKey(task.clientName) === clientKey
   ));
 };
 export const canViewAllClients = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
-  Boolean(user && user.role !== 'Client' && (isBossKoo(user) || user.role === 'Admin' || hasPermission(user, 'viewAllClients', customRoles)))
+  Boolean(user && user.role !== 'Client' && (isBossKoo(user) || hasPermission(user, 'viewAllClients', customRoles)))
 );
 export const getVisibleClientNames = (
   user: User | null | undefined,
   tasks: Task[] = [],
   projects: Project[] = [],
-  customRoles: CustomRole[] = []
+  customRoles: CustomRole[] = [],
+  scope: VisibilityScope = {}
 ) => {
   if (!user) return [];
   if (user.role === 'Client') return user.companyName ? [user.companyName] : [];
 
-  if (canViewAllClients(user, customRoles)) {
-    return Array.from(new Map(
-      [
-        ...tasks.map(task => task.clientName),
-        ...projects.map(project => project.clientName),
-      ]
-        .map(name => name.trim())
-        .filter(Boolean)
-        .map(name => [getClientKey(name), name])
-    ).values()).sort((a, b) => a.localeCompare(b));
-  }
-
-  if (user.role !== 'Staff') return [];
-
-  const visibleTasks = getVisibleTasks(user, tasks, customRoles);
-  return Array.from(new Map(
-    visibleTasks
-      .map(task => task.clientName)
+  const collectNames = (names: string[]) => Array.from(new Map(
+    names
       .map(name => name.trim())
       .filter(Boolean)
       .map(name => [getClientKey(name), name])
   ).values()).sort((a, b) => a.localeCompare(b));
+
+  if (canViewAllClients(user, customRoles)) {
+    return collectNames([
+      ...tasks.map(task => task.clientName),
+      ...projects.map(project => project.clientName),
+    ]);
+  }
+
+  if (user.role === 'Admin') {
+    return collectNames([
+      ...(scope.clients || []).filter(client => client.createdBy === user.id).map(client => client.clientName),
+      ...getVisibleTasks(user, tasks, customRoles, scope).map(task => task.clientName),
+      ...getVisibleProjects(user, projects, tasks, customRoles, scope).map(project => project.clientName),
+    ]);
+  }
+
+  if (user.role !== 'Staff') return [];
+
+  return collectNames(
+    getVisibleTasks(user, tasks, customRoles, scope).map(task => task.clientName)
+  );
 };
 export const canRenameClient = (
-  user: User | null | undefined
-) => canManageClientProfiles(user);
+  user: User | null | undefined,
+  clientName?: string,
+  profiles: ClientProfile[] = []
+) => canManageClientProfiles(user, clientName, profiles);
 export const canAssignTasksToOthers = (
   user: User | null | undefined,
   customRoles: CustomRole[] = [],
@@ -345,11 +421,7 @@ export const canEditProject = (
   customRoles: CustomRole[] = []
 ) => {
   void customRoles;
-  return Boolean(user) && (
-    isBossKoo(user) ||
-    user?.role === 'Admin' ||
-    (user?.role === 'Staff' && project.createdBy === user.id)
-  );
+  return Boolean(user) && (isBossKoo(user) || project.createdBy === user.id);
 };
 export const canDeleteProject = canEditProject;
 export const canReviewTaskAsClient = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
@@ -415,11 +487,24 @@ export const getDefaultAccessiblePath = (
 export const getVisibleTasks = (
   user: User | null | undefined,
   tasks: Task[],
-  customRoles: CustomRole[] = []
+  customRoles: CustomRole[] = [],
+  scope: VisibilityScope = {}
 ) => {
   if (!user) return [];
   if (user.role === 'Client') return tasks.filter(task => getClientKey(task.clientName) === getClientKey(user.companyName) && task.visibility !== 'internal');
-  if (user.role === 'Admin' || isBossKoo(user) || canViewAllTasks(user, customRoles)) return tasks;
+  if (isBossKoo(user) || (user.role !== 'Admin' && canViewAllTasks(user, customRoles))) return tasks;
+  if (user.role === 'Admin') {
+    // Project Managers are scoped to their own work: tasks they created or are
+    // assigned, plus tasks inside the companies/projects they own.
+    const clientKeys = ownedClientKeys(user, scope);
+    const projectIds = ownedProjectIds(user, scope);
+    return tasks.filter(task => (
+      task.assignedTo === user.id
+      || task.createdBy === user.id
+      || clientKeys.has(getClientKey(task.clientName))
+      || (Boolean(task.projectId) && projectIds.has(task.projectId as string))
+    ));
+  }
   if (user.role === 'Staff') {
     const canManageCreated = hasPermission(user, 'manageCreatedTasks', customRoles);
     const departmentScoped = isDepartmentScopedUser(user, customRoles);
@@ -436,17 +521,26 @@ export const getVisibleProjects = (
   user: User | null | undefined,
   projects: Project[],
   tasks: Task[] = [],
-  customRoles: CustomRole[] = []
+  customRoles: CustomRole[] = [],
+  scope: VisibilityScope = {}
 ) => {
   if (!user) return [];
   if (user.role === 'Client') return projects.filter(project => getClientKey(project.clientName) === getClientKey(user.companyName));
-  if (user.role === 'Admin' || isBossKoo(user)) return projects;
+  if (isBossKoo(user)) return projects;
+  const visibleProjectIds = new Set(
+    getVisibleTasks(user, tasks, customRoles, scope)
+      .map(task => task.projectId)
+      .filter((id): id is string => Boolean(id))
+  );
+  if (user.role === 'Admin') {
+    const clientKeys = ownedClientKeys(user, scope);
+    return projects.filter(project => (
+      project.createdBy === user.id
+      || clientKeys.has(getClientKey(project.clientName))
+      || visibleProjectIds.has(project.id)
+    ));
+  }
   if (user.role === 'Staff') {
-    const visibleProjectIds = new Set(
-      getVisibleTasks(user, tasks, customRoles)
-        .map(task => task.projectId)
-        .filter((id): id is string => Boolean(id))
-    );
     return projects.filter(project => project.createdBy === user.id || visibleProjectIds.has(project.id));
   }
   return [];
@@ -467,9 +561,9 @@ export const getAssignableProjects = (
 /**
  * Task-to-project links are more restrictive than project listing: a Staff
  * member may use their own project (even before its first task), a project
- * already connected to work they can see, or an Admin-curated/legacy project
+ * already connected to work they can see, or a legacy/Boss-curated project
  * when they may create tasks. This keeps another Staff/HOD member's empty
- * project out of the task form.
+ * project, and another Project Manager's project, out of the task form.
  */
 export const canLinkTaskToProject = (
   user: User | null | undefined,
@@ -479,7 +573,8 @@ export const canLinkTaskToProject = (
   users: User[] = [],
 ) => {
   if (!user || user.role === 'Client') return false;
-  if (isBossKoo(user) || user.role === 'Admin') return true;
+  if (isBossKoo(user)) return true;
+  if (user.role === 'Admin') return project.createdBy === user.id;
   if (user.role !== 'Staff') return false;
   if (project.createdBy === user.id) return true;
 
@@ -494,7 +589,7 @@ export const canLinkTaskToProject = (
 
   if (!project.createdBy) return true;
   const creator = users.find(member => member.id === project.createdBy);
-  return Boolean(creator && (creator.role === 'Admin' || isBossKoo(creator)));
+  return Boolean(creator && isBossKoo(creator));
 };
 
 export const isNotificationVisible = (user: User | null | undefined, notification: AppNotification) => {

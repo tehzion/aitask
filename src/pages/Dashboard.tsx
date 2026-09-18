@@ -44,7 +44,7 @@ const StatCard = ({ title, value, icon: Icon, tone, to }: StatCardProps) => (
 );
 
 const Dashboard: React.FC = () => {
-  const { projects, tasks: allTasks, users, currentUser, rolePermissions, backend, setCreateTaskModalOpen, hasLocalServiceDemo, registrations, clientPlans, serviceCycles } = useStore(useShallow(state => ({
+  const { projects, tasks: allTasks, users, currentUser, rolePermissions, backend, setCreateTaskModalOpen, hasLocalServiceDemo, registrations, clientPlans, serviceCycles, clientProfiles } = useStore(useShallow(state => ({
     projects: state.projects,
     tasks: state.tasks,
     users: state.users,
@@ -56,13 +56,15 @@ const Dashboard: React.FC = () => {
     registrations: state.registrations,
     clientPlans: state.clientPlans,
     serviceCycles: state.serviceCycles,
+    clientProfiles: state.clients,
   })));
   const { t } = useI18n();
   const [bossTab, setBossTab] = useState<BossTab>('overview');
+  const [portfolioOwner, setPortfolioOwner] = useState('All');
 
   const tasks = useMemo(
-    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
-    [allTasks, currentUser, rolePermissions]
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
+    [allTasks, clientProfiles, currentUser, projects, rolePermissions]
   );
   const { resolvedTheme } = useColorTheme();
   const chartColors = useMemo(() => {
@@ -81,13 +83,71 @@ const Dashboard: React.FC = () => {
     };
   }, [resolvedTheme]);
   const visibleProjects = useMemo(
-    () => getVisibleProjects(currentUser, projects, allTasks, rolePermissions),
-    [allTasks, currentUser, projects, rolePermissions]
+    () => getVisibleProjects(currentUser, projects, allTasks, rolePermissions, { clients: clientProfiles, projects }),
+    [allTasks, clientProfiles, currentUser, projects, rolePermissions]
   );
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
   const companiesDashboardAction = getCompaniesDashboardAction(currentUser, rolePermissions);
   const hasTaskData = tasks.length > 0;
   const showBossOperations = isBossKoo(currentUser);
+
+  const portfolioOwners = useMemo(() => {
+    if (!showBossOperations) return [];
+    const ownerIds = new Set<string>();
+    projects.forEach(project => { if (project.createdBy) ownerIds.add(project.createdBy); });
+    clientProfiles.forEach(client => { if (client.createdBy) ownerIds.add(client.createdBy); });
+    return users
+      .filter(member => ownerIds.has(member.id))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [clientProfiles, projects, showBossOperations, users]);
+
+  const portfolioAllRows = useMemo(() => {
+    if (!showBossOperations) return [];
+    const ownerName = (ownerId?: string) => users.find(member => member.id === ownerId)?.name || t('Unassigned');
+    return [
+      ...clientProfiles.map(client => ({
+        id: `company-${client.id}`,
+        type: t('Company'),
+        company: client.clientName,
+        project: t('All projects'),
+        ownerId: client.createdBy,
+        owner: ownerName(client.createdBy),
+        to: `/clients/${encodeURIComponent(client.id)}`,
+      })),
+      ...projects.map(project => ({
+        id: `project-${project.id}`,
+        type: t('Project'),
+        company: project.clientName,
+        project: project.projectName,
+        ownerId: project.createdBy,
+        owner: ownerName(project.createdBy),
+        to: project.clientId ? `/clients/${encodeURIComponent(project.clientId)}` : '/projects',
+      })),
+    ];
+  }, [clientProfiles, projects, showBossOperations, t, users]);
+
+  const portfolioRows = useMemo(() => (
+    portfolioAllRows
+      .filter(row => (
+        portfolioOwner === 'All'
+        || (portfolioOwner === 'Unassigned' ? !row.ownerId : row.ownerId === portfolioOwner)
+      ))
+      .sort((left, right) => left.company.localeCompare(right.company) || left.project.localeCompare(right.project))
+  ), [portfolioAllRows, portfolioOwner]);
+
+  const portfolioOwnerCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    portfolioAllRows.forEach(row => {
+      const key = row.ownerId || 'Unassigned';
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return counts;
+  }, [portfolioAllRows]);
+
+  const portfolioHasUnassigned = useMemo(
+    () => portfolioAllRows.some(row => !row.ownerId),
+    [portfolioAllRows]
+  );
   const showStaffOperations = currentUser?.role === 'Staff';
   const showClientPortal = currentUser?.role === 'Client';
 
@@ -330,7 +390,7 @@ const Dashboard: React.FC = () => {
     <>
     <div className={pageShell}>
       <PageHeader
-        title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Admin' ? 'Admin Dashboard' : showClientPortal ? 'Home' : 'My Dashboard'}
+        title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Admin' ? 'Project Manager Dashboard' : showClientPortal ? 'Home' : 'My Dashboard'}
         description={showClientPortal
           ? `Your next decision, delivery timing, and shared updates for ${currentUser?.companyName || 'your company'}.`
           : dashboardDescription}
@@ -391,7 +451,7 @@ const Dashboard: React.FC = () => {
                   {currentUser?.role === 'Client'
                     ? 'Tasks for your company will appear here as soon as the team publishes or assigns them.'
                     : currentUser?.role === 'Staff'
-                      ? 'Work assigned to you will appear here. You can also create a task for an existing Admin-created company.'
+                      ? 'Work assigned to you will appear here. You can also create a task for an existing Project Manager-created company.'
                       : 'Demo tasks are cleared. Create the first real task so dashboards, calendars, notifications, and reports begin filling with live data.'}
                 </p>
               </div>
@@ -494,6 +554,63 @@ const Dashboard: React.FC = () => {
                 )}
 
                 <ServiceRoleDashboard />
+
+                <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="portfolio-monitor-title">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
+                    <div>
+                      <h2 id="portfolio-monitor-title" className="text-base font-semibold text-ink">{t('Client & project monitor')}</h2>
+                      <p className="mt-1 text-sm text-muted">{t('Every company and project with its Project Manager owner.')}</p>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-muted">
+                      <span>{t('Filter by owner')}</span>
+                      <select
+                        aria-label={t('Filter by owner')}
+                        value={portfolioOwner}
+                        onChange={event => setPortfolioOwner(event.target.value)}
+                        className="min-h-9 rounded-control border border-line bg-surface px-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent/35"
+                      >
+                        <option value="All">{t('All Project Managers')} ({portfolioAllRows.length})</option>
+                        {portfolioHasUnassigned && (
+                          <option value="Unassigned">{t('Unassigned')} ({portfolioOwnerCounts.get('Unassigned') || 0})</option>
+                        )}
+                        {portfolioOwners.map(owner => (
+                          <option key={owner.id} value={owner.id}>{owner.name} ({portfolioOwnerCounts.get(owner.id) || 0})</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  {portfolioRows.length === 0 ? (
+                    <p className="px-5 py-6 text-sm text-muted">{t('No companies or projects match this owner yet.')}</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[560px] text-left text-sm">
+                        <thead className="border-b border-line/60 bg-inset/40 text-xs uppercase tracking-wider text-muted">
+                          <tr>
+                            <th className="px-5 py-3 font-semibold">{t('Type')}</th>
+                            <th className="px-5 py-3 font-semibold">{t('Company')}</th>
+                            <th className="px-5 py-3 font-semibold">{t('Project')}</th>
+                            <th className="px-5 py-3 font-semibold">{t('Owner')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-line/50">
+                          {portfolioRows.slice(0, 50).map(row => (
+                            <tr key={row.id} className="hover:bg-inset/40">
+                              <td className="px-5 py-3 text-muted">{row.type}</td>
+                              <td className="px-5 py-3 font-medium text-ink">{row.company}</td>
+                              <td className="px-5 py-3 text-ink">
+                                <Link to={row.to} className="hover:text-accent">{row.project}</Link>
+                              </td>
+                              <td className="px-5 py-3 text-muted">{row.owner}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {portfolioRows.length > 50 && (
+                        <p className="px-5 py-3 text-xs text-muted">{t('Showing the first 50 entries.')}</p>
+                      )}
+                    </div>
+                  )}
+                </section>
 
                 {bossBriefing && bossBriefing.renewals.length > 0 && (
                   <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="renewals-title">

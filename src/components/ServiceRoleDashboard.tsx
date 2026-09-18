@@ -66,12 +66,12 @@ const ServiceRoleDashboard = () => {
   const canSeePrices = canViewServicePrices(store.currentUser, store.rolePermissions);
   const now = new Date();
   const visibleTasks = React.useMemo(
-    () => getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions),
-    [store.currentUser, store.rolePermissions, store.tasks],
+    () => getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }),
+    [store.currentUser, store.rolePermissions, store.tasks, store.clients, store.projects],
   );
   const visibleClientKeys = React.useMemo(() => new Set(
-    getVisibleClientNames(store.currentUser, store.tasks, store.projects, store.rolePermissions).map(getClientKey)
-  ), [store.currentUser, store.projects, store.rolePermissions, store.tasks]);
+    getVisibleClientNames(store.currentUser, store.tasks, store.projects, store.rolePermissions, { clients: store.clients, projects: store.projects }).map(getClientKey)
+  ), [store.currentUser, store.projects, store.rolePermissions, store.tasks, store.clients]);
   const serviceTasks = visibleTasks.filter(task => Boolean(task.clientId));
   const myTasks = serviceTasks.filter(task => task.assignedTo === store.currentUser?.id);
   const scopeTasks = persona === 'production' ? myTasks : persona === 'boss' ? visibleTasks : serviceTasks;

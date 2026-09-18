@@ -92,11 +92,11 @@ const DeliveryTracker: React.FC = () => {
   }, [requestedPeriod]);
 
   const visibleTasks = React.useMemo(
-    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
-    [allTasks, currentUser, rolePermissions],
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects }),
+    [allTasks, clients, currentUser, projects, rolePermissions],
   );
   const visibleClientNames = React.useMemo(() => {
-    const names = getVisibleClientNames(currentUser, allTasks, projects, rolePermissions);
+    const names = getVisibleClientNames(currentUser, allTasks, projects, rolePermissions, { clients, projects });
     if (canViewAllClients(currentUser, rolePermissions)) names.push(...clients.map(client => client.clientName));
     if (currentUser?.role === 'Client' && currentUser.companyName) names.push(currentUser.companyName);
     return Array.from(new Map(names.filter(Boolean).map(name => [name.trim().toLowerCase(), name.trim()])).values())

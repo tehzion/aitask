@@ -751,7 +751,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
               </div>
             ) : currentUser?.role === 'Staff' ? (
               <div className="p-4 bg-white border-t border-slate-200 text-sm text-slate-500 shrink-0">
-                Only the assigned staff member or an admin can add updates to this task.
+                Only the assigned staff member or a Project Manager can add updates to this task.
               </div>
             ) : currentUser?.role === 'Client' ? (
               <div className="p-4 bg-white border-t border-slate-200 text-sm text-slate-500 shrink-0">

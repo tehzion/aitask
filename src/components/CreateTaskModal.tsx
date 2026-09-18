@@ -6,7 +6,7 @@ import { Department, Priority, ServiceType, TaskVisibility } from '../types';
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
 import { getServiceOptions, hasChoice } from '../lib/choiceOptions';
-import { canAssignTasksToOthers, canCreateTasks, canManageProjects, getAssignableProjects, getVisibleTasks } from '../lib/access';
+import { canAssignTasksToOthers, canCreateTasks, canManageProjects, getAssignableProjects, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
 import { getMemberDepartments, isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
@@ -98,19 +98,24 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     [currentUser, projects, rolePermissions, tasks, users]
   );
   const visibleTasksForChoices = React.useMemo(
-    () => getVisibleTasks(currentUser, tasks, rolePermissions),
-    [currentUser, rolePermissions, tasks],
+    () => getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects }),
+    [clients, currentUser, projects, rolePermissions, tasks],
   );
   const selectedProject = projectId ? assignableProjects.find(project => project.id === projectId) : undefined;
   const linkedTaskContext = Boolean(createTaskInitialClientId || createTaskInitialClientName);
   const showCompanyLink = currentUser?.role !== 'Client' || linkedTaskContext;
-  const clientOptions = React.useMemo(
-    () => Array.from(new Map([
-      ...clients.map(client => client.clientName),
-      ...(selectedProject ? [selectedProject.clientName] : []),
-    ].map(name => [name.trim().toLowerCase(), name.trim()])).values()).sort((left, right) => left.localeCompare(right)),
-    [clients, selectedProject],
-  );
+  const clientOptions = React.useMemo(() => {
+    const visibilityScope = { clients, projects };
+    const visibleKeys = new Set(
+      getVisibleClientNames(currentUser, tasks, projects, rolePermissions, visibilityScope)
+        .map(name => name.trim().toLowerCase())
+    );
+    const names = clients
+      .filter(client => client.createdBy === currentUser?.id || visibleKeys.has(client.clientName.trim().toLowerCase()))
+      .map(client => client.clientName.trim());
+    if (selectedProject) names.push(selectedProject.clientName.trim());
+    return Array.from(new Set(names.filter(Boolean))).sort((left, right) => left.localeCompare(right));
+  }, [clients, currentUser, projects, rolePermissions, selectedProject, tasks]);
   const serviceOptions = React.useMemo(
     () => getServiceOptions(assignableProjects, visibleTasksForChoices),
     [assignableProjects, visibleTasksForChoices],
@@ -295,7 +300,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     const hasDeliverableContext = Boolean(createTaskInitialDeliverableId);
     if (isStaffTaskCreator && !projectId && !hasDeliverableContext) {
-      setFormError('Choose a company created by an Admin before creating this task.');
+      setFormError('Choose a company created by a Project Manager before creating this task.');
       return;
     }
 
@@ -446,7 +451,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     onChange={e => selectProject(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                   >
-                    <option value="">{isStaffTaskCreator ? 'Choose an Admin-created company' : 'No Company Link / Independent Task'}</option>
+                    <option value="">{isStaffTaskCreator ? 'Choose a Project Manager-created company' : 'No Company Link / Independent Task'}</option>
                     {assignableProjects.map(p => (
                       <option key={p.id} data-i18n-skip value={p.id}>{p.projectName} ({p.clientName})</option>
                     ))}

@@ -172,15 +172,6 @@ Deno.serve(async (request) => {
     if (!target) return json({ error: 'Member account not found' }, 404);
     if (target.is_super_admin) return json({ error: 'Protected Super Admin accounts cannot be deleted' }, 403);
 
-    const { count: assignedCount, error: assignedError } = await adminClient
-      .from('aitask_entities')
-      .select('entity_id', { count: 'exact', head: true })
-      .eq('workspace_id', actor.workspace_id)
-      .eq('entity_type', 'task')
-      .eq('assigned_to', targetMemberId);
-    if (assignedError) return json({ error: 'Unable to check assigned tasks' }, 500);
-    if ((assignedCount || 0) > 0) return json({ error: 'Reassign this member\'s tasks before deleting the account' }, 409);
-
     if (target.auth_user_id) {
       const { error: deleteAuthError } = await adminClient.auth.admin.deleteUser(target.auth_user_id);
       if (deleteAuthError && !/not found/i.test(deleteAuthError.message)) {

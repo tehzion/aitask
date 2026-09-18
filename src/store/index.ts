@@ -62,7 +62,7 @@ import {
   canCreateTasks,
   canCreateUsers,
   canCreateClientProfiles,
-  canDeleteClientProfiles,
+  canDeleteClientProfile,
   canDeleteUser,
   canManageProjects,
   canCommentOnTask,
@@ -3033,7 +3033,7 @@ export const useStore = create<StoreState>()(
         if (deadline && (!isValidIsoDate(deadline) || new Date(deadline) < new Date(startDate))) return '';
         if (!projectData.clientId) return '';
         const client = state.clients.find(item => item.id === projectData.clientId);
-        const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions).map(normalizeClientKey));
+        const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions, { clients: state.clients, projects: state.projects }).map(normalizeClientKey));
         if (!client || normalizeClientKey(client.clientName) !== normalizeClientKey(clientName) || (!canViewAllClients(currentUser, state.rolePermissions) && !visibleClientKeys.has(normalizeClientKey(clientName)))) return '';
         if (state.projects.some(item => {
           const sameClient = projectData.clientId && item.clientId
@@ -3087,7 +3087,7 @@ export const useStore = create<StoreState>()(
         const nextClientId = data.clientId !== undefined ? data.clientId : project.clientId;
         if (nextClientId) {
           const client = state.clients.find(item => item.id === nextClientId);
-          const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions).map(normalizeClientKey));
+          const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions, { clients: state.clients, projects: state.projects }).map(normalizeClientKey));
           if (!client || normalizeClientKey(client.clientName) !== normalizeClientKey(clientName) || (!canViewAllClients(currentUser, state.rolePermissions) && !visibleClientKeys.has(normalizeClientKey(clientName)))) {
             return { ok: false, error: 'You can only link this project to a company you can access.' };
           }
@@ -3118,7 +3118,7 @@ export const useStore = create<StoreState>()(
         if (identityChanged && linkedTasks.some(task => !canEditTask(currentUser, task, state.rolePermissions))) {
           return {
             ok: false,
-            error: 'Only an admin can edit this project while it contains tasks assigned to other staff.',
+            error: 'Only a Project Manager or Boss Koo can edit this project while it contains tasks assigned to other staff.',
           };
         }
 
@@ -3149,7 +3149,7 @@ export const useStore = create<StoreState>()(
         if (linkedTasks.some(task => !canEditTask(currentUser, task, state.rolePermissions))) {
           return {
             ok: false,
-            error: 'Only an admin can delete this project while it contains tasks assigned to other staff.',
+            error: 'Only a Project Manager or Boss Koo can delete this project while it contains tasks assigned to other staff.',
           };
         }
 
@@ -3213,7 +3213,7 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
-        if (!canEditClientProfile(currentUser, clientName, state.tasks, state.rolePermissions)) {
+        if (!canEditClientProfile(currentUser, clientName, state.tasks, state.rolePermissions, state.clients)) {
           return { ok: false, error: 'You need Manage assigned clients permission and a direct task assignment to edit this client.' };
         }
 
@@ -3231,6 +3231,7 @@ export const useStore = create<StoreState>()(
         const profile: ClientProfile = {
           id: existing?.id || nowId('CL'),
           clientName: existing?.clientName || name,
+          createdBy: existing?.createdBy || currentUser?.id,
           contactPerson: cleanProfileText(data.contactPerson, 160),
           email: cleanProfileText(data.email, 320),
           phone: cleanProfileText(data.phone, 80),
@@ -3265,8 +3266,8 @@ export const useStore = create<StoreState>()(
         if (!nextName) return { ok: false, error: 'New client name is required.' };
         if (nextName.length > 240) return { ok: false, error: 'Client name must be 240 characters or less.' };
         if (oldKey === nextKey) return { ok: false, error: 'New client name must be different.' };
-        if (!canRenameClient(currentUser)) {
-          return { ok: false, error: 'Only admins can rename clients.' };
+        if (!canRenameClient(currentUser, oldName, state.clients)) {
+          return { ok: false, error: 'Only Project Managers can rename their own companies.' };
         }
 
         const duplicateExists = [
@@ -3348,12 +3349,11 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
-        if (!canDeleteClientProfiles(currentUser, state.rolePermissions)) {
-          return { ok: false, error: 'You need permission to delete companies.' };
-        }
-
         const client = state.clients.find(c => c.id === clientId);
         if (!client) return { ok: false, error: 'Company not found.' };
+        if (!canDeleteClientProfile(currentUser, client.clientName, state.clients, state.rolePermissions)) {
+          return { ok: false, error: 'You need permission to delete this company.' };
+        }
 
         const clientKey = normalizeClientKey(client.clientName);
         const belongsToClient = (item: { clientId?: string; clientName?: string }) => (
@@ -3538,6 +3538,7 @@ export const useStore = create<StoreState>()(
         const client: ClientProfile = {
           id: clientId,
           clientName,
+          createdBy: actor?.id,
           contactPerson: cleanProfileText(data.contactPerson, 160),
           email: cleanProfileText(data.email, 320),
           phone: cleanProfileText(data.phone, 80),

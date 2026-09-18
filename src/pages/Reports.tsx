@@ -10,10 +10,10 @@ import { themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
 
 const Reports: React.FC = () => {
-  const { tasks: allTasks, currentUser, rolePermissions } = useStore();
+  const { tasks: allTasks, currentUser, rolePermissions, clients, projects } = useStore();
   const tasks = useMemo(
-    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
-    [allTasks, currentUser, rolePermissions]
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects }),
+    [allTasks, clients, currentUser, projects, rolePermissions]
   );
   const { resolvedTheme } = useColorTheme();
   const chartColors = useMemo(() => {

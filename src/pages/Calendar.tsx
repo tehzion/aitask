@@ -97,6 +97,8 @@ const Calendar: React.FC = () => {
     commitPendingMutation,
     retryPendingSave,
     discardMutation,
+    clientProfiles,
+    projects,
   } = useStore(useShallow(state => ({
     tasks: state.tasks,
     users: state.users,
@@ -108,6 +110,8 @@ const Calendar: React.FC = () => {
     commitPendingMutation: state.commitPendingMutation,
     retryPendingSave: state.retryPendingSave,
     discardMutation: state.discardMutation,
+    clientProfiles: state.clients,
+    projects: state.projects,
   })));
   const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -130,8 +134,8 @@ const Calendar: React.FC = () => {
   }, []);
 
   const tasks = useMemo(
-    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
-    [allTasks, currentUser, rolePermissions],
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
+    [allTasks, clientProfiles, currentUser, projects, rolePermissions],
   );
   const taskById = useMemo(() => new Map(tasks.map(task => [task.id, task])), [tasks]);
   const rangeByTaskId = useMemo(
