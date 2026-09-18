@@ -298,6 +298,73 @@ describe('staff permission matrix', () => {
     expect(canDeleteClientProfiles(hod, [hodRole])).toBe(true);
   });
 
+  it('gives Admin full operational access while keeping Boss-only keys protected', () => {
+    const perms = getEffectivePermissions(admin);
+    expect(perms.viewApprovals).toBe(true);
+    expect(perms.createClients).toBe(true);
+    expect(perms.deleteClients).toBe(true);
+    expect(perms.createProjects).toBe(true);
+    expect(perms.manageServiceCycles).toBe(true);
+    expect(perms.editTasks).toBe(false);
+    expect(perms.manageUsers).toBe(false);
+    expect(perms.approveRegistrations).toBe(false);
+    expect(perms.deleteUsers).toBe(false);
+    expect(perms.viewProductionReports).toBe(false);
+    expect(getEffectivePermissions(superAdmin).viewApprovals).toBe(true);
+  });
+
+  it('scopes the HOD role to its own departments for visibility and editing', () => {
+    const hodRole: CustomRole = {
+      id: SYSTEM_HOD_ROLE_ID,
+      name: 'HOD',
+      baseRole: 'Staff',
+      permissions: { ...defaultRolePermissions.Staff, manageCreatedTasks: true },
+      createdAt: '2026-07-13T00:00:00.000Z',
+      updatedAt: '2026-07-13T00:00:00.000Z',
+    };
+    const designTask = makeTask({ id: 'design-dept-task', department: 'Designer', assignedTo: otherStaff.id, createdBy: otherStaff.id });
+    const videoTask = makeTask({ id: 'video-dept-task', department: 'Video Editor', assignedTo: otherStaff.id, createdBy: otherStaff.id });
+    const hod: User = { ...staff, customRoleId: hodRole.id, permissions: {} as User['permissions'] };
+
+    expect(getVisibleTasks(hod, [designTask, videoTask], [hodRole]).map(task => task.id)).toEqual(['design-dept-task']);
+    expect(canEditTask(hod, designTask, [hodRole])).toBe(true);
+    expect(canEditTask(hod, videoTask, [hodRole])).toBe(false);
+  });
+
+  it('honours an opt-in department-scoped custom role only when enabled', () => {
+    const scopedRole: CustomRole = {
+      id: 'dept-scoped-role',
+      name: 'Department Lead',
+      baseRole: 'Staff',
+      departmentScoped: true,
+      permissions: { ...defaultRolePermissions.Staff },
+      createdAt: '2026-07-13T00:00:00.000Z',
+      updatedAt: '2026-07-13T00:00:00.000Z',
+    };
+    const designTask = makeTask({ id: 'd', department: 'Designer', assignedTo: otherStaff.id, createdBy: otherStaff.id });
+    const scopedUser: User = { ...staff, customRoleId: scopedRole.id, permissions: {} as User['permissions'] };
+    expect(getVisibleTasks(scopedUser, [designTask], [scopedRole]).map(task => task.id)).toEqual(['d']);
+
+    const plainRole: CustomRole = { ...scopedRole, id: 'plain-role', departmentScoped: false };
+    const plainUser: User = { ...staff, customRoleId: plainRole.id, permissions: {} as User['permissions'] };
+    expect(getVisibleTasks(plainUser, [designTask], [plainRole])).toEqual([]);
+  });
+
+  it('layers a member permission override on top of the custom role grants', () => {
+    const role: CustomRole = {
+      id: 'layered-role',
+      name: 'Layered',
+      baseRole: 'Staff',
+      permissions: { ...defaultRolePermissions.Staff, viewAllClients: true },
+      createdAt: '2026-07-13T00:00:00.000Z',
+      updatedAt: '2026-07-13T00:00:00.000Z',
+    };
+    const user: User = { ...staff, customRoleId: role.id, permissions: { viewAllTasks: true } as User['permissions'] };
+    const perms = getEffectivePermissions(user, [role]);
+    expect(perms.viewAllClients).toBe(true);
+    expect(perms.viewAllTasks).toBe(true);
+  });
+
   it('chooses the first permitted page when Dashboard and Settings are disabled', () => {
     const taskOnlyStaff: User = {
       ...staff,
@@ -417,7 +484,7 @@ describe('staff permission matrix', () => {
     expect(effective.viewProductionReports).toBe(false);
   });
 
-  it('gives the protected HOD scope to created and assigned tasks only', () => {
+  it('gives the protected HOD scope to created, assigned, and department tasks', () => {
     const hodRole: CustomRole = {
       id: SYSTEM_HOD_ROLE_ID,
       name: 'HOD',
@@ -430,13 +497,15 @@ describe('staff permission matrix', () => {
     const hod: User = { ...staff, customRoleId: hodRole.id, customRoleName: hodRole.name };
     const createdAndReassigned = makeTask({ id: 'hod-created', createdBy: hod.id, assignedTo: otherStaff.id });
     const assignedToHod = makeTask({ id: 'hod-assigned', createdBy: otherStaff.id, assignedTo: hod.id });
-    const unrelated = makeTask({ id: 'hod-unrelated', createdBy: otherStaff.id, assignedTo: otherStaff.id });
-    const visible = getVisibleTasks(hod, [createdAndReassigned, assignedToHod, unrelated], [hodRole]);
+    const sameDepartment = makeTask({ id: 'hod-unrelated', createdBy: otherStaff.id, assignedTo: otherStaff.id });
+    const otherDepartment = makeTask({ id: 'hod-other-dept', department: 'Video Editor', createdBy: otherStaff.id, assignedTo: otherStaff.id });
+    const visible = getVisibleTasks(hod, [createdAndReassigned, assignedToHod, sameDepartment, otherDepartment], [hodRole]);
 
-    expect(visible.map(task => task.id)).toEqual(['hod-created', 'hod-assigned']);
+    expect(visible.map(task => task.id)).toEqual(['hod-created', 'hod-assigned', 'hod-unrelated']);
     expect(canEditTask(hod, createdAndReassigned, [hodRole])).toBe(true);
     expect(canEditTask(hod, assignedToHod, [hodRole])).toBe(true);
-    expect(canEditTask(hod, unrelated, [hodRole])).toBe(false);
+    expect(canEditTask(hod, sameDepartment, [hodRole])).toBe(true);
+    expect(canEditTask(hod, otherDepartment, [hodRole])).toBe(false);
     expect(canAssignTasksToOthers(hod, [hodRole], createdAndReassigned)).toBe(true);
     expect(canAssignTasksToOthers(hod, [hodRole], assignedToHod)).toBe(false);
   });

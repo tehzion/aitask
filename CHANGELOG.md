@@ -4,6 +4,31 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [2.6.0] - 2026-09-18
+
+### Added
+
+- Admin role now includes the Approvals page and full company-management parity,
+  while the five protected Boss Koo keys (`editTasks`, `manageUsers`,
+  `approveRegistrations`, `deleteUsers`, `viewProductionReports`) remain
+  non-delegable.
+- HOD and opt-in custom roles are department-scoped: members see and edit tasks
+  in their own departments. Custom roles expose a "Limit this role to its
+  departments" option.
+- Company delete cascades to the company's projects, tasks, plans, cycles,
+  deliverables, comments, add-ons, and pricing snapshots.
+
+### Fixed
+
+- Per-member permission overrides can now persist `createClients` and
+  `deleteClients`; the server previously dropped them.
+- Member overrides layer on top of the member's custom role instead of silently
+  replacing it.
+- Admin can edit and delete any project server-side (matching the UI).
+- Restored the HOD `manageCreatedTasks` invariant in the custom-role guard.
+
+See `docs/role-templates.md` for the full capability matrix.
+
 ## [2.5.1] - 2026-09-12
 
 ### Fixed

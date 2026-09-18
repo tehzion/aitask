@@ -317,7 +317,7 @@ interface StoreState {
   updateMemberDepartments: (userId: string, departments: Department[]) => Promise<{ ok: boolean; error?: string }>;
   updateMemberPermissions: (userId: string, permissions?: RolePermissions) => Promise<{ ok: boolean; error?: string }>;
   addCustomRole: (data: Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt' | 'isProtected'>) => { ok: boolean; id?: string; error?: string };
-  updateCustomRole: (id: string, data: Partial<Pick<CustomRole, 'name' | 'description' | 'baseRole' | 'permissions'>>) => { ok: boolean; error?: string };
+  updateCustomRole: (id: string, data: Partial<Pick<CustomRole, 'name' | 'description' | 'baseRole' | 'permissions' | 'departmentScoped'>>) => { ok: boolean; error?: string };
   deleteCustomRole: (id: string) => { ok: boolean; error?: string };
   assignCustomRoleToUser: (userId: string, customRoleId?: string) => { ok: boolean; error?: string };
   approveRegistration: (id: string, role: Role, departments: Department[], companyName?: string, customRoleId?: string) => { ok: boolean; error?: string };
@@ -4377,6 +4377,7 @@ export const useStore = create<StoreState>()(
                   permissions: nextPermissions,
                   name: nextName,
                   baseRole: editingHod ? 'Staff' : data.baseRole || role.baseRole,
+                  departmentScoped: editingHod ? true : (data.departmentScoped ?? role.departmentScoped),
                   isProtected: editingHod ? true : role.isProtected,
                   description: data.description?.trim() || undefined,
                   updatedAt: new Date().toISOString(),

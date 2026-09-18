@@ -90,6 +90,7 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewAllClients',
     'manageAssignedClients',
     'viewReports',
+    'viewApprovals',
     'viewSettings',
     'createTasks',
     'manageCreatedTasks',
@@ -166,7 +167,12 @@ export const getEffectivePermissions = (
   const directPermissions = user.permissions && Object.keys(user.permissions).length > 0
     ? user.permissions
     : undefined;
-  const source = directPermissions || customRole?.permissions || defaultRolePermissions[user.role];
+  // A per-member override layers on top of the member's custom role so a saved
+  // override never silently revokes the role's own grants. Without a custom
+  // role it remains the complete effective set, matching the server.
+  const source = directPermissions
+    ? (customRole ? { ...customRole.permissions, ...directPermissions } : directPermissions)
+    : (customRole?.permissions || defaultRolePermissions[user.role]);
   const permissions = makePermissions(
     (Object.keys(permissionLabels) as RolePermissionKey[]).filter(key => (
       source[key] === true
@@ -180,6 +186,16 @@ export const isHodRole = (role: CustomRole | null | undefined) => role?.id === S
 export const isHodUser = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   Boolean(user?.role === 'Staff' && user.customRoleId && customRoles.some(role => role.id === user.customRoleId && isHodRole(role)))
 );
+/**
+ * True when a Staff member's effective role is limited to their own
+ * departments — either the built-in HOD role or a custom role that opted into
+ * department scoping. Super admins and non-Staff roles are never scoped.
+ */
+export const isDepartmentScopedUser = (user: User | null | undefined, customRoles: CustomRole[] = []) => {
+  if (!user || user.role !== 'Staff' || isBossKoo(user)) return false;
+  const customRole = user.customRoleId ? customRoles.find(role => role.id === user.customRoleId) : undefined;
+  return isHodRole(customRole) || customRole?.departmentScoped === true;
+};
 export const getAssignableCustomRoles = (userRole: Role, customRoles: CustomRole[] = []) => (
   customRoles.filter(role => role.baseRole === userRole)
 );
@@ -312,7 +328,8 @@ export const canAssignTasksToOthers = (
 export const canEditTask = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
   hasPermission(user, 'editTasks', customRoles) ||
   ((user?.role === 'Staff' || user?.role === 'Admin') && task.assignedTo === user.id) ||
-  ((user?.role === 'Staff' || user?.role === 'Admin') && hasPermission(user, 'manageCreatedTasks', customRoles) && task.createdBy === user.id)
+  ((user?.role === 'Staff' || user?.role === 'Admin') && hasPermission(user, 'manageCreatedTasks', customRoles) && task.createdBy === user.id) ||
+  (isDepartmentScopedUser(user, customRoles) && isMemberInDepartment(user, task.department))
 );
 export const canDeleteTask = canEditTask;
 export const isProjectParticipant = (user: User | null | undefined, project: Project, tasks: Task[] = []) => {
@@ -405,7 +422,12 @@ export const getVisibleTasks = (
   if (user.role === 'Admin' || isBossKoo(user) || canViewAllTasks(user, customRoles)) return tasks;
   if (user.role === 'Staff') {
     const canManageCreated = hasPermission(user, 'manageCreatedTasks', customRoles);
-    return tasks.filter(task => task.assignedTo === user.id || (canManageCreated && task.createdBy === user.id));
+    const departmentScoped = isDepartmentScopedUser(user, customRoles);
+    return tasks.filter(task => (
+      task.assignedTo === user.id
+      || (canManageCreated && task.createdBy === user.id)
+      || (departmentScoped && isMemberInDepartment(user, task.department))
+    ));
   }
   return [];
 };

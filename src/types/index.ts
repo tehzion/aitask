@@ -64,6 +64,7 @@ export interface CustomRole {
   description?: string;
   baseRole: Role;
   permissions: RolePermissions;
+  departmentScoped?: boolean;
   isProtected?: boolean;
   createdAt: string;
   updatedAt: string;

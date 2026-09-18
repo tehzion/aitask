@@ -107,6 +107,7 @@ const Approvals: React.FC = () => {
     name: '',
     description: '',
     baseRole: 'Staff' as Role,
+    departmentScoped: false,
     permissions: clonePermissions(defaultRolePermissions.Staff),
   });
 
@@ -329,6 +330,7 @@ const Approvals: React.FC = () => {
       name: '',
       description: '',
       baseRole,
+      departmentScoped: false,
       permissions: clonePermissions(defaultRolePermissions[baseRole]),
     });
     setRoleError('');
@@ -360,6 +362,7 @@ const Approvals: React.FC = () => {
       name: roleForm.name,
       description: roleForm.description || undefined,
       baseRole: roleForm.baseRole,
+      departmentScoped: roleForm.baseRole === 'Staff' ? roleForm.departmentScoped : false,
       permissions: roleForm.permissions,
     };
 
@@ -398,6 +401,7 @@ const Approvals: React.FC = () => {
       name: targetRole.name,
       description: targetRole.description || '',
       baseRole: targetRole.baseRole,
+      departmentScoped: targetRole.departmentScoped === true,
       permissions: clonePermissions(targetRole.permissions),
     });
     setRoleError('');
@@ -896,6 +900,20 @@ const Approvals: React.FC = () => {
             </div>
 
             <div className="space-y-4">
+              {roleForm.baseRole === 'Staff' && (
+                <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={roleForm.departmentScoped}
+                    onChange={() => setRoleForm({ ...roleForm, departmentScoped: !roleForm.departmentScoped })}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>
+                    Limit this role to its departments
+                    <span className="mt-0.5 block text-xs text-slate-500">Members only see and edit work in their own departments.</span>
+                  </span>
+                </label>
+              )}
               {permissionGroups.map(group => (
                 <div key={group.title}>
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{group.title}</p>

@@ -183,7 +183,17 @@ describe('task store authorization', () => {
     });
 
     expect(useStore.getState().updateTask(creatorOnlyTask.id, { priority: 'High' })).toEqual({ ok: true });
-    expect(useStore.getState().updateTask(unrelatedTask.id, { priority: 'High' }).ok).toBe(false);
+    // Department scoping lets the HOD edit work in their own department...
+    expect(useStore.getState().updateTask(unrelatedTask.id, { priority: 'High' }).ok).toBe(true);
+    // ...but not work owned by another department.
+    const otherDepartmentTask = makeTask({
+      id: 'task-scope-other-dept',
+      department: 'Video Editor',
+      assignedTo: otherStaff.id,
+      createdBy: otherStaff.id,
+    });
+    useStore.setState({ tasks: [...useStore.getState().tasks, otherDepartmentTask] });
+    expect(useStore.getState().updateTask(otherDepartmentTask.id, { priority: 'High' }).ok).toBe(false);
     expect(useStore.getState().deleteTask(creatorOnlyTask.id).ok).toBe(true);
   });
 
