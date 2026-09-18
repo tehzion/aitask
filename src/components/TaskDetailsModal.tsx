@@ -10,6 +10,7 @@ import { getTodayInputDate, parseOptionalDate, cn } from '../lib/utils';
 import { isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
 import type { SecureCommandType } from '../lib/secureWorkspace';
 import ModalShell from './ModalShell';
+import ConfirmDialog from './ConfirmDialog';
 import { useI18n } from './I18nProvider';
 import { ProgressBar } from './ui';
 import { fieldLabel, inputBase } from './uiTokens';
@@ -33,6 +34,14 @@ const getStatusColor = (status: string): string => {
 };
 
 const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
+
+type ConfirmationState = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  action: () => void | Promise<void>;
+  tone?: 'danger' | 'primary';
+};
 
 const ExternalTaskLink: React.FC<{ value: string; label: string }> = ({ value, label }) => {
   const href = safeHttpsUrl(value);
@@ -93,8 +102,10 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   const [editError, setEditError] = useState('');
   const [mutationError, setMutationError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
   const titleId = React.useId();
   const descriptionId = React.useId();
+  const confirmationTitleId = React.useId();
   const [editForm, setEditForm] = useState({
     title: '',
     description: '',
@@ -227,10 +238,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     setIsEditingDetails(false);
   };
 
-  const handleDeleteTask = async () => {
-    const confirmed = window.confirm(t(`Delete "${task.title}"? This removes the task from the workspace.`));
-    if (!confirmed) return;
-
+  const performDeleteTask = async () => {
     const result = deleteTask(task.id);
     if (!result.ok) {
       setEditError(result.error || 'Unable to delete this task.');
@@ -247,6 +255,15 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     onClose();
   };
 
+  const handleDeleteTask = () => {
+    setConfirmation({
+      title: 'Delete task',
+      description: t(`Delete "${task.title}"? This removes the task from the workspace.`),
+      confirmLabel: 'Delete task',
+      action: performDeleteTask,
+    });
+  };
+
   const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
   const startDateValue = parseOptionalDate(task.startDate);
   const dueDateValue = parseOptionalDate(task.dueDate);
@@ -256,7 +273,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
       labelledBy={titleId}
       describedBy={descriptionId}
       onClose={onClose}
-      panelClassName="max-w-4xl"
+      panelClassName="max-w-4xl max-sm:max-h-none max-sm:rounded-none"
     >
         <p id={descriptionId} className="sr-only">Task details, status, dates, links and comments for {task.title}.</p>
         <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 bg-slate-50/50 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
@@ -273,20 +290,20 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                 <button
                   type="button"
                   onClick={() => setIsEditingDetails(value => !value)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                 >
                   <Pencil className="h-3.5 w-3.5" /> {isEditingDetails ? 'Cancel Edit' : 'Edit'}
                 </button>
                 <button
                   type="button"
                   onClick={handleDeleteTask}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Delete
                 </button>
               </>
             )}
-            <button onClick={onClose} aria-label="Close task details" title="Close" className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+            <button onClick={onClose} aria-label="Close task details" title="Close" className="inline-flex h-11 w-11 items-center justify-center rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -298,8 +315,8 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
           </div>
         )}
 
-        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-          <div className="w-full md:w-1/2 p-6 border-r border-slate-100 overflow-y-auto custom-scrollbar bg-white">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
+          <div className="w-full shrink-0 border-r border-slate-100 bg-white p-4 sm:p-6 md:w-1/2 md:overflow-y-auto md:custom-scrollbar">
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -319,8 +336,17 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                           if (isSubmitting) return;
                           const nextStatus = e.target.value as TaskStatus;
                           if (incompletePredecessors.length > 0 && nextStatus !== 'Pending' && nextStatus !== 'Cancelled') {
-                            const confirmed = window.confirm(t(`This step still has ${incompletePredecessors.length} incomplete predecessor task(s). Start it anyway?`));
-                            if (!confirmed) return;
+                            setConfirmation({
+                              title: 'Start with an incomplete earlier step?',
+                              description: t(`This step still has ${incompletePredecessors.length} incomplete predecessor task(s). Start it anyway?`),
+                              confirmLabel: 'Continue',
+                              tone: 'primary',
+                              action: async () => {
+                                updateTaskStatus(task.id, nextStatus);
+                                await confirmPendingMutation();
+                              },
+                            });
+                            return;
                           }
                           updateTaskStatus(task.id, nextStatus);
                           await confirmPendingMutation();
@@ -623,7 +649,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                           placeholder="Attachment label"
                           className="flex-1 bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                         />
-                        <button type="submit" className="px-3 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg">
+                      <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
                           Save
                         </button>
                       </div>
@@ -696,7 +722,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+            <div className="flex-none space-y-4 overflow-visible p-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:custom-scrollbar">
               {(!task.comments || task.comments.length === 0) ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-400">
                   <MessageSquare className="w-8 h-8 mb-2 opacity-20" />
@@ -743,13 +769,13 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                     type="submit"
                     disabled={!commentText.trim() || isSubmitting}
                     aria-label="Send comment"
-                    className="absolute bottom-2.5 right-2.5 p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="absolute bottom-2 right-2 inline-flex h-11 w-11 items-center justify-center rounded-md bg-blue-600 p-1.5 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isSubmitting ? <span className="text-xs font-semibold">Saving</span> : <Send className="w-4 h-4" />}
                   </button>
                 </form>
               </div>
-            ) : currentUser?.role === 'Staff' ? (
+            ) : currentUser?.role === 'Staff' || currentUser?.role === 'HOD' ? (
               <div className="p-4 bg-white border-t border-slate-200 text-sm text-slate-500 shrink-0">
                 Only the assigned staff member or a Project Manager can add updates to this task.
               </div>
@@ -760,6 +786,21 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
             ) : null}
           </div>
         </div>
+        {confirmation && (
+          <ConfirmDialog
+            labelledBy={confirmationTitleId}
+            title={confirmation.title}
+            description={confirmation.description}
+            confirmLabel={confirmation.confirmLabel}
+            tone={confirmation.tone}
+            busy={isSubmitting}
+            onClose={() => setConfirmation(null)}
+            onConfirm={async () => {
+              await confirmation.action();
+              setConfirmation(null);
+            }}
+          />
+        )}
     </ModalShell>
   );
 };

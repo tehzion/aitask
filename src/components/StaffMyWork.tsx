@@ -18,17 +18,21 @@ const bucketOrder: StaffWorkBucketKey[] = ['needs_action', 'up_next', 'waiting',
 const StaffMyWork: React.FC = () => {
   const navigate = useNavigate();
   const { locale, t } = useI18n();
-  const { currentUser, tasks: allTasks, projects, rolePermissions, clientPlans } = useStore(useShallow(state => ({
+  const { currentUser, tasks: allTasks, clients, projects, users, rolePermissions, clientPlans } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     tasks: state.tasks,
+    clients: state.clients,
     projects: state.projects,
+    users: state.users,
     rolePermissions: state.rolePermissions,
     clientPlans: state.clientPlans,
   })));
   const today = getTodayInputDate();
+  const isHod = currentUser?.role === 'HOD';
   const tasks = React.useMemo(
-    () => getVisibleTasks(currentUser, allTasks, rolePermissions).filter(task => task.assignedTo === currentUser?.id),
-    [allTasks, currentUser, rolePermissions],
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects })
+      .filter(task => isHod || task.assignedTo === currentUser?.id),
+    [allTasks, clients, currentUser, isHod, projects, rolePermissions],
   );
   const queue = React.useMemo(() => buildStaffWorkQueue(tasks, today), [tasks, today]);
   const focusTask = getStaffFocusTask(queue);
@@ -50,6 +54,8 @@ const StaffMyWork: React.FC = () => {
     ? { title: 'Operation context', description: 'Your assigned delivery and review queue.', values: [['Due today', dueToday], ['Waiting review', waitingReview], ['Blocked steps', blockedCount]] as const }
     : persona === 'account'
       ? { title: 'Account context', description: 'Clients and plans connected to your assigned work.', values: [['Assigned clients', visibleClients.length], ['Active plans', activePlans.length], ['Renewals', renewals.length]] as const }
+    : isHod
+      ? { title: 'Department context', description: 'Department workload, delegated tasks, and review risk.', values: [['Department tasks', tasks.length], ['Waiting review', waitingReview], ['Blocked steps', blockedCount]] as const }
       : { title: 'Production context', description: 'Output, blockers, and revision work linked to your assignments.', values: [['Linked outputs', linkedOutputs], ['Blocked steps', blockedCount], ['Revisions', revisions]] as const };
 
   const openTask = (taskId: string) => navigate(`/tasks?taskId=${encodeURIComponent(taskId)}`);
@@ -59,8 +65,8 @@ const StaffMyWork: React.FC = () => {
       <header className="flex items-start justify-between gap-4 border-b border-line/70 pb-4 sm:items-end">
         <div>
           <p className="calm-eyebrow">{formatLocalizedWeekdayDate(new Date(), locale)}</p>
-          <h1 className="mt-1 text-[1.8rem] font-semibold leading-9 tracking-[-0.045em] text-ink sm:text-4xl">My work</h1>
-          <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">Start with what needs attention, then move through the rest of your assigned work.</p>
+          <h1 className="mt-1 text-[1.8rem] font-semibold leading-9 tracking-[-0.045em] text-ink sm:text-4xl">{isHod ? 'Department work' : 'My work'}</h1>
+          <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">{isHod ? 'Start with what needs attention, then review delegated work across your departments.' : 'Start with what needs attention, then move through the rest of your assigned work.'}</p>
         </div>
         <BackendFreshness />
       </header>
@@ -101,7 +107,7 @@ const StaffMyWork: React.FC = () => {
       <section aria-labelledby="staff-queue-title">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div><h2 id="staff-queue-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">Assigned queue</h2><p className="mt-1 text-sm text-muted">Work is ordered by revision, deadline, state, and priority.</p></div>
-          <Link to="/clients?period=all" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline">All work <ArrowRight className="h-4 w-4" /></Link>
+          <Link to="/tasks?period=all" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline">All work <ArrowRight className="h-4 w-4" /></Link>
         </div>
         <div className="mt-4">
           <SegmentedTabs<StaffWorkBucketKey>
@@ -114,7 +120,7 @@ const StaffMyWork: React.FC = () => {
           />
         </div>
         <Surface id={`staff-queue-panel-${activeBucket}`} role="tabpanel" aria-labelledby={`staff-queue-tab-${activeBucket}`} tabIndex={0} className="mt-3 overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {queue[activeBucket].slice(0, 8).map(task => <StaffWorkItem key={task.id} task={task} allTasks={tasks} onOpen={item => openTask(item.id)} />)}
+          {queue[activeBucket].slice(0, 8).map(task => <StaffWorkItem key={task.id} task={task} allTasks={tasks} users={users} onOpen={item => openTask(item.id)} />)}
           {queue[activeBucket].length === 0 && <div className="px-5 py-12 text-center"><ListChecks className="mx-auto h-7 w-7 text-muted/60" /><p className="mt-3 text-sm font-semibold text-ink">Nothing in {getStaffBucketLabel(activeBucket).toLowerCase()}</p><p className="mt-1 text-sm text-muted">Choose another queue to review your work.</p></div>}
         </Surface>
       </section>

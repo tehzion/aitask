@@ -8,18 +8,27 @@ import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { useI18n } from '../components/I18nProvider';
-import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, isBossKoo, permissionGroups, permissionLabels, SYSTEM_HOD_ROLE_ID } from '../lib/access';
+import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, isBossKoo, permissionGroups, permissionLabels, BUILTIN_HOD_ROLE_ID } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
 import { getRetainedSecureMemberMutation } from '../lib/secureWorkspace';
 import { useToastStore } from '../store/useToastStore';
 import ModalShell from '../components/ModalShell';
+import ConfirmDialog from '../components/ConfirmDialog';
 import DepartmentMultiSelect from '../components/DepartmentMultiSelect';
 
-const ROLES: Role[] = ['Admin', 'Staff', 'Client'];
+const ROLES: Role[] = ['Project Manager', 'HOD', 'Staff', 'Client'];
 
 const clonePermissions = (permissions: RolePermissions): RolePermissions => ({ ...permissions });
+
+type ConfirmationState = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  action: () => void | Promise<void>;
+  tone?: 'danger' | 'primary';
+};
 
 const Approvals: React.FC = () => {
   const { t } = useI18n();
@@ -28,6 +37,7 @@ const Approvals: React.FC = () => {
   const deleteMemberTitleId = React.useId();
   const editDepartmentsTitleId = React.useId();
   const editPermissionsTitleId = React.useId();
+  const confirmationTitleId = React.useId();
   const secureAccounts = shouldUseSecureSupabase();
   const {
     registrations,
@@ -103,6 +113,7 @@ const Approvals: React.FC = () => {
   const [memberPermissionsId, setMemberPermissionsId] = useState<string | null>(null);
   const [memberPermissionsCustom, setMemberPermissionsCustom] = useState(false);
   const [memberPermissions, setMemberPermissions] = useState<RolePermissions>(() => clonePermissions(defaultRolePermissions.Staff));
+  const [memberPermissionsBefore, setMemberPermissionsBefore] = useState<RolePermissions>(() => clonePermissions(defaultRolePermissions.Staff));
   const [memberPermissionsError, setMemberPermissionsError] = useState('');
   const [roleCompanyUserId, setRoleCompanyUserId] = useState<string | null>(null);
   const [roleCompanyName, setRoleCompanyName] = useState('');
@@ -121,6 +132,7 @@ const Approvals: React.FC = () => {
   // Delete User Modal State
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [deleteUserError, setDeleteUserError] = useState('');
+  const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
 
   const pendingRegs = (registrations || []).filter(r => r.status === 'Pending');
   const historyRegs = (registrations || []).filter(r => r.status !== 'Pending');
@@ -128,6 +140,13 @@ const Approvals: React.FC = () => {
     ? users.find(user => user.id === memberPermissionsId)
     : undefined;
   const retainedMemberMutation = getRetainedSecureMemberMutation();
+  const memberPermissionsDefault = memberPermissionsUser
+    ? getEffectivePermissions({ ...memberPermissionsUser, permissions: undefined }, rolePermissions)
+    : clonePermissions(defaultRolePermissions.Staff);
+  const memberPermissionsPreview = memberPermissionsCustom ? memberPermissions : memberPermissionsDefault;
+  const memberPermissionKeys = permissionGroups.flatMap(group => group.keys);
+  const addedMemberPermissions = memberPermissionKeys.filter(key => memberPermissionsPreview[key] && !memberPermissionsBefore[key]);
+  const removedMemberPermissions = memberPermissionKeys.filter(key => !memberPermissionsPreview[key] && memberPermissionsBefore[key]);
 
   const pendingDays = (reg: Registration) => {
     const created = new Date(reg.createdAt).getTime();
@@ -143,13 +162,9 @@ const Approvals: React.FC = () => {
     });
   };
 
-  const handleBulkReject = async () => {
-    if (selectedBulkRegIds.size === 0 || isActionSaving) return;
-    const count = selectedBulkRegIds.size;
-    const confirmed = window.confirm(t(`Reject ${count} registrations? Those applicants will need to apply again.`));
-    if (!confirmed) return;
+  const performBulkReject = async (registrationIds: string[]) => {
     const previousRegistrations = useStore.getState().registrations;
-    selectedBulkRegIds.forEach(id => rejectRegistration(id));
+    registrationIds.forEach(id => rejectRegistration(id));
     setIsActionSaving(true);
     const saved = await commitPendingMutation();
     setIsActionSaving(false);
@@ -160,13 +175,19 @@ const Approvals: React.FC = () => {
     }
   };
 
-  const handleBulkApprove = async () => {
+  const handleBulkReject = () => {
     if (selectedBulkRegIds.size === 0 || isActionSaving) return;
-    const targets = pendingRegs.filter(reg => selectedBulkRegIds.has(reg.id));
-    const count = targets.length;
-    const confirmed = window.confirm(t(`Approve ${count} registrations as Staff with their requested departments?`));
-    if (!confirmed) return;
+    const registrationIds = Array.from(selectedBulkRegIds);
+    setConfirmation({
+      title: 'Reject registrations',
+      description: t(`Reject ${registrationIds.length} registrations? Those applicants will need to apply again.`),
+      confirmLabel: 'Reject registrations',
+      action: () => performBulkReject(registrationIds),
+    });
+  };
 
+  const performBulkApprove = async (targets: Registration[]) => {
+    const count = targets.length;
     if (secureAccounts) {
       setIsActionSaving(true);
       setActionError('');
@@ -233,6 +254,18 @@ const Approvals: React.FC = () => {
     } else {
       useToastStore.getState().addToast(`${count} registration(s) approved.`, 'success');
     }
+  };
+
+  const handleBulkApprove = () => {
+    if (selectedBulkRegIds.size === 0 || isActionSaving) return;
+    const targets = pendingRegs.filter(reg => selectedBulkRegIds.has(reg.id));
+    setConfirmation({
+      title: 'Approve registrations',
+      description: t(`Approve ${targets.length} registrations as Staff with their requested departments?`),
+      confirmLabel: 'Approve registrations',
+      tone: 'primary',
+      action: () => performBulkApprove(targets),
+    });
   };
 
   const handleOpenApproval = (reg: Registration) => {
@@ -337,7 +370,7 @@ const Approvals: React.FC = () => {
       name: '',
       description: '',
       baseRole,
-      departmentScoped: false,
+      departmentScoped: baseRole === 'HOD',
       permissions: clonePermissions(defaultRolePermissions[baseRole]),
     });
     setRoleError('');
@@ -369,7 +402,7 @@ const Approvals: React.FC = () => {
       name: roleForm.name,
       description: roleForm.description || undefined,
       baseRole: roleForm.baseRole,
-      departmentScoped: roleForm.baseRole === 'Staff' ? roleForm.departmentScoped : false,
+      departmentScoped: roleForm.baseRole === 'HOD' ? true : roleForm.baseRole === 'Staff' ? roleForm.departmentScoped : false,
       permissions: roleForm.permissions,
     };
 
@@ -414,15 +447,9 @@ const Approvals: React.FC = () => {
     setRoleError('');
   };
 
-  const handleDeleteRole = async (customRoleId: string) => {
+  const performDeleteRole = async (customRoleId: string) => {
     const targetRole = useStore.getState().rolePermissions.find(customRole => customRole.id === customRoleId);
     if (!targetRole) return;
-    const affectedMembers = useStore.getState().users.filter(user => user.customRoleId === customRoleId).length;
-    const confirmed = window.confirm(t(
-      `Delete "${targetRole.name}"?${affectedMembers > 0 ? ` ${affectedMembers} member${affectedMembers === 1 ? '' : 's'} will revert to their base role.` : ''}`
-    ));
-    if (!confirmed) return;
-
     const previousRoles = useStore.getState().rolePermissions;
     const previousUsers = useStore.getState().users;
     const previousDeletedRoleIds = useStore.getState().deletedRoleIds || [];
@@ -444,10 +471,21 @@ const Approvals: React.FC = () => {
     if (roleEditorId === customRoleId) resetRoleForm();
   };
 
+  const handleDeleteRole = (customRoleId: string) => {
+    const targetRole = useStore.getState().rolePermissions.find(customRole => customRole.id === customRoleId);
+    if (!targetRole) return;
+    const affectedMembers = useStore.getState().users.filter(user => user.customRoleId === customRoleId).length;
+    setConfirmation({
+      title: 'Delete custom role',
+      description: t(`Delete "${targetRole.name}"?${affectedMembers > 0 ? ` ${affectedMembers} member${affectedMembers === 1 ? '' : 's'} will revert to their base role.` : ''}`),
+      confirmLabel: 'Delete role',
+      action: () => performDeleteRole(customRoleId),
+    });
+  };
+
   const roleSelectValue = (user: User) => {
-    if (user.customRoleId === SYSTEM_HOD_ROLE_ID) return 'role:hod';
     if (user.customRoleId) return `custom:${user.customRoleId}`;
-    return `role:${user.role.toLowerCase()}`;
+    return user.role === 'Project Manager' ? 'role:project-manager' : `role:${user.role.toLowerCase()}`;
   };
 
   const handleChangeRole = async (user: User, value: string) => {
@@ -466,13 +504,12 @@ const Approvals: React.FC = () => {
       nextRole = customRole.baseRole;
       customRoleId = customRole.id;
     } else if (value === 'role:hod') {
-      nextRole = 'Staff';
-      customRoleId = SYSTEM_HOD_ROLE_ID;
-    } else if (value === 'role:admin') {
-      nextRole = 'Admin';
+      nextRole = 'HOD';
+    } else if (value === 'role:project-manager') {
+      nextRole = 'Project Manager';
     }
 
-    if (nextRole === 'Staff' && getMemberDepartments(user).length === 0) {
+    if (['Staff', 'HOD'].includes(nextRole) && getMemberDepartments(user).length === 0) {
       setRoleCompanyUserId(null);
       setRoleDeptUserId(user.id);
       setRoleDeptPending({ role: nextRole, customRoleId });
@@ -537,7 +574,7 @@ const Approvals: React.FC = () => {
     if (!memberDepartmentsId) return;
     setMemberDepartmentsError('');
     const member = users.find(user => user.id === memberDepartmentsId);
-    if (member && member.role !== 'Admin' && memberDepartments.length === 0) {
+    if (member && member.role !== 'Project Manager' && memberDepartments.length === 0) {
       setMemberDepartmentsError('Choose at least one department.');
       return;
     }
@@ -554,11 +591,13 @@ const Approvals: React.FC = () => {
 
   const handleEditPermissions = (userId: string) => {
     const user = users.find(item => item.id === userId);
-    if (!user || user.role !== 'Staff' || isBossKoo(user)) return;
+    if (!user || !['Staff', 'HOD'].includes(user.role) || isBossKoo(user)) return;
     const hasDirectPermissions = Boolean(user.permissions && Object.keys(user.permissions).length > 0);
     setMemberPermissionsId(user.id);
     setMemberPermissionsCustom(hasDirectPermissions);
-    setMemberPermissions(clonePermissions(getEffectivePermissions(user, rolePermissions)));
+    const effectivePermissions = clonePermissions(getEffectivePermissions(user, rolePermissions));
+    setMemberPermissionsBefore(effectivePermissions);
+    setMemberPermissions(effectivePermissions);
     setMemberPermissionsError('');
   };
 
@@ -608,6 +647,35 @@ const Approvals: React.FC = () => {
     }
   };
 
+  const performRejectRegistration = async (registrationId: string) => {
+    const previousRegistrations = useStore.getState().registrations;
+    rejectRegistration(registrationId);
+    setIsActionSaving(true);
+    const saved = await commitPendingMutation();
+    setIsActionSaving(false);
+    if (!saved.ok) {
+      useStore.setState({ registrations: previousRegistrations });
+      setActionError(saved.error || 'The rejection was rolled back. Use Retry required to confirm it.');
+    }
+  };
+
+  const handleRejectRegistration = (reg: Registration) => {
+    if (isActionSaving) return;
+    setConfirmation({
+      title: 'Reject registration',
+      description: t(`Reject ${reg.name}'s registration? They will need to apply again.`),
+      confirmLabel: 'Reject registration',
+      action: () => performRejectRegistration(reg.id),
+    });
+  };
+
+  const visibleMembers = users.filter(user => {
+    const normalizedSearch = memberSearch.trim().toLowerCase();
+    const matchesSearch = !normalizedSearch || user.name.toLowerCase().includes(normalizedSearch) || (user.email || '').toLowerCase().includes(normalizedSearch);
+    const matchesRole = memberRoleFilter === 'All' || user.role === memberRoleFilter;
+    return matchesSearch && matchesRole;
+  });
+
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setAddUserError('');
@@ -620,7 +688,7 @@ const Approvals: React.FC = () => {
       departments: newUser.role === 'Client' ? ['Client'] : newUser.departments,
       companyName: newUser.role === 'Client' ? newUser.companyName : undefined,
       customRoleId: newUser.customRoleId || undefined,
-      workerType: newUser.role === 'Staff' ? newUser.workerType : undefined,
+      workerType: ['Staff', 'HOD'].includes(newUser.role) ? newUser.workerType : undefined,
       sendInvitation: sendNewUserInvitation,
     });
     setIsActionSaving(false);
@@ -789,20 +857,7 @@ const Approvals: React.FC = () => {
                         <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
                       </button>
                       <button
-                        onClick={async () => {
-                          if (isActionSaving) return;
-                          const confirmed = window.confirm(t(`Reject ${reg.name}'s registration? They will need to apply again.`));
-                          if (!confirmed) return;
-                          const previousRegistrations = useStore.getState().registrations;
-                          rejectRegistration(reg.id);
-                          setIsActionSaving(true);
-                          const saved = await commitPendingMutation();
-                          setIsActionSaving(false);
-                          if (!saved.ok) {
-                            useStore.setState({ registrations: previousRegistrations });
-                            setActionError(saved.error || 'The rejection was rolled back. Use Retry required to confirm it.');
-                          }
-                        }}
+                        onClick={() => handleRejectRegistration(reg)}
                         disabled={isActionSaving || backend.isSaving}
                         className="flex flex-1 items-center justify-center px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -882,20 +937,7 @@ const Approvals: React.FC = () => {
                             <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
                           </button>
                           <button
-                            onClick={async () => {
-                              if (isActionSaving) return;
-                              const confirmed = window.confirm(`Reject ${reg.name}'s registration? They will need to apply again.`);
-                              if (!confirmed) return;
-                              const previousRegistrations = useStore.getState().registrations;
-                              rejectRegistration(reg.id);
-                              setIsActionSaving(true);
-                              const saved = await commitPendingMutation();
-                              setIsActionSaving(false);
-                              if (!saved.ok) {
-                                useStore.setState({ registrations: previousRegistrations });
-                                setActionError(saved.error || 'The rejection was rolled back. Use Retry required to confirm it.');
-                              }
-                            }}
+                            onClick={() => handleRejectRegistration(reg)}
                             disabled={isActionSaving || backend.isSaving}
                             className="inline-flex items-center px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                           >
@@ -942,7 +984,7 @@ const Approvals: React.FC = () => {
                   value={roleForm.name}
                   onChange={e => setRoleForm({ ...roleForm, name: e.target.value })}
                   placeholder="e.g. Account Manager"
-                  disabled={roleEditorId === SYSTEM_HOD_ROLE_ID}
+                  disabled={roleEditorId === BUILTIN_HOD_ROLE_ID}
                   required
                 />
               </div>
@@ -953,7 +995,7 @@ const Approvals: React.FC = () => {
                   className={cn(inputBase, 'px-3 py-2.5')}
                   value={roleForm.baseRole}
                   onChange={e => handleRoleBaseChange(e.target.value as Role)}
-                  disabled={roleEditorId === SYSTEM_HOD_ROLE_ID}
+                  disabled={roleEditorId === BUILTIN_HOD_ROLE_ID}
                 >
                   {ROLES.map(r => <option key={r} value={r}>{t(getRoleDisplayName(r))}</option>)}
                 </select>
@@ -1028,14 +1070,15 @@ const Approvals: React.FC = () => {
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Default roles</p>
               <div className="space-y-2">
-                {([['Project Manager', defaultRolePermissions.Admin, 'Full operational access. Account and role administration stays with Boss Koo.'],
-                  ['HOD', rolePermissions.find(role => role.id === SYSTEM_HOD_ROLE_ID)?.permissions || defaultRolePermissions.Staff, 'Department lead. Sees and edits work in their own departments.'],
+                {([['Project Manager', defaultRolePermissions['Project Manager'], 'Portfolio-scoped operational access. Account and role administration stays with Boss Koo.'],
+                  ['HOD', rolePermissions.find(role => role.isBuiltin && role.baseRole === 'HOD')?.permissions || defaultRolePermissions.HOD, 'Editable department lead role. Sees and edits work in their own departments.'],
                   ['Staff', defaultRolePermissions.Staff, 'Standard employee access to assigned work.'],
                   ['Client', defaultRolePermissions.Client, 'Reviews and approves their company work.']] as const).map(([name, permissions, description]) => (
                   <div key={name} className="rounded-lg border border-slate-200 p-4">
                     <div className="flex items-center gap-2">
                       <h3 data-i18n-skip className="font-semibold text-slate-900">{name}</h3>
-                      <Badge tone={name === 'HOD' ? 'purple' : 'slate'}>{name === 'HOD' ? 'Protected' : 'Default'}</Badge>
+                      <Badge tone={name === 'HOD' ? 'purple' : 'slate'}>{name === 'HOD' ? 'Editable default' : 'Default'}</Badge>
+                      {name === 'HOD' && superAdmin && <Button type="button" variant="secondary" className="ml-auto" onClick={() => handleEditRole(BUILTIN_HOD_ROLE_ID)}>Edit permissions</Button>}
                     </div>
                     <p className="mt-1 text-sm text-slate-500">{description}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -1052,7 +1095,7 @@ const Approvals: React.FC = () => {
               <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
                 No custom roles yet. Create one to assign it to team members.
               </div>
-            ) : rolePermissions.map(customRole => (
+            ) : rolePermissions.filter(customRole => !customRole.isBuiltin).map(customRole => (
               <div key={customRole.id} className="rounded-lg border border-slate-200 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -1064,7 +1107,7 @@ const Approvals: React.FC = () => {
                     {customRole.description && <p className="mt-1 text-sm text-slate-500">{customRole.description}</p>}
                   </div>
                   <div className="flex gap-2">
-                    <Button type="button" variant="secondary" onClick={() => handleEditRole(customRole.id)} disabled={customRole.isProtected && customRole.id !== SYSTEM_HOD_ROLE_ID}>Edit permissions</Button>
+                    <Button type="button" variant="secondary" onClick={() => handleEditRole(customRole.id)} disabled={customRole.isProtected}>Edit permissions</Button>
                     <Button type="button" variant="danger" onClick={() => void handleDeleteRole(customRole.id)} disabled={isActionSaving || customRole.isProtected}>Delete</Button>
                   </div>
                 </div>
@@ -1142,7 +1185,89 @@ const Approvals: React.FC = () => {
             {ROLES.map(role => <option key={role} value={role}>{role}</option>)}
           </select>
         </div>
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-slate-100 sm:hidden">
+          {visibleMembers.map(u => (
+            <article key={u.id} className="space-y-4 p-4">
+              <div className="flex items-start gap-3">
+                <img src={u.avatar} alt="" className="h-10 w-10 shrink-0 rounded-full border border-slate-200 object-cover" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span data-i18n-skip className="font-semibold text-slate-800">{u.name}</span>
+                    {isBossKoo(u) && <Badge tone="purple">Super Admin</Badge>}
+                  </div>
+                  <p data-i18n-skip className="mt-1 truncate text-xs text-slate-500">{u.email || 'No email on file'}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={u.role === 'Project Manager' ? 'purple' : u.role === 'Client' ? 'amber' : 'blue'}>{t(getRoleDisplayName(u.role))}</Badge>
+                {u.role === 'Client' ? (
+                  <span className="text-sm font-medium text-slate-600">{u.companyName || 'No company'}</span>
+                ) : getMemberDepartments(u).map(department => <Badge key={department} tone="slate">{department}</Badge>)}
+              </div>
+              {isBossKoo(u) ? (
+                <Badge tone="purple">Permanent Super Admin</Badge>
+              ) : superAdmin ? (
+                <div className="space-y-2">
+                  <label className="sr-only" htmlFor={`mobile-role-${u.id}`}>Role for {u.name}</label>
+                  <select
+                    id={`mobile-role-${u.id}`}
+                    className={cn(inputBase, 'w-full px-3 py-2 text-sm')}
+                    value={roleSelectValue(u)}
+                    onChange={event => void handleChangeRole(u, event.target.value)}
+                    disabled={isActionSaving}
+                  >
+                    <option value="role:project-manager">{t(getRoleDisplayName('Project Manager'))}</option>
+                    <option value="role:hod">HOD</option>
+                    <option value="role:staff">Staff</option>
+                    <option value="role:client">Client</option>
+                    {rolePermissions.filter(customRole => !customRole.isBuiltin).map(customRole => (
+                      <option key={customRole.id} data-i18n-skip value={`custom:${customRole.id}`}>{customRole.name}</option>
+                    ))}
+                  </select>
+                  {roleCompanyUserId === u.id && (
+                    <>
+                      <label className="sr-only" htmlFor={`mobile-company-${u.id}`}>Company for {u.name}</label>
+                      <select
+                        id={`mobile-company-${u.id}`}
+                        className={cn(inputBase, 'w-full px-3 py-2 text-sm')}
+                        value={roleCompanyName}
+                        onChange={event => setRoleCompanyName(event.target.value)}
+                        disabled={isActionSaving}
+                      >
+                        <option value="">Choose a company…</option>
+                        {clients.map(client => <option key={client.id} data-i18n-skip value={client.clientName}>{client.clientName}</option>)}
+                      </select>
+                      <Button type="button" className="w-full" onClick={() => void handleConfirmClientCompany(u)} disabled={isActionSaving || !roleCompanyName.trim()}>Confirm company</Button>
+                    </>
+                  )}
+                  {roleDeptUserId === u.id && (
+                    <>
+                      <DepartmentMultiSelect value={roleDeptValue} onChange={setRoleDeptValue} />
+                      <Button type="button" className="w-full" onClick={() => void handleConfirmRoleDepartments(u)} disabled={isActionSaving || roleDeptValue.length === 0}>Confirm departments</Button>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <Badge tone="slate">{getEffectiveRoleName(u, rolePermissions)}</Badge>
+              )}
+              {!isBossKoo(u) && u.permissions && Object.keys(u.permissions).length > 0 && <Badge tone="indigo">Custom access</Badge>}
+              <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                {superAdmin && u.role !== 'Client' && !isBossKoo(u) && (
+                  <Button type="button" variant="secondary" onClick={() => handleEditDepartments(u.id)} disabled={isActionSaving}>Edit departments</Button>
+                )}
+                {superAdmin && ['Staff', 'HOD'].includes(u.role) && !isBossKoo(u) && (
+                  <Button type="button" variant="secondary" onClick={() => handleEditPermissions(u.id)} disabled={isActionSaving}>Manage access</Button>
+                )}
+                {canDeleteUser(currentUser, u, rolePermissions) ? (
+                  <Button type="button" variant="danger" onClick={() => { setDeleteUserError(''); setUserToDelete(u.id); }}>Remove</Button>
+                ) : (
+                  <span className="inline-flex min-h-11 items-center rounded-control bg-inset px-3 text-xs font-semibold text-muted">{isBossKoo(u) || u.id === currentUser?.id ? 'Protected account' : 'No access'}</span>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
@@ -1154,14 +1279,7 @@ const Approvals: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {users
-                .filter(user => {
-                  const normalizedSearch = memberSearch.trim().toLowerCase();
-                  const matchesSearch = !normalizedSearch || user.name.toLowerCase().includes(normalizedSearch) || (user.email || '').toLowerCase().includes(normalizedSearch);
-                  const matchesRole = memberRoleFilter === 'All' || user.role === memberRoleFilter;
-                  return matchesSearch && matchesRole;
-                })
-                .map(u => (
+              {visibleMembers.map(u => (
                 <tr key={u.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -1178,7 +1296,7 @@ const Approvals: React.FC = () => {
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
-                        u.role === 'Admin' ? 'bg-purple-100 text-purple-700' :
+                        u.role === 'Project Manager' ? 'bg-purple-100 text-purple-700' :
                         u.role === 'Client' ? 'bg-amber-100 text-amber-700' :
                         'bg-blue-100 text-blue-700'
                       }`}>
@@ -1203,12 +1321,12 @@ const Approvals: React.FC = () => {
                           onChange={e => void handleChangeRole(u, e.target.value)}
                           disabled={isActionSaving}
                         >
-                          <option value="role:admin">{t(getRoleDisplayName('Admin'))}</option>
+                          <option value="role:project-manager">{t(getRoleDisplayName('Project Manager'))}</option>
                           <option value="role:hod">HOD</option>
                           <option value="role:staff">Staff</option>
                           <option value="role:client">Client</option>
-                          {getAssignableCustomRoles('Staff', rolePermissions)
-                            .filter(customRole => customRole.id !== SYSTEM_HOD_ROLE_ID)
+                          {rolePermissions
+                            .filter(customRole => !customRole.isBuiltin)
                             .map(customRole => (
                               <option key={customRole.id} data-i18n-skip value={`custom:${customRole.id}`}>{customRole.name}</option>
                             ))}
@@ -1273,7 +1391,7 @@ const Approvals: React.FC = () => {
                           <Pencil className="h-4 w-4" />
                         </button>
                       )}
-                      {superAdmin && u.role === 'Staff' && !isBossKoo(u) && (
+                      {superAdmin && ['Staff', 'HOD'].includes(u.role) && !isBossKoo(u) && (
                         <button
                           type="button"
                           onClick={() => handleEditPermissions(u.id)}
@@ -1391,6 +1509,32 @@ const Approvals: React.FC = () => {
               </button>
             </div>
 
+            <section aria-labelledby="effective-access-preview" className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 id="effective-access-preview" className="text-sm font-semibold text-slate-900">Effective access preview</h3>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">
+                    Preview the permissions that will apply after this choice is saved. Baseline: {getEffectiveRoleName({ ...memberPermissionsUser, permissions: undefined }, rolePermissions)}.
+                  </p>
+                </div>
+                <Badge tone="indigo">{memberPermissionKeys.filter(key => memberPermissionsPreview[key]).length} enabled</Badge>
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">Added</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">
+                    {addedMemberPermissions.length > 0 ? addedMemberPermissions.map(key => permissionLabels[key]).join(', ') : 'No additions'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-red-700">Removed</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">
+                    {removedMemberPermissions.length > 0 ? removedMemberPermissions.map(key => permissionLabels[key]).join(', ') : 'No removals'}
+                  </p>
+                </div>
+              </div>
+            </section>
+
             <fieldset disabled={!memberPermissionsCustom} className="space-y-4 disabled:opacity-55">
               <legend className="sr-only">Member permissions</legend>
               {permissionGroups.map(group => (
@@ -1494,7 +1638,7 @@ const Approvals: React.FC = () => {
                     onChange={e => setNewUser({ ...newUser, customRoleId: e.target.value })}
                   >
                     <option value="">Base role only</option>
-                    {getAssignableCustomRoles(newUser.role, rolePermissions).map(customRole => <option key={customRole.id} data-i18n-skip value={customRole.id}>{customRole.name}</option>)}
+                    {getAssignableCustomRoles(newUser.role, rolePermissions).filter(customRole => !customRole.isBuiltin).map(customRole => <option key={customRole.id} data-i18n-skip value={customRole.id}>{customRole.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -1510,7 +1654,7 @@ const Approvals: React.FC = () => {
                     value={newUser.departments}
                     onChange={departments => setNewUser({ ...newUser, departments })}
                   />
-                  {newUser.role === 'Staff' && <label className="block text-sm font-medium text-slate-700">Worker type<select className={cn(inputBase, 'mt-1 px-3 py-2.5')} value={newUser.workerType} onChange={event => setNewUser({ ...newUser, workerType: event.target.value as NonNullable<User['workerType']> })}><option value="employee">Employee</option><option value="supplier">Supplier</option><option value="freelancer">Freelancer</option></select></label>}
+                  {['Staff', 'HOD'].includes(newUser.role) && <label className="block text-sm font-medium text-slate-700">Worker type<select className={cn(inputBase, 'mt-1 px-3 py-2.5')} value={newUser.workerType} onChange={event => setNewUser({ ...newUser, workerType: event.target.value as NonNullable<User['workerType']> })}><option value="employee">Employee</option><option value="supplier">Supplier</option><option value="freelancer">Freelancer</option></select></label>}
                 </div>
               )}
 
@@ -1763,6 +1907,21 @@ const Approvals: React.FC = () => {
               </button>
             </div>
         </ModalShell>
+      )}
+      {confirmation && (
+        <ConfirmDialog
+          labelledBy={confirmationTitleId}
+          title={confirmation.title}
+          description={confirmation.description}
+          confirmLabel={confirmation.confirmLabel}
+          tone={confirmation.tone}
+          busy={isActionSaving}
+          onClose={() => setConfirmation(null)}
+          onConfirm={async () => {
+            await confirmation.action();
+            setConfirmation(null);
+          }}
+        />
       )}
     </div>
   );

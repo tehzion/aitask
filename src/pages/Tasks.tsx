@@ -10,7 +10,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
-import { canAssignTasksToOthers, canCreateTasks, canEditTask as canEditTaskByRole, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { canAssignTasksToOthers, canCreateTasks, canEditTask as canEditTaskByRole, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import { SkeletonTableRow, SkeletonMobileCard } from '../components/SkeletonCard';
 import { safeHttpsUrl } from '../lib/security';
 import { DEPARTMENTS } from '../lib/departments';
@@ -164,6 +164,7 @@ const TasksWorkspace: React.FC = () => {
   const clientRouteFilter = searchParams.get('client') || '';
   const taskIdFilter = searchParams.get('taskId');
   const assigneeRouteFilter = searchParams.get('assignee') || '';
+  const routeFocus = searchParams.get('focus') || '';
   const requestedPeriod = searchParams.get('period');
   const periodRouteFilter: TeamWorkloadPeriod | '' = requestedPeriod === 'today' || requestedPeriod === 'week' || requestedPeriod === 'overall'
     ? requestedPeriod
@@ -304,10 +305,21 @@ const TasksWorkspace: React.FC = () => {
         && task.dueDate >= routePeriodBounds.from
         && task.dueDate <= routePeriodBounds.to
       );
+      const matchesFocus = routeFocus === 'overdue'
+        ? Boolean(
+            task.dueDate
+            && !task.isCompleted
+            && task.status !== 'Cancelled'
+            && isBefore(parseOptionalDate(task.dueDate) || new Date(0), new Date())
+            && !isToday(parseOptionalDate(task.dueDate) || new Date(0)),
+          )
+        : routeFocus === 'waiting'
+          ? task.status === 'Waiting Approval' && !task.isCompleted
+          : true;
 
-      return matchesSearch && matchesDept && matchesAssignee && matchesClient && matchesStatus && matchesPriority && matchesDateFrom && matchesDateTo && matchesProject && matchesTask && matchesRoutePeriod;
+      return matchesSearch && matchesDept && matchesAssignee && matchesClient && matchesStatus && matchesPriority && matchesDateFrom && matchesDateTo && matchesProject && matchesTask && matchesRoutePeriod && matchesFocus;
     });
-  }, [assigneeRouteFilter, clientRouteFilter, dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, projectIdFilter, routePeriodBounds, searchTerm, taskIdFilter, tasks, users]);
+  }, [assigneeRouteFilter, clientRouteFilter, dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, projectIdFilter, routeFocus, routePeriodBounds, searchTerm, taskIdFilter, tasks, users]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTasks.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -354,7 +366,7 @@ const TasksWorkspace: React.FC = () => {
       : 'View details';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions, activeQuickTask);
   const TABLE_COLUMN_COUNT = isClientUser ? 5 : 8;
-  const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient, assigneeRouteFilter, periodRouteFilter].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
+  const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient, assigneeRouteFilter, periodRouteFilter, routeFocus].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
   const activeFilterLabels = [
     searchTerm && `Search: ${searchTerm}`,
     filterDepartment !== 'All' && filterDepartment,
@@ -368,12 +380,21 @@ const TasksWorkspace: React.FC = () => {
     dateTo && `To ${dateTo}`,
     activeProject && activeProject.projectName,
     taskIdFilter && taskIdFilter,
+    routeFocus === 'overdue' && 'Overdue',
+    routeFocus === 'waiting' && 'Waiting approval',
     periodRouteFilter && (periodRouteFilter === 'today' ? 'Today' : periodRouteFilter === 'week' ? 'This week' : 'Overall'),
   ].filter((label): label is string => Boolean(label));
 
   const clearRouteFilter = (key: string) => {
     const next = new URLSearchParams(searchParams);
     next.delete(key);
+    setSearchParams(next, { replace: true });
+  };
+
+  const clearTaskRouteFocus = () => {
+    if (!routeFocus) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('focus');
     setSearchParams(next, { replace: true });
   };
 
@@ -486,6 +507,23 @@ const TasksWorkspace: React.FC = () => {
         </div>
       )}
 
+      {routeFocus && (
+        <div className="flex items-center gap-3 rounded-lg border border-accent/20 bg-accent-soft px-4 py-3 text-accent">
+          <span className="min-w-0 flex-1 text-sm font-medium">
+            Showing <strong className="font-bold">{routeFocus === 'overdue' ? 'overdue tasks' : routeFocus === 'waiting' ? 'tasks waiting for approval' : 'focused tasks'}</strong>
+          </span>
+          <button
+            type="button"
+            onClick={() => clearRouteFilter('focus')}
+            className="rounded-md p-1.5 transition hover:bg-accent/10 focus:outline-none focus:ring-2 focus:ring-accent/30"
+            title="Clear focus filter"
+            aria-label="Clear focus filter"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {activeClient && !(isClientUser && !canViewActiveClient) && (
         <div className={`${cardBase} overflow-hidden`}>
           <div className="border-b border-slate-200 bg-slate-50/80 px-5 py-4">
@@ -590,18 +628,19 @@ const TasksWorkspace: React.FC = () => {
                 ['waiting', t('Waiting approval')],
               ] as const).map(([value, label]) => {
                 const isActive = value === 'all'
-                  ? !dateFrom && !dateTo && filterStatus === 'All'
+                  ? !routeFocus && !dateFrom && !dateTo && filterStatus === 'All'
                   : value === 'today'
                     ? dateFrom === format(new Date(), 'yyyy-MM-dd') && dateTo === format(new Date(), 'yyyy-MM-dd')
                     : value === 'overdue'
-                      ? !dateFrom && dateTo === format(new Date(), 'yyyy-MM-dd')
-                      : filterStatus === 'Waiting Approval';
+                      ? routeFocus === 'overdue' || (!routeFocus && !dateFrom && dateTo === format(new Date(), 'yyyy-MM-dd'))
+                      : routeFocus === 'waiting' || (!routeFocus && filterStatus === 'Waiting Approval');
                 return (
                   <button
                     key={value}
                     type="button"
                     aria-pressed={isActive}
                     onClick={() => {
+                      clearTaskRouteFocus();
                       const todayKey = format(new Date(), 'yyyy-MM-dd');
                       if (value === 'all') {
                         setDateFrom('');
@@ -1218,7 +1257,7 @@ const TasksWorkspace: React.FC = () => {
                   <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                 </div>
                 {!canAssignOthers && (
-                  <p className="mt-1 text-[10px] text-slate-400">Only admins can reassign tasks.</p>
+                  <p className="mt-1 text-[10px] text-slate-400">Only Boss Koo can reassign tasks.</p>
                 )}
               </div>
             </div>
@@ -1232,7 +1271,7 @@ const TasksWorkspace: React.FC = () => {
 const Tasks: React.FC = () => {
   const currentUser = useStore(state => state.currentUser);
   if (currentUser?.role === 'Client') return <ClientDeliveries />;
-  if (currentUser?.role === 'Staff') return <StaffAllWork />;
+  if (currentUser && !isBossKoo(currentUser)) return <StaffAllWork />;
   return <TasksWorkspace />;
 };
 

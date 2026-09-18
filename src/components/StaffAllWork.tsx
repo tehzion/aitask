@@ -21,26 +21,45 @@ const priorities: Priority[] = ['Urgent', 'High', 'Medium', 'Low'];
 
 const StaffAllWork: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, tasks: allTasks, rolePermissions, taskStatuses } = useStore(useShallow(state => ({
+  const { currentUser, tasks: allTasks, rolePermissions, taskStatuses, clients: clientProfiles, projects, users } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     tasks: state.tasks,
     rolePermissions: state.rolePermissions,
     taskStatuses: state.taskStatuses,
+    clients: state.clients,
+    projects: state.projects,
+    users: state.users,
   })));
   const [bucket, setBucket] = React.useState<StaffAllWorkBucket>('all');
   const [search, setSearch] = React.useState(searchParams.get('search') || '');
   const [filtersOpen, setFiltersOpen] = React.useState(false);
   const [client, setClient] = React.useState('All');
+  const [project, setProject] = React.useState('All');
+  const [assignee, setAssignee] = React.useState('All');
+  const [department, setDepartment] = React.useState('All');
+  const [creator, setCreator] = React.useState('All');
   const [status, setStatus] = React.useState<TaskStatus>('All');
   const [priority, setPriority] = React.useState<Priority | 'All'>('All');
   const [dueFrom, setDueFrom] = React.useState('');
   const [dueTo, setDueTo] = React.useState('');
   const [fullEditorOpen, setFullEditorOpen] = React.useState(false);
 
-  const tasks = React.useMemo(
-    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
-    [allTasks, currentUser, rolePermissions],
+  const visibleTasks = React.useMemo(
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
+    [allTasks, clientProfiles, currentUser, projects, rolePermissions],
   );
+  const isHod = currentUser?.role === 'HOD';
+  const isProjectManager = currentUser?.role === 'Project Manager';
+  const [scopeView, setScopeView] = React.useState<'mine' | 'department'>('department');
+  const tasks = React.useMemo(() => {
+    if (isHod && scopeView === 'mine') {
+      return visibleTasks.filter(task => task.assignedTo === currentUser?.id || task.createdBy === currentUser?.id);
+    }
+    if (currentUser?.role === 'Staff') {
+      return visibleTasks.filter(task => task.assignedTo === currentUser.id || task.createdBy === currentUser.id);
+    }
+    return visibleTasks;
+  }, [currentUser, isHod, scopeView, visibleTasks]);
   const queue = React.useMemo(() => buildStaffWorkQueue(tasks, getTodayInputDate()), [tasks]);
   const orderedTasks = React.useMemo(() => (
     bucket === 'all'
@@ -48,11 +67,19 @@ const StaffAllWork: React.FC = () => {
       : queue[bucket]
   ), [bucket, queue]);
   const clients = React.useMemo(() => Array.from(new Set(tasks.map(task => task.clientName).filter(Boolean))).sort(), [tasks]);
+  const projectsForFilter = React.useMemo(() => Array.from(new Set(tasks.map(task => task.projectName).filter(Boolean))).sort(), [tasks]);
+  const departments = React.useMemo(() => Array.from(new Set(tasks.map(task => task.department).filter(Boolean))).sort(), [tasks]);
+  const assignees = React.useMemo(() => users.filter(user => tasks.some(task => task.assignedTo === user.id)), [tasks, users]);
+  const creators = React.useMemo(() => users.filter(user => tasks.some(task => task.createdBy === user.id)), [tasks, users]);
   const normalizedSearch = search.trim().toLowerCase();
   const filteredTasks = orderedTasks.filter(task => {
-    const searchable = [task.title, task.description, task.clientName, task.projectName, task.serviceType].filter(Boolean).join(' ').toLowerCase();
+    const searchable = [task.title, task.description, task.clientName, task.projectName, task.serviceType, task.department].filter(Boolean).join(' ').toLowerCase();
     return (!normalizedSearch || searchable.includes(normalizedSearch))
       && (client === 'All' || task.clientName === client)
+      && (project === 'All' || task.projectName === project)
+      && (assignee === 'All' || task.assignedTo === assignee)
+      && (department === 'All' || task.department === department)
+      && (creator === 'All' || task.createdBy === creator)
       && (status === 'All' || task.status === status)
       && (priority === 'All' || task.priority === priority)
       && (!dueFrom || Boolean(task.dueDate && task.dueDate >= dueFrom))
@@ -60,7 +87,7 @@ const StaffAllWork: React.FC = () => {
   });
   const taskId = searchParams.get('taskId');
   const selectedTask = taskId ? tasks.find(task => task.id === taskId) || null : null;
-  const activeFilterCount = [client !== 'All', status !== 'All', priority !== 'All', Boolean(dueFrom), Boolean(dueTo)].filter(Boolean).length;
+  const activeFilterCount = [client !== 'All', project !== 'All', assignee !== 'All', department !== 'All', creator !== 'All', status !== 'All', priority !== 'All', Boolean(dueFrom), Boolean(dueTo)].filter(Boolean).length;
 
   React.useEffect(() => {
     const handleFocusSearch = () => document.querySelector<HTMLInputElement>('[data-staff-work-search]')?.focus();
@@ -77,6 +104,10 @@ const StaffAllWork: React.FC = () => {
 
   const clearFilters = () => {
     setClient('All');
+    setProject('All');
+    setAssignee('All');
+    setDepartment('All');
+    setCreator('All');
     setStatus('All');
     setPriority('All');
     setDueFrom('');
@@ -87,8 +118,8 @@ const StaffAllWork: React.FC = () => {
     <div className={`${pageShell} max-w-6xl`}>
       <PageHeader
         compact
-        title="All work"
-        description="Your visible work, ordered by what needs attention first."
+        title={isProjectManager ? 'Portfolio work' : isHod ? 'Department work' : 'All work'}
+        description={isProjectManager ? 'Your portfolio work, ordered by delivery risk and next action.' : isHod ? 'Department work, including delegated tasks and items that need review.' : 'All visible work, ordered by what needs attention first.'}
         meta={<span className="calm-number">{filteredTasks.length} task{filteredTasks.length === 1 ? '' : 's'}</span>}
         action={<Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>}
       />
@@ -110,6 +141,17 @@ const StaffAllWork: React.FC = () => {
           {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')} className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-4 w-4" /></button>}
         </div>
 
+        {isHod && (
+          <SegmentedTabs<'mine' | 'department'>
+            items={[{ id: 'mine', label: 'My work', count: visibleTasks.filter(task => task.assignedTo === currentUser?.id || task.createdBy === currentUser?.id).length }, { id: 'department', label: 'Department work', count: visibleTasks.length }]}
+            value={scopeView}
+            onChange={setScopeView}
+            label="HOD work scope"
+            idPrefix="hod-scope"
+            variant="underline"
+          />
+        )}
+
         <SegmentedTabs<StaffAllWorkBucket>
           items={buckets.map(item => ({ id: item, label: item === 'all' ? 'All' : getStaffBucketLabel(item), count: item === 'all' ? tasks.length : queue[item].length }))}
           value={bucket}
@@ -127,7 +169,7 @@ const StaffAllWork: React.FC = () => {
         )}
 
         <Surface id={`all-work-panel-${bucket}`} role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={tasks} onOpen={item => setTaskId(item.id)} />)}
+          {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={tasks} users={users} onOpen={item => setTaskId(item.id)} />)}
           {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">No visible work matches this view</p><p className="mt-1 text-sm text-muted">Clear a filter or choose another queue.</p></div>}
         </Surface>
       </section>
@@ -141,6 +183,10 @@ const StaffAllWork: React.FC = () => {
       >
         <div className="space-y-5">
           <label className="block text-sm font-medium text-ink">Client<select aria-label="Filter by client" value={client} onChange={event => setClient(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{clients.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">Project<select aria-label="Filter by project" value={project} onChange={event => setProject(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{projectsForFilter.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">Assignee<select aria-label="Filter by assignee" value={assignee} onChange={event => setAssignee(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{assignees.map(user => <option data-i18n-skip key={user.id} value={user.id}>{user.name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">Department<select aria-label="Filter by department" value={department} onChange={event => setDepartment(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{departments.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">Created by<select aria-label="Filter by creator" value={creator} onChange={event => setCreator(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{creators.map(user => <option data-i18n-skip key={user.id} value={user.id}>{user.name}</option>)}</select></label>
           <label className="block text-sm font-medium text-ink">Status<select aria-label="Filter by status" value={status} onChange={event => setStatus(event.target.value as TaskStatus)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{taskStatuses.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
           <label className="block text-sm font-medium text-ink">Priority<select aria-label="Filter by priority" value={priority} onChange={event => setPriority(event.target.value as Priority | 'All')} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{priorities.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
           <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium text-ink">Due from<input type="date" aria-label="Due from" value={dueFrom} onChange={event => setDueFrom(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`} /></label><label className="block text-sm font-medium text-ink">Due to<input type="date" aria-label="Due to" value={dueTo} onChange={event => setDueTo(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`} /></label></div>

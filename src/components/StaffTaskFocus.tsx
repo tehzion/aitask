@@ -48,6 +48,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   const [comment, setComment] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [pendingStatus, setPendingStatus] = React.useState<TaskStatus | null>(null);
   const statusPickerRef = React.useRef<HTMLSelectElement>(null);
   const liveTask = task ? tasks.find(item => item.id === task.id) || task : null;
 
@@ -55,6 +56,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
     setComment('');
     setError('');
     setIsSaving(false);
+    setPendingStatus(null);
   }, [task?.id]);
 
   if (!liveTask) return null;
@@ -74,11 +76,11 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   const canEdit = canEditTask(currentUser, liveTask, rolePermissions);
   const canComment = canCommentOnTask(currentUser, liveTask, rolePermissions);
 
-  const persistStatus = async (status: TaskStatus) => {
+  const persistStatus = async (status: TaskStatus, skipDependencyPrompt = false) => {
     if (mutationLocked || !canEdit || status === liveTask.status) return;
-    if (incompletePredecessors.length > 0 && !['Pending', 'Cancelled'].includes(status)) {
-      const confirmed = window.confirm(t(`This task still has ${incompletePredecessors.length} incomplete predecessor task(s). Start it anyway?`));
-      if (!confirmed) return;
+    if (!skipDependencyPrompt && incompletePredecessors.length > 0 && !['Pending', 'Cancelled'].includes(status)) {
+      setPendingStatus(status);
+      return;
     }
     setIsSaving(true);
     setError('');
@@ -109,7 +111,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
           ref={statusPickerRef}
           aria-label="All task statuses"
           value={liveTask.status}
-          disabled={mutationLocked || !canEdit || isSaving}
+          disabled={mutationLocked || !canEdit || isSaving || pendingStatus !== null}
           onChange={event => void persistStatus(event.target.value)}
           className={`${inputBase} min-h-11 appearance-none px-3 pr-9`}
         >
@@ -119,7 +121,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
       </label>
       <Button
         className="sm:min-w-44"
-        disabled={mutationLocked || !canEdit || isSaving || guidedAction.disabled}
+        disabled={mutationLocked || !canEdit || isSaving || guidedAction.disabled || pendingStatus !== null}
         onClick={() => {
           if (guidedAction.kind === 'advance' && guidedAction.targetStatus) void persistStatus(guidedAction.targetStatus);
           else statusPickerRef.current?.focus();
@@ -143,6 +145,21 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
       footer={footer}
     >
       <div className="space-y-6 pb-2">
+        {pendingStatus && (
+          <section role="alertdialog" aria-labelledby="staff-dependency-confirm-title" aria-describedby="staff-dependency-confirm-description" className="rounded-panel border border-amber-200 bg-amber-50 p-4 text-amber-950 shadow-sm dark:bg-[#31240f] dark:text-[#fff2c2] dark:ring-1 dark:ring-[#765d22]">
+            <div className="flex gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+              <div className="min-w-0">
+                <h3 id="staff-dependency-confirm-title" className="font-semibold">Start with an incomplete earlier step?</h3>
+                <p id="staff-dependency-confirm-description" className="mt-1 text-sm leading-6">This task still has {incompletePredecessors.length} incomplete predecessor task(s). Confirm before moving it to {pendingStatus}.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" variant="secondary" onClick={() => setPendingStatus(null)}>Cancel</Button>
+                  <Button type="button" onClick={() => { const nextStatus = pendingStatus; setPendingStatus(null); void persistStatus(nextStatus, true); }}>Continue</Button>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
         {error && <div role="alert" aria-live="assertive" className="rounded-control bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200">{error}</div>}
 
         <section aria-labelledby="staff-task-state" className="calm-raised p-4 sm:p-5">

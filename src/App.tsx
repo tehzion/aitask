@@ -22,6 +22,7 @@ const AccountPassword = React.lazy(() => import('./pages/AccountPassword'));
 const Feedback = React.lazy(() => import('./pages/Feedback'));
 const FeedbackResults = React.lazy(() => import('./pages/FeedbackResults'));
 const Notifications = React.lazy(() => import('./pages/Notifications'));
+const Tasks = React.lazy(() => import('./pages/Tasks'));
 
 const RouteLoading = () => (
   <div className="flex min-h-[40vh] items-center justify-center px-4 text-sm font-medium text-slate-500" role="status">
@@ -52,17 +53,6 @@ const RoleRoute: React.FC<{ path: string; children: React.ReactNode }> = ({ path
   return canAccessPath(currentUser, path, rolePermissions) || isRequiredAccountSetup
     ? <>{children}</>
     : <AccessDenied />;
-};
-
-const TasksRedirect = () => {
-  const location = useLocation();
-  const legacy = new URLSearchParams(location.search);
-  const next = new URLSearchParams();
-  ['search', 'client', 'taskId'].forEach(key => {
-    const value = legacy.get(key);
-    if (value) next.set(key, value);
-  });
-  return <Navigate to={`/clients${next.size ? `?${next.toString()}` : ''}`} replace />;
 };
 
 function App() {
@@ -151,7 +141,7 @@ function App() {
               </PrivateRoute>
             }>
               <Route index element={<RoleRoute path="/"><Dashboard /></RoleRoute>} />
-              <Route path="tasks" element={<TasksRedirect />} />
+              <Route path="tasks" element={<RoleRoute path="/tasks"><Tasks /></RoleRoute>} />
               <Route path="calendar" element={<RoleRoute path="/calendar"><Calendar /></RoleRoute>} />
               <Route path="clients" element={<RoleRoute path="/clients"><Clients /></RoleRoute>} />
               {/* ClientWorkspace performs client ownership and assigned-staff checks itself. */}

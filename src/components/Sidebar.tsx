@@ -55,9 +55,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
   const rolePermissions = useStore((state) => state.rolePermissions);
   const clients = useStore((state) => state.clients);
   const setCreateTaskModalOpen = useStore((state) => state.setCreateTaskModalOpen);
-  const isStaff = currentUser?.role === 'Staff';
+  const isStaff = currentUser?.role === 'Staff' || currentUser?.role === 'HOD';
   const isClient = currentUser?.role === 'Client';
-  const staffMoreActive = ['/clients', '/projects', '/reports', '/settings'].some(path => location.pathname === path || location.pathname.startsWith(`${path}/`));
+  const staffMoreActive = ['/tasks', '/clients', '/projects', '/reports', '/settings'].some(path => location.pathname === path || location.pathname.startsWith(`${path}/`));
   const clientMoreActive = ['/calendar', '/clients', '/reports', '/settings'].some(path => location.pathname === path || location.pathname.startsWith(`${path}/`));
   const moreActive = isClient ? clientMoreActive : staffMoreActive;
   const [staffMoreOpen, setStaffMoreOpen] = React.useState(moreActive);
@@ -80,6 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
         icon: navIcons[item.label as keyof typeof navIcons],
       }));
   const staffMoreItems = [
+    { path: '/tasks', label: 'All work', icon: CheckSquare },
     { path: '/clients', label: 'Clients', icon: Users },
     { path: '/projects', label: 'Companies', icon: FolderKanban },
     { path: '/reports', label: 'Reports', icon: BarChart3 },

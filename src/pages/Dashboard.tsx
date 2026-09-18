@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { SkeletonMetricCard, SkeletonChartCard } from '../components/SkeletonCard';
@@ -43,6 +43,8 @@ const StatCard = ({ title, value, icon: Icon, tone, to }: StatCardProps) => (
   </Link>
 );
 
+const PORTFOLIO_PAGE_SIZE = 25;
+
 const Dashboard: React.FC = () => {
   const { projects, tasks: allTasks, users, currentUser, rolePermissions, backend, setCreateTaskModalOpen, hasLocalServiceDemo, registrations, clientPlans, serviceCycles, clientProfiles } = useStore(useShallow(state => ({
     projects: state.projects,
@@ -61,6 +63,8 @@ const Dashboard: React.FC = () => {
   const { t } = useI18n();
   const [bossTab, setBossTab] = useState<BossTab>('overview');
   const [portfolioOwner, setPortfolioOwner] = useState('All');
+  const [portfolioSearch, setPortfolioSearch] = useState('');
+  const [portfolioPage, setPortfolioPage] = useState(1);
 
   const tasks = useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
@@ -135,6 +139,23 @@ const Dashboard: React.FC = () => {
       .sort((left, right) => left.company.localeCompare(right.company) || left.project.localeCompare(right.project))
   ), [portfolioAllRows, portfolioOwner]);
 
+  const filteredPortfolioRows = useMemo(() => {
+    const query = portfolioSearch.trim().toLowerCase();
+    if (!query) return portfolioRows;
+    return portfolioRows.filter(row => [row.type, row.company, row.project, row.owner].some(value => value.toLowerCase().includes(query)));
+  }, [portfolioRows, portfolioSearch]);
+
+  const portfolioPageCount = Math.max(1, Math.ceil(filteredPortfolioRows.length / PORTFOLIO_PAGE_SIZE));
+  const safePortfolioPage = Math.min(portfolioPage, portfolioPageCount);
+  const pagedPortfolioRows = filteredPortfolioRows.slice(
+    (safePortfolioPage - 1) * PORTFOLIO_PAGE_SIZE,
+    safePortfolioPage * PORTFOLIO_PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setPortfolioPage(1);
+  }, [portfolioOwner, portfolioSearch]);
+
   const portfolioOwnerCounts = useMemo(() => {
     const counts = new Map<string, number>();
     portfolioAllRows.forEach(row => {
@@ -148,7 +169,7 @@ const Dashboard: React.FC = () => {
     () => portfolioAllRows.some(row => !row.ownerId),
     [portfolioAllRows]
   );
-  const showStaffOperations = currentUser?.role === 'Staff';
+  const showStaffOperations = currentUser?.role === 'Staff' || currentUser?.role === 'HOD';
   const showClientPortal = currentUser?.role === 'Client';
 
   const bossBriefing = useMemo(() => {
@@ -198,10 +219,10 @@ const Dashboard: React.FC = () => {
       : [],
     [currentUser, showStaffOperations, tasks]
   );
-  const dashboardDescription = currentUser?.role === 'Staff'
+  const dashboardDescription = currentUser?.role === 'Staff' || currentUser?.role === 'HOD'
     ? staffAssignedTasks.length > 0
       ? `Welcome back, ${currentUser.name}. Here is what needs your attention and what you have completed.`
-      : `Welcome back, ${currentUser.name}. Your assigned work will appear here.`
+      : `Welcome back, ${currentUser.name}. Your assigned and department-scoped work will appear here.`
     : hasTaskData
       ? `Welcome back, ${currentUser?.name}! Here's your task overview.`
       : `Welcome back, ${currentUser?.name}! Your live workspace is ready.`;
@@ -386,11 +407,27 @@ const Dashboard: React.FC = () => {
 
   if (showStaffOperations) return <StaffMyWork />;
 
+  if (currentUser?.role === 'Project Manager' && !isBossKoo(currentUser)) return (
+    <div className={pageShell}>
+      <PageHeader
+        title="Project Manager Dashboard"
+        description="Portfolio-scoped delivery first: deadlines, review risk, active companies, and contracted value inside your own portfolio."
+        action={(
+          <Link to="/tasks" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+            Open portfolio work
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        )}
+      />
+      <div className="mt-6"><ServiceRoleDashboard /></div>
+    </div>
+  );
+
   return (
     <>
     <div className={pageShell}>
       <PageHeader
-        title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Admin' ? 'Project Manager Dashboard' : showClientPortal ? 'Home' : 'My Dashboard'}
+        title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Project Manager' ? 'Project Manager Dashboard' : showClientPortal ? 'Home' : 'My Dashboard'}
         description={showClientPortal
           ? `Your next decision, delivery timing, and shared updates for ${currentUser?.companyName || 'your company'}.`
           : dashboardDescription}
@@ -443,15 +480,15 @@ const Dashboard: React.FC = () => {
                 <h2 className="text-lg font-bold text-slate-950">
                   {currentUser?.role === 'Client'
                     ? 'No visible client tasks yet'
-                    : currentUser?.role === 'Staff'
+                    : currentUser?.role === 'Staff' || currentUser?.role === 'HOD'
                       ? 'No assigned tasks yet'
                       : 'Start the live workspace'}
                 </h2>
                 <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
                   {currentUser?.role === 'Client'
                     ? 'Tasks for your company will appear here as soon as the team publishes or assigns them.'
-                    : currentUser?.role === 'Staff'
-                      ? 'Work assigned to you will appear here. You can also create a task for an existing Project Manager-created company.'
+                    : currentUser?.role === 'Staff' || currentUser?.role === 'HOD'
+                      ? 'Work assigned to you and work in your permitted departments will appear here.'
                       : 'Demo tasks are cleared. Create the first real task so dashboards, calendars, notifications, and reports begin filling with live data.'}
                 </p>
               </div>
@@ -460,7 +497,7 @@ const Dashboard: React.FC = () => {
               {canCreateTask && (
                 <Button onClick={() => setCreateTaskModalOpen(true)} className="shrink-0">
                   <Plus className="h-4 w-4" />
-                  {currentUser?.role === 'Staff' ? 'Create task' : 'Create first task'}
+                  {currentUser?.role === 'Staff' || currentUser?.role === 'HOD' ? 'Create task' : 'Create first task'}
                 </Button>
               )}
               <Link
@@ -529,14 +566,14 @@ const Dashboard: React.FC = () => {
 
                 {bossBriefing && (
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <Link to="/clients?period=all" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+                    <Link to="/tasks?focus=overdue" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
                       <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', bossBriefing.overdueCount > 0 ? 'bg-red-50 text-red-700' : 'bg-inset text-muted')}><AlertCircle className="h-4 w-4" /></span>
                       <span className="min-w-0">
                         <span className="calm-number block text-xl font-semibold text-ink">{bossBriefing.overdueCount}</span>
                         <span className="block truncate text-xs text-muted">{t('Overdue tasks')}</span>
                       </span>
                     </Link>
-                    <Link to="/clients?period=all" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+                    <Link to="/tasks?focus=waiting" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
                       <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', bossBriefing.waitingCount > 0 ? 'bg-amber-50 text-amber-700' : 'bg-inset text-muted')}><FileCheck2 className="h-4 w-4" /></span>
                       <span className="min-w-0">
                         <span className="calm-number block text-xl font-semibold text-ink">{bossBriefing.waitingCount}</span>
@@ -561,8 +598,18 @@ const Dashboard: React.FC = () => {
                       <h2 id="portfolio-monitor-title" className="text-base font-semibold text-ink">{t('Client & project monitor')}</h2>
                       <p className="mt-1 text-sm text-muted">{t('Every company and project with its Project Manager owner.')}</p>
                     </div>
-                    <label className="flex items-center gap-2 text-sm text-muted">
-                      <span>{t('Filter by owner')}</span>
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                      <label className="sr-only" htmlFor="portfolio-search">{t('Search companies or projects')}</label>
+                      <input
+                        id="portfolio-search"
+                        type="search"
+                        value={portfolioSearch}
+                        onChange={event => setPortfolioSearch(event.target.value)}
+                        placeholder={t('Search companies or projects')}
+                        className="min-h-9 w-full rounded-control border border-line bg-surface px-3 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/35 sm:w-56"
+                      />
+                      <label className="flex items-center gap-2 text-sm text-muted">
+                        <span className="whitespace-nowrap">{t('Filter by owner')}</span>
                       <select
                         aria-label={t('Filter by owner')}
                         value={portfolioOwner}
@@ -577,9 +624,10 @@ const Dashboard: React.FC = () => {
                           <option key={owner.id} value={owner.id}>{owner.name} ({portfolioOwnerCounts.get(owner.id) || 0})</option>
                         ))}
                       </select>
-                    </label>
+                      </label>
+                    </div>
                   </div>
-                  {portfolioRows.length === 0 ? (
+                  {filteredPortfolioRows.length === 0 ? (
                     <p className="px-5 py-6 text-sm text-muted">{t('No companies or projects match this owner yet.')}</p>
                   ) : (
                     <div className="overflow-x-auto">
@@ -593,7 +641,7 @@ const Dashboard: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-line/50">
-                          {portfolioRows.slice(0, 50).map(row => (
+                          {pagedPortfolioRows.map(row => (
                             <tr key={row.id} className="hover:bg-inset/40">
                               <td className="px-5 py-3 text-muted">{row.type}</td>
                               <td className="px-5 py-3 font-medium text-ink">{row.company}</td>
@@ -605,9 +653,30 @@ const Dashboard: React.FC = () => {
                           ))}
                         </tbody>
                       </table>
-                      {portfolioRows.length > 50 && (
-                        <p className="px-5 py-3 text-xs text-muted">{t('Showing the first 50 entries.')}</p>
-                      )}
+                      <div className="flex flex-col gap-3 border-t border-line/60 px-5 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                          Showing {(safePortfolioPage - 1) * PORTFOLIO_PAGE_SIZE + 1}–{Math.min(safePortfolioPage * PORTFOLIO_PAGE_SIZE, filteredPortfolioRows.length)} of {filteredPortfolioRows.length}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={safePortfolioPage <= 1}
+                            onClick={() => setPortfolioPage(page => Math.max(1, page - 1))}
+                            className="min-h-9 rounded-control border border-line bg-surface px-3 font-semibold text-ink transition-colors hover:bg-inset disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            Previous
+                          </button>
+                          <span aria-live="polite">Page {safePortfolioPage} of {portfolioPageCount}</span>
+                          <button
+                            type="button"
+                            disabled={safePortfolioPage >= portfolioPageCount}
+                            onClick={() => setPortfolioPage(page => Math.min(portfolioPageCount, page + 1))}
+                            className="min-h-9 rounded-control border border-line bg-surface px-3 font-semibold text-ink transition-colors hover:bg-inset disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </section>

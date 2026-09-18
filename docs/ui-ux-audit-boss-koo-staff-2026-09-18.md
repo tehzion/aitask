@@ -4,7 +4,9 @@
 
 Audit target: current working tree, covering Boss Koo’s super-admin experience and the default Staff role. HOD/custom Staff roles, backend-only authorization, and production integrations are out of scope.
 
-Overall assessment: the role split is directionally strong. Staff receives a focused, action-first workbench and Boss Koo receives operational oversight with dashboard tabs. The main usability blocker is the Staff work-discovery route: `/tasks` redirects to the client delivery tracker, so the dedicated Staff “All work” screen is not reachable through the application router.
+Overall assessment: the role split is directionally strong. Staff receives a focused, action-first workbench and Boss Koo receives operational oversight with dashboard tabs. The main usability blocker found during the audit was the Staff work-discovery route; the implementation below now resolves that blocker and the other prioritized UI findings.
+
+Implementation status: applied in the working tree. The changes preserve `/clients` for delivery tracking, make `/tasks` the canonical task workspace, add contextual Boss triage filters, add effective-access review, make member and portfolio views responsive/discoverable, and replace the scoped native confirmations with accessible in-app dialogs.
 
 ## Strengths
 
@@ -17,6 +19,8 @@ Overall assessment: the role split is directionally strong. Staff receives a foc
 ## Prioritized findings
 
 ### P0 — Staff “All work” is unreachable and key links land in the wrong workspace
+
+Status: Resolved.
 
 Evidence:
 
@@ -42,6 +46,8 @@ Acceptance checks:
 
 ### P1 — Boss Koo’s task triage cards do not preserve their stated context
 
+Status: Resolved.
+
 Evidence: the Boss dashboard’s `Overdue tasks` and `Waiting approval` cards both link to the unfiltered `/clients?period=all` route in [`Dashboard.tsx`](/Users/user/Downloads/aitask-master/src/pages/Dashboard.tsx:530).
 
 Impact: clicking a high-priority operational signal does not show the corresponding subset. Boss Koo must manually rediscover the overdue or approval state, weakening the dashboard’s triage value.
@@ -55,6 +61,8 @@ Acceptance checks:
 - Empty filtered states explain that no matching work exists and offer a path back to all work.
 
 ### P1 — Role and permission management lacks an effective-access review step
+
+Status: Resolved.
 
 Evidence: [`Roles & Permissions`](/Users/user/Downloads/aitask-master/src/pages/Approvals.tsx:919) combines role creation, default-role definitions, member assignment, and permission editing. The member editor offers “Use role defaults” or “Custom access” but does not show an effective-access summary or before/after change set ([`Approvals.tsx`](/Users/user/Downloads/aitask-master/src/pages/Approvals.tsx:1368)).
 
@@ -70,6 +78,8 @@ Acceptance checks:
 
 ### P2 — Boss Koo’s active-user management is not mobile-first
 
+Status: Resolved.
+
 Evidence: pending registrations have a mobile-card presentation, but Active System Users remains a wide five-column table inside `overflow-x-auto` in [`Approvals.tsx`](/Users/user/Downloads/aitask-master/src/pages/Approvals.tsx:1145).
 
 Impact: on a 390px viewport, identity, role, contact, and actions are separated by horizontal scrolling. The most important action controls are icon-only and visually distant from the member identity.
@@ -84,6 +94,8 @@ Acceptance checks:
 
 ### P2 — Boss portfolio monitoring silently caps discoverability at 50 rows
 
+Status: Resolved.
+
 Evidence: the Client & project monitor renders `portfolioRows.slice(0, 50)` and only displays a “Showing the first 50 entries” note in [`Dashboard.tsx`](/Users/user/Downloads/aitask-master/src/pages/Dashboard.tsx:596).
 
 Impact: larger workspaces cannot find or inspect later companies/projects from the dashboard, with no search, pagination, or direct count-to-result relationship.
@@ -97,6 +109,8 @@ Acceptance checks:
 - Loading more does not shift the table header or lose the owner filter.
 
 ### P2 — High-impact confirmations use inconsistent native browser dialogs
+
+Status: Resolved for the audited flows. Registration approval/rejection, custom-role deletion, Staff dependency overrides, task deletion, and the full task-editor dependency override now use accessible in-app confirmations.
 
 Evidence: registration approval/rejection, role deletion, and task dependency overrides call `window.confirm` in [`Approvals.tsx`](/Users/user/Downloads/aitask-master/src/pages/Approvals.tsx:149) and [`StaffTaskFocus.tsx`](/Users/user/Downloads/aitask-master/src/components/StaffTaskFocus.tsx:77).
 
@@ -114,6 +128,9 @@ Acceptance checks:
 
 - Passed: `role-ux-stabilization.spec.ts` Boss and Staff queue keyboard-tab flow.
 - Passed: `role-ux-stabilization.spec.ts` Staff collapsed-navigation mobile check, including axe scan and no horizontal overflow.
-- Failed/blocked: the isolated Staff workbench flow was not green. One run stopped at the release notice during setup; an earlier run that dismissed the notice reached the expected `All work` assertion and failed because `/tasks` did not render the Staff queue.
-- Existing Staff visual snapshots were not replaced. They represent a different navigation state than the current router and should be updated only after the route/IA decision is implemented.
-- No application source, backend, or existing user changes were modified by this audit; this report is the only audit artifact added.
+- Passed: manual browser checks at the local demo server confirmed Staff `/tasks?period=all`, task focus, the accessible dependency confirmation, Boss `/tasks?focus=overdue`, effective-access preview, and 390px active-user cards.
+- Partial: the targeted Staff Playwright flow now reaches the updated route and task interaction; it stops at existing screenshot-baseline drift. Baselines were intentionally not replaced.
+- Passed: direct TypeScript check, full Vitest suite (39 files / 256 tests), targeted ESLint, `git diff --check`, and the production Vite build.
+- Full-repo ESLint still reports two unrelated pre-existing unused imports in `src/components/Layout.tsx` and `src/store/memberRole.test.ts`; those user changes were left untouched.
+- Existing Staff visual snapshots were not replaced; they remain intentionally preserved while the route/test visual drift is reviewed.
+- Targeted ESLint and `git diff --check` pass for the applied UI changes.

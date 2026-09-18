@@ -65,8 +65,10 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   const taskFocusAxe = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
   expect(taskFocusAxe.violations, `Staff task focus: ${taskFocusAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
 
-  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Send for review' }).click();
+  const dependencyConfirmation = page.getByRole('alertdialog', { name: 'Start with an incomplete earlier step?' });
+  await expect(dependencyConfirmation).toBeVisible();
+  await dependencyConfirmation.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('button', { name: 'Waiting for review' })).toBeDisabled();
 });
 
@@ -90,7 +92,7 @@ test('staff mobile keeps focus, task actions and secondary creation reachable', 
   await page.getByRole('button', { name: /Close 6\. Video Editing/ }).click();
 
   await page.goto('/');
-  await page.getByRole('button', { name: 'Open more staff actions' }).click();
+  await page.getByRole('button', { name: 'Open more destinations' }).click();
   await expect(page.getByRole('button', { name: 'Create task' })).toBeVisible();
   await page.getByRole('button', { name: 'Create task' }).click();
   await expect(page.getByRole('heading', { name: 'Create task' })).toBeVisible();
