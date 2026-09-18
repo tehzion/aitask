@@ -21,6 +21,18 @@ export interface OperationsPeriod {
   label: string;
 }
 
+export interface DueWorkWeek {
+  start: Date;
+  end: Date;
+  label: string;
+  isCurrent: boolean;
+  tasks: Task[];
+  onTime: number;
+  late: number;
+  open: number;
+  completionRate: number;
+}
+
 export interface AgencyPulseMetrics {
   period: OperationsPeriod;
   today: {
@@ -285,6 +297,44 @@ export const getTrackedWeeklyCompletions = (tasks: Task[], now = new Date(), wee
       name: format(weekStart, 'MMM d'),
       completed: tasks.filter(task => isTaskCompleted(task) && isInPeriod(task.completedAt, weekStart, weekEnd)).length,
       pending: dueTasks.filter(task => isTaskOpen(task)).length,
+    };
+  });
+};
+
+/** Groups due work into Monday-to-Sunday cohorts for performance reporting. */
+export const getDueWorkPerformance = (tasks: Task[], now = new Date(), weeks = 4): DueWorkWeek[] => {
+  const currentWeek = startOfWeek(now, mondayWeek);
+  return Array.from({ length: weeks }, (_, index) => weeks - index - 1).map(offset => {
+    const start = startOfWeek(subWeeks(currentWeek, offset), mondayWeek);
+    const end = endOfWeek(start, mondayWeek);
+    const cohort = tasks.filter(task => {
+      if (isCancelled(task)) return false;
+      const due = parseOptionalDate(task.dueDate);
+      return Boolean(due && isWithinInterval(due, { start, end }));
+    });
+    const onTime = cohort.filter(task => {
+      if (!isTaskCompleted(task)) return false;
+      const completedAt = parseOptionalDate(task.completedAt);
+      const due = parseOptionalDate(task.dueDate);
+      return Boolean(completedAt && due && completedAt <= endOfDay(due));
+    }).length;
+    const late = cohort.filter(task => {
+      if (!isTaskCompleted(task)) return false;
+      const completedAt = parseOptionalDate(task.completedAt);
+      const due = parseOptionalDate(task.dueDate);
+      return Boolean(completedAt && due && completedAt > endOfDay(due));
+    }).length;
+    const open = cohort.length - onTime - late;
+    return {
+      start,
+      end,
+      label: `${format(start, 'MMM d')}–${format(end, 'MMM d')}${start.getFullYear() === end.getFullYear() ? ` ${format(end, 'yyyy')}` : ` ${format(start, 'yyyy')}–${format(end, 'yyyy')}`}`,
+      isCurrent: offset === 0,
+      tasks: cohort,
+      onTime,
+      late,
+      open,
+      completionRate: cohort.length ? Math.round((onTime / cohort.length) * 100) : 0,
     };
   });
 };

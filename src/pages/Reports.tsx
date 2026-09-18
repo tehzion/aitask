@@ -6,11 +6,9 @@ import { ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../component
 import { cardBase, pageShell } from '../components/uiTokens';
 import { getVisibleTasks } from '../lib/access';
 import { STAFF_DEPARTMENTS } from '../lib/departments';
-import { getOperationsPeriod, getTrackedWeeklyCompletions, isTaskOpen } from '../lib/taskReporting';
-import { parseOptionalDate, themeTokenColor } from '../lib/utils';
+import { getDueWorkPerformance } from '../lib/taskReporting';
+import { themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
-import { isBefore, isToday } from 'date-fns';
-import { isWithinInterval } from 'date-fns';
 
 const Reports: React.FC = () => {
   const { tasks: allTasks, currentUser, rolePermissions } = useStore();
@@ -32,64 +30,54 @@ const Reports: React.FC = () => {
     : 'your accessible workspace tasks';
   const isClientUser = currentUser?.role === 'Client';
 
-  const trendData = useMemo(() => getTrackedWeeklyCompletions(tasks), [tasks]);
-  const hasTrackedTrend = trendData.some(week => week.completed > 0 || week.pending > 0);
-
-  const overview = useMemo(() => {
-    const now = new Date();
-    const period = getOperationsPeriod(now);
-    const completed = tasks.filter(task => {
-      const completedAt = parseOptionalDate(task.completedAt);
-      return Boolean(task.isCompleted && completedAt && isWithinInterval(completedAt, { start: period.start, end: period.end }));
-    }).length;
-    const pending = tasks.filter(isTaskOpen).length;
-    const overdue = tasks.filter(task => {
-      const dueDate = parseOptionalDate(task.dueDate);
-      return Boolean(isTaskOpen(task) && dueDate && isBefore(dueDate, now) && !isToday(dueDate));
-    }).length;
-    const activeUsers = new Set(tasks.map(task => task.assignedTo).filter(Boolean)).size;
-
-    return { completed, pending, overdue, activeUsers };
-  }, [tasks]);
+  const performance = useMemo(() => getDueWorkPerformance(tasks), [tasks]);
+  const trendData = performance.map(week => ({
+    name: `${week.label}${week.isCurrent ? ' (current)' : ''}`,
+    onTime: week.onTime,
+    late: week.late,
+    open: week.open,
+  }));
+  const dueTasks = performance.flatMap(week => week.tasks);
+  const overview = useMemo(() => ({
+    due: dueTasks.length,
+    onTime: performance.reduce((total, week) => total + week.onTime, 0),
+    late: performance.reduce((total, week) => total + week.late, 0),
+    open: performance.reduce((total, week) => total + week.open, 0),
+    activeUsers: new Set(dueTasks.map(task => task.assignedTo).filter(Boolean)).size,
+  }), [dueTasks, performance]);
 
   // Dynamic calculation of department performance
   const departmentStats = useMemo(() => {
-    const stats: Record<string, { total: number; completed: number; pending: number; overdue: number; name: string }> = {};
+    const stats: Record<string, { total: number; onTime: number; late: number; open: number; name: string }> = {};
     
     // Initialize stats for each department
     STAFF_DEPARTMENTS.forEach(dept => {
-      stats[dept] = { name: dept, total: 0, completed: 0, pending: 0, overdue: 0 };
+      stats[dept] = { name: dept, total: 0, onTime: 0, late: 0, open: 0 };
     });
 
-    const now = new Date();
-    const period = getOperationsPeriod(now);
-
-    tasks.forEach(task => {
+    performance.forEach(week => week.tasks.forEach(task => {
       const dept = task.department;
       if (stats[dept]) {
         stats[dept].total += 1;
-        const completedAt = parseOptionalDate(task.completedAt);
-        const completedInPeriod = Boolean(task.isCompleted && completedAt && isWithinInterval(completedAt, { start: period.start, end: period.end }));
-        if (completedInPeriod) {
-          stats[dept].completed += 1;
-        } else if (isTaskOpen(task)) {
-          stats[dept].pending += 1;
-          const dueDate = parseOptionalDate(task.dueDate);
-          if (dueDate && isBefore(dueDate, now) && !isToday(dueDate)) {
-            stats[dept].overdue += 1;
-          }
-        }
+        const dueWeek = performance.find(candidate => candidate.tasks.some(item => item.id === task.id));
+        if (!dueWeek) return;
+        if (dueWeek.tasks.find(item => item.id === task.id)?.completedAt) {
+          const due = new Date(`${task.dueDate}T23:59:59`);
+          const completed = new Date(task.completedAt || '');
+          if (completed <= due) stats[dept].onTime += 1;
+          else stats[dept].late += 1;
+        } else stats[dept].open += 1;
       }
-    });
+    }));
 
     return Object.values(stats)
       .filter(dept => dept.total > 0)
       .map(dept => ({
         ...dept,
-        completionRate: dept.total > 0 ? Math.round((dept.completed / dept.total) * 100) : 0
+        completionRate: dept.total > 0 ? Math.round((dept.onTime / dept.total) * 100) : 0
       }))
       .sort((a, b) => b.total - a.total); // Sort by total tasks descending
-  }, [tasks]);
+  }, [performance]);
 
   return (
     <div className={pageShell}>
@@ -98,19 +86,20 @@ const Reports: React.FC = () => {
         description={`Analyze ${scopeLabel} across the latest four Monday-to-Sunday weeks.`}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <MetricCard title="Completed" value={overview.completed} icon={CheckCircle2} tone="emerald" />
-        <MetricCard title="Pending" value={overview.pending} icon={Clock} tone="amber" />
-        <MetricCard title="Overdue" value={overview.overdue} icon={AlertCircle} tone="red" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+        <MetricCard title="Due tasks" value={overview.due} icon={Clock} tone="indigo" />
+        <MetricCard title="On time" value={overview.onTime} icon={CheckCircle2} tone="emerald" />
+        <MetricCard title="Late" value={overview.late} icon={AlertCircle} tone="red" />
+        <MetricCard title="Open" value={overview.open} icon={Clock} tone="amber" />
         {!isClientUser && <MetricCard title="Active Assignees" value={overview.activeUsers} icon={Users} tone="indigo" />}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartCard
-          title="Tracked Completions and Due Work"
-          description="Completed uses actual completion time; Pending uses the task due week. Historical completions without a timestamp are excluded from the trend."
+          title="Due-Work Performance"
+          description="Each week contains tasks due in that Monday–Sunday window. On-time completion means completed by the end of the due date."
         >
-          {!hasTrackedTrend ? (
+          {!dueTasks.length ? (
             <ChartEmptyState>No tracked weekly activity yet</ChartEmptyState>
           ) : (
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
@@ -120,8 +109,9 @@ const Reports: React.FC = () => {
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: chartColors.tick }} />
                 <Tooltip cursor={{ fill: chartColors.cursor }} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
                 <Legend iconType="circle" wrapperStyle={{fontSize: '12px'}} />
-                <Line type="monotone" dataKey="completed" stroke="#10b981" strokeWidth={3} activeDot={{ r: 8 }} />
-                <Line type="monotone" dataKey="pending" stroke="#f59e0b" strokeWidth={3} />
+                <Line type="monotone" dataKey="onTime" name="On time" stroke="#10b981" strokeWidth={3} activeDot={{ r: 8 }} />
+                <Line type="monotone" dataKey="late" name="Late" stroke="#ef4444" strokeWidth={3} />
+                <Line type="monotone" dataKey="open" name="Open" stroke="#f59e0b" strokeWidth={3} />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -139,8 +129,9 @@ const Reports: React.FC = () => {
                 <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} width={100} />
                 <Tooltip cursor={{ fill: chartColors.cursor }} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
                 <Legend iconType="circle" wrapperStyle={{fontSize: '12px'}} />
-                <Bar dataKey="completed" name="Completed Tasks" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="pending" name="Pending Tasks" stackId="a" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="onTime" name="On time" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="late" name="Late" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="open" name="Open" stackId="a" fill="#f59e0b" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -163,10 +154,10 @@ const Reports: React.FC = () => {
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
                 <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200">Department</th>
                 <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-center">Total Tasks</th>
-                <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-center">Completed</th>
-                <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-center">Pending</th>
-                <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-center">Overdue</th>
-                <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-right">Completion Rate</th>
+                <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-center">On time</th>
+                <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-center">Late</th>
+                <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-center">Open</th>
+                <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-right">On-time rate</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -179,17 +170,9 @@ const Reports: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-center font-medium text-slate-700">{dept.total}</td>
-                  <td className="px-6 py-4 text-center text-emerald-600 font-medium">{dept.completed}</td>
-                  <td className="px-6 py-4 text-center text-amber-500 font-medium">{dept.pending}</td>
-                  <td className="px-6 py-4 text-center">
-                    {dept.overdue > 0 ? (
-                      <span className="inline-flex items-center justify-center rounded-md bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700">
-                        {dept.overdue}
-                      </span>
-                    ) : (
-                      <span className="text-slate-300">-</span>
-                    )}
-                  </td>
+                  <td className="px-6 py-4 text-center text-emerald-600 font-medium">{dept.onTime}</td>
+                  <td className="px-6 py-4 text-center text-red-600 font-medium">{dept.late}</td>
+                  <td className="px-6 py-4 text-center text-amber-500 font-medium">{dept.open}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-3">
                       <div className="w-full max-w-[100px] bg-slate-100 rounded-full h-2">

@@ -136,7 +136,12 @@ const Navbar: React.FC<NavbarProps> = ({
   const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : unreadNotifs.length;
   const previewNotifications = unreadNotifs.slice(0, 5);
   const isClient = currentUser?.role === 'Client';
-  const searchesCompanies = !isClient && location.pathname.startsWith('/clients');
+  const searchesCompanies = location.pathname === '/projects' || location.pathname.startsWith('/projects/');
+  const searchDestination = searchesCompanies
+    ? '/projects'
+    : location.pathname.startsWith('/clients')
+      ? '/clients'
+      : '/tasks';
 
   const handleBellClick = () => {
     setShowNotifs(!showNotifs);
@@ -146,9 +151,7 @@ const Navbar: React.FC<NavbarProps> = ({
     event.preventDefault();
     const query = globalSearch.trim();
     if (!query) return;
-    navigate(searchesCompanies
-      ? `/clients?search=${encodeURIComponent(query)}`
-      : `/tasks?search=${encodeURIComponent(query)}`);
+    navigate(`${searchDestination}?search=${encodeURIComponent(query)}`);
     setShowMobileSearch(false);
   };
 
@@ -186,11 +189,11 @@ const Navbar: React.FC<NavbarProps> = ({
           </span>
           <input
             type="text"
-            aria-label={isClient ? 'Search deliveries' : searchesCompanies ? 'Search companies' : 'Search tasks'}
+            aria-label={isClient ? 'Search deliveries' : searchesCompanies ? 'Search companies' : searchDestination === '/clients' ? 'Search client work' : 'Search tasks'}
             aria-keyshortcuts="/"
             data-global-search
             className={cn(inputBase, 'border-transparent bg-inset py-2.5 pl-10 pr-3 shadow-none focus:bg-surface')}
-            placeholder={isClient ? 'Search deliveries…' : searchesCompanies ? 'Search companies…' : 'Search tasks...'}
+            placeholder={isClient ? 'Search deliveries…' : searchesCompanies ? 'Search companies…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...'}
             value={globalSearch}
             onChange={(event) => setGlobalSearch(event.target.value)}
           />
@@ -337,11 +340,11 @@ const Navbar: React.FC<NavbarProps> = ({
               ref={mobileSearchRef}
               type="text"
               autoFocus
-              aria-label={isClient ? 'Search deliveries' : searchesCompanies ? 'Search companies' : 'Search tasks'}
+              aria-label={isClient ? 'Search deliveries' : searchesCompanies ? 'Search companies' : searchDestination === '/clients' ? 'Search client work' : 'Search tasks'}
               aria-keyshortcuts="/"
               data-global-search
               className={cn(inputBase, 'py-2.5 pl-10 pr-3')}
-              placeholder={isClient ? 'Search deliveries…' : searchesCompanies ? 'Search companies…' : 'Search tasks...'}
+              placeholder={isClient ? 'Search deliveries…' : searchesCompanies ? 'Search companies…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...'}
               value={globalSearch}
               onChange={(event) => setGlobalSearch(event.target.value)}
             />

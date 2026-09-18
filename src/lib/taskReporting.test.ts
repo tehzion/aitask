@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Task, User } from '../types';
 import {
   getAgencyPulseMetrics,
+  getDueWorkPerformance,
   getNeedsAttentionTasks,
   getOperationsPeriod,
   getRecentCompletionTasks,
@@ -39,6 +40,20 @@ const users: User[] = [
 
 describe('Boss operations reporting', () => {
   const now = new Date(2026, 6, 31, 12, 0, 0);
+
+  it('builds four Monday-to-Sunday due-work cohorts with on-time, late, and open states', () => {
+    const weeks = getDueWorkPerformance([
+      makeTask({ id: 'on-time', dueDate: '2026-07-31', status: 'Completed', isCompleted: true, completedAt: new Date(2026, 6, 31, 23, 59).toISOString() }),
+      makeTask({ id: 'late', dueDate: '2026-07-30', status: 'Completed', isCompleted: true, completedAt: new Date(2026, 7, 1, 0, 1).toISOString() }),
+      makeTask({ id: 'open', dueDate: '2026-08-02' }),
+      makeTask({ id: 'cancelled', dueDate: '2026-07-31', status: 'Cancelled' }),
+      makeTask({ id: 'no-date', dueDate: '' }),
+    ], now);
+
+    expect(weeks).toHaveLength(4);
+    expect(weeks[3]).toMatchObject({ onTime: 1, late: 1, open: 1, completionRate: 33, isCurrent: true });
+    expect(weeks[3].tasks.map(task => task.id)).toEqual(['on-time', 'late', 'open']);
+  });
 
   it('uses a Monday-to-Sunday local week and displays the exact range', () => {
     const period = getOperationsPeriod(now);
