@@ -39,6 +39,7 @@ export const SECURE_SYNC_PROTOCOL_VERSION = 1;
 export const SECURE_BACKEND_SCHEMA_VERSION = 4;
 export const BACKEND_UPGRADE_REQUIRED_MESSAGE = 'AiTask is completing a system update. Your workspace is read-only for a moment; no changes have been submitted.';
 const SYNC_REQUEST_TIMEOUT_MS = 20_000;
+const WORKSPACE_PAGE_SIZE = 500;
 const PENDING_COMMAND_STORAGE_VERSION = 1;
 const PENDING_COMMAND_STORAGE_PREFIX = 'aitask:secure-pending-command';
 const PENDING_MEMBER_MUTATION_STORAGE_VERSION = 1;
@@ -1753,20 +1754,32 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
     }
     activeSecureAuthUserId = authUser.id;
   }
-  const [{ data: members, error: memberError }, { data: entities, error: entityError }, revision, notificationFeed] = await Promise.all([
-    supabase.from('aitask_members').select('*').eq('workspace_id', SECURE_WORKSPACE_ID),
-    supabase.from('aitask_entities')
+  const loadPages = async <T,>(queryFactory: () => {
+    range?: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown | null }>;
+  }): Promise<T[]> => {
+    const rows: T[] = [];
+    for (let from = 0; ; from += WORKSPACE_PAGE_SIZE) {
+      const query = queryFactory();
+      const { data, error } = await (query.range
+        ? query.range(from, from + WORKSPACE_PAGE_SIZE - 1)
+        : query as unknown as PromiseLike<{ data: unknown[] | null; error: unknown | null }>);
+      if (error) throw error;
+      const page = (data || []) as T[];
+      rows.push(...page);
+      if (!query.range || page.length < WORKSPACE_PAGE_SIZE) return rows;
+    }
+  };
+  const [members, entities, revision, notificationFeed] = await Promise.all([
+    loadPages<MemberRow>(() => supabase.from('aitask_members').select('*').eq('workspace_id', SECURE_WORKSPACE_ID)),
+    loadPages<EntityRow>(() => supabase.from('aitask_entities')
       .select('workspace_id,entity_type,entity_id,parent_id,data,version,updated_at')
       .eq('workspace_id', SECURE_WORKSPACE_ID)
-      .neq('entity_type', 'notification'),
+      .neq('entity_type', 'notification')),
     loadSecureWorkspaceRevision(),
     loadSecureNotificationPage({ limit: 50 }),
   ]);
-  if (memberError) throw memberError;
-  if (entityError) throw entityError;
-
-  const memberRows = members as MemberRow[];
-  const entityRows = entities as EntityRow[];
+  const memberRows = members;
+  const entityRows = entities;
   const authenticatedMemberRow = memberRows.find(member => member.auth_user_id === authUser.id);
   const currentUser = authenticatedMemberRow ? memberToUser(authenticatedMemberRow) : undefined;
   if (!currentUser) throw new Error('This authenticated account is not an AiTask workspace member.');

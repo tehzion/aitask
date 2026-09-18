@@ -12,6 +12,8 @@ import { inputBase, pageShell } from './uiTokens';
 import SideSheet from './SideSheet';
 import StaffTaskFocus from './StaffTaskFocus';
 import StaffWorkItem from './StaffWorkItem';
+import TaskDetailsModal from './TaskDetailsModal';
+import { canEditTask } from '../lib/access';
 
 type StaffAllWorkBucket = 'all' | StaffWorkBucketKey;
 const buckets: StaffAllWorkBucket[] = ['all', 'needs_action', 'up_next', 'waiting', 'done'];
@@ -33,6 +35,7 @@ const StaffAllWork: React.FC = () => {
   const [priority, setPriority] = React.useState<Priority | 'All'>('All');
   const [dueFrom, setDueFrom] = React.useState('');
   const [dueTo, setDueTo] = React.useState('');
+  const [fullEditorOpen, setFullEditorOpen] = React.useState(false);
 
   const tasks = React.useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions),
@@ -144,7 +147,17 @@ const StaffAllWork: React.FC = () => {
         </div>
       </SideSheet>
 
-      <StaffTaskFocus isOpen={Boolean(selectedTask)} task={selectedTask} onClose={() => setTaskId()} />
+      <StaffTaskFocus
+        isOpen={Boolean(selectedTask) && !fullEditorOpen}
+        task={selectedTask}
+        onClose={() => setTaskId()}
+        onOpenFullEditor={() => setFullEditorOpen(true)}
+      />
+      <TaskDetailsModal
+        isOpen={Boolean(selectedTask) && fullEditorOpen && canEditTask(currentUser, selectedTask, rolePermissions)}
+        task={selectedTask}
+        onClose={() => { setFullEditorOpen(false); setTaskId(); }}
+      />
     </div>
   );
 };

@@ -112,6 +112,18 @@ function App() {
     };
   }, [forceSyncMockData, initializeBackend, sendDueDateReminders]);
 
+  useEffect(() => {
+    const remind = () => {
+      if (document.visibilityState === 'visible') sendDueDateReminders();
+    };
+    const interval = window.setInterval(remind, 15 * 60 * 1000);
+    document.addEventListener('visibilitychange', remind);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', remind);
+    };
+  }, [sendDueDateReminders]);
+
   return (
     <>
       <BrowserRouter>

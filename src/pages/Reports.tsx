@@ -6,10 +6,11 @@ import { ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../component
 import { cardBase, pageShell } from '../components/uiTokens';
 import { getVisibleTasks } from '../lib/access';
 import { STAFF_DEPARTMENTS } from '../lib/departments';
-import { getTrackedWeeklyCompletions, isTaskOpen } from '../lib/taskReporting';
+import { getOperationsPeriod, getTrackedWeeklyCompletions, isTaskOpen } from '../lib/taskReporting';
 import { parseOptionalDate, themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
 import { isBefore, isToday } from 'date-fns';
+import { isWithinInterval } from 'date-fns';
 
 const Reports: React.FC = () => {
   const { tasks: allTasks, currentUser, rolePermissions } = useStore();
@@ -36,7 +37,11 @@ const Reports: React.FC = () => {
 
   const overview = useMemo(() => {
     const now = new Date();
-    const completed = tasks.filter(task => task.isCompleted).length;
+    const period = getOperationsPeriod(now);
+    const completed = tasks.filter(task => {
+      const completedAt = parseOptionalDate(task.completedAt);
+      return Boolean(task.isCompleted && completedAt && isWithinInterval(completedAt, { start: period.start, end: period.end }));
+    }).length;
     const pending = tasks.filter(isTaskOpen).length;
     const overdue = tasks.filter(task => {
       const dueDate = parseOptionalDate(task.dueDate);
@@ -57,12 +62,15 @@ const Reports: React.FC = () => {
     });
 
     const now = new Date();
+    const period = getOperationsPeriod(now);
 
     tasks.forEach(task => {
       const dept = task.department;
       if (stats[dept]) {
         stats[dept].total += 1;
-        if (task.isCompleted) {
+        const completedAt = parseOptionalDate(task.completedAt);
+        const completedInPeriod = Boolean(task.isCompleted && completedAt && isWithinInterval(completedAt, { start: period.start, end: period.end }));
+        if (completedInPeriod) {
           stats[dept].completed += 1;
         } else if (isTaskOpen(task)) {
           stats[dept].pending += 1;

@@ -110,6 +110,36 @@ describe('staff permission matrix', () => {
     expect(canAssignTasksToOthers(admin)).toBe(true);
   });
 
+  it('keeps the default Staff UI and data surface limited to assigned work', () => {
+    const routeAccess: Array<[string, boolean]> = [
+      ['/', true],
+      ['/tasks', true],
+      ['/calendar', true],
+      ['/projects', true],
+      ['/clients', true],
+      ['/reports', true],
+      ['/settings', true],
+      ['/approvals', false],
+    ];
+    routeAccess.forEach(([path, expected]) => expect(canAccessPath(staff, path)).toBe(expected));
+
+    const permissions = getEffectivePermissions(staff);
+    expect(permissions).toMatchObject({
+      createTasks: true,
+      manageCreatedTasks: false,
+      viewAllTasks: false,
+      viewAllClients: false,
+      manageAssignedClients: false,
+      manageUsers: false,
+      approveRegistrations: false,
+      deleteUsers: false,
+    });
+    expect(getVisibleClientNames(staff, tasks, projects)).toEqual(['Acme']);
+    expect(getVisibleProjects(staff, projects, tasks).map(project => project.id)).toEqual(['project-acme']);
+    expect(canOpenServiceClient(staff, 'Acme', [tasks[0]])).toBe(true);
+    expect(canOpenServiceClient(staff, 'Beta', [tasks[0]])).toBe(false);
+  });
+
   it('lets admins view tasks created by every staff member', () => {
     const staffCreatedTasks = [
       makeTask({ id: 'task-created-by-staff', createdBy: staff.id, assignedTo: staff.id }),

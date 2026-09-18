@@ -2406,7 +2406,7 @@ export const useStore = create<StoreState>()(
           }));
         }
 
-        if (isReadyForClientReview) {
+        if (isReadyForClientReview && task.visibility !== 'internal') {
           newNotifs.push(makeNotification({
             targetClient: task.clientName,
             title: isCompleted ? 'Task Completed' : 'Task Ready for Approval',
@@ -2550,7 +2550,7 @@ export const useStore = create<StoreState>()(
 
         return {
           tasks: state.tasks.map(t =>
-            t.id === taskId ? { ...t, dueDate: nextDueDate, updatedAt: new Date().toISOString() } : t
+            t.id === taskId ? { ...t, dueDate: nextDueDate, dueReminderSent: false, updatedAt: new Date().toISOString() } : t
           ),
         };
       }),
@@ -2562,6 +2562,11 @@ export const useStore = create<StoreState>()(
         const task = state.tasks.find(t => t.id === taskId);
         if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions)) {
           return { ok: false, error: 'You do not have permission to edit this task.' };
+        }
+
+        const requestedCreatorId = (data as Partial<Task>).createdBy;
+        if (requestedCreatorId !== undefined && requestedCreatorId !== task.createdBy) {
+          return { ok: false, error: 'Task ownership cannot be changed.' };
         }
 
         const canAssignOthers = canAssignTasksToOthers(currentUser, state.rolePermissions, task);
@@ -2891,6 +2896,7 @@ export const useStore = create<StoreState>()(
         }
         const currentUser = state.currentUser;
         if (!currentUser || !canCreateTasks(currentUser, state.rolePermissions)) return '';
+        if (taskData.createdBy !== undefined && taskData.createdBy !== currentUser.id) return '';
         if (currentUser.role === 'Staff' && !isMemberInDepartment(currentUser, taskData.department)) return '';
         const assignee = state.users.find(user => user.id === taskData.assignedTo && user.role !== 'Client');
         if (!assignee) return '';
@@ -2938,6 +2944,7 @@ export const useStore = create<StoreState>()(
           const newTask: Task = {
             ...taskData,
             id: taskId,
+            createdBy: currentUser.id,
             clientId: project?.clientId || taskData.clientId || state.clients.find(client => normalizeClientKey(client.clientName) === normalizeClientKey(clientName))?.id,
             title,
             clientName,

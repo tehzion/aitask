@@ -55,6 +55,7 @@ const isWithin = (value: Date | null, range: DeliveryPeriodRange) => Boolean(val
 ));
 
 const isTaskCompleted = (task: Task) => task.isCompleted || task.status === 'Completed';
+const isTaskCancelled = (task: Task) => task.status === 'Cancelled';
 
 export const getDeliveryPeriodRange = (
   period: DeliveryTrackerPeriod,
@@ -156,8 +157,8 @@ export const buildClientDeliverySummaries = ({
       return deliveredInPeriod || linkedToTrackedTask;
     });
 
-    const openTasks = clientTasks.filter(task => !isTaskCompleted(task));
-    const completed = clientTasks.filter(isTaskCompleted).length;
+    const openTasks = clientTasks.filter(task => !isTaskCompleted(task) && !isTaskCancelled(task));
+    const completed = clientTasks.filter(task => isTaskCompleted(task) && !isTaskCancelled(task)).length;
     const inProgress = openTasks.filter(task => task.status === 'In Progress').length;
     const review = openTasks.filter(task => task.status === 'Waiting Approval').length;
     const todayStart = atStartOfDay(today);

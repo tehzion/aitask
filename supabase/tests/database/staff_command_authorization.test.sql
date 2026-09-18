@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(29);
+select plan(31);
 
 select has_function(
   'private',
@@ -150,6 +150,22 @@ select is(
 
 select is(
   (public.aitask_execute_command(
+    'pgtap-staff-authorization', gen_random_uuid(), 'task.create',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'task', 'entityId', 'pgtap-forged-owner-task',
+      'expectedVersion', 0, 'data', jsonb_build_object(
+        'id', 'pgtap-forged-owner-task', 'title', 'Forged owner task', 'clientName', 'Test Client',
+        'department', 'Designer', 'assignedTo', 'pgtap-staff-actor',
+        'createdBy', 'pgtap-staff-coworker', 'status', 'Pending', 'visibility', 'internal'
+      )
+    ))
+  ) ->> 'code'),
+  'FORBIDDEN',
+  'ordinary Staff cannot forge a task owner during creation'
+);
+
+select is(
+  (public.aitask_execute_command(
     'pgtap-staff-authorization', gen_random_uuid(), 'workspace.patch',
     jsonb_build_array(jsonb_build_object(
       'kind', 'entity', 'action', 'insert', 'entityType', 'notification', 'entityId', 'pgtap-forged-notification',
@@ -196,6 +212,19 @@ select is(
   'the database replaces Staff-supplied notification text with canonical content'
 );
 set local role authenticated;
+
+select is(
+  (public.aitask_execute_command(
+    'pgtap-staff-authorization', gen_random_uuid(), 'task.update',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'update', 'entityType', 'task', 'entityId', 'pgtap-assigned-task',
+      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-staff-authorization' and entity_type = 'task' and entity_id = 'pgtap-assigned-task'),
+      'data', (select data || jsonb_build_object('createdBy', 'pgtap-staff-coworker', 'updatedAt', now()) from public.aitask_entities where workspace_id = 'pgtap-staff-authorization' and entity_type = 'task' and entity_id = 'pgtap-assigned-task')
+    ))
+  ) ->> 'ok')::boolean,
+  false,
+  'ordinary Staff cannot change task ownership through the command API'
+);
 
 select is(
   (public.aitask_execute_service_command(

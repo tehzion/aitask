@@ -85,6 +85,38 @@ describe('task store authorization', () => {
     expect(useStore.getState().deleteTask(creatorOnlyTask.id).ok).toBe(false);
   });
 
+  it('keeps task ownership immutable for ordinary Staff mutations', () => {
+    const forgedTaskUpdate = { createdBy: staff.id } as unknown as Parameters<typeof initialState.updateTask>[1];
+    expect(useStore.getState().updateTask(ownTask.id, forgedTaskUpdate)).toEqual({
+      ok: false,
+      error: 'Task ownership cannot be changed.',
+    });
+    expect(useStore.getState().tasks.find(task => task.id === ownTask.id)?.createdBy).toBe(ownTask.createdBy);
+
+    useStore.setState({
+      projects: [{
+        id: 'project-staff-owned',
+        clientName: 'Acme',
+        projectName: 'Acme',
+        services: ['Design'],
+        startDate: '2026-07-13',
+        deadline: '',
+        totalTasks: 0,
+        completedTasks: 0,
+      }],
+    });
+
+    const taskCount = useStore.getState().tasks.length;
+    expect(useStore.getState().addTask({
+      ...ownTask,
+      projectId: 'project-staff-owned',
+      title: 'Forged owner task',
+      assignedTo: staff.id,
+      createdBy: otherStaff.id,
+    })).toBe('');
+    expect(useStore.getState().tasks).toHaveLength(taskCount);
+  });
+
   it('keeps View all tasks read-only for unrelated work', () => {
     useStore.setState({
       currentUser: {
