@@ -245,6 +245,16 @@ describe('task store authorization', () => {
       assignedTo: staff.id,
       createdBy: staff.id,
     })).not.toBe('');
+
+    expect(useStore.getState().addTask({
+      ...taskInput,
+      projectId: 'project-staff-created',
+      title: 'Unassigned scoped work',
+      department: 'Designer',
+      assignedTo: '',
+      createdBy: staff.id,
+    })).not.toBe('');
+    expect(useStore.getState().tasks.find(task => task.title === 'Unassigned scoped work')?.assignedTo).toBe('');
   });
 
   it('records completion, preserves it during edits, and clears it when reopened', () => {

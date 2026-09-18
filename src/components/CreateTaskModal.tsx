@@ -319,14 +319,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    if (!assignedTo && filteredUsers.length === 0) {
-      setAssignmentError(`No assignable team members exist in ${department}. Add a user to this department before creating the task.`);
-      return;
-    }
-    
-    // Default to first user in department if not selected
-    const finalAssignee = assignedTo || filteredUsers[0].id;
-
     setIsSubmitting(true);
     const taskId = addTask({
       title: trimmedTitle,
@@ -342,7 +334,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       website: safeHttpsUrl(website) || undefined,
       visibility,
       department,
-      assignedTo: finalAssignee,
+      assignedTo,
       serviceType: trimmedServiceType,
       priority,
       startDate: finalStartDate,
@@ -562,7 +554,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
                       <option value="">
-                        {filteredUsers.length > 0 ? `Auto assign: ${filteredUsers[0].name}` : 'No users in this department'}
+                        Unassigned
                       </option>
                       {filteredUsers.map(u => (
                         <option key={u.id} data-i18n-skip value={u.id}>{u.name}</option>

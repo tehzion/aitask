@@ -2474,9 +2474,9 @@ export const useStore = create<StoreState>()(
         if (assignedTo === task.assignedTo) return state;
         if (!canAssignTasksToOthers(currentUser, state.rolePermissions, task)) return state;
 
-        const assigneeUser = state.users.find(u => u.id === assignedTo && u.role !== 'Client');
-        if (!assigneeUser) return state;
-        if (!isMemberInDepartment(assigneeUser, task.department)) {
+        const assigneeUser = assignedTo ? state.users.find(u => u.id === assignedTo && u.role !== 'Client') : undefined;
+        if (assignedTo && !assigneeUser) return state;
+        if (assigneeUser && !isMemberInDepartment(assigneeUser, task.department)) {
           useToastStore.getState().addToast(`${assigneeUser.name} is not assigned to ${task.department}.`, 'warning');
           return state;
         }
@@ -2487,7 +2487,7 @@ export const useStore = create<StoreState>()(
         });
 
         const newNotifs: AppNotification[] = [];
-        if (assignedTo !== task.assignedTo) {
+        if (assignedTo && assignedTo !== task.assignedTo) {
           newNotifs.push(makeNotification({
             targetUserId: assignedTo,
             title: 'Task Assigned To You',
@@ -2497,7 +2497,7 @@ export const useStore = create<StoreState>()(
           }));
         }
 
-        useToastStore.getState().addToast(`Task assigned to ${assigneeUser.name}`, 'success');
+        useToastStore.getState().addToast(assigneeUser ? `Task assigned to ${assigneeUser.name}` : 'Task is now unassigned', 'success');
 
         return {
           tasks: newTasks,
@@ -2592,10 +2592,10 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'You do not have permission to change the service.' };
         }
 
-        const assignee = state.users.find(user => user.id === nextAssigneeId && user.role !== 'Client');
-        if (!assignee) return { ok: false, error: 'Choose a valid internal assignee.' };
+        const assignee = nextAssigneeId ? state.users.find(user => user.id === nextAssigneeId && user.role !== 'Client') : undefined;
+        if (nextAssigneeId && !assignee) return { ok: false, error: 'Choose a valid internal assignee.' };
         const assignmentChanged = nextAssigneeId !== task.assignedTo || nextDepartment !== task.department;
-        if (assignmentChanged && !isMemberInDepartment(assignee, nextDepartment)) {
+        if (assignmentChanged && assignee && !isMemberInDepartment(assignee, nextDepartment)) {
           return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
         }
 
@@ -2709,7 +2709,7 @@ export const useStore = create<StoreState>()(
         };
 
         const notifications: AppNotification[] = [];
-        if (updatedTask.assignedTo !== task.assignedTo) {
+        if (updatedTask.assignedTo && updatedTask.assignedTo !== task.assignedTo) {
           notifications.push(makeNotification({
             targetUserId: updatedTask.assignedTo,
             title: 'Task Assigned To You',
@@ -2899,10 +2899,10 @@ export const useStore = create<StoreState>()(
         if (!currentUser || !canCreateTasks(currentUser, state.rolePermissions)) return '';
         if (taskData.createdBy !== undefined && taskData.createdBy !== currentUser.id) return '';
         if (currentUser.role === 'Staff' && !isMemberInDepartment(currentUser, taskData.department)) return '';
-        const assignee = state.users.find(user => user.id === taskData.assignedTo && user.role !== 'Client');
-        if (!assignee) return '';
-        if (!canAssignTasksToOthers(currentUser, state.rolePermissions) && assignee.id !== currentUser.id) return '';
-        if (!isMemberInDepartment(assignee, taskData.department)) return '';
+        const assignee = taskData.assignedTo ? state.users.find(user => user.id === taskData.assignedTo && user.role !== 'Client') : undefined;
+        if (taskData.assignedTo && !assignee) return '';
+        if (assignee && !canAssignTasksToOthers(currentUser, state.rolePermissions) && assignee.id !== currentUser.id) return '';
+        if (assignee && !isMemberInDepartment(assignee, taskData.department)) return '';
 
         const project = taskData.projectId
           ? state.projects.find(item => item.id === taskData.projectId)
@@ -2974,7 +2974,7 @@ export const useStore = create<StoreState>()(
             tasks,
             ...deriveServiceProgress(tasks, deliverables, state.serviceCycles),
             notifications: [
-              ...(currentUser.role === 'Staff' && assignee.role !== 'Admin'
+              ...(currentUser.role === 'Staff' && (!assignee || assignee.role !== 'Admin')
                 ? [makeNotification({
                     targetRole: 'Admin',
                     title: 'Task Created by Staff',
@@ -2983,13 +2983,13 @@ export const useStore = create<StoreState>()(
                     iconType: 'task',
                   })]
                 : []),
-              makeNotification({
+              ...(taskData.assignedTo ? [makeNotification({
                 targetUserId: taskData.assignedTo,
                 title: 'New Task Assigned',
                 message: `You have been assigned a new task: "${title}".`,
                 route: { page: 'tasks', entityId: taskId },
                 iconType: 'task'
-              }),
+              })] : []),
               ...(state.notifications || [])
             ]
           };
