@@ -53,6 +53,22 @@ describe('delivery tracker periods', () => {
     expect(moveDeliveryPeriod('week', range.start, 1).getDate()).toBe(14);
   });
 
+  it('includes all client work in the all-work scope', () => {
+    const range = getDeliveryPeriodRange('all', new Date(2026, 8, 10));
+    const summaries = buildClientDeliverySummaries({
+      clientNames: ['Acme'],
+      tasks: [
+        task({ id: 'historic', clientName: 'Acme', dueDate: '2020-01-01', isCompleted: true, status: 'Completed' }),
+        task({ id: 'future', clientName: 'Acme', dueDate: '2030-01-01' }),
+      ],
+      deliverables: [deliverable({ id: 'historic-deliverable', deliveredAt: '2020-01-01', status: 'Delivered' })],
+      cycles: [cycle], users, period: 'all', range,
+    });
+
+    expect(range.label).toBe('All work');
+    expect(summaries[0]).toMatchObject({ completed: 1, open: 1, included: 1, delivered: 1 });
+  });
+
   it('includes due and completed work and carries open overdue work forward', () => {
     const range = getDeliveryPeriodRange('week', new Date(2026, 8, 10, 12));
     expect(taskAppearsInDeliveryPeriod(task({ id: 'due', clientName: 'Acme', dueDate: '2026-09-09' }), range, new Date(2026, 8, 10))).toBe(true);

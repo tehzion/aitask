@@ -469,14 +469,14 @@ const Dashboard: React.FC = () => {
 
                 {bossBriefing && (
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <Link to="/tasks" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+                    <Link to="/clients?period=all" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
                       <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', bossBriefing.overdueCount > 0 ? 'bg-red-50 text-red-700' : 'bg-inset text-muted')}><AlertCircle className="h-4 w-4" /></span>
                       <span className="min-w-0">
                         <span className="calm-number block text-xl font-semibold text-ink">{bossBriefing.overdueCount}</span>
                         <span className="block truncate text-xs text-muted">{t('Overdue tasks')}</span>
                       </span>
                     </Link>
-                    <Link to="/tasks" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+                    <Link to="/clients?period=all" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
                       <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', bossBriefing.waitingCount > 0 ? 'bg-amber-50 text-amber-700' : 'bg-inset text-muted')}><FileCheck2 className="h-4 w-4" /></span>
                       <span className="min-w-0">
                         <span className="calm-number block text-xl font-semibold text-ink">{bossBriefing.waitingCount}</span>
@@ -545,9 +545,9 @@ const Dashboard: React.FC = () => {
             ) : (
               <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 order-1" aria-label="Workspace metrics">
                 <StatCard title="Active Companies" value={stats.activeProjects} icon={LayoutList} tone="blue" to="/projects" />
-                <StatCard title="Pending Tasks" value={stats.pendingTasks} icon={Clock} tone="amber" to="/tasks" />
-                <StatCard title="Completed Tasks" value={stats.completedTasks} icon={CheckCircle2} tone="emerald" to="/tasks" />
-                <StatCard title="Overdue Tasks" value={stats.overdueTasks} icon={AlertCircle} tone="red" to="/tasks" />
+                <StatCard title="Pending Tasks" value={stats.pendingTasks} icon={Clock} tone="amber" to="/clients?period=all" />
+                <StatCard title="Completed Tasks" value={stats.completedTasks} icon={CheckCircle2} tone="emerald" to="/clients?period=all" />
+                <StatCard title="Overdue Tasks" value={stats.overdueTasks} icon={AlertCircle} tone="red" to="/clients?period=all" />
                 <StatCard title="Due Today" value={stats.dueTodayTasks} icon={Calendar} tone="blue" to="/calendar" />
                 <StatCard title="Due This Week" value={stats.dueThisWeekTasks} icon={CalendarDays} tone="slate" to="/calendar" />
               </section>
@@ -581,14 +581,14 @@ const Dashboard: React.FC = () => {
                         <span className="block truncate text-xs text-muted">{t('Due today')}</span>
                       </span>
                     </Link>
-                    <Link to="/tasks" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+                    <Link to="/clients?period=all" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
                       <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', staffBriefing.overdueCount > 0 ? 'bg-red-50 text-red-700' : 'bg-inset text-muted')}><AlertCircle className="h-4 w-4" /></span>
                       <span className="min-w-0">
                         <span className="calm-number block text-xl font-semibold text-ink">{staffBriefing.overdueCount}</span>
                         <span className="block truncate text-xs text-muted">{t('Overdue')}</span>
                       </span>
                     </Link>
-                    <Link to="/tasks" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
+                    <Link to="/clients?period=all" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
                       <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', staffBriefing.waitingCount > 0 ? 'bg-amber-50 text-amber-700' : 'bg-inset text-muted')}><FileCheck2 className="h-4 w-4" /></span>
                       <span className="min-w-0">
                         <span className="calm-number block text-xl font-semibold text-ink">{staffBriefing.waitingCount}</span>
@@ -629,7 +629,7 @@ const Dashboard: React.FC = () => {
                           {departmentContext.teammates.length + 1} {t('members')} · {departmentContext.openCount} {t('open tasks')} · {departmentContext.overdueCount} {t('overdue')} · {departmentContext.waitingCount} {t('in review')}
                         </p>
                       </div>
-                      <Link to="/tasks" className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">
+                      <Link to="/clients?period=all" className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">
                         {t('My tasks')} <ArrowRight className="h-4 w-4" />
                       </Link>
                     </div>
@@ -723,7 +723,7 @@ const Dashboard: React.FC = () => {
               <h2 id="recent-activity-title" className="text-base font-semibold text-slate-950">Recent workspace activity</h2>
               <p className="mt-1 text-sm text-slate-500">Latest tasks across the work you can access.</p>
             </div>
-            <Link to="/tasks" className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
+            <Link to="/clients?period=all" className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
               View tasks <ArrowRight className="ml-1 h-4 w-4" />
             </Link>
           </div>

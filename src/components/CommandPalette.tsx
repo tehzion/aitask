@@ -45,7 +45,6 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onOpen
   const commands = React.useMemo<PaletteCommand[]>(() => {
     const navigation: Array<[string, string, React.ComponentType<{ className?: string }>]> = [
       ['/', t('Dashboard'), LayoutDashboard],
-      ['/tasks', t('Tasks'), CheckSquare],
       ['/calendar', t('Calendar'), CalendarDays],
       ['/clients', t('Clients'), Users],
       ['/projects', t('Companies'), FolderKanban],

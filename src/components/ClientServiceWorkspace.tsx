@@ -119,7 +119,7 @@ const ClientServiceWorkspace = () => {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2"><Link to="/tasks" className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset"><FileText className="h-4 w-4 text-accent" />All deliveries</Link><Link to="/notifications" className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset"><MessageSquareText className="h-4 w-4 text-accent" />Open Inbox</Link></div>
+      <div className="flex flex-wrap gap-2"><Link to="/clients?period=all" className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset"><FileText className="h-4 w-4 text-accent" />All deliveries</Link><Link to="/notifications" className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset"><MessageSquareText className="h-4 w-4 text-accent" />Open Inbox</Link></div>
     </div>
   );
 };

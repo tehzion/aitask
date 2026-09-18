@@ -14,7 +14,7 @@ import {
 } from 'date-fns';
 import type { Deliverable, ServiceCycle, Task, User } from '../types';
 
-export type DeliveryTrackerPeriod = 'week' | 'month';
+export type DeliveryTrackerPeriod = 'week' | 'month' | 'all';
 export type DeliveryTrackerStatusFilter = 'all' | 'open' | 'overdue' | 'completed';
 
 export interface DeliveryPeriodRange {
@@ -61,6 +61,11 @@ export const getDeliveryPeriodRange = (
   period: DeliveryTrackerPeriod,
   anchor: Date,
 ): DeliveryPeriodRange => {
+  if (period === 'all') {
+    // The range remains available to consumers, while the summary builder uses
+    // the period itself to include every visible record.
+    return { start: new Date(2000, 0, 1), end: new Date(2100, 11, 31), label: 'All work' };
+  }
   if (period === 'week') {
     const start = startOfWeek(anchor, { weekStartsOn: 1 });
     const end = endOfWeek(anchor, { weekStartsOn: 1 });
@@ -75,7 +80,7 @@ export const moveDeliveryPeriod = (
   period: DeliveryTrackerPeriod,
   anchor: Date,
   amount: number,
-) => period === 'week' ? addWeeks(anchor, amount) : addMonths(anchor, amount);
+) => period === 'week' ? addWeeks(anchor, amount) : period === 'month' ? addMonths(anchor, amount) : anchor;
 
 export const taskAppearsInDeliveryPeriod = (
   task: Task,
@@ -137,15 +142,16 @@ export const buildClientDeliverySummaries = ({
   return clientNames.map(clientName => {
     const key = normalize(clientName);
     const clientTasks = tasks.filter(task => (
-      normalize(task.clientName) === key && taskAppearsInDeliveryPeriod(task, range, today)
+      normalize(task.clientName) === key && (period === 'all' || taskAppearsInDeliveryPeriod(task, range, today))
     ));
     const clientTaskIds = new Set(clientTasks.map(task => task.id));
     const clientCycles = cycles
-      .filter(cycle => normalize(cycle.clientName) === key && cycleOverlaps(cycle, range))
+      .filter(cycle => normalize(cycle.clientName) === key && (period === 'all' || cycleOverlaps(cycle, range)))
       .sort((left, right) => right.periodStart.localeCompare(left.periodStart));
     const cycleIds = new Set(clientCycles.map(cycle => cycle.id));
     const clientDeliverables = deliverables.filter(deliverable => {
       if (normalize(deliverable.clientName) !== key) return false;
+      if (period === 'all') return true;
       const deliveredInPeriod = isWithin(
         dateValue(deliverable.deliveredAt || (deliverable.status === 'Delivered' ? deliverable.updatedAt : undefined)),
         range,

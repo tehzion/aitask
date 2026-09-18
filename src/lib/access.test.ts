@@ -292,10 +292,10 @@ describe('staff permission matrix', () => {
       },
     };
 
-    expect(getDefaultAccessiblePath(taskOnlyStaff)).toBe('/tasks');
+    expect(getDefaultAccessiblePath(taskOnlyStaff)).toBe('/clients');
   });
 
-  it('manages Companies and the client task tracker as separate page permissions', () => {
+  it('keeps Companies separate while task access opens the merged client workspace', () => {
     const companiesOnly: User = {
       ...staff,
       permissions: { ...defaultRolePermissions.Staff, viewProjects: true, viewDeliveryTracker: false },
@@ -306,7 +306,7 @@ describe('staff permission matrix', () => {
     };
 
     expect(canAccessPath(companiesOnly, '/projects')).toBe(true);
-    expect(canAccessPath(companiesOnly, '/clients')).toBe(false);
+    expect(canAccessPath(companiesOnly, '/clients')).toBe(true);
     expect(canAccessPath(trackerOnly, '/projects')).toBe(false);
     expect(canAccessPath(trackerOnly, '/clients')).toBe(true);
   });

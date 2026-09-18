@@ -11,7 +11,7 @@ import { useStore } from '../store';
 import { useNotificationReadActions } from '../hooks/useNotificationReadActions';
 import { canAccessPath, canCreateTasks, getUnreadNotifications } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
-import { LayoutDashboard, CheckSquare, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw, Settings as SettingsIcon, UserPlus, Menu } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw, Settings as SettingsIcon, UserPlus, Menu, Users } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
 import { notificationRouteToPath } from '../lib/security';
@@ -200,12 +200,12 @@ const Layout: React.FC = () => {
     : isClient
       ? [
           { path: '/', label: 'Home', icon: LayoutDashboard },
-          { path: '/tasks', label: 'Deliveries', icon: CheckSquare },
+          { path: '/clients', label: 'Deliveries', icon: Users },
           { path: '/notifications', label: 'Inbox', icon: Bell },
         ].filter(item => item.path === '/notifications' || canAccessPath(currentUser, item.path, rolePermissions))
     : [
         { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-        { path: '/tasks', label: 'Tasks', icon: CheckSquare },
+        { path: '/clients', label: 'Clients', icon: Users },
         { path: '/calendar', label: 'Calendar', icon: CalendarDays },
         ...(canAccessPath(currentUser, '/approvals', rolePermissions)
           ? [{ path: '/approvals', label: 'Approvals', icon: UserPlus }]

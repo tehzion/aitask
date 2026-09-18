@@ -813,7 +813,7 @@ const Settings: React.FC = () => {
               <p className="leading-6">
                 You can check task progress, leave feedback on your company tasks, and approve or request revisions when work is ready for review.
               </p>
-              <Button type="button" variant="secondary" onClick={() => navigate('/tasks')} className="w-full justify-center">
+              <Button type="button" variant="secondary" onClick={() => navigate('/clients?period=all')} className="w-full justify-center">
                 View company tasks
                 <ArrowRight className="h-4 w-4" />
               </Button>

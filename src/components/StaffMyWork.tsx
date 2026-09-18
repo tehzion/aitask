@@ -101,7 +101,7 @@ const StaffMyWork: React.FC = () => {
       <section aria-labelledby="staff-queue-title">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div><h2 id="staff-queue-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">Assigned queue</h2><p className="mt-1 text-sm text-muted">Work is ordered by revision, deadline, state, and priority.</p></div>
-          <Link to="/tasks" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline">All work <ArrowRight className="h-4 w-4" /></Link>
+          <Link to="/clients?period=all" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline">All work <ArrowRight className="h-4 w-4" /></Link>
         </div>
         <div className="mt-4">
           <SegmentedTabs<StaffWorkBucketKey>

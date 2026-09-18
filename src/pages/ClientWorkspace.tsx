@@ -625,7 +625,7 @@ const OperationsClientWorkspace = () => {
                                       )}
                                     >{task.workflowStepOrder}</span>
                                     <Link
-                                      to="/tasks"
+                                      to={`/clients?client=${encodeURIComponent(task.clientName)}&taskId=${encodeURIComponent(task.id)}`}
                                       data-i18n-skip
                                       className="min-w-0 font-medium text-ink hover:text-accent"
                                     >

@@ -11,7 +11,6 @@ import { shouldUseSecureSupabase, supabase } from './lib/supabaseClient';
 import { useAppNoticeState } from './hooks/useAppNoticeState';
 
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
-const Tasks = React.lazy(() => import('./pages/Tasks'));
 const Calendar = React.lazy(() => import('./pages/Calendar'));
 const Clients = React.lazy(() => import('./pages/DeliveryTracker'));
 const ClientWorkspace = React.lazy(() => import('./pages/ClientWorkspace'));
@@ -53,6 +52,17 @@ const RoleRoute: React.FC<{ path: string; children: React.ReactNode }> = ({ path
   return canAccessPath(currentUser, path, rolePermissions) || isRequiredAccountSetup
     ? <>{children}</>
     : <AccessDenied />;
+};
+
+const TasksRedirect = () => {
+  const location = useLocation();
+  const legacy = new URLSearchParams(location.search);
+  const next = new URLSearchParams();
+  ['search', 'client', 'taskId'].forEach(key => {
+    const value = legacy.get(key);
+    if (value) next.set(key, value);
+  });
+  return <Navigate to={`/clients${next.size ? `?${next.toString()}` : ''}`} replace />;
 };
 
 function App() {
@@ -141,7 +151,7 @@ function App() {
               </PrivateRoute>
             }>
               <Route index element={<RoleRoute path="/"><Dashboard /></RoleRoute>} />
-              <Route path="tasks" element={<RoleRoute path="/tasks"><Tasks /></RoleRoute>} />
+              <Route path="tasks" element={<TasksRedirect />} />
               <Route path="calendar" element={<RoleRoute path="/calendar"><Calendar /></RoleRoute>} />
               <Route path="clients" element={<RoleRoute path="/clients"><Clients /></RoleRoute>} />
               {/* ClientWorkspace performs client ownership and assigned-staff checks itself. */}

@@ -9,13 +9,16 @@ import {
   ChevronUp,
   ListChecks,
   PackageCheck,
+  Plus,
   Search,
   UsersRound,
 } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
+import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
-import { canViewAllClients, getClientKey, getVisibleClientNames, getVisibleTasks } from '../lib/access';
+import { canCreateTasks, canViewAllClients, getClientKey, getVisibleClientNames, getVisibleTasks } from '../lib/access';
+import TaskDetailsModal from '../components/TaskDetailsModal';
 import {
   buildClientDeliverySummaries,
   getDeliveryPeriodRange,
@@ -30,6 +33,7 @@ import { cn } from '../lib/utils';
 const PERIOD_TABS = [
   { id: 'week' as const, label: 'Week' },
   { id: 'month' as const, label: 'Month' },
+  { id: 'all' as const, label: 'All work' },
 ];
 
 const STATUS_FILTERS: { id: DeliveryTrackerStatusFilter; label: string }[] = [
@@ -55,6 +59,7 @@ const DeliveryTracker: React.FC = () => {
     deliverables,
     serviceCycles,
     users,
+    setCreateTaskModalOpen,
   } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     rolePermissions: state.rolePermissions,
@@ -64,13 +69,27 @@ const DeliveryTracker: React.FC = () => {
     deliverables: state.deliverables,
     serviceCycles: state.serviceCycles,
     users: state.users,
+    setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
-  const [period, setPeriod] = React.useState<DeliveryTrackerPeriod>('week');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const routeSearch = searchParams.get('search') || '';
+  const routeClient = searchParams.get('client') || '';
+  const routeTaskId = searchParams.get('taskId') || '';
+  const requestedPeriod = searchParams.get('period');
+  const [period, setPeriod] = React.useState<DeliveryTrackerPeriod>(
+    requestedPeriod === 'month' || requestedPeriod === 'all' ? requestedPeriod : 'week',
+  );
   const [anchor, setAnchor] = React.useState(() => new Date());
   const [statusFilter, setStatusFilter] = React.useState<DeliveryTrackerStatusFilter>('all');
-  const [search, setSearch] = React.useState('');
+  const [search, setSearch] = React.useState(routeSearch);
   const [expandedClients, setExpandedClients] = React.useState<Set<string>>(() => new Set());
+  const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
   const deferredSearch = React.useDeferredValue(search);
+
+  React.useEffect(() => setSearch(routeSearch), [routeSearch]);
+  React.useEffect(() => {
+    if (requestedPeriod === 'week' || requestedPeriod === 'month' || requestedPeriod === 'all') setPeriod(requestedPeriod);
+  }, [requestedPeriod]);
 
   const visibleTasks = React.useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions),
@@ -100,7 +119,9 @@ const DeliveryTracker: React.FC = () => {
 
   const filteredSummaries = React.useMemo(() => {
     const query = deferredSearch.trim().toLowerCase();
+    const focusedClient = routeClient.trim().toLowerCase();
     return summaries.filter(summary => {
+      const matchesClient = !focusedClient || summary.clientName.trim().toLowerCase() === focusedClient;
       const matchesSearch = !query || [
         summary.clientName,
         ...summary.tasks.map(task => `${task.title} ${task.serviceType}`),
@@ -110,9 +131,34 @@ const DeliveryTracker: React.FC = () => {
         || (statusFilter === 'open' && summary.open > 0)
         || (statusFilter === 'overdue' && summary.overdue > 0)
         || (statusFilter === 'completed' && (summary.completed > 0 || summary.delivered > 0));
-      return matchesSearch && matchesStatus;
+      return matchesClient && matchesSearch && matchesStatus;
     });
-  }, [deferredSearch, statusFilter, summaries]);
+  }, [deferredSearch, routeClient, statusFilter, summaries]);
+
+  const selectedTask = React.useMemo(() => (
+    selectedTaskId ? visibleTasks.find(task => task.id === selectedTaskId) || null : null
+  ), [selectedTaskId, visibleTasks]);
+
+  const updateQuery = React.useCallback((updates: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams);
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    });
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  React.useEffect(() => {
+    const focusedTask = routeTaskId ? visibleTasks.find(task => task.id === routeTaskId) : undefined;
+    const clientToExpand = focusedTask?.clientName || routeClient;
+    if (!clientToExpand) return;
+    if (focusedTask && period !== 'all') {
+      setPeriod('all');
+      updateQuery({ period: 'all' });
+    }
+    setExpandedClients(current => current.has(clientToExpand) ? current : new Set(current).add(clientToExpand));
+    if (focusedTask) setSelectedTaskId(focusedTask.id);
+  }, [period, routeClient, routeTaskId, updateQuery, visibleTasks]);
 
   const totals = React.useMemo(() => summaries.reduce((result, summary) => ({
     open: result.open + summary.open,
@@ -138,8 +184,9 @@ const DeliveryTracker: React.FC = () => {
     <div className={pageShell}>
       <PageHeader
         title="Clients"
-        description="Track weekly and monthly tasks, deliverables, deadlines, and completed work by client."
+        description="Manage every task, deliverable, deadline, and completed item by client."
         meta={<><span>{range.label}</span><span aria-hidden="true">·</span><span>{filteredSummaries.length} clients shown</span></>}
+        action={canCreateTasks(currentUser, rolePermissions) ? <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />New task</Button> : undefined}
       />
 
       <StatGroup className="grid-cols-2 xl:grid-cols-4" aria-label="Delivery tracker summary">
@@ -164,19 +211,19 @@ const DeliveryTracker: React.FC = () => {
               <p className="mt-1 text-sm text-muted">Open overdue work carries forward until it is completed.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <SegmentedTabs items={PERIOD_TABS} value={period} onChange={value => { setPeriod(value); setAnchor(new Date()); }} label="Tracker period" idPrefix="delivery-period" />
-              <div className="flex items-center rounded-control bg-surface ring-1 ring-line">
+              <SegmentedTabs items={PERIOD_TABS} value={period} onChange={value => { setPeriod(value); setAnchor(new Date()); updateQuery({ period: value === 'week' ? null : value }); }} label="Tracker period" idPrefix="delivery-period" />
+              {period !== 'all' && <div className="flex items-center rounded-control bg-surface ring-1 ring-line">
                 <button type="button" onClick={() => setAnchor(current => moveDeliveryPeriod(period, current, -1))} className="flex h-11 w-11 items-center justify-center rounded-l-control text-muted hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35" aria-label={`Previous ${period}`}><ChevronLeft className="h-4 w-4" /></button>
                 <button type="button" onClick={() => setAnchor(new Date())} className="min-h-11 border-x border-line px-3 text-sm font-semibold text-ink hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">Today</button>
                 <button type="button" onClick={() => setAnchor(current => moveDeliveryPeriod(period, current, 1))} className="flex h-11 w-11 items-center justify-center rounded-r-control text-muted hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35" aria-label={`Next ${period}`}><ChevronRight className="h-4 w-4" /></button>
-              </div>
+              </div>}
             </div>
           </div>
 
           <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative w-full lg:max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-              <input data-global-search type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search clients, tasks, or deliverables" aria-label="Search delivery tracker" className={cn(inputBase, 'pl-10 pr-3')} />
+              <input data-global-search type="search" value={search} onChange={event => { const value = event.target.value; setSearch(value); updateQuery({ search: value || null }); }} placeholder="Search clients, tasks, or deliverables" aria-label="Search delivery tracker" className={cn(inputBase, 'pl-10 pr-3')} />
             </div>
             <div className="flex flex-wrap gap-2" aria-label="Filter tracker status">
               {STATUS_FILTERS.map(filter => <button key={filter.id} type="button" aria-pressed={statusFilter === filter.id} onClick={() => setStatusFilter(filter.id)} className={cn('min-h-11 rounded-control px-3 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35', statusFilter === filter.id ? 'bg-accent text-white dark:text-[rgb(var(--calm-accent-ink))]' : 'bg-surface text-muted ring-1 ring-line hover:bg-inset hover:text-ink')}>{filter.label}</button>)}
@@ -215,7 +262,7 @@ const DeliveryTracker: React.FC = () => {
                       <section aria-labelledby={`${summary.clientName}-tasks`}>
                         <h4 id={`${summary.clientName}-tasks`} className="text-sm font-semibold text-ink">Tasks</h4>
                         <div className="mt-3 space-y-2">
-                          {summary.tasks.map(task => <div key={task.id} className="grid gap-2 rounded-control bg-surface px-3 py-3 ring-1 ring-line/70 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{task.title}</p><p className="mt-1 text-xs text-muted">{task.serviceType} · due {readableDate(task.dueDate)}</p></div><Badge tone={task.isCompleted || task.status === 'Completed' ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{task.status}</Badge></div>)}
+                          {summary.tasks.map(task => <button key={task.id} type="button" onClick={() => setSelectedTaskId(task.id)} className="grid w-full gap-2 rounded-control bg-surface px-3 py-3 text-left ring-1 ring-line/70 transition-colors hover:bg-accent-soft/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{task.title}</p><p className="mt-1 text-xs text-muted">{task.serviceType} · due {readableDate(task.dueDate)}</p></div><Badge tone={task.isCompleted || task.status === 'Completed' ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{task.status}</Badge></button>)}
                           {summary.tasks.length === 0 && <p className="rounded-control bg-surface px-3 py-4 text-sm text-muted ring-1 ring-line/70">No tasks in this period.</p>}
                         </div>
                       </section>
@@ -235,6 +282,7 @@ const DeliveryTracker: React.FC = () => {
           {filteredSummaries.length === 0 && <EmptyState title="No tracked client work" description="Try another period or clear the current search and status filters." className="m-5" />}
         </div>
       </section>
+      <TaskDetailsModal isOpen={Boolean(selectedTask)} task={selectedTask} onClose={() => { setSelectedTaskId(null); if (routeTaskId) updateQuery({ taskId: null }); }} />
     </div>
   );
 };

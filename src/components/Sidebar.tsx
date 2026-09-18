@@ -57,7 +57,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
   const setCreateTaskModalOpen = useStore((state) => state.setCreateTaskModalOpen);
   const isStaff = currentUser?.role === 'Staff';
   const isClient = currentUser?.role === 'Client';
-  const staffMoreActive = ['/tasks', '/clients', '/projects', '/reports', '/settings'].some(path => location.pathname === path || location.pathname.startsWith(`${path}/`));
+  const staffMoreActive = ['/clients', '/projects', '/reports', '/settings'].some(path => location.pathname === path || location.pathname.startsWith(`${path}/`));
   const clientMoreActive = ['/calendar', '/clients', '/reports', '/settings'].some(path => location.pathname === path || location.pathname.startsWith(`${path}/`));
   const moreActive = isClient ? clientMoreActive : staffMoreActive;
   const [staffMoreOpen, setStaffMoreOpen] = React.useState(moreActive);
@@ -72,7 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
     : isClient
       ? [
           { path: '/', label: 'Home', icon: LayoutDashboard },
-          { path: '/tasks', label: 'Deliveries', icon: CheckSquare },
+          { path: '/clients', label: 'Deliveries', icon: Users },
           { path: '/notifications', label: 'Inbox', icon: Bell },
         ].filter(item => item.path === '/notifications' || canAccessPath(currentUser, item.path, rolePermissions))
     : getVisibleNavigation(currentUser, rolePermissions).map(item => ({
@@ -80,8 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
         icon: navIcons[item.label as keyof typeof navIcons],
       }));
   const staffMoreItems = [
-    { path: '/tasks', label: 'All work', icon: CheckSquare },
-    { path: '/clients', label: 'Task tracker', icon: Users },
+    { path: '/clients', label: 'Clients', icon: Users },
     { path: '/projects', label: 'Companies', icon: FolderKanban },
     { path: '/reports', label: 'Reports', icon: BarChart3 },
     { path: '/settings', label: 'Settings', icon: Settings },

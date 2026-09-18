@@ -7,7 +7,6 @@ export type AppPath = '/' | '/tasks' | '/calendar' | '/clients' | '/projects' | 
 
 export const appNavigation: { label: string; path: AppPath }[] = [
   { label: 'Dashboard', path: '/' },
-  { label: 'Tasks', path: '/tasks' },
   { label: 'Calendar', path: '/calendar' },
   { label: 'Clients', path: '/clients' },
   { label: 'Companies', path: '/projects' },
@@ -355,6 +354,12 @@ export const canAccessPath = (user: User | null | undefined, path: string, custo
   const firstSegment = path.split('?')[0].replace(/^\/+/, '').split('/')[0];
   const route = (firstSegment ? `/${firstSegment}` : '/') as AppPath;
 
+  // Clients is the merged task workspace. Preserve access for custom roles
+  // that were granted the former Tasks page but not the tracker page.
+  if (route === '/clients') {
+    return hasPermission(user, 'viewDeliveryTracker', customRoles)
+      || hasPermission(user, 'viewTasks', customRoles);
+  }
   const permission = routePermission[route];
   return permission ? hasPermission(user, permission, customRoles) : false;
 };
