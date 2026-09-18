@@ -21,7 +21,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { Badge, Button, PageHeader, ProgressBar, StatGroup, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
-import { canCreateTasks, canEditClientProfile, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { canCreateClientProfiles, canCreateTasks, canEditClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
@@ -209,6 +209,7 @@ const Clients: React.FC = () => {
     const canSeeProfile = (profile: ClientProfile) => {
       if (!currentUser) return false;
       if (canSeeAllClients) return true;
+      if (profile.createdBy && profile.createdBy === currentUser.id) return true;
       return visibleClientKeys.has(getClientKey(profile.clientName));
     };
 
@@ -490,7 +491,7 @@ const Clients: React.FC = () => {
         description="The complete client database for company details, contacts, accounts, services, and linked work."
         meta={<><span>{clients.length} visible companies</span><span aria-hidden="true">·</span><span>{totalTasks} linked tasks</span></>}
         action={<div className="flex flex-wrap gap-2">
-          {(currentUser?.role === 'Admin' || currentUser?.isSuperAdmin) && <Button onClick={() => setIsCreateClientOpen(true)} disabled={upgradeRequired}><Building2 className="h-4 w-4" />New client</Button>}
+          {canCreateClientProfiles(currentUser, rolePermissions) && <Button onClick={() => setIsCreateClientOpen(true)} disabled={upgradeRequired}><Building2 className="h-4 w-4" />New client</Button>}
           {canAddProjects && <Button variant="secondary" onClick={() => { setInitialProjectClientId(''); setIsCreateProjectOpen(true); }}><Plus className="h-4 w-4" />New project</Button>}
           {canAddTasks && <Button variant="secondary" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />New task</Button>}
         </div>}
@@ -971,15 +972,15 @@ const Clients: React.FC = () => {
       )}
       {isCreateClientOpen && <CreateClientProfileModal
         onClose={() => setIsCreateClientOpen(false)}
-        onCreateProject={(clientId) => {
+        onCreateProject={canAddProjects ? (clientId) => {
           setIsCreateClientOpen(false);
           setInitialProjectClientId(clientId);
           setIsCreateProjectOpen(true);
-        }}
-        onAddServicePlan={(clientId) => {
+        } : undefined}
+        onAddServicePlan={canManageClientPlans(currentUser, rolePermissions) ? (clientId) => {
           setIsCreateClientOpen(false);
           setPlanClientId(clientId);
-        }}
+        } : undefined}
       />}
       <CreateProjectModal
         isOpen={isCreateProjectOpen}

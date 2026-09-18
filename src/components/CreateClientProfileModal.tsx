@@ -89,10 +89,12 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent text-white"><Check className="h-5 w-5" /></span>
             <div><p className="font-semibold text-ink" data-i18n-skip>{form.clientName}</p><p className="mt-1 text-sm leading-6 text-muted">{t('No login account or service plan was created automatically.')}</p></div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Button onClick={() => continueTo(onCreateProject)}><Building2 className="h-4 w-4" />{t('Create project')}<ArrowRight className="ml-auto h-4 w-4" /></Button>
-            <Button variant="secondary" onClick={() => continueTo(onAddServicePlan)}>{t('Add service plan')}<ArrowRight className="ml-auto h-4 w-4" /></Button>
-          </div>
+          {(onCreateProject || onAddServicePlan) && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {onCreateProject && <Button onClick={() => continueTo(onCreateProject)}><Building2 className="h-4 w-4" />{t('Create project')}<ArrowRight className="ml-auto h-4 w-4" /></Button>}
+              {onAddServicePlan && <Button variant="secondary" onClick={() => continueTo(onAddServicePlan)}>{t('Add service plan')}<ArrowRight className="ml-auto h-4 w-4" /></Button>}
+            </div>
+          )}
           <button type="button" onClick={onClose} className="min-h-11 w-full rounded-control border border-line px-4 py-2 text-sm font-semibold text-muted transition hover:bg-inset hover:text-ink">{t('Done')}</button>
         </div>
       ) : (

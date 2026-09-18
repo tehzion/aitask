@@ -5,6 +5,7 @@ import {
   canAccessPath,
   canApproveRegistrations,
   canCommentOnTask,
+  canCreateClientProfiles,
   canCreateUsers,
   canDeleteUser,
   canEditClientProfile,
@@ -257,6 +258,25 @@ describe('staff permission matrix', () => {
     };
 
     expect(canEditClientProfile(customRoleStaff, 'Acme', tasks, [customRole])).toBe(true);
+  });
+
+  it('lets an HOD custom role add companies without granting project or rename control', () => {
+    const hodRole: CustomRole = {
+      id: SYSTEM_HOD_ROLE_ID,
+      name: 'HOD',
+      baseRole: 'Staff',
+      permissions: { ...defaultRolePermissions.Staff, createClients: true },
+      createdAt: '2026-07-13T00:00:00.000Z',
+      updatedAt: '2026-07-13T00:00:00.000Z',
+    };
+    const hod: User = { ...staff, customRoleId: hodRole.id, permissions: {} as User['permissions'] };
+
+    expect(canCreateClientProfiles(superAdmin)).toBe(true);
+    expect(canCreateClientProfiles(admin)).toBe(true);
+    expect(canCreateClientProfiles(staff)).toBe(false);
+    expect(canCreateClientProfiles(acmeClient)).toBe(false);
+    expect(canCreateClientProfiles(hod, [hodRole])).toBe(true);
+    expect(canRenameClient(hod)).toBe(false);
   });
 
   it('chooses the first permitted page when Dashboard and Settings are disabled', () => {

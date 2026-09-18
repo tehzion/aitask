@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "production_aligned_through_20260918090000",
+  "status": "production_aligned_through_20260918120000",
   "metadataOnly": false,
-  "warning": "Production history is aligned through 20260918090000_role_authorization_fixes. Historical rollout repair remains prohibited.",
+  "warning": "Production history is aligned through 20260918120000_hod_company_creation. Historical rollout repair remains prohibited.",
   "productionVerification": {
     "verifiedAt": "2026-09-11",
-    "historyThrough": "20260918090000_role_authorization_fixes",
+    "historyThrough": "20260918120000_hod_company_creation",
     "historyAligned": true,
     "rolloutResult": {
       "approvedBaselineMatchedAfterRestore": true,
@@ -320,7 +320,8 @@
     "20260910120000_client_project_link_authorization",
     "20260910144226_member_permission_realtime_refresh",
     "20260911020546_enforce_task_project_link_authorization",
-    "20260918090000_role_authorization_fixes"
+    "20260918090000_role_authorization_fixes",
+    "20260918120000_hod_company_creation"
   ],
   "pendingProductionMigrations": []
 }

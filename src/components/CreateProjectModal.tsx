@@ -6,7 +6,7 @@ import { Project, ServiceType } from '../types';
 import { getServiceOptions, hasChoice, PRESET_SERVICES } from '../lib/choiceOptions';
 import ModalShell from './ModalShell';
 import { fieldLabel, modalFooter } from './uiTokens';
-import { canManageClientProfiles, canViewAllClients, getVisibleClientNames } from '../lib/access';
+import { canCreateClientProfiles, canViewAllClients, getVisibleClientNames } from '../lib/access';
 import CreateClientProfileModal from './CreateClientProfileModal';
 
 interface Props {
@@ -52,7 +52,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const clientOptions = React.useMemo(() => {
     const visibleKeys = new Set(getVisibleClientNames(currentUser, tasks, projects, rolePermissions).map(value => value.trim().toLowerCase()));
     const byName = new Map(clients
-      .filter(client => canViewAllClients(currentUser, rolePermissions) || visibleKeys.has(client.clientName.trim().toLowerCase()))
+      .filter(client => canViewAllClients(currentUser, rolePermissions) || client.createdBy === currentUser?.id || visibleKeys.has(client.clientName.trim().toLowerCase()))
       .map(client => [client.clientName.trim().toLowerCase(), { id: client.id, name: client.clientName }]));
     if (project) {
       const key = project.clientName.trim().toLowerCase();
@@ -300,7 +300,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                 <label htmlFor={clientSelectId} className={fieldLabel}>
                   Company name <span className="text-red-500">*</span>
                 </label>
-                {canManageClientProfiles(currentUser) && <button type="button" onClick={() => setIsClientModalOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">+ Add client</button>}
+                {canCreateClientProfiles(currentUser, rolePermissions) && <button type="button" onClick={() => setIsClientModalOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">+ Add client</button>}
               </div>
               <select
                 required
@@ -311,7 +311,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                 <option value="">Choose a company</option>
                 {clientOptions.map(option => <option key={option.id || option.name} value={option.id}>{option.name}</option>)}
               </select>
-              {clientOptions.length === 0 && <p className="mt-2 text-xs text-amber-700">{canManageClientProfiles(currentUser) ? 'Add a client profile first, then continue creating this project.' : 'Ask an administrator to add or assign a company before creating this project.'}</p>}
+              {clientOptions.length === 0 && <p className="mt-2 text-xs text-amber-700">{canCreateClientProfiles(currentUser, rolePermissions) ? 'Add a client profile first, then continue creating this project.' : 'Ask an administrator to add or assign a company before creating this project.'}</p>}
             </div>
 
             <div>

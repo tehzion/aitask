@@ -259,6 +259,7 @@ describe('retryPendingSave', () => {
       viewAssignedServiceClients: true,
       viewServicePrices: false,
       viewProductionReports: false,
+      createClients: false,
     };
 
     rpc.mockRejectedValueOnce(new Error('response lost'));

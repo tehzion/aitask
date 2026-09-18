@@ -88,6 +88,7 @@ describe('Chinese UI translations', () => {
       'zh',
     )).toBe('只读任务视图。您只能更新分配给您的或由您创建的任务。');
     expect(translateUiText('Dependency status unavailable', 'zh')).toBe('前置步骤状态不可用');
+    expect(translateUiText('Add companies', 'zh')).toBe('添加公司');
     expect(translateUiText(
       'Dependency status for 1 earlier step is unavailable. Confirm with the task owner before starting.',
       'zh',

@@ -40,6 +40,7 @@ export type RolePermissionKey =
   | 'editTasks'
   | 'manageCreatedTasks'
   | 'createProjects'
+  | 'createClients'
   | 'manageUsers'
   | 'approveRegistrations'
   | 'deleteUsers'
@@ -179,6 +180,7 @@ export interface ClientProfile {
   id: string;
   version?: number;
   clientName: string;
+  createdBy?: string;
   contactPerson?: string;
   email?: string;
   phone?: string;

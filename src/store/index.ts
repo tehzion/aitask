@@ -61,6 +61,7 @@ import {
   canApproveRegistrations,
   canCreateTasks,
   canCreateUsers,
+  canCreateClientProfiles,
   canManageClientProfiles,
   canDeleteUser,
   canManageProjects,
@@ -3155,8 +3156,8 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
-        if (!canManageClientProfiles(currentUser)) {
-          return { ok: false, error: 'Only Boss Koo or Admins can create client profiles.' };
+        if (!canCreateClientProfiles(currentUser, state.rolePermissions)) {
+          return { ok: false, error: 'You need permission to add companies.' };
         }
 
         const name = data.clientName.trim();
@@ -3180,6 +3181,7 @@ export const useStore = create<StoreState>()(
         const client: ClientProfile = {
           id: nowId('CL'),
           clientName: name,
+          createdBy: currentUser.id,
           contactPerson: cleanProfileText(data.contactPerson, 160),
           email: cleanProfileText(data.email, 320),
           phone: cleanProfileText(data.phone, 80),
