@@ -5,6 +5,26 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#E5231B" />
+    <script>
+      // Apply the persisted/system theme before first paint to avoid a light flash.
+      (function () {
+        try {
+          var stored = window.localStorage.getItem('aitask-color-theme');
+          var preference = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+          var dark = preference === 'dark'
+            || (preference === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var root = document.documentElement;
+          root.classList.toggle('dark', dark);
+          root.dataset.theme = dark ? 'dark' : 'light';
+          root.dataset.themePreference = preference;
+          root.style.colorScheme = dark ? 'dark' : 'light';
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', dark ? '#101618' : '#E5231B');
+        } catch (error) {
+          // Theme bootstrap is best-effort; the app re-applies it on mount.
+        }
+      })();
+    </script>
     <meta name="description" content="Marketing agency task, project, calendar, and approval management." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />

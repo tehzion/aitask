@@ -15,6 +15,7 @@ export default {
         ink: 'rgb(var(--calm-ink) / <alpha-value>)',
         muted: 'rgb(var(--calm-muted) / <alpha-value>)',
         line: 'rgb(var(--calm-line) / <alpha-value>)',
+        scrim: 'rgb(var(--calm-scrim) / <alpha-value>)',
         accent: 'rgb(var(--calm-accent) / <alpha-value>)',
         'accent-soft': 'rgb(var(--calm-accent-soft) / <alpha-value>)',
       },

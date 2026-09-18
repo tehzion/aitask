@@ -22,6 +22,9 @@ const Reports: React.FC = () => {
       grid: themeTokenColor('--calm-line', '#e2e8f0'),
       tick: themeTokenColor('--calm-muted', '#64748b'),
       cursor: themeTokenColor('--calm-inset', '#f8fafc'),
+      onTime: themeTokenColor('--calm-success', '#10b981'),
+      late: themeTokenColor('--calm-danger', '#ef4444'),
+      open: themeTokenColor('--calm-warning', '#f59e0b'),
     };
   }, [resolvedTheme]);
   const scopeLabel = currentUser?.role === 'Client'
@@ -87,9 +90,9 @@ const Reports: React.FC = () => {
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: chartColors.tick }} />
                 <Tooltip cursor={{ fill: chartColors.cursor }} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
                 <Legend iconType="circle" wrapperStyle={{fontSize: '12px'}} />
-                <Line type="monotone" dataKey="onTime" name="On time" stroke="#10b981" strokeWidth={3} activeDot={{ r: 8 }} />
-                <Line type="monotone" dataKey="late" name="Late" stroke="#ef4444" strokeWidth={3} />
-                <Line type="monotone" dataKey="open" name="Open" stroke="#f59e0b" strokeWidth={3} />
+                <Line type="monotone" dataKey="onTime" name="On time" stroke={chartColors.onTime} strokeWidth={3} activeDot={{ r: 8 }} />
+                <Line type="monotone" dataKey="late" name="Late" stroke={chartColors.late} strokeWidth={3} />
+                <Line type="monotone" dataKey="open" name="Open" stroke={chartColors.open} strokeWidth={3} />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -107,9 +110,9 @@ const Reports: React.FC = () => {
                 <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} width={100} />
                 <Tooltip cursor={{ fill: chartColors.cursor }} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
                 <Legend iconType="circle" wrapperStyle={{fontSize: '12px'}} />
-                <Bar dataKey="onTime" name="On time" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="late" name="Late" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="open" name="Open" stackId="a" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="onTime" name="On time" stackId="a" fill={chartColors.onTime} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="late" name="Late" stackId="a" fill={chartColors.late} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="open" name="Open" stackId="a" fill={chartColors.open} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
