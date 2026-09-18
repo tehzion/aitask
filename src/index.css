@@ -11,14 +11,14 @@
 :root {
   /* Asset revision marker: changing this value forces a fresh hashed
      stylesheet URL so clients that cached a broken asset response recover. */
-  --aitask-asset-revision: 2026-09-18-3;
-  --calm-canvas:      247 248 248;
+  --aitask-asset-revision: 2026-09-18-4;
+  --calm-canvas:      246 246 246;
   --calm-surface:     255 255 255;
-  --calm-inset:       239 243 242;
+  --calm-inset:       236 236 236;
   --calm-raised:      255 255 255;
-  --calm-ink:         23 33 38;
-  --calm-muted:       95 108 111;
-  --calm-line:        220 227 225;
+  --calm-ink:         26 26 26;
+  --calm-muted:       107 107 107;
+  --calm-line:        228 228 228;
   --calm-accent:      229 35 27;
   --calm-accent-soft: 253 231 229;
   --calm-accent-ink:  74 11 8;
@@ -29,11 +29,11 @@
   --calm-danger:      181 57 57;
   --calm-danger-soft: 252 232 232;
 
-  --color-bg:        #f7f8f8;
+  --color-bg:        #f6f6f6;
   --color-surface:   #ffffff;
-  --color-border:    #dce3e1;
-  --color-text:      #172126;
-  --color-muted:     #5f6c6f;
+  --color-border:    #e4e4e4;
+  --color-text:      #1a1a1a;
+  --color-muted:     #6b6b6b;
   --color-primary:   #e5231b;
   --color-primary-h: #c11c15;
   --color-primary-l: #fde7e5;
@@ -58,13 +58,13 @@ html[lang^="zh"] .calm-eyebrow {
 }
 
 html.dark {
-  --calm-canvas:      16 22 24;
-  --calm-surface:     22 30 33;
-  --calm-inset:       29 39 42;
-  --calm-raised:      34 45 48;
-  --calm-ink:         237 243 241;
-  --calm-muted:       169 182 181;
-  --calm-line:        50 64 65;
+  --calm-canvas:      20 22 24;
+  --calm-surface:     28 30 32;
+  --calm-inset:       14 16 17;
+  --calm-raised:      38 40 42;
+  --calm-ink:         236 237 238;
+  --calm-muted:       156 160 162;
+  --calm-line:        46 49 51;
   --calm-accent:      248 113 113;
   --calm-accent-soft: 74 24 22;
   --calm-accent-ink:  40 6 5;
@@ -75,11 +75,11 @@ html.dark {
   --calm-danger:      245 165 165;
   --calm-danger-soft: 89 40 43;
 
-  --color-bg:        #101618;
-  --color-surface:   #161e21;
-  --color-border:    #324041;
-  --color-text:      #edf3f1;
-  --color-muted:     #a9b6b5;
+  --color-bg:        #141618;
+  --color-surface:   #1c1e20;
+  --color-border:    #2e3133;
+  --color-text:      #ecedee;
+  --color-muted:     #9ca0a2;
   --color-primary:   #f87171;
   --color-primary-h: #fca5a5;
   --color-primary-l: #4a1816;
@@ -163,6 +163,34 @@ svg { stroke-width: 1.75; }
 [class~="border-slate-200/80"],
 [class~="border-slate-200/90"] { border-color: rgb(var(--calm-line)); }
 .border-slate-300 { border-color: rgb(var(--calm-line) / 0.9); }
+.border-slate-400,
+.border-slate-500,
+.border-slate-600 { border-color: rgb(var(--calm-line)); }
+
+.bg-slate-300 { background-color: rgb(var(--calm-line)); }
+.bg-slate-400 { background-color: rgb(var(--calm-muted)); }
+.text-slate-200,
+.text-slate-300 { color: rgb(var(--calm-muted)); }
+
+/* Neutral surface opacity variants missed by the alias layer. */
+[class~="bg-slate-50/30"] { background-color: rgb(var(--calm-inset) / 0.3); }
+[class~="bg-slate-50/50"] { background-color: rgb(var(--calm-inset) / 0.5); }
+[class~="bg-slate-50/60"] { background-color: rgb(var(--calm-inset) / 0.6); }
+[class~="bg-white/70"] { background-color: rgb(var(--calm-surface) / 0.7); }
+[class~="bg-white/90"] { background-color: rgb(var(--calm-surface) / 0.9); }
+
+/* Legacy dividers inherit the calm line color (bright dividers in dark mode otherwise). */
+.divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgb(var(--calm-line)); }
+
+/* Legacy dark: overrides the alias layer previously missed. */
+html.dark [class~="dark:bg-slate-800"] { background-color: rgb(var(--calm-raised)); }
+html.dark [class~="dark:border-slate-600"] { border-color: rgb(var(--calm-line)); }
+html.dark [class~="dark:hover:bg-slate-800"]:hover { background-color: rgb(var(--calm-inset)); }
+html.dark [class~="dark:text-slate-200"],
+html.dark [class~="dark:text-slate-300"] { color: rgb(var(--calm-muted)); }
+[class~="placeholder:text-slate-400"]::placeholder,
+[class~="placeholder:text-slate-500"]::placeholder { color: rgb(var(--calm-muted) / 0.7); }
 
 [class~="hover:text-slate-700"]:hover,
 [class~="hover:text-slate-800"]:hover { color: rgb(var(--calm-ink)); }

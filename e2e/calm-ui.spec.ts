@@ -59,7 +59,7 @@ test('core operations screens keep their semantic layout in light and dark modes
 
     for (const theme of ['Light', 'Dark'] as const) {
       await setTheme(page, theme);
-      const expectedCanvas = theme === 'Dark' ? 'rgb(16, 22, 24)' : 'rgb(247, 248, 248)';
+      const expectedCanvas = theme === 'Dark' ? 'rgb(20, 22, 24)' : 'rgb(246, 246, 246)';
       await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(expectedCanvas);
 
       for (const route of routes) {

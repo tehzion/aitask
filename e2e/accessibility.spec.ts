@@ -34,7 +34,7 @@ test('day/night mode and keyboard shortcuts remain accessible', async ({ page })
   await page.keyboard.press('Shift+D');
   await expect(root).toHaveClass(/dark/);
   await expect(page.getByRole('button', { name: 'Switch to day mode' })).toHaveAttribute('aria-pressed', 'true');
-  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(16, 22, 24)');
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(20, 22, 24)');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('aitask-color-theme'))).toBe('dark');
   await page.waitForTimeout(250);
   await expectNoAxeViolations(page, 'Admin dashboard in night mode');
