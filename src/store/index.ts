@@ -72,6 +72,7 @@ import {
   canManageServiceCycles,
   canManageTaskTemplates,
   canViewAllClients,
+  canOpenServiceClient,
   getAssignableProjects,
   getVisibleClientNames,
   isNotificationReadByUser,
@@ -105,6 +106,7 @@ import {
   saveSecureMemberPermissions,
   saveSecureWorkspace,
   type MutationConflict,
+  type MutationErrorCode,
   type SecureCommandType,
 } from '../lib/secureWorkspace';
 import {
@@ -158,6 +160,7 @@ interface BackendRuntimeState {
   pendingCommandType?: SecureCommandType;
   upgradeRequired?: boolean;
   conflict?: MutationConflict;
+  errorCode?: MutationErrorCode;
   error?: string;
   message: string;
 }
@@ -258,10 +261,10 @@ interface StoreState {
   initializeBackend: () => Promise<void>;
   syncBackendNow: (commandType?: SecureCommandType) => Promise<void>;
   pullBackendNow: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
-  retryMutation: () => Promise<{ ok: boolean; error?: string }>;
+  retryMutation: () => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode }>;
   reapplyMutationOnLatestWorkspace: () => Promise<{ ok: boolean; error?: string }>;
-  retryPendingSave: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string }>;
-  discardMutation: (options?: { reload?: boolean }) => Promise<void>;
+  retryPendingSave: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode }>;
+  discardMutation: (options?: { reload?: boolean; confirm?: boolean }) => Promise<void>;
   commitPendingMutation: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string }>;
   login: (name: string, password?: string) => Promise<LoginResult>;
   requestPasswordRecovery: (email: string) => Promise<{ ok: boolean; error?: string }>;
@@ -1210,6 +1213,7 @@ export const useStore = create<StoreState>()(
             pendingMutations: Math.max(1, state.backend.pendingMutations),
             pendingCommandType,
             error: undefined,
+            errorCode: undefined,
           }
         }));
 
@@ -1243,6 +1247,7 @@ export const useStore = create<StoreState>()(
                   hasLocalChanges: true,
                   message: result.error,
                   error: result.error,
+                  errorCode: result.code,
                 },
               }));
               return;
@@ -1265,6 +1270,7 @@ export const useStore = create<StoreState>()(
                 pendingCommandType: hasChangesAfterSave ? pendingCommandType : undefined,
                 conflict: undefined,
                 error: undefined,
+                errorCode: undefined,
                 message: hasChangesAfterSave ? 'Saving newer changes.' : 'Saved.',
               },
             }));
@@ -1336,6 +1342,8 @@ export const useStore = create<StoreState>()(
               hasLocalChanges: false,
               pendingMutations: 0,
               pendingCommandType: undefined,
+              error: undefined,
+              errorCode: undefined,
               message: result.message,
             }
           }));
@@ -1348,6 +1356,7 @@ export const useStore = create<StoreState>()(
               pendingMutations: state.backend.hasLocalChanges ? 1 : 0,
               message: 'Save was not confirmed. Your pending change is retained for retry.',
               error: error instanceof Error ? error.message : 'Supabase could not confirm the save.',
+              errorCode: 'RETRY_REQUIRED',
             }
           }));
         }
@@ -1808,6 +1817,7 @@ export const useStore = create<StoreState>()(
         if (
           shouldUseSecureSupabase()
           && get().backend.pendingMutations > 0
+          && options.confirm !== false
           && typeof window !== 'undefined'
           && !window.confirm(translateUiText(
             'Use the latest saved workspace? Your pending change in this browser tab will be permanently discarded.',
@@ -1830,6 +1840,7 @@ export const useStore = create<StoreState>()(
             hasLocalChanges: false,
             pendingMutations: 0,
             pendingCommandType: undefined,
+            errorCode: undefined,
             message: options.reload === false ? 'Pending change discarded.' : 'Loading the latest saved workspace.',
           },
         }));
@@ -1842,7 +1853,7 @@ export const useStore = create<StoreState>()(
         if (!shouldUseSupabase()) return { ok: true };
         const before = get().backend;
         if (before.isSaving || before.isPulling) {
-          return { ok: false, error: 'Another synchronization request is still running.' };
+          return { ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' };
         }
         if (getRetainedSecureCommand() || getRetainedSecureMemberMutation()) {
           return get().retryMutation();
@@ -1850,13 +1861,13 @@ export const useStore = create<StoreState>()(
         if (!before.hasLocalChanges) {
           return before.status === 'live'
             ? { ok: true }
-            : { ok: false, error: before.error || before.message || 'The change has not been saved yet.' };
+            : { ok: false, code: before.errorCode, error: before.error || before.message || 'The change has not been saved yet.' };
         }
         await get().syncBackendNow(commandType || before.pendingCommandType);
         const after = get().backend;
         return !after.hasLocalChanges && after.status === 'live'
           ? { ok: true }
-          : { ok: false, error: after.error || before.error || after.message || 'The change has not been saved yet.' };
+          : { ok: false, code: after.errorCode, error: after.error || before.error || after.message || 'The change has not been saved yet.' };
       },
 
       commitPendingMutation: async (commandType) => {
@@ -2918,8 +2929,10 @@ export const useStore = create<StoreState>()(
           const serviceDeliverable = taskData.deliverableId
             ? state.deliverables.find(item => item.id === taskData.deliverableId && item.cycleId === taskData.serviceCycleId)
             : undefined;
-          const assignedClient = serviceDeliverable && state.tasks.some(item => item.clientId === serviceDeliverable.clientId && item.assignedTo === currentUser.id);
-          if (!assignedClient) return '';
+          const canCreateForServiceClient = serviceDeliverable
+            && serviceDeliverable.clientId === taskData.clientId
+            && canOpenServiceClient(currentUser, serviceDeliverable.clientName, state.tasks, state.rolePermissions);
+          if (!canCreateForServiceClient) return '';
         }
 
         const title = taskData.title.trim();

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defaultRolePermissions, SYSTEM_HOD_ROLE_ID } from '../lib/access';
 import type { CustomRole } from '../types';
-import type { Task, User } from '../types';
+import type { Deliverable, Task, User } from '../types';
 import { useStore } from './index';
 
 const initialState = useStore.getState();
@@ -238,13 +238,26 @@ describe('task store authorization', () => {
       createdBy: staff.id,
     })).toBe('');
 
-    expect(useStore.getState().addTask({
+    const createdTaskId = useStore.getState().addTask({
       ...taskInput,
       projectId: 'project-staff-created',
       department: 'Designer',
       assignedTo: staff.id,
       createdBy: staff.id,
-    })).not.toBe('');
+    });
+    expect(createdTaskId).not.toBe('');
+    expect(useStore.getState().notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        title: 'Task Created by Staff',
+        targetRole: 'Admin',
+        route: { page: 'tasks', entityId: createdTaskId },
+      }),
+      expect.objectContaining({
+        title: 'New Task Assigned',
+        targetUserId: staff.id,
+        route: { page: 'tasks', entityId: createdTaskId },
+      }),
+    ]));
 
     expect(useStore.getState().addTask({
       ...taskInput,
@@ -255,6 +268,41 @@ describe('task store authorization', () => {
       createdBy: staff.id,
     })).not.toBe('');
     expect(useStore.getState().tasks.find(task => task.title === 'Unassigned scoped work')?.assignedTo).toBe('');
+  });
+
+  it('allows Staff to create a deliverable-linked task from an assigned client workspace', () => {
+    const deliverable: Deliverable = {
+      id: 'deliverable-acme',
+      clientId: 'client-acme',
+      clientName: 'Acme',
+      planId: 'plan-acme',
+      cycleId: 'cycle-acme',
+      serviceItemId: 'item-design',
+      sequence: 1,
+      title: 'Acme design deliverable',
+      status: 'Planned',
+      taskIds: [],
+      attachments: [],
+      createdAt: '2026-09-18T00:00:00.000Z',
+      updatedAt: '2026-09-18T00:00:00.000Z',
+    };
+    useStore.setState({ deliverables: [deliverable] });
+
+    const createdTaskId = useStore.getState().addTask({
+      ...ownTask,
+      title: 'Client workspace task',
+      clientId: deliverable.clientId,
+      serviceCycleId: deliverable.cycleId,
+      deliverableId: deliverable.id,
+      assignedTo: staff.id,
+      createdBy: staff.id,
+    });
+
+    expect(createdTaskId).not.toBe('');
+    expect(useStore.getState().tasks.find(task => task.id === createdTaskId)).toMatchObject({
+      clientId: deliverable.clientId,
+      deliverableId: deliverable.id,
+    });
   });
 
   it('records completion, preserves it during edits, and clears it when reopened', () => {

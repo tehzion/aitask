@@ -22,7 +22,7 @@ const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { users, clients, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, retryPendingSave } = useStore(useShallow(state => ({
+  const { users, clients, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, retryPendingSave, discardMutation } = useStore(useShallow(state => ({
     users: state.users,
     clients: state.clients,
     currentUser: state.currentUser,
@@ -38,6 +38,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     createTaskInitialDeliverableId: state.createTaskInitialDeliverableId,
     rolePermissions: state.rolePermissions,
     retryPendingSave: state.retryPendingSave,
+    discardMutation: state.discardMutation,
   })));
   const navigate = useNavigate();
   const titleId = React.useId();
@@ -252,6 +253,15 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   };
 
+  const handlePermanentSaveRejection = async (error?: string) => {
+    // The server rejected the command, so an identical retry cannot succeed.
+    // Restore the last confirmed workspace while leaving the form values in
+    // place for the user to correct.
+    await discardMutation({ reload: true, confirm: false });
+    setPendingTaskId('');
+    setFormError(error || 'This task was not saved. Review your permissions and task details.');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAssignmentError('');
@@ -263,6 +273,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       const pendingResult = await retryPendingSave('task.create');
       setIsSubmitting(false);
       if (!pendingResult.ok) {
+        if (pendingResult.code === 'FORBIDDEN' || pendingResult.code === 'VALIDATION') {
+          await handlePermanentSaveRejection(pendingResult.error);
+          return;
+        }
         setFormError(pendingResult.error || 'The task is still waiting to be saved.');
         return;
       }
@@ -362,6 +376,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     const saveResult = await retryPendingSave('task.create');
     setIsSubmitting(false);
     if (!saveResult.ok) {
+      if (saveResult.code === 'FORBIDDEN' || saveResult.code === 'VALIDATION') {
+        await handlePermanentSaveRejection(saveResult.error);
+        return;
+      }
       setPendingTaskId(taskId);
       setFormError(saveResult.error || 'The task is waiting to be saved. Review the sync status and retry.');
       return;
@@ -562,11 +580,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     </select>
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                   </div>
-                  {filteredUsers.length === 0 && (
-                    <p className="text-xs text-red-500 mt-1">
-                      No assignable team members in this department.
-                    </p>
-                  )}
                   {assignmentError && (
                     <p className="text-xs text-red-500 mt-1">{assignmentError}</p>
                   )}

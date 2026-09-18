@@ -18,6 +18,7 @@ import {
   discardSecureWorkspaceCommand,
   discardRetainedSecureMemberMutation,
   getRetainedSecureMemberMutation,
+  getRetainedSecureCommand,
   getSecureReleaseNoticeAcknowledgement,
   inferSecureCommandType,
   isSecureCommandType,
@@ -258,6 +259,22 @@ describe('secure command retry identity', () => {
     const retry = await retrySecureWorkspaceCommand();
     expect(retry.ok).toBe(true);
     expect(rpc.mock.calls[1][1].p_command_id).toBe(firstCommandId);
+  });
+
+  it('does not retain a task command rejected by a database permission rule', async () => {
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: '23514', message: 'Create tasks permission required.' },
+    });
+
+    const result = await saveSecureWorkspace(stateWithUser('permission-denied'), 'task.create');
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'FORBIDDEN',
+      error: 'Create tasks permission required.',
+    });
+    expect(getRetainedSecureCommand()).toBeNull();
   });
 
   it('keeps one retry command in account-scoped session storage', async () => {

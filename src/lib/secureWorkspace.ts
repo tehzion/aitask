@@ -100,6 +100,20 @@ export type MutationResult<T> =
   | { ok: true; data: T; commandId: string; workspaceVersion: number; replayed?: boolean }
   | { ok: false; code: MutationErrorCode; error: string; conflict?: MutationConflict };
 
+const commandErrorCode = (error: { code?: string; message?: string }): MutationErrorCode => {
+  const message = error.message || '';
+  // PostgreSQL reports trigger check violations as 23514. Permission failures
+  // are permanent until an administrator changes access, so retaining and
+  // retrying the exact same task command only traps the user in retry mode.
+  if (error.code === '42501' || /permission|required|not permitted|forbidden/i.test(message)) {
+    return 'FORBIDDEN';
+  }
+  if (error.code === '23514' || error.code === '23503' || error.code === '23505') {
+    return 'VALIDATION';
+  }
+  return 'RETRY_REQUIRED';
+};
+
 export type ReleaseNoticeAcknowledgementResult =
   | { ok: true; acknowledged: boolean }
   | { ok: false; code: MutationErrorCode; error: string };
@@ -1049,13 +1063,18 @@ const executeCommand = async (
   const { data, error } = rpcResult;
 
   if (error) {
-    retainSecureWorkspaceCommand(command);
+    const code = commandErrorCode(error);
+    if (code === 'RETRY_REQUIRED') retainSecureWorkspaceCommand(command);
+    else {
+      retryableCommand = null;
+      clearPersistedRetryableCommand();
+    }
     console.error('[AiTask sync] Supabase RPC failed.', JSON.stringify({ ...commandDiagnostic(command), code: error.code }));
     return isAuthError(error)
       ? { ok: false, code: 'FORBIDDEN', error: 'Your session expired. Sign in again, then retry the retained change.' }
       : error.code === 'PGRST202'
         ? { ok: false, code: 'RETRY_REQUIRED', error: BACKEND_UPGRADE_REQUIRED_MESSAGE }
-        : { ok: false, code: 'RETRY_REQUIRED', error: error.message || 'The command could not be confirmed.' };
+        : { ok: false, code, error: error.message || 'The command could not be confirmed.' };
   }
 
   const response = data as CommandResponse;
