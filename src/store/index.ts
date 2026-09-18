@@ -322,7 +322,7 @@ interface StoreState {
   updateCustomRole: (id: string, data: Partial<Pick<CustomRole, 'name' | 'description' | 'baseRole' | 'permissions' | 'departmentScoped'>>) => { ok: boolean; error?: string };
   deleteCustomRole: (id: string) => { ok: boolean; error?: string };
   assignCustomRoleToUser: (userId: string, customRoleId?: string) => { ok: boolean; error?: string };
-  changeMemberRole: (userId: string, role: Role, options?: { customRoleId?: string; companyName?: string }) => Promise<{ ok: boolean; error?: string }>;
+  changeMemberRole: (userId: string, role: Role, options?: { customRoleId?: string; companyName?: string; departments?: Department[] }) => Promise<{ ok: boolean; error?: string }>;
   approveRegistration: (id: string, role: Role, departments: Department[], companyName?: string, customRoleId?: string) => { ok: boolean; error?: string };
   rejectRegistration: (id: string) => void;
   deleteUser: (userId: string) => Promise<{ ok: boolean; error?: string }>;
@@ -4172,7 +4172,9 @@ export const useStore = create<StoreState>()(
         const departments = normalizeMemberDepartments(data.role, data.departments, data.department);
 
         if (!name) return { ok: false, error: 'Member name is required.' };
-        if (departments.length === 0) return { ok: false, error: 'Choose at least one department.' };
+        if (departments.length === 0 && data.role !== 'Admin') {
+          return { ok: false, error: 'Choose at least one department.' };
+        }
         if (initialPassword !== DEFAULT_USER_PASSWORD && initialPassword.length < 12) {
           return { ok: false, error: 'Custom initial passwords must be at least 12 characters.' };
         }
@@ -4481,7 +4483,14 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'Choose a company for this client account.' };
         }
 
-        const departments: Department[] = role === 'Client' ? ['Client'] : [];
+        let departments: Department[];
+        if (role === 'Client') departments = ['Client'];
+        else if (role === 'Admin') departments = [];
+        else if (options.departments?.length) departments = normalizeMemberDepartments(role, options.departments);
+        else departments = normalizeMemberDepartments(role, targetUser.departments, targetUser.department);
+        if (role === 'Staff' && departments.length === 0) {
+          return { ok: false, error: 'Choose at least one department for this member.' };
+        }
         const companyName = role === 'Client' ? options.companyName!.trim() : undefined;
         const legacyDepartment = role === 'Client'
           ? 'Client'
@@ -4490,6 +4499,7 @@ export const useStore = create<StoreState>()(
             : getLegacyDepartmentMirror(role, departments);
 
         if (shouldUseSecureSupabase()) {
+          const previousStatus = state.backend.status;
           set(current => ({
             backend: {
               ...current.backend,
@@ -4509,11 +4519,11 @@ export const useStore = create<StoreState>()(
             set(current => ({
               backend: {
                 ...current.backend,
-                status: result.code === 'CONFLICT' ? 'conflict' : result.code === 'OFFLINE' ? 'offline' : 'retry_required',
+                status: result.code === 'CONFLICT' ? 'conflict' : result.code === 'OFFLINE' ? 'offline' : result.code === 'VALIDATION' ? previousStatus : 'retry_required',
                 isSaving: false,
-                error: result.error,
+                error: result.code === 'VALIDATION' ? undefined : result.error,
                 conflict: result.conflict,
-                message: result.error,
+                message: result.code === 'VALIDATION' ? current.backend.message : result.error,
               },
             }));
             return { ok: false, error: result.error };
@@ -4590,7 +4600,9 @@ export const useStore = create<StoreState>()(
         }
 
         const departments = normalizeMemberDepartments(targetUser.role, requestedDepartments);
-        if (departments.length === 0) return { ok: false, error: 'Choose at least one department.' };
+        if (departments.length === 0 && targetUser.role !== 'Admin') {
+          return { ok: false, error: 'Choose at least one department.' };
+        }
         const currentDepartments = normalizeMemberDepartments(
           targetUser.role,
           targetUser.departments,

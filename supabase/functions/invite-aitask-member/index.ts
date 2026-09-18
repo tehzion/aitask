@@ -44,9 +44,10 @@ const normalizeDepartments = (role: string, value: unknown, legacyValue: unknown
   if (role === 'Client') return ['Client'];
   const raw = Array.isArray(value) ? value : legacyValue ? [legacyValue] : [];
   const normalized = raw.map(normalizeDepartment);
+  // Administrators are not limited by department and may have none.
+  if (normalized.length === 0) return role === 'Admin' ? [] : null;
   if (
-    normalized.length === 0
-    || normalized.some(department => !department || department === 'Client')
+    normalized.some(department => !department || department === 'Client')
     || new Set(normalized).size !== normalized.length
   ) return null;
   return normalized

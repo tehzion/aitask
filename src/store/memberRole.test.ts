@@ -16,7 +16,7 @@ vi.mock('../lib/supabaseClient', () => ({
 
 import { useStore } from './index';
 import { defaultRolePermissions } from '../lib/access';
-import type { User } from '../types';
+import type { Department, User } from '../types';
 
 const initialState = useStore.getState();
 
@@ -64,6 +64,31 @@ describe('member role assignment', () => {
   it('requires a company when assigning Client', async () => {
     const result = await useStore.getState().changeMemberRole('u-target', 'Client');
     expect(result.ok).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('allows Admin without departments and requires them for Staff', async () => {
+    const adminNoDept: User = { id: 'u-admin2', name: 'Admin Two', role: 'Admin', departments: [], department: 'Management' };
+    const staffNoDept: User = { id: 'u-staff2', name: 'Staff Two', role: 'Staff', departments: [], department: '' as Department };
+    useStore.setState({ users: [boss, target, adminNoDept, staffNoDept] });
+
+    // Admin may have no departments.
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true, commandId: 'cmd-3', workspaceVersion: 14,
+        member: {
+          id: 'u-admin2', role: 'Admin', customRoleId: null, customRoleName: null,
+          clientName: null, departments: [], department: 'Management', version: 2, updated_at: '2026-09-18T00:00:00Z',
+        },
+      },
+      error: null,
+    });
+    expect((await useStore.getState().changeMemberRole('u-admin2', 'Admin')).ok).toBe(true);
+    expect(rpc).toHaveBeenCalledWith('aitask_update_member_role', expect.objectContaining({ p_role: 'Admin', p_departments: [] }));
+
+    // Staff without any department is rejected before the RPC.
+    rpc.mockClear();
+    expect((await useStore.getState().changeMemberRole('u-staff2', 'Staff')).ok).toBe(false);
     expect(rpc).not.toHaveBeenCalled();
   });
 

@@ -44,7 +44,6 @@ const Approvals: React.FC = () => {
     addCustomRole,
     updateCustomRole,
     deleteCustomRole,
-    assignCustomRoleToUser,
     changeMemberRole,
     backend,
     commitPendingMutation,
@@ -64,7 +63,6 @@ const Approvals: React.FC = () => {
     addCustomRole: state.addCustomRole,
     updateCustomRole: state.updateCustomRole,
     deleteCustomRole: state.deleteCustomRole,
-    assignCustomRoleToUser: state.assignCustomRoleToUser,
     changeMemberRole: state.changeMemberRole,
     backend: state.backend,
     commitPendingMutation: state.commitPendingMutation,
@@ -108,6 +106,9 @@ const Approvals: React.FC = () => {
   const [memberPermissionsError, setMemberPermissionsError] = useState('');
   const [roleCompanyUserId, setRoleCompanyUserId] = useState<string | null>(null);
   const [roleCompanyName, setRoleCompanyName] = useState('');
+  const [roleDeptUserId, setRoleDeptUserId] = useState<string | null>(null);
+  const [roleDeptPending, setRoleDeptPending] = useState<{ role: Role; customRoleId?: string } | null>(null);
+  const [roleDeptValue, setRoleDeptValue] = useState<Department[]>([]);
   const superAdmin = isBossKoo(currentUser);
   const [roleForm, setRoleForm] = useState({
     name: '',
@@ -456,21 +457,56 @@ const Approvals: React.FC = () => {
       setRoleCompanyName('');
       return;
     }
+    let nextRole: Role = 'Staff';
+    let customRoleId: string | undefined;
     if (value.startsWith('custom:')) {
       const customRole = rolePermissions.find(item => item.id === value.slice('custom:'.length));
       if (!customRole) return;
-      await handleAssignRole(user.id, customRole.id);
+      nextRole = customRole.baseRole;
+      customRoleId = customRole.id;
+    } else if (value === 'role:hod') {
+      nextRole = 'Staff';
+      customRoleId = SYSTEM_HOD_ROLE_ID;
+    } else if (value === 'role:admin') {
+      nextRole = 'Admin';
+    }
+
+    if (nextRole === 'Staff' && getMemberDepartments(user).length === 0) {
+      setRoleCompanyUserId(null);
+      setRoleDeptUserId(user.id);
+      setRoleDeptPending({ role: nextRole, customRoleId });
+      setRoleDeptValue([]);
       return;
     }
-    if (value === 'role:hod') {
-      await handleAssignRole(user.id, SYSTEM_HOD_ROLE_ID);
-      return;
-    }
-    const nextRole = value === 'role:admin' ? 'Admin' : 'Staff';
+    await applyRoleChange(user, nextRole, customRoleId);
+  };
+
+  const applyRoleChange = async (
+    user: User,
+    nextRole: Role,
+    customRoleId?: string,
+    departments?: Department[],
+  ) => {
     setIsActionSaving(true);
-    const result = await changeMemberRole(user.id, nextRole);
+    const result = await changeMemberRole(user.id, nextRole, { customRoleId, departments });
     setIsActionSaving(false);
-    if (!result.ok) setAssignmentError(result.error || 'Unable to change role.');
+    if (!result.ok) {
+      setAssignmentError(result.error || 'Unable to change role.');
+      return false;
+    }
+    setRoleDeptUserId(null);
+    setRoleDeptPending(null);
+    setRoleDeptValue([]);
+    return true;
+  };
+
+  const handleConfirmRoleDepartments = async (user: User) => {
+    setAssignmentError('');
+    if (!roleDeptPending || roleDeptValue.length === 0) {
+      setAssignmentError('Choose at least one department for this member.');
+      return;
+    }
+    await applyRoleChange(user, roleDeptPending.role, roleDeptPending.customRoleId, roleDeptValue);
   };
 
   const handleConfirmClientCompany = async (user: User) => {
@@ -485,23 +521,6 @@ const Approvals: React.FC = () => {
     setRoleCompanyUserId(null);
     setRoleCompanyName('');
     if (!result.ok) setAssignmentError(result.error || 'Unable to change role.');
-  };
-
-  const handleAssignRole = async (userId: string, customRoleId: string) => {
-    setAssignmentError('');
-    const previousUsers = useStore.getState().users;
-    const result = assignCustomRoleToUser(userId, customRoleId || undefined);
-    if (!result.ok) {
-      setAssignmentError(result.error || 'Unable to assign role.');
-      return;
-    }
-    setIsActionSaving(true);
-    const saved = await commitPendingMutation();
-    setIsActionSaving(false);
-    if (!saved.ok) {
-      useStore.setState({ users: previousUsers });
-      setAssignmentError(saved.error || 'The role assignment was rolled back. Use Retry required to confirm it.');
-    }
   };
 
   const handleEditDepartments = (userId: string) => {
@@ -1220,6 +1239,19 @@ const Approvals: React.FC = () => {
                           >
                             Confirm
                           </button>
+                        )}
+                        {roleDeptUserId === u.id && (
+                          <>
+                            <DepartmentMultiSelect value={roleDeptValue} onChange={setRoleDeptValue} />
+                            <button
+                              type="button"
+                              onClick={() => void handleConfirmRoleDepartments(u)}
+                              disabled={isActionSaving || roleDeptValue.length === 0}
+                              className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              Confirm
+                            </button>
+                          </>
                         )}
                       </div>
                     )}
