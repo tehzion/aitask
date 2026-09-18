@@ -5,8 +5,7 @@ import { Users, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
 import { getVisibleTasks } from '../lib/access';
-import { STAFF_DEPARTMENTS } from '../lib/departments';
-import { getDueWorkPerformance } from '../lib/taskReporting';
+import { getDueWorkDepartmentPerformance, getDueWorkPerformance } from '../lib/taskReporting';
 import { themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
 
@@ -32,72 +31,51 @@ const Reports: React.FC = () => {
 
   const performance = useMemo(() => getDueWorkPerformance(tasks), [tasks]);
   const trendData = performance.map(week => ({
-    name: `${week.label}${week.isCurrent ? ' (current)' : ''}`,
+    name: `${week.label}${week.isCurrent ? ' (in progress)' : ''}`,
     onTime: week.onTime,
     late: week.late,
     open: week.open,
   }));
   const dueTasks = performance.flatMap(week => week.tasks);
-  const overview = useMemo(() => ({
-    due: dueTasks.length,
-    onTime: performance.reduce((total, week) => total + week.onTime, 0),
-    late: performance.reduce((total, week) => total + week.late, 0),
-    open: performance.reduce((total, week) => total + week.open, 0),
-    activeUsers: new Set(dueTasks.map(task => task.assignedTo).filter(Boolean)).size,
-  }), [dueTasks, performance]);
+  const overview = useMemo(() => {
+    const onTime = performance.reduce((total, week) => total + week.onTime, 0);
+    const late = performance.reduce((total, week) => total + week.late, 0);
+    const open = performance.reduce((total, week) => total + week.open, 0);
+    const untracked = performance.reduce((total, week) => total + week.untracked, 0);
+    return {
+      due: dueTasks.length,
+      onTime,
+      late,
+      open,
+      untracked,
+      completionRate: dueTasks.length ? Math.round((onTime / dueTasks.length) * 100) : 0,
+      activeUsers: new Set(dueTasks.map(task => task.assignedTo).filter(Boolean)).size,
+    };
+  }, [dueTasks, performance]);
 
-  // Dynamic calculation of department performance
-  const departmentStats = useMemo(() => {
-    const stats: Record<string, { total: number; onTime: number; late: number; open: number; name: string }> = {};
-    
-    // Initialize stats for each department
-    STAFF_DEPARTMENTS.forEach(dept => {
-      stats[dept] = { name: dept, total: 0, onTime: 0, late: 0, open: 0 };
-    });
-
-    performance.forEach(week => week.tasks.forEach(task => {
-      const dept = task.department;
-      if (stats[dept]) {
-        stats[dept].total += 1;
-        const dueWeek = performance.find(candidate => candidate.tasks.some(item => item.id === task.id));
-        if (!dueWeek) return;
-        if (dueWeek.tasks.find(item => item.id === task.id)?.completedAt) {
-          const due = new Date(`${task.dueDate}T23:59:59`);
-          const completed = new Date(task.completedAt || '');
-          if (completed <= due) stats[dept].onTime += 1;
-          else stats[dept].late += 1;
-        } else stats[dept].open += 1;
-      }
-    }));
-
-    return Object.values(stats)
-      .filter(dept => dept.total > 0)
-      .map(dept => ({
-        ...dept,
-        completionRate: dept.total > 0 ? Math.round((dept.onTime / dept.total) * 100) : 0
-      }))
-      .sort((a, b) => b.total - a.total); // Sort by total tasks descending
-  }, [performance]);
+  // Department totals derive from the same cohort outcomes so they always reconcile.
+  const departmentStats = useMemo(() => getDueWorkDepartmentPerformance(performance), [performance]);
 
   return (
     <div className={pageShell}>
       <PageHeader
         title="Four-Week Performance Report"
-        description={`Analyze ${scopeLabel} across the latest four Monday-to-Sunday weeks.`}
+        description={`Analyze ${scopeLabel} across the latest four Monday-to-Saturday weeks.`}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
         <MetricCard title="Due tasks" value={overview.due} icon={Clock} tone="indigo" />
         <MetricCard title="On time" value={overview.onTime} icon={CheckCircle2} tone="emerald" />
         <MetricCard title="Late" value={overview.late} icon={AlertCircle} tone="red" />
         <MetricCard title="Open" value={overview.open} icon={Clock} tone="amber" />
+        <MetricCard title="On-time rate" value={`${overview.completionRate}%`} icon={CheckCircle2} tone="emerald" />
         {!isClientUser && <MetricCard title="Active Assignees" value={overview.activeUsers} icon={Users} tone="indigo" />}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartCard
           title="Due-Work Performance"
-          description="Each week contains tasks due in that Monday–Sunday window. On-time completion means completed by the end of the due date."
+          description="Each week contains tasks due in that Monday–Saturday window. On-time completion means completed by the end of the due date."
         >
           {!dueTasks.length ? (
             <ChartEmptyState>No tracked weekly activity yet</ChartEmptyState>
@@ -157,6 +135,7 @@ const Reports: React.FC = () => {
                 <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-center">On time</th>
                 <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-center">Late</th>
                 <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-center">Open</th>
+                <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-center">Untracked</th>
                 <th scope="col" className="px-6 py-4 font-semibold border-b border-slate-200 text-right">On-time rate</th>
               </tr>
             </thead>
@@ -173,6 +152,7 @@ const Reports: React.FC = () => {
                   <td className="px-6 py-4 text-center text-emerald-600 font-medium">{dept.onTime}</td>
                   <td className="px-6 py-4 text-center text-red-600 font-medium">{dept.late}</td>
                   <td className="px-6 py-4 text-center text-amber-500 font-medium">{dept.open}</td>
+                  <td className="px-6 py-4 text-center text-slate-500 font-medium">{dept.untracked}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-3">
                       <div className="w-full max-w-[100px] bg-slate-100 rounded-full h-2">

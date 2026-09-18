@@ -2,7 +2,6 @@ import {
   addMonths,
   addWeeks,
   endOfMonth,
-  endOfWeek,
   format,
   isAfter,
   isBefore,
@@ -10,9 +9,9 @@ import {
   isValid,
   parseISO,
   startOfMonth,
-  startOfWeek,
 } from 'date-fns';
 import type { Deliverable, ServiceCycle, Task, User } from '../types';
+import { getWorkWeekRange } from './workWeek';
 
 export type DeliveryTrackerPeriod = 'week' | 'month' | 'all';
 export type DeliveryTrackerStatusFilter = 'all' | 'open' | 'overdue' | 'completed';
@@ -67,8 +66,7 @@ export const getDeliveryPeriodRange = (
     return { start: new Date(2000, 0, 1), end: new Date(2100, 11, 31), label: 'All work' };
   }
   if (period === 'week') {
-    const start = startOfWeek(anchor, { weekStartsOn: 1 });
-    const end = endOfWeek(anchor, { weekStartsOn: 1 });
+    const { start, end } = getWorkWeekRange(anchor);
     return { start, end, label: `${format(start, 'd MMM')} – ${format(end, 'd MMM yyyy')}` };
   }
   const start = startOfMonth(anchor);

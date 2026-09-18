@@ -41,25 +41,40 @@ const users: User[] = [
 describe('Boss operations reporting', () => {
   const now = new Date(2026, 6, 31, 12, 0, 0);
 
-  it('builds four Monday-to-Sunday due-work cohorts with on-time, late, and open states', () => {
+  it('builds four Monday-to-Saturday due-work cohorts with on-time, late, and open states', () => {
     const weeks = getDueWorkPerformance([
       makeTask({ id: 'on-time', dueDate: '2026-07-31', status: 'Completed', isCompleted: true, completedAt: new Date(2026, 6, 31, 23, 59).toISOString() }),
       makeTask({ id: 'late', dueDate: '2026-07-30', status: 'Completed', isCompleted: true, completedAt: new Date(2026, 7, 1, 0, 1).toISOString() }),
-      makeTask({ id: 'open', dueDate: '2026-08-02' }),
+      makeTask({ id: 'open', dueDate: '2026-08-01' }),
       makeTask({ id: 'cancelled', dueDate: '2026-07-31', status: 'Cancelled' }),
+      makeTask({ id: 'sunday', dueDate: '2026-08-02' }),
       makeTask({ id: 'no-date', dueDate: '' }),
     ], now);
 
     expect(weeks).toHaveLength(4);
-    expect(weeks[3]).toMatchObject({ onTime: 1, late: 1, open: 1, completionRate: 33, isCurrent: true });
+    expect(weeks[3]).toMatchObject({ onTime: 1, late: 1, open: 1, untracked: 0, completionRate: 33, isCurrent: true });
     expect(weeks[3].tasks.map(task => task.id)).toEqual(['on-time', 'late', 'open']);
   });
 
-  it('uses a Monday-to-Sunday local week and displays the exact range', () => {
+  it('excludes Sunday due dates and classifies untracked completions separately', () => {
+    const untracked = makeTask({ id: 'untracked', dueDate: '2026-07-28', status: 'Completed', isCompleted: true, completedAt: undefined });
+    const weeks = getDueWorkPerformance([
+      makeTask({ id: 'monday', dueDate: '2026-07-27' }),
+      makeTask({ id: 'saturday', dueDate: '2026-08-01' }),
+      makeTask({ id: 'sunday', dueDate: '2026-08-02' }),
+      makeTask({ id: 'next-monday', dueDate: '2026-08-03' }),
+      untracked,
+    ], now);
+
+    expect(weeks[3].tasks.map(task => task.id)).toEqual(['monday', 'saturday', 'untracked']);
+    expect(weeks[3]).toMatchObject({ open: 2, untracked: 1, completionRate: 0 });
+  });
+
+  it('uses a Monday-to-Saturday local week and displays the exact range', () => {
     const period = getOperationsPeriod(now);
     expect(period.start.getDay()).toBe(1);
-    expect(period.end.getDay()).toBe(0);
-    expect(period.label).toBe('27 Jul - 2 Aug 2026');
+    expect(period.end.getDay()).toBe(6);
+    expect(period.label).toBe('27 Jul - 1 Aug 2026');
   });
 
   it('separates today, week, overdue, and all-time metrics', () => {

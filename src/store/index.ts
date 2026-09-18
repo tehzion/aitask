@@ -83,6 +83,7 @@ import {
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
+import { getWorkWeekRange } from '../lib/workWeek';
 import { getInitialLocale, translateUiText } from '../lib/i18n';
 import { createAccessRefreshCoordinator } from '../lib/accessRefresh';
 import {
@@ -2438,16 +2439,12 @@ export const useStore = create<StoreState>()(
           try { celebrated = window.sessionStorage.getItem(celebrateKey) === '1'; } catch { /* session storage unavailable */ }
           if (!celebrated) {
             try { window.sessionStorage.setItem(celebrateKey, '1'); } catch { /* keep going without persistence */ }
-            const weekStart = new Date();
-            weekStart.setHours(0, 0, 0, 0);
-            const day = weekStart.getDay() === 0 ? 6 : weekStart.getDay() - 1;
-            weekStart.setDate(weekStart.getDate() - day);
-            const weekCompletions = newTasks.filter(item => (
-              item.assignedTo === currentUser.id
-              && isTaskCompleted(item)
-              && item.completedAt
-              && new Date(item.completedAt) >= weekStart
-            )).length;
+            const { start: weekStart, end: weekEnd } = getWorkWeekRange(new Date());
+            const weekCompletions = newTasks.filter(item => {
+              if (item.assignedTo !== currentUser.id || !isTaskCompleted(item) || !item.completedAt) return false;
+              const completedAt = new Date(item.completedAt);
+              return completedAt >= weekStart && completedAt <= weekEnd;
+            }).length;
             useToastStore.getState().addToast(`Nice work — ${weekCompletions} task${weekCompletions === 1 ? '' : 's'} completed this week.`, 'success');
           }
         }

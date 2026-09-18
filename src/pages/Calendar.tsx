@@ -3,9 +3,7 @@ import {
   addDays,
   addMonths,
   addWeeks,
-  eachDayOfInterval,
   endOfMonth,
-  endOfWeek,
   format,
   isAfter,
   isBefore,
@@ -14,7 +12,6 @@ import {
   isToday,
   parseISO,
   startOfMonth,
-  startOfWeek,
   subMonths,
   subWeeks,
 } from 'date-fns';
@@ -49,13 +46,13 @@ import {
 import { canCreateTasks, canEditTask as canEditTaskByRole, getVisibleTasks } from '../lib/access';
 import { getHolidaysForDate, HOLIDAY_COLORS, type MalaysiaHoliday } from '../lib/malaysiaHolidays';
 import { getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
+import { DAYS_IN_WORK_WEEK, getWorkWeekRange } from '../lib/workWeek';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
 import { useI18n } from '../components/I18nProvider';
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const WEEK_STARTS_ON = { weekStartsOn: 1 } as const;
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 type DragMode = 'move' | 'start' | 'due';
@@ -169,17 +166,17 @@ const Calendar: React.FC = () => {
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
-  const calendarStart = viewMode === 'month' ? startOfWeek(monthStart, WEEK_STARTS_ON) : startOfWeek(currentDate, WEEK_STARTS_ON);
-  const calendarEnd = viewMode === 'month' ? endOfWeek(monthEnd, WEEK_STARTS_ON) : endOfWeek(currentDate, WEEK_STARTS_ON);
-  const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+  const firstWeekStart = getWorkWeekRange(viewMode === 'month' ? monthStart : currentDate).start;
+  const lastWeekEnd = getWorkWeekRange(viewMode === 'month' ? monthEnd : currentDate).end;
   const maxVisibleLanes = viewMode === 'month' ? 3 : 6;
-  const weeks = Array.from({ length: Math.ceil(days.length / 7) }, (_, index) => {
-    const weekDays = days.slice(index * 7, index * 7 + 7);
-    return {
+  const weeks = [];
+  for (let weekStart = firstWeekStart; !isAfter(weekStart, lastWeekEnd); weekStart = addDays(weekStart, 7)) {
+    const weekDays = Array.from({ length: DAYS_IN_WORK_WEEK }, (_, index) => addDays(weekStart, index));
+    weeks.push({
       days: weekDays,
-      layout: buildCalendarWeekLayout(tasks, weekDays[0], maxVisibleLanes),
-    };
-  });
+      layout: buildCalendarWeekLayout(tasks, weekStart, maxVisibleLanes),
+    });
+  }
 
   const getUserName = (id: string) => users.find(user => user.id === id)?.name || 'Unknown';
   const getTasksForDay = (day: Date) => {
@@ -429,7 +426,7 @@ const Calendar: React.FC = () => {
   const getDayFromWeekPointer = (event: React.DragEvent<HTMLDivElement>, weekDays: Date[]) => {
     const rect = event.currentTarget.getBoundingClientRect();
     if (rect.width <= 0) return null;
-    const column = Math.min(6, Math.max(0, Math.floor((event.clientX - rect.left) / (rect.width / 7))));
+    const column = Math.min(weekDays.length - 1, Math.max(0, Math.floor((event.clientX - rect.left) / (rect.width / weekDays.length))));
     return weekDays[column] || null;
   };
 
@@ -603,8 +600,8 @@ const Calendar: React.FC = () => {
                   ? format(currentDate, 'MMMM yyyy')
                   : (
                     <>
-                      <span className="sm:hidden">{format(calendarStart, 'MMM d')} - {format(calendarEnd, 'MMM d')}</span>
-                      <span className="hidden sm:inline">{format(calendarStart, 'MMM d')} - {format(calendarEnd, 'MMM d, yyyy')}</span>
+                      <span className="sm:hidden">{format(firstWeekStart, 'MMM d')} - {format(lastWeekEnd, 'MMM d')}</span>
+                      <span className="hidden sm:inline">{format(firstWeekStart, 'MMM d')} - {format(lastWeekEnd, 'MMM d, yyyy')}</span>
                     </>
                   )}
               </button>
@@ -667,7 +664,7 @@ const Calendar: React.FC = () => {
 
       <div className="flex flex-col gap-4 xl:flex-row">
         <div className={clsx(cardBase, 'min-w-0 flex-1 overflow-hidden')} aria-describedby="calendar-drag-hint">
-          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+          <div className="grid grid-cols-6 border-b border-slate-200 bg-slate-50">
             {WEEKDAYS.map(day => (
               <div key={day} className="py-2.5 text-center text-xs font-medium text-slate-500">
                 <span className="sm:hidden">{day.slice(0, 1)}</span>
@@ -688,7 +685,7 @@ const Calendar: React.FC = () => {
                   viewMode === 'month' ? 'h-24 md:h-[154px]' : 'h-28 md:h-[230px]',
                 )}
               >
-                <div className="absolute inset-0 grid grid-cols-7 divide-x divide-slate-100">
+                <div className="absolute inset-0 grid grid-cols-6 divide-x divide-slate-100">
                   {week.days.map(day => {
                     const dayTasks = getTasksForDay(day);
                     const dayHolidays = getHolidaysForDay(day);
@@ -808,7 +805,7 @@ const Calendar: React.FC = () => {
                 </div>
 
                 <div
-                  className="pointer-events-none absolute inset-x-0 top-14 hidden grid-cols-7 md:grid"
+                  className="pointer-events-none absolute inset-x-0 top-14 hidden grid-cols-6 md:grid"
                   style={{ gridAutoRows: '24px', rowGap: '3px' }}
                 >
                   {week.layout.segments.filter(segment => !segment.hidden).map(segment => {

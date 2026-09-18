@@ -46,10 +46,10 @@ const users: User[] = [{
 }];
 
 describe('delivery tracker periods', () => {
-  it('uses Monday through Sunday and moves one whole period', () => {
+  it('uses Monday through Saturday and moves one whole period', () => {
     const range = getDeliveryPeriodRange('week', new Date(2026, 8, 10, 12));
     expect(range.start.getDay()).toBe(1);
-    expect(range.end.getDay()).toBe(0);
+    expect(range.end.getDay()).toBe(6);
     expect(moveDeliveryPeriod('week', range.start, 1).getDate()).toBe(14);
   });
 
