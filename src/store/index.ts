@@ -104,6 +104,7 @@ import {
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
   saveSecureMemberPermissions,
+  saveSecureMemberRole,
   saveSecureWorkspace,
   type MutationConflict,
   type MutationErrorCode,
@@ -320,6 +321,7 @@ interface StoreState {
   updateCustomRole: (id: string, data: Partial<Pick<CustomRole, 'name' | 'description' | 'baseRole' | 'permissions' | 'departmentScoped'>>) => { ok: boolean; error?: string };
   deleteCustomRole: (id: string) => { ok: boolean; error?: string };
   assignCustomRoleToUser: (userId: string, customRoleId?: string) => { ok: boolean; error?: string };
+  changeMemberRole: (userId: string, role: Role, options?: { customRoleId?: string; companyName?: string }) => Promise<{ ok: boolean; error?: string }>;
   approveRegistration: (id: string, role: Role, departments: Department[], companyName?: string, customRoleId?: string) => { ok: boolean; error?: string };
   rejectRegistration: (id: string) => void;
   deleteUser: (userId: string) => Promise<{ ok: boolean; error?: string }>;
@@ -4458,6 +4460,122 @@ export const useStore = create<StoreState>()(
           )),
         }));
 
+        return { ok: true };
+      },
+
+      changeMemberRole: async (userId, role, options = {}) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!canCreateUsers(state.currentUser, state.rolePermissions)) {
+          return { ok: false, error: 'Only Boss Koo can change member roles.' };
+        }
+
+        const targetUser = state.users.find(user => user.id === userId);
+        if (!targetUser) return { ok: false, error: 'User account was not found.' };
+        if (isBossKoo(targetUser)) return { ok: false, error: 'Boss Koo keeps permanent super admin permissions.' };
+
+        let customRole: CustomRole | undefined;
+        if (options.customRoleId) {
+          customRole = state.rolePermissions.find(item => item.id === options.customRoleId);
+          if (!customRole) return { ok: false, error: 'Custom role was not found.' };
+          if (customRole.baseRole !== role) return { ok: false, error: `This role can only be assigned to ${customRole.baseRole} members.` };
+        }
+        if (role === 'Client' && !options.companyName?.trim()) {
+          return { ok: false, error: 'Choose a company for this client account.' };
+        }
+
+        const departments: Department[] = role === 'Client' ? ['Client'] : [];
+        const companyName = role === 'Client' ? options.companyName!.trim() : undefined;
+        const legacyDepartment = role === 'Client'
+          ? 'Client'
+          : role === 'Admin'
+            ? 'Management'
+            : getLegacyDepartmentMirror(role, departments);
+
+        if (shouldUseSecureSupabase()) {
+          set(current => ({
+            backend: {
+              ...current.backend,
+              status: 'saving',
+              isSaving: true,
+              error: undefined,
+              message: 'Saving member role.',
+            },
+          }));
+          const result = await saveSecureMemberRole(targetUser, {
+            role,
+            customRoleId: customRole?.id,
+            companyName,
+            departments,
+          });
+          if (result.ok === false) {
+            set(current => ({
+              backend: {
+                ...current.backend,
+                status: result.code === 'CONFLICT' ? 'conflict' : result.code === 'OFFLINE' ? 'offline' : 'retry_required',
+                isSaving: false,
+                error: result.error,
+                conflict: result.conflict,
+                message: result.error,
+              },
+            }));
+            return { ok: false, error: result.error };
+          }
+
+          const updatedAt = result.data.member?.updated_at || new Date().toISOString();
+          const version = Number(result.data.member?.version) || Math.max(1, Number(targetUser.version) || 1) + 1;
+          isApplyingRemoteSnapshot = true;
+          set(current => ({
+            users: current.users.map(user => user.id === userId
+              ? {
+                  ...user,
+                  role,
+                  customRoleId: customRole?.id,
+                  customRoleName: customRole?.name,
+                  companyName,
+                  departments,
+                  department: legacyDepartment,
+                  permissions: undefined,
+                  version,
+                  updatedAt,
+                }
+              : user),
+            backend: {
+              ...current.backend,
+              status: 'live',
+              isSaving: false,
+              hasRemoteUpdate: false,
+              hasLocalChanges: false,
+              pendingMutations: 0,
+              pendingCommandType: undefined,
+              workspaceVersion: result.workspaceVersion,
+              remoteVersion: result.workspaceVersion,
+              lastSavedAt: updatedAt,
+              lastSyncedAt: updatedAt,
+              error: undefined,
+              conflict: undefined,
+              message: 'Saved.',
+            },
+          }));
+          isApplyingRemoteSnapshot = false;
+          return { ok: true };
+        }
+
+        set(current => ({
+          users: current.users.map(user => user.id === userId
+            ? {
+                ...user,
+                role,
+                customRoleId: customRole?.id,
+                customRoleName: customRole?.name,
+                companyName,
+                departments,
+                department: legacyDepartment,
+                permissions: undefined,
+                updatedAt: new Date().toISOString(),
+              }
+            : user),
+        }));
         return { ok: true };
       },
 

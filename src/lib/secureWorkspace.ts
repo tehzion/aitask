@@ -19,6 +19,7 @@ import type {
   NotificationCursor,
   NotificationFeedPage,
   Registration,
+  Role,
   RolePermissions,
   Task,
   WorkspaceMember,
@@ -196,6 +197,20 @@ type MemberPermissionsResponse = CommandResponse & {
   member?: {
     id: string;
     permissions: RolePermissions | Record<string, never>;
+    version: number;
+    updated_at: string;
+  };
+};
+
+type MemberRoleResponse = CommandResponse & {
+  member?: {
+    id: string;
+    role: Role;
+    customRoleId?: string;
+    customRoleName?: string;
+    clientName?: string;
+    departments: Department[];
+    department: Department;
     version: number;
     updated_at: string;
   };
@@ -1375,6 +1390,98 @@ export const saveSecureMemberPermissions = async (
 export type RetainedSecureMemberMutation =
   | { kind: 'departments'; memberId: string; departments: Department[]; expectedVersion: number }
   | { kind: 'permissions'; memberId: string; permissions: RolePermissions | null; expectedVersion: number };
+
+export type MemberRoleAssignment = {
+  role: Role;
+  customRoleId?: string;
+  companyName?: string;
+  departments: Department[];
+};
+
+export const saveSecureMemberRole = async (
+  member: WorkspaceMember,
+  assignment: MemberRoleAssignment,
+): Promise<MutationResult<MemberRoleResponse>> => {
+  if (member.isSuperAdmin) {
+    return { ok: false, code: 'VALIDATION', error: 'Boss Koo keeps permanent super admin permissions.' };
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before changing the role.' };
+  }
+
+  const expectedVersion = Math.max(1, Number(member.version) || 1);
+  const invoke = () => withSyncTimeout(supabase.rpc('aitask_update_member_role', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+    p_command_id: commandId(),
+    p_member_id: member.id,
+    p_role: assignment.role,
+    p_custom_role_id: assignment.customRoleId || null,
+    p_client_name: assignment.companyName || null,
+    p_departments: assignment.departments,
+    p_expected_version: expectedVersion,
+  }));
+
+  let rpcResult: Awaited<ReturnType<typeof invoke>>;
+  try {
+    rpcResult = await invoke();
+    if (isAuthError(rpcResult.error) && await refreshSecureSession()) rpcResult = await invoke();
+  } catch (error) {
+    return {
+      ok: false,
+      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
+      error: error instanceof SyncRequestTimeoutError
+        ? 'Save confirmation timed out. Submit again to retry the role change safely.'
+        : 'Supabase could not confirm the role change. Submit again to retry.',
+    };
+  }
+
+  if (rpcResult.error) {
+    return {
+      ok: false,
+      code: isAuthError(rpcResult.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
+      error: rpcResult.error.message || 'Unable to change the role.',
+    };
+  }
+
+  const response = rpcResult.data as MemberRoleResponse;
+  if (!response?.ok) {
+    return {
+      ok: false,
+      code: response.code || 'RETRY_REQUIRED',
+      error: response.error || 'The role change was rejected.',
+      conflict: response.conflict,
+    };
+  }
+
+  const key = entityKey('member', member.id);
+  const previous = baseline.get(key);
+  const nextData = {
+    ...(previous?.data || memberData(member)),
+    role: response.member?.role ?? assignment.role,
+    custom_role_id: response.member?.customRoleId ?? null,
+    custom_role_name: response.member?.customRoleName ?? null,
+    client_name: response.member?.clientName ?? null,
+    departments: response.member?.departments ?? assignment.departments,
+    department: response.member?.department ?? getLegacyDepartmentMirror(assignment.role, assignment.departments),
+    permissions: {},
+  };
+  baseline.set(key, {
+    kind: 'member',
+    entityType: 'member',
+    entityId: member.id,
+    version: Number(response.member?.version) || expectedVersion + 1,
+    data: nextData,
+    serialized: stable({ parentId: null, data: nextData }),
+  });
+
+  return {
+    ok: true,
+    data: response,
+    commandId: response.commandId,
+    workspaceVersion: Number(response.workspaceVersion) || 1,
+    replayed: response.replayed,
+  };
+};
 
 export const getRetainedSecureMemberMutation = (): RetainedSecureMemberMutation | null => {
   if (retryableMemberDepartments) {

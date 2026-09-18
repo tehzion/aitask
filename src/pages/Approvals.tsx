@@ -40,10 +40,12 @@ const Approvals: React.FC = () => {
     updateMemberDepartments,
     updateMemberPermissions,
     rolePermissions,
+    clients,
     addCustomRole,
     updateCustomRole,
     deleteCustomRole,
     assignCustomRoleToUser,
+    changeMemberRole,
     backend,
     commitPendingMutation,
     retryMutation,
@@ -58,10 +60,12 @@ const Approvals: React.FC = () => {
     updateMemberDepartments: state.updateMemberDepartments,
     updateMemberPermissions: state.updateMemberPermissions,
     rolePermissions: state.rolePermissions,
+    clients: state.clients,
     addCustomRole: state.addCustomRole,
     updateCustomRole: state.updateCustomRole,
     deleteCustomRole: state.deleteCustomRole,
     assignCustomRoleToUser: state.assignCustomRoleToUser,
+    changeMemberRole: state.changeMemberRole,
     backend: state.backend,
     commitPendingMutation: state.commitPendingMutation,
     retryMutation: state.retryMutation,
@@ -102,6 +106,8 @@ const Approvals: React.FC = () => {
   const [memberPermissionsCustom, setMemberPermissionsCustom] = useState(false);
   const [memberPermissions, setMemberPermissions] = useState<RolePermissions>(() => clonePermissions(defaultRolePermissions.Staff));
   const [memberPermissionsError, setMemberPermissionsError] = useState('');
+  const [roleCompanyUserId, setRoleCompanyUserId] = useState<string | null>(null);
+  const [roleCompanyName, setRoleCompanyName] = useState('');
   const superAdmin = isBossKoo(currentUser);
   const [roleForm, setRoleForm] = useState({
     name: '',
@@ -435,6 +441,50 @@ const Approvals: React.FC = () => {
     }
 
     if (roleEditorId === customRoleId) resetRoleForm();
+  };
+
+  const roleSelectValue = (user: User) => {
+    if (user.customRoleId === SYSTEM_HOD_ROLE_ID) return 'role:hod';
+    if (user.customRoleId) return `custom:${user.customRoleId}`;
+    return `role:${user.role.toLowerCase()}`;
+  };
+
+  const handleChangeRole = async (user: User, value: string) => {
+    setAssignmentError('');
+    if (value === 'role:client') {
+      setRoleCompanyUserId(user.id);
+      setRoleCompanyName('');
+      return;
+    }
+    if (value.startsWith('custom:')) {
+      const customRole = rolePermissions.find(item => item.id === value.slice('custom:'.length));
+      if (!customRole) return;
+      await handleAssignRole(user.id, customRole.id);
+      return;
+    }
+    if (value === 'role:hod') {
+      await handleAssignRole(user.id, SYSTEM_HOD_ROLE_ID);
+      return;
+    }
+    const nextRole = value === 'role:admin' ? 'Admin' : 'Staff';
+    setIsActionSaving(true);
+    const result = await changeMemberRole(user.id, nextRole);
+    setIsActionSaving(false);
+    if (!result.ok) setAssignmentError(result.error || 'Unable to change role.');
+  };
+
+  const handleConfirmClientCompany = async (user: User) => {
+    setAssignmentError('');
+    if (!roleCompanyName.trim()) {
+      setAssignmentError('Choose a company for this client account.');
+      return;
+    }
+    setIsActionSaving(true);
+    const result = await changeMemberRole(user.id, 'Client', { companyName: roleCompanyName.trim() });
+    setIsActionSaving(false);
+    setRoleCompanyUserId(null);
+    setRoleCompanyName('');
+    if (!result.ok) setAssignmentError(result.error || 'Unable to change role.');
   };
 
   const handleAssignRole = async (userId: string, customRoleId: string) => {
@@ -954,6 +1004,29 @@ const Approvals: React.FC = () => {
           </form>
 
           <div className="p-6 space-y-3">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Default roles</p>
+              <div className="space-y-2">
+                {([['Admin', defaultRolePermissions.Admin, 'Full operational access. Account and role administration stays with Boss Koo.'],
+                  ['HOD', rolePermissions.find(role => role.id === SYSTEM_HOD_ROLE_ID)?.permissions || defaultRolePermissions.Staff, 'Department lead. Sees and edits work in their own departments.'],
+                  ['Staff', defaultRolePermissions.Staff, 'Standard employee access to assigned work.'],
+                  ['Client', defaultRolePermissions.Client, 'Reviews and approves their company work.']] as const).map(([name, permissions, description]) => (
+                  <div key={name} className="rounded-lg border border-slate-200 p-4">
+                    <div className="flex items-center gap-2">
+                      <h3 data-i18n-skip className="font-semibold text-slate-900">{name}</h3>
+                      <Badge tone={name === 'HOD' ? 'purple' : 'slate'}>{name === 'HOD' ? 'Protected' : 'Default'}</Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-500">{description}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {Object.entries(permissions).filter(([, enabled]) => enabled).map(([key]) => (
+                        <Badge key={key} tone="indigo">{permissionLabels[key as RolePermissionKey]}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p className="pt-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Custom roles</p>
             {rolePermissions.length === 0 ? (
               <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
                 No custom roles yet. Create one to assign it to team members.
@@ -1102,22 +1175,53 @@ const Approvals: React.FC = () => {
                       ))}
                     </div>
                   </td>
-                  <td className="px-6 py-4 min-w-[220px]">
+                  <td className="px-6 py-4 min-w-[240px]">
                     {isBossKoo(u) ? (
                       <Badge tone="purple">Permanent Super Admin</Badge>
                     ) : (
-                      <select
-                        aria-label={`Custom role for ${u.name}`}
-                        className={cn(inputBase, 'px-3 py-2 text-sm')}
-                        value={u.customRoleId || ''}
-                        onChange={e => void handleAssignRole(u.id, e.target.value)}
-                        disabled={isActionSaving}
-                      >
-                        <option value="">Base role only ({getEffectiveRoleName(u, rolePermissions)})</option>
-                        {getAssignableCustomRoles(u.role, rolePermissions).map(customRole => (
-                          <option key={customRole.id} data-i18n-skip value={customRole.id}>{customRole.name}</option>
-                        ))}
-                      </select>
+                      <div className="space-y-2">
+                        <select
+                          aria-label={`Role for ${u.name}`}
+                          className={cn(inputBase, 'px-3 py-2 text-sm')}
+                          value={roleSelectValue(u)}
+                          onChange={e => void handleChangeRole(u, e.target.value)}
+                          disabled={isActionSaving}
+                        >
+                          <option value="role:admin">Admin</option>
+                          <option value="role:hod">HOD</option>
+                          <option value="role:staff">Staff</option>
+                          <option value="role:client">Client</option>
+                          {getAssignableCustomRoles('Staff', rolePermissions)
+                            .filter(customRole => customRole.id !== SYSTEM_HOD_ROLE_ID)
+                            .map(customRole => (
+                              <option key={customRole.id} data-i18n-skip value={`custom:${customRole.id}`}>{customRole.name}</option>
+                            ))}
+                        </select>
+                        {roleCompanyUserId === u.id && (
+                          <select
+                            aria-label={`Company for ${u.name}`}
+                            className={cn(inputBase, 'px-3 py-2 text-sm')}
+                            value={roleCompanyName}
+                            onChange={e => setRoleCompanyName(e.target.value)}
+                            disabled={isActionSaving}
+                          >
+                            <option value="">Choose a company…</option>
+                            {clients.map(client => (
+                              <option key={client.id} data-i18n-skip value={client.clientName}>{client.clientName}</option>
+                            ))}
+                          </select>
+                        )}
+                        {roleCompanyUserId === u.id && (
+                          <button
+                            type="button"
+                            onClick={() => void handleConfirmClientCompany(u)}
+                            disabled={isActionSaving || !roleCompanyName.trim()}
+                            className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            Confirm
+                          </button>
+                        )}
+                      </div>
                     )}
                     {!isBossKoo(u) && u.permissions && Object.keys(u.permissions).length > 0 && <Badge className="mt-2" tone="indigo">Custom access</Badge>}
                   </td>

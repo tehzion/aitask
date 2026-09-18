@@ -67,6 +67,22 @@ into **department scoping** ("Limit this role to its departments"), which gives
 its members the same department-limited task visibility and editing as HOD.
 Per-member overrides layer on top of the chosen role.
 
+## Member role assignment
+
+The Approvals page shows the built-in **default roles** (Admin, HOD, Staff,
+Client) as read-only templates, and the member list assigns any of them in one
+step via `aitask_update_member_role`:
+
+- **Admin** / **Staff** — sets the base role and clears any custom role.
+- **HOD** — sets base role `Staff` plus the protected `system-hod` role.
+- **Client** — sets base role `Client` and requires a company (stored as
+  `client_name`); leaving Client clears the company and departments.
+- **Custom role** — sets the member's base role to match the custom role's
+  `baseRole` and assigns it.
+
+Role changes are Boss-Koo-only, reset the member's departments (Client uses
+`Client`) and permission overrides, and cannot modify the Boss Koo account.
+
 ## Server enforcement
 
 - `private.aitask_has_permission` mirrors the frontend resolution order and the
