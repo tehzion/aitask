@@ -15,7 +15,7 @@ import { getSoundEnabled, setSoundEnabled, SOUND_PREF_EVENT } from '../lib/sound
 import { notificationRouteToPath } from '../lib/security';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import type { ResolvedTheme, ThemePreference } from '../lib/theme';
-import { LanguageSwitcher } from './I18nProvider';
+import { LanguageSwitcher, useI18n } from './I18nProvider';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -59,6 +59,7 @@ const Navbar: React.FC<NavbarProps> = ({
   const mobileSearchRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useI18n();
 
   useEffect(() => {
     const handleSoundPreference = (event: Event) => {
@@ -176,13 +177,16 @@ const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-10 flex h-[4.5rem] shrink-0 items-center justify-between border-b border-line/80 bg-surface/95 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
       <div className="flex items-center flex-1">
-        <IconButton
+        <button
+          type="button"
           onClick={onMenuClick}
-          label="Open menu"
-          className="mr-2 md:hidden"
+          aria-label={t('Open menu')}
+          title={t('Open menu')}
+          className="mr-2 inline-flex h-11 items-center gap-2 rounded-control px-3 text-muted transition-[background-color,color,transform] duration-160 hover:bg-inset hover:text-ink active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 md:hidden"
         >
-          <Menu className="w-6 h-6" />
-        </IconButton>
+          <Menu aria-hidden="true" className="h-5 w-5" />
+          <span className="text-sm font-semibold">{t('Menu')}</span>
+        </button>
         <form onSubmit={handleGlobalSearch} className="relative w-full max-w-md hidden sm:block">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3">
             <Search className="w-5 h-5 text-slate-400" />

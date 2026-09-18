@@ -11,7 +11,7 @@ import { useStore } from '../store';
 import { useNotificationReadActions } from '../hooks/useNotificationReadActions';
 import { canAccessPath, canCreateTasks, getUnreadNotifications } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
-import { LayoutDashboard, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw, Menu, Users } from 'lucide-react';
+import { Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw, Menu } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
 import { notificationRouteToPath } from '../lib/security';
@@ -20,6 +20,8 @@ import { useColorTheme } from '../hooks/useColorTheme';
 import { getNavigationShortcut, isEditableShortcutTarget } from '../lib/keyboard';
 import KeyboardShortcutsDialog from './KeyboardShortcutsDialog';
 import CommandPalette from './CommandPalette';
+import { useI18n } from './I18nProvider';
+import { getMobileNavigation } from '../lib/navigation';
 
 export interface LayoutOutletContext {
   notificationReadActions: ReturnType<typeof useNotificationReadActions>;
@@ -41,6 +43,7 @@ const Layout: React.FC = () => {
   const mobileMenuTriggerRef = useRef<HTMLElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useI18n();
   const { preference, resolvedTheme, setPreference, toggleTheme } = useColorTheme();
 
   const {
@@ -189,29 +192,10 @@ const Layout: React.FC = () => {
 
   const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : unreadNotifs.length;
   const previewNotifications = unreadNotifs.slice(0, 5);
-  const isStaff = currentUser?.role === 'Staff' || currentUser?.role === 'HOD';
-  const isClient = currentUser?.role === 'Client';
   // Keep the bottom bar focused on the highest-frequency destinations. The
   // complete role-specific navigation remains available in the More drawer;
   // this prevents manager roles from producing an unusable six-item bar.
-  const mobileNavItems = useMemo(() => isStaff
-    ? [
-        { path: '/', label: 'My work', icon: LayoutDashboard },
-        { path: '/calendar', label: 'Schedule', icon: CalendarDays },
-        { path: '/notifications', label: 'Inbox', icon: Bell },
-      ].filter(item => item.path === '/notifications' || canAccessPath(currentUser, item.path, rolePermissions))
-    : isClient
-      ? [
-          { path: '/', label: 'Home', icon: LayoutDashboard },
-          { path: '/clients', label: 'Deliveries', icon: Users },
-          { path: '/notifications', label: 'Inbox', icon: Bell },
-        ].filter(item => item.path === '/notifications' || canAccessPath(currentUser, item.path, rolePermissions))
-      : [
-          { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-          { path: '/clients', label: 'Clients', icon: Users },
-          { path: '/calendar', label: 'Calendar', icon: CalendarDays },
-          { path: '/notifications', label: 'Inbox', icon: Bell },
-        ].filter(item => item.path === '/notifications' || canAccessPath(currentUser, item.path, rolePermissions)), [currentUser, isClient, isStaff, rolePermissions]);
+  const mobileNavItems = useMemo(() => getMobileNavigation(currentUser, rolePermissions), [currentUser, rolePermissions]);
   const canOpenSettings = Boolean(currentUser?.mustResetPassword)
     || canAccessPath(currentUser, '/settings', rolePermissions);
 
@@ -343,7 +327,7 @@ const Layout: React.FC = () => {
         </main>
 
         {/* Mobile Bottom Navigation Bar */}
-        <nav aria-label="Mobile navigation" className="fixed bottom-0 left-0 right-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-start justify-around border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_14px_rgb(7_22_18/0.10)] md:hidden">
+        <nav aria-label={t('Mobile navigation')} className="fixed bottom-0 left-0 right-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-start justify-around border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_14px_rgb(7_22_18/0.10)] md:hidden">
           {mobileNavItems.map(item => {
             const Icon = item.icon;
             return (
@@ -351,15 +335,19 @@ const Layout: React.FC = () => {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) => cn(
-                  "flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
-                  isActive && "font-semibold text-accent"
+                  "flex h-16 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-control px-1 text-muted transition-[background-color,color,transform] duration-160 active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-inset",
+                  isActive && "bg-accent-soft font-semibold text-ink"
                 )}
               >
-              <span className="relative">
-                <Icon className="mb-0.5 h-5 w-5" />
-                {item.path === '/notifications' && unreadCount > 0 && <span className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-surface bg-accent px-0.5 text-[8px] font-black text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>}
-              </span>
-              <span className="text-[10px]">{item.label}</span>
+                {({ isActive }) => (
+                  <>
+                    <span className="relative flex h-7 w-7 items-center justify-center">
+                      <Icon aria-hidden="true" className={cn("h-5 w-5", isActive && "text-accent")} />
+                      {item.path === '/notifications' && unreadCount > 0 && <span className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-surface bg-accent px-0.5 text-[8px] font-black text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+                    </span>
+                    <span className="max-w-full truncate text-[10px] leading-4">{t(item.label)}</span>
+                  </>
+                )}
               </NavLink>
             );
           })}
@@ -367,11 +355,11 @@ const Layout: React.FC = () => {
           <button
             type="button"
             onClick={openMobileMenu}
-            aria-label="Open more destinations"
-            className="flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors hover:text-accent"
+            aria-label={t('Open more destinations')}
+            className="flex h-16 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-control px-1 text-muted transition-[background-color,color,transform] duration-160 hover:bg-inset hover:text-accent active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-inset"
           >
-            <Menu className="mb-0.5 h-5 w-5" />
-            <span className="text-[10px]">More</span>
+            <span className="flex h-7 w-7 items-center justify-center"><Menu aria-hidden="true" className="h-5 w-5" /></span>
+            <span className="max-w-full truncate text-[10px] leading-4">{t('More')}</span>
           </button>
         </nav>
       </div>

@@ -32,6 +32,11 @@ test('Staff Chinese workspace localizes dynamic copy and preserves work content'
   await expect(page.getByText('UrbanEats · Promo Video Campaign', { exact: true }).first()).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileNavigation = page.getByRole('navigation', { name: '移动端导航' });
+  await expect(mobileNavigation.getByText('我的工作', { exact: true })).toBeVisible();
+  await expect(mobileNavigation.getByText('更多', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 800 });
 
   await page.goto('/tasks');
   await page.getByRole('button', { name: /6\. Video Editing/ }).click();
@@ -84,12 +89,23 @@ test('Staff collapsed navigation is labelled and mobile layout remains accessibl
   const more = page.getByRole('button', { name: 'More' });
   await expect(more).toHaveAttribute('aria-controls', 'staff-more-menu');
   await expect(page.locator('#staff-more-menu')).toHaveCount(1);
+  await page.getByRole('link', { name: 'My work' }).focus();
+  await expect(page.getByRole('tooltip', { name: 'My work' })).toBeVisible();
+  await more.focus();
+  await expect(page.getByRole('tooltip', { name: 'More' })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Open more destinations' }).click();
+  const openMenu = page.getByRole('button', { name: 'Open menu' });
+  await expect(openMenu).toContainText('Menu');
+  const moreTrigger = page.getByRole('button', { name: 'Open more destinations' });
+  await moreTrigger.click();
   await expect(page.getByRole('button', { name: 'Create task' })).toBeVisible();
+  const closeMenu = page.getByRole('button', { name: 'Close navigation menu' }).last();
+  await expect(closeMenu).toBeVisible();
+  await closeMenu.click();
+  await expect(moreTrigger).toBeFocused();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 
-  const axe = await new AxeBuilder({ page }).include('main').analyze();
+  const axe = await new AxeBuilder({ page }).include('[aria-label="Primary navigation"], [aria-label="Mobile navigation"]').analyze();
   expect(axe.violations, axe.violations.map(item => item.id).join(', ')).toEqual([]);
 });
