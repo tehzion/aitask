@@ -36,7 +36,7 @@ and rejected by the database guards. They are **not delegable**.
 |---|---|---|---|---|---|
 | Page access (Dashboard/Tasks/Calendar/Companies/Reports/Settings) | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Approvals page (`viewApprovals`) | ✓ | ✓ | – | – | – |
-| View all tasks / clients | ✓ | ✓ | dept-scoped | assigned | own company |
+| Task / client visibility | ✓ | portfolio-scoped | dept-scoped | assigned | own company |
 | Create tasks | ✓ | ✓ | ✓ | ✓ | – |
 | Manage created tasks | ✓ | ✓ | ✓ | – | – |
 | Add / delete companies (`createClients`/`deleteClients`) | ✓ | ✓ | ✓ | – | – |
@@ -47,9 +47,10 @@ and rejected by the database guards. They are **not delegable**.
 | Protected keys | ✓ | – | – | – | – |
 
 ### Admin
-Full **operational** access: the entire service and company surface plus the
-Approvals page. Account/role administration and workspace-wide task editing stay
-with Boss Koo.
+Full **operational** access to the PM's portfolio: service operations, companies
+they own or can reach through visible work, and the Approvals page. Project
+Managers do not receive workspace-wide task/client visibility, account/role
+administration, or workspace-wide task editing; those remain with Boss Koo.
 
 ### HOD
 A Staff-based department lead. Sees and edits work in **their departments**

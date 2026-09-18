@@ -1190,7 +1190,7 @@ export const saveSecureMemberDepartments = async (
   requestedDepartments: Department[],
 ): Promise<MutationResult<MemberDepartmentsResponse>> => {
   const departments = normalizeMemberDepartments(member.role, requestedDepartments);
-  if (member.role === 'Client' || departments.length === 0) {
+  if (member.role === 'Client' || (member.role !== 'Admin' && departments.length === 0)) {
     return { ok: false, code: 'VALIDATION', error: 'Choose at least one valid internal department.' };
   }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {

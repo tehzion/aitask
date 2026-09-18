@@ -4,6 +4,17 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [2.6.1] - 2026-09-18
+
+### Fixed
+
+- Company deletion is now an atomic server-side cascade across operational and
+  service records.
+- Permission resolution consistently layers sparse member overrides over custom
+  roles and base-role defaults.
+- Admin department clearing, member-version updates, reminder filtering, and
+  role-security trigger coverage now match the documented authorization model.
+
 ## [2.6.0] - 2026-09-18
 
 ### Added

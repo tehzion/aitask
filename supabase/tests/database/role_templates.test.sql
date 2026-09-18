@@ -15,6 +15,17 @@ insert into auth.users (
 insert into public.aitask_workspaces(id, name)
 values ('pgtap-role-templates', 'Role template test workspace');
 
+insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
+values (
+  'pgtap-role-templates', 'custom_role', 'system-hod',
+  jsonb_build_object(
+    'id', 'system-hod', 'name', 'HOD', 'baseRole', 'Staff',
+    'isProtected', true, 'departmentScoped', true,
+    'permissions', jsonb_build_object('createTasks', true, 'manageCreatedTasks', true, 'createProjects', true),
+    'createdAt', now(), 'updatedAt', now()
+  )
+);
+
 insert into public.aitask_members(
   id, workspace_id, auth_user_id, name, email, role, department, departments, is_super_admin, custom_role_id, permissions
 ) values

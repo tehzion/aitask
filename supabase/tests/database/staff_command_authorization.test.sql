@@ -151,9 +151,13 @@ select is(
 -- Revoking the Staff/HOD Create tasks permission must be enforced server-side,
 -- beyond the creator-identity check in aitask_can_mutate_entity.
 reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claim.role', '', true);
 update public.aitask_members
 set permissions = '{"createTasks": false}'::jsonb
 where workspace_id = 'pgtap-staff-authorization' and id = 'pgtap-staff-actor';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000912', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 
 select is(
@@ -181,9 +185,13 @@ select is(
   0,
   'the revoked task creation was not persisted'
 );
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claim.role', '', true);
 update public.aitask_members
 set permissions = '{}'::jsonb
 where workspace_id = 'pgtap-staff-authorization' and id = 'pgtap-staff-actor';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000912', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 
 select is(

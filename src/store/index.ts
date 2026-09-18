@@ -4036,7 +4036,12 @@ export const useStore = create<StoreState>()(
 
         const newNotifs: AppNotification[] = [];
         const tasks = state.tasks.map(task => {
-          if (task.isCompleted || task.dueReminderSent) return task;
+          if (
+            task.isCompleted
+            || task.status === 'Cancelled'
+            || task.dueReminderSent
+            || !canEditTask(state.currentUser, task, state.rolePermissions)
+          ) return task;
           if (!task.dueDate || !isValidIsoDate(task.dueDate)) return task;
           const dueDate = new Date(`${task.dueDate}T00:00:00`);
           const isApproaching = dueDate.getTime() === today.getTime() || dueDate.getTime() === tomorrow.getTime();

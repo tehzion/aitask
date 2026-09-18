@@ -46,12 +46,12 @@ insert into public.aitask_members(
 
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values
-  ('pgtap-hod-authorization', 'client', 'pgtap-hod-client', '{"id":"pgtap-hod-client","clientName":"HOD Test Client"}'::jsonb),
+  ('pgtap-hod-authorization', 'client', 'pgtap-hod-client', '{"id":"pgtap-hod-client","clientName":"HOD Test Client","createdBy":"pgtap-hod"}'::jsonb),
   ('pgtap-hod-authorization', 'client', 'pgtap-hidden-client', '{"id":"pgtap-hidden-client","clientName":"Hidden Client"}'::jsonb),
   ('pgtap-hod-authorization', 'project', 'pgtap-hod-hidden-staff-project', '{"id":"pgtap-hod-hidden-staff-project","clientId":"pgtap-hod-client","clientName":"HOD Test Client","projectName":"Hidden Staff Project","createdBy":"pgtap-hod-staff","services":["Design"],"startDate":"2026-09-10"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-created', '{"id":"pgtap-hod-created","title":"HOD created task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-assigned', '{"id":"pgtap-hod-assigned","title":"HOD assigned task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod","createdBy":"pgtap-hod-staff","status":"Pending","visibility":"internal"}'::jsonb),
-  ('pgtap-hod-authorization', 'task', 'pgtap-hod-unrelated', '{"id":"pgtap-hod-unrelated","title":"Unrelated task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-staff","status":"Pending","visibility":"internal"}'::jsonb),
+  ('pgtap-hod-authorization', 'task', 'pgtap-hod-unrelated', '{"id":"pgtap-hod-unrelated","title":"Unrelated task","clientName":"HOD Test Client","department":"Video Editor","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-staff","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-admin-created', '{"id":"pgtap-hod-admin-created","title":"Admin created task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-admin","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-staff-task', '{"id":"pgtap-hod-staff-task","title":"Staff task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-admin","status":"Pending","visibility":"internal"}'::jsonb);
 

@@ -31,7 +31,7 @@ insert into public.aitask_members(
 
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values
-  ('pgtap-company-delete', 'client', 'pgtap-delete-client', '{"id":"pgtap-delete-client","clientName":"Delete Co"}'::jsonb),
+  ('pgtap-company-delete', 'client', 'pgtap-delete-client', '{"id":"pgtap-delete-client","clientName":"Delete Co","createdBy":"pgtap-hod-delete"}'::jsonb),
   ('pgtap-company-delete', 'client', 'pgtap-keep-client', '{"id":"pgtap-keep-client","clientName":"Keep Co"}'::jsonb);
 
 -- A member with Delete companies can remove a company.

@@ -536,7 +536,8 @@ const Approvals: React.FC = () => {
     e.preventDefault();
     if (!memberDepartmentsId) return;
     setMemberDepartmentsError('');
-    if (memberDepartments.length === 0) {
+    const member = users.find(user => user.id === memberDepartmentsId);
+    if (member && member.role !== 'Admin' && memberDepartments.length === 0) {
       setMemberDepartmentsError('Choose at least one department.');
       return;
     }
