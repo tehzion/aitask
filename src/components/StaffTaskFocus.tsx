@@ -102,7 +102,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
 
   const footer = (
     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
-      {canEdit && onOpenFullEditor && <Button variant="secondary" onClick={onOpenFullEditor}>Full edit</Button>}
+      {canEdit && onOpenFullEditor && <Button variant="secondary" onClick={onOpenFullEditor}>{t('Full edit')}</Button>}
       <label className="relative min-w-0 flex-1">
         <span className="sr-only">All task statuses</span>
         <select
@@ -175,8 +175,8 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
           </section>
         )}
         {unavailablePredecessorCount > 0 && (
-          <section className="rounded-panel bg-slate-50 p-4 text-sm text-muted ring-1 ring-line" aria-label="Dependency status unavailable">
-            Dependency status for {unavailablePredecessorCount} earlier step{unavailablePredecessorCount === 1 ? '' : 's'} is unavailable. Confirm with the task owner before starting.
+          <section className="rounded-panel bg-slate-50 p-4 text-sm text-muted ring-1 ring-line" aria-label={t('Dependency status unavailable')}>
+            {t(`Dependency status for ${unavailablePredecessorCount} earlier step${unavailablePredecessorCount === 1 ? '' : 's'} is unavailable. Confirm with the task owner before starting.`)}
           </section>
         )}
 
@@ -215,7 +215,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
             })}
             {(liveTask.comments || []).length === 0 && <p className="rounded-panel bg-inset px-4 py-8 text-center text-sm text-muted">{t('No updates yet. Add the first work note below.')}</p>}
           </div>
-          {!canComment && <p className="mt-3 rounded-control bg-inset px-3 py-2 text-xs font-medium text-muted">Read-only task view. You can update tasks assigned to you or created by you.</p>}
+          {!canComment && <p className="mt-3 rounded-control bg-inset px-3 py-2 text-xs font-medium text-muted">{t('Read-only task view. You can update tasks assigned to you or created by you.')}</p>}
           <form onSubmit={submitComment} className="mt-3 flex items-end gap-2">
             <label className="min-w-0 flex-1"><span className="sr-only">Add work update</span><textarea disabled={!canComment} value={comment} onChange={event => setComment(event.target.value)} rows={2} placeholder="Add a work update…" className={`${inputBase} resize-none px-3 py-2.5`} /></label>
             <Button type="submit" aria-label="Send work update" disabled={!comment.trim() || mutationLocked || !canComment || isSaving} className="h-11 w-11 shrink-0 px-0"><Send className="h-4 w-4" /></Button>

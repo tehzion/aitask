@@ -81,6 +81,23 @@ describe('Chinese UI translations', () => {
     expect(translateUiText('Total tasks', 'zh')).toBe('任务总数');
   });
 
+  it('translates staff task-focus chrome, including dependency notices', () => {
+    expect(translateUiText('Full edit', 'zh')).toBe('完整编辑');
+    expect(translateUiText(
+      'Read-only task view. You can update tasks assigned to you or created by you.',
+      'zh',
+    )).toBe('只读任务视图。您只能更新分配给您的或由您创建的任务。');
+    expect(translateUiText('Dependency status unavailable', 'zh')).toBe('前置步骤状态不可用');
+    expect(translateUiText(
+      'Dependency status for 1 earlier step is unavailable. Confirm with the task owner before starting.',
+      'zh',
+    )).toBe('1 个前置步骤的状态不可用。开始前请与任务负责人确认。');
+    expect(translateUiText(
+      'Dependency status for 3 earlier steps is unavailable. Confirm with the task owner before starting.',
+      'zh',
+    )).toBe('3 个前置步骤的状态不可用。开始前请与任务负责人确认。');
+  });
+
   it('formats structured dates and relative times in the selected application locale', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 7, 21, 12, 0));

@@ -799,15 +799,21 @@ describe('secure workspace baseline', () => {
       updated_at: '2026-07-18T00:00:00Z',
     };
 
-    from.mockImplementation((table: string) => ({
-      select: () => ({
-        eq: () => table === 'aitask_workspaces'
-          ? { single: () => Promise.resolve({ data: { version: 11, updated_at: '2026-07-18T00:00:00Z', sync_protocol_version: 1 }, error: null }) }
-          : table === 'aitask_entities'
-            ? { neq: () => Promise.resolve({ data: [existingTask], error: null }) }
-            : Promise.resolve({ data: [member], error: null }),
-      }),
-    }));
+    from.mockImplementation((table: string) => {
+      const result = table === 'aitask_workspaces'
+        ? Promise.resolve({ data: { version: 11, updated_at: '2026-07-18T00:00:00Z', sync_protocol_version: 1 }, error: null })
+        : table === 'aitask_entities'
+          ? Promise.resolve({ data: [existingTask], error: null })
+          : Promise.resolve({ data: [member], error: null });
+      const fluent: Record<string, () => unknown> = {};
+      fluent.select = () => fluent;
+      fluent.eq = () => fluent;
+      fluent.neq = () => fluent;
+      fluent.order = () => fluent;
+      fluent.range = () => result;
+      fluent.single = () => result;
+      return fluent;
+    });
     rpc.mockResolvedValueOnce({
       data: { ok: true, memberId: member.id, items: [], unreadCount: 0, nextCursor: null },
       error: null,
@@ -932,15 +938,21 @@ describe('secure workspace baseline', () => {
       updated_at: '2026-08-01T03:00:00Z',
     };
 
-    from.mockImplementation((table: string) => ({
-      select: () => ({
-        eq: () => table === 'aitask_workspaces'
-          ? { single: () => Promise.resolve({ data: { version: 30, updated_at: '2026-08-01T03:00:00Z', sync_protocol_version: 1 }, error: null }) }
-          : table === 'aitask_entities'
-            ? { neq: () => Promise.resolve({ data: [fullTask], error: null }) }
-            : Promise.resolve({ data: [clientMember, internalMember], error: null }),
-      }),
-    }));
+    from.mockImplementation((table: string) => {
+      const result = table === 'aitask_workspaces'
+        ? Promise.resolve({ data: { version: 30, updated_at: '2026-08-01T03:00:00Z', sync_protocol_version: 1 }, error: null })
+        : table === 'aitask_entities'
+          ? Promise.resolve({ data: [fullTask], error: null })
+          : Promise.resolve({ data: [clientMember, internalMember], error: null });
+      const fluent: Record<string, () => unknown> = {};
+      fluent.select = () => fluent;
+      fluent.eq = () => fluent;
+      fluent.neq = () => fluent;
+      fluent.order = () => fluent;
+      fluent.range = () => result;
+      fluent.single = () => result;
+      return fluent;
+    });
     rpc.mockResolvedValueOnce({
       data: { ok: true, memberId: clientMember.id, items: [], unreadCount: 0, nextCursor: null },
       error: null,
