@@ -32,6 +32,7 @@ import ModalShell from '../components/ModalShell';
 import CreateClientProfileModal from '../components/CreateClientProfileModal';
 import CreateClientPlanModal from '../components/CreateClientPlanModal';
 import CreateProjectModal from '../components/CreateProjectModal';
+import { useI18n } from '../components/I18nProvider';
 
 type ClientSource = 'Profile' | 'Task' | 'Company' | 'Account';
 
@@ -120,6 +121,7 @@ const getProfileForm = (client: ClientSummary): ClientProfileForm => {
 };
 
 const Clients: React.FC = () => {
+  const { t } = useI18n();
   const {
     clients: clientProfiles,
     tasks: allTasks,
@@ -531,8 +533,8 @@ const Clients: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title="Companies"
-        description="The complete client database for company details, contacts, accounts, services, and linked work."
+        title={isClientUser ? t('Company profile') : t('Companies')}
+        description={isClientUser ? t('Review your company details, services, contacts, and linked work.') : t('The complete client database for company details, contacts, accounts, services, and linked work.')}
         meta={<><span>{clients.length} visible companies</span><span aria-hidden="true">·</span><span>{totalTasks} linked tasks</span></>}
         action={<div className="flex flex-wrap gap-2">
           {canCreateClientProfiles(currentUser, rolePermissions) && <Button onClick={() => setIsCreateClientOpen(true)} disabled={upgradeRequired}><Building2 className="h-4 w-4" />New client</Button>}
@@ -542,7 +544,10 @@ const Clients: React.FC = () => {
       />
 
       <StatGroup className="grid-cols-2 lg:grid-cols-4" aria-label="Client summary">
-        {[{ label: 'Companies', value: clients.length, icon: Building2 }, { label: 'Saved profiles', value: savedProfiles, icon: FileText }, { label: 'Open tasks', value: openTasks, icon: CheckSquare }, { label: 'Client accounts', value: linkedAccounts, icon: Users }].map(({ label, value, icon: Icon }) => <div key={label} className="flex min-h-28 items-center justify-between gap-4 p-4 sm:p-5"><div><p className="text-xs font-medium text-muted">{label}</p><p className="calm-number mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">{value}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-control bg-accent-soft text-accent"><Icon className="h-4 w-4" /></span></div>)}
+        {(isClientUser
+          ? [{ label: t('Company'), value: clients.length, icon: Building2 }, { label: t('Saved profile'), value: savedProfiles, icon: FileText }, { label: t('Open tasks'), value: openTasks, icon: CheckSquare }, { label: t('Team accounts'), value: linkedAccounts, icon: Users }]
+          : [{ label: t('Companies'), value: clients.length, icon: Building2 }, { label: t('Saved profiles'), value: savedProfiles, icon: FileText }, { label: t('Open tasks'), value: openTasks, icon: CheckSquare }, { label: t('Client accounts'), value: linkedAccounts, icon: Users }]
+        ).map(({ label, value, icon: Icon }) => <div key={label} className="flex min-h-28 items-center justify-between gap-4 p-4 sm:p-5"><div><p className="text-xs font-medium text-muted">{label}</p><p className="calm-number mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">{value}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-control bg-accent-soft text-accent"><Icon className="h-4 w-4" /></span></div>)}
       </StatGroup>
 
       <div className={tableShell}>
@@ -554,7 +559,7 @@ const Clients: React.FC = () => {
             <input
               type="text"
               className={cn(inputBase, 'py-2.5 pl-10 pr-3')}
-              placeholder="Search companies, contacts, addresses..."
+              placeholder={isClientUser ? t('Search your company profile...') : t('Search companies, contacts, addresses...')}
               value={searchTerm}
               onChange={(event) => updateSearch(event.target.value)}
             />

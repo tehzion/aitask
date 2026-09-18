@@ -9,7 +9,7 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
     const current = useStore.getState();
     const client = current.users.find(user => user.role === 'Client');
     if (!client) throw new Error('Expected a Client demo account');
-    const contact = current.users.find(user => user.role === 'Staff') || current.users.find(user => user.role === 'Admin')!;
+    const contact = current.users.find(user => user.role === 'Staff') || current.users.find(user => user.role === 'Project Manager')!;
     const reviewTask = {
       id: 'client-v2-review',
       clientName: client.companyName || 'UrbanEats',
@@ -81,7 +81,11 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
   await expect(focus.getByText('Approve September campaign', { exact: true })).toBeVisible();
   await focus.getByRole('button', { name: 'Request changes' }).click();
   await expect(focus.getByRole('alert')).toHaveText(/Tell the team what needs to change/);
-  await focus.getByLabel('Decision note').fill('Please use the approved headline and reduce the logo size.');
+  const decisionNote = focus.getByLabel('Decision note');
+  await expect(decisionNote).toBeFocused();
+  await expect(decisionNote).toHaveAttribute('aria-invalid', 'true');
+  await expect(decisionNote).toHaveAttribute('aria-describedby', /.+/);
+  await decisionNote.fill('Please use the approved headline and reduce the logo size.');
   await focus.getByRole('button', { name: 'Request changes' }).click();
   await expect(focus.getByRole('button', { name: 'Request changes' })).toHaveCount(0);
   await expect(focus.getByText('Review actions will appear when the delivery is ready.')).toBeVisible();

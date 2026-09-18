@@ -118,7 +118,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await taskDialog.getByLabel(/Task Title/).fill('Cycle manual task');
   await taskDialog.getByRole('button', { name: 'Create & open task' }).click();
   await expect(taskDialog).toBeHidden();
-  await expect(page).toHaveURL(/\/clients\?.*taskId=/);
+  await expect(page).toHaveURL(/\/tasks\?.*taskId=/);
 
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');

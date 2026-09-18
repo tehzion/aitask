@@ -190,16 +190,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
   return (
     <>
       {isOpen && (
-        <button
-          type="button"
-          aria-label={t('Close navigation menu')}
-          tabIndex={-1}
+        <div
+          role="presentation"
+          aria-hidden="true"
           className="fixed inset-0 z-20 bg-slate-950/35 backdrop-blur-sm transition-opacity md:hidden"
           onClick={onClose}
         />
       )}
 
-      <aside
+      <nav
         ref={sidebarRef}
         tabIndex={-1}
         aria-label={t('Primary navigation')}
@@ -305,7 +304,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
             {isCollapsed ? <PanelLeftOpen aria-hidden="true" className="h-[19px] w-[19px]" /> : <><PanelLeftClose aria-hidden="true" className="mr-3 h-[19px] w-[19px]" /><span className="text-sm font-medium">{t('Collapse')}</span></>}
           </button>
         </div>
-      </aside>
+      </nav>
       {isCollapsed && isDesktop && collapsedLabel && typeof document !== 'undefined' && createPortal(
         <span
           role="tooltip"

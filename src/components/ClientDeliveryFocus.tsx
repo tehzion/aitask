@@ -48,12 +48,16 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
   const [decisionNote, setDecisionNote] = React.useState('');
   const [commentText, setCommentText] = React.useState('');
   const [error, setError] = React.useState('');
+  const [decisionError, setDecisionError] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const decisionNoteRef = React.useRef<HTMLTextAreaElement>(null);
+  const decisionErrorId = React.useId();
 
   React.useEffect(() => {
     setDecisionNote('');
     setCommentText('');
     setError('');
+    setDecisionError('');
     setIsSubmitting(false);
   }, [task?.id]);
 
@@ -82,9 +86,12 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
   const submitDecision = async (status: 'Approved' | 'Rejected') => {
     if (isSaving || !canReview) return;
     if (status === 'Rejected' && !decisionNote.trim()) {
-      setError('Tell the team what needs to change before sending the request.');
+      setDecisionError('Tell the team what needs to change before sending the request.');
+      setError('');
+      window.setTimeout(() => decisionNoteRef.current?.focus(), 0);
       return;
     }
+    setDecisionError('');
     reviewClientApproval(task.id, status, decisionNote);
     if (await commit('approval.review')) setDecisionNote('');
   };
@@ -154,7 +161,18 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
           <section aria-labelledby="delivery-decision-title">
             <h3 id="delivery-decision-title" className="font-semibold text-ink">Your decision</h3>
             <p className="mt-1 text-sm leading-6 text-muted">A note is optional when approving. A clear reason is required when requesting changes.</p>
-            <textarea value={decisionNote} onChange={event => { setDecisionNote(event.target.value); setError(''); }} rows={3} className={cn(inputBase, 'mt-3 resize-none px-3 py-2.5')} placeholder="Add context for the team…" aria-label="Decision note" />
+            <textarea
+              ref={decisionNoteRef}
+              value={decisionNote}
+              onChange={event => { setDecisionNote(event.target.value); setDecisionError(''); setError(''); }}
+              rows={3}
+              className={cn(inputBase, 'mt-3 resize-none px-3 py-2.5')}
+              placeholder="Add context for the team…"
+              aria-label="Decision note"
+              aria-invalid={decisionError ? 'true' : undefined}
+              aria-describedby={decisionError ? decisionErrorId : undefined}
+            />
+            {decisionError && <p id={decisionErrorId} role="alert" className="mt-2 text-sm font-medium text-red-700 dark:text-red-200">{decisionError}</p>}
           </section>
         )}
 

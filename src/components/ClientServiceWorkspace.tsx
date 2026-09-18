@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowRight, CalendarDays, CheckCircle2, Download, FileText, MessageSquareText, PackageCheck } from 'lucide-react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useStore } from '../store';
 import { getVisibleTasks } from '../lib/access';
 import { getClientDeliveryStageLabel, getClientFocusTask, groupClientDeliveries } from '../lib/clientPortal';
@@ -21,8 +21,27 @@ const ClientServiceWorkspace = () => {
   const [tab, setTab] = React.useState<ClientWorkspaceTab>('overview');
   const [message, setMessage] = React.useState('');
   const client = store.clients.find(item => item.id === clientId);
-  if (!client) return <Navigate to="/" replace />;
-  if (store.currentUser?.role !== 'Client' || store.currentUser.companyName?.trim().toLowerCase() !== client.clientName.trim().toLowerCase()) return <Navigate to="/" replace />;
+  const isWorkspaceAvailable = Boolean(
+    client
+    && store.currentUser?.role === 'Client'
+    && store.currentUser.companyName?.trim().toLowerCase() === client.clientName.trim().toLowerCase(),
+  );
+  if (!isWorkspaceAvailable || !client) {
+    return (
+      <div className={pageShell}>
+        <PageHeader
+          title={t('Workspace unavailable')}
+          description={t('This company workspace is not available for your account.')}
+        />
+        <section role="status" className="rounded-panel bg-surface p-6 ring-1 ring-line/80 sm:p-8">
+          <p className="text-sm leading-6 text-muted">{t('Open your deliveries to continue.')}</p>
+          <Link to="/clients" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-control bg-accent px-4 text-sm font-semibold text-white dark:text-[rgb(var(--calm-accent-ink))]">
+            {t('Back to Deliveries')}<ArrowRight className="h-4 w-4" />
+          </Link>
+        </section>
+      </div>
+    );
+  }
 
   const activePlan = [...store.clientPlans]
     .filter(item => item.clientId === client.id && ['Active', 'Paused'].includes(item.status))
