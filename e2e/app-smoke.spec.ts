@@ -66,7 +66,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.getByRole('button', { name: 'Return to Login' }).click();
 
   await expect(page.getByRole('button', { name: 'Use Boss Koo' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Use Admin Demo' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Use Project Manager Demo' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use Staff Demo' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use Finance Demo' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Use UrbanEats Client Demo' })).toBeVisible();
@@ -112,7 +112,7 @@ test('first login reaches the app and critical responsive routes remain usable',
     expect(widths.content, `Boss dashboard should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(widths.viewport);
   }
   await page.setViewportSize({ width: 1280, height: 800 });
-  await switchDemoAccount(page, 'Admin Demo');
+  await switchDemoAccount(page, 'Project Manager Demo');
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Workspace metrics' })).toBeVisible();
   await switchDemoAccount(page, 'Staff Demo');
@@ -427,7 +427,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: 'Tasks Management' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Portfolio work' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Workflow' })).toHaveCount(0);
   await expect(page.getByText(/^Client: (Pending|Approved|Rejected)$/)).toHaveCount(0);
   const newTaskButton = page.getByRole('button', { name: 'New task' });
@@ -779,7 +779,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
   await expect(mobileNav.getByText('Dashboard', { exact: true })).toHaveCount(0);
   await expect(mobileNav.getByText('Inbox', { exact: true })).toBeVisible();
-  await mobileNav.getByRole('button', { name: 'Open more staff actions' }).click();
+  await mobileNav.getByRole('button', { name: 'Open more destinations' }).click();
   await expect(page.getByRole('link', { name: 'All work' })).toBeVisible();
   await expect(mobileNav.getByText('Calendar', { exact: true })).toHaveCount(0);
 

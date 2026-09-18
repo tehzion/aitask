@@ -31,7 +31,7 @@ const englishCopy: Record<DashboardPersona, ReleaseNoticeCopy> = {
     ],
     acknowledgeLabel: 'Happy working',
   },
-  admin: {
+  projectManager: {
     eyebrow: 'What’s new',
     title: 'Service operations are now in one calm workspace',
     description: 'AiTask now connects client scope, monthly delivery, and team execution without changing your existing work.',
@@ -106,7 +106,7 @@ const chineseCopy: Record<DashboardPersona, ReleaseNoticeCopy> = {
     ],
     acknowledgeLabel: '开始工作吧',
   },
-  admin: {
+  projectManager: {
     eyebrow: '最新更新',
     title: '客户服务运营现已集中在一个清晰的工作区',
     description: 'AiTask 现可将客户服务范围、月度交付与团队执行连接在一起，同时保留您原有的工作方式。',

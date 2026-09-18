@@ -13,17 +13,17 @@ import { Project } from '../types';
 
 const Projects: React.FC = () => {
   const { t } = useI18n();
-  const { projects: allProjects, tasks: allTasks, users, currentUser, rolePermissions, deleteProject, commitPendingMutation } = useStore();
+  const { projects: allProjects, clients, tasks: allTasks, users, currentUser, rolePermissions, deleteProject, commitPendingMutation } = useStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   const tasks = React.useMemo(
-    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
-    [allTasks, currentUser, rolePermissions]
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects: allProjects }),
+    [allTasks, clients, currentUser, allProjects, rolePermissions]
   );
   const projects = React.useMemo(
-    () => getVisibleProjects(currentUser, allProjects, allTasks, rolePermissions),
-    [allProjects, allTasks, currentUser, rolePermissions]
+    () => getVisibleProjects(currentUser, allProjects, allTasks, rolePermissions, { clients, projects: allProjects }),
+    [allProjects, allTasks, clients, currentUser, rolePermissions]
   );
   const isClientUser = currentUser?.role === 'Client';
 

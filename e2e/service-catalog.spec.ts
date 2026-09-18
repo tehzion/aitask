@@ -4,7 +4,7 @@ const setBoss = async (page: import('@playwright/test').Page) => {
   await page.goto('/login');
   await page.evaluate(() => localStorage.setItem('aitask:locale', 'en'));
   await page.reload();
-  await page.getByRole('button', { name: 'Use Admin Demo' }).click();
+  await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => ['/', '/settings'].includes(url.pathname));

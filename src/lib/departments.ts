@@ -85,5 +85,6 @@ export const isMemberInDepartment = (
 
 export const getLegacyDepartmentMirror = (role: Role, departments: unknown): Department => {
   if (role === 'Client') return 'Client';
+  if (role === 'Project Manager' && normalizeMemberDepartments(role, departments).length === 0) return 'Management';
   return normalizeMemberDepartments(role, departments)[0] || 'Designer';
 };

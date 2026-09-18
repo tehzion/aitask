@@ -73,6 +73,8 @@ import {
   canManageTaskTemplates,
   canViewAllClients,
   canOpenServiceClient,
+  BUILTIN_HOD_ROLE_ID,
+  defaultRolePermissions,
   getAssignableProjects,
   getVisibleClientNames,
   isNotificationReadByUser,
@@ -223,6 +225,39 @@ type AddMemberInput = Omit<User, 'id' | 'avatar' | 'isSuperAdmin'> & {
   registrationId?: string;
   memberId?: string;
   sendInvitation?: boolean;
+};
+
+const makeBuiltinHodRole = (): CustomRole => ({
+  id: BUILTIN_HOD_ROLE_ID,
+  name: 'HOD',
+  description: 'Department lead with scoped task ownership and review access.',
+  baseRole: 'HOD',
+  permissions: { ...defaultRolePermissions.HOD },
+  departmentScoped: true,
+  isProtected: false,
+  isBuiltin: true,
+  createdAt: '2026-09-18T00:00:00.000Z',
+  updatedAt: '2026-09-18T00:00:00.000Z',
+});
+
+const ensureBuiltinRoleTemplate = (roles: CustomRole[] = []) => {
+  const normalized = roles
+    .filter(role => role.id !== 'system-hod')
+    .map(role => role.id === BUILTIN_HOD_ROLE_ID
+      ? {
+          ...makeBuiltinHodRole(),
+          ...role,
+          id: BUILTIN_HOD_ROLE_ID,
+          name: 'HOD',
+          baseRole: 'HOD' as const,
+          departmentScoped: true,
+          isProtected: false,
+          isBuiltin: true,
+        }
+      : role);
+  return normalized.some(role => role.id === BUILTIN_HOD_ROLE_ID)
+    ? normalized
+    : [makeBuiltinHodRole(), ...normalized];
 };
 
 interface StoreState {
@@ -854,7 +889,7 @@ const mergeWorkspaceStates = (
     tasks: mergedTasks,
     notifications: mergedNotifications,
     registrations: mergedRegistrations,
-    rolePermissions: mergedRolePermissions,
+    rolePermissions: ensureBuiltinRoleTemplate(mergedRolePermissions),
     taskStatuses: mergedTaskStatuses,
     deletedUserIds: mergedDeletedUserIds,
     deletedRoleIds: mergedDeletedRoleIds,
@@ -884,7 +919,7 @@ const makeWorkspacePatch = (current: StoreState, snapshot: SnapshotResult) => {
   return {
     ...workspace,
     users,
-    rolePermissions: workspace.rolePermissions || [],
+    rolePermissions: ensureBuiltinRoleTemplate(workspace.rolePermissions || []),
     taskStatuses: workspace.taskStatuses && workspace.taskStatuses.length > 0
       ? workspace.taskStatuses
       : ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'],
@@ -1033,7 +1068,7 @@ export const useStore = create<StoreState>()(
       notifications: [],
       notificationUnreadCount: 0,
       registrations: [],
-      rolePermissions: [],
+      rolePermissions: [makeBuiltinHodRole()],
       backend: makeBackendRuntimeState(),
 
       initializeBackend: async () => {
@@ -2409,11 +2444,11 @@ export const useStore = create<StoreState>()(
         const newNotifs: AppNotification[] = [];
 
         const hasOtherAdmin = state.users.some(user => (
-          user.id !== currentUser?.id && (user.role === 'Admin' || user.isSuperAdmin)
+          user.id !== currentUser?.id && (user.role === 'Project Manager' || user.isSuperAdmin)
         ));
-        if (currentUser?.role !== 'Admin' || hasOtherAdmin) {
+        if (currentUser?.role !== 'Project Manager' || hasOtherAdmin) {
           newNotifs.push(makeNotification({
-            targetRole: 'Admin',
+            targetRole: 'Project Manager',
             title: 'Task Status Updated',
             message: `"${task.title}" was moved to ${nextStatus} by ${currentUser?.name}.`,
             route: { page: 'tasks', entityId: taskId },
@@ -2590,7 +2625,7 @@ export const useStore = create<StoreState>()(
         if (!canAssignOthers && nextDepartment !== task.department) {
           return { ok: false, error: 'You do not have permission to change the task department.' };
         }
-        if (canAssignOthers && currentUser.role === 'Staff' && !isBossKoo(currentUser) && !isMemberInDepartment(currentUser, nextDepartment)) {
+        if (canAssignOthers && ['Staff', 'HOD'].includes(currentUser.role) && !isBossKoo(currentUser) && !isMemberInDepartment(currentUser, nextDepartment)) {
           return { ok: false, error: 'You can only manage tasks within your departments.' };
         }
         const requestedClientName = data.clientName !== undefined ? data.clientName.trim() : task.clientName;
@@ -2751,10 +2786,10 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'You do not have permission to delete this task.' };
         }
 
-        const serverGeneratesStaffDeleteNotification = shouldUseSecureSupabase() && currentUser.role === 'Staff';
-        const notifications = currentUser.role !== 'Admin' && !serverGeneratesStaffDeleteNotification
+        const serverGeneratesStaffDeleteNotification = shouldUseSecureSupabase() && ['Staff', 'HOD'].includes(currentUser.role);
+        const notifications = currentUser.role !== 'Project Manager' && !serverGeneratesStaffDeleteNotification
           ? [makeNotification({
-              targetRole: 'Admin' as Role,
+              targetRole: 'Project Manager' as Role,
               title: 'Task Deleted',
               message: `${currentUser.name} deleted "${task.title}".`,
               route: { page: 'tasks', entityId: taskId },
@@ -2812,7 +2847,7 @@ export const useStore = create<StoreState>()(
         const notifications: AppNotification[] = [];
         if (!shouldUseSecureSupabase()) {
           notifications.push(makeNotification({
-            targetRole: 'Admin',
+            targetRole: 'Project Manager',
             title: status === 'Approved' ? 'Client Approved Task' : 'Client Requested Revision',
             message: `${currentUser.name} ${status === 'Approved' ? 'approved' : 'rejected'} "${task.title}"${note ? `: ${note}` : '.'}`,
             route: { page: 'tasks', entityId: taskId },
@@ -2908,7 +2943,7 @@ export const useStore = create<StoreState>()(
         const currentUser = state.currentUser;
         if (!currentUser || !canCreateTasks(currentUser, state.rolePermissions)) return '';
         if (taskData.createdBy !== undefined && taskData.createdBy !== currentUser.id) return '';
-        if (currentUser.role === 'Staff' && !isMemberInDepartment(currentUser, taskData.department)) return '';
+        if (['Staff', 'HOD'].includes(currentUser.role) && !isMemberInDepartment(currentUser, taskData.department)) return '';
         const assignee = taskData.assignedTo ? state.users.find(user => user.id === taskData.assignedTo && user.role !== 'Client') : undefined;
         if (taskData.assignedTo && !assignee) return '';
         if (assignee && !canAssignTasksToOthers(currentUser, state.rolePermissions) && assignee.id !== currentUser.id) return '';
@@ -2924,7 +2959,7 @@ export const useStore = create<StoreState>()(
           );
           if (!assignableProjectIds.has(taskData.projectId)) return '';
         }
-        if (currentUser.role === 'Staff' && !project) {
+        if (['Staff', 'HOD'].includes(currentUser.role) && !project) {
           const serviceDeliverable = taskData.deliverableId
             ? state.deliverables.find(item => item.id === taskData.deliverableId && item.cycleId === taskData.serviceCycleId)
             : undefined;
@@ -2986,9 +3021,9 @@ export const useStore = create<StoreState>()(
             tasks,
             ...deriveServiceProgress(tasks, deliverables, state.serviceCycles),
             notifications: [
-              ...(currentUser.role === 'Staff' && (!assignee || assignee.role !== 'Admin')
+              ...(['Staff', 'HOD'].includes(currentUser.role) && (!assignee || assignee.role !== 'Project Manager')
                 ? [makeNotification({
-                    targetRole: 'Admin',
+                    targetRole: 'Project Manager',
                     title: 'Task Created by Staff',
                     message: `${currentUser.name} created a new task: "${title}".`,
                     route: { page: 'tasks', entityId: taskId },
@@ -3382,7 +3417,7 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         if (!canManageServiceCatalog(state.currentUser, state.rolePermissions)) {
-          return { ok: false, error: 'Only administrators can manage service packages.' };
+          return { ok: false, error: 'Only Project Managers or Boss Koo can manage service packages.' };
         }
         const name = data.name.trim().slice(0, 160);
         if (!name) return { ok: false, error: 'Package name is required.' };
@@ -3473,7 +3508,7 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         if (!canManageServiceCatalog(state.currentUser, state.rolePermissions)) {
-          return { ok: false, error: 'Only administrators can manage service packages.' };
+          return { ok: false, error: 'Only Project Managers or Boss Koo can manage service packages.' };
         }
         const existing = state.servicePackages.find(item => item.id === id);
         if (!existing) return { ok: false, error: 'Package not found.' };
@@ -3786,7 +3821,7 @@ export const useStore = create<StoreState>()(
         const cycle = state.serviceCycles.find(item => item.id === cycleId);
         const actor = state.currentUser;
         if (!cycle || !actor) return { ok: false, error: 'Cycle not found.' };
-        const authorized = canManageServiceCycles(actor, state.rolePermissions) || (actor.role === 'Staff' && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
+        const authorized = canManageServiceCycles(actor, state.rolePermissions) || (['Staff', 'HOD'].includes(actor.role) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
         if (!authorized) return { ok: false, error: 'You do not have access to this cycle.' };
         const now = new Date().toISOString();
         set(current => ({ serviceCycles: current.serviceCycles.map(item => item.id === cycleId ? { ...item, status, publishedAt: status === 'Published' ? item.publishedAt || now : item.publishedAt, updatedAt: now } : item) }));
@@ -3799,7 +3834,7 @@ export const useStore = create<StoreState>()(
         const deliverable = state.deliverables.find(item => item.id === deliverableId);
         const actor = state.currentUser;
         if (!deliverable || !actor) return { ok: false, error: 'Deliverable not found.' };
-        const authorized = canManageServiceCycles(actor, state.rolePermissions) || (actor.role === 'Staff' && state.tasks.some(task => task.deliverableId === deliverable.id && task.assignedTo === actor.id));
+        const authorized = canManageServiceCycles(actor, state.rolePermissions) || (['Staff', 'HOD'].includes(actor.role) && state.tasks.some(task => task.deliverableId === deliverable.id && task.assignedTo === actor.id));
         if (!authorized) return { ok: false, error: 'You do not have access to this deliverable.' };
         set(current => {
           const now = new Date().toISOString();
@@ -3991,9 +4026,9 @@ export const useStore = create<StoreState>()(
 
         const newNotifs: AppNotification[] = [];
         const serverGeneratesClientNotifications = shouldUseSecureSupabase() && currentUser.role === 'Client';
-        if (!serverGeneratesClientNotifications && currentUser.role !== 'Admin') {
+        if (!serverGeneratesClientNotifications && currentUser.role !== 'Project Manager') {
           newNotifs.push(makeNotification({
-            targetRole: 'Admin',
+            targetRole: 'Project Manager',
             title: currentUser.role === 'Client' ? 'Client Feedback' : 'New Comment',
             message: `${currentUser.name} commented on "${task.title}".`,
             route: { page: 'tasks', entityId: taskId },
@@ -4056,7 +4091,7 @@ export const useStore = create<StoreState>()(
             iconType: 'alert'
           }));
           newNotifs.push(makeNotification({
-            targetRole: 'Admin',
+            targetRole: 'Project Manager',
             title: 'Task Deadline Approaching',
             message: `"${task.title}" for ${task.clientName} is due ${when}.`,
             route: { page: 'tasks', entityId: task.id },
@@ -4178,7 +4213,7 @@ export const useStore = create<StoreState>()(
         const departments = normalizeMemberDepartments(data.role, data.departments, data.department);
 
         if (!name) return { ok: false, error: 'Member name is required.' };
-        if (departments.length === 0 && data.role !== 'Admin') {
+        if (departments.length === 0 && data.role !== 'Project Manager') {
           return { ok: false, error: 'Choose at least one department.' };
         }
         if (initialPassword !== DEFAULT_USER_PASSWORD && initialPassword.length < 12) {
@@ -4258,7 +4293,7 @@ export const useStore = create<StoreState>()(
               departments,
               department: getLegacyDepartmentMirror(data.role, departments),
               companyName,
-              workerType: data.role === 'Staff' ? data.workerType || 'employee' : undefined,
+              workerType: ['Staff', 'HOD'].includes(data.role) ? data.workerType || 'employee' : undefined,
               customRoleId: data.customRoleId,
               registrationId: data.registrationId,
               memberId: data.memberId,
@@ -4291,7 +4326,7 @@ export const useStore = create<StoreState>()(
           department: getLegacyDepartmentMirror(data.role, departments),
           mustResetPassword: true,
           companyName,
-          workerType: data.role === 'Staff' ? data.workerType || 'employee' : undefined,
+          workerType: ['Staff', 'HOD'].includes(data.role) ? data.workerType || 'employee' : undefined,
           isSuperAdmin: false,
           customRoleId: customRole?.id,
           customRoleName: customRole?.name,
@@ -4304,7 +4339,7 @@ export const useStore = create<StoreState>()(
           users: [...state.users, newUser],
           notifications: [
             makeNotification({
-              targetRole: 'Admin',
+              targetRole: 'Project Manager',
               title: 'Member Added',
               message: `${currentUser.name} added ${name} as ${data.role}.`,
               route: { page: 'approvals' },
@@ -4343,6 +4378,7 @@ export const useStore = create<StoreState>()(
           name,
           description: data.description?.trim() || undefined,
           isProtected: false,
+          isBuiltin: false,
           createdAt: now,
           updatedAt: now,
         };
@@ -4383,9 +4419,10 @@ export const useStore = create<StoreState>()(
                   ...data,
                   permissions: nextPermissions,
                   name: nextName,
-                  baseRole: editingHod ? 'Staff' : data.baseRole || role.baseRole,
+                  baseRole: editingHod ? 'HOD' : data.baseRole || role.baseRole,
                   departmentScoped: editingHod ? true : (data.departmentScoped ?? role.departmentScoped),
-                  isProtected: editingHod ? true : role.isProtected,
+                  isProtected: editingHod ? false : role.isProtected,
+                  isBuiltin: editingHod ? true : role.isBuiltin,
                   description: data.description?.trim() || undefined,
                   updatedAt: new Date().toISOString(),
                 }
@@ -4415,7 +4452,7 @@ export const useStore = create<StoreState>()(
 
         const targetRole = get().rolePermissions.find(role => role.id === id);
         if (!targetRole) return { ok: false, error: 'Custom role was not found.' };
-        if (targetRole.isProtected || isHodRole(targetRole)) return { ok: false, error: 'Protected roles cannot be deleted.' };
+        if (targetRole.isProtected || targetRole.isBuiltin || isHodRole(targetRole)) return { ok: false, error: 'Built-in roles cannot be deleted.' };
 
         set((state) => ({
           rolePermissions: state.rolePermissions.filter(role => role.id !== id),
@@ -4447,6 +4484,7 @@ export const useStore = create<StoreState>()(
           : undefined;
 
         if (customRoleId && !customRole) return { ok: false, error: 'Custom role was not found.' };
+        if (customRole?.isBuiltin) return { ok: false, error: 'Built-in roles are assigned through the member base role.' };
         if (customRole && customRole.baseRole !== targetUser.role) {
           return { ok: false, error: `This role can only be assigned to ${customRole.baseRole} members.` };
         }
@@ -4483,6 +4521,7 @@ export const useStore = create<StoreState>()(
         if (options.customRoleId) {
           customRole = state.rolePermissions.find(item => item.id === options.customRoleId);
           if (!customRole) return { ok: false, error: 'Custom role was not found.' };
+          if (customRole.isBuiltin) return { ok: false, error: 'Built-in roles are assigned through the member base role.' };
           if (customRole.baseRole !== role) return { ok: false, error: `This role can only be assigned to ${customRole.baseRole} members.` };
         }
         if (role === 'Client' && !options.companyName?.trim()) {
@@ -4491,16 +4530,16 @@ export const useStore = create<StoreState>()(
 
         let departments: Department[];
         if (role === 'Client') departments = ['Client'];
-        else if (role === 'Admin') departments = [];
+        else if (role === 'Project Manager') departments = [];
         else if (options.departments?.length) departments = normalizeMemberDepartments(role, options.departments);
         else departments = normalizeMemberDepartments(role, targetUser.departments, targetUser.department);
-        if (role === 'Staff' && departments.length === 0) {
+        if (['Staff', 'HOD'].includes(role) && departments.length === 0) {
           return { ok: false, error: 'Choose at least one department for this member.' };
         }
         const companyName = role === 'Client' ? options.companyName!.trim() : undefined;
         const legacyDepartment = role === 'Client'
           ? 'Client'
-          : role === 'Admin'
+          : role === 'Project Manager'
             ? 'Management'
             : getLegacyDepartmentMirror(role, departments);
 
@@ -4606,7 +4645,7 @@ export const useStore = create<StoreState>()(
         }
 
         const departments = normalizeMemberDepartments(targetUser.role, requestedDepartments);
-        if (departments.length === 0 && targetUser.role !== 'Admin') {
+        if (departments.length === 0 && targetUser.role !== 'Project Manager') {
           return { ok: false, error: 'Choose at least one department.' };
         }
         const currentDepartments = normalizeMemberDepartments(
@@ -4706,7 +4745,7 @@ export const useStore = create<StoreState>()(
 
         const targetUser = state.users.find(user => user.id === userId);
         if (!targetUser) return { ok: false, error: 'User account was not found.' };
-        if (targetUser.role !== 'Staff' || isBossKoo(targetUser)) {
+        if (!['Staff', 'HOD'].includes(targetUser.role) || isBossKoo(targetUser)) {
           return { ok: false, error: 'Only Staff and HOD permissions can be customized.' };
         }
 
@@ -4897,7 +4936,7 @@ export const useStore = create<StoreState>()(
           ),
           notifications: [
             makeNotification({
-              targetRole: 'Admin',
+              targetRole: 'Project Manager',
               title: 'Member Removed',
               message: `${state.currentUser?.name || 'Super admin'} removed ${targetUser?.name}. ${state.tasks.some(task => task.assignedTo === userId) ? 'Their assigned tasks are now unassigned.' : ''}`,
               route: { page: 'approvals' },
@@ -5015,8 +5054,8 @@ export const useStore = create<StoreState>()(
         if (!isLocalServiceDemoEnabled() || state.backend.mode !== 'local' || shouldUseSecureSupabase()) {
           return { ok: false, error: 'The sample workspace is available only in an explicit local browser session.' };
         }
-        if (!state.currentUser || state.currentUser.role !== 'Admin') {
-          return { ok: false, error: 'Only an administrator can reset the sample workspace.' };
+        if (!state.currentUser || state.currentUser.role !== 'Project Manager') {
+          return { ok: false, error: 'Only a Project Manager or Boss Koo can reset the sample workspace.' };
         }
 
         const fixture = createLocalServiceDemoFixture();

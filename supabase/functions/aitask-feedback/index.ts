@@ -8,7 +8,7 @@ const allowedOrigins = new Set([
   'http://127.0.0.1:5178',
   'http://127.0.0.1:5181',
 ]);
-const roles = new Set(['Super Admin', 'Admin', 'Staff', 'Client']);
+const roles = new Set(['Super Admin', 'Project Manager', 'HOD', 'Staff', 'Client']);
 const devices = new Set(['Desktop', 'Laptop', 'Tablet', 'Mobile', 'Other']);
 const answerValues = new Set(['pass', 'issue', 'na']);
 const baseQuestionIds = [

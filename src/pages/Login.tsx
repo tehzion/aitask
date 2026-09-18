@@ -19,12 +19,13 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 30;
 
 const DEMO_ACCOUNTS = [
-  { username: 'Admin Demo',            role: 'Admin',       badge: 'bg-red-100 text-red-700' },
+  { username: 'Project Manager Demo',  role: 'Project Manager',       badge: 'bg-red-100 text-red-700' },
   { username: 'UrbanEats Client Demo', role: 'Client',      badge: 'bg-emerald-100 text-emerald-700' },
 ];
 
 const LOCAL_STAFF_DEMO_ACCOUNTS = [
   { username: 'Staff Demo', role: 'Staff', badge: 'bg-blue-100 text-blue-700' },
+  { username: 'HOD Demo', role: 'HOD', badge: 'bg-purple-100 text-purple-700' },
   { username: 'Operation Demo', role: 'Operation', badge: 'bg-amber-100 text-amber-800' },
   { username: 'Account Demo', role: 'Account', badge: 'bg-violet-100 text-violet-800' },
 ];
@@ -214,7 +215,7 @@ const Login: React.FC = () => {
           {isRecovering
             ? 'Enter your account email to receive a secure recovery link.'
             : isRegistering
-            ? 'Fill in your details. An admin will review and approve your account.'
+            ? 'Fill in your details. Boss Koo will review and approve your account.'
             : secureAccounts ? 'Enter your account email and password to access the dashboard.' : 'Enter your username and password to access the dashboard.'}
         </p>
       </div>

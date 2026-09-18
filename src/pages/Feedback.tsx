@@ -19,7 +19,7 @@ import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
 import { useI18n } from '../components/I18nProvider';
 
-const roles: FeedbackRole[] = ['Super Admin', 'Admin', 'Staff', 'Client'];
+const roles: FeedbackRole[] = ['Super Admin', 'Project Manager', 'HOD', 'Staff', 'Client'];
 const devices = ['Desktop', 'Laptop', 'Tablet', 'Mobile', 'Other'];
 const answerOptions: Array<{ value: FeedbackAnswer; en: string; zh: string }> = [
   { value: 'pass', en: 'Pass', zh: '通过' },
@@ -181,7 +181,7 @@ const Feedback: React.FC = () => {
             <div>
               <h1 className="text-2xl font-semibold text-slate-950 sm:text-3xl">{t.title}</h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{t.intro}</p>
-              <p className="mt-3 text-sm font-semibold text-blue-700">{t.deadline}</p>
+              <p className="mt-3 text-sm font-semibold text-slate-700">{t.deadline}</p>
             </div>
           </div>
         </section>

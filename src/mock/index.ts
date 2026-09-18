@@ -7,11 +7,12 @@ const today = new Date();
 
 export const mockUsers: User[] = [
   // Boss
-  { id: 'u-boss', name: 'Boss Koo', password: DEFAULT_USER_PASSWORD, role: 'Admin', departments: ['Management'], department: 'Management', isSuperAdmin: true, avatar: 'https://i.pravatar.cc/150?u=BossKoo' },
+  { id: 'u-boss', name: 'Boss Koo', password: DEFAULT_USER_PASSWORD, role: 'Project Manager', departments: ['Management'], department: 'Management', isSuperAdmin: true, avatar: 'https://i.pravatar.cc/150?u=BossKoo' },
 
   // Demos
-  { id: 'u-admin', name: 'Admin Demo', password: DEFAULT_USER_PASSWORD, role: 'Admin', departments: ['Operation'], department: 'Operation', avatar: 'https://i.pravatar.cc/150?u=AdminDemo' },
+  { id: 'u-admin', name: 'Project Manager Demo', password: DEFAULT_USER_PASSWORD, role: 'Project Manager', departments: ['Operation'], department: 'Operation', avatar: 'https://i.pravatar.cc/150?u=ProjectManagerDemo' },
   { id: 'u-staff-demo-local', name: 'Staff Demo', password: DEFAULT_USER_PASSWORD, role: 'Staff', departments: ['Designer'], department: 'Designer', avatar: 'https://i.pravatar.cc/150?u=StaffDemo' },
+  { id: 'u-hod-demo-local', name: 'HOD Demo', password: DEFAULT_USER_PASSWORD, role: 'HOD', departments: ['Designer'], department: 'Designer', customRoleId: 'builtin-hod', customRoleName: 'HOD', avatar: 'https://i.pravatar.cc/150?u=HodDemo' },
   { id: LOCAL_SERVICE_DEMO_USER_IDS.operation, authUserId: 'local-demo-operation', name: 'Operation Demo', password: DEFAULT_USER_PASSWORD, role: 'Staff', departments: ['Operation'], department: 'Operation', workerType: 'employee', avatar: 'https://i.pravatar.cc/150?u=OperationDemo' },
   { id: LOCAL_SERVICE_DEMO_USER_IDS.account, authUserId: 'local-demo-account', name: 'Account Demo', password: DEFAULT_USER_PASSWORD, role: 'Staff', departments: ['Account & Finance'], department: 'Account & Finance', workerType: 'employee', avatar: 'https://i.pravatar.cc/150?u=AccountDemo' },
   { id: 'u-client-urban', name: 'UrbanEats Client Demo', password: DEFAULT_USER_PASSWORD, role: 'Client', departments: ['Client'], department: 'Client', companyName: 'UrbanEats', avatar: 'https://i.pravatar.cc/150?u=UrbanEatsClient' },

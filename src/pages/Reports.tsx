@@ -129,7 +129,7 @@ const Reports: React.FC = () => {
             <p className="text-sm text-slate-500 mt-1">Detailed breakdown for {scopeLabel}.</p>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto xl:block">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
@@ -174,6 +174,34 @@ const Reports: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="grid gap-3 p-3 xl:hidden">
+          {departmentStats.length === 0 ? (
+            <ChartEmptyState>No department data yet</ChartEmptyState>
+          ) : departmentStats.map(dept => (
+            <article key={dept.name} className="rounded-control border border-line bg-inset/50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Users className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                  <h4 className="min-w-0 break-words text-sm font-semibold text-ink">{dept.name}</h4>
+                </div>
+                <span className="shrink-0 text-sm font-bold text-ink">{dept.completionRate}%</span>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-line/60" aria-label={`${dept.name} on-time rate ${dept.completionRate}%`} role="img">
+                <div
+                  className={`h-full rounded-full ${dept.completionRate >= 80 ? 'bg-emerald-500' : dept.completionRate >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  style={{ width: `${dept.completionRate}%` }}
+                />
+              </div>
+              <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
+                <div><dt className="text-xs text-muted">Total tasks</dt><dd className="mt-0.5 font-semibold text-ink">{dept.total}</dd></div>
+                <div><dt className="text-xs text-muted">On time</dt><dd className="mt-0.5 font-semibold text-emerald-700">{dept.onTime}</dd></div>
+                <div><dt className="text-xs text-muted">Late</dt><dd className="mt-0.5 font-semibold text-red-700">{dept.late}</dd></div>
+                <div><dt className="text-xs text-muted">Open</dt><dd className="mt-0.5 font-semibold text-amber-700">{dept.open}</dd></div>
+                <div><dt className="text-xs text-muted">Untracked</dt><dd className="mt-0.5 font-semibold text-muted">{dept.untracked}</dd></div>
+              </dl>
+            </article>
+          ))}
         </div>
       </div>
       )}

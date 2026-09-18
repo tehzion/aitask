@@ -1,11 +1,11 @@
 import { AppNotification, ClientProfile, CustomRole, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
 import { getMemberDepartments, isMemberInDepartment } from './departments';
 
-export type DashboardPersona = 'boss' | 'admin' | 'operation' | 'account' | 'production' | 'client';
+export type DashboardPersona = 'boss' | 'projectManager' | 'operation' | 'account' | 'production' | 'client';
 
 /**
  * Optional ownership context for scoped-role visibility. When supplied, a
- * Project Manager (Admin) also sees tasks and projects that belong to the
+ * Project Managers also see tasks and projects that belong to the
  * companies they created. Boss Koo is never scoped.
  */
 export type VisibilityScope = {
@@ -101,19 +101,18 @@ export const sanitizeNonSuperAdminPermissions = (permissions: RolePermissions): 
   return sanitized;
 };
 
-// Per-role defaults. Project Managers (role 'Admin') are scoped to the
+// Per-role defaults. Project Managers are scoped to the
 // companies/projects/clients they own, so their defaults intentionally omit
 // viewAllTasks/viewAllClients and any per-member override of those keys is
 // ignored by the scoped visibility functions; Boss Koo always sees everything.
 export const defaultRolePermissions: Record<Role, RolePermissions> = {
-  Admin: makePermissions([
+  'Project Manager': makePermissions([
     'viewDashboard',
     'viewTasks',
     'viewCalendar',
     'viewProjects',
     'viewDeliveryTracker',
     'viewReports',
-    'viewApprovals',
     'viewSettings',
     'createTasks',
     'manageCreatedTasks',
@@ -126,6 +125,20 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'manageServiceCycles',
     'viewAllServiceClients',
     'viewServicePrices',
+  ]),
+  HOD: makePermissions([
+    'viewDashboard',
+    'viewTasks',
+    'viewCalendar',
+    'viewProjects',
+    'viewDeliveryTracker',
+    'viewReports',
+    'viewSettings',
+    'createTasks',
+    'manageCreatedTasks',
+    'createClients',
+    'deleteClients',
+    'viewAssignedServiceClients',
   ]),
   Staff: makePermissions([
     'viewDashboard',
@@ -162,12 +175,12 @@ const routePermission: Record<AppPath, RolePermissionKey> = {
 };
 
 export const isBossKoo = (user: User | null | undefined) => Boolean(user?.isSuperAdmin);
-export const isAdmin = (user: User | null | undefined) => user?.role === 'Admin';
-export const SYSTEM_HOD_ROLE_ID = 'system-hod';
+export const isProjectManager = (user: User | null | undefined) => user?.role === 'Project Manager';
+export const BUILTIN_HOD_ROLE_ID = 'builtin-hod';
 
 export const getDashboardPersona = (user: User | null | undefined): DashboardPersona => {
   if (isBossKoo(user)) return 'boss';
-  if (user?.role === 'Admin') return 'admin';
+  if (user?.role === 'Project Manager') return 'projectManager';
   if (user?.role === 'Client') return 'client';
   const departments = getMemberDepartments(user);
   if (departments.includes('Operation')) return 'operation';
@@ -185,6 +198,7 @@ export const getEffectivePermissions = (
   const customRole = user.customRoleId
     ? customRoles.find(role => role.id === user.customRoleId)
     : undefined;
+  const builtinRole = customRoles.find(role => role.isBuiltin && role.baseRole === user.role);
 
   const directPermissions = user.permissions && Object.keys(user.permissions).length > 0
     ? user.permissions
@@ -193,8 +207,8 @@ export const getEffectivePermissions = (
   // override never silently revokes the role's own grants. Without a custom
   // role it remains the complete effective set, matching the server.
   const source = directPermissions
-    ? (customRole ? { ...customRole.permissions, ...directPermissions } : directPermissions)
-    : (customRole?.permissions || defaultRolePermissions[user.role]);
+    ? (customRole ? { ...customRole.permissions, ...directPermissions } : { ...(builtinRole?.permissions || defaultRolePermissions[user.role]), ...directPermissions })
+    : (customRole?.permissions || builtinRole?.permissions || defaultRolePermissions[user.role]);
   const permissions = makePermissions(
     (Object.keys(permissionLabels) as RolePermissionKey[]).filter(key => (
       source[key] === true
@@ -204,17 +218,19 @@ export const getEffectivePermissions = (
   return sanitizeNonSuperAdminPermissions(permissions);
 };
 
-export const isHodRole = (role: CustomRole | null | undefined) => role?.id === SYSTEM_HOD_ROLE_ID;
+export const isHodRole = (role: CustomRole | null | undefined) => Boolean(role?.isBuiltin && role.baseRole === 'HOD');
 export const isHodUser = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
-  Boolean(user?.role === 'Staff' && user.customRoleId && customRoles.some(role => role.id === user.customRoleId && isHodRole(role)))
+  Boolean(user?.role === 'HOD' || (user?.customRoleId && customRoles.some(role => role.id === user.customRoleId && isHodRole(role))))
 );
 /**
- * True when a Staff member's effective role is limited to their own
+ * True when an internal member's effective role is limited to their own
  * departments — either the built-in HOD role or a custom role that opted into
  * department scoping. Super admins and non-Staff roles are never scoped.
  */
 export const isDepartmentScopedUser = (user: User | null | undefined, customRoles: CustomRole[] = []) => {
-  if (!user || user.role !== 'Staff' || isBossKoo(user)) return false;
+  if (!user || isBossKoo(user)) return false;
+  if (user.role === 'HOD') return true;
+  if (user.role !== 'Staff') return false;
   const customRole = user.customRoleId ? customRoles.find(role => role.id === user.customRoleId) : undefined;
   return isHodRole(customRole) || customRole?.departmentScoped === true;
 };
@@ -224,7 +240,7 @@ export const getAssignableCustomRoles = (userRole: Role, customRoles: CustomRole
 
 export const getRoleDisplayName = (role: Role | null | undefined) => {
   if (!role) return '';
-  return role === 'Admin' ? 'Project Manager' : role;
+  return role;
 };
 
 export const getEffectiveRoleName = (user: User | null | undefined, customRoles: CustomRole[] = []) => {
@@ -282,7 +298,7 @@ export const canOpenServiceClient = (
   const clientKey = getClientKey(clientName);
   if (user.role === 'Client') return getClientKey(user.companyName) === clientKey;
   if (isBossKoo(user)) return true;
-  if (user.role === 'Admin') {
+  if (user.role === 'Project Manager') {
     if (!clientKey) return false;
     const ownsProfile = profiles.some(profile => profile.createdBy === user.id && getClientKey(profile.clientName) === clientKey);
     if (ownsProfile) return true;
@@ -292,7 +308,7 @@ export const canOpenServiceClient = (
     ));
   }
   if (hasPermission(user, 'viewAllServiceClients', customRoles)) return true;
-  if (user.role !== 'Staff' || !hasPermission(user, 'viewAssignedServiceClients', customRoles)) return false;
+  if (!['Staff', 'HOD'].includes(user.role) || !hasPermission(user, 'viewAssignedServiceClients', customRoles)) return false;
   return Boolean(clientKey) && tasks.some(task => task.assignedTo === user.id && getClientKey(task.clientName) === clientKey);
 };
 export const canManageClientProfiles = (
@@ -302,16 +318,16 @@ export const canManageClientProfiles = (
 ) => {
   if (!user) return false;
   if (isBossKoo(user)) return true;
-  if (user.role !== 'Admin') return false;
+  if (user.role !== 'Project Manager') return false;
   if (!clientName) return true;
   const profile = profiles.find(item => getClientKey(item.clientName) === getClientKey(clientName));
   return profile?.createdBy === user.id;
 };
 export const canCreateClientProfiles = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
-  Boolean(user) && (isBossKoo(user) || user.role === 'Admin' || hasPermission(user, 'createClients', customRoles))
+  Boolean(user) && (isBossKoo(user) || user.role === 'Project Manager' || hasPermission(user, 'createClients', customRoles))
 );
 export const canDeleteClientProfiles = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
-  Boolean(user) && (isBossKoo(user) || user.role === 'Admin' || hasPermission(user, 'deleteClients', customRoles))
+  Boolean(user) && (isBossKoo(user) || user.role === 'Project Manager' || hasPermission(user, 'deleteClients', customRoles))
 );
 export const canDeleteClientProfile = (
   user: User | null | undefined,
@@ -320,7 +336,7 @@ export const canDeleteClientProfile = (
   customRoles: CustomRole[] = []
 ) => {
   if (isBossKoo(user)) return true;
-  if (user?.role === 'Admin') {
+  if (user?.role === 'Project Manager') {
     const profile = profiles.find(item => getClientKey(item.clientName) === getClientKey(clientName));
     return profile?.createdBy === user.id;
   }
@@ -336,7 +352,7 @@ export const canEditClientProfile = (
 ) => {
   if (isBossKoo(user)) return true;
   const clientKey = getClientKey(clientName);
-  if (user?.role === 'Admin') {
+  if (user?.role === 'Project Manager') {
     const profile = profiles.find(item => getClientKey(item.clientName) === clientKey);
     if (profile?.createdBy === user.id) return true;
     if (profile) return false;
@@ -344,7 +360,7 @@ export const canEditClientProfile = (
       getClientKey(task.clientName) === clientKey && (task.createdBy === user.id || task.assignedTo === user.id)
     ));
   }
-  if (user?.role !== 'Staff' || !hasPermission(user, 'manageAssignedClients', customRoles)) return false;
+  if (!['Staff', 'HOD'].includes(user?.role || '') || !hasPermission(user, 'manageAssignedClients', customRoles)) return false;
   return Boolean(clientKey) && tasks.some(task => (
     task.assignedTo === user.id && getClientKey(task.clientName) === clientKey
   ));
@@ -376,7 +392,7 @@ export const getVisibleClientNames = (
     ]);
   }
 
-  if (user.role === 'Admin') {
+  if (user.role === 'Project Manager') {
     return collectNames([
       ...(scope.clients || []).filter(client => client.createdBy === user.id).map(client => client.clientName),
       ...getVisibleTasks(user, tasks, customRoles, scope).map(task => task.clientName),
@@ -384,7 +400,7 @@ export const getVisibleClientNames = (
     ]);
   }
 
-  if (user.role !== 'Staff') return [];
+  if (!['Staff', 'HOD'].includes(user.role)) return [];
 
   return collectNames(
     getVisibleTasks(user, tasks, customRoles, scope).map(task => task.clientName)
@@ -405,8 +421,8 @@ export const canAssignTasksToOthers = (
 );
 export const canEditTask = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
   hasPermission(user, 'editTasks', customRoles) ||
-  ((user?.role === 'Staff' || user?.role === 'Admin') && task.assignedTo === user.id) ||
-  ((user?.role === 'Staff' || user?.role === 'Admin') && hasPermission(user, 'manageCreatedTasks', customRoles) && task.createdBy === user.id) ||
+  (['Staff', 'HOD', 'Project Manager'].includes(user?.role || '') && task.assignedTo === user.id) ||
+  (['Staff', 'HOD', 'Project Manager'].includes(user?.role || '') && hasPermission(user, 'manageCreatedTasks', customRoles) && task.createdBy === user.id) ||
   (isDepartmentScopedUser(user, customRoles) && isMemberInDepartment(user, task.department))
 );
 export const canDeleteTask = canEditTask;
@@ -494,8 +510,8 @@ export const getVisibleTasks = (
 ) => {
   if (!user) return [];
   if (user.role === 'Client') return tasks.filter(task => getClientKey(task.clientName) === getClientKey(user.companyName) && task.visibility !== 'internal');
-  if (isBossKoo(user) || (user.role !== 'Admin' && canViewAllTasks(user, customRoles))) return tasks;
-  if (user.role === 'Admin') {
+  if (isBossKoo(user) || (user.role !== 'Project Manager' && canViewAllTasks(user, customRoles))) return tasks;
+  if (user.role === 'Project Manager') {
     // Project Managers are scoped to their own work: tasks they created or are
     // assigned, plus tasks inside the companies/projects they own.
     const clientKeys = ownedClientKeys(user, scope);
@@ -507,7 +523,7 @@ export const getVisibleTasks = (
       || (Boolean(task.projectId) && projectIds.has(task.projectId as string))
     ));
   }
-  if (user.role === 'Staff') {
+  if (['Staff', 'HOD'].includes(user.role)) {
     const canManageCreated = hasPermission(user, 'manageCreatedTasks', customRoles);
     const departmentScoped = isDepartmentScopedUser(user, customRoles);
     return tasks.filter(task => (
@@ -534,7 +550,7 @@ export const getVisibleProjects = (
       .map(task => task.projectId)
       .filter((id): id is string => Boolean(id))
   );
-  if (user.role === 'Admin') {
+  if (user.role === 'Project Manager') {
     const clientKeys = ownedClientKeys(user, scope);
     return projects.filter(project => (
       project.createdBy === user.id
@@ -542,7 +558,7 @@ export const getVisibleProjects = (
       || visibleProjectIds.has(project.id)
     ));
   }
-  if (user.role === 'Staff') {
+  if (['Staff', 'HOD'].includes(user.role)) {
     return projects.filter(project => project.createdBy === user.id || visibleProjectIds.has(project.id));
   }
   return [];
@@ -556,7 +572,7 @@ export const getAssignableProjects = (
   users: User[] = [],
 ) => {
   if (!user) return [];
-  if (user.role !== 'Staff') return getVisibleProjects(user, projects, tasks, customRoles);
+  if (!['Staff', 'HOD'].includes(user.role)) return getVisibleProjects(user, projects, tasks, customRoles);
   return projects.filter(project => canLinkTaskToProject(user, project, tasks, customRoles, users));
 };
 
@@ -576,8 +592,8 @@ export const canLinkTaskToProject = (
 ) => {
   if (!user || user.role === 'Client') return false;
   if (isBossKoo(user)) return true;
-  if (user.role === 'Admin') return project.createdBy === user.id;
-  if (user.role !== 'Staff') return false;
+  if (user.role === 'Project Manager') return project.createdBy === user.id;
+  if (!['Staff', 'HOD'].includes(user.role)) return false;
   if (project.createdBy === user.id) return true;
 
   const linkedTasks = tasks.filter(task => task.projectId === project.id);
@@ -599,7 +615,7 @@ export const isNotificationVisible = (user: User | null | undefined, notificatio
   if (notification.visibleToCurrentUser) return true;
   if (notification.targetUserId && notification.targetUserId === user.id) return true;
   // Supabase RLS note: Boss Koo maps to super_admin, but must still receive admin-scoped operational notices.
-  if (notification.targetRole === 'Admin' && isBossKoo(user)) return true;
+  if (notification.targetRole === 'Project Manager' && isBossKoo(user)) return true;
   if (user.role !== 'Client' && notification.targetRole && notification.targetRole === user.role) return true;
   if (notification.targetClient && user.role === 'Client' && getClientKey(notification.targetClient) === getClientKey(user.companyName)) return true;
   return false;

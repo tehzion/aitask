@@ -225,7 +225,7 @@ const Settings: React.FC = () => {
   const canBypassPasswordReset = mustResetPassword && canUsePasswordResetBypass();
   const bypassActive = currentUser ? hasPasswordResetBypass(currentUser.id) : false;
   const isPasswordSetupOnly = mustResetPassword && !bypassActive;
-  const canResetLocalDemo = !isPasswordSetupOnly && currentUser?.role === 'Admin' && isLocalServiceDemoEnabled();
+  const canResetLocalDemo = !isPasswordSetupOnly && currentUser?.role === 'Project Manager' && isLocalServiceDemoEnabled();
   const secureAccounts = shouldUseSecureSupabase();
   const defaultAccessiblePath = getDefaultAccessiblePath(currentUser, rolePermissions);
   const isSupabaseMode = backendStatus.mode === 'supabase';

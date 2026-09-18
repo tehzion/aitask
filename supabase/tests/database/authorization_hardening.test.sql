@@ -19,8 +19,8 @@ values ('pgtap-authorization-hardening', 'Authorization hardening test workspace
 
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values
-  ('pgtap-authorization-hardening', 'custom_role', 'system-hod', jsonb_build_object(
-    'id', 'system-hod', 'name', 'HOD', 'baseRole', 'Staff', 'isProtected', true, 'departmentScoped', true,
+  ('pgtap-authorization-hardening', 'custom_role', 'builtin-hod', jsonb_build_object(
+    'id', 'builtin-hod', 'name', 'HOD', 'baseRole', 'HOD', 'isProtected', false, 'isBuiltin', true, 'departmentScoped', true,
     'permissions', jsonb_build_object('createTasks', true, 'manageCreatedTasks', true, 'createClients', true, 'deleteClients', true)
   )),
   ('pgtap-authorization-hardening', 'custom_role', 'sparse-role', jsonb_build_object(
@@ -32,9 +32,9 @@ insert into public.aitask_members(
   id, workspace_id, auth_user_id, name, email, role, department, departments,
   is_super_admin, client_name, custom_role_id, permissions
 ) values
-  ('pgtap-hardening-boss', 'pgtap-authorization-hardening', '00000000-0000-0000-0000-000000001001', 'Boss', 'pgtap-hardening-boss@aitask.local', 'Admin', 'Management', array['Management'], true, null, null, '{}'::jsonb),
-  ('pgtap-hardening-pm', 'pgtap-authorization-hardening', '00000000-0000-0000-0000-000000001002', 'PM', 'pgtap-hardening-pm@aitask.local', 'Admin', 'Management', array['Management'], false, null, null, '{}'::jsonb),
-  ('pgtap-hardening-hod', 'pgtap-authorization-hardening', '00000000-0000-0000-0000-000000001003', 'HOD', 'pgtap-hardening-hod@aitask.local', 'Staff', 'Designer', array['Designer'], false, null, 'system-hod', '{}'::jsonb),
+  ('pgtap-hardening-boss', 'pgtap-authorization-hardening', '00000000-0000-0000-0000-000000001001', 'Boss', 'pgtap-hardening-boss@aitask.local', 'Project Manager', 'Management', array['Management'], true, null, null, '{}'::jsonb),
+  ('pgtap-hardening-pm', 'pgtap-authorization-hardening', '00000000-0000-0000-0000-000000001002', 'PM', 'pgtap-hardening-pm@aitask.local', 'Project Manager', 'Management', array['Management'], false, null, null, '{}'::jsonb),
+  ('pgtap-hardening-hod', 'pgtap-authorization-hardening', '00000000-0000-0000-0000-000000001003', 'HOD', 'pgtap-hardening-hod@aitask.local', 'HOD', 'Designer', array['Designer'], false, null, null, '{}'::jsonb),
   ('pgtap-hardening-staff', 'pgtap-authorization-hardening', '00000000-0000-0000-0000-000000001004', 'Staff', 'pgtap-hardening-staff@aitask.local', 'Staff', 'Designer', array['Designer'], false, null, null, '{}'::jsonb),
   ('pgtap-hardening-client', 'pgtap-authorization-hardening', '00000000-0000-0000-0000-000000001005', 'Client', 'pgtap-hardening-client@aitask.local', 'Client', 'Client', array['Client'], false, 'Staff Co', null, '{}'::jsonb),
   ('pgtap-hardening-sparse', 'pgtap-authorization-hardening', '00000000-0000-0000-0000-000000001006', 'Sparse', 'pgtap-hardening-sparse@aitask.local', 'Staff', 'Designer', array['Designer'], false, null, 'sparse-role', '{"viewAllClients":true}'::jsonb);

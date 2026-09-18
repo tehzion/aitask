@@ -311,7 +311,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                 <option value="">Choose a company</option>
                 {clientOptions.map(option => <option key={option.id || option.name} value={option.id}>{option.name}</option>)}
               </select>
-              {clientOptions.length === 0 && <p className="mt-2 text-xs text-amber-700">{canCreateClientProfiles(currentUser, rolePermissions) ? 'Add a client profile first, then continue creating this project.' : 'Ask an administrator to add or assign a company before creating this project.'}</p>}
+              {clientOptions.length === 0 && <p className="mt-2 text-xs text-amber-700">{canCreateClientProfiles(currentUser, rolePermissions) ? 'Add a client profile first, then continue creating this project.' : 'Ask Boss Koo to add or assign a company before creating this project.'}</p>}
             </div>
 
             <div>

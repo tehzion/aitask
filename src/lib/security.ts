@@ -25,7 +25,7 @@ import type {
 import { getTodayInputDate } from './utils';
 import { getLegacyDepartmentMirror, normalizeDepartment, normalizeMemberDepartments } from './departments';
 
-const roles = new Set<Role>(['Admin', 'Staff', 'Client']);
+const roles = new Set<Role>(['Project Manager', 'HOD', 'Staff', 'Client']);
 const priorities = new Set<Priority>(['Low', 'Medium', 'High', 'Urgent']);
 const approvalStatuses = new Set<ClientApprovalStatus>(['Pending', 'Approved', 'Rejected']);
 const recurrenceFrequencies = new Set<RecurrenceFrequency>(['None', 'Daily', 'Weekly', 'Monthly']);
@@ -233,10 +233,14 @@ const parseUser = (value: unknown): User | null => {
   if (!isRecord(value)) return null;
   const id = cleanText(value.id, 160);
   const name = cleanText(value.name, 160);
-  const role = cleanText(value.role, 20) as Role;
+  const rawRole = cleanText(value.role, 40);
+  const rawCustomRoleId = cleanText(value.customRoleId, 160);
+  const isLegacyHod = rawCustomRoleId === 'system-hod' || rawCustomRoleId === 'builtin-hod'
+    || (rawRole === 'Staff' && cleanText(value.customRoleName, 160)?.toLowerCase() === 'hod');
+  const role = (rawRole === 'Admin' ? 'Project Manager' : isLegacyHod ? 'HOD' : rawRole) as Role;
   if (!id || !name || !roles.has(role)) return null;
   const departments = normalizeMemberDepartments(role, value.departments, cleanText(value.department, 80));
-  if (departments.length === 0) return null;
+  if (departments.length === 0 && role !== 'Project Manager') return null;
 
   return {
     id,
@@ -254,8 +258,10 @@ const parseUser = (value: unknown): User | null => {
     companyName: optionalText(value.companyName, 240),
     isSuperAdmin: value.isSuperAdmin === true,
     mustResetPassword: value.mustResetPassword === true,
-    customRoleId: optionalText(value.customRoleId, 160),
-    customRoleName: optionalText(value.customRoleName, 160),
+    // The legacy system-hod/builtin-hod references are normalized away. A
+    // regular editable custom role based on HOD remains assignable.
+    customRoleId: isLegacyHod ? undefined : optionalText(value.customRoleId, 160),
+    customRoleName: isLegacyHod ? undefined : optionalText(value.customRoleName, 160),
     permissions: isRecord(value.permissions) ? value.permissions as User['permissions'] : undefined,
     workerType: ['employee', 'supplier', 'freelancer'].includes(cleanText(value.workerType, 20))
       ? cleanText(value.workerType, 20) as NonNullable<User['workerType']>

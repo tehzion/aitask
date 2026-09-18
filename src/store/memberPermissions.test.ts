@@ -11,7 +11,7 @@ import { useStore } from './index';
 
 const initialState = useStore.getState();
 const boss: User = {
-  id: 'boss', name: 'Boss Koo', role: 'Admin', departments: ['Management'], department: 'Management', isSuperAdmin: true,
+  id: 'boss', name: 'Boss Koo', role: 'Project Manager', departments: ['Management'], department: 'Management', isSuperAdmin: true,
 };
 const staff: User = {
   id: 'staff', name: 'Staff Member', role: 'Staff', departments: ['Designer'], department: 'Designer', version: 1,

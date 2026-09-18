@@ -176,6 +176,18 @@ describe('remote snapshot validation', () => {
     expect(parsed.users[0]?.departments).toEqual(['Video Editor', 'Designer']);
   });
 
+  it('migrates legacy HOD references without stripping real editable HOD custom roles', () => {
+    const parsed = parseWorkspaceSnapshot({
+      users: [
+        { id: 'legacy-hod', name: 'Legacy HOD', role: 'Staff', customRoleId: 'system-hod', department: 'Designer' },
+        { id: 'editable-hod', name: 'Editable HOD', role: 'HOD', customRoleId: 'hod-review', customRoleName: 'HOD Review', department: 'Designer' },
+      ],
+    });
+
+    expect(parsed.users[0]).toMatchObject({ role: 'HOD', customRoleId: undefined, customRoleName: undefined });
+    expect(parsed.users[1]).toMatchObject({ role: 'HOD', customRoleId: 'hod-review', customRoleName: 'HOD Review' });
+  });
+
   it('accepts the new video positions as independent values', () => {
     expect(parseTask({ ...taskFixture, department: 'Video Editor' })?.department).toBe('Video Editor');
     expect(parseTask({ ...taskFixture, department: 'Video Shooting' })?.department).toBe('Video Shooting');

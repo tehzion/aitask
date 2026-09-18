@@ -27,10 +27,10 @@ import {
   getVisibleTasks,
   getUnreadNotifications,
   isNotificationReadByUser,
-  SYSTEM_HOD_ROLE_ID,
+  BUILTIN_HOD_ROLE_ID,
 } from './access';
 
-const admin: User = { id: 'admin-1', name: 'Admin', role: 'Admin', departments: ['Management'], department: 'Management' };
+const admin: User = { id: 'admin-1', name: 'Project Manager', role: 'Project Manager', departments: ['Management'], department: 'Management' };
 const superAdmin: User = { ...admin, id: 'boss-1', name: 'Boss Koo', isSuperAdmin: true };
 const staff: User = { id: 'staff-1', name: 'Staff', role: 'Staff', departments: ['Designer'], department: 'Designer' };
 const otherStaff: User = { id: 'staff-2', name: 'Other Staff', role: 'Staff', departments: ['Video Editor'], department: 'Editor' };
@@ -277,14 +277,17 @@ describe('staff permission matrix', () => {
 
   it('lets an HOD custom role add companies without granting project or rename control', () => {
     const hodRole: CustomRole = {
-      id: SYSTEM_HOD_ROLE_ID,
+      id: BUILTIN_HOD_ROLE_ID,
       name: 'HOD',
-      baseRole: 'Staff',
-      permissions: { ...defaultRolePermissions.Staff, createClients: true },
+      baseRole: 'HOD',
+      isBuiltin: true,
+      isProtected: false,
+      departmentScoped: true,
+      permissions: { ...defaultRolePermissions.HOD, createClients: true },
       createdAt: '2026-07-13T00:00:00.000Z',
       updatedAt: '2026-07-13T00:00:00.000Z',
     };
-    const hod: User = { ...staff, customRoleId: hodRole.id, permissions: {} as User['permissions'] };
+    const hod: User = { ...staff, role: 'HOD', customRoleId: hodRole.id, permissions: {} as User['permissions'] };
 
     expect(canCreateClientProfiles(superAdmin)).toBe(true);
     expect(canCreateClientProfiles(admin)).toBe(true);
@@ -296,14 +299,16 @@ describe('staff permission matrix', () => {
 
   it('lets an HOD custom role delete companies without widening ordinary Staff', () => {
     const hodRole: CustomRole = {
-      id: SYSTEM_HOD_ROLE_ID,
+      id: BUILTIN_HOD_ROLE_ID,
       name: 'HOD',
-      baseRole: 'Staff',
-      permissions: { ...defaultRolePermissions.Staff, deleteClients: true },
+      baseRole: 'HOD',
+      isBuiltin: true,
+      isProtected: false,
+      permissions: { ...defaultRolePermissions.HOD, deleteClients: true },
       createdAt: '2026-07-13T00:00:00.000Z',
       updatedAt: '2026-07-13T00:00:00.000Z',
     };
-    const hod: User = { ...staff, customRoleId: hodRole.id, permissions: {} as User['permissions'] };
+    const hod: User = { ...staff, role: 'HOD', customRoleId: hodRole.id, permissions: {} as User['permissions'] };
 
     expect(canDeleteClientProfiles(superAdmin)).toBe(true);
     expect(canDeleteClientProfiles(admin)).toBe(true);
@@ -312,9 +317,9 @@ describe('staff permission matrix', () => {
     expect(canDeleteClientProfiles(hod, [hodRole])).toBe(true);
   });
 
-  it('gives Admin full operational access while keeping Boss-only keys protected', () => {
+  it('gives Project Managers portfolio operations while keeping Boss-only keys protected', () => {
     const perms = getEffectivePermissions(admin);
-    expect(perms.viewApprovals).toBe(true);
+    expect(perms.viewApprovals).toBe(false);
     expect(perms.createClients).toBe(true);
     expect(perms.deleteClients).toBe(true);
     expect(perms.createProjects).toBe(true);
@@ -329,16 +334,19 @@ describe('staff permission matrix', () => {
 
   it('scopes the HOD role to its own departments for visibility and editing', () => {
     const hodRole: CustomRole = {
-      id: SYSTEM_HOD_ROLE_ID,
+      id: BUILTIN_HOD_ROLE_ID,
       name: 'HOD',
-      baseRole: 'Staff',
-      permissions: { ...defaultRolePermissions.Staff, manageCreatedTasks: true },
+      baseRole: 'HOD',
+      isBuiltin: true,
+      isProtected: false,
+      departmentScoped: true,
+      permissions: { ...defaultRolePermissions.HOD, manageCreatedTasks: true },
       createdAt: '2026-07-13T00:00:00.000Z',
       updatedAt: '2026-07-13T00:00:00.000Z',
     };
     const designTask = makeTask({ id: 'design-dept-task', department: 'Designer', assignedTo: otherStaff.id, createdBy: otherStaff.id });
     const videoTask = makeTask({ id: 'video-dept-task', department: 'Video Editor', assignedTo: otherStaff.id, createdBy: otherStaff.id });
-    const hod: User = { ...staff, customRoleId: hodRole.id, permissions: {} as User['permissions'] };
+    const hod: User = { ...staff, role: 'HOD', customRoleId: hodRole.id, permissions: {} as User['permissions'] };
 
     expect(getVisibleTasks(hod, [designTask, videoTask], [hodRole]).map(task => task.id)).toEqual(['design-dept-task']);
     expect(canEditTask(hod, designTask, [hodRole])).toBe(true);
@@ -414,7 +422,7 @@ describe('staff permission matrix', () => {
   it('uses a Companies dashboard action that matches the member permissions', () => {
     const profileOnly: User = {
       ...admin,
-      permissions: { ...defaultRolePermissions.Admin, manageClientPlans: false },
+      permissions: { ...defaultRolePermissions['Project Manager'], manageClientPlans: false },
     };
     const plansOnly: User = {
       ...staff,
@@ -500,15 +508,17 @@ describe('staff permission matrix', () => {
 
   it('gives the protected HOD scope to created, assigned, and department tasks', () => {
     const hodRole: CustomRole = {
-      id: SYSTEM_HOD_ROLE_ID,
+      id: BUILTIN_HOD_ROLE_ID,
       name: 'HOD',
-      baseRole: 'Staff',
-      isProtected: true,
-      permissions: { ...defaultRolePermissions.Staff, manageCreatedTasks: true },
+      baseRole: 'HOD',
+      isBuiltin: true,
+      isProtected: false,
+      departmentScoped: true,
+      permissions: { ...defaultRolePermissions.HOD, manageCreatedTasks: true },
       createdAt: '2026-09-07T00:00:00.000Z',
       updatedAt: '2026-09-07T00:00:00.000Z',
     };
-    const hod: User = { ...staff, customRoleId: hodRole.id, customRoleName: hodRole.name };
+    const hod: User = { ...staff, role: 'HOD', customRoleId: hodRole.id, customRoleName: hodRole.name };
     const createdAndReassigned = makeTask({ id: 'hod-created', createdBy: hod.id, assignedTo: otherStaff.id });
     const assignedToHod = makeTask({ id: 'hod-assigned', createdBy: otherStaff.id, assignedTo: hod.id });
     const sameDepartment = makeTask({ id: 'hod-unrelated', createdBy: otherStaff.id, assignedTo: otherStaff.id });

@@ -5,7 +5,7 @@ const noticeId = '2026-08-service-operations';
 
 const openAdminWorkspace = async (page: import('@playwright/test').Page) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Use Admin Demo' }).click();
+  await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   if (/\/settings$/.test(page.url())) {
@@ -78,7 +78,7 @@ test('the notice is Chinese, dark-mode readable, and usable on mobile', async ({
     localStorage.setItem('aitask-color-theme', 'dark');
   });
   await page.reload();
-  await page.getByRole('button', { name: 'Use Admin Demo' }).click();
+  await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('密码').fill('password123');
   await page.getByRole('button', { name: '进入仪表板' }).click();
   if (/\/settings$/.test(page.url())) {

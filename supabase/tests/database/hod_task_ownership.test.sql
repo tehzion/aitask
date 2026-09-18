@@ -8,7 +8,7 @@ select is(
    from public.aitask_entities
    where workspace_id = 'aitask-main'
      and entity_type = 'custom_role'
-     and entity_id = 'system-hod'),
+     and entity_id = 'builtin-hod'),
   'true',
   'the migration provisions the protected HOD role'
 );
@@ -27,9 +27,9 @@ values ('pgtap-hod-authorization', 'HOD authorization test workspace');
 
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values (
-  'pgtap-hod-authorization', 'custom_role', 'system-hod',
+  'pgtap-hod-authorization', 'custom_role', 'builtin-hod',
   jsonb_build_object(
-    'id', 'system-hod', 'name', 'HOD', 'baseRole', 'Staff', 'isProtected', true,
+    'id', 'builtin-hod', 'name', 'HOD', 'baseRole', 'HOD', 'isProtected', false, 'isBuiltin', true, 'departmentScoped', true,
     'permissions', jsonb_build_object('createTasks', true, 'manageCreatedTasks', true, 'createProjects', true),
     'createdAt', now(), 'updatedAt', now()
   )
@@ -39,10 +39,10 @@ insert into public.aitask_members(
   id, workspace_id, auth_user_id, name, email, role, department, departments,
   custom_role_id, custom_role_name, is_super_admin
 ) values
-  ('pgtap-hod', 'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000920', 'HOD Actor', 'pgtap-hod@aitask.local', 'Staff', 'Designer', array['Designer'], 'system-hod', 'HOD', false),
+  ('pgtap-hod', 'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000920', 'HOD Actor', 'pgtap-hod@aitask.local', 'HOD', 'Designer', array['Designer'], null, null, false),
   ('pgtap-hod-staff', 'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000921', 'Assigned Staff', 'pgtap-hod-staff@aitask.local', 'Staff', 'Designer', array['Designer'], null, null, false),
-  ('pgtap-hod-admin', 'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000922', 'Scoped Admin', 'pgtap-hod-admin@aitask.local', 'Admin', 'Management', array['Management'], null, null, false),
-  ('pgtap-hod-boss', 'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000923', 'Boss Koo', 'pgtap-hod-boss@aitask.local', 'Admin', 'Management', array['Management'], null, null, true);
+  ('pgtap-hod-admin', 'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000922', 'Scoped Admin', 'pgtap-hod-admin@aitask.local', 'Project Manager', 'Management', array['Management'], null, null, false),
+  ('pgtap-hod-boss', 'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000923', 'Boss Koo', 'pgtap-hod-boss@aitask.local', 'Project Manager', 'Management', array['Management'], null, null, true);
 
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values
@@ -230,9 +230,9 @@ select is(
   (public.aitask_execute_command(
     'pgtap-hod-authorization', gen_random_uuid(), 'role.manage',
     jsonb_build_array(jsonb_build_object(
-      'kind', 'entity', 'action', 'update', 'entityType', 'custom_role', 'entityId', 'system-hod',
-      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'system-hod'),
-      'data', (select data || jsonb_build_object('description', 'changed') from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'system-hod')
+      'kind', 'entity', 'action', 'update', 'entityType', 'custom_role', 'entityId', 'builtin-hod',
+      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'builtin-hod'),
+      'data', (select data || jsonb_build_object('description', 'changed') from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'builtin-hod')
     ))
   ) ->> 'ok')::boolean,
   true,
@@ -242,9 +242,9 @@ select is(
   (public.aitask_execute_command(
     'pgtap-hod-authorization', gen_random_uuid(), 'role.manage',
     jsonb_build_array(jsonb_build_object(
-      'kind', 'entity', 'action', 'update', 'entityType', 'custom_role', 'entityId', 'system-hod',
-      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'system-hod'),
-      'data', (select data || jsonb_build_object('name', 'Not HOD') from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'system-hod')
+      'kind', 'entity', 'action', 'update', 'entityType', 'custom_role', 'entityId', 'builtin-hod',
+      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'builtin-hod'),
+      'data', (select data || jsonb_build_object('name', 'Not HOD') from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'builtin-hod')
     ))
   ) ->> 'ok')::boolean,
   false,
@@ -254,8 +254,8 @@ select is(
   (public.aitask_execute_command(
     'pgtap-hod-authorization', gen_random_uuid(), 'role.manage',
     jsonb_build_array(jsonb_build_object(
-      'kind', 'entity', 'action', 'delete', 'entityType', 'custom_role', 'entityId', 'system-hod',
-      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'system-hod')
+      'kind', 'entity', 'action', 'delete', 'entityType', 'custom_role', 'entityId', 'builtin-hod',
+      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'custom_role' and entity_id = 'builtin-hod')
     ))
   ) ->> 'ok')::boolean,
   false,
@@ -267,7 +267,7 @@ select is(
     jsonb_build_array(jsonb_build_object(
       'kind', 'entity', 'action', 'update', 'entityType', 'member', 'entityId', 'pgtap-hod-admin',
       'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'member' and entity_id = 'pgtap-hod-admin'),
-      'data', (select data || jsonb_build_object('customRoleId', 'system-hod', 'customRoleName', 'HOD') from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'member' and entity_id = 'pgtap-hod-admin')
+      'data', (select data || jsonb_build_object('customRoleId', 'builtin-hod', 'customRoleName', 'HOD') from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'member' and entity_id = 'pgtap-hod-admin')
     ))
   ) ->> 'ok')::boolean,
   false,

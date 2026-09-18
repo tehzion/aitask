@@ -30,7 +30,7 @@ test('the interface can switch between English and Simplified Chinese and rememb
 
 test('the client profile dialog localizes its staged-save state in Chinese', async ({ page }) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Use Admin Demo' }).click();
+  await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(/\/(?:settings)?$/);
@@ -49,7 +49,7 @@ test('the client profile dialog localizes its staged-save state in Chinese', asy
 
 test('user-authored task content stays exactly as typed in Chinese mode', async ({ page }) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Use Admin Demo' }).click();
+  await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(/\/(?:settings)?$/);
@@ -107,7 +107,7 @@ test('user-authored task content stays exactly as typed in Chinese mode', async 
 
 test('client portal and workspace keep user-authored names untouched in Chinese mode', async ({ page }) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Use Admin Demo' }).click();
+  await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(/\/(?:settings)?$/);

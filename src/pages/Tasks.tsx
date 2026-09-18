@@ -226,14 +226,14 @@ const TasksWorkspace: React.FC = () => {
   }, [searchTerm, filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority, dateFrom, dateTo, projectIdFilter, clientRouteFilter, taskIdFilter, assigneeRouteFilter, periodRouteFilter]);
 
   const tasks = useMemo(
-    () => getVisibleTasks(currentUser, allTasks, rolePermissions),
-    [allTasks, currentUser, rolePermissions]
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
+    [allTasks, clientProfiles, currentUser, projects, rolePermissions]
   );
   const isClientUser = currentUser?.role === 'Client';
 
   const visibleProjects = useMemo(
-    () => getVisibleProjects(currentUser, projects, allTasks, rolePermissions),
-    [allTasks, currentUser, projects, rolePermissions]
+    () => getVisibleProjects(currentUser, projects, allTasks, rolePermissions, { clients: clientProfiles, projects }),
+    [allTasks, clientProfiles, currentUser, projects, rolePermissions]
   );
 
   const visibleClientKeys = useMemo(() => new Set(

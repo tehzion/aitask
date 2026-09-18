@@ -13,15 +13,15 @@ const initialState = useStore.getState();
 const boss: User = {
   id: 'boss-departments',
   name: 'Boss Koo',
-  role: 'Admin',
+  role: 'Project Manager',
   departments: ['Management'],
   isSuperAdmin: true,
 };
 
 const admin: User = {
   id: 'admin-departments',
-  name: 'Admin',
-  role: 'Admin',
+  name: 'Project Manager',
+  role: 'Project Manager',
   departments: ['Management'],
 };
 

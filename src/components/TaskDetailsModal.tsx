@@ -330,7 +330,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                       <select
                         aria-label="Task status"
                         disabled={isSubmitting}
-                        className={`text-sm pl-3 pr-7 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none shadow-sm disabled:cursor-not-allowed disabled:opacity-60 ${getStatusColor(task.status)}`}
+                        className={`min-h-11 text-sm pl-3 pr-7 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none shadow-sm disabled:cursor-not-allowed disabled:opacity-60 ${getStatusColor(task.status)}`}
                         value={task.status}
                         onChange={async (e) => {
                           if (isSubmitting) return;
@@ -511,7 +511,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                     </div>
                   )}
                   <div className="flex justify-end">
-                    <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
+                    <button type="submit" disabled={isSubmitting} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
                       <Save className="h-4 w-4" /> {isSubmitting ? 'Saving...' : 'Save Changes'}
                     </button>
                   </div>
@@ -639,7 +639,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                         value={attachmentLink}
                         onChange={(e) => setAttachmentLink(e.target.value)}
                         placeholder="Attachment URL"
-                        className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
+                        className="min-h-11 w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                       />
                       <div className="flex gap-2">
                         <input
@@ -647,9 +647,9 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                           value={attachmentName}
                           onChange={(e) => setAttachmentName(e.target.value)}
                           placeholder="Attachment label"
-                          className="flex-1 bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
+                          className="min-h-11 flex-1 bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                         />
-                      <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                        <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
                           Save
                         </button>
                       </div>
@@ -666,9 +666,9 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                     onChange={(e) => setRevisionNote(e.target.value)}
                     rows={2}
                     placeholder="Optional revision note..."
-                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 outline-none shadow-sm resize-none"
+                    className="min-h-11 w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 outline-none shadow-sm resize-none"
                   />
-                  <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
+                  <button type="submit" disabled={isSubmitting} className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
                     <RotateCcw className="w-4 h-4" /> {isSubmitting ? 'Requesting...' : 'Request Revision'}
                   </button>
                 </form>
@@ -687,13 +687,13 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
                     onChange={(e) => setApprovalNote(e.target.value)}
                     rows={2}
                     placeholder="Optional approval or revision note..."
-                    className="w-full bg-white border border-emerald-200 text-slate-900 text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block p-3 outline-none shadow-sm resize-none"
+                    className="min-h-11 w-full bg-white border border-emerald-200 text-slate-900 text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block p-3 outline-none shadow-sm resize-none"
                   />
                   <div className="flex gap-2">
-                    <button disabled={isSubmitting} onClick={() => handleClientReview('Approved')} type="button" className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
+                    <button disabled={isSubmitting} onClick={() => handleClientReview('Approved')} type="button" className="min-h-11 flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
                       <CheckCircle2 className="w-4 h-4" /> {isSubmitting ? 'Saving...' : 'Approve'}
                     </button>
-                    <button disabled={isSubmitting} onClick={() => handleClientReview('Rejected')} type="button" className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-2 text-sm font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
+                    <button disabled={isSubmitting} onClick={() => handleClientReview('Rejected')} type="button" className="min-h-11 flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-2 text-sm font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
                       <XCircle className="w-4 h-4" /> Request changes
                     </button>
                   </div>

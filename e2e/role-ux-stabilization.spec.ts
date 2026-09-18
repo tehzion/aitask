@@ -86,7 +86,7 @@ test('Staff collapsed navigation is labelled and mobile layout remains accessibl
   await expect(page.locator('#staff-more-menu')).toHaveCount(1);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Open more staff actions' }).click();
+  await page.getByRole('button', { name: 'Open more destinations' }).click();
   await expect(page.getByRole('button', { name: 'Create task' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 

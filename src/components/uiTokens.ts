@@ -7,7 +7,7 @@ export const tableShell = 'overflow-hidden rounded-panel bg-surface ring-1 ring-
 export const tableHeader = 'bg-inset/90 text-xs font-semibold text-muted';
 export const filterBar = 'rounded-panel bg-inset/80 p-3 ring-1 ring-line/70 sm:p-4';
 export const inputBase = [
-  'w-full rounded-control border border-line bg-surface text-sm text-ink shadow-none',
+  'min-h-11 w-full rounded-control border border-line bg-surface text-sm text-ink shadow-none',
   'outline-none transition-[border-color,box-shadow,background-color] duration-160',
   'focus:border-accent focus:ring-2 focus:ring-accent/15',
   'placeholder:text-muted/70',

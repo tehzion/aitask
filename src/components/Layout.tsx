@@ -11,7 +11,7 @@ import { useStore } from '../store';
 import { useNotificationReadActions } from '../hooks/useNotificationReadActions';
 import { canAccessPath, canCreateTasks, getUnreadNotifications } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
-import { LayoutDashboard, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw, Settings as SettingsIcon, UserPlus, Menu, Users } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Bell, X, FileText, CheckCircle2, Info, AlertCircle, RefreshCw, RotateCcw, Menu, Users } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '../lib/utils';
 import { notificationRouteToPath } from '../lib/security';
@@ -189,8 +189,11 @@ const Layout: React.FC = () => {
 
   const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : unreadNotifs.length;
   const previewNotifications = unreadNotifs.slice(0, 5);
-  const isStaff = currentUser?.role === 'Staff';
+  const isStaff = currentUser?.role === 'Staff' || currentUser?.role === 'HOD';
   const isClient = currentUser?.role === 'Client';
+  // Keep the bottom bar focused on the highest-frequency destinations. The
+  // complete role-specific navigation remains available in the More drawer;
+  // this prevents manager roles from producing an unusable six-item bar.
   const mobileNavItems = useMemo(() => isStaff
     ? [
         { path: '/', label: 'My work', icon: LayoutDashboard },
@@ -203,17 +206,12 @@ const Layout: React.FC = () => {
           { path: '/clients', label: 'Deliveries', icon: Users },
           { path: '/notifications', label: 'Inbox', icon: Bell },
         ].filter(item => item.path === '/notifications' || canAccessPath(currentUser, item.path, rolePermissions))
-    : [
-        { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-        { path: '/clients', label: 'Clients', icon: Users },
-        { path: '/calendar', label: 'Calendar', icon: CalendarDays },
-        ...(canAccessPath(currentUser, '/approvals', rolePermissions)
-          ? [{ path: '/approvals', label: 'Approvals', icon: UserPlus }]
-          : []),
-        ...(canAccessPath(currentUser, '/settings', rolePermissions)
-          ? [{ path: '/settings', label: 'Settings', icon: SettingsIcon }]
-          : []),
-      ].filter(item => canAccessPath(currentUser, item.path, rolePermissions)), [currentUser, isClient, isStaff, rolePermissions]);
+      : [
+          { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+          { path: '/clients', label: 'Clients', icon: Users },
+          { path: '/calendar', label: 'Calendar', icon: CalendarDays },
+          { path: '/notifications', label: 'Inbox', icon: Bell },
+        ].filter(item => item.path === '/notifications' || canAccessPath(currentUser, item.path, rolePermissions)), [currentUser, isClient, isStaff, rolePermissions]);
   const canOpenSettings = Boolean(currentUser?.mustResetPassword)
     || canAccessPath(currentUser, '/settings', rolePermissions);
 
@@ -295,7 +293,7 @@ const Layout: React.FC = () => {
                     type="button"
                     onClick={() => pullBackendNow({ silent: false })}
                     disabled={backend.isPulling || backend.isSaving}
-                    className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <RefreshCw className={cn('h-4 w-4', backend.isPulling && 'animate-spin')} />
                     Refresh
@@ -307,7 +305,7 @@ const Layout: React.FC = () => {
                       type="button"
                       onClick={() => void retryPendingSave()}
                       disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
-                      className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <RotateCcw className="h-4 w-4" />
                       Retry my changes
@@ -316,7 +314,7 @@ const Layout: React.FC = () => {
                       type="button"
                       onClick={() => void discardMutation()}
                       disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
-                      className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <X className="h-4 w-4" />
                       Use latest
@@ -326,7 +324,7 @@ const Layout: React.FC = () => {
                 {canOpenSettings && (
                   <Link
                     to="/settings"
-                    className="inline-flex min-h-9 items-center justify-center rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
                   >
                     Open Settings
                   </Link>
@@ -339,7 +337,7 @@ const Layout: React.FC = () => {
           ref={mainRef}
           id="main-content"
           tabIndex={-1}
-          className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-canvas p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none sm:p-6 md:pb-6 lg:p-8"
+          className="min-w-0 flex-1 scroll-mt-20 scroll-pb-[calc(5rem+env(safe-area-inset-bottom))] overflow-x-hidden overflow-y-auto bg-canvas p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none sm:p-6 md:pb-6 lg:p-8"
         >
           <Outlet context={{ notificationReadActions }} />
         </main>
@@ -366,37 +364,15 @@ const Layout: React.FC = () => {
             );
           })}
 
-          {isStaff || isClient ? (
-            <button
-              type="button"
-              onClick={openMobileMenu}
-              aria-label={isClient ? 'Open more client destinations' : 'Open more staff actions'}
-              className="flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors hover:text-accent"
-            >
-              <Menu className="mb-0.5 h-5 w-5" />
-              <span className="text-[10px]">More</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setIsMobileNotifOpen(true)}
-              aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
-              className={cn(
-                "relative flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors",
-                isMobileNotifOpen && "font-semibold text-accent"
-              )}
-            >
-              <div className="relative">
-                <Bell className="mb-0.5 h-5 w-5" />
-                {unreadCount > 0 && (
-                  <span className="absolute -right-1.5 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-surface bg-accent text-[8px] font-black text-white">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
-              </div>
-              <span className="text-[10px]">Notifications</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={openMobileMenu}
+            aria-label="Open more destinations"
+            className="flex h-16 flex-1 flex-col items-center justify-center text-slate-500 transition-colors hover:text-accent"
+          >
+            <Menu className="mb-0.5 h-5 w-5" />
+            <span className="text-[10px]">More</span>
+          </button>
         </nav>
       </div>
 

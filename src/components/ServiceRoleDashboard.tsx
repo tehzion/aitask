@@ -85,7 +85,7 @@ const ServiceRoleDashboard = () => {
   const revisions = scopeTasks.filter(task => task.revisionCount > 0 && !task.isCompleted);
   const completed = scopeTasks.filter(task => task.isCompleted);
   const renewalPlans = activePlans.filter(plan => plan.contractEndDate).sort((a, b) => (a.contractEndDate || '').localeCompare(b.contractEndDate || ''));
-  const workers = store.users.filter(user => user.role === 'Staff').map(user => ({
+  const workers = store.users.filter(user => user.role === 'Staff' || user.role === 'HOD').map(user => ({
     user,
     open: serviceTasks.filter(task => task.assignedTo === user.id && !task.isCompleted).length,
     completed: serviceTasks.filter(task => task.assignedTo === user.id && task.isCompleted).length,
@@ -134,6 +134,39 @@ const ServiceRoleDashboard = () => {
     <WorkbenchHeader id="account-workbench-title" title="Account & Finance workbench" description="Client packages, internal monthly management fees, renewals and production output." />
     <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label="Monthly management value" value={canSeePrices ? formatMoney(contractedMonthly) : 'Restricted'} icon={WalletCards} detail={`${activePlans.length} active client package${activePlans.length === 1 ? '' : 's'}.`} /><StatGroup className="grid-cols-3"><CompactStat label="Active packages" value={activePlans.length} icon={UsersRound} /><CompactStat label="Contract reminders" value={renewalPlans.length} icon={CalendarDays} tone="warning" /><CompactStat label="Delivered outputs" value={delivered.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
     <div className="grid gap-4 xl:grid-cols-2"><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">Client package & renewal</h3></div><div className="divide-y divide-line/60">{activePlans.map(plan => { const contractEnd = parseOptionalDate(plan.contractEndDate); return <DataRow key={plan.id} titleI18nSkip={false} descriptionI18nSkip={false} title={<Link to={`/clients/${encodeURIComponent(plan.clientId)}`} className="hover:text-accent"><span data-i18n-skip>{plan.clientName}</span></Link>} description={<><span data-i18n-skip>{plan.name}</span> · {t('contract reminder')} {contractEnd ? formatLocalizedDate(contractEnd, locale) : t('not set')}</>} action={canSeePrices ? <span className="calm-number text-sm font-semibold text-ink">{formatMoney(store.servicePricingSnapshots.find(item => item.parentId === plan.id)?.totalMinor || 0)}</span> : undefined} />; })}</div></Surface><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">Employee / supplier / freelancer output</h3></div><div className="divide-y divide-line/60">{workers.map(item => <DataRow key={item.user.id} titleI18nSkip={false} descriptionI18nSkip={false} title={<span data-i18n-skip>{item.user.name}</span>} description={<span data-i18n-skip>{item.user.workerType || 'employee'}</span>} action={<span className="calm-number text-xs text-muted">{item.completed} tasks · {item.delivered} delivered</span>} />)}</div></Surface></div>
+  </section>;
+
+  if (persona === 'projectManager') return <section className="space-y-5" aria-labelledby="portfolio-workbench-title">
+    <WorkbenchHeader id="portfolio-workbench-title" title="Portfolio delivery overview" description="Owned and visible portfolio delivery, workload, output and contracted monthly value. Other portfolios remain outside your scope." />
+    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label="Open delivery tasks" value={scopeTasks.filter(task => !task.isCompleted).length} icon={Clock3} detail={`${dueToday.length} due today · ${overdue.length} overdue in your portfolio.`} /><StatGroup className="grid-cols-3"><CompactStat label="Overdue delivery" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Waiting review" value={waitingInternal.length + waitingClient.length} icon={FileCheck2} tone="warning" /><CompactStat label="Active companies" value={activePlans.length} icon={UsersRound} /></StatGroup></div>
+    <div className="grid gap-4 xl:grid-cols-2"><TaskQueue title="Due today / overdue" tasks={[...overdue, ...dueToday].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty="No urgent portfolio delivery work." accent /><TaskQueue title="Waiting review" tasks={[...waitingInternal, ...waitingClient]} empty="No portfolio review work is waiting." /></div>
+    <Surface className="overflow-hidden">
+      <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
+        <div><h3 className="font-semibold text-ink">Monthly deliverables</h3><p className="mt-1 text-sm text-muted">Current cycle delivery progress for each active company.</p></div>
+        <StatusChip tone="slate">{activeCompanies.length}</StatusChip>
+      </div>
+      <div className="divide-y divide-line/60">
+        {activeCompanies.map(item => (
+          <div key={item.clientId} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
+            <div className="min-w-0">
+              <Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="truncate text-sm font-semibold text-ink hover:text-accent">{item.clientName}</Link>
+              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t('No published cycle for this month')}</>}</p>
+            </div>
+            <div className="min-w-0">
+              <ProgressBar className="mb-1.5" label={`Deliverables ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />
+              <div className="flex flex-wrap gap-1.5 text-[11px] text-muted">
+                <StatusChip tone="emerald">{item.delivered} Delivered</StatusChip>
+                <StatusChip tone="blue">{item.ready} Ready</StatusChip>
+                <StatusChip tone="indigo">{item.inProgress} In progress</StatusChip>
+                <StatusChip tone="slate">{item.planned} Planned</StatusChip>
+              </div>
+            </div>
+          </div>
+        ))}
+        {activeCompanies.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">No active companies yet.</p>}
+      </div>
+    </Surface>
+    <Surface variant="inset" className="flex flex-wrap items-center justify-between gap-3 p-5"><div><p className="calm-eyebrow">Portfolio commercial context</p><p className="mt-1 text-sm text-muted">Contracted value is limited to active plans inside your visible portfolio.</p></div><p className="calm-number text-2xl font-semibold text-ink">{formatMoney(contractedMonthly)}</p></Surface>
   </section>;
 
   return <section className="space-y-5" aria-labelledby="management-workbench-title">

@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle, ArrowRight, Paperclip, RotateCcw } from 'lucide-react';
-import type { Task } from '../types';
+import type { Task, User } from '../types';
 import { getRelativeDueDateString } from '../lib/utils';
 import { ProgressBar, StatusChip } from './ui';
 
@@ -15,15 +15,18 @@ const statusTone = (task: Task) => {
 interface StaffWorkItemProps {
   task: Task;
   allTasks: Task[];
+  users?: User[];
   onOpen: (task: Task) => void;
   emphasized?: boolean;
 }
 
-const StaffWorkItem: React.FC<StaffWorkItemProps> = ({ task, allTasks, onOpen, emphasized = false }) => {
+const StaffWorkItem: React.FC<StaffWorkItemProps> = ({ task, allTasks, users = [], onOpen, emphasized = false }) => {
   const incompletePredecessors = (task.predecessorTaskIds || []).filter(id => (
     allTasks.some(item => item.id === id && !item.isCompleted && item.status !== 'Completed')
   ));
   const isRevision = task.revisionCount > 0 && !task.isCompleted;
+  const assignee = users.find(user => user.id === task.assignedTo)?.name;
+  const creator = users.find(user => user.id === task.createdBy)?.name;
 
   return (
     <button
@@ -39,6 +42,10 @@ const StaffWorkItem: React.FC<StaffWorkItemProps> = ({ task, allTasks, onOpen, e
         </span>
         <span data-i18n-skip className="mt-1 block truncate text-sm text-muted">{task.clientName}{task.projectName ? ` · ${task.projectName}` : ''}</span>
         <span className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-muted">
+          {task.department && <span data-i18n-skip>{task.department}</span>}
+          {assignee && <span data-i18n-skip>Assigned: {assignee}</span>}
+          {!task.assignedTo && <span>Unassigned</span>}
+          {creator && <span data-i18n-skip>Created by: {creator}</span>}
           <span>{getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}</span>
           {isRevision && <span className="inline-flex items-center gap-1 text-amber-700"><RotateCcw className="h-3.5 w-3.5" />Revision {task.revisionCount}</span>}
           {incompletePredecessors.length > 0 && <span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />{incompletePredecessors.length} blocker{incompletePredecessors.length === 1 ? '' : 's'}</span>}

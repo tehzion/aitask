@@ -18,9 +18,9 @@ values ('pgtap-pm-ownership', 'Project Manager ownership test workspace');
 insert into public.aitask_members(
   id, workspace_id, auth_user_id, name, email, role, department, departments, permissions, is_super_admin
 ) values
-  ('pgtap-boss-owner', 'pgtap-pm-ownership', '00000000-0000-0000-0000-000000000917', 'Boss Owner', 'pgtap-boss-owner@aitask.local', 'Admin', 'Management', array['Management'], '{}'::jsonb, true),
-  ('pgtap-pm-one', 'pgtap-pm-ownership', '00000000-0000-0000-0000-000000000918', 'PM One', 'pgtap-pm-one@aitask.local', 'Admin', 'Management', array['Management'], '{}'::jsonb, false),
-  ('pgtap-pm-two', 'pgtap-pm-ownership', '00000000-0000-0000-0000-000000000919', 'PM Two', 'pgtap-pm-two@aitask.local', 'Admin', 'Management', array['Management'], '{}'::jsonb, false),
+  ('pgtap-boss-owner', 'pgtap-pm-ownership', '00000000-0000-0000-0000-000000000917', 'Boss Owner', 'pgtap-boss-owner@aitask.local', 'Project Manager', 'Management', array['Management'], '{}'::jsonb, true),
+  ('pgtap-pm-one', 'pgtap-pm-ownership', '00000000-0000-0000-0000-000000000918', 'PM One', 'pgtap-pm-one@aitask.local', 'Project Manager', 'Management', array['Management'], '{}'::jsonb, false),
+  ('pgtap-pm-two', 'pgtap-pm-ownership', '00000000-0000-0000-0000-000000000919', 'PM Two', 'pgtap-pm-two@aitask.local', 'Project Manager', 'Management', array['Management'], '{}'::jsonb, false),
   ('pgtap-pm-staff', 'pgtap-pm-ownership', '00000000-0000-0000-0000-000000000920', 'PM Staff', 'pgtap-pm-staff@aitask.local', 'Staff', 'Designer', array['Designer'], '{}'::jsonb, false);
 
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)

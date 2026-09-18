@@ -50,9 +50,14 @@ const RoleRoute: React.FC<{ path: string; children: React.ReactNode }> = ({ path
   const rolePermissions = useStore((state) => state.rolePermissions);
   const isRequiredAccountSetup = path === '/settings'
     && Boolean(currentUser?.mustResetPassword);
-  return canAccessPath(currentUser, path, rolePermissions) || isRequiredAccountSetup
-    ? <>{children}</>
-    : <AccessDenied />;
+  if (canAccessPath(currentUser, path, rolePermissions) || isRequiredAccountSetup) return <>{children}</>;
+  return (
+    <AccessDenied
+      message={path === '/approvals'
+        ? 'Approvals are restricted to Boss Koo. Your role can continue in its own operational workspace.'
+        : undefined}
+    />
+  );
 };
 
 function App() {

@@ -138,7 +138,7 @@ const collectSourceFiles = (dir: string): string[] => {
 
 describe('Chinese translation coverage guards', () => {
   it('keeps the corrected role and service terminology consistent', () => {
-    expect(translateUiText('Admin', 'zh')).toBe('项目经理');
+    expect(translateUiText('Project Manager', 'zh')).toBe('项目经理');
     expect(translateUiText('Project Manager', 'zh')).toBe('项目经理');
     expect(translateUiText('Revision', 'zh')).toBe('修订');
     expect(translateUiText('Revisions', 'zh')).toBe('修订');

@@ -19,9 +19,9 @@ values ('pgtap-pm-security', 'Project Manager member security test workspace');
 insert into public.aitask_members(
   id, workspace_id, auth_user_id, name, email, role, department, departments, permissions, is_super_admin
 ) values
-  ('pgtap-sec-boss', 'pgtap-pm-security', '00000000-0000-0000-0000-000000000921', 'Boss', 'pgtap-sec-boss@aitask.local', 'Admin', 'Management', array['Management'], '{}'::jsonb, true),
-  ('pgtap-sec-pm-one', 'pgtap-pm-security', '00000000-0000-0000-0000-000000000922', 'PM One', 'pgtap-sec-pm1@aitask.local', 'Admin', 'Management', array['Management'], '{}'::jsonb, false),
-  ('pgtap-sec-pm-two', 'pgtap-pm-security', '00000000-0000-0000-0000-000000000923', 'PM Two', 'pgtap-sec-pm2@aitask.local', 'Admin', 'Management', array['Management'], '{}'::jsonb, false),
+  ('pgtap-sec-boss', 'pgtap-pm-security', '00000000-0000-0000-0000-000000000921', 'Boss', 'pgtap-sec-boss@aitask.local', 'Project Manager', 'Management', array['Management'], '{}'::jsonb, true),
+  ('pgtap-sec-pm-one', 'pgtap-pm-security', '00000000-0000-0000-0000-000000000922', 'PM One', 'pgtap-sec-pm1@aitask.local', 'Project Manager', 'Management', array['Management'], '{}'::jsonb, false),
+  ('pgtap-sec-pm-two', 'pgtap-pm-security', '00000000-0000-0000-0000-000000000923', 'PM Two', 'pgtap-sec-pm2@aitask.local', 'Project Manager', 'Management', array['Management'], '{}'::jsonb, false),
   ('pgtap-sec-staff', 'pgtap-pm-security', '00000000-0000-0000-0000-000000000924', 'Staff', 'pgtap-sec-staff@aitask.local', 'Staff', 'Designer', array['Designer'], '{}'::jsonb, false),
   ('pgtap-sec-hod', 'pgtap-pm-security', '00000000-0000-0000-0000-000000000925', 'HOD', 'pgtap-sec-hod@aitask.local', 'Staff', 'Designer', array['Designer'], '{"deleteClients": true}'::jsonb, false);
 
@@ -56,7 +56,7 @@ select is(
     'pgtap-pm-security', gen_random_uuid(), 'workspace.patch',
     jsonb_build_array(jsonb_build_object(
       'kind', 'member', 'action', 'update', 'entityType', 'member', 'entityId', 'pgtap-sec-pm-one',
-      'data', '{"id":"pgtap-sec-pm-one","name":"PM One","email":"pgtap-sec-pm1@aitask.local","role":"Admin","department":"Management","is_super_admin":true,"must_reset_password":false,"permissions":{}}'::jsonb,
+      'data', '{"id":"pgtap-sec-pm-one","name":"PM One","email":"pgtap-sec-pm1@aitask.local","role":"Project Manager","department":"Management","is_super_admin":true,"must_reset_password":false,"permissions":{}}'::jsonb,
       'expectedVersion', (select version from public.aitask_members where workspace_id = 'pgtap-pm-security' and id = 'pgtap-sec-pm-one')
     ))
   ) ->> 'ok')::boolean,

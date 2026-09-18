@@ -1190,7 +1190,7 @@ export const saveSecureMemberDepartments = async (
   requestedDepartments: Department[],
 ): Promise<MutationResult<MemberDepartmentsResponse>> => {
   const departments = normalizeMemberDepartments(member.role, requestedDepartments);
-  if (member.role === 'Client' || (member.role !== 'Admin' && departments.length === 0)) {
+  if (member.role === 'Client' || (member.role !== 'Project Manager' && departments.length === 0)) {
     return { ok: false, code: 'VALIDATION', error: 'Choose at least one valid internal department.' };
   }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -1291,7 +1291,7 @@ export const saveSecureMemberPermissions = async (
   member: WorkspaceMember,
   permissions: RolePermissions | null,
 ): Promise<MutationResult<MemberPermissionsResponse>> => {
-  if (member.role !== 'Staff' || member.isSuperAdmin) {
+  if (!['Staff', 'HOD'].includes(member.role) || member.isSuperAdmin) {
     return { ok: false, code: 'VALIDATION', error: 'Only Staff and HOD permissions can be customized.' };
   }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {

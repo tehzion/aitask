@@ -18,7 +18,7 @@ create table if not exists public.aitask_members (
   auth_user_id uuid unique references auth.users(id) on delete set null,
   name text not null,
   email text,
-  role text not null check (role in ('Admin', 'Staff', 'Client')),
+  role text not null check (role in ('Project Manager', 'HOD', 'Staff', 'Client')),
   department text not null,
   departments text[] not null,
   avatar text,
@@ -67,7 +67,7 @@ create table if not exists public.aitask_feedback_submissions (
   campaign text not null check (campaign = 'launch-week-2026-07'),
   name text not null check (char_length(name) between 2 and 100),
   email text not null check (char_length(email) between 5 and 254),
-  role text not null check (role in ('Super Admin', 'Admin', 'Staff', 'Client')),
+  role text not null check (role in ('Super Admin', 'Project Manager', 'HOD', 'Staff', 'Client')),
   organization text not null default '' check (char_length(organization) <= 120),
   device text not null check (device in ('Desktop', 'Laptop', 'Tablet', 'Mobile', 'Other')),
   language text not null check (language in ('en', 'zh')),
@@ -138,7 +138,7 @@ security definer
 set search_path = ''
 as $$
   select coalesce((
-    select role = 'Admin' or is_super_admin
+    select role = 'Project Manager' or is_super_admin
     from public.aitask_members
     where workspace_id = p_workspace_id
       and auth_user_id = (select auth.uid())
@@ -174,7 +174,7 @@ as $$
       when member.is_super_admin then true
       when member.permissions <> '{}'::jsonb then coalesce(member.permissions ->> p_permission = 'true', false)
       when custom_role.data is not null then coalesce(custom_role.data -> 'permissions' ->> p_permission = 'true', false)
-      when member.role = 'Admin' then p_permission = any(array[
+      when member.role = 'Project Manager' then p_permission = any(array[
         'viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects', 'viewAllTasks',
         'viewAllClients', 'manageAssignedClients', 'viewReports', 'viewSettings',
         'createTasks', 'editTasks', 'createProjects'
@@ -213,7 +213,7 @@ set search_path = ''
 as $$
   select coalesce((
     select case private.aitask_member_role(p_workspace_id)
-      when 'Admin' then true
+      when 'Project Manager' then true
       when 'Staff' then
         private.aitask_has_permission(p_workspace_id, 'viewAllTasks')
         or private.aitask_has_permission(p_workspace_id, 'editTasks')
@@ -261,7 +261,7 @@ security definer
 set search_path = ''
 as $$
   select case private.aitask_member_role(p_workspace_id)
-    when 'Admin' then true
+    when 'Project Manager' then true
     when 'Client' then p_client_key = private.aitask_member_client_key(p_workspace_id)
     when 'Staff' then private.aitask_has_permission(p_workspace_id, 'viewAllClients') or exists (
       select 1
@@ -305,7 +305,7 @@ set search_path = ''
 as $$
   select coalesce((
     select case private.aitask_member_role(p_workspace_id)
-      when 'Admin' then true
+    when 'Project Manager' then true
       when 'Client' then project.client_key = private.aitask_member_client_key(p_workspace_id)
       when 'Staff' then
         project.created_by = private.aitask_member_id(p_workspace_id)
@@ -326,7 +326,7 @@ as $$
               from public.aitask_members creator
               where creator.workspace_id = p_workspace_id
                 and creator.id = project.created_by
-                and (creator.role = 'Admin' or creator.is_super_admin)
+                and (creator.role = 'Project Manager' or creator.is_super_admin)
             )
           )
         )
@@ -489,7 +489,7 @@ create policy "members can read scoped entities" on public.aitask_entities
     or (entity_type = 'notification' and (
       target_user_id = private.aitask_member_id(workspace_id)
       or target_role = private.aitask_member_role(workspace_id)
-      or (target_role = 'Admin' and private.aitask_is_admin(workspace_id))
+      or (target_role = 'Project Manager' and private.aitask_is_admin(workspace_id))
       or (private.aitask_member_role(workspace_id) = 'Client' and target_client_key = private.aitask_member_client_key(workspace_id))
     ))
   );
@@ -511,7 +511,7 @@ create policy "members can insert authorized entities" on public.aitask_entities
       and created_by = private.aitask_member_id(workspace_id)
       and private.aitask_can_view_task(workspace_id, parent_id))
     or (entity_type = 'notification'
-      and private.aitask_member_role(workspace_id) in ('Admin', 'Staff'))
+      and private.aitask_member_role(workspace_id) in ('Project Manager', 'Staff'))
   );
 
 drop policy if exists "members can update authorized entities" on public.aitask_entities;

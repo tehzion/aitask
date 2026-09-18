@@ -44,8 +44,8 @@ const normalizeDepartments = (role: string, value: unknown, legacyValue: unknown
   if (role === 'Client') return ['Client'];
   const raw = Array.isArray(value) ? value : legacyValue ? [legacyValue] : [];
   const normalized = raw.map(normalizeDepartment);
-  // Administrators are not limited by department and may have none.
-  if (normalized.length === 0) return role === 'Admin' ? [] : null;
+  // Project Managers are portfolio-scoped and are not limited by department.
+  if (normalized.length === 0) return role === 'Project Manager' ? [] : null;
   if (
     normalized.some(department => !department || department === 'Client')
     || new Set(normalized).size !== normalized.length
@@ -195,11 +195,11 @@ Deno.serve(async (request) => {
   const memberId = typeof body.memberId === 'string' ? body.memberId.trim() : '';
   let name = typeof body.name === 'string' ? body.name.trim() : '';
   let email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-  let role = ['Admin', 'Staff', 'Client'].includes(body.role) ? body.role : 'Staff';
+  let role = ['Project Manager', 'HOD', 'Staff', 'Client'].includes(body.role) ? body.role : 'Staff';
   let departments = normalizeDepartments(role, body.departments, body.department);
   const companyName = role === 'Client' && typeof body.companyName === 'string' ? body.companyName.trim() : null;
   const customRoleId = typeof body.customRoleId === 'string' && body.customRoleId.trim() ? body.customRoleId.trim() : null;
-  const workerType = role === 'Staff' && ['employee', 'supplier', 'freelancer'].includes(body.workerType)
+  const workerType = ['Staff', 'HOD'].includes(role) && ['employee', 'supplier', 'freelancer'].includes(body.workerType)
     ? body.workerType
     : 'employee';
   const sendInvitation = body.sendInvitation !== false;
@@ -239,7 +239,7 @@ Deno.serve(async (request) => {
       .maybeSingle();
     if (error || !customRole) return json({ error: 'Custom role not found' }, 400);
     const customRoleData = customRole.data && typeof customRole.data === 'object' ? customRole.data as Record<string, unknown> : {};
-    if (customRoleData.baseRole !== role) {
+    if (customRoleData.isBuiltin === true || customRoleData.baseRole !== role) {
       return json({ error: `This custom role can only be assigned to ${String(customRoleData.baseRole || 'its configured base role')} accounts` }, 400);
     }
     const customRolePermissions = customRoleData.permissions && typeof customRoleData.permissions === 'object'

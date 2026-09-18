@@ -34,8 +34,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('release notice personas', () => {
   it('uses the same persona rules as the role workbenches', () => {
-    expect(getReleaseNoticePersona(user({ role: 'Admin', isSuperAdmin: true, departments: ['Management'], department: 'Management' }))).toBe('boss');
-    expect(getReleaseNoticePersona(user({ role: 'Admin', departments: ['Management'], department: 'Management' }))).toBe('admin');
+    expect(getReleaseNoticePersona(user({ role: 'Project Manager', isSuperAdmin: true, departments: ['Management'], department: 'Management' }))).toBe('boss');
+    expect(getReleaseNoticePersona(user({ role: 'Project Manager', departments: ['Management'], department: 'Management' }))).toBe('projectManager');
     expect(getReleaseNoticePersona(user({ departments: ['Operation'], department: 'Operation' }))).toBe('operation');
     expect(getReleaseNoticePersona(user({ departments: ['Account & Finance'], department: 'Account & Finance' }))).toBe('account');
     expect(getReleaseNoticePersona(user())).toBe('production');

@@ -21,6 +21,7 @@ const TOKEN_PATTERN = /\b(?:bg|text|border|ring|ring-offset|divide|from|via|to|p
 // backgrounds. Keep this list small and justified.
 const ALLOWLIST = new Set([
   'bg-amber-200/50', 'bg-amber-400', 'bg-amber-950/30',
+  'bg-indigo-50/60',
   'bg-blue-200/50', 'bg-blue-400', 'bg-blue-500',
   'bg-emerald-400', 'bg-pink-400', 'bg-purple-500', 'bg-violet-400',
   'bg-red-950/30', 'bg-slate-950/35', 'bg-slate-950/45',
@@ -31,6 +32,7 @@ const ALLOWLIST = new Set([
   'shadow-amber-50/40', 'shadow-blue-50/40', 'shadow-emerald-50/40',
   'shadow-red-50/40', 'shadow-slate-950/10', 'shadow-slate-950/20',
   'text-amber-100', 'text-amber-200', 'text-amber-500',
+  'text-amber-950',
   'text-blue-500', 'text-emerald-500', 'text-red-100', 'text-red-400',
   'text-red-500', 'text-sky-300', 'text-slate-100',
   'text-white/65', 'text-white/70', 'text-white/80',

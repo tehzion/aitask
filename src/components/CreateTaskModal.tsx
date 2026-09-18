@@ -65,7 +65,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [customServiceError, setCustomServiceError] = useState('');
   const [priority, setPriority] = useState<Priority>('Medium');
   const [visibility, setVisibility] = useState<TaskVisibility>(() => (
-    currentUser?.role === 'Staff' ? 'internal' : 'client-visible'
+    ['Staff', 'HOD'].includes(currentUser?.role || '') ? 'internal' : 'client-visible'
   ));
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -78,7 +78,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [pendingTaskId, setPendingTaskId] = useState('');
 
   const canCreateProjects = canManageProjects(currentUser, rolePermissions);
-  const isStaffTaskCreator = currentUser?.role === 'Staff';
+  const isStaffTaskCreator = currentUser?.role === 'Staff' || currentUser?.role === 'HOD';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
   const departmentChoices = React.useMemo(
     () => isStaffTaskCreator && currentUser
@@ -140,7 +140,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setCustomServiceInput('');
     setCustomServiceError('');
     setPriority('Medium');
-    setVisibility(currentUser?.role === 'Staff' ? 'internal' : 'client-visible');
+    setVisibility(['Staff', 'HOD'].includes(currentUser?.role || '') ? 'internal' : 'client-visible');
     setStartDate(getTodayInputDate());
     setDueDate('');
     setAttachmentLink('');

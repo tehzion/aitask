@@ -8,7 +8,7 @@ const expectNoAxeViolations = async (page: import('@playwright/test').Page, cont
 
 const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Use Admin Demo' }).click();
+  await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await expect(page).toHaveURL(/\/(?:settings)?$/);
@@ -20,7 +20,7 @@ const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
   await expect(releaseNotice).toBeVisible();
   await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
-  await expect(page.getByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Project Manager Dashboard' })).toBeVisible();
 };
 
 test('day/night mode and keyboard shortcuts remain accessible', async ({ page }) => {
@@ -68,7 +68,7 @@ test('day/night mode and keyboard shortcuts remain accessible', async ({ page })
   await page.keyboard.press('g');
   await page.keyboard.press('t');
   await expect(page).toHaveURL(/\/tasks$/);
-  await expect(page.getByRole('heading', { name: 'Tasks Management' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Portfolio work' })).toBeVisible();
   await expectNoAxeViolations(page, 'Tasks in night mode');
 
   await page.keyboard.press('/');

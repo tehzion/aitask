@@ -224,6 +224,9 @@ html [class~="hover:bg-blue-800"]:hover { background-color: color-mix(in srgb, r
 .text-rose-800,
 .text-rose-700,
 .text-pink-700 { color: rgb(var(--calm-accent)); }
+/* The calm red accent needs a darker text treatment on its pale badge
+   surface to preserve WCAG AA contrast for small labels. */
+html:not(.dark) .bg-blue-50.text-blue-700 { color: rgb(180 35 24); }
 .border-blue-600,
 .border-blue-700 { border-color: rgb(var(--calm-accent)); }
 .bg-blue-50,

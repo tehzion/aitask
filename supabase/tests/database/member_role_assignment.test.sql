@@ -15,7 +15,7 @@ insert into public.aitask_workspaces(id, name) values ('pgtap-member-role', 'Mem
 insert into public.aitask_members(
   id, workspace_id, auth_user_id, name, email, role, department, departments, is_super_admin, permissions
 ) values
-  ('pgtap-role-boss2', 'pgtap-member-role', '00000000-0000-0000-0000-000000000931', 'Boss', 'pgtap-role-boss2@aitask.local', 'Admin', 'Management', array['Management'], true, '{}'::jsonb),
+  ('pgtap-role-boss2', 'pgtap-member-role', '00000000-0000-0000-0000-000000000931', 'Boss', 'pgtap-role-boss2@aitask.local', 'Project Manager', 'Management', array['Management'], true, '{}'::jsonb),
   ('pgtap-role-target2', 'pgtap-member-role', '00000000-0000-0000-0000-000000000932', 'Target', 'pgtap-role-target2@aitask.local', 'Staff', 'Designer', array['Designer'], false, '{}'::jsonb);
 
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
@@ -28,7 +28,7 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select is(
   (public.aitask_update_member_role(
     'pgtap-member-role', gen_random_uuid(), 'pgtap-role-target2',
-    'Admin', null, null, array[]::text[],
+    'Project Manager', null, null, array[]::text[],
     (select version from public.aitask_members where workspace_id = 'pgtap-member-role' and id = 'pgtap-role-target2')
   ) ->> 'ok')::boolean,
   true,
@@ -38,7 +38,7 @@ select is(
 reset role;
 select is(
   (select role from public.aitask_members where workspace_id = 'pgtap-member-role' and id = 'pgtap-role-target2'),
-  'Admin',
+  'Project Manager',
   'the member role is persisted'
 );
 

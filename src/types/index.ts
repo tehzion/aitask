@@ -1,4 +1,4 @@
-export type Role = 'Admin' | 'Staff' | 'Client';
+export type Role = 'Project Manager' | 'HOD' | 'Staff' | 'Client';
 export type LoginFailureCode =
   | 'invalid_credentials'
   | 'account_unapproved_or_unlinked'
@@ -66,6 +66,7 @@ export interface CustomRole {
   permissions: RolePermissions;
   departmentScoped?: boolean;
   isProtected?: boolean;
+  isBuiltin?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -118,7 +119,7 @@ export interface AppNotification {
   version?: number;
   updatedAt?: string;
   targetUserId?: string; // e.g., assignee
-  targetRole?: Role;     // e.g., 'Admin'
+  targetRole?: Role;     // e.g., 'Project Manager'
   targetClient?: string; // e.g., 'TechNova'
   title: string;
   message: string;

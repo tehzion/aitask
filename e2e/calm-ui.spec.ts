@@ -2,10 +2,10 @@ import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 const routes = [
-  { path: '/', heading: 'Admin Dashboard' },
+  { path: '/', heading: 'Project Manager Dashboard' },
   { path: '/projects', heading: 'Companies' },
   { path: '/clients', heading: 'Clients' },
-  { path: '/tasks', heading: 'Tasks Management' },
+  { path: '/tasks', heading: 'Portfolio work' },
   { path: '/clients/demo-service-client-urban', heading: 'UrbanEats' },
   { path: '/settings', heading: /Settings|Account Setup/ },
 ] as const;
@@ -13,7 +13,7 @@ const routes = [
 const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   await page.clock.install({ time: new Date('2026-08-16T00:00:00.000Z') });
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Use Admin Demo' }).click();
+  await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   if (/\/settings$/.test(page.url())) {
@@ -22,7 +22,7 @@ const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
   await expect(releaseNotice).toBeVisible();
   await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
-  await expect(page.getByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Project Manager Dashboard' })).toBeVisible();
 };
 
 const setTheme = async (page: import('@playwright/test').Page, theme: 'Light' | 'Dark') => {

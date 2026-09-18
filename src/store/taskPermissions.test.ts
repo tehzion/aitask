@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { defaultRolePermissions, SYSTEM_HOD_ROLE_ID } from '../lib/access';
+import { defaultRolePermissions, BUILTIN_HOD_ROLE_ID } from '../lib/access';
 import type { CustomRole } from '../types';
 import type { Deliverable, Task, User } from '../types';
 import { useStore } from './index';
@@ -169,16 +169,18 @@ describe('task store authorization', () => {
 
   it('lets HOD manage a task they created after assigning it to another staff member', () => {
     const hodRole: CustomRole = {
-      id: SYSTEM_HOD_ROLE_ID,
+      id: BUILTIN_HOD_ROLE_ID,
       name: 'HOD',
-      baseRole: 'Staff',
-      isProtected: true,
-      permissions: { ...defaultRolePermissions.Staff, manageCreatedTasks: true },
+      baseRole: 'HOD',
+      isBuiltin: true,
+      isProtected: false,
+      departmentScoped: true,
+      permissions: { ...defaultRolePermissions.HOD, manageCreatedTasks: true },
       createdAt: '2026-09-07T00:00:00.000Z',
       updatedAt: '2026-09-07T00:00:00.000Z',
     };
     useStore.setState({
-      currentUser: { ...staff, customRoleId: hodRole.id, customRoleName: hodRole.name },
+      currentUser: { ...staff, role: 'HOD', customRoleId: hodRole.id, customRoleName: hodRole.name },
       rolePermissions: [hodRole],
     });
 
@@ -259,7 +261,7 @@ describe('task store authorization', () => {
     expect(useStore.getState().notifications).toEqual(expect.arrayContaining([
       expect.objectContaining({
         title: 'Task Created by Staff',
-        targetRole: 'Admin',
+        targetRole: 'Project Manager',
         route: { page: 'tasks', entityId: createdTaskId },
       }),
       expect.objectContaining({

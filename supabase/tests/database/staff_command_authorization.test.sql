@@ -232,7 +232,7 @@ select is(
     jsonb_build_array(jsonb_build_object(
       'kind', 'entity', 'action', 'insert', 'entityType', 'notification', 'entityId', 'pgtap-forged-notification',
       'expectedVersion', 0, 'data', jsonb_build_object(
-        'id', 'pgtap-forged-notification', 'targetRole', 'Admin', 'title', 'Security alert',
+        'id', 'pgtap-forged-notification', 'targetRole', 'Project Manager', 'title', 'Security alert',
         'message', 'Forged by Staff', 'route', jsonb_build_object('page', 'tasks', 'entityId', 'pgtap-assigned-task'),
         'isRead', false, 'readByUserIds', jsonb_build_array(), 'createdAt', now()
       )
@@ -254,7 +254,7 @@ select is(
       jsonb_build_object(
         'kind', 'entity', 'action', 'insert', 'entityType', 'notification', 'entityId', 'pgtap-status-notification',
         'expectedVersion', 0, 'data', jsonb_build_object(
-          'id', 'pgtap-status-notification', 'targetRole', 'Admin', 'title', 'Task Status Updated',
+          'id', 'pgtap-status-notification', 'targetRole', 'Project Manager', 'title', 'Task Status Updated',
           'message', 'Forged content', 'route', jsonb_build_object('page', 'tasks', 'entityId', 'pgtap-assigned-task'),
           'isRead', false, 'readByUserIds', jsonb_build_array(), 'createdAt', now()
         )
@@ -597,7 +597,7 @@ select is(
         'kind', 'entity', 'action', 'insert', 'entityType', 'notification',
         'entityId', 'pgtap-legacy-delete-notification', 'expectedVersion', 0,
         'data', jsonb_build_object(
-          'id', 'pgtap-legacy-delete-notification', 'targetRole', 'Admin',
+          'id', 'pgtap-legacy-delete-notification', 'targetRole', 'Project Manager',
           'title', 'Task Deleted', 'message', 'Untrusted legacy content',
           'route', jsonb_build_object('page', 'tasks'), 'isRead', false,
           'readByUserIds', jsonb_build_array(), 'createdAt', now(), 'iconType', 'alert'

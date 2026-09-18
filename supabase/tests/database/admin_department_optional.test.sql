@@ -15,7 +15,7 @@ insert into public.aitask_workspaces(id, name) values ('pgtap-admin-dept', 'Admi
 insert into public.aitask_members(
   id, workspace_id, auth_user_id, name, email, role, department, departments, is_super_admin, permissions
 ) values
-  ('pgtap-boss3', 'pgtap-admin-dept', '00000000-0000-0000-0000-000000000941', 'Boss', 'pgtap-admin-dept@aitask.local', 'Admin', 'Management', array['Management'], true, '{}'::jsonb),
+  ('pgtap-boss3', 'pgtap-admin-dept', '00000000-0000-0000-0000-000000000941', 'Boss', 'pgtap-admin-dept@aitask.local', 'Project Manager', 'Management', array['Management'], true, '{}'::jsonb),
   ('pgtap-target3', 'pgtap-admin-dept', '00000000-0000-0000-0000-000000000942', 'Target', 'pgtap-staff-dept@aitask.local', 'Staff', 'Designer', array['Designer'], false, '{}'::jsonb);
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000941', true);
@@ -25,7 +25,7 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select is(
   (public.aitask_update_member_role(
     'pgtap-admin-dept', gen_random_uuid(), 'pgtap-target3',
-    'Admin', null, null, array[]::text[],
+    'Project Manager', null, null, array[]::text[],
     (select version from public.aitask_members where workspace_id = 'pgtap-admin-dept' and id = 'pgtap-target3')
   ) ->> 'ok')::boolean,
   true,

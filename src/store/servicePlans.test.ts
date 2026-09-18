@@ -4,7 +4,7 @@ import { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } from '../lib/serviceM
 import { useStore } from './index';
 
 const initialState = useStore.getState();
-const admin: User = { id: 'admin-service', name: 'Service Admin', role: 'Admin', departments: ['Management'], department: 'Management' };
+const admin: User = { id: 'admin-service', name: 'Service Admin', role: 'Project Manager', departments: ['Management'], department: 'Management' };
 
 describe('client service plan store', () => {
   beforeEach(() => {

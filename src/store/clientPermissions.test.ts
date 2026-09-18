@@ -87,7 +87,7 @@ describe('client profile store authorization', () => {
   });
 
   it('lets an admin create a profile without a service plan and rejects duplicate names', () => {
-    const admin: User = { id: 'admin-client-profile', name: 'Admin', role: 'Admin', departments: ['Management'], department: 'Management' };
+    const admin: User = { id: 'admin-client-profile', name: 'Project Manager', role: 'Project Manager', departments: ['Management'], department: 'Management' };
     useStore.setState({ ...initialState, currentUser: admin, users: [admin], clients: [], tasks: [], projects: [], rolePermissions: [] }, true);
 
     const created = useStore.getState().createClientProfile({
@@ -104,7 +104,7 @@ describe('client profile store authorization', () => {
   });
 
   it('cascades a company delete for an admin and blocks ordinary staff', () => {
-    const admin: User = { id: 'admin-delete-client', name: 'Admin', role: 'Admin', departments: ['Management'], department: 'Management' };
+    const admin: User = { id: 'admin-delete-client', name: 'Project Manager', role: 'Project Manager', departments: ['Management'], department: 'Management' };
     useStore.setState({
       ...initialState,
       currentUser: admin,
