@@ -924,6 +924,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Edit all tasks': '编辑所有任务',
   'Create companies': '创建公司',
   'Add companies': '添加公司',
+  'Delete companies': '删除公司',
   'Manage users': '管理用户',
   'Approve registrations': '批准注册',
   'Delete users': '删除用户',

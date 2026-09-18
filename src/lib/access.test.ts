@@ -6,6 +6,7 @@ import {
   canApproveRegistrations,
   canCommentOnTask,
   canCreateClientProfiles,
+  canDeleteClientProfiles,
   canCreateUsers,
   canDeleteUser,
   canEditClientProfile,
@@ -277,6 +278,24 @@ describe('staff permission matrix', () => {
     expect(canCreateClientProfiles(acmeClient)).toBe(false);
     expect(canCreateClientProfiles(hod, [hodRole])).toBe(true);
     expect(canRenameClient(hod)).toBe(false);
+  });
+
+  it('lets an HOD custom role delete companies without widening ordinary Staff', () => {
+    const hodRole: CustomRole = {
+      id: SYSTEM_HOD_ROLE_ID,
+      name: 'HOD',
+      baseRole: 'Staff',
+      permissions: { ...defaultRolePermissions.Staff, deleteClients: true },
+      createdAt: '2026-07-13T00:00:00.000Z',
+      updatedAt: '2026-07-13T00:00:00.000Z',
+    };
+    const hod: User = { ...staff, customRoleId: hodRole.id, permissions: {} as User['permissions'] };
+
+    expect(canDeleteClientProfiles(superAdmin)).toBe(true);
+    expect(canDeleteClientProfiles(admin)).toBe(true);
+    expect(canDeleteClientProfiles(staff)).toBe(false);
+    expect(canDeleteClientProfiles(acmeClient)).toBe(false);
+    expect(canDeleteClientProfiles(hod, [hodRole])).toBe(true);
   });
 
   it('chooses the first permitted page when Dashboard and Settings are disabled', () => {

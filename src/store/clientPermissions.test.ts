@@ -102,4 +102,53 @@ describe('client profile store authorization', () => {
     const duplicate = useStore.getState().createClientProfile({ clientName: ' new company ' });
     expect(duplicate).toEqual({ ok: false, error: 'This company already exists in the Companies database.' });
   });
+
+  it('cascades a company delete for an admin and blocks ordinary staff', () => {
+    const admin: User = { id: 'admin-delete-client', name: 'Admin', role: 'Admin', departments: ['Management'], department: 'Management' };
+    useStore.setState({
+      ...initialState,
+      currentUser: admin,
+      users: [admin],
+      clients: [],
+      projects: [],
+      tasks: [],
+      clientPlans: [],
+      serviceCycles: [],
+      deliverables: [],
+      cycleComments: [],
+      addons: [],
+      servicePricingSnapshots: [],
+      rolePermissions: [],
+      backend: { ...initialState.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
+    }, true);
+
+    const created = useStore.getState().createClientWithPlan({
+      clientName: 'Delete Co',
+      planName: 'Delete Growth',
+      origin: 'custom',
+      serviceItems: [{ id: 'svc-delete', name: 'Design', platforms: [], unit: 'post', quantity: 1, unitPriceMinor: 10000 }],
+      startDate: '2026-08-15', billingDay: 15, discountType: 'none', discountValue: 0, taxRateBps: 0,
+    });
+    expect(created.ok).toBe(true);
+    const activation = useStore.getState().activateClientPlan(created.planId!);
+    expect(activation.ok).toBe(true);
+    const clientId = created.clientId!;
+    expect(useStore.getState().serviceCycles.some(cycle => cycle.clientId === clientId)).toBe(true);
+    expect(useStore.getState().clientPlans.some(plan => plan.clientId === clientId)).toBe(true);
+
+    expect(useStore.getState().deleteClientProfile(clientId)).toEqual({ ok: true });
+    const state = useStore.getState();
+    expect(state.clients).toEqual([]);
+    expect(state.clientPlans.filter(plan => plan.clientId === clientId)).toEqual([]);
+    expect(state.serviceCycles.filter(cycle => cycle.clientId === clientId)).toEqual([]);
+    expect(state.deliverables.filter(item => item.clientId === clientId)).toEqual([]);
+    expect(state.servicePricingSnapshots.filter(item => item.clientId === clientId)).toEqual([]);
+
+    useStore.setState({
+      currentUser: makeStaff(true),
+      clients: [{ id: 'CL-keep', clientName: 'Keep Co', createdAt: '2026-01-01', updatedAt: '2026-01-01' }],
+    });
+    expect(useStore.getState().deleteClientProfile('CL-keep')).toEqual({ ok: false, error: 'You need permission to delete companies.' });
+    expect(useStore.getState().clients).toHaveLength(1);
+  });
 });

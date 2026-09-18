@@ -22,7 +22,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { Badge, Button, PageHeader, ProgressBar, StatGroup, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
-import { canCreateClientProfiles, canCreateTasks, canEditClientProfile, canManageClientPlans, canManageClientProfiles, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfiles, canEditClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
@@ -403,7 +403,7 @@ const Clients: React.FC = () => {
     ? !upgradeRequired && canEditClientProfile(currentUser, selectedClient.name, allTasks, rolePermissions)
     : false;
   const selectedClientCanDelete = Boolean(
-    selectedClient?.profile && !upgradeRequired && canManageClientProfiles(currentUser),
+    selectedClient?.profile && !upgradeRequired && canDeleteClientProfiles(currentUser, rolePermissions),
   );
 
   const openClientPanel = (client: ClientSummary, edit = false) => {

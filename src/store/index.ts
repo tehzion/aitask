@@ -62,7 +62,7 @@ import {
   canCreateTasks,
   canCreateUsers,
   canCreateClientProfiles,
-  canManageClientProfiles,
+  canDeleteClientProfiles,
   canDeleteUser,
   canManageProjects,
   canCommentOnTask,
@@ -3349,22 +3349,33 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
-        if (!canManageClientProfiles(currentUser)) {
-          return { ok: false, error: 'Only admins can delete client profiles.' };
+        if (!canDeleteClientProfiles(currentUser, state.rolePermissions)) {
+          return { ok: false, error: 'You need permission to delete companies.' };
         }
 
         const client = state.clients.find(c => c.id === clientId);
-        if (!client) return { ok: false, error: 'Client profile not found.' };
-        if (state.clientPlans.some(plan => plan.clientId === clientId)) {
-          return { ok: false, error: 'End and archive this client service plan before deleting the client profile.' };
-        }
+        if (!client) return { ok: false, error: 'Company not found.' };
+
+        const clientKey = normalizeClientKey(client.clientName);
+        const belongsToClient = (item: { clientId?: string; clientName?: string }) => (
+          item.clientId === clientId
+          || (Boolean(item.clientName) && normalizeClientKey(item.clientName) === clientKey)
+        );
 
         set(current => ({
           clients: current.clients.filter(c => c.id !== clientId),
           deletedClientIds: Array.from(new Set([...(current.deletedClientIds || []), clientId])),
+          projects: current.projects.filter(item => !belongsToClient(item)),
+          tasks: current.tasks.filter(item => !belongsToClient(item)),
+          clientPlans: current.clientPlans.filter(item => item.clientId !== clientId),
+          serviceCycles: current.serviceCycles.filter(item => item.clientId !== clientId),
+          deliverables: current.deliverables.filter(item => item.clientId !== clientId),
+          cycleComments: current.cycleComments.filter(item => item.clientId !== clientId),
+          addons: current.addons.filter(item => item.clientId !== clientId),
+          servicePricingSnapshots: current.servicePricingSnapshots.filter(item => item.clientId !== clientId),
         }));
 
-        useToastStore.getState().addToast(`Client profile for "${client.clientName}" deleted.`, 'success');
+        useToastStore.getState().addToast(`Company "${client.clientName}" deleted.`, 'success');
         return { ok: true };
       },
 

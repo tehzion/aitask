@@ -41,6 +41,7 @@ export type RolePermissionKey =
   | 'manageCreatedTasks'
   | 'createProjects'
   | 'createClients'
+  | 'deleteClients'
   | 'manageUsers'
   | 'approveRegistrations'
   | 'deleteUsers'

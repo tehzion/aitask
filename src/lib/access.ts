@@ -31,6 +31,7 @@ export const permissionLabels: Record<RolePermissionKey, string> = {
   manageCreatedTasks: 'Manage tasks I create',
   createProjects: 'Create companies',
   createClients: 'Add companies',
+  deleteClients: 'Delete companies',
   manageUsers: 'Manage users',
   approveRegistrations: 'Approve registrations',
   deleteUsers: 'Delete users',
@@ -48,7 +49,7 @@ export const permissionLabels: Record<RolePermissionKey, string> = {
 export const permissionGroups: { title: string; keys: RolePermissionKey[] }[] = [
   { title: 'Page Access', keys: ['viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects', 'viewDeliveryTracker', 'viewReports', 'viewApprovals', 'viewSettings'] },
   { title: 'Task Access', keys: ['viewAllTasks', 'createTasks', 'manageCreatedTasks'] },
-  { title: 'Client Access', keys: ['viewAllClients', 'manageAssignedClients', 'createClients', 'viewAllServiceClients', 'viewAssignedServiceClients', 'viewServicePrices'] },
+  { title: 'Client Access', keys: ['viewAllClients', 'manageAssignedClients', 'createClients', 'deleteClients', 'viewAllServiceClients', 'viewAssignedServiceClients', 'viewServicePrices'] },
   { title: 'Service Management', keys: ['manageServiceCatalog', 'manageTaskTemplates', 'manageClientPlans', 'manageServiceCycles'] },
   { title: 'Workflow Actions', keys: ['createProjects', 'clientReview'] },
 ];
@@ -94,6 +95,7 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'manageCreatedTasks',
     'createProjects',
     'createClients',
+    'deleteClients',
     'manageServiceCatalog',
     'manageTaskTemplates',
     'manageClientPlans',
@@ -242,6 +244,9 @@ export const canOpenServiceClient = (
 export const canManageClientProfiles = (user: User | null | undefined) => Boolean(user && (isBossKoo(user) || user.role === 'Admin'));
 export const canCreateClientProfiles = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   Boolean(user) && (isBossKoo(user) || user.role === 'Admin' || hasPermission(user, 'createClients', customRoles))
+);
+export const canDeleteClientProfiles = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
+  Boolean(user) && (isBossKoo(user) || user.role === 'Admin' || hasPermission(user, 'deleteClients', customRoles))
 );
 export const getClientKey = (value: string | null | undefined) => value?.trim().toLowerCase() || '';
 export const canEditClientProfile = (
