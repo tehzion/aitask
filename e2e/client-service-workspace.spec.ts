@@ -100,7 +100,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     localStorage.setItem('aitask:release-notice:2026-08-service-operations:operation-e2e', 'acknowledged');
-    useStore.setState({ currentUser: { id: 'operation-e2e', name: 'Operation E2E', role: 'Staff', departments: ['Operation'], department: 'Operation', workerType: 'employee', permissions: { manageServiceCycles: true, viewAllServiceClients: true, viewDashboard: true, viewTasks: true, viewCalendar: true, viewProjects: true } } });
+    useStore.setState({ currentUser: { id: 'operation-e2e', name: 'Operation E2E', role: 'Staff', departments: ['Operation'], department: 'Operation', workerType: 'employee', permissions: { manageServiceCycles: true, createTasks: true, viewAllServiceClients: true, viewDashboard: true, viewTasks: true, viewCalendar: true, viewProjects: true } } });
   });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
@@ -110,6 +110,15 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
   await expect(page.getByText('Internal monthly total')).toHaveCount(0);
   await expectNoAxeViolations(page, 'Operation client workspace plan');
+
+  await page.getByRole('tab', { name: 'Cycles', exact: true }).click();
+  await page.getByRole('button', { name: 'Task', exact: true }).first().click();
+  const taskDialog = page.getByRole('dialog', { name: 'Create task' });
+  await expect(taskDialog).toBeVisible();
+  await taskDialog.getByLabel(/Task Title/).fill('Cycle manual task');
+  await taskDialog.getByRole('button', { name: 'Create & open task' }).click();
+  await expect(taskDialog).toBeHidden();
+  await expect(page).toHaveURL(/\/clients\?.*taskId=/);
 
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');

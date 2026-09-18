@@ -293,7 +293,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     const finalStartDate = startDate.trim() || getTodayInputDate();
     const finalDueDate = dueDate.trim();
 
-    if (isStaffTaskCreator && !projectId) {
+    const hasDeliverableContext = Boolean(createTaskInitialDeliverableId);
+    if (isStaffTaskCreator && !projectId && !hasDeliverableContext) {
       setFormError('Choose a company created by an Admin before creating this task.');
       return;
     }
@@ -732,7 +733,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
           <button 
             type="submit"
             form="create-task-form"
-            disabled={filteredUsers.length === 0 || isSubmitting}
+            disabled={isSubmitting}
             className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Saving task...' : pendingTaskId ? 'Retry saving task' : 'Create & open task'}
