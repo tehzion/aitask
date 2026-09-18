@@ -14,6 +14,7 @@ import {
   Plus,
   Search,
   Save,
+  Trash2,
   UserRound,
   Users,
   X,
@@ -21,7 +22,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { Badge, Button, PageHeader, ProgressBar, StatGroup, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
-import { canCreateClientProfiles, canCreateTasks, canEditClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { canCreateClientProfiles, canCreateTasks, canEditClientProfile, canManageClientPlans, canManageClientProfiles, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
@@ -132,6 +133,7 @@ const Clients: React.FC = () => {
     setCreateTaskModalOpen,
     upsertClientProfile,
     renameClient,
+    deleteClientProfile,
     commitPendingMutation,
     upgradeRequired,
   } = useStore(useShallow(state => ({
@@ -147,6 +149,7 @@ const Clients: React.FC = () => {
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
     upsertClientProfile: state.upsertClientProfile,
     renameClient: state.renameClient,
+    deleteClientProfile: state.deleteClientProfile,
     commitPendingMutation: state.commitPendingMutation,
     upgradeRequired: state.backend.upgradeRequired === true,
   })));
@@ -161,6 +164,7 @@ const Clients: React.FC = () => {
   const [renameValue, setRenameValue] = React.useState('');
   const [renameError, setRenameError] = React.useState('');
   const [isSavingClient, setIsSavingClient] = React.useState(false);
+  const [isDeleteConfirming, setIsDeleteConfirming] = React.useState(false);
   const [isCreateClientOpen, setIsCreateClientOpen] = React.useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = React.useState(false);
   const [initialProjectClientId, setInitialProjectClientId] = React.useState('');
@@ -398,6 +402,9 @@ const Clients: React.FC = () => {
   const selectedClientCanEditProfile = selectedClient
     ? !upgradeRequired && canEditClientProfile(currentUser, selectedClient.name, allTasks, rolePermissions)
     : false;
+  const selectedClientCanDelete = Boolean(
+    selectedClient?.profile && !upgradeRequired && canManageClientProfiles(currentUser),
+  );
 
   const openClientPanel = (client: ClientSummary, edit = false) => {
     setSelectedClientName(client.name);
@@ -406,6 +413,7 @@ const Clients: React.FC = () => {
     setRenameValue(client.name);
     setRenameError('');
     setIsRenamingClient(false);
+    setIsDeleteConfirming(false);
     setIsEditingProfile(Boolean(edit && !upgradeRequired && canEditClientProfile(currentUser, client.name, allTasks, rolePermissions)));
   };
 
@@ -413,6 +421,7 @@ const Clients: React.FC = () => {
     setSelectedClientName('');
     setIsEditingProfile(false);
     setIsRenamingClient(false);
+    setIsDeleteConfirming(false);
     setProfileError('');
     setRenameError('');
   };
@@ -459,6 +468,27 @@ const Clients: React.FC = () => {
     setSelectedClientName(renameValue.trim());
     setIsRenamingClient(false);
     setRenameError('');
+  };
+
+  const handleDeleteClient = async () => {
+    if (!selectedClient?.profile) return;
+
+    const result = deleteClientProfile(selectedClient.profile.id);
+    if (!result.ok) {
+      setProfileError(result.error || 'Unable to delete this company.');
+      setIsDeleteConfirming(false);
+      return;
+    }
+
+    setIsSavingClient(true);
+    const saveResult = await commitPendingMutation();
+    setIsSavingClient(false);
+    if (!saveResult.ok) {
+      setProfileError(saveResult.error || 'The company deletion is waiting to be saved.');
+      return;
+    }
+
+    closeClientPanel();
   };
 
   const renderContactSummary = (client: ClientSummary) => {
@@ -951,6 +981,27 @@ const Clients: React.FC = () => {
                       </button>
                     </>
                 ) : (
+                  isDeleteConfirming ? (
+                    <>
+                      <p className="self-center text-sm font-medium text-red-700 sm:mr-2">Delete this company profile? Linked service plans must be archived first.</p>
+                      <button
+                        type="button"
+                        onClick={() => setIsDeleteConfirming(false)}
+                        disabled={isSavingClient}
+                        className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteClient()}
+                        disabled={isSavingClient}
+                        className={cn(buttonBase, 'min-h-10 rounded-lg bg-red-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60')}
+                      >
+                        <Trash2 className="h-4 w-4" /> {isSavingClient ? 'Deleting…' : 'Delete company'}
+                      </button>
+                    </>
+                  ) : (
                   <>
                     {selectedClientCanRename && (
                       <button
@@ -978,7 +1029,20 @@ const Clients: React.FC = () => {
                         <Pencil className="h-4 w-4" /> Edit details
                       </button>
                     )}
+                    {selectedClientCanDelete && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileError('');
+                          setIsDeleteConfirming(true);
+                        }}
+                        className={cn(buttonBase, 'min-h-10 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm text-red-700 shadow-sm hover:bg-red-50')}
+                      >
+                        <Trash2 className="h-4 w-4" /> Delete company
+                      </button>
+                    )}
                   </>
+                  )
                 )}
               </div>
             </div>
