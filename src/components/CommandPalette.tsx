@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckSquare, LayoutDashboard, Moon, Search, Sun, UserPlus, CalendarDays, Users, FolderKanban, BarChart3, UserCheck, Settings, Languages, Keyboard } from 'lucide-react';
+import { BarChart3, CalendarDays, CheckSquare, FolderKanban, Languages, LayoutDashboard, ListChecks, Moon, Search, Settings, Sun, UserCheck, UserPlus, Users, Keyboard } from 'lucide-react';
 import ModalShell from './ModalShell';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
@@ -8,6 +8,7 @@ import { canAccessPath, canCreateTasks, isBossKoo } from '../lib/access';
 import { useColorTheme } from '../hooks/useColorTheme';
 import { useI18n } from './I18nProvider';
 import { cn } from '../lib/utils';
+import { getDeliveryWorkspaceLabel } from '../lib/navigation';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -46,7 +47,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onOpen
     const navigation: Array<[string, string, React.ComponentType<{ className?: string }>]> = [
       ['/', t('Dashboard'), LayoutDashboard],
       ['/calendar', t('Calendar'), CalendarDays],
-      ['/clients', t('Clients'), Users],
+      ['/clients', t(getDeliveryWorkspaceLabel(currentUser)), currentUser?.role === 'Client' ? Users : ListChecks],
       ['/projects', t('Companies'), FolderKanban],
       ['/reports', t('Reports'), BarChart3],
       ['/approvals', t('Approvals'), UserCheck],

@@ -30,6 +30,7 @@ import {
   Plus,
   User,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { Link, useNavigate } from 'react-router-dom';
@@ -47,6 +48,13 @@ import { canCreateTasks, canEditTask as canEditTaskByRole, getVisibleTasks } fro
 import { getHolidaysForDate, HOLIDAY_COLORS, type MalaysiaHoliday } from '../lib/malaysiaHolidays';
 import { getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { DAYS_IN_WORK_WEEK, getWorkWeekRange } from '../lib/workWeek';
+import { formatLocalizedDate, formatLocalizedMonth, formatLocalizedWeekdayDate } from '../lib/i18n';
+import {
+  filterCalendarTasks,
+  getCalendarOverview,
+  getCalendarTaskSummary,
+  type CalendarFilter,
+} from '../lib/calendarMetrics';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
@@ -76,16 +84,68 @@ interface PendingDateAttempt {
   lastPulledAt?: string;
 }
 
-const taskDateLabel = (task: Task) => {
+const taskDateLabel = (
+  task: Task,
+  formatDate: (value: Date) => string = value => format(value, 'd MMM yyyy'),
+  translate: (value: string) => string = value => value,
+) => {
   const range = normalizeCalendarTaskRange(task);
-  if (!range) return 'Task dates unavailable';
-  if (!range.hasDueDate) return `Starts ${format(range.start, 'd MMM yyyy')} · No due date`;
-  if (range.durationDays === 1) return `${format(range.start, 'd MMM yyyy')} · One day`;
-  return `${format(range.start, 'd MMM yyyy')} to ${format(range.end, 'd MMM yyyy')} · ${range.durationDays} days`;
+  if (!range) return translate('Task dates unavailable');
+  if (!range.hasDueDate) return `${translate('Starts')} ${formatDate(range.start)} · ${translate('No due date')}`;
+  if (range.durationDays === 1) return `${formatDate(range.start)} · ${translate('One day')}`;
+  return `${formatDate(range.start)} ${translate('to')} ${formatDate(range.end)} · ${range.durationDays} ${translate('days')}`;
 };
 
+const taskScheduleLabel = (
+  task: Task,
+  formatDate: (value: Date) => string = value => format(value, 'd MMM yyyy'),
+  translate: (value: string) => string = value => value,
+) => {
+  const range = normalizeCalendarTaskRange(task);
+  if (!range) return translate('Task dates unavailable');
+  if (!range.hasDueDate) return `${translate('Starts')} ${formatDate(range.start)} · ${translate('No due date')}`;
+  return `${translate('Starts')} ${formatDate(range.start)} · ${translate('Due')} ${formatDate(range.end)}`;
+};
+
+interface CalendarMetricButtonProps {
+  filter: CalendarFilter;
+  label: string;
+  value: number;
+  icon: LucideIcon;
+  active: boolean;
+  onSelect: (filter: CalendarFilter) => void;
+}
+
+const CalendarMetricButton: React.FC<CalendarMetricButtonProps> = ({ filter, label, value, icon: Icon, active, onSelect }) => (
+  <button
+    type="button"
+    data-calendar-filter={filter}
+    aria-pressed={active}
+    aria-label={`${label}: ${value}`}
+    onClick={() => onSelect(filter)}
+    className={clsx(
+      'flex min-h-20 min-w-0 items-center gap-3 rounded-panel border px-3 py-3 text-left transition-[background-color,border-color,box-shadow,color] duration-160',
+      'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/45 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
+      active
+        ? 'border-accent bg-accent-soft text-ink ring-1 ring-accent/20'
+        : 'border-line bg-surface text-ink hover:border-accent/35 hover:bg-inset',
+    )}
+  >
+    <span className={clsx(
+      'flex h-10 w-10 shrink-0 items-center justify-center rounded-control',
+      active ? 'bg-accent text-white' : 'bg-inset text-muted',
+    )}>
+      <Icon className="h-4 w-4" aria-hidden="true" />
+    </span>
+    <span className="min-w-0">
+      <span className="block truncate text-xs font-semibold text-muted">{label}</span>
+      <span className="calm-number mt-1 block text-2xl font-semibold leading-7 text-ink">{value}</span>
+    </span>
+  </button>
+);
+
 const Calendar: React.FC = () => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const {
     tasks: allTasks,
     users,
@@ -118,6 +178,7 @@ const Calendar: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
   const [showHolidays, setShowHolidays] = useState(true);
+  const [calendarFilter, setCalendarFilter] = useState<CalendarFilter>('all');
   const [dragState, setDragState] = useState<TaskDragState | null>(null);
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
   const [dropSuccess, setDropSuccess] = useState<string | null>(null);
@@ -133,9 +194,14 @@ const Calendar: React.FC = () => {
     if (successTimer.current) window.clearTimeout(successTimer.current);
   }, []);
 
-  const tasks = useMemo(
+  const visibleTasks = useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
     [allTasks, clientProfiles, currentUser, projects, rolePermissions],
+  );
+  const overview = getCalendarOverview(visibleTasks);
+  const tasks = useMemo(
+    () => filterCalendarTasks(visibleTasks, calendarFilter),
+    [calendarFilter, visibleTasks],
   );
   const taskById = useMemo(() => new Map(tasks.map(task => [task.id, task])), [tasks]);
   const rangeByTaskId = useMemo(
@@ -153,8 +219,16 @@ const Calendar: React.FC = () => {
     savingTaskIdRef.current = savingTaskId;
   }, [savingTaskId]);
 
-  const nextPeriod = () => setCurrentDate(viewMode === 'month' ? addMonths(currentDate, 1) : addWeeks(currentDate, 1));
-  const prevPeriod = () => setCurrentDate(viewMode === 'month' ? subMonths(currentDate, 1) : subWeeks(currentDate, 1));
+  const nextPeriod = () => {
+    const nextDate = viewMode === 'month' ? addMonths(currentDate, 1) : addWeeks(currentDate, 1);
+    setCurrentDate(nextDate);
+    setSelectedDate(viewMode === 'month' ? nextDate : getWorkWeekRange(nextDate).start);
+  };
+  const prevPeriod = () => {
+    const previousDate = viewMode === 'month' ? subMonths(currentDate, 1) : subWeeks(currentDate, 1);
+    setCurrentDate(previousDate);
+    setSelectedDate(viewMode === 'month' ? previousDate : getWorkWeekRange(previousDate).start);
+  };
   const goToday = () => {
     setCurrentDate(new Date());
     setSelectedDate(new Date());
@@ -182,7 +256,43 @@ const Calendar: React.FC = () => {
     });
   }
 
-  const getUserName = (id: string) => users.find(user => user.id === id)?.name || 'Unassigned';
+  const dateButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const visibleCalendarDays = weeks.flatMap(week => week.days);
+  const focusDateKey = visibleCalendarDays.some(day => isSameDay(day, selectedDate))
+    ? format(selectedDate, 'yyyy-MM-dd')
+    : format(visibleCalendarDays[0], 'yyyy-MM-dd');
+  const getPeriodLabel = () => viewMode === 'month'
+    ? formatLocalizedMonth(currentDate, locale)
+    : `${formatLocalizedDate(firstWeekStart, locale)} – ${formatLocalizedDate(lastWeekEnd, locale)}`;
+  const shiftWorkday = (day: Date, offset: number) => {
+    if (Math.abs(offset) === DAYS_IN_WORK_WEEK) {
+      return addDays(day, offset + (offset > 0 ? 1 : -1));
+    }
+    const candidate = addDays(day, offset);
+    if (candidate.getDay() === 0) return addDays(candidate, offset < 0 ? -1 : 1);
+    return candidate;
+  };
+  const focusDateButton = (day: Date) => {
+    const nextDateKey = format(day, 'yyyy-MM-dd');
+    window.requestAnimationFrame(() => dateButtonRefs.current[nextDateKey]?.focus());
+  };
+  const handleDateKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, day: Date) => {
+    let nextDate: Date | null = null;
+    if (event.key === 'ArrowLeft') nextDate = shiftWorkday(day, -1);
+    if (event.key === 'ArrowRight') nextDate = shiftWorkday(day, 1);
+    if (event.key === 'ArrowUp') nextDate = shiftWorkday(day, -DAYS_IN_WORK_WEEK);
+    if (event.key === 'ArrowDown') nextDate = shiftWorkday(day, DAYS_IN_WORK_WEEK);
+    if (event.key === 'Home') nextDate = getWorkWeekRange(day).start;
+    if (event.key === 'End') nextDate = getWorkWeekRange(day).end;
+    if (!nextDate) return;
+    event.preventDefault();
+    setSelectedDate(nextDate);
+    if (viewMode === 'month' && !isSameMonth(nextDate, monthStart)) setCurrentDate(nextDate);
+    if (viewMode === 'week' && (isBefore(nextDate, firstWeekStart) || isAfter(nextDate, lastWeekEnd))) setCurrentDate(nextDate);
+    focusDateButton(nextDate);
+  };
+
+  const getUserName = (id: string, fallback = 'Unassigned') => users.find(user => user.id === id)?.name || fallback;
   const getTasksForDay = (day: Date) => {
     const calendarDay = parseISO(format(day, 'yyyy-MM-dd'));
     return tasks.filter(task => {
@@ -531,153 +641,210 @@ const Calendar: React.FC = () => {
   const selectedDayTasks = getTasksForDay(selectedDate);
   const selectedDayHolidays = getHolidaysForDay(selectedDate);
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+  const selectedDaySummary = getCalendarTaskSummary(selectedDayTasks);
   const isClientUser = currentUser?.role === 'Client';
+  const localizedTaskDateLabel = (task: Task) => taskDateLabel(
+    task,
+    value => formatLocalizedDate(value, locale),
+    t,
+  );
+  const localizedTaskScheduleLabel = (task: Task) => taskScheduleLabel(
+    task,
+    value => formatLocalizedDate(value, locale),
+    t,
+  );
+  const filterLabels: Record<CalendarFilter, string> = {
+    all: t('Overall'),
+    open: t('Open tasks'),
+    'due-today': t('Due today'),
+    overdue: t('Overdue'),
+    completed: t('Completed'),
+    'no-due-date': t('No due date'),
+  };
+  const activeFilterLabel = filterLabels[calendarFilter];
 
   return (
     <div className={pageShell}>
-      <div className="flex min-w-0 flex-col gap-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
+      <div className="flex min-w-0 flex-col gap-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-slate-950">{isClientUser ? 'Delivery Schedule' : 'Team Calendar'}</h1>
-          <p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-600">
+          <p className="calm-eyebrow">{t('Schedule')}</p>
+          <h1 className="mt-1 text-2xl font-semibold text-ink">{t(isClientUser ? 'Delivery Schedule' : 'Team Calendar')}</h1>
+          <p className="mt-1.5 max-w-3xl text-sm leading-6 text-muted">
             {isClientUser
-              ? 'See each deliverable from its start date to its due date.'
-              : 'See each task from start to due date. Drag a range to move it, or adjust either edge.'}
+              ? t('See each deliverable from its start date to its due date.')
+              : t('See each task from start to due date. Drag a range to move it, or adjust either edge.')}
           </p>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2" role="toolbar" aria-label={t('Calendar controls')}>
+          <Button variant="secondary" onClick={goToday} className="shrink-0">
+            <CalendarIcon className="h-4 w-4" aria-hidden="true" />
+            {t('Today')}
+          </Button>
+
+          <div className="flex min-w-0 items-center rounded-control border border-line bg-surface p-1" role="group" aria-label={t('Calendar view')}>
             <button
               type="button"
-              onClick={() => setShowHolidays(value => !value)}
-              aria-pressed={showHolidays}
+              aria-pressed={viewMode === 'month'}
+              onClick={() => setViewMode('month')}
               className={clsx(
-                'flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
-                showHolidays
-                  ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
-                  : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50',
+                'min-h-11 rounded-tag px-3 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                viewMode === 'month' ? 'bg-accent text-white' : 'text-muted hover:bg-inset hover:text-ink',
               )}
             >
-              <Flag className="h-3 w-3" /> MY Holidays
+              {t('Month')}
             </button>
+            <button
+              type="button"
+              aria-pressed={viewMode === 'week'}
+              onClick={() => setViewMode('week')}
+              className={clsx(
+                'min-h-11 rounded-tag px-3 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                viewMode === 'week' ? 'bg-accent text-white' : 'text-muted hover:bg-inset hover:text-ink',
+              )}
+            >
+              {t('Week')}
+            </button>
+          </div>
 
-            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1">
-              <button
-                type="button"
-                aria-pressed={viewMode === 'month'}
-                onClick={() => setViewMode('month')}
-                className={clsx(
-                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                  viewMode === 'month' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100',
-                )}
-              >
-                Month
-              </button>
-              <button
-                type="button"
-                aria-pressed={viewMode === 'week'}
-                onClick={() => setViewMode('week')}
-                className={clsx(
-                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                  viewMode === 'week' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100',
-                )}
-              >
-                Week
-              </button>
+          <div className="flex min-w-0 items-center rounded-control border border-line bg-surface p-1">
+            <button
+              type="button"
+              onClick={prevPeriod}
+              aria-label={t(viewMode === 'month' ? 'Previous month' : 'Previous week')}
+              title={t(viewMode === 'month' ? 'Previous month' : 'Previous week')}
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-tag text-muted transition-colors hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <div className="min-w-[8.5rem] px-2 text-center text-sm font-semibold text-ink" aria-live="polite">
+              {getPeriodLabel()}
             </div>
+            <button
+              type="button"
+              onClick={nextPeriod}
+              aria-label={t(viewMode === 'month' ? 'Next month' : 'Next week')}
+              title={t(viewMode === 'month' ? 'Next month' : 'Next week')}
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-tag text-muted transition-colors hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
 
-            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-1">
-              <button
-                type="button"
-                onClick={prevPeriod}
-                aria-label={`Previous ${viewMode}`}
-                title={`Previous ${viewMode}`}
-                className="rounded-md p-1.5 text-slate-600 transition-colors hover:bg-slate-100"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={goToday}
-                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-              >
-                <CalendarIcon className="h-4 w-4" />
-                {viewMode === 'month'
-                  ? format(currentDate, 'MMMM yyyy')
-                  : (
-                    <>
-                      <span className="sm:hidden">{format(firstWeekStart, 'MMM d')} - {format(lastWeekEnd, 'MMM d')}</span>
-                      <span className="hidden sm:inline">{format(firstWeekStart, 'MMM d')} - {format(lastWeekEnd, 'MMM d, yyyy')}</span>
-                    </>
-                  )}
-              </button>
-              <button
-                type="button"
-                onClick={nextPeriod}
-                aria-label={`Next ${viewMode}`}
-                title={`Next ${viewMode}`}
-                className="rounded-md p-1.5 text-slate-600 transition-colors hover:bg-slate-100"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-
-            {canCreateTasks(currentUser, rolePermissions) && (
-              <Button onClick={() => handleAddTaskForDate(selectedDate)}>
-                <Plus className="h-4 w-4" /> Assign Task
-              </Button>
+          <button
+            type="button"
+            onClick={() => setShowHolidays(value => !value)}
+            aria-pressed={showHolidays}
+            className={clsx(
+              'inline-flex min-h-11 items-center gap-2 rounded-control border px-3 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+              showHolidays
+                ? 'border-accent/30 bg-accent-soft text-ink hover:border-accent/50'
+                : 'border-line bg-surface text-muted hover:bg-inset hover:text-ink',
             )}
+          >
+            <Flag className="h-4 w-4" aria-hidden="true" /> {t('MY Holidays')}
+          </button>
+
+          {canCreateTasks(currentUser, rolePermissions) && (
+            <Button onClick={() => handleAddTaskForDate(selectedDate)} className="shrink-0">
+              <Plus className="h-4 w-4" aria-hidden="true" /> {t('Assign Task')}
+            </Button>
+          )}
         </div>
       </div>
 
+      <section aria-labelledby="calendar-overview-title" className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 id="calendar-overview-title" className="text-base font-semibold text-ink">{t('Overview')}</h2>
+            <p className="mt-0.5 text-sm text-muted">{t('Scan visible work, then select a metric to focus the calendar.')}</p>
+          </div>
+          {calendarFilter !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setCalendarFilter('all')}
+              className="inline-flex min-h-11 items-center gap-2 rounded-control px-3 text-sm font-semibold text-accent transition-colors hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              {t('Showing')}: {activeFilterLabel}
+              <X className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only">{t('Clear filter')}</span>
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          <CalendarMetricButton filter="all" label={t('Overall')} value={overview.total} icon={CalendarRange} active={calendarFilter === 'all'} onSelect={setCalendarFilter} />
+          <CalendarMetricButton filter="open" label={t('Open tasks')} value={overview.open} icon={Clock} active={calendarFilter === 'open'} onSelect={setCalendarFilter} />
+          <CalendarMetricButton filter="due-today" label={t('Due today')} value={overview.dueToday} icon={CalendarIcon} active={calendarFilter === 'due-today'} onSelect={setCalendarFilter} />
+          <CalendarMetricButton filter="overdue" label={t('Overdue')} value={overview.overdue} icon={Clock} active={calendarFilter === 'overdue'} onSelect={setCalendarFilter} />
+          <CalendarMetricButton filter="completed" label={t('Completed')} value={overview.completed} icon={CheckCircle2} active={calendarFilter === 'completed'} onSelect={setCalendarFilter} />
+          <CalendarMetricButton filter="no-due-date" label={t('No due date')} value={overview.noDueDate} icon={CalendarRange} active={calendarFilter === 'no-due-date'} onSelect={setCalendarFilter} />
+        </div>
+      </section>
+
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
           {showHolidays && (
             <>
-              <span className="font-semibold text-slate-600">Malaysia holidays</span>
+              <span className="font-semibold text-ink">{t('Malaysia holidays')}</span>
               {(['national', 'religious', 'cultural', 'federal'] as const).map(category => (
                 <span key={category} className="flex items-center gap-1.5 capitalize">
-                  <span className={clsx('h-2.5 w-2.5 rounded-sm', HOLIDAY_COLORS[category].dot)} />
-                  {category}
+                  <span className={clsx('h-2.5 w-2.5 rounded-sm', HOLIDAY_COLORS[category].dot)} aria-hidden="true" />
+                  {t(category)}
                 </span>
               ))}
             </>
           )}
         </div>
         {!isClientUser && (
-        <p id="calendar-drag-hint" className="hidden shrink-0 items-center gap-1.5 text-xs text-slate-400 2xl:flex">
-          <GripVertical className="h-3 w-3" />
-          Drag the bar to move · drag either edge to resize
+        <p id="calendar-drag-hint" className="hidden shrink-0 items-center gap-1.5 text-xs text-muted 2xl:flex">
+          <GripVertical className="h-3 w-3" aria-hidden="true" />
+          {t('Drag the bar to move · drag either edge to resize')}
         </p>
         )}
       </div>
 
       {dropSuccess && (
         <div
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg md:bottom-6"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-control bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg md:bottom-6"
           role="status"
           aria-live="polite"
         >
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
           <span className="truncate">{dropSuccess}</span>
         </div>
       )}
       {syncError && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800" role="alert" aria-live="assertive">
+        <div className="rounded-control border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800" role="alert" aria-live="assertive">
           {syncError}
         </div>
       )}
 
-      <div className="flex flex-col gap-4 xl:flex-row">
-        <div className={clsx(cardBase, 'min-w-0 flex-1 overflow-hidden')} aria-describedby="calendar-drag-hint">
-          <div className="grid grid-cols-6 border-b border-slate-200 bg-slate-50">
+      <div className="flex min-w-0 flex-col gap-4 xl:flex-row">
+        <div className={clsx(cardBase, 'order-2 min-w-0 flex-1 overflow-hidden xl:order-1')} aria-describedby="calendar-drag-hint">
+          <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-line bg-surface px-4 py-3">
+            <h2 id="calendar-grid-title" className="text-sm font-semibold text-ink">{t('Calendar')}</h2>
+            {calendarFilter !== 'all' && (
+              <div className="flex items-center gap-2 text-xs text-muted">
+                <span>{t('Showing')}: <span className="font-semibold text-ink">{activeFilterLabel}</span></span>
+                <button
+                  type="button"
+                  onClick={() => setCalendarFilter('all')}
+                  className="inline-flex min-h-11 items-center rounded-control px-2 font-semibold text-accent transition-colors hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                >
+                  {t('Clear filter')}
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-6 border-b border-line bg-inset">
             {WEEKDAYS.map(day => (
-              <div key={day} className="py-2.5 text-center text-xs font-medium text-slate-500">
-                <span className="sm:hidden">{day.slice(0, 1)}</span>
-                <span className="hidden sm:inline">{day}</span>
+              <div key={day} className="py-2.5 text-center text-xs font-semibold text-muted">
+                <span className="sm:hidden">{t(day).slice(0, 1)}</span>
+                <span className="hidden sm:inline">{t(day)}</span>
               </div>
             ))}
           </div>
 
-          <div className="divide-y divide-slate-200">
+          <div className="divide-y divide-line">
             {weeks.map(week => (
               <div
                 key={week.layout.weekStart}
@@ -689,7 +856,7 @@ const Calendar: React.FC = () => {
                   viewMode === 'month' ? 'h-24 md:h-[154px]' : 'h-28 md:h-[230px]',
                 )}
               >
-                <div className="absolute inset-0 grid grid-cols-6 divide-x divide-slate-100">
+                <div className="absolute inset-0 grid grid-cols-6 divide-x divide-line">
                   {week.days.map(day => {
                     const dayTasks = getTasksForDay(day);
                     const dayHolidays = getHolidaysForDay(day);
@@ -708,40 +875,42 @@ const Calendar: React.FC = () => {
                         onClick={() => setSelectedDate(day)}
                         className={clsx(
                           'group relative min-w-0 cursor-pointer select-none transition-colors',
-                          !inMonth && 'bg-slate-50',
-                          inMonth && !primaryHoliday && !isDropTarget && 'bg-white hover:bg-slate-50',
+                          !inMonth && 'bg-inset',
+                          inMonth && !primaryHoliday && !isDropTarget && 'bg-surface hover:bg-inset',
                           inMonth && primaryHoliday && !isDropTarget && HOLIDAY_COLORS[primaryHoliday.category].bg,
-                          isDropTarget && 'bg-blue-100 ring-2 ring-inset ring-blue-400',
-                          selected && !isDropTarget && 'ring-2 ring-inset ring-blue-300',
+                          isDropTarget && 'bg-accent-soft ring-2 ring-inset ring-accent',
+                          selected && !isDropTarget && 'ring-2 ring-inset ring-accent/60',
                         )}
                       >
                         <div className="flex items-center justify-between p-1.5">
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            aria-label={`Select ${format(day, 'EEEE, d MMMM yyyy')}`}
+                          <button
+                            type="button"
+                            ref={element => {
+                              dateButtonRefs.current[dateStr] = element;
+                            }}
+                            tabIndex={dateStr === focusDateKey ? 0 : -1}
+                            aria-label={`${t('Select date')} ${formatLocalizedWeekdayDate(day, locale, true)}`}
                             aria-current={selected ? 'date' : undefined}
                             onClick={event => {
                               event.stopPropagation();
                               setSelectedDate(day);
                             }}
-                            onKeyDown={event => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
-                                setSelectedDate(day);
-                              }
-                            }}
+                            onKeyDown={event => handleDateKeyDown(event, day)}
                             className={clsx(
-                              'flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold outline-none',
-                              todayDay ? 'bg-blue-600 text-white' : inMonth ? 'text-slate-700 hover:bg-slate-100' : 'text-slate-500 hover:bg-slate-100',
+                              'flex h-8 min-w-8 items-center justify-center rounded-full text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
+                              todayDay ? 'bg-accent text-white' : inMonth ? 'text-ink hover:bg-inset' : 'text-muted hover:bg-inset',
                             )}
                           >
                             {format(day, 'd')}
-                          </span>
+                          </button>
                           <div className="flex items-center gap-1">
                             {dayHolidays.length > 0 && inMonth && (
-                              <span title={dayHolidays.map(holiday => holiday.name).join(', ')}>
-                                <Flag className={clsx('h-3 w-3', HOLIDAY_COLORS[primaryHoliday.category].text)} />
+                              <span
+                                role="img"
+                                title={dayHolidays.map(holiday => holiday.name).join(', ')}
+                                aria-label={`${t('Holiday')}: ${dayHolidays.map(holiday => holiday.name).join(', ')}`}
+                              >
+                                <Flag className={clsx('h-3 w-3', HOLIDAY_COLORS[primaryHoliday.category].text)} aria-hidden="true" />
                               </span>
                             )}
                             {canCreateTasks(currentUser, rolePermissions) && inMonth && (
@@ -751,14 +920,14 @@ const Calendar: React.FC = () => {
                                   event.stopPropagation();
                                   handleAddTaskForDate(day);
                                 }}
-                                title={`Assign task on ${format(day, 'd MMM yyyy')}`}
-                                aria-label={`Assign task on ${format(day, 'd MMM yyyy')}`}
+                                title={`${t('Assign task on')} ${formatLocalizedDate(day, locale)}`}
+                                aria-label={`${t('Assign task on')} ${formatLocalizedDate(day, locale)}`}
                                 className={clsx(
-                                  'hidden h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white/90 text-slate-500 shadow-sm transition-opacity hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 sm:flex',
+                                  'hidden min-h-11 min-w-11 items-center justify-center rounded-control border border-line bg-surface/90 text-muted shadow-sm transition-opacity hover:border-accent/30 hover:bg-accent-soft hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 sm:flex',
                                   selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
                                 )}
                               >
-                                <Plus className="h-3.5 w-3.5" />
+                                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                               </button>
                             )}
                           </div>
@@ -778,13 +947,16 @@ const Calendar: React.FC = () => {
 
                         {isDropTarget && (
                           <span className="absolute left-1/2 top-10 -translate-x-1/2 rounded border border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
-                            Drop
+                            {t('Drop')}
                           </span>
                         )}
 
                         {dayTasks.length > 0 && (
                           <div className="absolute bottom-1 right-1 md:hidden">
-                            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-bold text-white">
+                            <span
+                              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-bold text-white"
+                              aria-label={`${dayTasks.length} ${t(dayTasks.length === 1 ? 'task' : 'tasks')} ${t('on')} ${formatLocalizedDate(day, locale)}`}
+                            >
                               {dayTasks.length}
                             </span>
                           </div>
@@ -797,10 +969,10 @@ const Calendar: React.FC = () => {
                               event.stopPropagation();
                               setSelectedDate(day);
                             }}
-                            className="absolute bottom-1 left-1 hidden rounded px-1.5 py-0.5 text-[9px] font-semibold text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 md:block"
-                            aria-label={`Show ${hiddenCount} more task${hiddenCount === 1 ? '' : 's'} active on ${format(day, 'd MMM yyyy')}`}
+                            className="absolute bottom-1 left-1 hidden min-h-11 rounded-control px-1.5 py-0.5 text-[9px] font-semibold text-muted transition-colors hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 md:block"
+                            aria-label={`${t('Show')} ${hiddenCount} ${t(hiddenCount === 1 ? 'more task' : 'more tasks')} ${t('on')} ${formatLocalizedDate(day, locale)}`}
                           >
-                            +{hiddenCount} more
+                            +{hiddenCount} {t('more')}
                           </button>
                         )}
                       </div>
@@ -817,7 +989,7 @@ const Calendar: React.FC = () => {
                     if (!task) return null;
                     const editable = canEditTaskDates(task);
                     const range = normalizeCalendarTaskRange(task);
-                    const title = taskDateLabel(task);
+                    const title = localizedTaskDateLabel(task);
 
                     return (
                       <div
@@ -847,7 +1019,7 @@ const Calendar: React.FC = () => {
                             onDragEnd={handleDragEnd}
                             aria-label={`${t('Adjust start date for')} ${task.title}`} data-i18n-skip
                             title={t('Drag to adjust start date')}
-                            className="flex w-2.5 shrink-0 cursor-ew-resize items-center justify-center border-r border-current/10 bg-white/35 hover:bg-white/70"
+                            className="flex h-full min-h-6 w-2.5 shrink-0 cursor-ew-resize items-center justify-center border-r border-current/10 bg-white/35 outline-none transition-colors hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
                           >
                             <span className="h-3 w-0.5 rounded-full bg-current/50" />
                           </button>
@@ -860,7 +1032,7 @@ const Calendar: React.FC = () => {
                           onDragEnd={handleDragEnd}
                           onClick={() => openDateEditor(task)}
                           className={clsx(
-                            'flex min-w-0 flex-1 items-center gap-1 px-1.5 text-left outline-none',
+                            'flex h-full min-h-6 min-w-0 flex-1 items-center gap-1 px-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
                             editable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
                           )}
                           aria-label={`${t(editable ? 'Edit dates for' : 'Open')} ${task.title}. ${t(title)}`} data-i18n-skip
@@ -885,7 +1057,7 @@ const Calendar: React.FC = () => {
                             onDragEnd={handleDragEnd}
                             aria-label={`${t('Adjust due date for')} ${task.title}`} data-i18n-skip
                             title={t(range?.hasDueDate ? 'Drag to adjust due date' : 'Drag to add a due date')}
-                            className="flex w-2.5 shrink-0 cursor-ew-resize items-center justify-center border-l border-current/10 bg-white/35 hover:bg-white/70"
+                            className="flex h-full min-h-6 w-2.5 shrink-0 cursor-ew-resize items-center justify-center border-l border-current/10 bg-white/35 outline-none transition-colors hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
                           >
                             <span className="h-3 w-0.5 rounded-full bg-current/50" />
                           </button>
@@ -899,23 +1071,26 @@ const Calendar: React.FC = () => {
           </div>
         </div>
 
-        <aside className={clsx(cardBase, 'flex w-full shrink-0 flex-col overflow-hidden xl:w-80')}>
-            <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-4 py-3">
+        <aside
+          className={clsx(cardBase, 'order-1 flex w-full max-h-[min(70dvh,42rem)] shrink-0 flex-col overflow-hidden xl:order-2 xl:w-80 xl:max-h-[calc(100dvh-10rem)]')}
+          aria-labelledby="calendar-selected-day-title"
+        >
+          <div className="flex items-center justify-between border-b border-line bg-inset px-4 py-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-slate-500">Selected day</p>
-              <h2 className="mt-0.5 truncate text-base font-semibold text-slate-900">
-                {format(selectedDate, 'EEEE, d MMMM yyyy')}
+              <p className="text-xs font-medium text-muted">{t('Selected day')}</p>
+              <h2 id="calendar-selected-day-title" className="mt-0.5 truncate text-base font-semibold text-ink">
+                {formatLocalizedWeekdayDate(selectedDate, locale, true)}
               </h2>
             </div>
             {canCreateTasks(currentUser, rolePermissions) && (
               <button
                 type="button"
                 onClick={() => handleAddTaskForDate(selectedDate)}
-                title="Assign task for this day"
-                aria-label="Assign task for this day"
-                className="shrink-0 rounded-md p-1 text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                title={t('Assign task for this day')}
+                aria-label={t('Assign task for this day')}
+                className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-accent transition-colors hover:bg-accent-soft hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
-                <Plus className="h-5 w-5" />
+                <Plus className="h-5 w-5" aria-hidden="true" />
               </button>
             )}
           </div>
@@ -923,8 +1098,8 @@ const Calendar: React.FC = () => {
           <div className="custom-scrollbar flex-1 space-y-4 overflow-y-auto p-4">
             {selectedDayHolidays.length > 0 && (
               <div className="space-y-2">
-                <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                  <Flag className="h-3 w-3" /> Public Holiday
+                <p className="flex items-center gap-1.5 text-xs font-medium text-muted">
+                  <Flag className="h-3 w-3" aria-hidden="true" /> {t('Public Holiday')}
                 </p>
                 {selectedDayHolidays.map(holiday => (
                   <div
@@ -944,7 +1119,7 @@ const Calendar: React.FC = () => {
             <div
               className={clsx(
                 '-m-2 space-y-2 rounded-lg p-2 ring-2 ring-inset ring-transparent transition-colors',
-                dropTargetDate === selectedDateStr && 'bg-blue-50 ring-blue-300',
+                dropTargetDate === selectedDateStr && 'bg-accent-soft ring-accent',
               )}
               onDragOver={event => {
                 if (!dragState) return;
@@ -958,22 +1133,37 @@ const Calendar: React.FC = () => {
               }}
               onDrop={event => void applyDrop(event, selectedDate)}
             >
-              <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                <CalendarRange className="h-3 w-3" />
-                {selectedDayTasks.length} active task{selectedDayTasks.length === 1 ? '' : 's'}
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-muted">
+                    <CalendarRange className="h-3 w-3" aria-hidden="true" />
+                    {t('Tasks on this day')}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    {selectedDaySummary.open} {t('open tasks')} · {selectedDaySummary.completed} {t('completed')}
+                    {selectedDaySummary.overdue > 0 && ` · ${selectedDaySummary.overdue} ${t('overdue')}`}
+                  </p>
+                </div>
+                <span className="calm-number text-xl font-semibold text-ink" aria-label={`${selectedDaySummary.total} ${t('tasks')}`}>
+                  {selectedDaySummary.total}
+                </span>
+              </div>
 
               {selectedDayTasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-200 py-8 text-center">
-                  <p className="text-sm text-slate-400">No active tasks</p>
-                  <p className="mb-1 text-xs text-slate-500">Choose another day or assign a task</p>
+                <div className="flex flex-col items-center justify-center gap-1 rounded-control border-2 border-dashed border-line py-8 text-center">
+                  <p className="text-sm text-muted">
+                    {calendarFilter === 'all' ? t('No tasks scheduled for this day.') : t('No tasks match this filter.')}
+                  </p>
+                  <p className="mb-1 text-xs text-muted">
+                    {calendarFilter === 'all' ? t('Choose another day or assign a task') : t('Try Overall to see every visible task.')}
+                  </p>
                   {canCreateTasks(currentUser, rolePermissions) && (
                     <Button
                       onClick={() => handleAddTaskForDate(selectedDate)}
                       variant="secondary"
-                      className="h-8 min-h-8 px-2.5 text-xs"
+                      className="min-h-11 px-2.5 text-xs"
                     >
-                      <Plus className="h-3.5 w-3.5" /> Assign Task
+                      <Plus className="h-3.5 w-3.5" aria-hidden="true" /> {t('Assign Task')}
                     </Button>
                   )}
                 </div>
@@ -993,8 +1183,8 @@ const Calendar: React.FC = () => {
                     <article
                       key={task.id}
                       className={clsx(
-                        'rounded-lg border bg-white p-3 transition-colors',
-                        isOverdue ? 'border-red-200 border-l-4 border-l-red-500' : 'border-slate-200',
+                        'rounded-control border bg-surface p-3 transition-colors',
+                        isOverdue ? 'border-red-200 border-l-4 border-l-red-500' : 'border-line',
                       )}
                     >
                       <div className="flex items-start gap-2">
@@ -1003,11 +1193,11 @@ const Calendar: React.FC = () => {
                           <Link
                             data-i18n-skip
                             to={`/tasks?taskId=${encodeURIComponent(task.id)}`}
-                            className={clsx(
-                              'text-sm font-semibold leading-snug text-slate-800 transition-colors hover:text-blue-700',
-                              task.isCompleted && 'text-slate-400 line-through',
-                              isOverdue && 'text-red-900',
-                            )}
+                      className={clsx(
+                        'rounded-sm text-sm font-semibold leading-snug text-ink transition-colors hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                        task.isCompleted && 'text-muted line-through',
+                        isOverdue && 'text-red-900',
+                      )}
                           >
                             {task.title}
                           </Link>
@@ -1031,8 +1221,13 @@ const Calendar: React.FC = () => {
                         </span>
                         )}
                         {!isClientUser && (
-                        <span className="flex items-center gap-1 text-[10px] text-slate-400">
-                          <User className="h-2.5 w-2.5" /> {getUserName(task.assignedTo)}
+                          <span className="flex items-center gap-1 text-[10px] text-muted">
+                            <User className="h-2.5 w-2.5" aria-hidden="true" /> {getUserName(task.assignedTo)}
+                        </span>
+                        )}
+                        {!isClientUser && task.createdBy && task.createdBy !== task.assignedTo && (
+                          <span className="text-[10px] text-muted">
+                            {t('Created by')} {getUserName(task.createdBy, 'Unknown')}
                         </span>
                         )}
                         <Badge tone={task.status === 'Completed' ? 'emerald' : task.status === 'Cancelled' ? 'slate' : 'blue'} className="px-1.5 py-0.5 text-[10px]">
@@ -1046,25 +1241,25 @@ const Calendar: React.FC = () => {
                           onClick={() => openDateEditor(task)}
                           disabled={savingTaskId === task.id || hasBlockedMutation}
                           aria-label={`${t('Edit dates for')} ${task.title}`} data-i18n-skip
-                          className="mt-3 flex w-full items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-left transition-colors hover:border-blue-200 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="mt-3 flex min-h-11 w-full items-center gap-2 rounded-control border border-line bg-inset px-2.5 py-2 text-left transition-colors hover:border-accent/30 hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {savingTaskId === task.id ? (
-                            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-600" />
+                            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent" aria-hidden="true" />
                           ) : (
-                            <CalendarRange className="h-4 w-4 shrink-0 text-blue-600" />
+                            <CalendarRange className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
                           )}
                           <span className="min-w-0 flex-1">
-                            <span className="block text-[10px] font-medium text-slate-500">Schedule</span>
-                            <span className="block truncate text-xs font-semibold text-slate-700">{taskDateLabel(task)}</span>
+                            <span className="block text-[10px] font-medium text-muted">{t('Schedule')}</span>
+                            <span className="block truncate text-xs font-semibold text-ink">{localizedTaskScheduleLabel(task)}</span>
                           </span>
-                          <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                          <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden="true" />
                         </button>
                       ) : (
-                        <div className="mt-3 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                          <CalendarRange className="h-4 w-4 shrink-0 text-slate-400" />
+                        <div className="mt-3 flex min-h-11 items-center gap-2 rounded-control border border-line bg-inset px-2.5 py-2">
+                          <CalendarRange className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
                           <span className="min-w-0">
-                            <span className="block text-[10px] font-medium text-slate-500">Schedule</span>
-                            <span className="block truncate text-xs font-semibold text-slate-700">{taskDateLabel(task)}</span>
+                            <span className="block text-[10px] font-medium text-muted">{t('Schedule')}</span>
+                          <span className="block truncate text-xs font-semibold text-ink">{localizedTaskScheduleLabel(task)}</span>
                           </span>
                         </div>
                       )}
@@ -1076,8 +1271,8 @@ const Calendar: React.FC = () => {
                             isOverdue ? 'font-bold text-red-700' : 'text-slate-500',
                           )}
                         >
-                          <Clock className="h-3 w-3" />
-                          {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
+                          <Clock className="h-3 w-3" aria-hidden="true" />
+                          {t(getRelativeDueDateString(task.dueDate, task.isCompleted, task.status))}
                         </p>
                       )}
                     </article>
@@ -1098,14 +1293,14 @@ const Calendar: React.FC = () => {
           panelClassName="max-w-md"
         >
           <div className={panelHeader}>
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-              <CalendarRange className="h-5 w-5" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
+              <CalendarRange className="h-5 w-5" aria-hidden="true" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 id="calendar-date-editor-title" className="truncate text-lg font-semibold text-slate-950">
-                Edit task dates
+              <h2 id="calendar-date-editor-title" className="truncate text-lg font-semibold text-ink">
+                {t('Edit task dates')}
               </h2>
-              <p id="calendar-date-editor-description" className="truncate text-sm text-slate-500">
+              <p id="calendar-date-editor-description" className="truncate text-sm text-muted">
                 {editingTask.title}
               </p>
             </div>
@@ -1113,23 +1308,23 @@ const Calendar: React.FC = () => {
               type="button"
               onClick={closeDateEditor}
               disabled={savingTaskId === editingTask.id}
-              aria-label="Close date editor"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
+              aria-label={t('Close date editor')}
+              className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
             >
-              <X className="h-5 w-5" />
+              <X className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
 
           <form onSubmit={handleDateEditorSubmit} className="flex min-h-0 flex-1 flex-col">
             <div className="space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-medium text-slate-500">Current range</p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">{taskDateLabel(editingTask)}</p>
+              <div className="rounded-control border border-line bg-inset px-4 py-3">
+                <p className="text-xs font-medium text-muted">{t('Current range')}</p>
+                <p className="mt-1 text-sm font-semibold text-ink">{localizedTaskDateLabel(editingTask)}</p>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label>
-                  <span className={fieldLabel}>Start Date</span>
+                  <span className={fieldLabel}>{t('Start Date')}</span>
                   <input
                     type="date"
                     required
@@ -1145,7 +1340,7 @@ const Calendar: React.FC = () => {
                   />
                 </label>
                 <label>
-                  <span className={fieldLabel}>Due Date <span className="font-normal text-slate-400">(optional)</span></span>
+                  <span className={fieldLabel}>{t('Due Date')} <span className="font-normal text-muted">({t('optional')})</span></span>
                   <input
                     type="date"
                     value={dateDraft.dueDate}
@@ -1161,8 +1356,8 @@ const Calendar: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs leading-5 text-slate-500">
-                  Leave Due Date blank to show this task only on its Start Date.
+                <p className="text-xs leading-5 text-muted">
+                  {t('Leave Due Date blank to show this task only on its Start Date.')}
                 </p>
                 {dateDraft.dueDate && (
                   <button
@@ -1172,32 +1367,32 @@ const Calendar: React.FC = () => {
                       setDateDraft(current => current ? { ...current, dueDate: '' } : current);
                       setDateDraftError('');
                     }}
-                    className="shrink-0 text-xs font-semibold text-blue-700 hover:text-blue-800"
+                    className="inline-flex min-h-11 shrink-0 items-center rounded-control px-2 text-xs font-semibold text-accent hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                   >
-                    Clear due date
+                    {t('Clear due date')}
                   </button>
                 )}
               </div>
 
               {dateDraftError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700" role="alert">
+                <div className="rounded-control border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700" role="alert">
                   {dateDraftError}
                 </div>
               )}
               {editingPendingAttempt ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900" role="alert">
-                  <p className="font-semibold">Attempted range retained</p>
+                <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900" role="alert">
+                  <p className="font-semibold">{t('Attempted range retained')}</p>
                   <p className="mt-1 leading-5">
-                    Retry will save {editingPendingAttempt.attempted.startDate}
+                    {t('Retry will save')} {editingPendingAttempt.attempted.startDate}
                     {editingPendingAttempt.attempted.dueDate
-                      ? ` to ${editingPendingAttempt.attempted.dueDate}`
-                      : ' with no due date'}.
-                    Use latest will discard this attempt.
+                      ? ` ${t('to')} ${editingPendingAttempt.attempted.dueDate}`
+                      : ` ${t('with no due date')}`}
+                    . {t('Use latest will discard this attempt.')}
                   </p>
                 </div>
               ) : hasBlockedMutation && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800" role="alert">
-                  Resolve the current sync issue with Retry or Discard before changing these dates.
+                <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800" role="alert">
+                  {t('Resolve the current sync issue with Retry or Discard before changing these dates.')}
                 </div>
               )}
             </div>
@@ -1210,9 +1405,9 @@ const Calendar: React.FC = () => {
                   else closeDateEditor();
                 }}
                 aria-disabled={Boolean(editingPendingAttempt)}
-                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control px-3 text-sm font-semibold text-muted transition-colors hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
-                Open task <ExternalLink className="h-4 w-4" />
+                {t('Open task')} <ExternalLink className="h-4 w-4" aria-hidden="true" />
               </Link>
               <div className="flex flex-col-reverse gap-2 sm:flex-row">
                 {editingPendingAttempt ? (
@@ -1223,15 +1418,15 @@ const Calendar: React.FC = () => {
                       onClick={() => void handleUseLatestDates()}
                       disabled={savingTaskId === editingTask.id || backend.status === 'offline'}
                     >
-                      Use latest
+                      {t('Use latest')}
                     </Button>
                     <Button
                       type="button"
                       onClick={() => void handleRetryDates()}
                       disabled={savingTaskId === editingTask.id || backend.status === 'offline'}
                     >
-                      {savingTaskId === editingTask.id && <Loader2 className="h-4 w-4 animate-spin" />}
-                      {savingTaskId === editingTask.id ? 'Retrying' : 'Retry dates'}
+                      {savingTaskId === editingTask.id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                      {savingTaskId === editingTask.id ? t('Retrying') : t('Retry dates')}
                     </Button>
                   </>
                 ) : (
@@ -1242,14 +1437,14 @@ const Calendar: React.FC = () => {
                       onClick={closeDateEditor}
                       disabled={savingTaskId === editingTask.id}
                     >
-                      Cancel
+                      {t('Cancel')}
                     </Button>
                     <Button
                       type="submit"
                       disabled={savingTaskId === editingTask.id || hasBlockedMutation}
                     >
-                      {savingTaskId === editingTask.id && <Loader2 className="h-4 w-4 animate-spin" />}
-                      {savingTaskId === editingTask.id ? 'Saving' : 'Save dates'}
+                      {savingTaskId === editingTask.id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                      {savingTaskId === editingTask.id ? t('Saving') : t('Save dates')}
                     </Button>
                   </>
                 )}

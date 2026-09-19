@@ -58,7 +58,7 @@ const advanceClientWizard = async (page: Page, clientName: string) => {
 
 test('all five release roles can access their scoped staging workspace', async ({ browser }) => {
   const checks: Array<{ role: QaRole; expected: RegExp }> = [
-    { role: 'SUPER_ADMIN', expected: /AiTask|Dashboard|Clients/ },
+    { role: 'SUPER_ADMIN', expected: /AiTask|Dashboard|Delivery tracker/ },
     { role: 'OPERATION', expected: /My work/ },
     { role: 'PRODUCTION', expected: /My work/ },
     { role: 'ACCOUNT', expected: /My work/ },

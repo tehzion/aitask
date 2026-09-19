@@ -4,7 +4,7 @@ import AxeBuilder from '@axe-core/playwright';
 const routes = [
   { path: '/', heading: 'Project Manager Dashboard' },
   { path: '/projects', heading: 'Companies' },
-  { path: '/clients', heading: 'Clients' },
+  { path: '/clients', heading: 'Delivery tracker' },
   { path: '/tasks', heading: 'Portfolio work' },
   { path: '/clients/demo-service-client-urban', heading: 'UrbanEats' },
   { path: '/settings', heading: /Settings|Account Setup/ },
@@ -64,7 +64,7 @@ test('core operations screens keep their semantic layout in light and dark modes
 
       for (const route of routes) {
         await page.goto(route.path);
-        await expect(page.getByRole('heading', { name: route.heading })).toBeVisible();
+        await expect(page.getByRole('heading', { name: route.heading, level: 1 })).toBeVisible();
         await expectNoHorizontalOverflow(page, `${viewport.name} ${theme} ${route.path}`);
         const pageName = route.path === '/'
           ? 'dashboard'
@@ -89,7 +89,7 @@ test('core operations screens keep their semantic layout in light and dark modes
   await page.goto('/clients');
   await page.getByRole('button', { name: '切换为中文' }).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
-  await expectNoHorizontalOverflow(page, 'Simplified Chinese Clients');
+  await expectNoHorizontalOverflow(page, 'Simplified Chinese Delivery tracker');
   if (hasCommittedVisualBaseline) {
     await expect(page).toHaveScreenshot('calm-clients-mobile-dark-zh.png', {
       animations: 'disabled',

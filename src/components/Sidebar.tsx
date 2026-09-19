@@ -8,7 +8,7 @@ import { canCreateTasks } from '../lib/access';
 import { clearPasswordResetBypass } from '../lib/auth';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
 import { discardSecureWorkspaceCommand, getRetainedSecureCommand } from '../lib/secureWorkspace';
-import { getNavigationSections, type NavigationItem } from '../lib/navigation';
+import { getMobileNavigation, getNavigationSections, type NavigationItem } from '../lib/navigation';
 import { useI18n } from './I18nProvider';
 
 interface SidebarProps {
@@ -47,7 +47,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
     rolePermissions,
     clientProfile ? `/clients/${clientProfile.id}` : undefined,
   );
-  const moreActive = secondary.some(item => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
+  const mobilePrimaryPaths = new Set(getMobileNavigation(currentUser, rolePermissions).map(item => item.path));
+  const visibleSecondary = isDesktop
+    ? secondary
+    : secondary.filter(item => !mobilePrimaryPaths.has(item.path));
+  const moreActive = visibleSecondary.some(item => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
   const [staffMoreOpen, setStaffMoreOpen] = React.useState(moreActive);
 
   const handleLogout = async () => {
@@ -231,7 +235,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
         <div className="custom-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-5">
           <p className={clsx('calm-eyebrow mb-3 px-3', isCollapsed && 'md:sr-only')}>{t('Workspace')}</p>
           <div className="space-y-1">{primary.map(renderNavItem)}</div>
-          {(isStaff || isClient) && secondary.length > 0 && (
+          {(isStaff || isClient) && visibleSecondary.length > 0 && (
             <div className="pt-3">
               <button
                 type="button"
@@ -273,7 +277,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
                     </button>
                   </div>
                 )}
-                {secondary.map(renderNavItem)}
+                {visibleSecondary.map(renderNavItem)}
               </div>
             </div>
           )}

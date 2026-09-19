@@ -5,6 +5,7 @@ import {
   CheckSquare,
   FolderKanban,
   LayoutDashboard,
+  ListChecks,
   PackageCheck,
   Settings,
   UserPlus,
@@ -24,7 +25,12 @@ export type NavigationSections = {
   primary: NavigationItem[];
   secondary: NavigationItem[];
   footer: NavigationItem[];
+  mobilePrimary?: NavigationItem[];
 };
+
+export const getDeliveryWorkspaceLabel = (user: User | null | undefined) => (
+  user?.role === 'Client' ? 'Deliveries' : 'Delivery tracker'
+);
 
 const routeIsVisible = (
   user: User | null | undefined,
@@ -46,10 +52,17 @@ const staffPrimary: NavigationItem[] = [
 
 const staffSecondary: NavigationItem[] = [
   { path: '/tasks', label: 'All work', icon: CheckSquare },
-  { path: '/clients', label: 'Clients', icon: Users },
+  { path: '/clients', label: 'Delivery tracker', icon: ListChecks },
   { path: '/projects', label: 'Companies', icon: FolderKanban },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
   { path: '/settings', label: 'Settings', icon: Settings },
+];
+
+const staffMobilePrimary: NavigationItem[] = [
+  staffPrimary[0],
+  staffSecondary[1],
+  staffPrimary[1],
+  staffPrimary[2],
 ];
 
 const clientPrimary: NavigationItem[] = [
@@ -67,7 +80,7 @@ const createClientSecondary = (clientProfilePath?: string): NavigationItem[] => 
 
 const generalMobilePrimary: NavigationItem[] = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/clients', label: 'Clients', icon: Users },
+  { path: '/clients', label: 'Delivery tracker', icon: ListChecks },
   { path: '/calendar', label: 'Calendar', icon: CalendarDays },
   { path: '/notifications', label: 'Inbox', icon: Bell },
 ];
@@ -75,7 +88,7 @@ const generalMobilePrimary: NavigationItem[] = [
 const navIcons = {
   Dashboard: LayoutDashboard,
   Calendar: CalendarDays,
-  Clients: Users,
+  'Delivery tracker': ListChecks,
   Companies: FolderKanban,
   Reports: BarChart3,
   Approvals: UserPlus,
@@ -94,6 +107,7 @@ export const getNavigationSections = (
       primary: filterVisible(user, rolePermissions, staffPrimary),
       secondary: filterVisible(user, rolePermissions, staffSecondary),
       footer: [],
+      mobilePrimary: filterVisible(user, rolePermissions, staffMobilePrimary),
     };
   }
 
@@ -121,6 +135,8 @@ export const getMobileNavigation = (
   clientProfilePath?: string,
 ) => {
   const sections = getNavigationSections(user, rolePermissions, clientProfilePath);
-  if (user?.role === 'Staff' || user?.role === 'HOD' || user?.role === 'Client') return sections.primary;
+  if (user?.role === 'Staff' || user?.role === 'HOD' || user?.role === 'Client') {
+    return sections.mobilePrimary || sections.primary;
+  }
   return filterVisible(user, rolePermissions, generalMobilePrimary);
 };

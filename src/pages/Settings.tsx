@@ -453,7 +453,7 @@ const Settings: React.FC = () => {
     setLocalDemoMessage({
       tone: result.ok ? 'success' : 'error',
       text: result.ok
-        ? 'Sample workspace reset. Open Clients to explore the seeded service plans and cycles.'
+        ? t('Sample workspace reset. Open Delivery tracker to explore the seeded service plans and cycles.')
         : result.error || 'The sample workspace could not be reset.',
     });
   };

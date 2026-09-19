@@ -15,6 +15,10 @@ describe('Chinese UI translations', () => {
   it('keeps English as the default and translates shared interface copy to Simplified Chinese', () => {
     expect(translateUiText('Clients', 'en')).toBe('Clients');
     expect(translateUiText('Clients', 'zh')).toBe('客户');
+    expect(translateUiText('Delivery tracker', 'en')).toBe('Delivery tracker');
+    expect(translateUiText('Delivery tracker', 'zh')).toBe('交付跟踪');
+    expect(translateUiText('Client work', 'zh')).toBe('客户工作');
+    expect(translateUiText('Track tasks, deliverables, deadlines, and completion by client.', 'zh')).toBe('按客户跟踪任务、交付物、截止日期和完成情况。');
     expect(translateUiText('System update in progress', 'zh')).toBe('系统正在更新');
     expect(translateUiText('Read only', 'zh')).toBe('只读');
     expect(translateUiText(
@@ -48,6 +52,9 @@ describe('Chinese UI translations', () => {
     expect(translateUiText('overdue', 'zh')).toBe('逾期');
     expect(translateUiText('Due in 3 days', 'zh')).toBe('3 天后到期');
     expect(translateUiText('3 days ago', 'zh')).toBe('3 天前');
+    expect(translateUiText('Starts 18 Sep 2026 · Due 22 Sep 2026', 'zh')).toBe('开始：2026年9月18日 · 截止 2026年9月22日');
+    expect(translateUiText('Starts 18 Sep 2026 · No due date', 'zh')).toBe('开始：2026年9月18日 · 无截止日期');
+    expect(translateUiText('Created by Jing Yi', 'zh')).toBe('创建人：Jing Yi');
     expect(translateUiText('3 shown from 10 total, 4 linked tasks', 'zh')).toBe('显示 3 / 10 个，共关联 4 个任务');
     expect(translateUiText('Open delivery file', 'zh')).toBe('打开交付文件');
     expect(translateUiText('1 active revision', 'zh')).toBe('1 个进行中的版本');

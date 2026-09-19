@@ -17,6 +17,7 @@ import { format, isValid, parseISO } from 'date-fns';
 import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
+import { useI18n } from '../components/I18nProvider';
 import { canCreateTasks, canViewAllClients, getClientKey, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import {
@@ -50,6 +51,7 @@ const readableDate = (value?: string) => {
 };
 
 const DeliveryTracker: React.FC = () => {
+  const { t } = useI18n();
   const {
     currentUser,
     rolePermissions,
@@ -183,13 +185,13 @@ const DeliveryTracker: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title="Clients"
-        description="Manage every task, deliverable, deadline, and completed item by client."
+        title={t('Delivery tracker')}
+        description={t('Track tasks, deliverables, deadlines, and completion by client.')}
         meta={<><span>{range.label}</span><span aria-hidden="true">·</span><span>{filteredSummaries.length} clients shown</span></>}
         action={canCreateTasks(currentUser, rolePermissions) ? <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />New task</Button> : undefined}
       />
 
-      <StatGroup className="grid-cols-2 xl:grid-cols-4" aria-label="Delivery tracker summary">
+      <StatGroup className="grid-cols-2 xl:grid-cols-4" aria-label={t('Delivery tracker summary')}>
         {[
           { label: 'Open tasks', value: totals.open, icon: ListChecks, tone: 'text-blue-600 bg-blue-50' },
           { label: 'Overdue', value: totals.overdue, icon: AlertTriangle, tone: 'text-red-700 bg-red-50' },
@@ -207,8 +209,8 @@ const DeliveryTracker: React.FC = () => {
         <div className="border-b border-line bg-inset/70 p-4 sm:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h2 id="delivery-tracker-heading" className="font-semibold text-ink">Delivery tracker</h2>
-              <p className="mt-1 text-sm text-muted">Open overdue work carries forward until it is completed.</p>
+              <h2 id="delivery-tracker-heading" className="font-semibold text-ink">{t('Client work')}</h2>
+              <p className="mt-1 text-sm text-muted">{t('Open overdue work carries forward until it is completed.')}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <SegmentedTabs items={PERIOD_TABS} value={period} onChange={value => { setPeriod(value); setAnchor(new Date()); updateQuery({ period: value === 'week' ? null : value }); }} label="Tracker period" idPrefix="delivery-period" />

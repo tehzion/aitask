@@ -533,7 +533,7 @@ const TasksWorkspace: React.FC = () => {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <Link to="/clients" className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-700 hover:text-blue-800">
-                  <ArrowLeft className="h-4 w-4" /> Back to Clients
+                  <ArrowLeft className="h-4 w-4" /> {t('Back to Delivery tracker')}
                 </Link>
                 <div className="flex items-start gap-3">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">

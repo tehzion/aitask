@@ -38,7 +38,7 @@ export type AppPath = '/' | '/tasks' | '/calendar' | '/clients' | '/projects' | 
 export const appNavigation: { label: string; path: AppPath }[] = [
   { label: 'Dashboard', path: '/' },
   { label: 'Calendar', path: '/calendar' },
-  { label: 'Clients', path: '/clients' },
+  { label: 'Delivery tracker', path: '/clients' },
   { label: 'Companies', path: '/projects' },
   { label: 'Reports', path: '/reports' },
   { label: 'Approvals', path: '/approvals' },
@@ -279,7 +279,7 @@ export const getRoleDisplayName = (role: Role | null | undefined) => {
 
 export const getEffectiveRoleName = (user: User | null | undefined, customRoles: CustomRole[] = []) => {
   if (!user) return 'Unknown';
-  if (isBossKoo(user)) return 'Super Admin';
+  if (isBossKoo(user)) return 'Boss Koo';
   const customRole = user.customRoleId
     ? customRoles.find(role => role.id === user.customRoleId)
     : undefined;

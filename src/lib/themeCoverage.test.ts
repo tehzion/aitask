@@ -29,6 +29,7 @@ const ALLOWLIST = new Set([
   'border-amber-800/70', 'border-amber-900/70',
   'border-red-100/70', 'border-red-900/70', 'border-slate-700',
   'ring-white/10',
+  'ring-emerald-500/40', 'ring-red-500/40',
   'ring-red-500/35',
   'shadow-amber-50/40', 'shadow-blue-50/40', 'shadow-emerald-50/40',
   'shadow-red-50/40', 'shadow-slate-950/10', 'shadow-slate-950/20',

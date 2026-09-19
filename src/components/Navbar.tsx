@@ -20,6 +20,9 @@ import { LanguageSwitcher, useI18n } from './I18nProvider';
 interface NavbarProps {
   onMenuClick: () => void;
   notificationReadActions: NotificationReadActions;
+  showNotifications: boolean;
+  onToggleNotifications: () => void;
+  onCloseNotifications: () => void;
   resolvedTheme: ResolvedTheme;
   themePreference: ThemePreference;
   onSetThemePreference: (preference: ThemePreference) => void;
@@ -30,6 +33,9 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = ({
   onMenuClick,
   notificationReadActions,
+  showNotifications,
+  onToggleNotifications,
+  onCloseNotifications,
   resolvedTheme,
   themePreference,
   onSetThemePreference,
@@ -47,7 +53,6 @@ const Navbar: React.FC<NavbarProps> = ({
     notificationUnreadCount: state.notificationUnreadCount,
     rolePermissions: state.rolePermissions,
   })));
-  const [showNotifs, setShowNotifs] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
   const [soundEnabled, setSoundEnabledState] = useState(getSoundEnabled);
@@ -82,13 +87,17 @@ const Navbar: React.FC<NavbarProps> = ({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-        setShowNotifs(false);
+        onCloseNotifications();
       }
       if (appearanceRef.current && !appearanceRef.current.contains(event.target as Node)) setShowAppearance(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [onCloseNotifications]);
+
+  useEffect(() => {
+    onCloseNotifications();
+  }, [location.pathname, onCloseNotifications]);
 
   useEffect(() => {
     if (!showAppearance) return;
@@ -145,7 +154,7 @@ const Navbar: React.FC<NavbarProps> = ({
       : '/tasks';
 
   const handleBellClick = () => {
-    setShowNotifs(!showNotifs);
+    onToggleNotifications();
   };
 
   const handleGlobalSearch = (event: React.FormEvent) => {
@@ -243,7 +252,7 @@ const Navbar: React.FC<NavbarProps> = ({
           <IconButton
             onClick={handleBellClick}
             label="Notifications"
-            aria-expanded={showNotifs}
+            aria-expanded={showNotifications}
             aria-controls="header-notifications-menu"
             className="relative"
           >
@@ -256,7 +265,7 @@ const Navbar: React.FC<NavbarProps> = ({
           </IconButton>
 
           {/* Notifications Dropdown */}
-          {showNotifs && (
+          {showNotifications && (
             <div id="header-notifications-menu" role="region" aria-label="Notification preview" className="calm-raised absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] max-w-80 overflow-hidden">
               <div className="flex items-center justify-between border-b border-line/80 bg-inset/80 px-4 py-3">
                 <div>
@@ -278,7 +287,7 @@ const Navbar: React.FC<NavbarProps> = ({
                     to={notificationRouteToPath(notif.route ?? (notif as typeof notif & { link?: string }).link)}
                     onClick={() => {
                       void notificationReadActions.markRead(notif.id);
-                      setShowNotifs(false);
+                      onCloseNotifications();
                     }}
                     className="flex items-start gap-3 border-b border-line/60 bg-surface px-4 py-3 transition-colors hover:bg-inset/70"
                   >
@@ -302,7 +311,7 @@ const Navbar: React.FC<NavbarProps> = ({
               <div className="flex items-center justify-between gap-3 border-t border-line/80 bg-inset/80 px-3 py-2.5">
                 <Link
                   to="/notifications"
-                  onClick={() => setShowNotifs(false)}
+                  onClick={onCloseNotifications}
                   className="rounded-tag px-2 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-accent-soft"
                 >
                   View all notifications

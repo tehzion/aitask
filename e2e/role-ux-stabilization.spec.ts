@@ -35,6 +35,7 @@ test('Staff Chinese workspace localizes dynamic copy and preserves work content'
   await page.setViewportSize({ width: 390, height: 844 });
   const mobileNavigation = page.getByRole('navigation', { name: '移动端导航' });
   await expect(mobileNavigation.getByText('我的工作', { exact: true })).toBeVisible();
+  await expect(mobileNavigation.getByText('交付跟踪', { exact: true })).toBeVisible();
   await expect(mobileNavigation.getByText('更多', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 800 });
 

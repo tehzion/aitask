@@ -509,9 +509,15 @@ test('first login reaches the app and critical responsive routes remain usable',
     };
   });
   await page.reload();
+  await expect(page.locator('[data-calendar-filter="all"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('[data-calendar-filter="open"]').click();
+  await expect(page.locator('[data-calendar-filter="open"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Showing: Open tasks')).toBeVisible();
+  await page.locator('[data-calendar-filter="all"]').click();
+  await expect(page.locator('[data-calendar-filter="all"]')).toHaveAttribute('aria-pressed', 'true');
   await page.locator(`[data-calendar-date="${calendarDates.start}"]`).click({ position: { x: 12, y: 12 } });
   await expect(page.getByRole('group', { name: /Calendar Range QA/ }).first()).toBeVisible();
-  await expect(page.getByText('1 active task')).toBeVisible();
+  await expect(page.getByText('Tasks on this day')).toBeVisible();
   await page.getByRole('button', { name: /Edit dates for Calendar Range QA/ }).first().click();
   const dateEditor = page.getByRole('dialog', { name: 'Edit task dates' });
   await expect(dateEditor).toBeVisible();
@@ -578,7 +584,7 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.setViewportSize({ width: 1536, height: 864 });
   await page.goto('/clients');
-  await expect(page.getByRole('heading', { name: 'Clients' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Delivery tracker', level: 1 })).toBeVisible();
   const deliveryTracker = page.getByRole('region', { name: 'Delivery tracker' });
   await expect(deliveryTracker).toBeVisible();
   await deliveryTracker.getByRole('tab', { name: 'Month' }).click();
@@ -601,6 +607,7 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.goto('/approvals');
   await expect(page).toHaveURL(/\/approvals$/);
+  await page.getByRole('tab', { name: 'Roles' }).click();
   await expect(page.getByRole('heading', { name: 'Roles & Permissions' })).toBeVisible();
   await expect(page.getByText('Client Access', { exact: true })).toBeVisible();
   await expect(page.getByText('Task Access', { exact: true })).toBeVisible();
@@ -624,18 +631,19 @@ test('first login reaches the app and critical responsive routes remain usable',
       }, ...kept],
     });
   });
+  await page.getByRole('tab', { name: 'Registrations' }).click();
   const applicantRow = page.locator('main').locator('tr').filter({ hasText: 'QA Staff Applicant' });
   await expect(applicantRow.getByRole('button', { name: 'Approve' })).toBeVisible();
   await applicantRow.getByRole('button', { name: 'Approve' }).click();
-  const approveDialog = page.getByRole('dialog', { name: 'Assign role and departments' });
-  await expect(approveDialog).toBeVisible();
-  await expect(approveDialog.getByLabel('System Role')).toHaveValue('Staff');
-  await approveDialog.getByRole('button', { name: 'Confirm & Approve' }).click();
-  await expect(approveDialog).toBeHidden();
+  const approvalReview = page.locator('section[aria-labelledby="approval-review-title-e2e-reg-qa"]');
+  await expect(approvalReview).toBeVisible();
+  await expect(approvalReview.getByLabel('System role')).toHaveValue('Staff');
+  await approvalReview.getByRole('button', { name: 'Confirm & approve' }).click();
+  await expect(approvalReview).toBeHidden();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/clients');
-  await expect(page.getByRole('heading', { name: 'Clients' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Delivery tracker', level: 1 })).toBeVisible();
 
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');

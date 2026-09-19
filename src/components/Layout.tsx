@@ -32,6 +32,7 @@ const Layout: React.FC = () => {
   });
   const [isShortcutHelpOpen, setIsShortcutHelpOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [shortcutAnnouncement, setShortcutAnnouncement] = useState('');
   const shortcutPrefixRef = useRef('');
   const shortcutTimerRef = useRef<number | null>(null);
@@ -88,6 +89,14 @@ const Layout: React.FC = () => {
     setIsMobileMenuOpen(false);
     window.setTimeout(() => mobileMenuTriggerRef.current?.focus(), 0);
   }, [isMobileMenuOpen]);
+
+  const toggleNotifications = React.useCallback(() => {
+    setIsNotificationsOpen(value => !value);
+  }, []);
+
+  const closeNotifications = React.useCallback(() => {
+    setIsNotificationsOpen(false);
+  }, []);
 
   // Global keyboard shortcuts are intentionally disabled while typing.
   useEffect(() => {
@@ -187,9 +196,8 @@ const Layout: React.FC = () => {
   }, [notifications, currentUser]);
 
   const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : unreadNotifs.length;
-  // Keep the bottom bar focused on the highest-frequency destinations. The
-  // complete role-specific navigation remains available in the More drawer;
-  // this prevents manager roles from producing an unusable six-item bar.
+  // Keep the bottom bar focused on the highest-frequency destinations while
+  // keeping Delivery tracker visible for internal operators.
   const mobileNavItems = useMemo(() => getMobileNavigation(currentUser, rolePermissions), [currentUser, rolePermissions]);
   const canOpenSettings = Boolean(currentUser?.mustResetPassword)
     || canAccessPath(currentUser, '/settings', rolePermissions);
@@ -232,6 +240,9 @@ const Layout: React.FC = () => {
         <Navbar
           onMenuClick={openMobileMenu}
           notificationReadActions={notificationReadActions}
+          showNotifications={isNotificationsOpen}
+          onToggleNotifications={toggleNotifications}
+          onCloseNotifications={closeNotifications}
           resolvedTheme={resolvedTheme}
           themePreference={preference}
           onSetThemePreference={setPreference}
@@ -321,11 +332,26 @@ const Layout: React.FC = () => {
               "flex h-16 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-control px-1 text-muted transition-[background-color,color,transform] duration-160 active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-inset",
               isActive && "bg-accent-soft font-semibold text-ink",
             );
+            if (isNotification) {
+              return (
+                <button
+                  key={item.path}
+                  type="button"
+                  onClick={toggleNotifications}
+                  aria-label={`${t('Notifications')}, ${t(`${unreadCount} unread`)}`}
+                  aria-expanded={isNotificationsOpen}
+                  aria-controls="header-notifications-menu"
+                  className={navClass(location.pathname === item.path)}
+                >
+                  {renderContent(location.pathname === item.path)}
+                </button>
+              );
+            }
+
             return (
               <NavLink
                 key={item.path}
                 to={item.path}
-                aria-label={isNotification ? t(item.label) : undefined}
                 className={({ isActive }) => navClass(isActive)}
               >
                 {({ isActive }) => renderContent(isActive)}

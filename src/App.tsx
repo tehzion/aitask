@@ -12,9 +12,9 @@ import { useAppNoticeState } from './hooks/useAppNoticeState';
 
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Calendar = React.lazy(() => import('./pages/Calendar'));
-const Clients = React.lazy(() => import('./pages/DeliveryTracker'));
+const DeliveryTracker = React.lazy(() => import('./pages/DeliveryTracker'));
 const ClientWorkspace = React.lazy(() => import('./pages/ClientWorkspace'));
-const Projects = React.lazy(() => import('./pages/Clients'));
+const Companies = React.lazy(() => import('./pages/Clients'));
 const Reports = React.lazy(() => import('./pages/Reports'));
 const Approvals = React.lazy(() => import('./pages/Approvals'));
 const Settings = React.lazy(() => import('./pages/Settings'));
@@ -148,10 +148,10 @@ function App() {
               <Route index element={<RoleRoute path="/"><Dashboard /></RoleRoute>} />
               <Route path="tasks" element={<RoleRoute path="/tasks"><Tasks /></RoleRoute>} />
               <Route path="calendar" element={<RoleRoute path="/calendar"><Calendar /></RoleRoute>} />
-              <Route path="clients" element={<RoleRoute path="/clients"><Clients /></RoleRoute>} />
+              <Route path="clients" element={<RoleRoute path="/clients"><DeliveryTracker /></RoleRoute>} />
               {/* ClientWorkspace performs client ownership and assigned-staff checks itself. */}
               <Route path="clients/:clientId" element={<ClientWorkspace />} />
-              <Route path="projects" element={<RoleRoute path="/projects"><Projects /></RoleRoute>} />
+              <Route path="projects" element={<RoleRoute path="/projects"><Companies /></RoleRoute>} />
               <Route path="reports" element={<RoleRoute path="/reports"><Reports /></RoleRoute>} />
               <Route path="approvals" element={<RoleRoute path="/approvals"><Approvals /></RoleRoute>} />
               <Route path="notifications" element={<Notifications />} />

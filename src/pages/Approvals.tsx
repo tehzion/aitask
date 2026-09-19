@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
-import { CheckCircle2, XCircle, UserPlus, Users, Trash2, AlertTriangle, ShieldCheck, Save, Pencil } from 'lucide-react';
-import { Department, Role, Registration, RolePermissionKey, RolePermissions, User } from '../types';
+import { ArrowLeft, CheckCircle2, XCircle, UserPlus, Users, Trash2, AlertTriangle, ShieldCheck, Save, Pencil, Search, X, Clock3, UserCheck, History, ChevronRight } from 'lucide-react';
+import { CustomRole, Department, Role, Registration, RolePermissionKey, RolePermissions, User } from '../types';
 import { format } from 'date-fns';
-import { Link } from 'react-router-dom';
-import { Badge, Button, PageHeader } from '../components/ui';
-import { cardBase, inputBase, pageShell } from '../components/uiTokens';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Badge, Button, IconButton, MetricCard, PageHeader, SegmentedTabs } from '../components/ui';
+import { cardBase, fieldLabel, inputBase, pageShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { useI18n } from '../components/I18nProvider';
 import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, hodRestrictedPermissionKeys, isBossKoo, nonSuperAdminOnlyPermissionKeys, permissionGroups, permissionLabels, BUILTIN_HOD_ROLE_ID } from '../lib/access';
@@ -20,6 +20,17 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import DepartmentMultiSelect from '../components/DepartmentMultiSelect';
 
 const ROLES: Role[] = ['Project Manager', 'HOD', 'Staff', 'Client'];
+const APPROVAL_TABS = ['registrations', 'members', 'roles', 'history'] as const;
+type ApprovalTab = typeof APPROVAL_TABS[number];
+
+const approvalTabItems = [
+  { id: 'registrations' as const, label: 'Registrations', compactLabel: 'Queue', icon: UserCheck },
+  { id: 'members' as const, label: 'Members', compactLabel: 'Members', icon: Users },
+  { id: 'roles' as const, label: 'Roles', compactLabel: 'Roles', icon: ShieldCheck },
+  { id: 'history' as const, label: 'History', compactLabel: 'History', icon: History },
+];
+
+const isApprovalTab = (value: string | null): value is ApprovalTab => Boolean(value && APPROVAL_TABS.includes(value as ApprovalTab));
 
 const clonePermissions = (permissions: RolePermissions): RolePermissions => ({ ...permissions });
 
@@ -31,10 +42,216 @@ type ConfirmationState = {
   tone?: 'danger' | 'primary';
 };
 
+type RegistrationReviewPanelProps = {
+  registration: Registration;
+  waitingDays: number;
+  role: Role;
+  departments: Department[];
+  customRoleId: string;
+  companyName: string;
+  sendInvitation: boolean;
+  temporaryPassword: string;
+  secureAccounts: boolean;
+  rolePermissions: CustomRole[];
+  isSaving: boolean;
+  error: string;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent) => void;
+  onRoleChange: (role: Role) => void;
+  onDepartmentsChange: (departments: Department[]) => void;
+  onCustomRoleChange: (customRoleId: string) => void;
+  onCompanyNameChange: (companyName: string) => void;
+  onInvitationChange: (sendInvitation: boolean) => void;
+  onTemporaryPasswordChange: (password: string) => void;
+  onGeneratePassword: () => void;
+};
+
+const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
+  registration,
+  waitingDays,
+  role,
+  departments,
+  customRoleId,
+  companyName,
+  sendInvitation,
+  temporaryPassword,
+  secureAccounts,
+  rolePermissions,
+  isSaving,
+  error,
+  onClose,
+  onSubmit,
+  onRoleChange,
+  onDepartmentsChange,
+  onCustomRoleChange,
+  onCompanyNameChange,
+  onInvitationChange,
+  onTemporaryPasswordChange,
+  onGeneratePassword,
+}) => {
+  const descriptionId = `approval-review-description-${registration.id}`;
+  const errorId = `approval-review-error-${registration.id}`;
+  const roleNeedsDepartments = role === 'Staff' || role === 'HOD';
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <header className="flex shrink-0 items-start justify-between gap-4 border-b border-line/80 bg-inset/50 px-4 py-4 sm:px-6">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink">Registration review</p>
+            <Badge tone="amber">Pending</Badge>
+            {waitingDays >= 7 && <Badge tone="red">{waitingDays}d waiting</Badge>}
+          </div>
+          <h2 id={`approval-review-title-${registration.id}`} className="mt-2 truncate text-xl font-semibold tracking-[-0.025em] text-ink sm:text-2xl">{registration.name}</h2>
+          <p id={descriptionId} className="mt-1 text-sm leading-6 text-muted">Review identity, requested access, and onboarding before approving this account.</p>
+        </div>
+        <IconButton label="Close registration review" onClick={onClose} className="shrink-0">
+          <X className="h-5 w-5" aria-hidden="true" />
+        </IconButton>
+      </header>
+
+      <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col" aria-describedby={descriptionId}>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
+          {error && (
+            <div id={errorId} className="mb-5 rounded-control border border-red-200 bg-red-50 px-3 py-3 text-sm leading-6 text-red-800" role="alert" aria-live="assertive">
+              {error}
+            </div>
+          )}
+
+          <section aria-labelledby={`applicant-details-${registration.id}`} className="rounded-panel border border-line/80 bg-surface p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h3 id={`applicant-details-${registration.id}`} className="text-sm font-semibold text-ink">Applicant details</h3>
+              <span className="text-xs text-muted">Applied {format(new Date(registration.createdAt), 'MMM d, yyyy')}</span>
+            </div>
+            <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="min-w-0"><dt className="text-xs font-medium text-muted">Email</dt><dd data-i18n-skip className="mt-1 break-words text-sm font-medium text-ink">{registration.email || 'No email provided'}</dd></div>
+              <div className="min-w-0"><dt className="text-xs font-medium text-muted">Phone</dt><dd data-i18n-skip className="mt-1 break-words text-sm font-medium text-ink">{registration.phone || 'No phone provided'}</dd></div>
+              <div className="min-w-0"><dt className="text-xs font-medium text-muted">Requested position</dt><dd data-i18n-skip className="mt-1 break-words text-sm font-medium text-ink">{registration.jobPosition || 'Not specified'}</dd></div>
+              <div className="min-w-0"><dt className="text-xs font-medium text-muted">Onboarding</dt><dd className="mt-1 text-sm font-medium text-ink">{registration.onboardingMode === 'legacy_invite' ? 'Invitation' : 'Self signup'}</dd></div>
+            </dl>
+          </section>
+
+          <section aria-labelledby={`access-details-${registration.id}`} className="mt-4 rounded-panel border border-line/80 bg-surface p-4 sm:p-5">
+            <div>
+              <h3 id={`access-details-${registration.id}`} className="text-sm font-semibold text-ink">Access assignment</h3>
+              <p className="mt-1 text-sm leading-6 text-muted">Assign the smallest workspace access needed for this member.</p>
+            </div>
+
+            <div className="mt-5 space-y-5">
+              <div>
+                <label htmlFor={`approval-role-${registration.id}`} className={fieldLabel}>System role</label>
+                <select
+                  id={`approval-role-${registration.id}`}
+                  className={cn(inputBase, 'px-3 py-2.5')}
+                  value={role}
+                  onChange={event => onRoleChange(event.target.value as Role)}
+                  disabled={isSaving}
+                >
+                  {ROLES.map(option => <option key={option} value={option}>{option}</option>)}
+                </select>
+                <p className="mt-1 text-xs leading-5 text-muted">Requested role: <span className="font-medium text-ink">{registration.requestedRole}</span></p>
+              </div>
+
+              {role === 'Client' ? (
+                <div>
+                  <label htmlFor={`approval-company-${registration.id}`} className={fieldLabel}>Client company</label>
+                  <input
+                    id={`approval-company-${registration.id}`}
+                    className={cn(inputBase, 'px-3 py-2.5')}
+                    value={companyName}
+                    onChange={event => onCompanyNameChange(event.target.value)}
+                    placeholder="Choose or enter a company"
+                    disabled={isSaving}
+                    aria-required="true"
+                  />
+                  <p className="mt-1 text-xs leading-5 text-muted">The client account will only see work linked to this company.</p>
+                </div>
+              ) : (
+                <DepartmentMultiSelect
+                  value={departments}
+                  onChange={onDepartmentsChange}
+                  disabled={isSaving}
+                  label={roleNeedsDepartments ? 'Departments' : 'Departments (optional)'}
+                  description={roleNeedsDepartments ? 'Select every department this member can receive assignments from.' : 'Add departments when this Project Manager needs a narrower portfolio scope.'}
+                />
+              )}
+
+              <div>
+                <label htmlFor={`approval-custom-role-${registration.id}`} className={fieldLabel}>Custom role</label>
+                <select
+                  id={`approval-custom-role-${registration.id}`}
+                  className={cn(inputBase, 'px-3 py-2.5')}
+                  value={customRoleId}
+                  onChange={event => onCustomRoleChange(event.target.value)}
+                  disabled={isSaving}
+                >
+                  <option value="">Base role only</option>
+                  {getAssignableCustomRoles(role, rolePermissions).filter(customRole => !customRole.isBuiltin).map(customRole => <option key={customRole.id} value={customRole.id}>{customRole.name}</option>)}
+                </select>
+                <p className="mt-1 text-xs leading-5 text-muted">Custom roles are limited to the selected system role.</p>
+              </div>
+            </div>
+          </section>
+
+          {secureAccounts && (
+            <section aria-labelledby={`onboarding-details-${registration.id}`} className="mt-4 rounded-panel border border-line/80 bg-inset/60 p-4 sm:p-5">
+              <h3 id={`onboarding-details-${registration.id}`} className="text-sm font-semibold text-ink">Onboarding</h3>
+              <label className="mt-3 flex min-h-11 items-start gap-3 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-line text-accent focus:ring-accent/40"
+                  checked={sendInvitation}
+                  onChange={event => onInvitationChange(event.target.checked)}
+                  disabled={isSaving}
+                />
+                <span>
+                  <span className="block font-medium">{registration.onboardingMode === 'legacy_invite' ? 'Send email invitation' : 'Require verified email'}</span>
+                  <span className="mt-1 block text-xs leading-5 text-muted">{sendInvitation ? 'Approval waits for email delivery or verification.' : 'Approve without SMTP using the member\'s existing password.'}</span>
+                </span>
+              </label>
+
+              {registration.onboardingMode === 'legacy_invite' && !sendInvitation && (
+                <div className="mt-4">
+                  <label htmlFor={`approval-password-${registration.id}`} className={fieldLabel}>Temporary password</label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      id={`approval-password-${registration.id}`}
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={12}
+                      className={cn(inputBase, 'px-3 py-2.5')}
+                      value={temporaryPassword}
+                      onChange={event => onTemporaryPasswordChange(event.target.value)}
+                      disabled={isSaving}
+                      required
+                    />
+                    <Button type="button" variant="secondary" className="shrink-0" onClick={onGeneratePassword} disabled={isSaving}>Generate &amp; copy</Button>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted">Share it privately. AiTask does not store the password.</p>
+                </div>
+              )}
+
+              {!sendInvitation && registration.onboardingMode !== 'legacy_invite' && (
+                <div className="mt-4 rounded-control border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-900" role="note">
+                  Confirm the applicant&apos;s identity before approving. Without email verification, approval activates the password chosen during signup.
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+
+        <footer className="modalFooter shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to queue</Button>
+          <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving…' : 'Confirm & approve'}<CheckCircle2 className="h-4 w-4" aria-hidden="true" /></Button>
+        </footer>
+      </form>
+    </div>
+  );
+};
+
 const Approvals: React.FC = () => {
   const { t } = useI18n();
   const addMemberTitleId = React.useId();
-  const approvalTitleId = React.useId();
   const deleteMemberTitleId = React.useId();
   const editDepartmentsTitleId = React.useId();
   const editPermissionsTitleId = React.useId();
@@ -80,7 +297,12 @@ const Approvals: React.FC = () => {
     retryMutation: state.retryMutation,
   })));
   const [selectedReg, setSelectedReg] = useState<Registration | null>(null);
+  const [isMobileApprovalViewport, setIsMobileApprovalViewport] = useState(false);
   const [selectedBulkRegIds, setSelectedBulkRegIds] = useState<Set<string>>(new Set());
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = isApprovalTab(searchParams.get('tab')) ? searchParams.get('tab') as ApprovalTab : 'registrations';
+  const registrationQueryId = searchParams.get('registrationId');
+  const [registrationSearch, setRegistrationSearch] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
   const [memberRoleFilter, setMemberRoleFilter] = useState<'All' | Role>('All');
   
@@ -135,8 +357,45 @@ const Approvals: React.FC = () => {
   const [deleteUserError, setDeleteUserError] = useState('');
   const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
 
-  const pendingRegs = (registrations || []).filter(r => r.status === 'Pending');
-  const historyRegs = (registrations || []).filter(r => r.status !== 'Pending');
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1023px)');
+    const update = () => setIsMobileApprovalViewport(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  const pendingDays = (reg: Registration) => {
+    const created = new Date(reg.createdAt).getTime();
+    return Math.max(0, Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24)));
+  };
+
+  const pendingRegs = useMemo(
+    () => (registrations || [])
+      .filter(registration => registration.status === 'Pending')
+      .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()),
+    [registrations],
+  );
+  const historyRegs = useMemo(
+    () => (registrations || [])
+      .filter(registration => registration.status !== 'Pending')
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
+    [registrations],
+  );
+  const filteredPendingRegs = useMemo(() => {
+    const query = registrationSearch.trim().toLowerCase();
+    if (!query) return pendingRegs;
+    return pendingRegs.filter(registration => [
+      registration.name,
+      registration.email,
+      registration.phone,
+      registration.jobPosition,
+      registration.requestedRole,
+      registration.onboardingMode,
+    ].some(value => value?.toLowerCase().includes(query)));
+  }, [pendingRegs, registrationSearch]);
+  const agedRegistrationCount = pendingRegs.filter(registration => pendingDays(registration) >= 7).length;
+  const activeMemberCount = users.length;
   const memberPermissionsUser = memberPermissionsId
     ? users.find(user => user.id === memberPermissionsId)
     : undefined;
@@ -149,10 +408,34 @@ const Approvals: React.FC = () => {
   const addedMemberPermissions = memberPermissionKeys.filter(key => memberPermissionsPreview[key] && !memberPermissionsBefore[key]);
   const removedMemberPermissions = memberPermissionKeys.filter(key => !memberPermissionsPreview[key] && memberPermissionsBefore[key]);
 
-  const pendingDays = (reg: Registration) => {
-    const created = new Date(reg.createdAt).getTime();
-    return Math.max(0, Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24)));
+  const updateApprovalQuery = (updates: { tab?: ApprovalTab; registrationId?: string | null }, replace = true) => {
+    const next = new URLSearchParams(searchParams);
+    if (updates.tab) next.set('tab', updates.tab);
+    if (updates.registrationId === null) next.delete('registrationId');
+    else if (updates.registrationId) next.set('registrationId', updates.registrationId);
+    setSearchParams(next, { replace });
   };
+
+  const closeApprovalReview = () => {
+    setSelectedReg(null);
+    updateApprovalQuery({ registrationId: null });
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'registrations' || !registrationQueryId) {
+      setSelectedReg(null);
+      return;
+    }
+    const registration = pendingRegs.find(item => item.id === registrationQueryId);
+    if (registration) {
+      setSelectedReg(current => current?.id === registration.id ? current : registration);
+      return;
+    }
+    setSelectedReg(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete('registrationId');
+    setSearchParams(next, { replace: true });
+  }, [activeTab, pendingRegs, registrationQueryId, searchParams, setSearchParams]);
 
   const toggleBulkSelect = (id: string) => {
     setSelectedBulkRegIds(current => {
@@ -271,6 +554,8 @@ const Approvals: React.FC = () => {
 
   const handleOpenApproval = (reg: Registration) => {
     setSelectedReg(reg);
+    updateApprovalQuery({ tab: 'registrations', registrationId: reg.id });
+    setActionError('');
     setRole(reg.requestedRole || 'Staff');
     if (reg.requestedRole === 'Client') {
       setApprovalDepartments(['Client']);
@@ -284,12 +569,46 @@ const Approvals: React.FC = () => {
     setCompanyName('');
   };
 
+  const handleTabChange = (tab: ApprovalTab) => {
+    if (tab !== 'registrations') {
+      setSelectedReg(null);
+      updateApprovalQuery({ tab, registrationId: null });
+      return;
+    }
+    updateApprovalQuery({ tab });
+  };
+
+  const handleApprovalRoleChange = (nextRole: Role) => {
+    setRole(nextRole);
+    setApprovalCustomRoleId('');
+    setCompanyName('');
+    setActionError('');
+    if (nextRole === 'Client') setApprovalDepartments(['Client']);
+    else if (nextRole === 'Project Manager') setApprovalDepartments([]);
+    else {
+      const requestedDepartment = selectedReg ? normalizeDepartment(selectedReg.jobPosition) : null;
+      setApprovalDepartments(requestedDepartment && requestedDepartment !== 'Client' ? [requestedDepartment] : []);
+    }
+  };
+
+  const generateApprovalPassword = () => {
+    const generated = Array.from(crypto.getRandomValues(new Uint8Array(9)))
+      .map(byte => 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'[byte % 55])
+      .join('');
+    setApprovalTemporaryPassword(generated);
+    void navigator.clipboard?.writeText(generated).catch(() => undefined);
+  };
+
   const handleApprove = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedReg || isActionSaving) return;
     setActionError('');
     const departments = role === 'Client' ? ['Client' as Department] : approvalDepartments;
-    if (departments.length === 0) {
+    if (role === 'Client' && !companyName.trim()) {
+      setActionError('Choose a client company before approving this member.');
+      return;
+    }
+    if (!['Project Manager', 'Client'].includes(role) && departments.length === 0) {
       setActionError('Choose at least one department before approving this member.');
       return;
     }
@@ -314,7 +633,7 @@ const Approvals: React.FC = () => {
         return;
       }
       setIsActionSaving(false);
-      setSelectedReg(null);
+      closeApprovalReview();
       setRole('Staff');
       setApprovalDepartments([]);
       setCompanyName('');
@@ -341,7 +660,7 @@ const Approvals: React.FC = () => {
       setActionError(saved.error || 'The approval is waiting to be saved. Use Retry required to continue.');
       return;
     }
-    setSelectedReg(null);
+    closeApprovalReview();
     setRole('Staff');
     setApprovalDepartments([]);
     setCompanyName('');
@@ -748,7 +1067,7 @@ const Approvals: React.FC = () => {
       <div className={pageShell}>
         <PageHeader
           title="Approvals — Boss Koo only"
-          description="Registration approvals, member administration, and role management are restricted to the Boss Koo account."
+          description="Registration approvals, member management, and role controls are restricted to the Boss Koo account."
         />
         <section className="mt-6 rounded-panel border border-amber-200 bg-amber-50 p-6 text-amber-950" role="alert" aria-labelledby="approvals-access-denied-title">
           <div className="flex items-start gap-3">
@@ -767,8 +1086,8 @@ const Approvals: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title="User Approvals"
-        description="Boss Koo super admin controls for registrations, direct member creation, and active users."
+        title="Approvals"
+        description="Review access requests and manage workspace members, roles, and decisions."
         action={superAdmin ? (
           <Button onClick={() => setIsAddUserOpen(true)} disabled={isActionSaving || backend.isSaving}>
             <UserPlus className="w-4 h-4" />
@@ -778,69 +1097,134 @@ const Approvals: React.FC = () => {
       />
 
       {actionError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert">
+        <div className="rounded-panel border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
           {actionError}
         </div>
       )}
 
+      <section aria-label="Approval overview" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard title="Pending registrations" value={pendingRegs.length} icon={UserCheck} tone="blue" footer="Awaiting review" />
+        <MetricCard title="Aging 7+ days" value={agedRegistrationCount} icon={Clock3} tone={agedRegistrationCount > 0 ? 'red' : 'emerald'} footer={agedRegistrationCount > 0 ? 'Prioritize these requests' : 'Queue is current'} />
+        <MetricCard title="Active members" value={activeMemberCount} icon={Users} tone="purple" footer="Workspace accounts" />
+        <MetricCard title="Recent decisions" value={historyRegs.length} icon={History} tone="slate" footer="Approved or rejected" />
+      </section>
+
+      <SegmentedTabs
+        items={approvalTabItems.map(item => ({
+          ...item,
+          count: item.id === 'registrations' ? pendingRegs.length : item.id === 'members' ? activeMemberCount : item.id === 'history' ? historyRegs.length : undefined,
+        }))}
+        value={activeTab}
+        onChange={handleTabChange}
+        label="Approval workspace sections"
+        idPrefix="approval-sections"
+        variant="underline"
+      />
+
       {/* Pending Approvals */}
-      <div className={`${cardBase} overflow-hidden`}>
-        <div className="px-6 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <UserPlus className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-slate-800">Pending Registrations ({pendingRegs.length})</h2>
+      {activeTab === 'registrations' && <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)]">
+      <div className={`${cardBase} min-w-0 overflow-hidden`}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/80 px-4 py-4 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
+              <UserPlus className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-ink sm:text-lg">Pending registrations</h2>
+              <p className="mt-0.5 text-xs text-muted">{pendingRegs.length} awaiting review</p>
+            </div>
           </div>
-          {superAdmin && pendingRegs.length > 0 && (
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+          {superAdmin && filteredPendingRegs.length > 0 && (
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-muted">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                checked={selectedBulkRegIds.size === pendingRegs.length && pendingRegs.length > 0}
-                onChange={() => setSelectedBulkRegIds(current => current.size === pendingRegs.length ? new Set() : new Set(pendingRegs.map(reg => reg.id)))}
+                className="h-4 w-4 rounded border-line text-accent focus:ring-accent/40"
+                checked={selectedBulkRegIds.size === filteredPendingRegs.length && filteredPendingRegs.length > 0}
+                onChange={() => setSelectedBulkRegIds(current => current.size === filteredPendingRegs.length ? new Set() : new Set(filteredPendingRegs.map(reg => reg.id)))}
               />
               {t('Select all')}
             </label>
           )}
         </div>
 
+        <div className="border-b border-line/80 bg-inset/60 p-3 sm:p-4">
+          <label htmlFor="registration-search" className="sr-only">Search registrations</label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+            <input
+              id="registration-search"
+              type="search"
+              value={registrationSearch}
+              onChange={event => setRegistrationSearch(event.target.value)}
+              placeholder="Search name, email, phone, or position"
+              className={cn(inputBase, 'pl-9 pr-10')}
+            />
+            {registrationSearch && (
+              <IconButton
+                label="Clear registration search"
+                className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2"
+                onClick={() => setRegistrationSearch('')}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </IconButton>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-muted">Oldest requests appear first so aging access requests stay visible.</p>
+        </div>
+
         {selectedBulkRegIds.size > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-blue-100 bg-blue-50 px-6 py-3">
-            <p className="text-sm font-semibold text-blue-800">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-accent/20 bg-accent-soft/60 px-4 py-3 sm:px-5">
+            <p className="text-sm font-semibold text-accent">
               {selectedBulkRegIds.size} {t('selected')}
             </p>
-            <div className="flex gap-2">
-              <button
+            <div className="flex flex-wrap gap-2">
+              <Button
                 type="button"
+                variant="primary"
                 onClick={() => void handleBulkApprove()}
                 disabled={isActionSaving}
-                className="inline-flex items-center px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <CheckCircle2 className="w-4 h-4 mr-1.5" /> {t('Approve selected')}
-              </button>
-              <button
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> {t('Approve selected')}
+              </Button>
+              <Button
                 type="button"
+                variant="danger"
                 onClick={() => void handleBulkReject()}
                 disabled={isActionSaving}
-                className="inline-flex items-center px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <XCircle className="w-4 h-4 mr-1.5" /> {t('Reject selected')}
-              </button>
+                <XCircle className="h-4 w-4" aria-hidden="true" /> {t('Reject selected')}
+              </Button>
             </div>
           </div>
         )}
         
-        {pendingRegs.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 text-sm">
-            No pending registrations at the moment.
+        {filteredPendingRegs.length === 0 ? (
+          <div className="px-6 py-12 text-center">
+            <UserCheck className="mx-auto h-7 w-7 text-muted/60" aria-hidden="true" />
+            <p className="mt-3 text-sm font-semibold text-ink">{pendingRegs.length === 0 ? 'No pending registrations' : 'No registrations match this search'}</p>
+            <p className="mt-1 text-sm text-muted">{pendingRegs.length === 0 ? 'New access requests will appear here.' : 'Try a different name, email, phone number, or position.'}</p>
+            {pendingRegs.length > 0 && <Button type="button" variant="secondary" className="mt-4" onClick={() => setRegistrationSearch('')}>Clear search</Button>}
           </div>
         ) : (
           <>
           {/* Mobile cards */}
-          <div className="divide-y divide-slate-100 sm:hidden">
-            {pendingRegs.map(reg => {
+          <div className="divide-y divide-line/70 sm:hidden">
+            {filteredPendingRegs.map(reg => {
               const days = pendingDays(reg);
               return (
-              <div key={reg.id} className="p-4">
+              <article
+                key={reg.id}
+                tabIndex={0}
+                aria-label={`Review registration for ${reg.name}`}
+                onClick={() => handleOpenApproval(reg)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    handleOpenApproval(reg);
+                  }
+                }}
+                className="cursor-pointer p-4 transition-colors hover:bg-inset/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-start gap-2">
                     {superAdmin && (
@@ -849,6 +1233,7 @@ const Approvals: React.FC = () => {
                         className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                         checked={selectedBulkRegIds.has(reg.id)}
                         onChange={() => toggleBulkSelect(reg.id)}
+                        onClick={event => event.stopPropagation()}
                         aria-label={`Select ${reg.name}`}
                       />
                     )}
@@ -858,7 +1243,7 @@ const Approvals: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    {days > 7 && (
+                    {days >= 7 && (
                       <span className="rounded-md bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">{days}d</span>
                     )}
                     <span className="inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
@@ -872,25 +1257,25 @@ const Approvals: React.FC = () => {
                   {superAdmin ? (
                     <>
                       <button
-                        onClick={() => handleOpenApproval(reg)}
+                        onClick={event => { event.stopPropagation(); handleOpenApproval(reg); }}
                         disabled={isActionSaving || backend.isSaving}
-                        className="flex flex-1 items-center justify-center px-3 py-2 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex min-h-11 flex-1 items-center justify-center rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
                       </button>
                       <button
-                        onClick={() => handleRejectRegistration(reg)}
+                        onClick={event => { event.stopPropagation(); handleRejectRegistration(reg); }}
                         disabled={isActionSaving || backend.isSaving}
-                        className="flex flex-1 items-center justify-center px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex min-h-11 flex-1 items-center justify-center rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <XCircle className="w-4 h-4 mr-1.5" /> Reject
                       </button>
                     </>
                   ) : (
-                    <span className="text-xs font-medium text-slate-500">Super Admin approval required</span>
+                    <span className="text-xs font-medium text-muted">Boss Koo approval required</span>
                   )}
                 </div>
-              </div>
+              </article>
               );
             })}
           </div>
@@ -899,21 +1284,33 @@ const Approvals: React.FC = () => {
           <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                  <th className="w-10 px-4 py-4 border-b border-slate-200">
+                <tr className="bg-inset/70 text-xs uppercase tracking-wider text-muted">
+                  <th className="w-10 border-b border-line px-4 py-4">
                     <span className="sr-only">Select</span>
                   </th>
-                  <th className="px-6 py-4 font-semibold border-b border-slate-200">Name</th>
-                  <th className="px-6 py-4 font-semibold border-b border-slate-200">Contact</th>
-                  <th className="px-6 py-4 font-semibold border-b border-slate-200">Requested Access</th>
-                  <th className="px-6 py-4 font-semibold border-b border-slate-200 text-right">Actions</th>
+                  <th className="border-b border-line px-6 py-4 font-semibold">Name</th>
+                  <th className="border-b border-line px-6 py-4 font-semibold">Contact</th>
+                  <th className="border-b border-line px-6 py-4 font-semibold">Requested access</th>
+                  <th className="border-b border-line px-6 py-4 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {pendingRegs.map(reg => {
+              <tbody className="divide-y divide-line/70">
+                {filteredPendingRegs.map(reg => {
                   const days = pendingDays(reg);
                   return (
-                  <tr key={reg.id} className="hover:bg-slate-50">
+                  <tr
+                    key={reg.id}
+                    tabIndex={0}
+                    aria-label={`Review registration for ${reg.name}`}
+                    onClick={() => handleOpenApproval(reg)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handleOpenApproval(reg);
+                      }
+                    }}
+                    className="cursor-pointer hover:bg-inset/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
+                  >
                     <td className="px-4 py-4">
                       {superAdmin ? (
                         <input
@@ -921,6 +1318,7 @@ const Approvals: React.FC = () => {
                           className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                           checked={selectedBulkRegIds.has(reg.id)}
                           onChange={() => toggleBulkSelect(reg.id)}
+                          onClick={event => event.stopPropagation()}
                           aria-label={`Select ${reg.name}`}
                         />
                       ) : null}
@@ -929,7 +1327,7 @@ const Approvals: React.FC = () => {
                       <div data-i18n-skip className="font-semibold text-slate-800">{reg.name}</div>
                       <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                         Applied: {format(new Date(reg.createdAt), 'MMM dd, yyyy')}
-                        {days > 7 && (
+                        {days >= 7 && (
                           <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">{days}d pending</span>
                         )}
                       </div>
@@ -952,22 +1350,22 @@ const Approvals: React.FC = () => {
                       {superAdmin ? (
                         <>
                           <button
-                            onClick={() => handleOpenApproval(reg)}
+                            onClick={event => { event.stopPropagation(); handleOpenApproval(reg); }}
                             disabled={isActionSaving || backend.isSaving}
-                            className="inline-flex items-center px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex min-h-11 items-center rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
                           </button>
                           <button
-                            onClick={() => handleRejectRegistration(reg)}
+                            onClick={event => { event.stopPropagation(); handleRejectRegistration(reg); }}
                             disabled={isActionSaving || backend.isSaving}
-                            className="inline-flex items-center px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex min-h-11 items-center rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <XCircle className="w-4 h-4 mr-1.5" /> Reject
                           </button>
                         </>
                       ) : (
-                        <span className="text-xs font-medium text-slate-500">Super Admin approval required</span>
+                        <span className="text-xs font-medium text-muted">Boss Koo approval required</span>
                       )}
                     </td>
                   </tr>
@@ -980,8 +1378,45 @@ const Approvals: React.FC = () => {
         )}
       </div>
 
+      {selectedReg ? (
+        <section className="hidden min-h-0 min-w-0 flex-col overflow-hidden rounded-panel bg-surface ring-1 ring-line/80 shadow-sm lg:sticky lg:top-6 lg:flex lg:h-[calc(100dvh-29rem)] lg:max-h-[calc(100dvh-29rem)]" aria-labelledby={`approval-review-title-${selectedReg.id}`}>
+          <RegistrationReviewPanel
+            registration={selectedReg}
+            waitingDays={pendingDays(selectedReg)}
+            role={role}
+            departments={approvalDepartments}
+            customRoleId={approvalCustomRoleId}
+            companyName={companyName}
+            sendInvitation={sendApprovalInvitation}
+            temporaryPassword={approvalTemporaryPassword}
+            secureAccounts={secureAccounts}
+            rolePermissions={rolePermissions}
+            isSaving={isActionSaving || backend.isSaving}
+            error={actionError}
+            onClose={closeApprovalReview}
+            onSubmit={handleApprove}
+            onRoleChange={handleApprovalRoleChange}
+            onDepartmentsChange={setApprovalDepartments}
+            onCustomRoleChange={setApprovalCustomRoleId}
+            onCompanyNameChange={setCompanyName}
+            onInvitationChange={setSendApprovalInvitation}
+            onTemporaryPasswordChange={setApprovalTemporaryPassword}
+            onGeneratePassword={generateApprovalPassword}
+          />
+        </section>
+      ) : (
+        <aside className="hidden min-h-[26rem] items-center justify-center rounded-panel border border-dashed border-line bg-inset/30 p-8 text-center lg:flex">
+          <div className="max-w-sm">
+            <ChevronRight className="mx-auto h-8 w-8 text-accent/60" aria-hidden="true" />
+            <h2 className="mt-4 text-base font-semibold text-ink">Select a registration to review</h2>
+            <p className="mt-2 text-sm leading-6 text-muted">Choose an applicant from the queue to inspect their request and assign access.</p>
+          </div>
+        </aside>
+      )}
+      </div>}
+
       {/* Roles & Permissions */}
-      <div className={`${cardBase} overflow-hidden`}>
+      {activeTab === 'roles' && <div className={`${cardBase} overflow-hidden`}>
         <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
           <ShieldCheck className="w-5 h-5 text-blue-600" />
           <div>
@@ -1154,37 +1589,68 @@ const Approvals: React.FC = () => {
         </div>
         </fieldset>
       </div>
+      }
 
       {/* History */}
-      {historyRegs.length > 0 && (
-          <div className={`${cardBase} overflow-hidden`}>
-          <div className="px-6 py-4 border-b border-slate-100">
-            <h2 className="text-sm font-semibold text-slate-800">Recent Decisions</h2>
+      {activeTab === 'history' && (
+        <div className={`${cardBase} overflow-hidden`}>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/80 px-4 py-4 sm:px-5">
+            <div>
+              <h2 className="text-base font-semibold text-ink sm:text-lg">Decision history</h2>
+              <p className="mt-1 text-sm text-muted">Review previously approved and rejected access requests.</p>
+            </div>
+            <Badge tone="slate">{historyRegs.length} decisions</Badge>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <tbody className="divide-y divide-slate-100">
+          {historyRegs.length === 0 ? (
+            <div className="px-6 py-12 text-center">
+              <History className="mx-auto h-7 w-7 text-muted/60" aria-hidden="true" />
+              <p className="mt-3 text-sm font-semibold text-ink">No decisions yet</p>
+              <p className="mt-1 text-sm text-muted">Completed reviews will appear here.</p>
+            </div>
+          ) : (
+            <>
+              <div className="divide-y divide-line/70 sm:hidden">
                 {historyRegs.map(reg => (
-                  <tr key={reg.id}>
-                    <td data-i18n-skip className="px-6 py-3 font-medium text-slate-700">{reg.name}</td>
-                    <td data-i18n-skip className="px-6 py-3 text-slate-500">{reg.email}</td>
-                    <td className="px-6 py-3">
-                      <span className={`inline-flex px-2 py-1 rounded-md text-xs font-semibold ${
-                        reg.status === 'Approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {reg.status}
-                      </span>
-                    </td>
-                  </tr>
+                  <article key={reg.id} className="space-y-3 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p data-i18n-skip className="truncate font-semibold text-ink">{reg.name}</p>
+                        <p data-i18n-skip className="mt-1 break-words text-xs text-muted">{reg.email}</p>
+                      </div>
+                      <Badge tone={reg.status === 'Approved' ? 'emerald' : 'red'}>{reg.status}</Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                      <span>{reg.requestedRole}</span>
+                      <span>{reg.jobPosition || 'Position not specified'}</span>
+                      <span>{format(new Date(reg.createdAt), 'MMM d, yyyy')}</span>
+                    </div>
+                  </article>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-inset/70 text-xs uppercase tracking-wider text-muted">
+                    <tr><th className="px-5 py-3 font-semibold">Applicant</th><th className="px-5 py-3 font-semibold">Requested access</th><th className="px-5 py-3 font-semibold">Decision</th><th className="px-5 py-3 font-semibold">Date</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-line/70">
+                    {historyRegs.map(reg => (
+                      <tr key={reg.id} className="hover:bg-inset/40">
+                        <td data-i18n-skip className="px-5 py-4 font-medium text-ink"><span className="block">{reg.name}</span><span data-i18n-skip className="mt-1 block text-xs font-normal text-muted">{reg.email}</span></td>
+                        <td className="px-5 py-4 text-muted">{reg.requestedRole} · {reg.jobPosition || 'Position not specified'}</td>
+                        <td className="px-5 py-4"><Badge tone={reg.status === 'Approved' ? 'emerald' : 'red'}>{reg.status}</Badge></td>
+                        <td className="px-5 py-4 text-muted">{format(new Date(reg.createdAt), 'MMM d, yyyy')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* Active Users Management */}
-      <div className={`${cardBase} overflow-hidden mt-8`}>
+      {activeTab === 'members' && <div className={`${cardBase} overflow-hidden`}>
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Users className="w-5 h-5 text-blue-600" />
@@ -1196,7 +1662,7 @@ const Approvals: React.FC = () => {
             {assignmentError}
           </div>
         )}
-        <div className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50/60 px-6 py-3 sm:flex-row">
+        <div className="flex flex-col gap-2 border-b border-line/80 bg-inset/60 px-4 py-3 sm:flex-row sm:px-5">
           <input
             type="search"
             value={memberSearch}
@@ -1215,6 +1681,13 @@ const Approvals: React.FC = () => {
             {ROLES.map(role => <option key={role} value={role}>{role}</option>)}
           </select>
         </div>
+        {visibleMembers.length === 0 && (
+          <div className="px-6 py-12 text-center">
+            <Users className="mx-auto h-7 w-7 text-muted/60" aria-hidden="true" />
+            <p className="mt-3 text-sm font-semibold text-ink">No members match these filters</p>
+            <p className="mt-1 text-sm text-muted">Try a different name, email, or role.</p>
+          </div>
+        )}
         <div className="divide-y divide-slate-100 sm:hidden">
           {visibleMembers.map(u => (
             <article key={u.id} className="space-y-4 p-4">
@@ -1223,7 +1696,7 @@ const Approvals: React.FC = () => {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span data-i18n-skip className="font-semibold text-slate-800">{u.name}</span>
-                    {isBossKoo(u) && <Badge tone="purple">Super Admin</Badge>}
+                    {isBossKoo(u) && <Badge tone="purple">Boss Koo</Badge>}
                   </div>
                   <p data-i18n-skip className="mt-1 truncate text-xs text-slate-500">{u.email || 'No email on file'}</p>
                 </div>
@@ -1235,7 +1708,7 @@ const Approvals: React.FC = () => {
                 ) : getMemberDepartments(u).map(department => <Badge key={department} tone="slate">{department}</Badge>)}
               </div>
               {isBossKoo(u) ? (
-                <Badge tone="purple">Permanent Super Admin</Badge>
+                <Badge tone="purple">Protected Boss Koo account</Badge>
               ) : superAdmin ? (
                 <div className="space-y-2">
                   <label className="sr-only" htmlFor={`mobile-role-${u.id}`}>Role for {u.name}</label>
@@ -1317,7 +1790,7 @@ const Approvals: React.FC = () => {
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <span data-i18n-skip className="font-semibold text-slate-800">{u.name}</span>
-                          {isBossKoo(u) && <Badge tone="purple">Super Admin</Badge>}
+                          {isBossKoo(u) && <Badge tone="purple">Boss Koo</Badge>}
                         </div>
                         {u.email && <div data-i18n-skip className="text-xs text-slate-500 mt-0.5">{u.email}</div>}
                       </div>
@@ -1341,7 +1814,7 @@ const Approvals: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 min-w-[240px]">
                     {isBossKoo(u) ? (
-                      <Badge tone="purple">Permanent Super Admin</Badge>
+                      <Badge tone="purple">Protected Boss Koo account</Badge>
                     ) : superAdmin ? (
                       <div className="space-y-2">
                         <select
@@ -1414,7 +1887,7 @@ const Approvals: React.FC = () => {
                           type="button"
                           onClick={() => handleEditDepartments(u.id)}
                           disabled={isActionSaving}
-                          className="inline-flex items-center rounded-lg p-2 text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:opacity-50"
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-accent-soft hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
                           title="Edit departments"
                           aria-label={`Edit departments for ${u.name}`}
                         >
@@ -1439,7 +1912,7 @@ const Approvals: React.FC = () => {
                           setDeleteUserError('');
                           setUserToDelete(u.id);
                         }}
-                        className="inline-flex items-center px-3 py-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors"
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
                         title="Remove User"
                         aria-label={`Remove ${u.name}`}
                       >
@@ -1459,7 +1932,7 @@ const Approvals: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
       {memberDepartmentsId && (
         <ModalShell
@@ -1772,131 +2245,38 @@ const Approvals: React.FC = () => {
         </ModalShell>
       )}
 
-      {/* Approval Modal */}
-      {selectedReg && (
+      {/* Mobile registration review sheet */}
+      {selectedReg && isMobileApprovalViewport && (
         <ModalShell
-          labelledBy={approvalTitleId}
-          onClose={() => setSelectedReg(null)}
-          panelClassName="max-w-lg "
+          labelledBy={`approval-review-title-${selectedReg.id}`}
+          describedBy={`approval-review-description-${selectedReg.id}`}
+          onClose={closeApprovalReview}
+          overlayClassName="items-end p-0 sm:items-center sm:p-4 lg:hidden"
+          panelClassName="h-[100dvh] max-h-[100dvh] rounded-t-panel sm:h-auto sm:max-h-[90vh] sm:rounded-panel"
         >
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
-              <h2 id={approvalTitleId} className="text-lg font-semibold text-slate-950">Assign role and departments</h2>
-              <p className="text-sm text-slate-500 mt-1">Configure system access for {selectedReg.name}.</p>
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-                <span><span className="font-semibold text-slate-500">Email:</span> {selectedReg.email}</span>
-                {selectedReg.phone && <span><span className="font-semibold text-slate-500">Phone:</span> {selectedReg.phone}</span>}
-                <span><span className="font-semibold text-slate-500">Position:</span> {selectedReg.jobPosition}</span>
-              </div>
-            </div>
-            
-            <form onSubmit={handleApprove} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">System Role</label>
-                <select 
-                  aria-label="System Role"
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
-                  value="Staff"
-                  disabled
-                >
-                  <option value="Staff">Staff</option>
-                </select>
-                <p className="mt-1 text-xs text-slate-500">Registrations are approved as Staff.</p>
-              </div>
-
-              <DepartmentMultiSelect
-                value={approvalDepartments}
-                onChange={setApprovalDepartments}
-                description="The requested position is preselected when it matches an active department. Review all selections before approval."
-              />
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Custom Role</label>
-                <select
-                  aria-label="Custom Role"
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
-                  value={approvalCustomRoleId}
-                  onChange={e => setApprovalCustomRoleId(e.target.value)}
-                >
-                  <option value="">Base role only</option>
-                  {getAssignableCustomRoles('Staff', rolePermissions).map(customRole => <option key={customRole.id} value={customRole.id}>{customRole.name}</option>)}
-                </select>
-              </div>
-
-              {secureAccounts && (
-                <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-                  <label className="flex items-start gap-3 text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      checked={sendApprovalInvitation}
-                      onChange={event => setSendApprovalInvitation(event.target.checked)}
-                    />
-                    <span>
-                      <span className="block font-medium text-slate-900">
-                        {selectedReg.onboardingMode === 'legacy_invite' ? 'Send email invitation' : 'Require verified email'}
-                      </span>
-                      <span className="mt-0.5 block text-xs text-slate-500">
-                        {sendApprovalInvitation
-                          ? 'Approval waits for email delivery or verification.'
-                          : 'Approve without SMTP using the member\'s existing password.'}
-                      </span>
-                    </span>
-                  </label>
-                  {selectedReg.onboardingMode === 'legacy_invite' && !sendApprovalInvitation && (
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Temporary Password</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="password"
-                          autoComplete="new-password"
-                          minLength={12}
-                          className={cn(inputBase, 'px-3 py-2.5')}
-                          value={approvalTemporaryPassword}
-                          onChange={event => setApprovalTemporaryPassword(event.target.value)}
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const generated = Array.from(crypto.getRandomValues(new Uint8Array(6)))
-                              .map(byte => 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'[byte % 55])
-                              .join('');
-                            setApprovalTemporaryPassword(generated);
-                            void navigator.clipboard?.writeText(generated).catch(() => undefined);
-                          }}
-                          className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                          title="Generate a strong password and copy it"
-                        >
-                          Generate &amp; copy
-                        </button>
-                      </div>
-                      <p className="mt-1 text-xs text-slate-500">Share it privately. AiTask does not store the password.</p>
-                    </div>
-                  )}
-                  {!sendApprovalInvitation && selectedReg.onboardingMode !== 'legacy_invite' && (
-                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800" role="note">
-                      Confirm the applicant's identity before approving. Without email verification, approval activates the password chosen during signup.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="pt-4 flex gap-3 justify-end">
-                <button 
-                  type="button" onClick={() => setSelectedReg(null)}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  disabled={isActionSaving}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isActionSaving ? 'Saving...' : 'Confirm & Approve'}
-                </button>
-              </div>
-            </form>
+          <RegistrationReviewPanel
+            registration={selectedReg}
+            waitingDays={pendingDays(selectedReg)}
+            role={role}
+            departments={approvalDepartments}
+            customRoleId={approvalCustomRoleId}
+            companyName={companyName}
+            sendInvitation={sendApprovalInvitation}
+            temporaryPassword={approvalTemporaryPassword}
+            secureAccounts={secureAccounts}
+            rolePermissions={rolePermissions}
+            isSaving={isActionSaving || backend.isSaving}
+            error={actionError}
+            onClose={closeApprovalReview}
+            onSubmit={handleApprove}
+            onRoleChange={handleApprovalRoleChange}
+            onDepartmentsChange={setApprovalDepartments}
+            onCustomRoleChange={setApprovalCustomRoleId}
+            onCompanyNameChange={setCompanyName}
+            onInvitationChange={setSendApprovalInvitation}
+            onTemporaryPasswordChange={setApprovalTemporaryPassword}
+            onGeneratePassword={generateApprovalPassword}
+          />
         </ModalShell>
       )}
       {/* Delete User Modal */}
