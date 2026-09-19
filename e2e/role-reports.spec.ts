@@ -16,14 +16,16 @@ test('Account reports include assigned work and exclude other departments', asyn
     const account = state.users.find(user => user.name === 'Account Demo');
     const production = state.users.find(user => user.name === 'Staff Demo');
     if (!account || !production) throw new Error('Expected Account and Staff demo users');
+    const today = new Date();
+    const dueDate = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
     const common = {
       clientName: 'Report QA Client',
       projectName: 'Report QA Project',
       serviceType: 'Reporting',
       description: 'Deterministic report scope test.',
       createdBy: 'u-boss',
-      startDate: '2099-01-01',
-      dueDate: '2099-01-02',
+      startDate: dueDate,
+      dueDate,
       priority: 'Medium' as const,
       completionPercentage: 0,
       isCompleted: false,
@@ -32,7 +34,7 @@ test('Account reports include assigned work and exclude other departments', asyn
       isRecurring: false,
       comments: [],
       approvalHistory: [],
-      updatedAt: '2099-01-01T00:00:00.000Z',
+      updatedAt: today.toISOString(),
     };
     useStore.setState({
       tasks: [
@@ -53,7 +55,7 @@ test('Account reports include assigned work and exclude other departments', asyn
           status: 'Completed',
           completionPercentage: 100,
           isCompleted: true,
-          completedAt: '2099-01-01T12:00:00.000Z',
+          completedAt: today.toISOString(),
         },
       ],
       currentUser: { ...account, mustResetPassword: false },
@@ -63,10 +65,10 @@ test('Account reports include assigned work and exclude other departments', asyn
   await page.goto('/reports');
   const reportHeading = page.getByRole('heading', { name: 'Four-Week Performance Report' });
   await expect(reportHeading).toBeVisible();
-  await expect(reportHeading.locator('..').getByText('your accessible workspace tasks', { exact: false })).toBeVisible();
-  await expect(page.getByText('Completed', { exact: true }).locator('..').getByText('0', { exact: true })).toBeVisible();
-  await expect(page.getByText('Pending', { exact: true }).locator('..').getByText('1', { exact: true })).toBeVisible();
-  await expect(page.getByText('Active Assignees', { exact: true }).locator('..').getByText('1', { exact: true })).toBeVisible();
+  await expect(reportHeading.locator('..').getByText('Internal workspace', { exact: false })).toBeVisible();
+  await expect(page.getByText('Due tasks', { exact: true }).locator('..').getByText('1', { exact: true })).toBeVisible();
+  await expect(page.getByText('Open today', { exact: true }).locator('..').getByText('1', { exact: true })).toBeVisible();
+  await expect(page.getByText('Assignees in period', { exact: true }).locator('..').getByText('1', { exact: true })).toBeVisible();
 
   const accountRow = page.getByRole('row').filter({ hasText: 'Account & Finance' });
   await expect(accountRow).toContainText('1');

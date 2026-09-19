@@ -96,9 +96,9 @@ test('Account reports remain scoped to assigned work', async ({ page }) => {
   await page.goto('/reports');
   const reportHeading = page.getByRole('heading', { name: 'Four-Week Performance Report' });
   await expect(reportHeading).toBeVisible();
-  await expect(reportHeading.locator('..').getByText('your accessible workspace tasks', { exact: false })).toBeVisible();
+  await expect(reportHeading.locator('..').getByText('Internal workspace', { exact: false })).toBeVisible();
 
-  const pendingMetric = page.getByText('Pending', { exact: true }).locator('..');
+  const pendingMetric = page.getByText('Open today', { exact: true }).locator('..');
   await expect(pendingMetric.getByText('1', { exact: true })).toBeVisible();
   const accountRow = page.getByRole('row').filter({ hasText: 'Account & Finance' });
   await expect(accountRow).toContainText('1');
