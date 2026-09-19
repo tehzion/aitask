@@ -48,7 +48,7 @@ set local role authenticated;
 select is(private.aitask_can_view_client('pgtap-pm-ownership', 'pm one co'), false, 'PM Two cannot view another PM''s company');
 select is(private.aitask_can_view_project('pgtap-pm-ownership', 'pm1-project'), false, 'PM Two cannot view another PM''s project');
 select is(private.aitask_can_view_task('pgtap-pm-ownership', 'pm1-task'), false, 'PM Two cannot view another PM''s task');
-select is(private.aitask_has_permission('pgtap-pm-ownership', 'viewAllClients'), false, 'Admin defaults no longer grant View all clients');
+select is(private.aitask_has_permission('pgtap-pm-ownership', 'viewAllClients'), false, 'Project Manager defaults no longer grant View all clients');
 
 reset role;
 

@@ -18,7 +18,7 @@ export interface OperationsPeriod {
   label: string;
 }
 
-export type DueWorkOutcome = 'onTime' | 'late' | 'open' | 'untracked';
+export type DueWorkOutcome = 'onTime' | 'late' | 'upcoming' | 'open' | 'overdue' | 'untracked';
 
 export interface DueWorkWeek {
   start: Date;
@@ -29,8 +29,11 @@ export interface DueWorkWeek {
   outcomes: Array<{ task: Task; outcome: DueWorkOutcome }>;
   onTime: number;
   late: number;
+  upcoming: number;
   open: number;
+  overdue: number;
   untracked: number;
+  tracked: number;
   completionRate: number;
 }
 
@@ -300,8 +303,12 @@ export const getTrackedWeeklyCompletions = (tasks: Task[], now = new Date(), wee
   });
 };
 
-export const classifyDueWork = (task: Task): DueWorkOutcome => {
-  if (!isTaskCompleted(task)) return 'open';
+export const classifyDueWork = (task: Task, now = new Date()): DueWorkOutcome => {
+  if (!isTaskCompleted(task)) {
+    const due = parseOptionalDate(task.dueDate);
+    if (!due || due >= startOfDay(now) && due <= endOfDay(now)) return 'open';
+    return due > endOfDay(now) ? 'upcoming' : 'overdue';
+  }
   const due = parseOptionalDate(task.dueDate);
   const completedAt = parseOptionalDate(task.completedAt);
   if (!due || !completedAt) return 'untracked';
@@ -318,9 +325,11 @@ export const getDueWorkPerformance = (tasks: Task[], now = new Date(), weeks = 4
       const due = parseOptionalDate(task.dueDate);
       return Boolean(due && isWithinInterval(due, { start, end }));
     });
-    const outcomes = cohort.map(task => ({ task, outcome: classifyDueWork(task) }));
+    const outcomes = cohort.map(task => ({ task, outcome: classifyDueWork(task, now) }));
     const countOf = (outcome: DueWorkOutcome) => outcomes.filter(item => item.outcome === outcome).length;
     const onTime = countOf('onTime');
+    const late = countOf('late');
+    const tracked = onTime + late;
     return {
       start,
       end,
@@ -329,10 +338,13 @@ export const getDueWorkPerformance = (tasks: Task[], now = new Date(), weeks = 4
       tasks: cohort,
       outcomes,
       onTime,
-      late: countOf('late'),
+      late,
+      upcoming: countOf('upcoming'),
       open: countOf('open'),
+      overdue: countOf('overdue'),
       untracked: countOf('untracked'),
-      completionRate: cohort.length ? Math.round((onTime / cohort.length) * 100) : 0,
+      tracked,
+      completionRate: tracked ? Math.round((onTime / tracked) * 100) : 0,
     };
   });
 };
@@ -342,8 +354,11 @@ export interface DepartmentDueWorkPerformance {
   total: number;
   onTime: number;
   late: number;
+  upcoming: number;
   open: number;
+  overdue: number;
   untracked: number;
+  tracked: number;
   completionRate: number;
 }
 
@@ -352,15 +367,29 @@ export const getDueWorkDepartmentPerformance = (weeks: DueWorkWeek[]): Departmen
   const stats = new Map<string, DepartmentDueWorkPerformance>();
   weeks.forEach(week => week.outcomes.forEach(({ task, outcome }) => {
     const name = task.department || 'Unassigned';
-    const entry = stats.get(name) || { name, total: 0, onTime: 0, late: 0, open: 0, untracked: 0, completionRate: 0 };
+    const entry = stats.get(name) || {
+      name,
+      total: 0,
+      onTime: 0,
+      late: 0,
+      upcoming: 0,
+      open: 0,
+      overdue: 0,
+      untracked: 0,
+      tracked: 0,
+      completionRate: 0,
+    };
     entry.total += 1;
     if (outcome === 'onTime') entry.onTime += 1;
     else if (outcome === 'late') entry.late += 1;
+    else if (outcome === 'upcoming') entry.upcoming += 1;
+    else if (outcome === 'overdue') entry.overdue += 1;
     else if (outcome === 'untracked') entry.untracked += 1;
     else entry.open += 1;
+    entry.tracked = entry.onTime + entry.late;
     stats.set(name, entry);
   }));
   return Array.from(stats.values())
-    .map(entry => ({ ...entry, completionRate: entry.total ? Math.round((entry.onTime / entry.total) * 100) : 0 }))
+    .map(entry => ({ ...entry, completionRate: entry.tracked ? Math.round((entry.onTime / entry.tracked) * 100) : 0 }))
     .sort((a, b) => b.total - a.total);
 };

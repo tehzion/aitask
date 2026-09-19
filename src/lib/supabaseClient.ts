@@ -58,7 +58,7 @@ export const subscribeToCurrentMemberAccessChanges = (
 
 const legacyAliases: Record<string, string> = {
   'boss koo': 'boss@aitask.local',
-  'admin demo': 'admin@aitask.local',
+  'project manager demo': 'admin@aitask.local',
   'urbaneats client demo': 'urbaneats.client@aitask.local',
   'adminmojo': 'adminmojo@aitask.local',
 };

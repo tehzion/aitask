@@ -24,7 +24,7 @@ values ('pgtap-member-role', 'client', 'pgtap-role-client', '{"id":"pgtap-role-c
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000931', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
--- Boss Koo can promote a Staff member to Admin.
+-- Boss Koo can promote a Staff member to Project Manager.
 select is(
   (public.aitask_update_member_role(
     'pgtap-member-role', gen_random_uuid(), 'pgtap-role-target2',
@@ -32,7 +32,7 @@ select is(
     (select version from public.aitask_members where workspace_id = 'pgtap-member-role' and id = 'pgtap-role-target2')
   ) ->> 'ok')::boolean,
   true,
-  'Boss Koo can promote a Staff member to Admin'
+  'Boss Koo can promote a Staff member to Project Manager'
 );
 
 reset role;

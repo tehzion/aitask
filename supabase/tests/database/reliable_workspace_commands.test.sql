@@ -27,7 +27,7 @@ select has_function(
   'private',
   'aitask_is_super_admin',
   array['text'],
-  'Super Admin authorization is distinct from the Admin business role'
+  'Super Admin authorization is distinct from the Project Manager business role'
 );
 select has_function(
   'private',

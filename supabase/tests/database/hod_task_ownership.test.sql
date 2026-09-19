@@ -41,7 +41,7 @@ insert into public.aitask_members(
 ) values
   ('pgtap-hod', 'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000920', 'HOD Actor', 'pgtap-hod@aitask.local', 'HOD', 'Designer', array['Designer'], null, null, false),
   ('pgtap-hod-staff', 'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000921', 'Assigned Staff', 'pgtap-hod-staff@aitask.local', 'Staff', 'Designer', array['Designer'], null, null, false),
-  ('pgtap-hod-admin', 'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000922', 'Scoped Admin', 'pgtap-hod-admin@aitask.local', 'Project Manager', 'Management', array['Management'], null, null, false),
+  ('pgtap-hod-admin', 'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000922', 'Scoped Project Manager', 'pgtap-hod-admin@aitask.local', 'Project Manager', 'Management', array['Management'], null, null, false),
   ('pgtap-hod-boss', 'pgtap-hod-authorization', '00000000-0000-0000-0000-000000000923', 'Boss Koo', 'pgtap-hod-boss@aitask.local', 'Project Manager', 'Management', array['Management'], null, null, true);
 
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
@@ -52,7 +52,7 @@ values
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-created', '{"id":"pgtap-hod-created","title":"HOD created task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-assigned', '{"id":"pgtap-hod-assigned","title":"HOD assigned task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod","createdBy":"pgtap-hod-staff","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-unrelated', '{"id":"pgtap-hod-unrelated","title":"Unrelated task","clientName":"HOD Test Client","department":"Video Editor","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-staff","status":"Pending","visibility":"internal"}'::jsonb),
-  ('pgtap-hod-authorization', 'task', 'pgtap-hod-admin-created', '{"id":"pgtap-hod-admin-created","title":"Admin created task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-admin","status":"Pending","visibility":"internal"}'::jsonb),
+  ('pgtap-hod-authorization', 'task', 'pgtap-hod-admin-created', '{"id":"pgtap-hod-admin-created","title":"Project Manager created task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-admin","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-staff-task', '{"id":"pgtap-hod-staff-task","title":"Staff task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-admin","status":"Pending","visibility":"internal"}'::jsonb);
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000920', true);
@@ -174,8 +174,8 @@ select ok(private.aitask_can_edit_task('pgtap-hod-authorization', 'pgtap-hod-ass
 select ok(private.aitask_can_edit_task('pgtap-hod-authorization', 'pgtap-hod-staff-task'), 'ordinary Staff can edit their assigned task');
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000922', true);
-select ok(private.aitask_can_edit_task('pgtap-hod-authorization', 'pgtap-hod-admin-created'), 'Admin can edit a task they created');
-select ok(not private.aitask_can_edit_task('pgtap-hod-authorization', 'pgtap-hod-unrelated'), 'Admin cannot edit an unrelated task');
+select ok(private.aitask_can_edit_task('pgtap-hod-authorization', 'pgtap-hod-admin-created'), 'Project Manager can edit a task they created');
+select ok(not private.aitask_can_edit_task('pgtap-hod-authorization', 'pgtap-hod-unrelated'), 'Project Manager cannot edit an unrelated task');
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000923', true);
 select ok(private.aitask_can_edit_task('pgtap-hod-authorization', 'pgtap-hod-unrelated'), 'Boss Koo retains unrestricted task editing');
@@ -271,7 +271,7 @@ select is(
     ))
   ) ->> 'ok')::boolean,
   false,
-  'the HOD role cannot be assigned to an Admin account'
+  'the HOD role cannot be assigned to a Project Manager account'
 );
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000920', true);

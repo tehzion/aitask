@@ -50,7 +50,7 @@ if (stagingUrl === productionUrl) {
 }
 
 const roles = [
-  { key: 'SUPER_ADMIN', id: `${FIXTURE_PREFIX}super-admin`, name: 'Release QA Super Admin', role: 'Admin', department: 'Management', departments: ['Management'], isSuperAdmin: true, clientName: null },
+  { key: 'SUPER_ADMIN', id: `${FIXTURE_PREFIX}super-admin`, name: 'Release QA Super Admin', role: 'Project Manager', department: 'Management', departments: ['Management'], isSuperAdmin: true, clientName: null },
   { key: 'OPERATION', id: `${FIXTURE_PREFIX}operation`, name: 'Release QA Operation', role: 'Staff', department: 'Operation', departments: ['Operation'], isSuperAdmin: false, clientName: null },
   { key: 'PRODUCTION', id: `${FIXTURE_PREFIX}production`, name: 'Release QA Production', role: 'Staff', department: 'Video Editor', departments: ['Video Editor'], workerType: 'supplier', isSuperAdmin: false, clientName: null },
   { key: 'ACCOUNT', id: `${FIXTURE_PREFIX}account`, name: 'Release QA Account', role: 'Staff', department: 'Account & Finance', departments: ['Account & Finance'], workerType: 'freelancer', isSuperAdmin: false, clientName: null },

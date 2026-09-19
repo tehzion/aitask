@@ -70,9 +70,9 @@ select is(
     (select version from public.aitask_members where id = 'pgtap-hardening-pm')
   ) ->> 'ok')::boolean,
   true,
-  'Boss Koo can clear Admin departments'
+  'Boss Koo can clear Project Manager departments'
 );
-select is((select cardinality(departments) from public.aitask_members where id = 'pgtap-hardening-pm'), 0, 'Admin departments may be empty');
+select is((select cardinality(departments) from public.aitask_members where id = 'pgtap-hardening-pm'), 0, 'Project Manager departments may be empty');
 select is((select version from public.aitask_members where id = 'pgtap-hardening-pm'), 2::bigint, 'department changes increment member version');
 select ok(position('new.departments is distinct from old.departments' in pg_get_functiondef('private.aitask_guard_member_security()'::regprocedure)) > 0, 'member security guard protects departments');
 

@@ -27,7 +27,7 @@ Until production SMTP is configured, Super Admin onboarding may skip email deliv
 
 ## Launch Feedback
 
-The public checklist is available at `/feedback`; role-specific links use `?role=Staff`, `?role=Client`, `?role=Admin`, or `?role=Super%20Admin`. Responses close operationally on 30 July 2026, with later responses retained and marked late.
+The public checklist is available at `/feedback`; role-specific links use `?role=Staff`, `?role=Client`, `?role=Project%20Manager`, or `?role=Super%20Admin`. Responses close operationally on 30 July 2026, with later responses retained and marked late.
 
 Feedback is stored outside the synchronized workspace in `aitask_feedback_submissions`. Anonymous and normal authenticated roles have no direct table privileges. The `aitask-feedback` Edge Function accepts validated public submissions and returns read-only results only to Boss Koo or an email in `AITASK_FEEDBACK_REVIEWER_EMAILS`. `adminmojo` has a linked, non-Super-Admin workspace account and may also use the allowlisted reviewer email flow at `/feedback/results`.
 

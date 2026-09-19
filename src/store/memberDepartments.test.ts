@@ -77,7 +77,7 @@ describe('Super Admin member department management', () => {
     ]);
   });
 
-  it('denies an ordinary Admin', async () => {
+  it('denies an ordinary Project Manager', async () => {
     useStore.setState({ currentUser: admin });
     const result = await useStore.getState().updateMemberDepartments(staff.id, ['Operation']);
     expect(result).toEqual({ ok: false, error: 'Only Boss Koo can manage member departments.' });

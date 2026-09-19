@@ -10,7 +10,7 @@ insert into auth.users (
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000941', 'authenticated', 'authenticated', 'pgtap-admin-dept@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000942', 'authenticated', 'authenticated', 'pgtap-staff-dept@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
 
-insert into public.aitask_workspaces(id, name) values ('pgtap-admin-dept', 'Admin department test workspace');
+insert into public.aitask_workspaces(id, name) values ('pgtap-admin-dept', 'Project Manager department test workspace');
 
 insert into public.aitask_members(
   id, workspace_id, auth_user_id, name, email, role, department, departments, is_super_admin, permissions
@@ -21,7 +21,7 @@ insert into public.aitask_members(
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000941', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
--- Admin is not limited by department and may have none.
+-- Project Managers are not limited by department and may have none.
 select is(
   (public.aitask_update_member_role(
     'pgtap-admin-dept', gen_random_uuid(), 'pgtap-target3',
@@ -29,14 +29,14 @@ select is(
     (select version from public.aitask_members where workspace_id = 'pgtap-admin-dept' and id = 'pgtap-target3')
   ) ->> 'ok')::boolean,
   true,
-  'an Admin can be assigned with no departments'
+  'a Project Manager can be assigned with no departments'
 );
 
 reset role;
 select is(
   (select cardinality(departments) from public.aitask_members where workspace_id = 'pgtap-admin-dept' and id = 'pgtap-target3'),
   0,
-  'the Admin member has zero departments'
+  'the Project Manager member has zero departments'
 );
 
 set local role authenticated;

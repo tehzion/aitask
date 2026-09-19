@@ -79,14 +79,14 @@ describe('client profile store authorization', () => {
     expect(useStore.getState().clients[0]?.contactPerson).toBe('Alicia');
   });
 
-  it('keeps global rename admin-only', () => {
+  it('keeps global rename Project Manager-only', () => {
     useStore.setState({ currentUser: makeStaff(true) });
     const result = useStore.getState().renameClient('Acme', 'Acme Global');
     expect(result).toEqual({ ok: false, error: 'Only Project Managers can rename their own companies.' });
     expect(useStore.getState().tasks[0]?.clientName).toBe('Acme');
   });
 
-  it('lets an admin create a profile without a service plan and rejects duplicate names', () => {
+  it('lets a Project Manager create a profile without a service plan and rejects duplicate names', () => {
     const admin: User = { id: 'admin-client-profile', name: 'Project Manager', role: 'Project Manager', departments: ['Management'], department: 'Management' };
     useStore.setState({ ...initialState, currentUser: admin, users: [admin], clients: [], tasks: [], projects: [], rolePermissions: [] }, true);
 
@@ -103,7 +103,7 @@ describe('client profile store authorization', () => {
     expect(duplicate).toEqual({ ok: false, error: 'This company already exists in the Companies database.' });
   });
 
-  it('cascades a company delete for an admin and blocks ordinary staff', () => {
+  it('cascades a company delete for a Project Manager and blocks ordinary staff', () => {
     const admin: User = { id: 'admin-delete-client', name: 'Project Manager', role: 'Project Manager', departments: ['Management'], department: 'Management' };
     useStore.setState({
       ...initialState,

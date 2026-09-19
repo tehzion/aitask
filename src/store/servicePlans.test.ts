@@ -4,7 +4,7 @@ import { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } from '../lib/serviceM
 import { useStore } from './index';
 
 const initialState = useStore.getState();
-const admin: User = { id: 'admin-service', name: 'Service Admin', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+const admin: User = { id: 'admin-service', name: 'Service Project Manager', role: 'Project Manager', departments: ['Management'], department: 'Management' };
 
 describe('client service plan store', () => {
   beforeEach(() => {
@@ -35,7 +35,7 @@ describe('client service plan store', () => {
     expect(useStore.getState().serviceCycles).toHaveLength(1);
   });
 
-  it('keeps commercial actions admin-only', () => {
+  it('keeps commercial actions Project Manager-only', () => {
     useStore.setState({ currentUser: { ...admin, role: 'Staff', departments: ['Designer'], department: 'Designer' } });
     const result = useStore.getState().createClientWithPlan({
       clientName: 'Blocked', planName: 'Plan', origin: 'custom', serviceItems: [], startDate: '2026-08-15', billingDay: 15,

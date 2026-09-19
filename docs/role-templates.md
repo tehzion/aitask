@@ -5,10 +5,10 @@ permissions resolve, and which capabilities are deliberately reserved.
 
 ## Role model
 
-There are three base roles — `Admin`, `Staff`, `Client`. **HOD is not a base
-role**: it is the protected Staff-based custom role `system-hod`. Custom roles
-and per-member overrides resolve at request time on both the client and the
-server.
+There are four canonical roles — `Project Manager`, `HOD`, `Staff`, and
+`Client`. Boss Koo is the `Project Manager` role with the protected
+`isSuperAdmin` flag. Custom roles and per-member overrides resolve at request
+time on both the client and the server.
 
 Resolution order (highest first):
 
@@ -17,10 +17,10 @@ Resolution order (highest first):
    top of the member's custom role so saving an override never silently revokes
    the role's own grants.
 3. **Custom-role permissions** (`custom_role.data.permissions`).
-4. **Base-role defaults** (`Admin` / `Staff` / `Client`).
+4. **Base-role defaults** (`Project Manager` / `HOD` / `Staff` / `Client`).
 
-After resolution, `sanitizeNonSuperAdminPermissions` forces the five protected
-keys to `false` for every non-super-admin.
+After resolution, `sanitizeRolePermissions` forces protected keys to `false`
+for every non-super-admin and preserves HOD's department boundary.
 
 ## Protected (Boss Koo only) keys
 
@@ -32,11 +32,11 @@ and rejected by the database guards. They are **not delegable**.
 
 ## Templates
 
-| Capability | Boss Koo | Admin | HOD (`system-hod`) | Staff | Client |
+| Capability | Boss Koo | Project Manager | HOD | Staff | Client |
 |---|---|---|---|---|---|
 | Page access (Dashboard/Tasks/Calendar/Companies/Reports/Settings) | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Approvals page (`viewApprovals`) | ✓ | ✓ | – | – | – |
-| Task / client visibility | ✓ | portfolio-scoped | dept-scoped | assigned | own company |
+| Task / client visibility | ✓ | portfolio-scoped | dept-scoped | assigned/created | own company |
 | Create tasks | ✓ | ✓ | ✓ | ✓ | – |
 | Manage created tasks | ✓ | ✓ | ✓ | – | – |
 | Add / delete companies (`createClients`/`deleteClients`) | ✓ | ✓ | ✓ | – | – |
@@ -46,7 +46,7 @@ and rejected by the database guards. They are **not delegable**.
 | Client review actions | – | – | – | – | ✓ |
 | Protected keys | ✓ | – | – | – | – |
 
-### Admin
+### Project Manager
 Full **operational** access to the PM's portfolio: service operations, companies
 they own or can reach through visible work, and the Approvals page. Project
 Managers do not receive workspace-wide task/client visibility, account/role
@@ -59,8 +59,8 @@ can add/delete companies. It does **not** get workspace-wide visibility or
 service-administration rights.
 
 ### Staff
-Standard employee access: assigned work only (plus work they created when
-granted `manageCreatedTasks`). No elevation over other members' work.
+Standard employee access: assigned or created work only. No elevation over
+other members' work.
 
 ### Custom roles
 Boss Koo may create roles with any **non-protected** key. A custom role may opt
@@ -70,12 +70,12 @@ Per-member overrides layer on top of the chosen role.
 
 ## Member role assignment
 
-The Approvals page shows the built-in **default roles** (Admin, HOD, Staff,
+The Approvals page shows the built-in **default roles** (Project Manager, HOD, Staff,
 Client) as read-only templates, and the member list assigns any of them in one
 step via `aitask_update_member_role`:
 
-- **Admin** / **Staff** — sets the base role and clears any custom role.
-- **HOD** — sets base role `Staff` plus the protected `system-hod` role.
+- **Project Manager** / **Staff** / **HOD** — sets the canonical base role and
+  clears any incompatible custom role.
 - **Client** — sets base role `Client` and requires a company (stored as
   `client_name`); leaving Client clears the company and departments.
 - **Custom role** — sets the member's base role to match the custom role's
@@ -99,8 +99,8 @@ Role changes are Boss-Koo-only, reset the member's departments (Client uses
 
 ## Change log of role-template fixes
 
-- Admin: added `viewApprovals` and server parity for `createClients` /
-  `deleteClients`; Admin can now edit/delete any project server-side.
+- Project Manager: added `viewApprovals` and server parity for `createClients` /
+  `deleteClients`; Project Managers retain portfolio-scoped project control.
 - HOD: department-scoped task visibility and editing.
 - Custom roles: optional `departmentScoped` flag; member overrides can persist
   `createClients` / `deleteClients`; overrides now layer on the custom role.

@@ -169,14 +169,14 @@ describe('staff permission matrix', () => {
     ]);
   });
 
-  it('scopes clients and projects to connected work while keeping rename admin-only', () => {
+  it('scopes clients and projects to connected work while keeping rename Project Manager-only', () => {
     expect(getVisibleClientNames(staff, tasks, projects)).toEqual(['Acme']);
     expect(getVisibleProjects(staff, projects, tasks).map(project => project.id)).toEqual(['project-acme']);
     expect(canRenameClient(staff)).toBe(false);
     expect(canRenameClient(admin)).toBe(true);
   });
 
-  it('offers only Admin-created or legacy companies when Staff create tasks', () => {
+  it('offers only Project Manager-created or legacy companies when Staff create tasks', () => {
     const companySet: Project[] = [
       { ...projects[0], createdBy: admin.id },
       { ...projects[1], createdBy: staff.id },
@@ -228,7 +228,7 @@ describe('staff permission matrix', () => {
     const companySet: Project[] = [
       { ...projects[0], id: 'project-own-empty', clientName: 'Own Empty', projectName: 'Own Empty', createdBy: staff.id },
       { ...projects[0], id: 'project-other-empty', clientName: 'Other Empty', projectName: 'Other Empty', createdBy: otherStaff.id },
-      { ...projects[0], id: 'project-admin-empty', clientName: 'Admin Empty', projectName: 'Admin Empty', createdBy: admin.id },
+      { ...projects[0], id: 'project-admin-empty', clientName: 'Project Manager Empty', projectName: 'Project Manager Empty', createdBy: admin.id },
     ];
 
     expect(getAssignableProjects(staff, companySet, [], [], members).map(project => project.id)).toEqual([
@@ -580,7 +580,7 @@ describe('staff permission matrix', () => {
     expect(canAssignTasksToOthers(hod, [hodRole], assignedToHod)).toBe(false);
   });
 
-  it('scopes Admin task visibility to owned and assigned work while keeping edits scoped', () => {
+  it('scopes Project Manager task visibility to owned and assigned work while keeping edits scoped', () => {
     const adminCreated = makeTask({ id: 'admin-created', createdBy: admin.id, assignedTo: otherStaff.id });
     const adminAssigned = makeTask({ id: 'admin-assigned', createdBy: otherStaff.id, assignedTo: admin.id });
     const unrelated = makeTask({ id: 'admin-unrelated', createdBy: otherStaff.id, assignedTo: otherStaff.id });
@@ -737,7 +737,7 @@ describe('project manager ownership follow-ups', () => {
     expect(canOpenServiceClient(admin, 'Beta', [ownTask], [], [])).toBe(true);
   });
 
-  it('lets an Admin edit a company profile through their own task when no profile exists', () => {
+  it('lets a Project Manager edit a company profile through their own task when no profile exists', () => {
     const ownTask = makeTask({ id: 'admin-own-edit', clientName: 'Gamma', createdBy: admin.id, assignedTo: otherStaff.id });
     const otherTask = makeTask({ id: 'admin-other-edit', clientName: 'Gamma', createdBy: otherStaff.id, assignedTo: otherStaff.id });
     expect(canEditClientProfile(admin, 'Gamma', [ownTask], [], [])).toBe(true);

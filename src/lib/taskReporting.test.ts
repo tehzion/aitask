@@ -41,7 +41,7 @@ const users: User[] = [
 describe('Boss operations reporting', () => {
   const now = new Date(2026, 6, 31, 12, 0, 0);
 
-  it('builds four Monday-to-Saturday due-work cohorts with on-time, late, and open states', () => {
+  it('builds four Monday-to-Saturday due-work cohorts with tracked and open states', () => {
     const weeks = getDueWorkPerformance([
       makeTask({ id: 'on-time', dueDate: '2026-07-31', status: 'Completed', isCompleted: true, completedAt: new Date(2026, 6, 31, 23, 59).toISOString() }),
       makeTask({ id: 'late', dueDate: '2026-07-30', status: 'Completed', isCompleted: true, completedAt: new Date(2026, 7, 1, 0, 1).toISOString() }),
@@ -52,7 +52,7 @@ describe('Boss operations reporting', () => {
     ], now);
 
     expect(weeks).toHaveLength(4);
-    expect(weeks[3]).toMatchObject({ onTime: 1, late: 1, open: 1, untracked: 0, completionRate: 33, isCurrent: true });
+    expect(weeks[3]).toMatchObject({ onTime: 1, late: 1, upcoming: 1, open: 0, overdue: 0, untracked: 0, tracked: 2, completionRate: 50, isCurrent: true });
     expect(weeks[3].tasks.map(task => task.id)).toEqual(['on-time', 'late', 'open']);
   });
 
@@ -67,7 +67,17 @@ describe('Boss operations reporting', () => {
     ], now);
 
     expect(weeks[3].tasks.map(task => task.id)).toEqual(['monday', 'saturday', 'untracked']);
-    expect(weeks[3]).toMatchObject({ open: 2, untracked: 1, completionRate: 0 });
+    expect(weeks[3]).toMatchObject({ upcoming: 1, open: 0, overdue: 1, untracked: 1, tracked: 0, completionRate: 0 });
+  });
+
+  it('keeps due-today work separate from upcoming and overdue work', () => {
+    const weeks = getDueWorkPerformance([
+      makeTask({ id: 'due-today', dueDate: '2026-07-31' }),
+      makeTask({ id: 'upcoming', dueDate: '2026-08-01' }),
+      makeTask({ id: 'overdue', dueDate: '2026-07-30' }),
+    ], now);
+
+    expect(weeks[3]).toMatchObject({ open: 1, upcoming: 1, overdue: 1, tracked: 0 });
   });
 
   it('uses a Monday-to-Saturday local week and displays the exact range', () => {

@@ -135,7 +135,7 @@ test('Staff and Boss dashboards stay accessible across desktop and mobile', asyn
   }
 });
 
-test('Staff sees a clear approvals denial while Boss Koo keeps the admin workspace', async ({ page }) => {
+test('Staff sees a clear approvals denial while Boss Koo keeps the Project Manager workspace', async ({ page }) => {
   await signIn(page, 'Staff Demo');
   await page.goto('/approvals');
   await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();

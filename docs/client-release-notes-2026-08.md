@@ -32,7 +32,7 @@
 - **Safer Staff and HOD controls.** Boss Koo can manage safe role defaults and individual overrides while protected identity, global task editing, and account-management permissions remain server-enforced.
 - **A simpler client-first setup.** New client saves the company profile first and does not force a service plan or create a client login. The next screen offers Create project, Add service plan, and Done.
 - **Projects have their own identity.** Every new project uses an existing company record, keeps an independent project name, requires at least one service and a start date, and rejects duplicate names within the same company.
-- **Continue without losing your place.** Boss Koo and Admins can add a company from inside project creation, then continue the same form with that company selected.
+- **Continue without losing your place.** Boss Koo and Project Managers can add a company from inside project creation, then continue the same form with that company selected.
 - **Correct task inheritance.** Creating a task from a project carries the canonical client ID, company name, project ID, and project name into the task record.
 - **Historical names remain safe.** Renaming a company preserves custom project names; only legacy project names that exactly followed the old company name continue to follow it.
 - **Database-enforced company visibility.** Staff and HOD project creation requires permission and a real company visible to that person. Hidden and nonexistent client links are rejected server-side.
@@ -44,7 +44,7 @@
 
 - **A clearer HOD responsibility boundary.** HODs can create work for their own departments and continue managing the tasks they created, even after handing those tasks to another team member.
 - **Staff controls stay focused.** Staff can continue working on tasks assigned to them, while HOD-created work remains under the HOD’s ownership without opening unrelated work.
-- **Admin visibility with safer editing.** Admins can still review the full task list, but unrelated tasks are protected from changes unless they created the task or are assigned to it.
+- **Project Manager visibility with safer editing.** Project Managers can review their portfolio task list, but unrelated tasks are protected from changes unless they created the task or are assigned to it.
 - **Boss Koo retains full control.** Only Boss Koo can manage every task and assign the protected HOD role to Staff accounts.
 - **Same protection in every path.** These boundaries are checked when work is opened, edited, reassigned, or removed, including after a refresh or retry.
 
@@ -111,7 +111,7 @@
 | Release | Formal release commit | Verification basis |
 | --- | --- | --- |
 | v2.3.0 | Release tag `v2.3.0` | Companies/client tracker split, profile-only client creation, named projects, canonical client linking, safe Staff/HOD permissions, browser flow verification, and project-link authorization tests. Production now reports the tagged release provenance. |
-| v2.2.0 | Release tag `v2.2.0` | Protected HOD role, created-task ownership after reassignment, scoped Admin editing, creator immutability, assignment/department enforcement, protected-role guards, capability-version cutover, and local pgTAP/client permission tests. |
+| v2.2.0 | Release tag `v2.2.0` | Protected HOD role, created-task ownership after reassignment, scoped Project Manager editing, creator immutability, assignment/department enforcement, protected-role guards, capability-version cutover, and local pgTAP/client permission tests. |
 | v2.1.5 | Release tag `v2.1.5` | Structured hosted auth failures and email-only recovery, Boss-only administration, assigned-service isolation, privilege-only database hardening, authenticated staging QA, and exact automatic `master` deployment provenance. |
 | v2.1.4 | Release tag `v2.1.4` | Staff cycle-progress correction, complete Staff authorization rollout, immutable forward migrations, production data-integrity checks, and exact deployment provenance; authenticated staging QA waived by the exact one-time direct-production gate. |
 | v2.1.3 | Release tag `v2.1.3` | Staff command authorization, canonical task-linked notifications, service-catalog flows, Boss deliverables, registration approval, and Chinese coverage. |

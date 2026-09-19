@@ -13,7 +13,7 @@ proving that the live schema and the repository baseline are equivalent.
 - Postflight matches the approved business checksum, all task/project records
   have canonical client IDs, Storage is private, and the service cron is not
   tied to a hard-coded workspace.
-- Super Admin, Admin, Staff, and Client capability probes pass for their own
+- Super Admin, Project Manager, Staff, and Client capability probes pass for their own
   workspace and return `FORBIDDEN` for a cross-workspace probe.
 - Do not repair migration history or reapply the five rollout migrations.
 - A public-schema logical backup was restored into a disposable clean stack and

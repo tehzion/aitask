@@ -2,7 +2,7 @@
 
 **Testing period:** 18-30 July 2026  
 **Return by:** 30 July 2026  
-**For:** Super Admin, Admin, Staff, and Client users
+**For:** Super Admin, Project Manager, Staff, and Client users
 
 Complete one checklist per user after using AiTask for one week. Tick `Pass`, `Issue`, or `Not applicable` for each relevant item. Add an issue record for every item marked `Issue`.
 
@@ -10,7 +10,7 @@ Complete one checklist per user after using AiTask for one week. Tick `Pass`, `I
 
 - Name / 姓名:
 - Email / 电子邮箱:
-- Role / 角色: Super Admin / Admin / Staff / Client
+- Role / 角色: Super Admin / Project Manager / Staff / Client
 - Department or company / 部门或公司:
 - Main device / 主要设备: Desktop / Laptop / Tablet / Mobile
 - Browser / 浏览器:
@@ -92,7 +92,7 @@ Complete one checklist per user after using AiTask for one week. Tick `Pass`, `I
 | Approving a user sends the correct invitation. / 批准用户后会发送正确的邀请邮件。 | [ ] | [ ] | [ ] |
 | Department, role, and permissions save correctly. / 部门、角色和权限可以正确保存。 | [ ] | [ ] | [ ] |
 | Removing a permission takes effect after refresh. / 移除权限后，刷新页面即会生效。 | [ ] | [ ] | [ ] |
-| `adminmojo` has Admin access but cannot act as Super Admin. / `adminmojo` 拥有管理员权限，但不能作为超级管理员。 | [ ] | [ ] | [ ] |
+| `adminmojo` has Project Manager access but cannot act as Super Admin. / `adminmojo` 拥有项目经理权限，但不能作为超级管理员。 | [ ] | [ ] | [ ] |
 | Audit records exist for sensitive administrative actions. / 敏感管理操作有审计记录。 | [ ] | [ ] | [ ] |
 
 ## Issue Record / 问题记录

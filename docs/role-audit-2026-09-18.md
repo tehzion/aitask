@@ -34,7 +34,7 @@ Sources: `src/lib/access.ts`, the HOD migration, and the September member-permis
 
 `updateTaskStatus` creates a client-targeted notification whenever the next status is Completed or Waiting Approval, without checking task visibility. Staff task creation defaults to internal visibility.
 
-For Staff/HOD, the database's staff notification trigger explicitly rejects notifications targeting a client for an internal task. The notification is included in the task save, so this can reject the entire command. For Boss Koo with the Admin base role, the staff-only trigger does not run, leaving a notification containing the internal task title available to the client. Notification audience checks do not check the linked task's visibility.
+For Staff/HOD, the database's staff notification trigger explicitly rejects notifications targeting a client for an internal task. The notification is included in the task save, so this can reject the entire command. For Boss Koo with the Project Manager base role, the staff-only trigger does not run, leaving a notification containing the internal task title available to the client. Notification audience checks do not check the linked task's visibility.
 
 **Evidence:** A local browser/store probe completed an internal task titled “Confidential internal task” and observed a client notification containing that title. Backend rejection/disclosure consequences are established by source tracing, not a live production test.
 

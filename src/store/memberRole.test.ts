@@ -66,7 +66,7 @@ describe('member role assignment', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it('blocks a Project Manager (non-Boss Admin) from changing roles', async () => {
+  it('blocks a non-Boss Project Manager from changing roles', async () => {
     const projectManager: User = { id: 'u-pm', name: 'Project Manager', role: 'Project Manager', departments: [], department: 'Management' };
     useStore.setState({ currentUser: projectManager });
     const result = await useStore.getState().changeMemberRole('u-target', 'Project Manager');

@@ -454,7 +454,7 @@ select is(
      and data -> 'route' ->> 'entityId' = 'pgtap-self-task'
      and data ->> 'message' = 'Staff Actor deleted "Self task".'),
   1,
-  'the database creates one canonical Admin notice for a Staff task deletion'
+  'the database creates one canonical Project Manager notice for a Staff task deletion'
 );
 set local role authenticated;
 

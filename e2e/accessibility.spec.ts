@@ -29,7 +29,7 @@ test('day/night mode and keyboard shortcuts remain accessible', async ({ page })
   const root = page.locator('html');
   const themeButton = page.getByRole('button', { name: 'Switch to night mode' });
   await expect(themeButton).toHaveAttribute('aria-keyshortcuts', 'Shift+D');
-  await expectNoAxeViolations(page, 'Admin dashboard in day mode');
+  await expectNoAxeViolations(page, 'Project Manager dashboard in day mode');
 
   await page.keyboard.press('Shift+D');
   await expect(root).toHaveClass(/dark/);
@@ -37,7 +37,7 @@ test('day/night mode and keyboard shortcuts remain accessible', async ({ page })
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(20, 22, 24)');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('aitask-color-theme'))).toBe('dark');
   await page.waitForTimeout(250);
-  await expectNoAxeViolations(page, 'Admin dashboard in night mode');
+  await expectNoAxeViolations(page, 'Project Manager dashboard in night mode');
 
   await page.reload();
   await expect(root).toHaveClass(/dark/);
