@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 test('Account reports include assigned work and exclude other departments', async ({ page }) => {
   await page.goto('/login');
@@ -73,4 +74,15 @@ test('Account reports include assigned work and exclude other departments', asyn
   const accountRow = page.getByRole('row').filter({ hasText: 'Account & Finance' });
   await expect(accountRow).toContainText('1');
   await expect(page.getByRole('row').filter({ hasText: 'Video Editor' })).toHaveCount(0);
+
+  const desktopA11y = await new AxeBuilder({ page }).include('main').analyze();
+  expect(desktopA11y.violations, desktopA11y.violations.map(item => item.id).join(', ')).toEqual([]);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole('heading', { name: 'Four-Week Performance Report' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByText('View weekly data table', { exact: true }).click();
+  await expect(page.getByRole('table').first()).toBeVisible();
+  const mobileA11y = await new AxeBuilder({ page }).include('main').analyze();
+  expect(mobileA11y.violations, mobileA11y.violations.map(item => item.id).join(', ')).toEqual([]);
 });
