@@ -1,13 +1,36 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "preparedAt": "2026-08-24",
-  "status": "production_aligned_through_20260918200000_pending_20260918210000_20260918220000_20260919090000_20260919110000",
+  "preparedAt": "2026-09-19",
+  "status": "production_authorization_rollout_verified",
   "metadataOnly": false,
-  "warning": "Production history is aligned through 20260918200000_member_security_and_project_visibility. The authorization-hardening, canonical PM/HOD role, PM/HOD scope-invariant, and task-detail authorization migrations are implemented locally but still require production rollout verification. Historical rollout repair remains prohibited.",
+  "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
-    "verifiedAt": "2026-09-11",
-    "historyThrough": "20260918200000_member_security_and_project_visibility",
-    "historyAligned": true,
+    "verifiedAt": "2026-09-19",
+    "historyThrough": "task_detail_authorization (connector version 20260919065648)",
+    "historyAligned": false,
+    "historyAlignmentNote": "The connector stored deployment IDs 20260919065513, 20260919065609, 20260919065620, and 20260919065648 for the four matching repository migrations. Names and live SQL are verified; timestamp repair is intentionally prohibited.",
+    "authorizationRollout": {
+      "repositoryMigrations": [
+        "20260918210000_authorization_hardening_followups",
+        "20260918220000_project_manager_hod_role_model",
+        "20260919090000_enforce_pm_hod_scope_invariants",
+        "20260919110000_task_detail_authorization"
+      ],
+      "connectorVersions": [
+        "20260919065513_authorization_hardening_followups",
+        "20260919065609_project_manager_hod_role_model",
+        "20260919065620_enforce_pm_hod_scope_invariants",
+        "20260919065648_task_detail_authorization"
+      ],
+      "liveVerification": {
+        "legacyAdminRoles": 0,
+        "legacySystemHodTemplates": 0,
+        "builtinHodTemplates": 1,
+        "taskAuthorizationPolicies": 3,
+        "anonymousTaskHelperExecution": false,
+        "authenticatedTaskHelperExecution": true
+      }
+    },
     "rolloutResult": {
       "approvedBaselineMatchedAfterRestore": true,
       "postflightUnchanged": true,
@@ -321,10 +344,5 @@
     "20260919090000_enforce_pm_hod_scope_invariants",
     "20260919110000_task_detail_authorization"
   ],
-  "pendingProductionMigrations": [
-    "20260918210000_authorization_hardening_followups",
-    "20260918220000_project_manager_hod_role_model",
-    "20260919090000_enforce_pm_hod_scope_invariants",
-    "20260919110000_task_detail_authorization"
-  ]
+  "pendingProductionMigrations": []
 }
