@@ -255,7 +255,8 @@ html [class~="focus:border-blue-500"]:focus { border-color: rgb(var(--calm-accen
 .text-emerald-900,
 .text-emerald-800,
 .text-emerald-700,
-.text-emerald-600 { color: rgb(var(--calm-success)); }
+.text-emerald-600,
+.text-emerald-300 { color: rgb(var(--calm-success)); }
 .bg-emerald-50,
 .bg-emerald-100 { background-color: rgb(var(--calm-success-soft)); }
 .bg-emerald-500,
@@ -268,7 +269,8 @@ html [class~="focus:border-blue-500"]:focus { border-color: rgb(var(--calm-accen
 .text-amber-900,
 .text-amber-800,
 .text-amber-700,
-.text-amber-600 { color: rgb(var(--calm-warning)); }
+.text-amber-600,
+.text-amber-300 { color: rgb(var(--calm-warning)); }
 .bg-amber-50,
 .bg-amber-100 { background-color: rgb(var(--calm-warning-soft)); }
 .bg-amber-500,
@@ -281,7 +283,8 @@ html [class~="focus:border-blue-500"]:focus { border-color: rgb(var(--calm-accen
 .text-red-900,
 .text-red-800,
 .text-red-700,
-.text-red-600 { color: rgb(var(--calm-danger)); }
+.text-red-600,
+.text-red-300 { color: rgb(var(--calm-danger)); }
 .bg-red-50,
 .bg-red-100,
 [class~="bg-red-50/30"] { background-color: rgb(var(--calm-danger-soft)); }

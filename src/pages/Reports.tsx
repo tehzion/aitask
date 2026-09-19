@@ -35,8 +35,7 @@ const Reports: React.FC = () => {
     };
   }, [resolvedTheme]);
   const isClientUser = currentUser?.role === 'Client';
-  const reportNow = useMemo(() => new Date(), [tasks]);
-  const performance = useMemo(() => getDueWorkPerformance(tasks, reportNow), [reportNow, tasks]);
+  const performance = useMemo(() => getDueWorkPerformance(tasks), [tasks]);
   const dueTasks = performance.flatMap(week => week.tasks);
 
   const formatWeekLabel = (week: { start: Date; end: Date; isCurrent: boolean }) => {

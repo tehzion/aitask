@@ -66,9 +66,9 @@ test('Account reports include assigned work and exclude other departments', asyn
   const reportHeading = page.getByRole('heading', { name: 'Four-Week Performance Report' });
   await expect(reportHeading).toBeVisible();
   await expect(reportHeading.locator('..').getByText('Internal workspace', { exact: false })).toBeVisible();
-  await expect(page.getByText('Due tasks', { exact: true }).locator('..').getByText('1', { exact: true })).toBeVisible();
-  await expect(page.getByText('Open today', { exact: true }).locator('..').getByText('1', { exact: true })).toBeVisible();
-  await expect(page.getByText('Assignees in period', { exact: true }).locator('..').getByText('1', { exact: true })).toBeVisible();
+  await expect(page.getByText('Due tasks', { exact: true }).first().locator('..').getByText('1', { exact: true })).toBeVisible();
+  await expect(page.getByText('Open today', { exact: true }).first().locator('..').getByText('1', { exact: true })).toBeVisible();
+  await expect(page.getByText('Assignees in period', { exact: true }).first().locator('..').getByText('1', { exact: true })).toBeVisible();
 
   const accountRow = page.getByRole('row').filter({ hasText: 'Account & Finance' });
   await expect(accountRow).toContainText('1');
