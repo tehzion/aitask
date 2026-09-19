@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { getDashboardPersona, getVisibleClientNames, getVisibleTasks, isHodUser } from '../lib/access';
 import { buildStaffWorkQueue, getStaffBucketLabel, getStaffFocusTask, type StaffWorkBucketKey } from '../lib/staffWorkspace';
+import { isTaskOpen } from '../lib/taskReporting';
 import { getRelativeDueDateString, getTodayInputDate } from '../lib/utils';
 import { pageShell } from './uiTokens';
 import { Button, MetaLine, SegmentedTabs, StatusChip, Surface } from './ui';
@@ -44,17 +45,18 @@ const StaffMyWork: React.FC = () => {
     if (!hasSelectedBucketRef.current) setActiveBucket(defaultBucket);
   }, [defaultBucket]);
 
-  const incompleteTaskIds = new Set(tasks.filter(task => !task.isCompleted && task.status !== 'Completed').map(task => task.id));
-  const blockedCount = tasks.filter(task => (task.predecessorTaskIds || []).some(id => incompleteTaskIds.has(id))).length;
+  const reportableTasks = tasks.filter(task => task.status !== 'Cancelled');
+  const incompleteTaskIds = new Set(reportableTasks.filter(isTaskOpen).map(task => task.id));
+  const blockedCount = reportableTasks.filter(task => (task.predecessorTaskIds || []).some(id => incompleteTaskIds.has(id))).length;
   const persona = getDashboardPersona(currentUser);
   const visibleClients = getVisibleClientNames(currentUser, allTasks, projects, rolePermissions, { clients, projects });
   const visibleClientKeys = new Set(visibleClients.map(name => name.trim().toLowerCase()));
   const activePlans = clientPlans.filter(plan => plan.status === 'Active' && visibleClientKeys.has(plan.clientName.trim().toLowerCase()));
   const renewals = activePlans.filter(plan => Boolean(plan.contractEndDate && plan.contractEndDate >= today && plan.contractEndDate <= new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)));
-  const linkedOutputs = new Set(tasks.map(task => task.deliverableId).filter(Boolean)).size;
-  const dueToday = tasks.filter(task => !task.isCompleted && task.dueDate === today).length;
+  const linkedOutputs = new Set(reportableTasks.map(task => task.deliverableId).filter(Boolean)).size;
+  const dueToday = tasks.filter(task => isTaskOpen(task) && task.dueDate === today).length;
   const waitingReview = queue.waiting.length;
-  const revisions = tasks.filter(task => !task.isCompleted && task.revisionCount > 0).length;
+  const revisions = tasks.filter(task => isTaskOpen(task) && task.revisionCount > 0).length;
   const roleInsight = persona === 'operation'
     ? { title: t('Operation context'), description: t('Your assigned delivery and review queue.'), values: [[t('Due today'), dueToday], [t('Waiting review'), waitingReview], [t('Blocked steps'), blockedCount]] as const }
     : persona === 'account'
@@ -96,7 +98,7 @@ const StaffMyWork: React.FC = () => {
               )}
             </div>
             <Button onClick={() => openTask(focusTask.id)} className="w-full lg:w-auto">
-              Open work <ArrowRight className="h-4 w-4" />
+              {t('Open work')} <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
         </section>
@@ -121,14 +123,14 @@ const StaffMyWork: React.FC = () => {
               hasSelectedBucketRef.current = true;
               setActiveBucket(bucket);
             }}
-            label="Staff work queue"
+            label={t('Staff work queue')}
             idPrefix="staff-queue"
             variant="underline"
           />
         </div>
         <Surface id={`staff-queue-panel-${activeBucket}`} role="tabpanel" aria-labelledby={`staff-queue-tab-${activeBucket}`} tabIndex={0} className="mt-3 overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           {queue[activeBucket].slice(0, 8).map(task => <StaffWorkItem key={task.id} task={task} allTasks={tasks} users={users} onOpen={item => openTask(item.id)} />)}
-          {queue[activeBucket].length === 0 && <div className="px-5 py-12 text-center"><ListChecks className="mx-auto h-7 w-7 text-muted/60" /><p className="mt-3 text-sm font-semibold text-ink">Nothing in {getStaffBucketLabel(activeBucket).toLowerCase()}</p><p className="mt-1 text-sm text-muted">Choose another queue to review your work.</p></div>}
+          {queue[activeBucket].length === 0 && <div className="px-5 py-12 text-center"><ListChecks className="mx-auto h-7 w-7 text-muted/60" aria-hidden="true" /><p className="mt-3 text-sm font-semibold text-ink">{t('Nothing in')} {t(getStaffBucketLabel(activeBucket))}</p><p className="mt-1 text-sm text-muted">{t('Choose another queue to review your work.')}</p></div>}
         </Surface>
       </section>
 
@@ -140,8 +142,8 @@ const StaffMyWork: React.FC = () => {
       </Surface>
 
       <div className="flex flex-wrap items-center gap-4 text-sm">
-        <Link to="/calendar" className="inline-flex min-h-11 items-center gap-2 font-semibold text-ink hover:text-accent hover:underline"><CalendarDays className="h-4 w-4" />Open schedule</Link>
-        <Link to="/notifications" className="inline-flex min-h-11 items-center gap-2 font-semibold text-ink hover:text-accent hover:underline"><Clock3 className="h-4 w-4" />Check inbox</Link>
+        <Link to="/calendar" className="inline-flex min-h-11 items-center gap-2 font-semibold text-ink hover:text-accent hover:underline"><CalendarDays className="h-4 w-4" aria-hidden="true" />{t('Open schedule')}</Link>
+        <Link to="/notifications" className="inline-flex min-h-11 items-center gap-2 font-semibold text-ink hover:text-accent hover:underline"><Clock3 className="h-4 w-4" aria-hidden="true" />{t('Check inbox')}</Link>
         {revisions > 0 && <span className="inline-flex items-center gap-2 text-amber-700"><RotateCcw className="h-4 w-4" />{t(`${revisions} active revision${revisions === 1 ? '' : 's'}`)}</span>}
       </div>
     </div>

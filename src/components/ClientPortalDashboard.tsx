@@ -67,7 +67,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
     ?.filter(comment => comment.userId !== currentUser?.id)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
 
-  const deliveryRow = (task: Task, actionLabel = 'View delivery') => (
+  const deliveryRow = (task: Task, actionLabel = t('View delivery')) => (
     <article key={task.id} className="group grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
@@ -113,7 +113,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
                 </div>
               )}
               <Link to={taskPath(focusTask)} className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-control bg-accent px-5 text-sm font-semibold text-white shadow-[0_12px_28px_-18px_rgb(var(--calm-accent)/0.9)] transition duration-160 hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 active:translate-y-px dark:text-[rgb(var(--calm-accent-ink))]">
-                {focusStage === 'needs_review' ? 'Review delivery' : 'View delivery'}<ArrowRight className="h-4 w-4" />
+                {focusStage === 'needs_review' ? t('Review deliverable') : t('View delivery')}<ArrowRight className="h-4 w-4" />
               </Link>
             </div>
           ) : (
@@ -128,7 +128,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
         <Surface className="p-6">
           <p className="calm-eyebrow">Delivery progress</p>
           <div className="mt-5 flex items-end justify-between gap-4">
-            <div><p className="calm-number text-4xl font-semibold tracking-tight text-ink">{cycleCompletion}%</p><p className="mt-2 text-sm text-muted">{cycleDeliverables.length ? <>{deliveredCount}/{cycleDeliverables.length} {t('delivered this cycle')}</> : t('No published deliverables yet')}</p></div>
+            <div><p className="calm-number text-4xl font-semibold tracking-tight text-ink">{cycleCompletion}%</p><p className="mt-2 text-sm text-muted">{cycleDeliverables.length ? t(`${deliveredCount} of ${cycleDeliverables.length} delivered this cycle`) : t('No published deliverables yet')}</p></div>
             {currentCycle && <StatusChip tone="emerald">{currentCycle.status}</StatusChip>}
           </div>
           <ProgressBar className="mt-6" value={deliveredCount} max={Math.max(cycleDeliverables.length, 1)} label="Delivery progress" />
@@ -146,7 +146,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
           <Link to="/tasks?stage=needs_review" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent">View all<ArrowRight className="h-4 w-4" /></Link>
         </header>
         <div className="divide-y divide-line/70">
-          {reviewQueue.map(task => deliveryRow(task, 'Review delivery'))}
+          {reviewQueue.map(task => deliveryRow(task, t('Review deliverable')))}
           {reviewQueue.length === 0 && focusStage !== 'needs_review' && <p className="px-5 py-8 text-sm text-muted">Nothing is waiting for your review.</p>}
           {reviewQueue.length === 0 && focusStage === 'needs_review' && <p className="px-5 py-5 text-sm text-muted">Your current review is highlighted above.</p>}
         </div>

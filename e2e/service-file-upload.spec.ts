@@ -20,14 +20,14 @@ test('service activity upload shows file context and preserves retry state when 
   const sheet = page.getByRole('dialog', { name: 'Add activity' });
   await sheet.getByLabel('Update').fill('Upload recovery check');
   await sheet.locator('#activity-file').setInputFiles({
-    name: 'brief.txt',
-    mimeType: 'text/plain',
+    name: 'brief.pdf',
+    mimeType: 'application/pdf',
     buffer: Buffer.from('private service file'),
   });
-  await expect(sheet.getByText('brief.txt', { exact: true })).toBeVisible();
+  await expect(sheet.getByText('brief.pdf', { exact: true })).toBeVisible();
   await expect(sheet.getByText('20 B', { exact: true })).toBeVisible();
 
   await sheet.getByRole('button', { name: 'Add activity', exact: true }).click();
   await expect(sheet.getByRole('alert')).toContainText('Private file uploads require the Supabase backend.');
-  await expect(sheet.getByText('brief.txt', { exact: true })).toBeVisible();
+  await expect(sheet.getByText('brief.pdf', { exact: true })).toBeVisible();
 });

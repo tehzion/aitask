@@ -34,6 +34,8 @@ import {
 } from "../components/ui";
 import { cardBase, inputBase, pageShell } from "../components/uiTokens";
 import { cn } from "../lib/utils";
+import { parseOptionalDate } from "../lib/utils";
+import { formatLocalizedDate } from "../lib/i18n";
 import {
   calculatePlanTotalMinor,
   formatMoney,
@@ -48,7 +50,14 @@ import {
 } from "../lib/access";
 import { SECURE_WORKSPACE_ID } from "../lib/secureWorkspace";
 import { useI18n } from "../components/I18nProvider";
-import { SERVICE_FILE_MAX_BYTES, downloadServiceFile, uploadServiceFile } from "../lib/serviceFiles";
+import {
+  SERVICE_FILE_ACCEPT,
+  SERVICE_FILE_MAX_BYTES,
+  SERVICE_FILE_TYPE_ERROR,
+  downloadServiceFile,
+  getServiceFileMimeType,
+  uploadServiceFile,
+} from "../lib/serviceFiles";
 import DraftServicePlanEditor from "../components/DraftServicePlanEditor";
 import SideSheet from "../components/SideSheet";
 import ClientServiceWorkspace from "../components/ClientServiceWorkspace";
@@ -76,7 +85,7 @@ const deliverableStatuses: DeliverableStatus[] = [
 ];
 
 const OperationsClientWorkspace = () => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const { clientId = "" } = useParams();
   const store = useStore();
   const client = store.clients.find((item) => item.id === clientId);
@@ -90,6 +99,7 @@ const OperationsClientWorkspace = () => {
   const activityFileInputRef = React.useRef<HTMLInputElement>(null);
   const activityFormRef = React.useRef<HTMLFormElement>(null);
   const [message, setMessage] = React.useState("");
+  const [downloadingFileId, setDownloadingFileId] = React.useState<string | null>(null);
   const [activityFeedback, setActivityFeedback] = React.useState<ActivityFeedback | null>(null);
   const [addonSheetOpen, setAddonSheetOpen] = React.useState(false);
   const [activitySheetOpen, setActivitySheetOpen] = React.useState(false);
@@ -342,13 +352,24 @@ const OperationsClientWorkspace = () => {
       "addon.manage",
     );
   };
+  const download = async (attachment: AttachmentRef) => {
+    if (downloadingFileId) return;
+    setDownloadingFileId(attachment.id);
+    setMessage("");
+    try {
+      const downloaded = await downloadServiceFile(attachment);
+      if (!downloaded.ok) setMessage(t(downloaded.error));
+    } finally {
+      setDownloadingFileId(null);
+    }
+  };
 
   const tabs: { id: Tab; label: string; compactLabel?: string }[] = [
-    { id: "overview", label: "Overview" },
-    { id: "plan", label: "Plan" },
-    { id: "cycles", label: "Cycles" },
-    ...(canManagePlans ? [{ id: "addons" as Tab, label: "Add-ons" }] : []),
-    { id: "activity", label: "Activity / Files", compactLabel: "Activity" },
+    { id: "overview", label: t("Overview") },
+    { id: "plan", label: t("Plan") },
+    { id: "cycles", label: t("Cycles") },
+    ...(canManagePlans ? [{ id: "addons" as Tab, label: t("Add-ons") }] : []),
+    { id: "activity", label: t("Activity / Files"), compactLabel: t("Activity") },
   ];
 
   return (
@@ -358,29 +379,29 @@ const OperationsClientWorkspace = () => {
         className="inline-flex min-h-11 items-center gap-1 rounded-control text-sm font-semibold text-muted hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent/35"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to companies
+        {t("Back to companies")}
       </Link>
       <PageHeader
         compact
         title={<span data-i18n-skip>{client.clientName}</span>}
-        description="Plan details, delivery cycles, deliverables, and shared files."
+        description={t("Plan details, delivery cycles, deliverables, and shared files.")}
         meta={
           <>
-            <StatusChip tone={activePlan?.status === "Active" ? "emerald" : activePlan?.status === "Paused" ? "amber" : "slate"}>{activePlan?.status || "No plan"}</StatusChip>
-            {currentCycle && <span>{currentCycle.periodStart} – {currentCycle.periodEnd}</span>}
-            {activePlan?.contractEndDate && <span>Renewal date {activePlan.contractEndDate}</span>}
+            <StatusChip tone={activePlan?.status === "Active" ? "emerald" : activePlan?.status === "Paused" ? "amber" : "slate"}>{activePlan ? t(activePlan.status) : t("No plan")}</StatusChip>
+            {currentCycle && <span>{formatLocalizedDate(parseOptionalDate(currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(currentCycle.periodEnd)!, locale)}</span>}
+            {activePlan?.contractEndDate && <span>{t("Renewal date")} {formatLocalizedDate(parseOptionalDate(activePlan.contractEndDate)!, locale)}</span>}
           </>
         }
         action={
           canManagePlans && activePlan?.status === "Draft" && !activePlan.supersedesPlanId ? (
             <Button onClick={() => void saveAndCommit(store.activateClientPlan(activePlan.id), "client_plan.manage")}>
-              <Play className="h-4 w-4" />Activate plan
+              <Play className="h-4 w-4" />{t("Activate plan")}
             </Button>
           ) : null
         }
       />
       <div className="sticky top-[4.5rem] z-20 border-b border-line/80 bg-canvas/95 py-3 backdrop-blur-md">
-        <SegmentedTabs<Tab> items={tabs} value={tab} onChange={setTab} label="Client workspace" idPrefix={CLIENT_WORKSPACE_TABS_ID} />
+        <SegmentedTabs<Tab> items={tabs} value={tab} onChange={setTab} label={t("Client workspace")} idPrefix={CLIENT_WORKSPACE_TABS_ID} />
       </div>
       {message && (
         <p
@@ -417,13 +438,13 @@ const OperationsClientWorkspace = () => {
       {tab === "plan" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-plan`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-plan`} tabIndex={0} className="scroll-mt-36 space-y-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           <section className={cn(cardBase, "overflow-hidden")}>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
               <div>
-                <h2 className="font-semibold text-slate-950">
+                <h2 className="font-semibold text-ink">
                   {activePlan?.name ? <span data-i18n-skip>{activePlan.name}</span> : "No service plan"}
                 </h2>
                 {activePlan && (
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-muted">
                     {t('Revision')} {activePlan.revision} · <span data-i18n-skip>{activePlan.origin}</span> ·
                     {t('billing day')} {activePlan.billingDay}
                     {activePlan.contractEndDate
@@ -447,22 +468,22 @@ const OperationsClientWorkspace = () => {
               )}
             </div>
             {activePlan ? (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-line/70">
                 {activePlan.serviceItems.map((item) => (
                   <div
                     key={item.id}
                     className="grid gap-2 px-5 py-4 md:grid-cols-[1fr_180px_150px] md:items-center"
                   >
                     <div>
-                      <p className="font-semibold text-slate-900">
+                      <p className="font-semibold text-ink">
                         {item.name}
                       </p>
-                      <p className="mt-1 text-sm text-slate-500">
+                      <p className="mt-1 text-sm text-muted">
                         {item.platforms.join(", ") || "No platform"} ·{" "}
                         {item.quantity} {item.unit}
                       </p>
                       {item.workflow && (
-                        <p className="mt-1 text-xs font-medium text-blue-700">
+                        <p className="mt-1 text-xs font-medium text-accent">
                           {item.workflow.name} · rev{" "}
                           {item.workflow.templateRevision} ·{" "}
                           {item.workflow.steps.length} tasks
@@ -470,11 +491,11 @@ const OperationsClientWorkspace = () => {
                       )}
                     </div>
                     {canSeePrices && (
-                      <p className="text-sm font-medium text-slate-700">
+                      <p className="text-sm font-medium text-ink">
                         {formatMoney(item.unitPriceMinor)} each
                       </p>
                     )}
-                    <span className="text-sm text-slate-500">
+                    <span className="text-sm text-muted">
                       {item.quantity} slots
                     </span>
                   </div>
@@ -482,17 +503,17 @@ const OperationsClientWorkspace = () => {
               </div>
             ) : (
               <div className="space-y-4 p-8 text-center">
-                <p className="text-sm text-slate-500">This company does not have a service plan yet.</p>
+                <p className="text-sm text-muted">{t("This company does not have a service plan yet.")}</p>
                 {canManagePlans && <Button onClick={() => setPlanModalOpen(true)}><Plus className="h-4 w-4" />Add service plan</Button>}
               </div>
             )}
             {canSeePrices && planTotals && (
-              <div className="flex justify-end border-t border-slate-200 bg-slate-50 p-5">
+              <div className="flex justify-end border-t border-line bg-inset p-5">
                 <div className="text-right">
-                  <p className="text-xs text-slate-500">
-                    Internal monthly total
+                  <p className="text-xs text-muted">
+                    {t("Internal monthly total")}
                   </p>
-                  <p className="text-xl font-semibold text-slate-950">
+                  <p className="text-xl font-semibold text-ink">
                     {formatMoney(planTotals.total)}
                   </p>
                 </div>
@@ -579,12 +600,12 @@ const OperationsClientWorkspace = () => {
                 key={cycle.id}
                 className={cn(cardBase, "overflow-hidden")}
               >
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
                   <div>
-                    <h2 className="font-semibold text-slate-950">
+                    <h2 className="font-semibold text-ink">
                       {cycle.periodStart} – {cycle.periodEnd}
                     </h2>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="mt-1 text-sm text-muted">
                       {cycleDeliverables.length} deliverables · plan revision{" "}
                       {cycle.planRevision}
                     </p>
@@ -624,7 +645,7 @@ const OperationsClientWorkspace = () => {
                   </div>
                   {progress.length > 1 && <p className="mt-4 text-xs text-muted">{progress.map((item) => `${item.name} ${item.completed}/${item.included}`).join(" · ")}</p>}
                 </div>
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-line/70">
                   {cycleDeliverables.map((deliverable) => {
                     const linkedTasks = tasks
                       .filter((task) => deliverable.taskIds.includes(task.id))
@@ -642,10 +663,10 @@ const OperationsClientWorkspace = () => {
                         className="grid gap-3 px-5 py-4 lg:grid-cols-[1fr_180px_420px] lg:items-start"
                       >
                         <div>
-                          <p data-i18n-skip className="font-semibold text-slate-900">
+                          <p data-i18n-skip className="font-semibold text-ink">
                             {deliverable.title}
                           </p>
-                          <p className="mt-1 text-xs text-slate-500">
+                          <p className="mt-1 text-xs text-muted">
                             {linkedTasks.length} linked task(s)
                             {serviceItem?.workflow
                               ? <> · <span data-i18n-skip>{serviceItem.workflow.name}</span></>
@@ -670,9 +691,9 @@ const OperationsClientWorkspace = () => {
                                       className={cn(
                                         "absolute -left-[2.1rem] flex h-6 w-6 items-center justify-center rounded-full border bg-surface text-[10px] font-semibold",
                                         task.isCompleted
-                                          ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                                          ? "border-[rgb(var(--calm-success)/.55)] bg-[rgb(var(--calm-success-soft))] text-[rgb(var(--calm-success))]"
                                           : waiting
-                                            ? "border-amber-400 bg-amber-50 text-amber-700"
+                                            ? "border-[rgb(var(--calm-warning)/.55)] bg-[rgb(var(--calm-warning-soft))] text-[rgb(var(--calm-warning))]"
                                             : "border-accent bg-accent-soft text-accent",
                                       )}
                                     >{task.workflowStepOrder}</span>
@@ -683,7 +704,7 @@ const OperationsClientWorkspace = () => {
                                     >
                                       {task.title.replace(/^\d+\.\s*/, "")}
                                     </Link>
-                                    <span className={cn("font-medium", task.isCompleted ? "text-emerald-700" : waiting ? "text-amber-700" : "text-muted")}>{task.isCompleted ? "Completed" : waiting ? "Waiting on previous step" : "Current / ready"}</span>
+                                    <span className={cn("font-medium", task.isCompleted ? "text-[rgb(var(--calm-success))]" : waiting ? "text-[rgb(var(--calm-warning))]" : "text-muted")}>{task.isCompleted ? t("Completed") : waiting ? t("Waiting on previous step") : t("Current / ready")}</span>
                                   </li>
                                 );
                               })}
@@ -800,7 +821,7 @@ const OperationsClientWorkspace = () => {
             );
           })}
           {cycles.length === 0 && (
-            <p className="rounded-lg border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
+            <p className="rounded-control border border-dashed border-line p-10 text-center text-sm text-muted">
               No visible service cycles yet.
             </p>
           )}
@@ -810,7 +831,7 @@ const OperationsClientWorkspace = () => {
       {tab === "addons" && canManagePlans && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-addons`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-addons`} tabIndex={0} className="scroll-mt-36 space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold text-ink">Service add-ons</h2><p className="mt-1 text-sm text-muted">One-off and recurring scope changes remain visible in the history.</p></div><Button onClick={() => setAddonSheetOpen(true)}><Plus className="h-4 w-4" />Add service add-on</Button></div>
-          <section className={cn(cardBase, "divide-y divide-slate-100")}>
+          <section className={cn(cardBase, "divide-y divide-line/70")}>
             {addons.map((item) => (
               <div
                 key={item.id}
@@ -818,12 +839,12 @@ const OperationsClientWorkspace = () => {
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="font-semibold text-slate-900">{item.name}</p>
+                    <p className="font-semibold text-ink">{item.name}</p>
                     <Badge tone={item.isActive ? "emerald" : "slate"}>
                       {item.isActive ? "Active" : "Stopped"}
                     </Badge>
                   </div>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-muted">
                     {item.billingMode} ·{" "}
                     {item.platforms.join(", ") || "No platform"}
                     {item.effectiveUntil
@@ -833,7 +854,7 @@ const OperationsClientWorkspace = () => {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {canSeePrices && (
-                    <p className="mr-2 font-semibold text-slate-950">
+                    <p className="mr-2 font-semibold text-ink">
                       {formatMoney(item.quantity * item.unitPriceMinor)}
                     </p>
                   )}
@@ -881,31 +902,31 @@ const OperationsClientWorkspace = () => {
       {tab === "activity" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-activity`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-activity`} tabIndex={0} className="scroll-mt-36 space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           {!isClient && <div className="flex justify-end"><Button onClick={() => { setActivityFeedback(null); setActivitySheetOpen(true); }}><MessageSquareText className="h-4 w-4" />{t("Add activity")}</Button></div>}
-          <section className={cn(cardBase, "divide-y divide-slate-100")}>
+          <section className={cn(cardBase, "divide-y divide-line/70")}>
             {comments.map((item) => (
               <article key={item.id} className="p-5">
                 <div className="flex items-center gap-2">
-                  <MessageSquareText className="h-4 w-4 text-slate-400" />
-                  <p className="text-sm font-semibold text-slate-800">
+                  <MessageSquareText className="h-4 w-4 text-muted" aria-hidden="true" />
+                  <p className="text-sm font-semibold text-ink">
                     {store.users.find((user) => user.id === item.userId)
                       ?.name || "Team member"}
                   </p>
                   {!isClient && <Badge tone="slate">{item.visibility}</Badge>}
                 </div>
-                <p data-i18n-skip className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
+                <p data-i18n-skip className="mt-3 whitespace-pre-wrap text-sm text-muted">
                   {item.text}
                 </p>
                 {item.attachments.map((attachment) => (
                   <button
                     key={attachment.id}
                     data-i18n-skip
-                    onClick={async () => {
-                      const downloaded = await downloadServiceFile(attachment);
-                      if (!downloaded.ok) setMessage(downloaded.error);
-                    }}
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-blue-700"
+                    type="button"
+                    disabled={Boolean(downloadingFileId)}
+                    aria-busy={downloadingFileId === attachment.id}
+                    onClick={() => void download(attachment)}
+                    className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-control border border-line px-3 py-2 text-sm font-semibold text-accent transition-colors hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 disabled:cursor-wait disabled:opacity-60"
                   >
-                    <FileUp className="h-4 w-4" aria-hidden="true" />
+                  <FileUp className="h-4 w-4" aria-hidden="true" />
                     {attachment.fileName}
                   </button>
                 ))}
@@ -1007,6 +1028,7 @@ const OperationsClientWorkspace = () => {
               id="activity-file"
               ref={activityFileInputRef}
               type="file"
+              accept={SERVICE_FILE_ACCEPT}
               aria-describedby="activity-file-help activity-file-selection"
               onChange={(e) => {
                 const selected = e.target.files?.[0];
@@ -1016,12 +1038,18 @@ const OperationsClientWorkspace = () => {
                   setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller.") });
                   return;
                 }
+                if (selected && !getServiceFileMimeType(selected)) {
+                  e.target.value = "";
+                  setFile(undefined);
+                  setActivityFeedback({ tone: "error", text: t(SERVICE_FILE_TYPE_ERROR) });
+                  return;
+                }
                 setFile(selected);
                 setActivityFeedback(null);
               }}
               className="mt-2 block min-h-11 w-full rounded-control border border-line bg-surface px-3 py-2 text-sm text-muted file:mr-3 file:rounded-control file:border-0 file:bg-accent-soft file:px-3 file:py-1.5 file:font-semibold file:text-accent focus:outline-none focus:ring-2 focus:ring-accent/35"
             />
-            <p id="activity-file-help" className="mt-1 text-xs leading-5 text-muted">{t("Optional private file. Uploads require the secure workspace backend.")}</p>
+            <p id="activity-file-help" className="mt-1 text-xs leading-5 text-muted">{t("Optional private PDF or image. Uploads require the secure workspace backend.")}</p>
             {file && (
               <div id="activity-file-selection" className="mt-3 flex items-center justify-between gap-3 rounded-control border border-line bg-inset px-3 py-2.5 text-sm" role="status">
                 <div className="min-w-0">

@@ -318,12 +318,11 @@ const Layout: React.FC = () => {
         <nav aria-label={t('Mobile navigation')} className="fixed bottom-0 left-0 right-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-start justify-around border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_14px_rgb(7_22_18/0.10)] md:hidden">
           {mobileNavItems.map(item => {
             const Icon = item.icon;
-            const isNotification = item.path === '/notifications';
             const renderContent = (isActive: boolean) => (
               <>
                 <span className="relative flex h-7 w-7 items-center justify-center">
                   <Icon aria-hidden="true" className={cn("h-5 w-5", isActive && "text-accent")} />
-                  {isNotification && unreadCount > 0 && <span className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-surface bg-accent px-0.5 text-[8px] font-black text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+                  {item.path === '/notifications' && unreadCount > 0 && <span className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-surface bg-accent px-0.5 text-[8px] font-black text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>}
                 </span>
                 <span className="max-w-full truncate text-[10px] leading-4">{t(item.label)}</span>
               </>
@@ -332,26 +331,11 @@ const Layout: React.FC = () => {
               "flex h-16 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-control px-1 text-muted transition-[background-color,color,transform] duration-160 active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-inset",
               isActive && "bg-accent-soft font-semibold text-ink",
             );
-            if (isNotification) {
-              return (
-                <button
-                  key={item.path}
-                  type="button"
-                  onClick={toggleNotifications}
-                  aria-label={`${t('Notifications')}, ${t(`${unreadCount} unread`)}`}
-                  aria-expanded={isNotificationsOpen}
-                  aria-controls="header-notifications-menu"
-                  className={navClass(location.pathname === item.path)}
-                >
-                  {renderContent(location.pathname === item.path)}
-                </button>
-              );
-            }
-
             return (
               <NavLink
                 key={item.path}
                 to={item.path}
+                aria-label={t(item.label)}
                 className={({ isActive }) => navClass(isActive)}
               >
                 {({ isActive }) => renderContent(isActive)}

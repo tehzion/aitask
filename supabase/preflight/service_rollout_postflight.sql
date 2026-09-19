@@ -38,6 +38,7 @@ order by procedure.proname, arguments;
 select jsonb_build_object(
   'privateBucket', not bucket.public,
   'fileSizeLimit', bucket.file_size_limit,
+  'allowedMimeTypes', bucket.allowed_mime_types,
   'storagePolicies', (
     select count(*)
     from pg_policies

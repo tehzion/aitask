@@ -77,6 +77,13 @@ running migration files manually. The app verifies backend capabilities at
 startup and switches to a read-only "system update" state when the deployed
 schema is older than the frontend expects.
 
+Production migration history must either match repository filenames or have an
+explicit, reviewed connector alias map in
+`supabase/preflight/migration_repair_manifest.review.json`. The release gate
+accepts only that recorded mapping; it does not rewrite migration history or
+silently treat a pending migration as deployed. Run
+`pnpm verify:release-db-alignment` before tagging a release.
+
 Before applying migrations to a live project, follow
 [`docs/production-rpc-mismatch-recovery.md`](docs/production-rpc-mismatch-recovery.md):
 it defines fail-closed stop conditions (verified restorable backup, preflight

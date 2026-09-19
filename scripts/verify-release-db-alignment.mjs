@@ -35,14 +35,43 @@ const latestMigration = migrations.at(-1);
 const historyThrough = manifest.productionVerification?.historyThrough;
 
 if (!latestMigration) fail('No migrations were found.');
-if (manifest.productionVerification?.historyAligned !== true) {
-  fail('The production migration history is not recorded as aligned.');
-}
-if (historyThrough !== latestMigration) {
-  fail(`Production is recorded through ${historyThrough || '(missing)'}, but the latest migration is ${latestMigration}.`);
-}
 if (!manifest.status?.includes(latestMigration.split('_')[0])) {
-  fail('The manifest status does not identify the latest aligned migration version.');
+  fail('The manifest status does not identify the latest production migration version.');
 }
 
-console.log(`[release-db] Production alignment verified through ${latestMigration}.`);
+if (manifest.productionVerification?.historyAligned === true) {
+  if (historyThrough !== latestMigration) {
+    fail(`Production is recorded through ${historyThrough || '(missing)'}, but the latest migration is ${latestMigration}.`);
+  }
+  console.log(`[release-db] Production migration history verified through ${latestMigration}.`);
+  process.exit(0);
+}
+
+const resolution = manifest.productionVerification?.migrationResolution;
+const aliases = resolution?.repositoryToProduction;
+if (resolution?.status !== 'connector_aliases_verified' || !Array.isArray(aliases) || aliases.length === 0) {
+  fail('Production migration history is neither directly aligned nor covered by an approved connector alias map.');
+}
+const localAliases = aliases.map((entry) => entry?.repository).filter(Boolean);
+const latestAlias = aliases.at(-1);
+if (localAliases.at(-1) !== latestMigration || !latestAlias?.production) {
+  fail(`Connector alias map does not resolve the latest migration ${latestMigration}.`);
+}
+if (new Set(localAliases).size !== localAliases.length) {
+  fail('Connector alias map contains duplicate repository migrations.');
+}
+const expectedLocalTail = migrations.slice(-localAliases.length);
+if (JSON.stringify(expectedLocalTail) !== JSON.stringify(localAliases)) {
+  fail('Connector alias map must cover the repository migration tail in filename order.');
+}
+if (!historyThrough?.includes(latestAlias.production.split('_')[0])) {
+  fail(`Production historyThrough does not record connector migration ${latestAlias.production}.`);
+}
+for (const entry of aliases) {
+  const repositoryName = entry.repository?.split('_').slice(1).join('_');
+  if (!repositoryName || !entry.production?.endsWith(`_${repositoryName}`)) {
+    fail(`Connector alias has an unexpected migration name: ${entry.repository || '(missing)'}.`);
+  }
+}
+
+console.log(`[release-db] Production migration resolution verified: ${latestMigration} → ${latestAlias.production}.`);

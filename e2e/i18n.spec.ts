@@ -86,16 +86,17 @@ test('user-authored task content stays exactly as typed in Chinese mode', async 
   await page.goto('/tasks');
   const taskTitle = page.locator('main').getByText('Dashboard', { exact: true }).filter({ visible: true });
   await expect(taskTitle.first()).toBeVisible();
-  await expect(page.locator('main').getByText(/T-i18n-probe - Settings/).filter({ visible: true }).first()).toBeVisible();
+  const authoredTaskRow = page.getByRole('button', { name: /Dashboard.*Settings/ }).first();
+  await expect(authoredTaskRow).toBeVisible();
 
   // Switch to Chinese via the Navbar switcher.
   await page.getByRole('button', { name: '切换为中文' }).click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
 
   // UI chrome translates, user content does not.
-  await expect(page.getByRole('heading', { name: '任务管理' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '项目组合工作' })).toBeVisible();
   await expect(page.locator('main').getByText('Dashboard', { exact: true }).filter({ visible: true }).first()).toBeVisible();
-  await expect(page.locator('main').getByText(/T-i18n-probe - Settings/).filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /Dashboard.*Settings/ }).first()).toBeVisible();
 
   // Open the task modal: the comment "Due soon" must not be word-mangled.
   await taskTitle.first().click();

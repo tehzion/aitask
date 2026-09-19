@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(26);
 
 select has_column('public','aitask_entities','client_id','service entities project the canonical client id');
 select has_column('public','aitask_entities','plan_id','service entities project the plan id');
@@ -16,6 +16,7 @@ select ok(not has_function_privilege('anon','public.aitask_execute_service_comma
 select ok(not has_function_privilege('authenticated','private.aitask_generate_due_service_cycles(text,date)','EXECUTE'),'browser sessions cannot invoke the cron generator');
 select is((select public from storage.buckets where id='client-service-files'),false,'client service files use a private bucket');
 select is((select file_size_limit from storage.buckets where id='client-service-files'),104857600::bigint,'service files are limited to 100 MB');
+select is((select allowed_mime_types from storage.buckets where id='client-service-files'),array['application/pdf','image/jpeg','image/png','image/webp','image/gif']::text[],'service files allow PDF and image review formats');
 select has_column('public','aitask_members','worker_type','members distinguish employees, suppliers and freelancers');
 select has_function('public','aitask_generate_deliverable_task_chain',array['text','uuid','jsonb'],'task-chain generation has an intent-specific RPC');
 select has_function('public','aitask_set_service_cycle_status',array['text','uuid','text','bigint','text'],'cycle status updates have an intent-specific RPC');
