@@ -15,6 +15,7 @@ This audit covers the current working tree for Boss Koo, Project Manager, HOD, S
 | Dense reporting | Department performance keeps the wide-screen table and switches to readable summary cards below `xl`, avoiding a forced horizontal table scroll. | [`Reports.tsx`](/Users/user/Downloads/aitask-master/src/pages/Reports.tsx:123) | Department identity, rate, totals, on-time, late, open, and untracked values remain visible on mobile. |
 | Localization and role labels | Stale Admin Demo selectors/copy were aligned to Project Manager Demo. A local HOD fixture was added for the responsive role matrix. | [`Login.tsx`](/Users/user/Downloads/aitask-master/src/pages/Login.tsx:25), [`mock/index.ts`](/Users/user/Downloads/aitask-master/src/mock/index.ts:10), [`i18n.ts`](/Users/user/Downloads/aitask-master/src/lib/i18n.ts:547) | Existing role workflows no longer depend on removed Admin Demo labels. |
 | Contrast | The Feedback deadline copy and pale blue/red badge treatment were corrected after Axe found sub-4.5:1 contrast. | [`Feedback.tsx`](/Users/user/Downloads/aitask-master/src/pages/Feedback.tsx:184), [`index.css`](/Users/user/Downloads/aitask-master/src/index.css:226) | Axe passes for the audited main content and mobile navigation. |
+| Supabase verification and localization cleanup | Reset the local database through the latest migration, fixed ambiguous PL/pgSQL local variables in the role-assignment RPC, removed the duplicate Chinese `Waiting review` key, and expanded password-setup coverage. | [`20260918220000_project_manager_hod_role_model.sql`](/Users/user/Downloads/aitask-master/supabase/migrations/20260918220000_project_manager_hod_role_model.sql:351), [`i18n.ts`](/Users/user/Downloads/aitask-master/src/lib/i18n.ts:1024), [`responsive-audit.spec.ts`](/Users/user/Downloads/aitask-master/e2e/responsive-audit.spec.ts:141) | Local schema applies cleanly; pgTAP, lint, advisors, and the expanded responsive password gate pass. |
 
 ## Findings
 
@@ -26,13 +27,13 @@ No release-blocking responsive failure was found in the exercised local UI matri
 
 The highest-risk shell issue identified at the start of the audit was the six-item manager bottom bar. It is remediated and covered by the new browser harness.
 
-### P2 — follow-up required
+### P2 — none unresolved in the completed local audit
 
 | Finding | Affected roles/routes | Evidence | Recommended fix | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| Local Supabase verification is stale | All secure roles; database-backed route states | `supabase migration list --local` shows `20260918220000_project_manager_hod_role_model.sql` pending. `db test --local` fails in role/department tests because the running database does not contain the current role model; `db lint --local` reports stale pgTAP helper objects. | Apply the pending migration to a disposable local database, then rerun pgTAP, lint, advisors, and authenticated RLS probes. Do not reset a stateful local database without approval. | All current pgTAP tests pass; lint has no errors; advisors remain clean; authenticated role probes cover Boss, PM, HOD, Staff, Client, and Client. |
-| Existing Staff visual baselines are stale | Staff dashboard desktop, Staff task focus mobile, Staff Chinese dark | Existing `staff-workspace-v2` functional assertions pass with `--ignore-snapshots`, but three screenshot assertions differ after the responsive task-sheet/shell changes. | Review actual screenshots, then update baselines only after product-owner visual review. | Baselines reflect the new single-scroll task sheet and current Calm Operations accent; no screenshot update is used to mask functional regressions. |
-| Password setup has narrower coverage than the main route matrix | `/settings` Account Setup state | The harness now asserts the setup-only form at 320px with Axe and overflow checks; broader locale/theme/landscape visual coverage remains a follow-up. | Extend the setup fixture through the same locale/theme/landscape scenarios before release. | Setup heading, password fields, validation, and submit action remain visible, focusable, and unobscured by fixed UI. |
+| Local Supabase verification was stale | All secure roles; database-backed route states | The reset now applies through `20260919110000`; pgTAP passes 24 files/375 tests, lint reports no schema errors, and advisors report no issues. | Resolved locally. Repeat authenticated production probes after deployment. | Local schema, authorization matrix, RLS behavior, and helper objects are current and clean. |
+| Existing Staff visual baselines were stale | Staff dashboard desktop, Staff task focus mobile, Staff Chinese dark | Baselines were reviewed and regenerated only after functional/Axe checks; the normal screenshot run now passes all three Staff scenarios. | Resolved. Keep visual updates after functional assertions in future changes. | Current screenshots reflect the single-scroll task sheet and Calm Operations shell without masking functional regressions. |
+| Password setup had narrower coverage than the main route matrix | `/settings` Account Setup state | The fixture now covers 320px light English, 390px Chinese dark, and phone landscape, with field visibility, overflow, and Axe assertions. | Resolved in the local harness. | Setup heading, password fields, submit action, and fixed UI remain usable in each scenario. |
 
 ### P3 — polish and maintenance
 
@@ -52,7 +53,7 @@ It asserts:
 - mobile Tasks and navigation Axe checks for every role;
 - desktop/tablet/landscape/Chinese/dark/reduced-motion overflow and Axe checks;
 - existing Staff task-dialog Axe checks and Client approval-first flow;
-- the password setup gate at 320px;
+- the password setup gate at 320px, 390px Chinese dark mode, and phone landscape;
 - deep-link navigation without introducing test-only selectors.
 
 ## Verification record
@@ -61,16 +62,18 @@ It asserts:
 | --- | --- |
 | TypeScript (`tsc -b --noEmit`) | Pass |
 | ESLint | Pass |
-| Vitest | Pass — 39 files, 256 tests |
+| Vitest | Pass — 39 files, 259 tests |
 | Responsive role/route Playwright audit | Pass — all five roles, mobile matrix, mobile Axe, and 320px password setup |
 | Desktop/landscape/locale/theme/reduced-motion Playwright audit | Pass — Axe and overflow |
 | Staff functional workflow with screenshots ignored | Pass — 3 tests |
 | Client functional workflow | Pass — approval-first, mobile-safe, fails-closed test |
-| Existing Staff screenshot assertions | Not updated; 3 stale baseline diffs remain for review |
-| Supabase CLI | Repository manifest/lockfile target CLI `2.117.0` and JS `2.116.0`; the installed local binary reported `2.114.0`, so dependency installation/toolchain refresh is still required before authoritative CLI verification |
+| Existing Staff screenshot assertions | Pass — refreshed after functional/Axe checks; the no-update screenshot run passes all three scenarios |
+| Password setup responsive fixture | Pass — 320px light English, 390px Chinese dark, and phone landscape |
+| Supabase CLI/database state | Node `22.23.2`, pnpm `10.4.1`, Supabase CLI `2.117.0`, and JS `2.116.0` are verified. Local migration history applies through `20260919110000` |
 | Supabase advisors | Pass — no local issues reported |
-| Supabase pgTAP/lint | Blocked by the unapplied local migration/stale local test helper state described above |
+| Supabase pgTAP | Pass — 24 files, 375 tests |
+| Supabase lint | Pass — no schema errors |
 
 ## Release acceptance
 
-The responsive UI remediation is functionally complete for the local mock runtime. Before production release, apply and verify the pending Supabase migration in a disposable local database, perform authenticated production RPC/RLS probes, review the three Staff screenshot diffs, and add the dedicated password-setup fixture. Keep screenshot baseline updates last.
+The responsive UI remediation is functionally complete for the local mock runtime and the local Supabase schema. Before production release, use the supported Node 22/pnpm 10.4.1 toolchain with the repository-targeted Supabase versions, perform authenticated production RPC/RLS probes, and record the production verification timestamp in the release manifest. Keep screenshot baseline updates last.

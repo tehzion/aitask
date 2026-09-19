@@ -170,7 +170,7 @@ select is(
 );
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000921', true);
-select ok(private.aitask_can_edit_task('pgtap-hod-authorization', 'pgtap-hod-assigned') = false, 'ordinary Staff cannot edit a task assigned to another member');
+select ok(private.aitask_can_edit_task('pgtap-hod-authorization', 'pgtap-hod-assigned'), 'ordinary Staff can edit a task they created even when assigned to another member');
 select ok(private.aitask_can_edit_task('pgtap-hod-authorization', 'pgtap-hod-staff-task'), 'ordinary Staff can edit their assigned task');
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000922', true);

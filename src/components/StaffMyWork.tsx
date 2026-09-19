@@ -3,7 +3,7 @@ import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Layers3, ListChecks, Ro
 import { Link, useNavigate } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
-import { getDashboardPersona, getVisibleClientNames, getVisibleTasks } from '../lib/access';
+import { getDashboardPersona, getVisibleClientNames, getVisibleTasks, isHodUser } from '../lib/access';
 import { buildStaffWorkQueue, getStaffBucketLabel, getStaffFocusTask, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getRelativeDueDateString, getTodayInputDate } from '../lib/utils';
 import { pageShell } from './uiTokens';
@@ -28,7 +28,7 @@ const StaffMyWork: React.FC = () => {
     clientPlans: state.clientPlans,
   })));
   const today = getTodayInputDate();
-  const isHod = currentUser?.role === 'HOD';
+  const isHod = isHodUser(currentUser, rolePermissions);
   const tasks = React.useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects })
       .filter(task => isHod || task.assignedTo === currentUser?.id),
@@ -38,11 +38,16 @@ const StaffMyWork: React.FC = () => {
   const focusTask = getStaffFocusTask(queue);
   const defaultBucket = queue.needs_action.length > 0 ? 'needs_action' : queue.up_next.length > 0 ? 'up_next' : queue.waiting.length > 0 ? 'waiting' : 'done';
   const [activeBucket, setActiveBucket] = React.useState<StaffWorkBucketKey>(defaultBucket);
+  const hasSelectedBucketRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!hasSelectedBucketRef.current) setActiveBucket(defaultBucket);
+  }, [defaultBucket]);
 
   const incompleteTaskIds = new Set(tasks.filter(task => !task.isCompleted && task.status !== 'Completed').map(task => task.id));
   const blockedCount = tasks.filter(task => (task.predecessorTaskIds || []).some(id => incompleteTaskIds.has(id))).length;
   const persona = getDashboardPersona(currentUser);
-  const visibleClients = getVisibleClientNames(currentUser, allTasks, projects, rolePermissions);
+  const visibleClients = getVisibleClientNames(currentUser, allTasks, projects, rolePermissions, { clients, projects });
   const visibleClientKeys = new Set(visibleClients.map(name => name.trim().toLowerCase()));
   const activePlans = clientPlans.filter(plan => plan.status === 'Active' && visibleClientKeys.has(plan.clientName.trim().toLowerCase()));
   const renewals = activePlans.filter(plan => Boolean(plan.contractEndDate && plan.contractEndDate >= today && plan.contractEndDate <= new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)));
@@ -55,7 +60,7 @@ const StaffMyWork: React.FC = () => {
     : persona === 'account'
       ? { title: 'Account context', description: 'Clients and plans connected to your assigned work.', values: [['Assigned clients', visibleClients.length], ['Active plans', activePlans.length], ['Renewals', renewals.length]] as const }
     : isHod
-      ? { title: 'Department context', description: 'Department workload, delegated tasks, and review risk.', values: [['Department tasks', tasks.length], ['Waiting review', waitingReview], ['Blocked steps', blockedCount]] as const }
+      ? { title: t('Department context'), description: t('Department workload, delegated tasks, and review risk.'), values: [[t('Department tasks'), tasks.length], [t('Waiting review'), waitingReview], [t('Blocked steps'), blockedCount]] as const }
       : { title: 'Production context', description: 'Output, blockers, and revision work linked to your assignments.', values: [['Linked outputs', linkedOutputs], ['Blocked steps', blockedCount], ['Revisions', revisions]] as const };
 
   const openTask = (taskId: string) => navigate(`/tasks?taskId=${encodeURIComponent(taskId)}`);
@@ -65,8 +70,8 @@ const StaffMyWork: React.FC = () => {
       <header className="flex items-start justify-between gap-4 border-b border-line/70 pb-4 sm:items-end">
         <div>
           <p className="calm-eyebrow">{formatLocalizedWeekdayDate(new Date(), locale)}</p>
-          <h1 className="mt-1 text-[1.8rem] font-semibold leading-9 tracking-[-0.045em] text-ink sm:text-4xl">{isHod ? 'Department work' : 'My work'}</h1>
-          <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">{isHod ? 'Start with what needs attention, then review delegated work across your departments.' : 'Start with what needs attention, then move through the rest of your assigned work.'}</p>
+          <h1 className="mt-1 text-[1.8rem] font-semibold leading-9 tracking-[-0.045em] text-ink sm:text-4xl">{isHod ? t('Department work') : t('My work')}</h1>
+          <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">{isHod ? t('Start with what needs attention, then review delegated work across your departments.') : t('Start with what needs attention, then move through the rest of your assigned work.')}</p>
         </div>
         <BackendFreshness />
       </header>
@@ -99,21 +104,24 @@ const StaffMyWork: React.FC = () => {
       ) : (
         <Surface variant="raised" className="p-6 sm:p-8">
           <CheckCircle2 className="h-9 w-9 text-accent" />
-          <h2 className="mt-4 text-xl font-semibold text-ink">Your assigned queue is clear</h2>
-          <p className="mt-1 max-w-[52ch] text-sm leading-6 text-muted">New assignments will appear here. You can still review completed work or create a secondary task from More.</p>
+          <h2 className="mt-4 text-xl font-semibold text-ink">{isHod ? t('Your department queue is clear') : t('Your assigned queue is clear')}</h2>
+          <p className="mt-1 max-w-[52ch] text-sm leading-6 text-muted">{isHod ? t('Delegated work in your departments will appear here. You can still review completed work or open the full workbench.') : t('New assignments will appear here. You can still review completed work or create a secondary task from More.')}</p>
         </Surface>
       )}
 
       <section aria-labelledby="staff-queue-title">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div><h2 id="staff-queue-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">Assigned queue</h2><p className="mt-1 text-sm text-muted">Work is ordered by revision, deadline, state, and priority.</p></div>
-          <Link to="/tasks?period=all" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline">All work <ArrowRight className="h-4 w-4" /></Link>
+          <div><h2 id="staff-queue-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">{isHod ? t('Department queue') : t('Assigned queue')}</h2><p className="mt-1 text-sm text-muted">{t('Work is ordered by revision, deadline, state, and priority.')}</p></div>
+          <Link to="/tasks?period=all" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-ink hover:text-accent hover:underline">{t('All work')} <ArrowRight className="h-4 w-4" /></Link>
         </div>
         <div className="mt-4">
           <SegmentedTabs<StaffWorkBucketKey>
             items={bucketOrder.map(bucket => ({ id: bucket, label: getStaffBucketLabel(bucket), count: queue[bucket].length }))}
             value={activeBucket}
-            onChange={setActiveBucket}
+            onChange={bucket => {
+              hasSelectedBucketRef.current = true;
+              setActiveBucket(bucket);
+            }}
             label="Staff work queue"
             idPrefix="staff-queue"
             variant="underline"
@@ -133,8 +141,8 @@ const StaffMyWork: React.FC = () => {
       </Surface>
 
       <div className="flex flex-wrap items-center gap-4 text-sm">
-        <Link to="/calendar" className="inline-flex min-h-11 items-center gap-2 font-semibold text-accent hover:underline"><CalendarDays className="h-4 w-4" />Open schedule</Link>
-        <Link to="/notifications" className="inline-flex min-h-11 items-center gap-2 font-semibold text-accent hover:underline"><Clock3 className="h-4 w-4" />Check inbox</Link>
+        <Link to="/calendar" className="inline-flex min-h-11 items-center gap-2 font-semibold text-ink hover:text-accent hover:underline"><CalendarDays className="h-4 w-4" />Open schedule</Link>
+        <Link to="/notifications" className="inline-flex min-h-11 items-center gap-2 font-semibold text-ink hover:text-accent hover:underline"><Clock3 className="h-4 w-4" />Check inbox</Link>
         {revisions > 0 && <span className="inline-flex items-center gap-2 text-amber-700"><RotateCcw className="h-4 w-4" />{t(`${revisions} active revision${revisions === 1 ? '' : 's'}`)}</span>}
       </div>
     </div>

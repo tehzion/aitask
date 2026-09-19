@@ -48,6 +48,8 @@ test('Staff Chinese workspace localizes dynamic copy and preserves work content'
 
 test('Boss and Staff queues move focus with keyboard tabs', async ({ page }) => {
   await signIn(page, 'Staff Demo');
+  await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
+  await expect(page.getByText('6. Video Editing', { exact: true }).first()).toBeVisible();
   await page.getByRole('tab', { name: /Needs action/ }).focus();
   await page.keyboard.press('ArrowRight');
   const nextStaffTab = page.getByRole('tab', { name: /Up next/ });
@@ -108,4 +110,41 @@ test('Staff collapsed navigation is labelled and mobile layout remains accessibl
 
   const axe = await new AxeBuilder({ page }).include('[aria-label="Primary navigation"], [aria-label="Mobile navigation"]').analyze();
   expect(axe.violations, axe.violations.map(item => item.id).join(', ')).toEqual([]);
+});
+
+test('Staff and Boss dashboards stay accessible across desktop and mobile', async ({ page }) => {
+  for (const role of [
+    { username: 'Staff Demo', heading: 'My work' },
+    { username: 'Boss Koo', heading: 'Super Admin Dashboard' },
+  ]) {
+    const viewports = [{ width: 390, height: 844 }, { width: 1280, height: 800 }];
+    for (const [index, viewport] of viewports.entries()) {
+      await page.setViewportSize(viewport);
+      if (index === 0) await signIn(page, role.username);
+      await page.goto('/');
+      await expect(page.getByRole('heading', { name: role.heading })).toBeVisible();
+
+      const mainAxe = await new AxeBuilder({ page }).include('main').analyze();
+      expect(mainAxe.violations, `${role.username} ${viewport.width}px dashboard: ${mainAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
+      if (viewport.width < 768) {
+        const navigationAxe = await new AxeBuilder({ page }).include('[aria-label="Mobile navigation"]').analyze();
+        expect(navigationAxe.violations, `${role.username} ${viewport.width}px mobile navigation: ${navigationAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
+      }
+    }
+    await page.getByRole('button', { name: 'Logout' }).click();
+  }
+});
+
+test('Staff sees a clear approvals denial while Boss Koo keeps the admin workspace', async ({ page }) => {
+  await signIn(page, 'Staff Demo');
+  await page.goto('/approvals');
+  await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
+  await expect(page.getByText('Approvals are restricted to Boss Koo')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add Member' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Logout' }).click();
+  await signIn(page, 'Boss Koo');
+  await page.goto('/approvals');
+  await expect(page.getByRole('heading', { name: 'Approvals' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add Member' }).first()).toBeVisible();
 });

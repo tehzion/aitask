@@ -11,7 +11,7 @@ import { Button, ProgressBar, StatusChip } from './ui';
 import SideSheet from './SideSheet';
 import { useI18n } from './I18nProvider';
 import { formatLocalizedDate, formatLocalizedDistanceToNow } from '../lib/i18n';
-import { canCommentOnTask, canEditTask } from '../lib/access';
+import { getTaskAccess } from '../lib/access';
 
 interface StaffTaskFocusProps {
   isOpen: boolean;
@@ -24,7 +24,10 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   const { locale, t } = useI18n();
   const {
     tasks,
+    clients,
+    projects,
     users,
+    currentUser,
     deliverables,
     serviceCycles,
     taskStatuses,
@@ -35,7 +38,10 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
     rolePermissions,
   } = useStore(useShallow(state => ({
     tasks: state.tasks,
+    clients: state.clients,
+    projects: state.projects,
     users: state.users,
+    currentUser: state.currentUser,
     deliverables: state.deliverables,
     serviceCycles: state.serviceCycles,
     taskStatuses: state.taskStatuses,
@@ -50,7 +56,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   const [error, setError] = React.useState('');
   const [pendingStatus, setPendingStatus] = React.useState<TaskStatus | null>(null);
   const statusPickerRef = React.useRef<HTMLSelectElement>(null);
-  const liveTask = task ? tasks.find(item => item.id === task.id) || task : null;
+  const liveTask = task ? tasks.find(item => item.id === task.id) || null : null;
 
   React.useEffect(() => {
     setComment('');
@@ -72,9 +78,10 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   const dueDate = parseOptionalDate(liveTask.dueDate);
   const attachment = safeHttpsUrl(liveTask.attachmentLink);
   const mutationLocked = backend.upgradeRequired === true || backend.isSaving || backend.isPulling;
-  const currentUser = useStore.getState().currentUser;
-  const canEdit = canEditTask(currentUser, liveTask, rolePermissions);
-  const canComment = canCommentOnTask(currentUser, liveTask, rolePermissions);
+  const taskAccess = getTaskAccess(currentUser, liveTask, rolePermissions, { clients, projects });
+  if (!taskAccess.canView) return null;
+  const canEdit = taskAccess.canEdit;
+  const canComment = taskAccess.canComment;
 
   const persistStatus = async (status: TaskStatus, skipDependencyPrompt = false) => {
     if (mutationLocked || !canEdit || status === liveTask.status) return;
@@ -95,14 +102,19 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
     if (!comment.trim() || mutationLocked || !canComment || isSaving) return;
     setIsSaving(true);
     setError('');
-    addComment(liveTask.id, comment);
+    const localResult = addComment(liveTask.id, comment);
+    if (!localResult.ok) {
+      setError(localResult.error || 'You do not have permission to comment on this task.');
+      setIsSaving(false);
+      return;
+    }
     const result = await commitPendingMutation('comment.add');
     setIsSaving(false);
     if (result.ok) setComment('');
     else setError(result.error || 'This update is waiting to sync. Use the workspace retry controls to continue.');
   };
 
-  const footer = (
+  const footer = canEdit ? (
     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
       {canEdit && onOpenFullEditor && <Button variant="secondary" onClick={onOpenFullEditor}>{t('Full edit')}</Button>}
       <label className="relative min-w-0 flex-1">
@@ -131,7 +143,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
         {isSaving ? 'Saving…' : guidedAction.label}
       </Button>
     </div>
-  );
+  ) : null;
 
   return (
     <SideSheet
@@ -233,10 +245,12 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
             {(liveTask.comments || []).length === 0 && <p className="rounded-panel bg-inset px-4 py-8 text-center text-sm text-muted">{t('No updates yet. Add the first work note below.')}</p>}
           </div>
           {!canComment && <p className="mt-3 rounded-control bg-inset px-3 py-2 text-xs font-medium text-muted">{t('Read-only task view. You can update tasks assigned to you or created by you.')}</p>}
-          <form onSubmit={submitComment} className="mt-3 flex items-end gap-2">
-            <label className="min-w-0 flex-1"><span className="sr-only">Add work update</span><textarea disabled={!canComment} value={comment} onChange={event => setComment(event.target.value)} rows={2} placeholder="Add a work update…" className={`${inputBase} resize-none px-3 py-2.5`} /></label>
-            <Button type="submit" aria-label="Send work update" disabled={!comment.trim() || mutationLocked || !canComment || isSaving} className="h-11 w-11 shrink-0 px-0"><Send className="h-4 w-4" /></Button>
-          </form>
+          {canComment ? (
+            <form onSubmit={submitComment} className="mt-3 flex items-end gap-2">
+              <label className="min-w-0 flex-1"><span className="sr-only">Add work update</span><textarea value={comment} onChange={event => setComment(event.target.value)} rows={2} placeholder="Add a work update…" className={`${inputBase} resize-none px-3 py-2.5`} /></label>
+              <Button type="submit" aria-label="Send work update" disabled={!comment.trim() || mutationLocked || isSaving} className="h-11 w-11 shrink-0 px-0"><Send className="h-4 w-4" /></Button>
+            </form>
+          ) : null}
         </section>
 
         <section aria-labelledby="staff-task-history">

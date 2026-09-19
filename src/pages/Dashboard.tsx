@@ -413,10 +413,19 @@ const Dashboard: React.FC = () => {
         title="Project Manager Dashboard"
         description="Portfolio-scoped delivery first: deadlines, review risk, active companies, and contracted value inside your own portfolio."
         action={(
-          <Link to="/tasks" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-            Open portfolio work
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+          <div className="flex flex-wrap items-center justify-end gap-2.5">
+            <BackendFreshness />
+            <Link to="/tasks" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink transition hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+              Open portfolio work
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            {canCreateTask && (
+              <Button onClick={() => setCreateTaskModalOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Create task
+              </Button>
+            )}
+          </div>
         )}
       />
       <div className="mt-6"><ServiceRoleDashboard /></div>

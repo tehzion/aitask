@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save, ChevronDown, AlertTriangle } from 'lucide-react';
 import { Department, Priority, Task, TaskStatus } from '../types';
 import { format, formatDistanceToNow } from 'date-fns';
-import { canAssignTasksToOthers, canCommentOnTask, canEditTask as canEditTaskByRole, canReviewTaskAsClient } from '../lib/access';
+import { getTaskAccess, canReviewTaskAsClient } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate, parseOptionalDate, cn } from '../lib/utils';
 import { isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
@@ -60,11 +60,13 @@ const ExternalTaskLink: React.FC<{ value: string; label: string }> = ({ value, l
   );
 };
 
-const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
+const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTask }) => {
   const { t } = useI18n();
   const {
     users,
     tasks,
+    clients,
+    projects,
     currentUser,
     updateTaskStatus,
     updateTask,
@@ -80,6 +82,8 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   } = useStore(useShallow(state => ({
     users: state.users,
     tasks: state.tasks,
+    clients: state.clients,
+    projects: state.projects,
     currentUser: state.currentUser,
     updateTaskStatus: state.updateTaskStatus,
     updateTask: state.updateTask,
@@ -106,6 +110,9 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   const titleId = React.useId();
   const descriptionId = React.useId();
   const confirmationTitleId = React.useId();
+  const requestedTaskRef = React.useRef(requestedTask);
+  requestedTaskRef.current = requestedTask;
+  const requestedTaskId = requestedTask?.id;
   const [editForm, setEditForm] = useState({
     title: '',
     description: '',
@@ -120,8 +127,9 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
   });
 
   useEffect(() => {
-    setAttachmentLink(task?.attachmentLink || '');
-    setAttachmentName(task?.attachmentName || '');
+    const draftTask = requestedTaskRef.current;
+    setAttachmentLink(draftTask?.attachmentLink || '');
+    setAttachmentName(draftTask?.attachmentName || '');
     setApprovalNote('');
     setRevisionNote('');
     setEditError('');
@@ -129,31 +137,35 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
     setIsEditingDetails(false);
     setCommentText('');
     setIsSubmitting(false);
-    if (task) {
+    if (draftTask) {
       setEditForm({
-        title: task.title,
-        description: task.description || '',
-        clientName: task.clientName,
-        serviceType: task.serviceType,
-        department: task.department === 'Client' ? 'Designer' : task.department,
-        assignedTo: task.assignedTo,
-        priority: task.priority,
-        startDate: task.startDate || getTodayInputDate(),
-        dueDate: task.dueDate,
-        notes: task.notes || '',
+        title: draftTask.title,
+        description: draftTask.description || '',
+        clientName: draftTask.clientName,
+        serviceType: draftTask.serviceType,
+        department: draftTask.department === 'Client' ? 'Designer' : draftTask.department,
+        assignedTo: draftTask.assignedTo,
+        priority: draftTask.priority,
+        startDate: draftTask.startDate || getTodayInputDate(),
+        dueDate: draftTask.dueDate,
+        notes: draftTask.notes || '',
       });
     }
-  }, [task]);
+  }, [requestedTaskId]);
 
-  if (!isOpen || !task) return null;
+  if (!isOpen || !requestedTask) return null;
+  const task = tasks.find(item => item.id === requestedTask.id);
+  if (!task) return null;
 
   const assignee = users.find(u => u.id === task.assignedTo);
   const creator = users.find(u => u.id === task.createdBy);
-  const canEditTask = !upgradeRequired && canEditTaskByRole(currentUser, task, rolePermissions);
-  const canAddComment = !upgradeRequired && canCommentOnTask(currentUser, task, rolePermissions);
-  const canClientReview = !upgradeRequired && canReviewTaskAsClient(currentUser, task, rolePermissions);
+  const taskAccess = getTaskAccess(currentUser, task, rolePermissions, { clients, projects });
+  if (!taskAccess.canView) return null;
+  const canEditTask = !upgradeRequired && taskAccess.canEdit;
+  const canAddComment = !upgradeRequired && taskAccess.canComment;
+  const canClientReview = !upgradeRequired && taskAccess.canView && canReviewTaskAsClient(currentUser, task, rolePermissions);
   const isClientTaskViewer = currentUser?.role === 'Client';
-  const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions, task);
+  const canAssignOthers = !upgradeRequired && taskAccess.canAssign;
   const incompletePredecessors = (task.predecessorTaskIds || [])
     .map(id => tasks.find(item => item.id === id))
     .filter((item): item is Task => Boolean(item && !item.isCompleted));
@@ -175,8 +187,12 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task }) => {
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!commentText.trim() || isSubmitting) return;
-    addComment(task.id, commentText);
+    if (!commentText.trim() || isSubmitting || !canAddComment) return;
+    const localResult = addComment(task.id, commentText);
+    if (!localResult.ok) {
+      setMutationError(localResult.error || 'You do not have permission to comment on this task.');
+      return;
+    }
     if (await confirmPendingMutation('comment.add')) setCommentText('');
   };
 

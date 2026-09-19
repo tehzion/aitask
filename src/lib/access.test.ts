@@ -16,6 +16,7 @@ import {
   canRenameClient,
   canReviewTaskAsClient,
   canViewAllClients,
+  canViewTask,
   allPermissions,
   defaultRolePermissions,
   getEffectivePermissions,
@@ -25,6 +26,7 @@ import {
   getVisibleClientNames,
   getVisibleProjects,
   getVisibleTasks,
+  getTaskAccess,
   getUnreadNotifications,
   isNotificationReadByUser,
   BUILTIN_HOD_ROLE_ID,
@@ -251,9 +253,9 @@ describe('staff permission matrix', () => {
     expect(canEditClientProfile(permittedStaff, 'Acme', tasks)).toBe(true);
     expect(canEditClientProfile(permittedStaff, 'Beta', tasks)).toBe(false);
     expect(canEditClientProfile(permittedStaff, 'Created Co', [creatorOnlyTask])).toBe(false);
-    expect(getVisibleTasks(permittedStaff, [creatorOnlyTask])).toEqual([]);
-    expect(getVisibleClientNames(permittedStaff, [creatorOnlyTask])).toEqual([]);
-    expect(canEditTask(permittedStaff, creatorOnlyTask)).toBe(false);
+    expect(getVisibleTasks(permittedStaff, [creatorOnlyTask]).map(task => task.id)).toEqual(['task-created-only']);
+    expect(getVisibleClientNames(permittedStaff, [creatorOnlyTask])).toEqual(['Created Co']);
+    expect(canEditTask(permittedStaff, creatorOnlyTask)).toBe(true);
     expect(canEditClientProfile(acmeClient, 'Acme', tasks)).toBe(false);
   });
 
@@ -330,6 +332,50 @@ describe('staff permission matrix', () => {
     expect(perms.deleteUsers).toBe(false);
     expect(perms.viewProductionReports).toBe(false);
     expect(getEffectivePermissions(superAdmin).viewApprovals).toBe(true);
+  });
+
+  it('keeps approvals and broad visibility out of PM and HOD custom roles', () => {
+    const pmRole: CustomRole = {
+      id: 'pm-broad',
+      name: 'Broad PM',
+      baseRole: 'Project Manager',
+      permissions: { ...defaultRolePermissions['Project Manager'], viewAllClients: true, viewApprovals: true },
+      createdAt: '2026-09-19T00:00:00.000Z',
+      updatedAt: '2026-09-19T00:00:00.000Z',
+    };
+    const pm: User = { ...admin, customRoleId: pmRole.id, permissions: {} as User['permissions'] };
+    expect(canViewAllClients(pm, [pmRole])).toBe(false);
+    expect(canAccessPath(pm, '/approvals', [pmRole])).toBe(false);
+    expect(getVisibleClientNames(pm, [
+      makeTask({ id: 'pm-owned', clientName: 'Acme', createdBy: pm.id }),
+      makeTask({ id: 'other-client', clientName: 'Beta', createdBy: otherStaff.id, assignedTo: otherStaff.id }),
+    ], [], [pmRole])).toEqual(['Acme']);
+
+    const hodRole: CustomRole = {
+      id: 'hod-broad',
+      name: 'Broad HOD',
+      baseRole: 'HOD',
+      departmentScoped: true,
+      permissions: {
+        ...defaultRolePermissions.HOD,
+        viewAllTasks: true,
+        viewAllClients: true,
+        viewApprovals: true,
+        manageServiceCatalog: true,
+      },
+      createdAt: '2026-09-19T00:00:00.000Z',
+      updatedAt: '2026-09-19T00:00:00.000Z',
+    };
+    const hod: User = { ...staff, role: 'HOD', customRoleId: hodRole.id, permissions: {} as User['permissions'] };
+    const departmentTask = makeTask({ id: 'hod-department', department: 'Designer', assignedTo: otherStaff.id });
+    const outsideTask = makeTask({ id: 'hod-outside', department: 'Video Editor', assignedTo: otherStaff.id });
+    const hodPermissions = getEffectivePermissions(hod, [hodRole]);
+    expect(hodPermissions.viewApprovals).toBe(false);
+    expect(hodPermissions.viewAllTasks).toBe(false);
+    expect(hodPermissions.viewAllClients).toBe(false);
+    expect(hodPermissions.manageServiceCatalog).toBe(false);
+    expect(canAccessPath(hod, '/approvals', [hodRole])).toBe(false);
+    expect(getVisibleTasks(hod, [departmentTask, outsideTask], [hodRole]).map(task => task.id)).toEqual(['hod-department']);
   });
 
   it('scopes the HOD role to its own departments for visibility and editing', () => {
@@ -545,6 +591,54 @@ describe('staff permission matrix', () => {
     expect(canEditTask(admin, adminCreated)).toBe(true);
     expect(canEditTask(admin, adminAssigned)).toBe(true);
     expect(canEditTask(admin, unrelated)).toBe(false);
+  });
+
+  it('keeps task-detail decisions aligned across Boss Koo, PM, HOD, and Staff', () => {
+    const pmPortfolioTask = makeTask({ id: 'pm-portfolio', clientName: 'Owned Co', createdBy: otherStaff.id, assignedTo: otherStaff.id });
+    const pmAssignedTask = makeTask({ id: 'pm-assigned', clientName: 'Other Co', createdBy: otherStaff.id, assignedTo: admin.id });
+    const pmCreatedTask = makeTask({ id: 'pm-created', clientName: 'Other Co', createdBy: admin.id, assignedTo: otherStaff.id });
+    const pmUnrelatedTask = makeTask({ id: 'pm-unrelated', clientName: 'Hidden Co', createdBy: otherStaff.id, assignedTo: otherStaff.id });
+    const pmScope = {
+      clients: [{ id: 'owned-co', clientName: 'Owned Co', createdBy: admin.id, createdAt: '', updatedAt: '' }],
+      projects: [],
+    };
+
+    expect(canViewTask(admin, pmPortfolioTask, [], pmScope)).toBe(true);
+    expect(getTaskAccess(admin, pmPortfolioTask, [], pmScope)).toMatchObject({
+      canView: true,
+      canEdit: false,
+      canComment: false,
+      canDelete: false,
+      canAssign: false,
+    });
+    expect(getTaskAccess(admin, pmAssignedTask)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: false });
+    expect(getTaskAccess(admin, pmCreatedTask)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: true });
+    expect(getTaskAccess(admin, pmUnrelatedTask)).toEqual({ canView: false, canEdit: false, canComment: false, canDelete: false, canAssign: false });
+
+    const hodRole: CustomRole = {
+      id: BUILTIN_HOD_ROLE_ID,
+      name: 'HOD',
+      baseRole: 'HOD',
+      isBuiltin: true,
+      isProtected: false,
+      departmentScoped: true,
+      permissions: { ...defaultRolePermissions.HOD, manageCreatedTasks: true },
+      createdAt: '2026-09-07T00:00:00.000Z',
+      updatedAt: '2026-09-07T00:00:00.000Z',
+    };
+    const hod: User = { ...staff, id: 'hod-1', name: 'HOD', role: 'HOD', customRoleId: hodRole.id, customRoleName: hodRole.name };
+    const hodDepartmentTask = makeTask({ id: 'hod-department', department: 'Designer', createdBy: otherStaff.id, assignedTo: otherStaff.id });
+    const hodOtherDepartmentTask = makeTask({ id: 'hod-other-department', department: 'Video Editor', createdBy: otherStaff.id, assignedTo: otherStaff.id });
+    expect(getTaskAccess(hod, hodDepartmentTask, [hodRole])).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: false });
+    expect(getTaskAccess(hod, hodOtherDepartmentTask, [hodRole])).toEqual({ canView: false, canEdit: false, canComment: false, canDelete: false, canAssign: false });
+
+    const staffAssignedTask = makeTask({ id: 'staff-assigned', assignedTo: staff.id });
+    const staffCreatedTask = makeTask({ id: 'staff-created', assignedTo: otherStaff.id, createdBy: staff.id });
+    const staffUnrelatedTask = makeTask({ id: 'staff-unrelated', assignedTo: otherStaff.id, createdBy: otherStaff.id });
+    expect(getTaskAccess(staff, staffAssignedTask)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: false });
+    expect(getTaskAccess(staff, staffCreatedTask)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: false });
+    expect(getTaskAccess(staff, staffUnrelatedTask)).toEqual({ canView: false, canEdit: false, canComment: false, canDelete: false, canAssign: false });
+    expect(getTaskAccess(superAdmin, staffUnrelatedTask)).toEqual({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: true });
   });
 
   it('keeps missing permissions disabled for existing persisted roles', () => {

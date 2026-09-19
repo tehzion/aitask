@@ -50,7 +50,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const customInputRef = useRef<HTMLInputElement>(null);
   const initializedFormKeyRef = useRef('');
   const clientOptions = React.useMemo(() => {
-    const visibleKeys = new Set(getVisibleClientNames(currentUser, tasks, projects, rolePermissions).map(value => value.trim().toLowerCase()));
+    const visibleKeys = new Set(getVisibleClientNames(currentUser, tasks, projects, rolePermissions, { clients, projects }).map(value => value.trim().toLowerCase()));
     const byName = new Map(clients
       .filter(client => canViewAllClients(currentUser, rolePermissions) || client.createdBy === currentUser?.id || visibleKeys.has(client.clientName.trim().toLowerCase()))
       .map(client => [client.clientName.trim().toLowerCase(), { id: client.id, name: client.clientName }]));

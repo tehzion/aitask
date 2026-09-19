@@ -176,7 +176,7 @@ export const StatusChip: React.FC<React.HTMLAttributes<HTMLSpanElement> & { tone
 );
 
 export interface SegmentTab<T extends string> { id: T; label: string; compactLabel?: string; count?: number; icon?: React.ComponentType<{ className?: string }> }
-export const SegmentedTabs = <T extends string,>({ items, value, onChange, label, idPrefix, variant = 'segmented' }: { items: SegmentTab<T>[]; value: T; onChange: (value: T) => void; label: string; idPrefix?: string; variant?: 'segmented' | 'underline' | 'boss' }) => {
+export const SegmentedTabs = <T extends string,>({ items, value, onChange, label, idPrefix, panelId, variant = 'segmented' }: { items: SegmentTab<T>[]; value: T; onChange: (value: T) => void; label: string; idPrefix?: string; panelId?: string | ((item: T) => string); variant?: 'segmented' | 'underline' | 'boss' }) => {
   const generatedId = React.useId().replace(/:/g, '');
   const prefix = idPrefix || `segmented-tabs-${generatedId}`;
   const tabsRef = React.useRef<Array<HTMLButtonElement | null>>([]);
@@ -228,7 +228,7 @@ export const SegmentedTabs = <T extends string,>({ items, value, onChange, label
           tabIndex={value === item.id ? 0 : -1}
           aria-label={item.label}
           aria-selected={value === item.id}
-          aria-controls={`${prefix}-panel-${item.id}`}
+          aria-controls={typeof panelId === 'function' ? panelId(item.id) : panelId || `${prefix}-panel-${item.id}`}
           onClick={() => onChange(item.id)}
           onKeyDown={event => handleKeyDown(event, index)}
           className={cn(
@@ -238,7 +238,7 @@ export const SegmentedTabs = <T extends string,>({ items, value, onChange, label
                 ? 'inline-flex min-h-11 items-center gap-2 rounded-control px-3 text-sm font-semibold transition-colors'
                 : 'min-h-11 shrink-0 rounded-tag px-2 text-xs font-medium transition-[background-color,color,box-shadow] duration-160 sm:px-3 sm:text-sm',
             isUnderline
-              ? value === item.id ? 'text-accent after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent' : 'text-muted hover:text-ink'
+              ? value === item.id ? 'text-ink after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent' : 'text-muted hover:text-ink'
               : isBoss
                 ? value === item.id ? 'bg-accent text-white' : 'text-muted hover:bg-inset hover:text-ink'
                 : value === item.id ? 'bg-surface text-ink ring-1 ring-line/70' : 'text-muted hover:text-ink',

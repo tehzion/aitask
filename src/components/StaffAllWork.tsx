@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import type { Priority, TaskStatus } from '../types';
 import { useStore } from '../store';
-import { getVisibleTasks } from '../lib/access';
+import { getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../lib/access';
 import { buildStaffWorkQueue, getStaffBucketLabel, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getTodayInputDate } from '../lib/utils';
 import { Button, PageHeader, SegmentedTabs, Surface } from './ui';
@@ -14,12 +14,14 @@ import StaffTaskFocus from './StaffTaskFocus';
 import StaffWorkItem from './StaffWorkItem';
 import TaskDetailsModal from './TaskDetailsModal';
 import { canEditTask } from '../lib/access';
+import { useI18n } from './I18nProvider';
 
 type StaffAllWorkBucket = 'all' | StaffWorkBucketKey;
 const buckets: StaffAllWorkBucket[] = ['all', 'needs_action', 'up_next', 'waiting', 'done'];
 const priorities: Priority[] = ['Urgent', 'High', 'Medium', 'Low'];
 
 const StaffAllWork: React.FC = () => {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser, tasks: allTasks, rolePermissions, taskStatuses, clients: clientProfiles, projects, users } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
@@ -48,18 +50,18 @@ const StaffAllWork: React.FC = () => {
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
     [allTasks, clientProfiles, currentUser, projects, rolePermissions],
   );
-  const isHod = currentUser?.role === 'HOD';
+  const isHod = isHodUser(currentUser, rolePermissions);
   const isProjectManager = currentUser?.role === 'Project Manager';
   const [scopeView, setScopeView] = React.useState<'mine' | 'department'>('department');
   const tasks = React.useMemo(() => {
     if (isHod && scopeView === 'mine') {
       return visibleTasks.filter(task => task.assignedTo === currentUser?.id || task.createdBy === currentUser?.id);
     }
-    if (currentUser?.role === 'Staff') {
+    if (currentUser?.role === 'Staff' && !isDepartmentScopedUser(currentUser, rolePermissions)) {
       return visibleTasks.filter(task => task.assignedTo === currentUser.id || task.createdBy === currentUser.id);
     }
     return visibleTasks;
-  }, [currentUser, isHod, scopeView, visibleTasks]);
+  }, [currentUser, isHod, rolePermissions, scopeView, visibleTasks]);
   const queue = React.useMemo(() => buildStaffWorkQueue(tasks, getTodayInputDate()), [tasks]);
   const orderedTasks = React.useMemo(() => (
     bucket === 'all'
@@ -71,8 +73,9 @@ const StaffAllWork: React.FC = () => {
   const departments = React.useMemo(() => Array.from(new Set(tasks.map(task => task.department).filter(Boolean))).sort(), [tasks]);
   const assignees = React.useMemo(() => users.filter(user => tasks.some(task => task.assignedTo === user.id)), [tasks, users]);
   const creators = React.useMemo(() => users.filter(user => tasks.some(task => task.createdBy === user.id)), [tasks, users]);
-  const normalizedSearch = search.trim().toLowerCase();
-  const filteredTasks = orderedTasks.filter(task => {
+  const deferredSearch = React.useDeferredValue(search);
+  const normalizedSearch = deferredSearch.trim().toLowerCase();
+  const filteredTasks = React.useMemo(() => orderedTasks.filter(task => {
     const searchable = [task.title, task.description, task.clientName, task.projectName, task.serviceType, task.department].filter(Boolean).join(' ').toLowerCase();
     return (!normalizedSearch || searchable.includes(normalizedSearch))
       && (client === 'All' || task.clientName === client)
@@ -84,10 +87,10 @@ const StaffAllWork: React.FC = () => {
       && (priority === 'All' || task.priority === priority)
       && (!dueFrom || Boolean(task.dueDate && task.dueDate >= dueFrom))
       && (!dueTo || Boolean(task.dueDate && task.dueDate <= dueTo));
-  });
+  }), [assignee, client, creator, department, dueFrom, dueTo, normalizedSearch, orderedTasks, priority, project, status]);
   const taskId = searchParams.get('taskId');
   const selectedTask = taskId ? tasks.find(task => task.id === taskId) || null : null;
-  const activeFilterCount = [client !== 'All', project !== 'All', assignee !== 'All', department !== 'All', creator !== 'All', status !== 'All', priority !== 'All', Boolean(dueFrom), Boolean(dueTo)].filter(Boolean).length;
+  const activeFilterCount = [Boolean(search.trim()), client !== 'All', project !== 'All', assignee !== 'All', department !== 'All', creator !== 'All', status !== 'All', priority !== 'All', Boolean(dueFrom), Boolean(dueTo)].filter(Boolean).length;
 
   React.useEffect(() => {
     const handleFocusSearch = () => document.querySelector<HTMLInputElement>('[data-staff-work-search]')?.focus();
@@ -103,6 +106,7 @@ const StaffAllWork: React.FC = () => {
   };
 
   const clearFilters = () => {
+    setSearch('');
     setClient('All');
     setProject('All');
     setAssignee('All');
@@ -118,8 +122,8 @@ const StaffAllWork: React.FC = () => {
     <div className={`${pageShell} max-w-6xl`}>
       <PageHeader
         compact
-        title={isProjectManager ? 'Portfolio work' : isHod ? 'Department work' : 'All work'}
-        description={isProjectManager ? 'Your portfolio work, ordered by delivery risk and next action.' : isHod ? 'Department work, including delegated tasks and items that need review.' : 'All visible work, ordered by what needs attention first.'}
+        title={t(isProjectManager ? 'Portfolio work' : isHod ? 'Department work' : 'All work')}
+        description={t(isProjectManager ? 'Your portfolio work, ordered by delivery risk and next action.' : isHod ? 'Department work, including delegated tasks and items that need review.' : 'All visible work, ordered by what needs attention first.')}
         meta={<span className="calm-number">{filteredTasks.length} task{filteredTasks.length === 1 ? '' : 's'}</span>}
         action={<Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>}
       />
@@ -132,10 +136,10 @@ const StaffAllWork: React.FC = () => {
             data-global-search
             data-staff-work-search
             type="search"
-            aria-label="Search visible work"
+            aria-label={t('Search visible work')}
             value={search}
             onChange={event => setSearch(event.target.value)}
-            placeholder="Search tasks, clients, or services…"
+            placeholder={t('Search visible work')}
             className={`${inputBase} min-h-12 pl-10 pr-10`}
           />
           {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')} className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-4 w-4" /></button>}
@@ -143,11 +147,12 @@ const StaffAllWork: React.FC = () => {
 
         {isHod && (
           <SegmentedTabs<'mine' | 'department'>
-            items={[{ id: 'mine', label: 'My work', count: visibleTasks.filter(task => task.assignedTo === currentUser?.id || task.createdBy === currentUser?.id).length }, { id: 'department', label: 'Department work', count: visibleTasks.length }]}
+            items={[{ id: 'mine', label: t('My work'), count: visibleTasks.filter(task => task.assignedTo === currentUser?.id || task.createdBy === currentUser?.id).length }, { id: 'department', label: t('Department work'), count: visibleTasks.length }]}
             value={scopeView}
             onChange={setScopeView}
             label="HOD work scope"
             idPrefix="hod-scope"
+            panelId="all-work-panel"
             variant="underline"
           />
         )}
@@ -158,6 +163,7 @@ const StaffAllWork: React.FC = () => {
           onChange={setBucket}
           label="All work queues"
           idPrefix="all-work"
+          panelId="all-work-panel"
           variant="underline"
         />
 
@@ -168,9 +174,9 @@ const StaffAllWork: React.FC = () => {
           </div>
         )}
 
-        <Surface id={`all-work-panel-${bucket}`} role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+        <Surface id="all-work-panel" role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={tasks} users={users} onOpen={item => setTaskId(item.id)} />)}
-          {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">No visible work matches this view</p><p className="mt-1 text-sm text-muted">Clear a filter or choose another queue.</p></div>}
+          {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">{t('No visible work matches this view')}</p><p className="mt-1 text-sm text-muted">{t('Clear a filter or choose another queue.')}</p></div>}
         </Surface>
       </section>
 

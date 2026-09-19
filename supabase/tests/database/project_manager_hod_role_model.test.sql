@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(9);
+select plan(12);
 
 select is(
   (select count(*)::integer from public.aitask_members where role = 'Admin'),
@@ -42,6 +42,37 @@ select is(
   (select count(*)::integer from public.aitask_entities where entity_type = 'custom_role' and entity_id = 'builtin-hod' and coalesce(data -> 'permissions' ->> 'createProjects', 'false') = 'false'),
   (select count(*)::integer from public.aitask_workspaces),
   'HOD defaults do not create projects'
+);
+select is(
+  (select count(*)::integer
+   from public.aitask_entities
+   where entity_type = 'custom_role'
+     and entity_id = 'builtin-hod'
+     and exists (
+       select 1
+       from unnest(array[
+         'viewAllTasks','viewAllClients','viewApprovals',
+         'manageServiceCatalog','manageTaskTemplates','manageClientPlans',
+         'manageServiceCycles','viewAllServiceClients','viewServicePrices'
+       ]) key
+       where coalesce(data -> 'permissions' ->> key, 'false') = 'true'
+     )),
+  0,
+  'HOD defaults cannot widen scope or manage services'
+);
+select ok(
+  (select pg_get_functiondef('private.aitask_has_permission(text, text)'::regprocedure)
+    like '%member.role = ''HOD'' and p_permission = any%'),
+  'the permission resolver protects HOD invariants server-side'
+);
+select ok(
+  exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and coalesce(qual, '') like '%private.aitask_is_hod%'
+  ),
+  'notification RLS includes direct HOD targeting'
 );
 select is(
   (select count(*)::integer from public.aitask_entities where entity_type = 'notification' and (target_role = 'Admin' or data ->> 'targetRole' = 'Admin')),

@@ -13,6 +13,14 @@ export type VisibilityScope = {
   projects?: Project[];
 };
 
+export type TaskAccess = {
+  canView: boolean;
+  canEdit: boolean;
+  canComment: boolean;
+  canDelete: boolean;
+  canAssign: boolean;
+};
+
 const ownedClientKeys = (user: User, scope: VisibilityScope) => new Set(
   (scope.clients || [])
     .filter(client => client.createdBy === user.id)
@@ -91,6 +99,22 @@ export const nonSuperAdminOnlyPermissionKeys: RolePermissionKey[] = [
   'approveRegistrations',
   'deleteUsers',
   'viewProductionReports',
+  'viewApprovals',
+];
+
+// HOD is editable, but its department scope and operational boundary are
+// invariants. These permissions must never turn an HOD into a workspace-wide
+// or service-administration role.
+export const hodRestrictedPermissionKeys: RolePermissionKey[] = [
+  'viewAllTasks',
+  'viewAllClients',
+  'viewApprovals',
+  'manageServiceCatalog',
+  'manageTaskTemplates',
+  'manageClientPlans',
+  'manageServiceCycles',
+  'viewAllServiceClients',
+  'viewServicePrices',
 ];
 
 export const sanitizeNonSuperAdminPermissions = (permissions: RolePermissions): RolePermissions => {
@@ -98,6 +122,16 @@ export const sanitizeNonSuperAdminPermissions = (permissions: RolePermissions): 
   nonSuperAdminOnlyPermissionKeys.forEach(key => {
     sanitized[key] = false;
   });
+  return sanitized;
+};
+
+export const sanitizeRolePermissions = (permissions: RolePermissions, baseRole: Role): RolePermissions => {
+  const sanitized = sanitizeNonSuperAdminPermissions(permissions);
+  if (baseRole === 'HOD') {
+    hodRestrictedPermissionKeys.forEach(key => {
+      sanitized[key] = false;
+    });
+  }
   return sanitized;
 };
 
@@ -215,7 +249,7 @@ export const getEffectivePermissions = (
       || (key === 'viewDeliveryTracker' && source.viewDeliveryTracker === undefined && source.viewProjects === true)
     ))
   );
-  return sanitizeNonSuperAdminPermissions(permissions);
+  return sanitizeRolePermissions(permissions, user.role);
 };
 
 export const isHodRole = (role: CustomRole | null | undefined) => Boolean(role?.isBuiltin && role.baseRole === 'HOD');
@@ -366,7 +400,8 @@ export const canEditClientProfile = (
   ));
 };
 export const canViewAllClients = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
-  Boolean(user && user.role !== 'Client' && (isBossKoo(user) || hasPermission(user, 'viewAllClients', customRoles)))
+  Boolean(user && user.role !== 'Client'
+    && (isBossKoo(user) || (user.role !== 'Project Manager' && user.role !== 'HOD' && hasPermission(user, 'viewAllClients', customRoles))))
 );
 export const getVisibleClientNames = (
   user: User | null | undefined,
@@ -416,13 +451,44 @@ export const canAssignTasksToOthers = (
   customRoles: CustomRole[] = [],
   task?: Task,
 ) => (
-  hasPermission(user, 'editTasks', customRoles)
+  isBossKoo(user)
+  || (user?.role !== 'HOD' && hasPermission(user, 'editTasks', customRoles))
   || (hasPermission(user, 'manageCreatedTasks', customRoles) && (!task || task.createdBy === user?.id))
 );
+
+export const canViewTask = (
+  user: User | null | undefined,
+  task: Task,
+  customRoles: CustomRole[] = [],
+  scope: VisibilityScope = {},
+) => {
+  if (!user) return false;
+  if (user.role === 'Client') {
+    return getClientKey(task.clientName) === getClientKey(user.companyName) && task.visibility !== 'internal';
+  }
+  if (isBossKoo(user)) return true;
+  if (user.role === 'Project Manager') {
+    const clientKeys = ownedClientKeys(user, scope);
+    const projectIds = ownedProjectIds(user, scope);
+    return task.assignedTo === user.id
+      || task.createdBy === user.id
+      || clientKeys.has(getClientKey(task.clientName))
+      || (Boolean(task.projectId) && projectIds.has(task.projectId as string));
+  }
+  if (user.role !== 'HOD' && canViewAllTasks(user, customRoles)) return true;
+  if (['Staff', 'HOD'].includes(user.role)) {
+    return task.assignedTo === user.id
+      || task.createdBy === user.id
+      || (isDepartmentScopedUser(user, customRoles) && isMemberInDepartment(user, task.department));
+  }
+  return false;
+};
+
 export const canEditTask = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
-  hasPermission(user, 'editTasks', customRoles) ||
+  isBossKoo(user) ||
+  (user?.role !== 'HOD' && hasPermission(user, 'editTasks', customRoles)) ||
   (['Staff', 'HOD', 'Project Manager'].includes(user?.role || '') && task.assignedTo === user.id) ||
-  (['Staff', 'HOD', 'Project Manager'].includes(user?.role || '') && hasPermission(user, 'manageCreatedTasks', customRoles) && task.createdBy === user.id) ||
+  (['Staff', 'HOD', 'Project Manager'].includes(user?.role || '') && task.createdBy === user.id) ||
   (isDepartmentScopedUser(user, customRoles) && isMemberInDepartment(user, task.department))
 );
 export const canDeleteTask = canEditTask;
@@ -460,6 +526,20 @@ export const canCommentOnTask = (user: User | null | undefined, task: Task, cust
     hasPermission(user, 'clientReview', customRoles)
   )
 );
+
+export const getTaskAccess = (
+  user: User | null | undefined,
+  task: Task,
+  customRoles: CustomRole[] = [],
+  scope: VisibilityScope = {},
+): TaskAccess => {
+  const canView = canViewTask(user, task, customRoles, scope);
+  const canEdit = canView && canEditTask(user, task, customRoles);
+  const canComment = canView && canCommentOnTask(user, task, customRoles);
+  const canDelete = canEdit;
+  const canAssign = canEdit && canAssignTasksToOthers(user, customRoles, task);
+  return { canView, canEdit, canComment, canDelete, canAssign };
+};
 
 export const canAccessPath = (user: User | null | undefined, path: string, customRoles: CustomRole[] = []) => {
   if (!user) return false;
@@ -509,30 +589,7 @@ export const getVisibleTasks = (
   scope: VisibilityScope = {}
 ) => {
   if (!user) return [];
-  if (user.role === 'Client') return tasks.filter(task => getClientKey(task.clientName) === getClientKey(user.companyName) && task.visibility !== 'internal');
-  if (isBossKoo(user) || (user.role !== 'Project Manager' && canViewAllTasks(user, customRoles))) return tasks;
-  if (user.role === 'Project Manager') {
-    // Project Managers are scoped to their own work: tasks they created or are
-    // assigned, plus tasks inside the companies/projects they own.
-    const clientKeys = ownedClientKeys(user, scope);
-    const projectIds = ownedProjectIds(user, scope);
-    return tasks.filter(task => (
-      task.assignedTo === user.id
-      || task.createdBy === user.id
-      || clientKeys.has(getClientKey(task.clientName))
-      || (Boolean(task.projectId) && projectIds.has(task.projectId as string))
-    ));
-  }
-  if (['Staff', 'HOD'].includes(user.role)) {
-    const canManageCreated = hasPermission(user, 'manageCreatedTasks', customRoles);
-    const departmentScoped = isDepartmentScopedUser(user, customRoles);
-    return tasks.filter(task => (
-      task.assignedTo === user.id
-      || (canManageCreated && task.createdBy === user.id)
-      || (departmentScoped && isMemberInDepartment(user, task.department))
-    ));
-  }
-  return [];
+  return tasks.filter(task => canViewTask(user, task, customRoles, scope));
 };
 
 export const getVisibleProjects = (

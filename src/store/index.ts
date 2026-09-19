@@ -81,7 +81,7 @@ import {
   isNotificationVisible,
   isBossKoo,
   isHodRole,
-  sanitizeNonSuperAdminPermissions,
+  sanitizeRolePermissions,
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
@@ -250,6 +250,7 @@ const ensureBuiltinRoleTemplate = (roles: CustomRole[] = []) => {
           id: BUILTIN_HOD_ROLE_ID,
           name: 'HOD',
           baseRole: 'HOD' as const,
+          permissions: sanitizeRolePermissions(role.permissions, 'HOD'),
           departmentScoped: true,
           isProtected: false,
           isBuiltin: true,
@@ -344,7 +345,7 @@ interface StoreState {
   addCycleCommentAttachment: (commentId: string, attachment: AttachmentRef) => { ok: boolean; error?: string };
   addAddon: (data: Omit<Addon, 'id' | 'createdAt' | 'updatedAt'>) => { ok: boolean; id?: string; error?: string };
   setAddonActive: (addonId: string, isActive: boolean, effectiveUntil?: string) => { ok: boolean; error?: string };
-  addComment: (taskId: string, text: string) => void;
+  addComment: (taskId: string, text: string) => { ok: boolean; id?: string; error?: string };
   markNotificationRead: (id: string) => void;
   markNotificationUnread: (id: string) => void;
   markAllNotificationsRead: () => void;
@@ -3150,7 +3151,14 @@ export const useStore = create<StoreState>()(
 
         const identityChanged = clientName !== project.clientName || projectName !== project.projectName || updatedProject.clientId !== project.clientId;
         const linkedTasks = state.tasks.filter(task => task.projectId === projectId);
-        if (identityChanged && linkedTasks.some(task => !canEditTask(currentUser, task, state.rolePermissions))) {
+        // Task creator access does not grant Staff/HOD project-identity
+        // control. Renaming a company/project rewrites every linked task, so
+        // only a Project Manager/Boss or a member whose linked tasks are all
+        // assigned to them may perform that broader mutation.
+        const canRewriteLinkedTaskIdentity = isBossKoo(currentUser)
+          || currentUser.role === 'Project Manager'
+          || linkedTasks.every(task => task.assignedTo === currentUser.id);
+        if (identityChanged && !canRewriteLinkedTaskIdentity) {
           return {
             ok: false,
             error: 'Only a Project Manager or Boss Koo can edit this project while it contains tasks assigned to other staff.',
@@ -3181,7 +3189,10 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'You do not have permission to delete this project.' };
         }
         const linkedTasks = state.tasks.filter(task => task.projectId === projectId);
-        if (linkedTasks.some(task => !canEditTask(currentUser, task, state.rolePermissions))) {
+        const canDetachLinkedTasks = isBossKoo(currentUser)
+          || currentUser.role === 'Project Manager'
+          || linkedTasks.every(task => task.assignedTo === currentUser.id);
+        if (!canDetachLinkedTasks) {
           return {
             ok: false,
             error: 'Only a Project Manager or Boss Koo can delete this project while it contains tasks assigned to other staff.',
@@ -4000,15 +4011,18 @@ export const useStore = create<StoreState>()(
         return { ok: true };
       },
 
-      addComment: (taskId, text) => set((state) => {
-        if (isWorkspaceMutationLocked(state)) return state;
+      addComment: (taskId, text) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canCommentOnTask(currentUser, task, state.rolePermissions)) return state;
+        if (!currentUser || !task || !canCommentOnTask(currentUser, task, state.rolePermissions)) {
+          return { ok: false, error: 'You do not have permission to comment on this task.' };
+        }
 
         // Enforce a reasonable length cap to prevent storage abuse
         const safeText = text.trim().slice(0, 2000);
-        if (!safeText) return state;
+        if (!safeText) return { ok: false, error: 'Comment cannot be empty.' };
 
         const newComment: TaskComment = {
           id: nowId('C'),
@@ -4056,11 +4070,12 @@ export const useStore = create<StoreState>()(
           }));
         }
 
-        return {
+        set({
           tasks: newTasks,
           notifications: [...newNotifs, ...(state.notifications || [])]
-        };
-      }),
+        });
+        return { ok: true, id: newComment.id };
+      },
 
       sendDueDateReminders: () => set((state) => {
         if (isWorkspaceMutationLocked(state)) return state;
@@ -4362,7 +4377,7 @@ export const useStore = create<StoreState>()(
 
         const name = data.name.trim();
         if (!name) return { ok: false, error: 'Role name is required.' };
-        const permissions = sanitizeNonSuperAdminPermissions(data.permissions);
+        const permissions = sanitizeRolePermissions(data.permissions, data.baseRole);
         const hasAnyPermission = permissions && Object.values(permissions).some(Boolean);
         if (!hasAnyPermission) return { ok: false, error: 'Choose at least one permission so members with this role keep workspace access.' };
 
@@ -4404,9 +4419,10 @@ export const useStore = create<StoreState>()(
         if (targetRole.isProtected && !editingHod) return { ok: false, error: 'Protected roles cannot be changed.' };
 
         const nextName = editingHod ? 'HOD' : data.name?.trim() || targetRole.name;
+        const nextBaseRole = editingHod ? 'HOD' : data.baseRole || targetRole.baseRole;
         const duplicate = get().rolePermissions.some(role => role.id !== id && role.name.toLowerCase() === nextName.toLowerCase());
         if (duplicate) return { ok: false, error: 'A role with this name already exists.' };
-        const nextPermissions = sanitizeNonSuperAdminPermissions(data.permissions ?? targetRole.permissions);
+        const nextPermissions = sanitizeRolePermissions(data.permissions ?? targetRole.permissions, nextBaseRole);
         if (!Object.values(nextPermissions).some(Boolean)) {
           return { ok: false, error: 'Choose at least one permission so members with this role keep workspace access.' };
         }
@@ -4419,7 +4435,7 @@ export const useStore = create<StoreState>()(
                   ...data,
                   permissions: nextPermissions,
                   name: nextName,
-                  baseRole: editingHod ? 'HOD' : data.baseRole || role.baseRole,
+                  baseRole: nextBaseRole,
                   departmentScoped: editingHod ? true : (data.departmentScoped ?? role.departmentScoped),
                   isProtected: editingHod ? false : role.isProtected,
                   isBuiltin: editingHod ? true : role.isBuiltin,
@@ -4750,7 +4766,7 @@ export const useStore = create<StoreState>()(
         }
 
         const permissions = requestedPermissions
-          ? sanitizeNonSuperAdminPermissions(requestedPermissions)
+          ? sanitizeRolePermissions(requestedPermissions, targetUser.role)
           : undefined;
         if (permissions && !Object.values(permissions).some(Boolean)) {
           return { ok: false, error: 'Choose at least one permission or reset to role defaults.' };

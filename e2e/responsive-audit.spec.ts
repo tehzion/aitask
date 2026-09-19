@@ -51,12 +51,9 @@ const expectNoHorizontalOverflow = async (page: Page, context: string) => {
 
 const dismissTransientOverlays = async (page: Page) => {
   const continueButton = page.getByRole('button', { name: 'Continue for now' });
-  if (await continueButton.isVisible().catch(() => false)) await continueButton.click();
-  const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
-  if (await releaseNotice.isVisible().catch(() => false)) {
-    const close = releaseNotice.getByRole('button', { name: 'Happy working' });
-    if (await close.isVisible().catch(() => false)) await close.click();
-  }
+  await continueButton.waitFor({ state: 'visible', timeout: 1_500 }).then(() => continueButton.click()).catch(() => undefined);
+  const releaseClose = page.getByRole('button', { name: 'Happy working' });
+  await releaseClose.waitFor({ state: 'visible', timeout: 1_500 }).then(() => releaseClose.click()).catch(() => undefined);
 };
 
 const signInAs = async (page: Page, username: string) => {
@@ -96,7 +93,7 @@ test.describe('responsive role and route audit', () => {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         for (const route of role.routes) {
           await page.goto(route, { waitUntil: 'domcontentloaded' });
-          await expect(page.locator('main')).toBeVisible();
+          await expect(page.locator('main'), `${role.id} ${viewport.name}px ${route} should render a main region`).toBeVisible();
           await expectNoHorizontalOverflow(page, `${role.id} ${viewport.name}px ${route}`);
           await assertMobileNavigation(page, `${role.id} ${viewport.name}px ${route}`);
           if (viewport.width === 390 && route === '/tasks') {
@@ -138,18 +135,47 @@ test.describe('responsive role and route audit', () => {
     }
   });
 
-  test('keeps the password setup gate usable on a narrow screen', async ({ page }) => {
-    await page.setViewportSize({ width: 320, height: 700 });
-    await page.goto('/login');
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
-    await page.getByRole('button', { name: 'Use Staff Demo' }).click();
-    await page.getByLabel('Password').fill('password123');
-    await page.getByRole('button', { name: 'Access Dashboard' }).click();
-    await page.waitForURL(url => url.pathname === '/settings');
-    await expect(page.getByRole('heading', { name: 'Account Setup' })).toBeVisible();
-    await expectNoHorizontalOverflow(page, 'password setup 320px');
-    const axeResults = await new AxeBuilder({ page }).include('main').analyze();
-    expect(axeResults.violations, `password setup: ${axeResults.violations.map(item => item.id).join(', ')}`).toEqual([]);
+  test('keeps approvals Boss-only and exposes the HOD workbench copy', async ({ page }) => {
+    await signInAs(page, 'Project Manager Demo');
+    await page.goto('/approvals', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
+    await expect(page.getByText('Approvals are restricted to Boss Koo')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add Member' })).toHaveCount(0);
+
+    await signInAs(page, 'HOD Demo');
+    await page.goto('/tasks', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Department work' }).first()).toBeVisible();
+    await expect(page.getByLabel('Search visible work')).toBeVisible();
+  });
+
+  test('keeps the password setup gate usable across narrow and rotated layouts', async ({ page }) => {
+    const scenarios = [
+      { name: '320px', width: 320, height: 700, locale: 'en', theme: 'light' },
+      { name: '390px-dark-zh', width: 390, height: 844, locale: 'zh', theme: 'dark' },
+      { name: 'phone-landscape', width: 844, height: 390, locale: 'en', theme: 'dark' },
+    ] as const;
+
+    for (const scenario of scenarios) {
+      await page.setViewportSize({ width: scenario.width, height: scenario.height });
+      await page.goto('/login');
+      await page.evaluate(({ locale, theme }) => {
+        localStorage.clear();
+        localStorage.setItem('aitask:locale', locale);
+        localStorage.setItem('aitask-color-theme', theme);
+      }, scenario);
+      await page.reload();
+      await page.getByRole('button', { name: 'Use Staff Demo' }).click();
+      await page.locator('#password').fill('password123');
+      await page.getByRole('button', { name: /Access Dashboard|进入仪表板/ }).click();
+      await page.waitForURL(url => url.pathname === '/settings');
+      await expect(page.getByRole('heading', { name: /Account Setup|账号设置/ })).toBeVisible();
+      await expect(page.locator('#current-password')).toBeVisible();
+      await expect(page.locator('#new-password')).toBeVisible();
+      await expect(page.locator('#confirm-password')).toBeVisible();
+      await expect(page.locator('#current-password').locator('xpath=ancestor::form').locator('button[type="submit"]')).toBeVisible();
+      await expectNoHorizontalOverflow(page, `password setup ${scenario.name}`);
+      const axeResults = await new AxeBuilder({ page }).include('main').analyze();
+      expect(axeResults.violations, `password setup ${scenario.name}: ${axeResults.violations.map(item => item.id).join(', ')}`).toEqual([]);
+    }
   });
 });

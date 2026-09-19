@@ -1,28 +1,28 @@
-# Boss Koo, HOD and Staff audit — 18 September 2026
+# Boss Koo, Project Manager, HOD and Staff audit — 18 September 2026
 
-Audit target: working tree at commit `39088a2`, application version 2.5.1, including the permission changes already present when the audit started. No application fixes or production changes were made.
+Audit target: current working tree, application version 2.6.1, including the authorization and responsive UI changes already present when this follow-up began. Production deployment and authenticated production probes remain out of scope.
 
 ## Assessment
 
-The application has a substantial authorization foundation and passing unit coverage, but it has important mismatches between role capabilities, task screens and backend notification enforcement. Fix the P1 findings before relying on the current build for internal task confidentiality or permission revocation.
+The application has a substantial authorization foundation. This follow-up closes the task-detail visibility/action mismatch between Boss Koo, Project Manager, HOD, and Staff surfaces and the Supabase command/RLS boundary. Other findings below remain tracked separately unless explicitly marked remediated.
 
 This is a local code and browser audit, not certification of the deployed environment. Browser tests used local demo data. SQL findings trace the latest migration definitions and their command/trigger paths; authenticated production RPCs, deployed migration state, email delivery and private storage were not exercised.
 
 ## Current role contract
 
-| Capability | Boss Koo | HOD, default protected role | Staff, default |
-| --- | --- | --- | --- |
-| Identity | `isSuperAdmin` grants all permissions | Staff base role with `system-hod` custom role | Staff base role |
-| View tasks | All | Assigned tasks and tasks they created | Assigned tasks |
-| Edit tasks | All | Assigned tasks and tasks they created | Assigned tasks |
-| Delegate tasks | Yes | Their own created tasks, within their departments | No |
-| Create work | Yes | Within their departments | Self-assignment, within their departments |
-| Delete tasks | All | Same scope as editing | Assigned tasks; this is explicitly permitted by current code |
-| Users, registration and permissions | Boss-only powers | No | No |
-| Internal service prices and service administration | Yes | Not enabled by default | Not enabled by default |
-| Dashboard | Management dashboard | Simplified Staff dashboard | Simplified Staff dashboard |
+| Capability | Boss Koo | Project Manager | HOD, default role | Staff, default |
+| --- | --- | --- | --- | --- |
+| Identity | `isSuperAdmin` grants all permissions | Portfolio-scoped non-superadmin | HOD department scope | Assignment/creator scope |
+| View tasks | All | Assigned/created plus owned company/project portfolio | Assigned/created plus member departments | Assigned/created |
+| Edit tasks | All | Assigned or created only | Assigned/created plus member departments | Assigned/created |
+| Comment on task | All | Assigned or created only | Same as edit scope | Same as edit scope |
+| Delegate tasks | Yes | Own created tasks | Own created tasks | No |
+| Delete tasks | All | Same scope as editing | Same scope as editing | Same scope as editing |
+| Users, registration and permissions | Boss-only powers | No | No | No |
+| Internal service prices and service administration | Yes | As configured, never workspace-wide task access | Not enabled by default | Not enabled by default |
+| Dashboard | Management dashboard | Portfolio dashboard | Department workbench | Assigned workbench |
 
-HOD currently means **creator/assignee-scoped lead**, not automatic access to every task in a department. Individual permission overrides take precedence over custom-role permissions. Changes made by Boss Koo can alter the defaults above.
+PM portfolio-only task details are explicitly read-only. HOD department access is intentionally broader than ordinary Staff, while protected Boss Koo capabilities cannot be delegated. Individual permission overrides and explicit department-scoped custom Staff roles are resolved by the shared frontend/server contract. Changes made by Boss Koo can alter non-protected defaults above.
 
 Sources: `src/lib/access.ts`, the HOD migration, and the September member-permission migration.
 
@@ -66,7 +66,7 @@ The actual deployed cap and row counts were not checked. Supabase documents a de
 
 **Fix:** Load with stable ordering and pagination, fetch the authenticated member directly, and verify complete loading before publishing the workspace state. Add a fixture exceeding the API cap with mixed entity types.
 
-### 4. P2 — HOD permissions are not exposed by the task workspace
+### 4. P2 — HOD permissions were not exposed by the task workspace — remediated
 
 **Roles:** HOD; Staff for attachment editing.
 
@@ -76,9 +76,9 @@ Every Staff-base user is routed to `StaffAllWork` and `StaffTaskFocus`. This inc
 
 **References:** [Staff route branch](/Users/user/Downloads/aitask-master/src/pages/Tasks.tsx:1235), [focus panel](/Users/user/Downloads/aitask-master/src/components/StaffTaskFocus.tsx:94), [existing editing UI](/Users/user/Downloads/aitask-master/src/components/TaskDetailsModal.tsx:198).
 
-**Fix:** Add capability-based actions to the shared task panel. Give HOD a delegated-work view with assignee, due date and review controls. Let assigned Staff update deliverable links without requiring a manager to do it.
+**Resolution:** The shared task focus now derives actions from the task-access resolver, exposes HOD department work and full-edit controls where allowed, keeps reassignment limited to HOD-created work, and allows assigned Staff to use permitted detail/attachment actions. Coverage is included in the task-detail role matrix.
 
-### 5. P2 — Read-only Staff receive editing controls and can lose a typed comment
+### 5. P2 — Read-only Staff receive editing controls and can lose a typed comment — remediated
 
 **Roles:** Staff/HOD granted View all tasks, inspecting an unrelated task.
 
@@ -88,7 +88,7 @@ The focus panel disables controls for backend activity but never checks `canEdit
 
 **References:** [status controls](/Users/user/Downloads/aitask-master/src/components/StaffTaskFocus.tsx:102), [comment submission](/Users/user/Downloads/aitask-master/src/components/StaffTaskFocus.tsx:82), [comment authorization](/Users/user/Downloads/aitask-master/src/store/index.ts:3942).
 
-**Fix:** Gate each action by its capability, return explicit mutation results, and retain the draft on authorization or sync failure. Display a clear read-only state.
+**Resolution:** `StaffTaskFocus` and `TaskDetailsModal` now hide unauthorized actions, return explicit comment mutation results, retain drafts after rejected/sync-failed saves, and fail closed when a task is no longer visible.
 
 ### 6. P2 — Cancelled tasks count as open and overdue in the client tracker
 
@@ -147,7 +147,7 @@ The report heading and description promise the latest four weeks. The trend uses
 
 ## Verification and coverage
 
-- Unit tests: **228 passed across 36 files**.
+- Unit tests: **259 passed across 39 files**.
 - TypeScript check and ESLint: **passed**.
 - Production Vite/PWA build: **passed**, with the existing large-chunk warning (main bundle approximately 507 kB minified).
 - First browser batch: **6 passed, 3 failed**. The three failures were Staff visual snapshot mismatches. The inspected desktop diff is around queue-tab rendering; do not treat this as an authorization failure or silently replace the baselines.
@@ -155,7 +155,7 @@ The report heading and description promise the latest four weeks. The trend uses
 - Two temporary audit reproduction tests: **2 passed**, confirming HOD action absence, silent read-only comment loss, internal-task notification generation and reminder-flag retention. The initial HOD probe required a fixture correction to avoid a full-page reload resetting the synthetic role; the corrected run passed.
 - Additional service/accessibility browser checks: **9 passed**, covering keyboard/theme accessibility, service plans and role workbenches, company/project creation, demo file and price isolation, per-account release notices, and service catalog/template creation and deletion guards. Screenshot comparisons were disabled for this batch.
 - Across these runs, **18 existing browser scenarios passed functionally**, plus **2 focused audit probes**. The three initial visual comparison failures remain unresolved; no screenshot baselines were updated. Temporary probe files were removed after recording their results because they deliberately asserted the observed buggy behavior.
-- Runtime: Node 24.19.0; project declares Node 22 and pnpm 10.4.1. The available pnpm 11.19.0 rejected engine constraints, so installed tool entry points were invoked directly. CI should rerun under the pinned runtime.
-- SQL tests were reviewed but not executed against a local or deployed Supabase database. No production accounts, client records, emails or files were changed.
+- Runtime: Node 22.23.2 with pnpm 10.4.1 is now configured as the default fresh-login toolchain; Supabase CLI 2.117.0 and JS 2.116.0 are installed and verified. No production accounts, client records, emails or files were changed.
+- Subsequent local Supabase verification passes **24 database test files/375 tests**, with no lint or advisor findings. Authenticated production probes remain deployment-gated.
 
 The audit covered routing/login setup, effective permissions, Boss account/registration management, task creation/edit/status/comment/delete paths, HOD ownership, calendar dates, companies/client tracker, service workspaces and files, reports, notifications, settings, synchronization and relevant SQL/Edge Function enforcement. This does not imply every UI permutation or production integration was exercised.

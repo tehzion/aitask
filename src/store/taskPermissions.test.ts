@@ -74,15 +74,15 @@ describe('task store authorization', () => {
     useStore.setState(initialState, true);
   });
 
-  it('allows assigned work and rejects unrelated work by default', () => {
+  it('allows assigned or created work and rejects unrelated work by default', () => {
     expect(useStore.getState().updateTask(ownTask.id, { priority: 'High' }).ok).toBe(true);
     expect(useStore.getState().updateTask(unrelatedTask.id, { priority: 'High' })).toEqual({
       ok: false,
       error: 'You do not have permission to edit this task.',
     });
     expect(useStore.getState().tasks.find(task => task.id === unrelatedTask.id)?.priority).toBe('Medium');
-    expect(useStore.getState().updateTask(creatorOnlyTask.id, { priority: 'High' }).ok).toBe(false);
-    expect(useStore.getState().deleteTask(creatorOnlyTask.id).ok).toBe(false);
+    expect(useStore.getState().updateTask(creatorOnlyTask.id, { priority: 'High' }).ok).toBe(true);
+    expect(useStore.getState().deleteTask(creatorOnlyTask.id).ok).toBe(true);
   });
 
   it('keeps task ownership immutable for ordinary Staff mutations', () => {

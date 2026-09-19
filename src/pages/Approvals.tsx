@@ -4,11 +4,12 @@ import { useShallow } from 'zustand/react/shallow';
 import { CheckCircle2, XCircle, UserPlus, Users, Trash2, AlertTriangle, ShieldCheck, Save, Pencil } from 'lucide-react';
 import { Department, Role, Registration, RolePermissionKey, RolePermissions, User } from '../types';
 import { format } from 'date-fns';
+import { Link } from 'react-router-dom';
 import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { useI18n } from '../components/I18nProvider';
-import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, isBossKoo, permissionGroups, permissionLabels, BUILTIN_HOD_ROLE_ID } from '../lib/access';
+import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, hodRestrictedPermissionKeys, isBossKoo, nonSuperAdminOnlyPermissionKeys, permissionGroups, permissionLabels, BUILTIN_HOD_ROLE_ID } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
@@ -742,6 +743,27 @@ const Approvals: React.FC = () => {
     setUserToDelete(null);
   };
 
+  if (!superAdmin) {
+    return (
+      <div className={pageShell}>
+        <PageHeader
+          title="Approvals — Boss Koo only"
+          description="Registration approvals, member administration, and role management are restricted to the Boss Koo account."
+        />
+        <section className="mt-6 rounded-panel border border-amber-200 bg-amber-50 p-6 text-amber-950" role="alert" aria-labelledby="approvals-access-denied-title">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+            <div>
+              <h2 id="approvals-access-denied-title" className="font-semibold">Access denied</h2>
+              <p className="mt-1 text-sm leading-6">Only Boss Koo can review registrations, change member roles, or edit role permissions.</p>
+              <Link to="/tasks" className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">Return to work</Link>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className={pageShell}>
       <PageHeader
@@ -964,7 +986,7 @@ const Approvals: React.FC = () => {
           <ShieldCheck className="w-5 h-5 text-blue-600" />
           <div>
             <h2 className="text-lg font-semibold text-slate-800">Roles & Permissions</h2>
-            <p className="text-sm text-slate-500">Manage safe Staff and HOD access. Boss Koo account powers stay permanently protected.</p>
+            <p className="text-sm text-slate-500">Manage Project Manager, HOD, Staff, and Client access. Boss Koo powers and HOD scope stay protected.</p>
           </div>
         </div>
 
@@ -1032,15 +1054,23 @@ const Approvals: React.FC = () => {
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{group.title}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {group.keys.map(key => (
-                      <label key={key} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                      (() => {
+                        const protectedPermission = nonSuperAdminOnlyPermissionKeys.includes(key)
+                          || (roleForm.baseRole === 'HOD' && hodRestrictedPermissionKeys.includes(key));
+                        return (
+                      <label key={key} className={cn('flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700', protectedPermission && 'cursor-not-allowed bg-slate-50 text-slate-400')}>
                         <input
                           type="checkbox"
                           checked={roleForm.permissions[key]}
                           onChange={() => togglePermission(key)}
+                          disabled={protectedPermission}
                           className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                         />
-                        {permissionLabels[key]}
+                        <span>{permissionLabels[key]}</span>
+                        {protectedPermission && <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-slate-400">Protected</span>}
                       </label>
+                        );
+                      })()
                     ))}
                   </div>
                 </div>

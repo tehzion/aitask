@@ -343,13 +343,16 @@ const TasksWorkspace: React.FC = () => {
   const activeClientFallbackDetails = activeClientTasks.find(task => task.customerDetails)?.customerDetails;
   const activeClientWebsite = safeHttpsUrl(activeClientProfile?.website || activeClientTasks.find(task => task.website)?.website);
   const activeClientFacebook = safeHttpsUrl(activeClientProfile?.facebookPage || activeClientTasks.find(task => task.facebookPage)?.facebookPage);
-  const selectedLiveTask = allTasks.find(t => t.id === selectedTask?.id) || null;
-  const activeQuickTask = activeQuickEdit ? allTasks.find(t => t.id === activeQuickEdit.taskId) : undefined;
+  const selectedLiveTask = tasks.find(t => t.id === selectedTask?.id) || null;
+  const activeQuickTask = activeQuickEdit ? tasks.find(t => t.id === activeQuickEdit.taskId) : undefined;
 
   useEffect(() => {
     if (!taskIdFilter) return;
     const routedTask = tasks.find(task => task.id === taskIdFilter);
-    if (!routedTask) return;
+    if (!routedTask) {
+      setSelectedTask(null);
+      return;
+    }
     setSelectedTask(current => current?.id === routedTask.id ? current : routedTask);
   }, [taskIdFilter, tasks]);
 
@@ -1159,7 +1162,7 @@ const TasksWorkspace: React.FC = () => {
 
       {/* Quick Edit Popover */}
       {activeQuickEdit && (() => {
-        const currentTask = allTasks.find(t => t.id === activeQuickEdit.taskId);
+        const currentTask = tasks.find(t => t.id === activeQuickEdit.taskId);
         if (!currentTask) return null;
 
         return (

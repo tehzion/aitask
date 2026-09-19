@@ -351,8 +351,8 @@ as $$
 declare
   actor public.aitask_members%rowtype;
   member_row public.aitask_members%rowtype;
-  departments text[];
-  custom_role_name text;
+  v_departments text[];
+  v_custom_role_name text;
   workspace_version bigint;
   response jsonb;
 begin
@@ -382,7 +382,7 @@ begin
   end if;
 
   begin
-    departments := private.aitask_normalize_member_departments(p_role, case when p_role = 'Client' then array['Client'] else p_departments end);
+    v_departments := private.aitask_normalize_member_departments(p_role, case when p_role = 'Client' then array['Client'] else p_departments end);
   exception when check_violation then
     return jsonb_build_object('ok', false, 'code', 'VALIDATION', 'error', sqlerrm);
   end;
@@ -391,9 +391,9 @@ begin
     return jsonb_build_object('ok', false, 'code', 'VALIDATION', 'error', 'Choose a company for this client account.');
   end if;
 
-  custom_role_name := null;
+  v_custom_role_name := null;
   if p_custom_role_id is not null and p_role <> 'Client' then
-    select entity.data ->> 'name' into custom_role_name
+    select entity.data ->> 'name' into v_custom_role_name
     from public.aitask_entities entity
     where entity.workspace_id = p_workspace_id
       and entity.entity_type = 'custom_role'
@@ -401,16 +401,16 @@ begin
       and entity.data ->> 'baseRole' = p_role
       and coalesce((entity.data ->> 'isBuiltin')::boolean, false) = false
     limit 1;
-    if custom_role_name is null then return jsonb_build_object('ok', false, 'code', 'VALIDATION', 'error', 'This role can only be assigned to a matching editable custom role.'); end if;
+    if v_custom_role_name is null then return jsonb_build_object('ok', false, 'code', 'VALIDATION', 'error', 'This role can only be assigned to a matching editable custom role.'); end if;
   end if;
 
   update public.aitask_members
   set role = p_role,
-      department = case when p_role = 'Project Manager' then 'Management' when p_role = 'Client' then 'Client' else departments[1] end,
-      departments = departments,
+      department = case when p_role = 'Project Manager' then 'Management' when p_role = 'Client' then 'Client' else v_departments[1] end,
+      departments = v_departments,
       client_name = case when p_role = 'Client' then btrim(p_client_name) else null end,
       custom_role_id = case when p_role = 'Client' then null else nullif(btrim(coalesce(p_custom_role_id, '')), '') end,
-      custom_role_name = case when p_role = 'Client' then null else custom_role_name end,
+      custom_role_name = case when p_role = 'Client' then null else v_custom_role_name end,
       permissions = '{}'::jsonb,
       version = version + 1,
       updated_at = now()
