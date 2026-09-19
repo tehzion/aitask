@@ -182,7 +182,7 @@ const Calendar: React.FC = () => {
     });
   }
 
-  const getUserName = (id: string) => users.find(user => user.id === id)?.name || 'Unknown';
+  const getUserName = (id: string) => users.find(user => user.id === id)?.name || 'Unassigned';
   const getTasksForDay = (day: Date) => {
     const calendarDay = parseISO(format(day, 'yyyy-MM-dd'));
     return tasks.filter(task => {
@@ -1011,7 +1011,11 @@ const Calendar: React.FC = () => {
                           >
                             {task.title}
                           </Link>
-                          <p data-i18n-skip className="mt-0.5 truncate text-[10px] text-slate-400">{isClientUser ? task.serviceType : task.clientName}</p>
+                          <p data-i18n-skip className="mt-0.5 truncate text-[10px] text-slate-400">
+                            {isClientUser
+                              ? task.serviceType
+                              : [task.clientName, task.projectName].filter(Boolean).join(' · ')}
+                          </p>
                         </div>
                         {!isClientUser && (
                         <Badge tone={task.isCompleted ? 'emerald' : task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : 'slate'}>
@@ -1050,7 +1054,7 @@ const Calendar: React.FC = () => {
                             <CalendarRange className="h-4 w-4 shrink-0 text-blue-600" />
                           )}
                           <span className="min-w-0 flex-1">
-                            <span className="block text-[10px] font-medium text-slate-500">Start and due</span>
+                            <span className="block text-[10px] font-medium text-slate-500">Schedule</span>
                             <span className="block truncate text-xs font-semibold text-slate-700">{taskDateLabel(task)}</span>
                           </span>
                           <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
@@ -1059,21 +1063,23 @@ const Calendar: React.FC = () => {
                         <div className="mt-3 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
                           <CalendarRange className="h-4 w-4 shrink-0 text-slate-400" />
                           <span className="min-w-0">
-                            <span className="block text-[10px] font-medium text-slate-500">Start and due</span>
+                            <span className="block text-[10px] font-medium text-slate-500">Schedule</span>
                             <span className="block truncate text-xs font-semibold text-slate-700">{taskDateLabel(task)}</span>
                           </span>
                         </div>
                       )}
 
-                      <p
-                        className={clsx(
-                          'mt-2 flex items-center gap-1 text-[10px] font-medium',
-                          isOverdue ? 'font-bold text-red-700' : 'text-slate-500',
-                        )}
-                      >
-                        <Clock className="h-3 w-3" />
-                        {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
-                      </p>
+                      {dueDate && (
+                        <p
+                          className={clsx(
+                            'mt-2 flex items-center gap-1 text-[10px] font-medium',
+                            isOverdue ? 'font-bold text-red-700' : 'text-slate-500',
+                          )}
+                        >
+                          <Clock className="h-3 w-3" />
+                          {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
+                        </p>
+                      )}
                     </article>
                   );
                 })
