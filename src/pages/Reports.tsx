@@ -165,7 +165,7 @@ const Reports: React.FC = () => {
             ) : (
               <div aria-hidden="true" className="h-full w-full">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
-                  <LineChart data={trendData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <LineChart accessibilityLayer={false} data={trendData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 11 }} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: chartColors.tick }} allowDecimals={false} />
@@ -187,7 +187,7 @@ const Reports: React.FC = () => {
               <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
                 {t('View weekly data table')}
               </summary>
-              <div className="mt-3 overflow-x-auto">
+              <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label={t('Weekly due-work data')}>
                 <table className="min-w-[680px] w-full text-left text-sm">
                   <caption className="sr-only">{t('Weekly due-work data')}</caption>
                   <thead className="text-xs uppercase tracking-wide text-muted">
@@ -230,7 +230,7 @@ const Reports: React.FC = () => {
               ) : (
                 <div aria-hidden="true" className="h-full w-full">
                   <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
-                    <BarChart data={departmentStats} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                    <BarChart accessibilityLayer={false} data={departmentStats} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartColors.grid} />
                       <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick }} allowDecimals={false} />
                       <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} width={100} />
@@ -252,7 +252,7 @@ const Reports: React.FC = () => {
                 <summary className="flex min-h-11 cursor-pointer items-center text-sm font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">
                   {t('View department data table')}
                 </summary>
-                <div className="mt-3 overflow-x-auto">
+                <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label={t('Department performance data')}>
                   <table className="min-w-[680px] w-full text-left text-sm">
                     <caption className="sr-only">{t('Department performance data')}</caption>
                     <thead className="text-xs uppercase tracking-wide text-muted">
