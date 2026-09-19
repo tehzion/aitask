@@ -123,7 +123,7 @@ const Projects: React.FC = () => {
 
               <div className="min-w-0">
                 <ProgressBar value={stats.completed} max={Math.max(stats.total, 1)} label="Task progress" />
-                <p className="mt-2 text-xs text-muted"><span className="calm-number font-semibold text-ink">{stats.completed}</span> of {stats.total} complete · {stats.pending} open</p>
+                <p className="mt-2 text-xs text-muted"><span className="calm-number font-semibold text-ink">{stats.completed}/{stats.total}</span> {t('complete')} · {stats.pending} {t('open')}</p>
               </div>
 
               {!isClientUser && (

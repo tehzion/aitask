@@ -600,10 +600,10 @@ const Calendar: React.FC = () => {
       case 'Editor':
       case 'Video Editor': return 'bg-blue-400';
       case 'Videoshooting':
-      case 'Video Shooting': return 'bg-violet-400';
+      case 'Video Shooting': return 'bg-accent';
       case 'Ads Management': return 'bg-amber-400';
       case 'Account & Finance': return 'bg-emerald-400';
-      case 'Management': return 'bg-indigo-400';
+      case 'Management': return 'bg-accent';
       case 'Operation': return 'bg-slate-400';
       default: return 'bg-slate-400';
     }
@@ -615,10 +615,10 @@ const Calendar: React.FC = () => {
       case 'Editor':
       case 'Video Editor': return 'bg-blue-50 text-blue-700';
       case 'Videoshooting':
-      case 'Video Shooting': return 'bg-violet-50 text-violet-700';
+      case 'Video Shooting': return 'bg-accent-soft text-accent';
       case 'Ads Management': return 'bg-amber-50 text-amber-700';
       case 'Account & Finance': return 'bg-emerald-50 text-emerald-700';
-      case 'Management': return 'bg-indigo-50 text-indigo-700';
+      case 'Management': return 'bg-accent-soft text-accent';
       case 'Operation': return 'bg-slate-100 text-slate-700';
       default: return 'bg-slate-100 text-slate-700';
     }

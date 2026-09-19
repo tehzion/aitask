@@ -98,7 +98,7 @@ const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
       <header className="flex shrink-0 items-start justify-between gap-4 border-b border-line/80 bg-inset/50 px-4 py-4 sm:px-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink">Registration review</p>
+            <p className="text-xs font-semibold tracking-wide text-ink">Registration review</p>
             <Badge tone="amber">Pending</Badge>
             {waitingDays >= 7 && <Badge tone="red">{waitingDays}d waiting</Badge>}
           </div>
@@ -1131,7 +1131,7 @@ const Approvals: React.FC = () => {
             </span>
             <div className="min-w-0">
               <h2 className="text-base font-semibold text-ink sm:text-lg">Pending registrations</h2>
-              <p className="mt-0.5 text-xs text-muted">{pendingRegs.length} awaiting review</p>
+              <p className="mt-0.5 text-xs text-muted">{pendingRegs.length} {t('awaiting review')}</p>
             </div>
           </div>
           {superAdmin && filteredPendingRegs.length > 0 && (
@@ -1246,7 +1246,7 @@ const Approvals: React.FC = () => {
                     {days >= 7 && (
                       <span className="rounded-md bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">{days}d</span>
                     )}
-                    <span className="inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
+                    <span className="inline-flex px-2 py-1 rounded-md text-xs font-bold tracking-wide bg-accent-soft text-accent">
                       {reg.requestedRole || 'Staff'}
                     </span>
                   </div>
@@ -1284,7 +1284,7 @@ const Approvals: React.FC = () => {
           <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-inset/70 text-xs uppercase tracking-wider text-muted">
+                <tr className="bg-inset/70 text-xs tracking-wide text-muted">
                   <th className="w-10 border-b border-line px-4 py-4">
                     <span className="sr-only">Select</span>
                   </th>
@@ -1338,7 +1338,7 @@ const Approvals: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
+                        <span className="inline-flex px-2 py-1 rounded-md text-xs font-bold tracking-wide bg-accent-soft text-accent">
                           {reg.requestedRole || 'Staff'}
                         </span>
                         <span className="text-sm font-medium text-slate-600">
@@ -1486,7 +1486,7 @@ const Approvals: React.FC = () => {
               )}
               {permissionGroups.map(group => (
                 <div key={group.title}>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{group.title}</p>
+                  <p className="text-xs font-semibold tracking-wide text-slate-400 mb-2">{group.title}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {group.keys.map(key => (
                       (() => {
@@ -1502,7 +1502,7 @@ const Approvals: React.FC = () => {
                           className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                         />
                         <span>{permissionLabels[key]}</span>
-                        {protectedPermission && <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-slate-400">Protected</span>}
+                        {protectedPermission && <span className="ml-auto text-[10px] font-semibold tracking-wide text-slate-400">Protected</span>}
                       </label>
                         );
                       })()
@@ -1533,7 +1533,7 @@ const Approvals: React.FC = () => {
 
           <div className="p-6 space-y-3">
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Default roles</p>
+              <p className="mb-2 text-xs font-semibold tracking-wide text-slate-400">Default roles</p>
               <div className="space-y-2">
                 {([['Project Manager', defaultRolePermissions['Project Manager'], 'Portfolio-scoped operational access. Account and role administration stays with Boss Koo.'],
                   ['HOD', rolePermissions.find(role => role.isBuiltin && role.baseRole === 'HOD')?.permissions || defaultRolePermissions.HOD, 'Editable department lead role. Sees and edits work in their own departments.'],
@@ -1555,7 +1555,7 @@ const Approvals: React.FC = () => {
                 ))}
               </div>
             </div>
-            <p className="pt-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Custom roles</p>
+            <p className="pt-2 text-xs font-semibold tracking-wide text-slate-400">Custom roles</p>
             {rolePermissions.length === 0 ? (
               <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
                 No custom roles yet. Create one to assign it to team members.
@@ -1629,7 +1629,7 @@ const Approvals: React.FC = () => {
               </div>
               <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-inset/70 text-xs uppercase tracking-wider text-muted">
+                  <thead className="bg-inset/70 text-xs tracking-wide text-muted">
                     <tr><th className="px-5 py-3 font-semibold">Applicant</th><th className="px-5 py-3 font-semibold">Requested access</th><th className="px-5 py-3 font-semibold">Decision</th><th className="px-5 py-3 font-semibold">Date</th></tr>
                   </thead>
                   <tbody className="divide-y divide-line/70">
@@ -1773,7 +1773,7 @@ const Approvals: React.FC = () => {
         <div className="hidden overflow-x-auto sm:block">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+              <tr className="bg-inset text-muted text-xs tracking-wide">
                 <th className="px-6 py-4 font-semibold border-b border-slate-200">User</th>
                 <th className="px-6 py-4 font-semibold border-b border-slate-200">Role & Departments</th>
                 <th className="px-6 py-4 font-semibold border-b border-slate-200">Custom Role</th>
@@ -1798,8 +1798,8 @@ const Approvals: React.FC = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`inline-flex px-2 py-1 rounded-md text-xs font-bold uppercase tracking-wider ${
-                        u.role === 'Project Manager' ? 'bg-purple-100 text-purple-700' :
+                      <span className={`inline-flex px-2 py-1 rounded-md text-xs font-bold tracking-wide ${
+                        u.role === 'Project Manager' ? 'bg-accent-soft text-accent' :
                         u.role === 'Client' ? 'bg-amber-100 text-amber-700' :
                         'bg-blue-100 text-blue-700'
                       }`}>
@@ -1899,7 +1899,7 @@ const Approvals: React.FC = () => {
                           type="button"
                           onClick={() => handleEditPermissions(u.id)}
                           disabled={isActionSaving}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-control text-slate-500 transition-colors hover:bg-accent-soft hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
                           title="Manage permissions"
                           aria-label={`Manage permissions for ${u.name}`}
                         >
@@ -2012,7 +2012,7 @@ const Approvals: React.FC = () => {
               </button>
             </div>
 
-            <section aria-labelledby="effective-access-preview" className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4">
+            <section aria-labelledby="effective-access-preview" className="rounded-panel border border-accent/20 bg-accent-soft/50 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 id="effective-access-preview" className="text-sm font-semibold text-slate-900">Effective access preview</h3>
@@ -2024,13 +2024,13 @@ const Approvals: React.FC = () => {
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">Added</p>
+                  <p className="text-[11px] font-semibold tracking-wide text-emerald-700">Added</p>
                   <p className="mt-1 text-xs leading-5 text-slate-600">
                     {addedMemberPermissions.length > 0 ? addedMemberPermissions.map(key => permissionLabels[key]).join(', ') : 'No additions'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-red-700">Removed</p>
+                  <p className="text-[11px] font-semibold tracking-wide text-red-700">Removed</p>
                   <p className="mt-1 text-xs leading-5 text-slate-600">
                     {removedMemberPermissions.length > 0 ? removedMemberPermissions.map(key => permissionLabels[key]).join(', ') : 'No removals'}
                   </p>
@@ -2042,7 +2042,7 @@ const Approvals: React.FC = () => {
               <legend className="sr-only">Member permissions</legend>
               {permissionGroups.map(group => (
                 <div key={group.title}>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">{group.title}</p>
+                  <p className="mb-2 text-xs font-semibold tracking-wide text-slate-400">{group.title}</p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {group.keys.map(key => (
                       <label key={key} className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">

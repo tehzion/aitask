@@ -13,7 +13,7 @@ import { getVisibleTasks } from '../lib/access';
 import { formatLocalizedDate } from '../lib/i18n';
 import { cn, parseOptionalDate } from '../lib/utils';
 import { useStore } from '../store';
-import { Button, EmptyState, PageHeader, StatusChip } from './ui';
+import { Button, EmptyState, FilterToken, PageHeader, StatusChip } from './ui';
 import { inputBase, pageShell } from './uiTokens';
 import SideSheet from './SideSheet';
 import ClientDeliveryFocus from './ClientDeliveryFocus';
@@ -129,7 +129,7 @@ const ClientDeliveries = () => {
             <Filter className="h-4 w-4" />Filters{activeFilterCount > 0 && <span className="calm-number rounded-tag bg-accent-soft px-1.5 py-0.5 text-xs text-accent">{activeFilterCount}</span>}
           </Button>
         </div>
-        {activeFilterCount > 0 && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className="text-muted">Showing:</span>{stageFilter !== 'all' && <StatusChip tone={stageTone[stageFilter]}>{CLIENT_DELIVERY_STAGE_LABELS[stageFilter]}</StatusChip>}{serviceFilter !== 'All' && <StatusChip>{serviceFilter}</StatusChip>}{dateFilter !== 'any' && <StatusChip>{dateFilter === 'next_7' ? 'Next 7 days' : dateFilter === 'this_month' ? 'This month' : 'No date'}</StatusChip>}<button type="button" onClick={clearFilters} className="min-h-11 px-2 font-semibold text-accent">Clear filters</button></div>}
+        {activeFilterCount > 0 && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className="text-muted">Showing:</span>{stageFilter !== 'all' && <FilterToken>{CLIENT_DELIVERY_STAGE_LABELS[stageFilter]}</FilterToken>}{serviceFilter !== 'All' && <FilterToken>{serviceFilter}</FilterToken>}{dateFilter !== 'any' && <FilterToken>{dateFilter === 'next_7' ? 'Next 7 days' : dateFilter === 'this_month' ? 'This month' : 'No date'}</FilterToken>}<button type="button" onClick={clearFilters} className="min-h-11 px-2 font-semibold text-accent">Clear filters</button></div>}
       </section>
 
       {visibleStages.length > 0 ? (

@@ -147,7 +147,7 @@ const TasksWorkspace: React.FC = () => {
 
   const getDeptBadge = (dept: string) => {
     switch (dept) {
-      case 'Designer':          return 'bg-violet-50 text-violet-700 border border-violet-100';
+      case 'Designer':          return 'bg-accent-soft text-accent border border-accent/20';
       case 'Editor':
       case 'Video Editor':      return 'bg-sky-50 text-sky-700 border border-sky-100';
       case 'Videoshooting':
@@ -820,7 +820,7 @@ const TasksWorkspace: React.FC = () => {
           <>
             <div className="hidden overflow-x-auto 2xl:block">
 	              <table className={cn('w-full text-left text-sm text-slate-500', isClientUser ? 'min-w-[820px]' : 'min-w-[1020px]')}>
-                <thead className="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
+                <thead className="text-xs text-slate-700 bg-slate-50 border-b border-slate-200">
                   <tr>
                     <th className="px-3 py-3 font-semibold">Task Details</th>
 	                    {!isClientUser && <th className="px-3 py-3 font-semibold">Client / Company</th>}
@@ -1199,7 +1199,7 @@ const TasksWorkspace: React.FC = () => {
 
               {/* Status */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Status</label>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1">Status</label>
                 <div className="relative">
                   <select
                     className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white appearance-none cursor-pointer")}
@@ -1220,7 +1220,7 @@ const TasksWorkspace: React.FC = () => {
 
               {/* Priority */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Priority</label>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1">Priority</label>
                 <div className="relative">
                   <select
                     className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white appearance-none cursor-pointer")}
@@ -1241,7 +1241,7 @@ const TasksWorkspace: React.FC = () => {
 
               {/* Assignee */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Assignee</label>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1">Assignee</label>
                 <div className="relative">
                   <select
                     className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white disabled:bg-slate-50 disabled:text-slate-400 appearance-none cursor-pointer")}

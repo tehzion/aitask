@@ -30,8 +30,8 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   test.setTimeout(90_000);
   await openStaffWorkspace(page);
 
-  await expect(page.getByText('Your next move')).toBeVisible();
-  await expect(page.getByRole('button', { name: /Open task/ })).toBeVisible();
+  await expect(page.getByText('Next due')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Open work/ })).toBeVisible();
   await expect(page.getByText('Workspace analytics')).toHaveCount(0);
   await expect(page.locator('main').getByRole('button', { name: 'Create Task' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'My work' })).toBeVisible();
@@ -54,6 +54,13 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   await expect(page.getByLabel('Filter by assignee')).toHaveCount(0);
   await expect(page.locator('main').getByRole('button', { name: 'Table', exact: true })).toHaveCount(0);
   await expect(page.locator('main').getByRole('button', { name: 'Board', exact: true })).toHaveCount(0);
+  const workSearch = page.getByRole('searchbox', { name: 'Search visible work' });
+  await workSearch.fill('Video');
+  await expect(page).toHaveURL(/\/tasks\?search=Video$/);
+  await expect(page.getByText('6. Video Editing', { exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Clear search' }).click();
+  await expect(workSearch).toHaveValue('');
+  await expect(page).toHaveURL(/\/tasks$/);
   if (hasCommittedVisualBaseline) {
     await expect(page).toHaveScreenshot('staff-v2-all-work-desktop-light.png', screenshotOptions(page));
   }
@@ -76,7 +83,7 @@ test('staff mobile keeps focus, task actions and secondary creation reachable', 
   await page.setViewportSize({ width: 390, height: 844 });
   await openStaffWorkspace(page);
 
-  const openTask = page.getByRole('button', { name: /Open task/ });
+  const openTask = page.getByRole('button', { name: /Open work/ });
   const openTaskBox = await openTask.boundingBox();
   expect(openTaskBox && openTaskBox.y + openTaskBox.height).toBeLessThan(780);
   if (hasCommittedVisualBaseline) {

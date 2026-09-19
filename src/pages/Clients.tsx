@@ -3,9 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
   Building2,
-  CheckSquare,
   ExternalLink,
-  FileText,
   Mail,
   MapPin,
   MoreHorizontal,
@@ -16,11 +14,10 @@ import {
   Save,
   Trash2,
   UserRound,
-  Users,
   X,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
-import { Badge, Button, PageHeader, ProgressBar, StatGroup, StatusChip } from '../components/ui';
+import { Badge, Button, PageHeader, ProgressBar, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
 import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
@@ -543,12 +540,12 @@ const Clients: React.FC = () => {
         </div>}
       />
 
-      <StatGroup className="grid-cols-2 lg:grid-cols-4" aria-label="Client summary">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-line/70 py-3 text-sm" aria-label="Client summary">
         {(isClientUser
-          ? [{ label: t('Company'), value: clients.length, icon: Building2 }, { label: t('Saved profile'), value: savedProfiles, icon: FileText }, { label: t('Open tasks'), value: openTasks, icon: CheckSquare }, { label: t('Team accounts'), value: linkedAccounts, icon: Users }]
-          : [{ label: t('Companies'), value: clients.length, icon: Building2 }, { label: t('Saved profiles'), value: savedProfiles, icon: FileText }, { label: t('Open tasks'), value: openTasks, icon: CheckSquare }, { label: t('Client accounts'), value: linkedAccounts, icon: Users }]
-        ).map(({ label, value, icon: Icon }) => <div key={label} className="flex min-h-28 items-center justify-between gap-4 p-4 sm:p-5"><div><p className="text-xs font-medium text-muted">{label}</p><p className="calm-number mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">{value}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-control bg-accent-soft text-accent"><Icon className="h-4 w-4" /></span></div>)}
-      </StatGroup>
+          ? [[t('Company'), clients.length], [t('Saved profile'), savedProfiles], [t('Open tasks'), openTasks], [t('Team accounts'), linkedAccounts]]
+          : [[t('Companies'), clients.length], [t('Saved profiles'), savedProfiles], [t('Open tasks'), openTasks], [t('Client accounts'), linkedAccounts]]
+        ).map(([label, value]) => <span key={String(label)} className="inline-flex items-baseline gap-1.5"><strong className="calm-number text-base text-ink">{value}</strong><span className="text-muted">{label}</span></span>)}
+      </div>
 
       <div className={tableShell}>
         <div className="flex flex-col gap-3 border-b border-line bg-inset/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
@@ -636,7 +633,7 @@ const Clients: React.FC = () => {
                     </td>
                     <td className="px-5 py-6 align-top">
                       <div className="font-semibold text-ink">{client.taskCount} total</div>
-                      <p className="mt-1 text-xs text-slate-500">{client.openTaskCount} open, {client.completedTaskCount} completed</p>
+                      <p className="mt-1 text-xs text-slate-500">{client.openTaskCount} {t('open')}, {client.completedTaskCount} {t('completed')}</p>
                       <p className="mt-1 text-xs text-slate-500">{client.projectIds.size} company record{client.projectIds.size === 1 ? '' : 's'}</p>
                       {serviceContext?.cycle && <ProgressBar className="mt-3 w-40" label="Cycle delivered" value={serviceContext.delivered} max={Math.max(1, serviceContext.included)} />}
                     </td>

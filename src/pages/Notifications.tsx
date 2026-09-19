@@ -54,7 +54,7 @@ const categoryIcon = (category: NotificationCategory) => {
 const categoryTone: Record<NotificationCategory, string> = {
   assignment: 'bg-blue-50 text-blue-700',
   deadline: 'bg-amber-50 text-amber-700',
-  review: 'bg-violet-50 text-violet-700',
+  review: 'bg-accent-soft text-accent',
   feedback: 'bg-cyan-50 text-cyan-700',
   account: 'bg-slate-100 text-slate-700',
   status: 'bg-emerald-50 text-emerald-700',
@@ -318,7 +318,7 @@ const Notifications: React.FC = () => {
               sections[section].length > 0 && (
                 <section key={section} aria-labelledby={`notification-section-${section.toLowerCase()}`}>
                   <div className="border-b border-slate-200 bg-slate-50 px-4 py-2.5 sm:px-5">
-                    <h2 id={`notification-section-${section.toLowerCase()}`} className="text-xs font-semibold uppercase text-slate-500">{section}</h2>
+                    <h2 id={`notification-section-${section.toLowerCase()}`} className="text-xs font-semibold text-slate-500">{section}</h2>
                   </div>
                   {sections[section].map(group => {
                     const Icon = categoryIcon(group.category);
@@ -329,7 +329,7 @@ const Notifications: React.FC = () => {
                       <article key={`${group.id}:${group.latest.id}`} className={cn('relative border-b border-slate-100 last:border-b-0', !allRead && 'bg-blue-50/30')}>
                         {!allRead && <span className="absolute inset-y-0 left-0 w-1 bg-blue-600" />}
                         <div className="flex flex-col gap-3 px-4 py-4 sm:px-5 lg:flex-row lg:items-start">
-                          <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', categoryTone[group.category])}>
+                          <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-control', categoryTone[group.category])}>
                             <Icon className="h-5 w-5" />
                           </div>
                           <div className="min-w-0 flex-1">

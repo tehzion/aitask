@@ -1,16 +1,13 @@
 import React from 'react';
 import {
-  AlertTriangle,
   CalendarDays,
-  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
-  ListChecks,
-  PackageCheck,
   Plus,
   Search,
+  X,
   UsersRound,
 } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
@@ -27,7 +24,7 @@ import {
   type DeliveryTrackerPeriod,
   type DeliveryTrackerStatusFilter,
 } from '../lib/deliveryTracker';
-import { Badge, Button, EmptyState, PageHeader, ProgressBar, SegmentedTabs, StatGroup, StatusChip } from '../components/ui';
+import { Badge, Button, EmptyState, PageHeader, ProgressBar, SegmentedTabs, StatusChip } from '../components/ui';
 import { inputBase, pageShell, tableShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 
@@ -191,21 +188,11 @@ const DeliveryTracker: React.FC = () => {
         action={canCreateTasks(currentUser, rolePermissions) ? <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />New task</Button> : undefined}
       />
 
-      <StatGroup className="grid-cols-2 xl:grid-cols-4" aria-label={t('Delivery tracker summary')}>
-        {[
-          { label: 'Open tasks', value: totals.open, icon: ListChecks, tone: 'text-blue-600 bg-blue-50' },
-          { label: 'Overdue', value: totals.overdue, icon: AlertTriangle, tone: 'text-red-700 bg-red-50' },
-          { label: 'Tasks completed', value: totals.completed, icon: CheckCircle2, tone: 'text-emerald-700 bg-emerald-50' },
-          { label: 'Deliverables completed', value: totals.delivered, icon: PackageCheck, tone: 'text-violet-700 bg-violet-50' },
-        ].map(({ label, value, icon: Icon, tone }) => (
-          <div key={label} className="flex min-h-28 items-center justify-between gap-4 p-4 sm:p-5">
-            <div><p className="text-xs font-medium text-muted">{label}</p><p className="calm-number mt-2 text-2xl font-semibold tracking-[-0.04em] text-ink">{value}</p></div>
-            <span className={cn('flex h-9 w-9 items-center justify-center rounded-control', tone)}><Icon className="h-4 w-4" /></span>
-          </div>
-        ))}
-      </StatGroup>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-line/70 py-3 text-sm" aria-label={t('Delivery tracker summary')}>
+        {[['Open work', totals.open], ['Overdue', totals.overdue], ['Completed', totals.completed], ['Deliverables', totals.delivered]].map(([label, value]) => <span key={String(label)} className="inline-flex items-baseline gap-1.5"><strong className="calm-number text-base text-ink">{value}</strong><span className="text-muted">{label}</span></span>)}
+      </div>
 
-      <section className={tableShell} aria-labelledby="delivery-tracker-heading">
+      <section className={tableShell} aria-label={t('Delivery tracker')}>
         <div className="border-b border-line bg-inset/70 p-4 sm:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
@@ -225,7 +212,8 @@ const DeliveryTracker: React.FC = () => {
           <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative w-full lg:max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-              <input data-global-search type="search" value={search} onChange={event => { const value = event.target.value; setSearch(value); updateQuery({ search: value || null }); }} placeholder="Search clients, tasks, or deliverables" aria-label="Search delivery tracker" className={cn(inputBase, 'pl-10 pr-3')} />
+              <input data-global-search type="search" value={search} onChange={event => { const value = event.target.value; setSearch(value); updateQuery({ search: value || null }); }} placeholder="Search clients, tasks, or deliverables" aria-label="Search delivery tracker" className={cn(inputBase, search ? 'pl-10 pr-10' : 'pl-10 pr-3')} />
+              {search && <button type="button" aria-label="Clear delivery tracker search" onClick={() => { setSearch(''); updateQuery({ search: null }); }} className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"><X className="h-4 w-4" /></button>}
             </div>
             <div className="flex flex-wrap gap-2" aria-label="Filter tracker status">
               {STATUS_FILTERS.map(filter => <button key={filter.id} type="button" aria-pressed={statusFilter === filter.id} onClick={() => setStatusFilter(filter.id)} className={cn('min-h-11 rounded-control px-3 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35', statusFilter === filter.id ? 'bg-accent text-white dark:text-[rgb(var(--calm-accent-ink))]' : 'bg-surface text-muted ring-1 ring-line hover:bg-inset hover:text-ink')}>{filter.label}</button>)}
@@ -244,12 +232,12 @@ const DeliveryTracker: React.FC = () => {
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{summary.clientName.slice(0, 2).toUpperCase()}</span><div className="min-w-0"><h3 data-i18n-skip className="truncate font-semibold text-ink">{summary.clientName}</h3><p className="mt-0.5 text-xs text-muted">{summary.cycle ? `${summary.cycle.periodStart} – ${summary.cycle.periodEnd}` : 'No service cycle in this period'}</p></div></div>
                   </div>
                   <div>
-                    <div className="flex flex-wrap gap-1.5"><StatusChip tone={summary.overdue ? 'red' : 'blue'}>{summary.open} open</StatusChip>{summary.overdue > 0 && <StatusChip tone="red">{summary.overdue} overdue</StatusChip>}<StatusChip tone="emerald">{summary.completed} completed</StatusChip></div>
-                    <p className="mt-2 text-xs text-muted">{summary.inProgress} in progress · {summary.review} in review</p>
+                    <div className="flex flex-wrap gap-1.5"><StatusChip tone={summary.overdue ? 'red' : 'blue'}>{summary.open} {t('open')}</StatusChip>{summary.overdue > 0 && <StatusChip tone="red">{summary.overdue} {t('overdue')}</StatusChip>}<StatusChip tone="emerald">{summary.completed} {t('completed')}</StatusChip></div>
+                    <p className="mt-2 text-xs text-muted">{summary.inProgress} {t('in progress')} · {summary.review} {t('in review')}</p>
                   </div>
                   <div>
                     <ProgressBar value={summary.progress} label={`${summary.clientName} completion`} />
-                    <p className="mt-2 text-xs text-muted">{summary.delivered} of {summary.included} deliverables completed</p>
+                    <p className="mt-2 text-xs text-muted">{summary.delivered}/{summary.included} {t('deliverables completed')}</p>
                   </div>
                   <div className="min-w-0">
                     <p className="inline-flex items-center gap-1.5 text-sm font-medium text-ink"><CalendarDays className="h-4 w-4 text-accent" />{readableDate(summary.nextDeadline)}</p>

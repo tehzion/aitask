@@ -59,5 +59,5 @@ export const HOLIDAY_COLORS: Record<HolidayCategory, { bg: string; text: string;
   national:  { bg: 'bg-red-50',    text: 'text-red-700',    dot: 'bg-red-500',    badge: 'bg-red-100 text-red-700 border-red-200' },
   religious: { bg: 'bg-teal-50',   text: 'text-teal-700',   dot: 'bg-teal-500',   badge: 'bg-teal-100 text-teal-700 border-teal-200' },
   cultural:  { bg: 'bg-amber-50',  text: 'text-amber-700',  dot: 'bg-amber-500',  badge: 'bg-amber-100 text-amber-700 border-amber-200' },
-  federal:   { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-500', badge: 'bg-purple-100 text-purple-700 border-purple-200' },
+  federal:   { bg: 'bg-accent-soft', text: 'text-accent', dot: 'bg-accent', badge: 'bg-accent-soft text-accent border-accent/20' },
 };

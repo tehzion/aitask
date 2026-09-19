@@ -108,7 +108,7 @@ const TaskGroup = ({
     <section aria-label={title}>
       <div className="flex items-center justify-between border-y border-slate-100 bg-slate-50 px-4 py-2.5 sm:px-5">
         <h4 className={cn(
-          'text-xs font-semibold uppercase text-slate-600',
+          'text-xs font-semibold text-slate-600',
           tone === 'danger' && 'text-red-700',
           tone === 'success' && 'text-emerald-700',
         )}>{title}</h4>

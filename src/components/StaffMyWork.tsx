@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Layers3, ListChecks, RotateCcw, Sparkles } from 'lucide-react';
+import { ArrowRight, CalendarDays, CheckCircle2, Clock3, ListChecks, RotateCcw } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
@@ -7,7 +7,7 @@ import { getDashboardPersona, getVisibleClientNames, getVisibleTasks, isHodUser 
 import { buildStaffWorkQueue, getStaffBucketLabel, getStaffFocusTask, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getRelativeDueDateString, getTodayInputDate } from '../lib/utils';
 import { pageShell } from './uiTokens';
-import { Button, SegmentedTabs, StatusChip, Surface } from './ui';
+import { Button, MetaLine, SegmentedTabs, StatusChip, Surface } from './ui';
 import BackendFreshness from './BackendFreshness';
 import StaffWorkItem from './StaffWorkItem';
 import { formatLocalizedWeekdayDate } from '../lib/i18n';
@@ -56,12 +56,12 @@ const StaffMyWork: React.FC = () => {
   const waitingReview = queue.waiting.length;
   const revisions = tasks.filter(task => !task.isCompleted && task.revisionCount > 0).length;
   const roleInsight = persona === 'operation'
-    ? { title: 'Operation context', description: 'Your assigned delivery and review queue.', values: [['Due today', dueToday], ['Waiting review', waitingReview], ['Blocked steps', blockedCount]] as const }
+    ? { title: t('Operation context'), description: t('Your assigned delivery and review queue.'), values: [[t('Due today'), dueToday], [t('Waiting review'), waitingReview], [t('Blocked steps'), blockedCount]] as const }
     : persona === 'account'
-      ? { title: 'Account context', description: 'Clients and plans connected to your assigned work.', values: [['Assigned clients', visibleClients.length], ['Active plans', activePlans.length], ['Renewals', renewals.length]] as const }
+      ? { title: t('Account context'), description: t('Clients and plans connected to your assigned work.'), values: [[t('Assigned clients'), visibleClients.length], [t('Active plans'), activePlans.length], [t('Renewals'), renewals.length]] as const }
     : isHod
       ? { title: t('Department context'), description: t('Department workload, delegated tasks, and review risk.'), values: [[t('Department tasks'), tasks.length], [t('Waiting review'), waitingReview], [t('Blocked steps'), blockedCount]] as const }
-      : { title: 'Production context', description: 'Output, blockers, and revision work linked to your assignments.', values: [['Linked outputs', linkedOutputs], ['Blocked steps', blockedCount], ['Revisions', revisions]] as const };
+      : { title: t('Production context'), description: t('Output, blockers, and revision work linked to your assignments.'), values: [[t('Linked outputs'), linkedOutputs], [t('Blocked steps'), blockedCount], [t('Revisions'), revisions]] as const };
 
   const openTask = (taskId: string) => navigate(`/tasks?taskId=${encodeURIComponent(taskId)}`);
 
@@ -77,27 +77,26 @@ const StaffMyWork: React.FC = () => {
       </header>
 
       {focusTask ? (
-        <section aria-labelledby="staff-focus-title" className="relative overflow-hidden rounded-panel bg-[rgb(var(--calm-accent-ink))] p-5 text-white shadow-float sm:p-6 dark:bg-inset dark:text-ink">
-          <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-accent/20 blur-3xl" />
-          <div className="relative grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+        <section aria-labelledby="staff-focus-title" className="calm-raised border-l-2 border-accent p-5 sm:p-6">
+          <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
             <div className="min-w-0">
-              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-white/65 dark:text-muted"><Sparkles className="h-4 w-4" />Your next move</p>
-              <h2 data-i18n-skip id="staff-focus-title" className="mt-3 text-balance text-2xl font-semibold tracking-[-0.035em] sm:text-3xl">{focusTask.title}</h2>
-              <p data-i18n-skip className="mt-2 truncate text-sm text-white/70 dark:text-muted">{focusTask.clientName}{focusTask.projectName ? ` · ${focusTask.projectName}` : ''}</p>
-              <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-semibold">
-                <StatusChip tone={focusTask.revisionCount > 0 ? 'amber' : focusTask.status === 'In Progress' ? 'blue' : 'slate'}>{focusTask.revisionCount > 0 ? `Revision ${focusTask.revisionCount}` : focusTask.status}</StatusChip>
-                <span className="rounded-tag bg-white/10 px-2 py-1 text-white/80 ring-1 ring-white/10 dark:bg-surface dark:text-muted dark:ring-line">{getRelativeDueDateString(focusTask.dueDate, focusTask.isCompleted, focusTask.status)}</span>
-                <span className="rounded-tag bg-white/10 px-2 py-1 text-white/80 ring-1 ring-white/10 dark:bg-surface dark:text-muted dark:ring-line">{focusTask.priority}</span>
+              <p className="calm-eyebrow">{t('Next due')}</p>
+              <h2 data-i18n-skip id="staff-focus-title" className="mt-2 text-balance text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-3xl">{focusTask.title}</h2>
+              <MetaLine className="mt-2"><span data-i18n-skip>{focusTask.clientName}{focusTask.projectName ? ` · ${focusTask.projectName}` : ''}</span> · {t('Assigned')}</MetaLine>
+              <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <StatusChip tone={focusTask.revisionCount > 0 ? 'amber' : focusTask.status === 'In Progress' ? 'blue' : 'slate'}>{focusTask.revisionCount > 0 ? `${t('Revision')} ${focusTask.revisionCount}` : t(focusTask.status)}</StatusChip>
+                <span className="calm-meta">{getRelativeDueDateString(focusTask.dueDate, focusTask.isCompleted, focusTask.status)}</span>
+                <span className="calm-meta">{t('Priority')}: {t(focusTask.priority)}</span>
               </div>
               {focusTask.status === 'In Progress' && (
                 <div className="mt-5 max-w-md">
-                  <div className="flex items-center justify-between text-xs font-medium text-white/65 dark:text-muted"><span>Current task progress</span><span className="calm-number">{focusTask.completionPercentage}%</span></div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/15 dark:bg-line"><div className="h-full rounded-full bg-accent dark:bg-accent" style={{ width: `${focusTask.completionPercentage}%` }} /></div>
+                  <div className="flex items-center justify-between text-xs font-medium text-muted"><span>{t('Task progress')}</span><span className="calm-number text-ink">{focusTask.completionPercentage}%</span></div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-inset ring-1 ring-line/60"><div className="h-full rounded-full bg-accent" style={{ width: `${focusTask.completionPercentage}%` }} /></div>
                 </div>
               )}
             </div>
-            <Button onClick={() => openTask(focusTask.id)} className="w-full bg-white text-[rgb(var(--calm-accent-ink))] hover:bg-white/90 dark:bg-accent dark:text-[rgb(var(--calm-accent-ink))] lg:w-auto">
-              Open task <ArrowRight className="h-4 w-4" />
+            <Button onClick={() => openTask(focusTask.id)} className="w-full lg:w-auto">
+              Open work <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
         </section>
@@ -134,7 +133,7 @@ const StaffMyWork: React.FC = () => {
       </section>
 
       <Surface variant="inset" className="overflow-hidden" aria-labelledby="staff-role-context">
-        <div className="flex items-start gap-3 px-5 py-4"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-surface text-accent"><Layers3 className="h-5 w-5" /></span><div><h2 id="staff-role-context" className="font-semibold text-ink">{roleInsight.title}</h2><p className="mt-0.5 text-sm text-muted">{roleInsight.description}</p></div></div>
+        <div className="px-5 py-4"><h2 id="staff-role-context" className="font-semibold text-ink">{roleInsight.title}</h2><p className="mt-0.5 text-sm text-muted">{roleInsight.description}</p></div>
         <div className="grid grid-cols-3 divide-x divide-line border-t border-line bg-surface/60">
           {roleInsight.values.map(([label, value]) => <div key={label} className="px-3 py-4 sm:px-5"><p className="calm-number text-xl font-semibold text-ink">{value}</p><p className="mt-1 text-xs leading-4 text-muted">{label}</p></div>)}
         </div>

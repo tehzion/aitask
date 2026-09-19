@@ -6,7 +6,7 @@ import { useStore } from '../store';
 import { canViewServicePrices, getClientKey, getDashboardPersona, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { formatMoney } from '../lib/serviceManagement';
 import { parseOptionalDate } from '../lib/utils';
-import { DataRow, ProgressBar, StatGroup, StatusChip, Surface } from './ui';
+import { CountLabel, DataRow, ProgressBar, StatGroup, StatusChip, Surface } from './ui';
 import { formatLocalizedDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
 
@@ -19,7 +19,7 @@ const WorkbenchHeader = ({ id, title, description, action }: { id: string; title
   </div>
 );
 
-const SpotlightMetric = ({ label, value, icon: Icon, detail, tone = 'accent' }: { label: string; value: React.ReactNode; icon: React.ComponentType<{ className?: string }>; detail: string; tone?: 'accent' | 'danger' }) => (
+const SpotlightMetric = ({ label, value, icon: Icon, detail, tone = 'accent' }: { label: string; value: React.ReactNode; icon: React.ComponentType<{ className?: string }>; detail: React.ReactNode; tone?: 'accent' | 'danger' }) => (
   <div className={`calm-raised min-h-44 border-l-2 p-5 sm:p-6 ${tone === 'danger' ? 'border-red-500' : 'border-accent'}`}>
     <div className="flex h-full flex-col justify-between gap-8">
       <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium text-muted">{label}</p><span className={tone === 'danger' ? 'rounded-control bg-red-50 p-2 text-red-700' : 'rounded-control bg-accent-soft p-2 text-accent'}><Icon className="h-5 w-5" /></span></div>
@@ -33,14 +33,14 @@ const CompactStat = ({ label, value, icon: Icon, tone = 'neutral' }: { label: st
   return <div className="min-h-36 p-5"><div className={`inline-flex rounded-control p-2 ${toneClass}`}><Icon className="h-4 w-4" /></div><p className="calm-number mt-5 text-2xl font-semibold tracking-[-0.04em] text-ink">{value}</p><p className="mt-1 text-xs font-medium text-muted">{label}</p></div>;
 };
 
-const TaskQueue = ({ title, tasks, empty, accent = false }: { title: string; tasks: WorkspaceTask[]; empty: string; accent?: boolean }) => (
-  <TaskQueueContent title={title} tasks={tasks} empty={empty} accent={accent} />
+const TaskQueue = ({ title, tasks, empty }: { title: string; tasks: WorkspaceTask[]; empty: string }) => (
+  <TaskQueueContent title={title} tasks={tasks} empty={empty} />
 );
 
-const TaskQueueContent = ({ title, tasks, empty, accent = false }: { title: string; tasks: WorkspaceTask[]; empty: string; accent?: boolean }) => {
+const TaskQueueContent = ({ title, tasks, empty }: { title: string; tasks: WorkspaceTask[]; empty: string }) => {
   const { locale, t } = useI18n();
   return <Surface className="overflow-hidden">
-    <div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{title}</h3><StatusChip tone={accent ? 'amber' : 'slate'}>{tasks.length}</StatusChip></div>
+    <div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{title}</h3><CountLabel>{tasks.length}</CountLabel></div>
     <div className="divide-y divide-line/60">
       {tasks.slice(0, 6).map(task => {
         const dueDate = parseOptionalDate(task.dueDate);
@@ -117,33 +117,33 @@ const ServiceRoleDashboard = () => {
   if (persona === 'production') {
     const open = myTasks.filter(task => !task.isCompleted);
     return <section className="space-y-5" aria-labelledby="production-workbench-title">
-      <WorkbenchHeader id="production-workbench-title" title="Production workbench" description="Assigned deadlines, revisions, review queues and completed output." />
+      <WorkbenchHeader id="production-workbench-title" title="Assigned production work" description="Deadlines, revisions, review queues, and completed output." />
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label="My open tasks" value={open.length} icon={Clock3} detail="Only tasks assigned to you are included." /><StatGroup className="grid-cols-3"><CompactStat label="Overdue" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Revisions" value={revisions.length} icon={FileCheck2} tone="warning" /><CompactStat label="Completed" value={completed.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
-      <div className="grid gap-4 xl:grid-cols-[1.25fr_1fr]"><TaskQueue title="Deadline" tasks={[...open].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty="No assigned deadlines." accent /><TaskQueue title="Revision / internal review" tasks={[...revisions, ...waitingInternal.filter(task => !revisions.some(item => item.id === task.id))]} empty="No revision or review work." /></div>
+      <div className="grid gap-4 xl:grid-cols-[1.25fr_1fr]"><TaskQueue title="Deadline" tasks={[...open].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty="No assigned deadlines." /><TaskQueue title="Revision / internal review" tasks={[...revisions, ...waitingInternal.filter(task => !revisions.some(item => item.id === task.id))]} empty="No revision or review work." /></div>
     </section>;
   }
 
   if (persona === 'operation') return <section className="space-y-5" aria-labelledby="operation-workbench-title">
-    <WorkbenchHeader id="operation-workbench-title" title="Operation workbench" description="Delivery queues, team workload and cycle execution. Pricing is not shown." action={<Link to="/calendar" className="inline-flex min-h-10 items-center gap-2 rounded-control px-3 text-sm font-semibold text-accent hover:bg-accent-soft"><CalendarDays className="h-4 w-4" />Content calendar</Link>} />
-    <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label="Due today" value={dueToday.length} icon={Clock3} detail={`${overdue.length} overdue task${overdue.length === 1 ? '' : 's'} require attention.`} /><StatGroup className="grid-cols-3"><CompactStat label="Overdue" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Internal review" value={waitingInternal.length} icon={FileCheck2} tone="warning" /><CompactStat label="Client approval" value={waitingClient.length} icon={UsersRound} /></StatGroup></div>
-    <div className="grid gap-4 xl:grid-cols-3"><TaskQueue title="Today / overdue" tasks={[...overdue, ...dueToday]} empty="No urgent production work." accent /><TaskQueue title="Waiting internal review" tasks={waitingInternal} empty="Internal review queue is clear." /><TaskQueue title="Waiting client approval" tasks={waitingClient} empty="No client approval is waiting." /></div>
-    <Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">Staff workload</h3></div><div className="grid divide-y divide-line/60 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">{workers.slice(0, 4).map(item => <div key={item.user.id} className="p-4"><p data-i18n-skip className="font-semibold text-ink">{item.user.name}</p><p className="mt-1 text-xs text-muted">{item.open} open · {item.completed} completed</p><ProgressBar className="mt-4" label="Delivered output" value={item.delivered} max={Math.max(1, item.completed)} /></div>)}</div></Surface>
+    <WorkbenchHeader id="operation-workbench-title" title="Production queue" description="Delivery deadlines, review handoffs, and team workload." action={<Link to="/calendar" className="inline-flex min-h-10 items-center gap-2 rounded-control px-3 text-sm font-semibold text-accent hover:bg-accent-soft"><CalendarDays className="h-4 w-4" />Open schedule</Link>} />
+    <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label="Due today" value={dueToday.length} icon={Clock3} detail={<>{overdue.length} {t('overdue tasks require attention.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label="Overdue" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Internal review" value={waitingInternal.length} icon={FileCheck2} tone="warning" /><CompactStat label="Client approval" value={waitingClient.length} icon={UsersRound} /></StatGroup></div>
+    <div className="grid gap-4 xl:grid-cols-3"><TaskQueue title="Urgent today" tasks={[...overdue, ...dueToday]} empty="No urgent production work." /><TaskQueue title="Internal review" tasks={waitingInternal} empty="The internal review queue is clear." /><TaskQueue title="Client approval" tasks={waitingClient} empty="No client approval is waiting." /></div>
+    <Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">Team handoffs</h3><p className="mt-1 text-sm text-muted">Open work and delivered output by person.</p></div><div className="grid divide-y divide-line/60 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">{workers.slice(0, 4).map(item => <div key={item.user.id} className="p-4"><p data-i18n-skip className="font-semibold text-ink">{item.user.name}</p><p className="mt-1 text-xs text-muted">{item.open} {t('open')} · {item.completed} {t('completed')}</p><ProgressBar className="mt-4" label="Delivered output" value={item.delivered} max={Math.max(1, item.completed)} /></div>)}</div></Surface>
   </section>;
 
   if (persona === 'account') return <section className="space-y-5" aria-labelledby="account-workbench-title">
-    <WorkbenchHeader id="account-workbench-title" title="Account & Finance workbench" description="Client packages, internal monthly management fees, renewals and production output." />
-    <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label="Monthly management value" value={canSeePrices ? formatMoney(contractedMonthly) : 'Restricted'} icon={WalletCards} detail={`${activePlans.length} active client package${activePlans.length === 1 ? '' : 's'}.`} /><StatGroup className="grid-cols-3"><CompactStat label="Active packages" value={activePlans.length} icon={UsersRound} /><CompactStat label="Contract reminders" value={renewalPlans.length} icon={CalendarDays} tone="warning" /><CompactStat label="Delivered outputs" value={delivered.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
-    <div className="grid gap-4 xl:grid-cols-2"><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">Client package & renewal</h3></div><div className="divide-y divide-line/60">{activePlans.map(plan => { const contractEnd = parseOptionalDate(plan.contractEndDate); return <DataRow key={plan.id} titleI18nSkip={false} descriptionI18nSkip={false} title={<Link to={`/clients/${encodeURIComponent(plan.clientId)}`} className="hover:text-accent"><span data-i18n-skip>{plan.clientName}</span></Link>} description={<><span data-i18n-skip>{plan.name}</span> · {t('contract reminder')} {contractEnd ? formatLocalizedDate(contractEnd, locale) : t('not set')}</>} action={canSeePrices ? <span className="calm-number text-sm font-semibold text-ink">{formatMoney(store.servicePricingSnapshots.find(item => item.parentId === plan.id)?.totalMinor || 0)}</span> : undefined} />; })}</div></Surface><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">Employee / supplier / freelancer output</h3></div><div className="divide-y divide-line/60">{workers.map(item => <DataRow key={item.user.id} titleI18nSkip={false} descriptionI18nSkip={false} title={<span data-i18n-skip>{item.user.name}</span>} description={<span data-i18n-skip>{item.user.workerType || 'employee'}</span>} action={<span className="calm-number text-xs text-muted">{item.completed} tasks · {item.delivered} delivered</span>} />)}</div></Surface></div>
+    <WorkbenchHeader id="account-workbench-title" title="Accounts" description="Client plans, renewals, commercial records, and delivery output." />
+    <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label="Monthly management value" value={canSeePrices ? formatMoney(contractedMonthly) : 'Restricted'} icon={WalletCards} detail={<>{activePlans.length} {t(activePlans.length === 1 ? 'active client package.' : 'active client packages.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label="Active packages" value={activePlans.length} icon={UsersRound} /><CompactStat label="Contract reminders" value={renewalPlans.length} icon={CalendarDays} tone="warning" /><CompactStat label="Delivered outputs" value={delivered.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
+    <div className="grid gap-4 xl:grid-cols-2"><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">Plans and renewals</h3></div><div className="divide-y divide-line/60">{activePlans.map(plan => { const contractEnd = parseOptionalDate(plan.contractEndDate); return <DataRow key={plan.id} titleI18nSkip={false} descriptionI18nSkip={false} title={<Link to={`/clients/${encodeURIComponent(plan.clientId)}`} className="hover:text-accent"><span data-i18n-skip>{plan.clientName}</span></Link>} description={<><span data-i18n-skip>{plan.name}</span> · {t('renewal')} {contractEnd ? formatLocalizedDate(contractEnd, locale) : t('not set')}</>} action={canSeePrices ? <span className="calm-number text-sm font-semibold text-ink">{formatMoney(store.servicePricingSnapshots.find(item => item.parentId === plan.id)?.totalMinor || 0)}</span> : undefined} />; })}</div></Surface><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">Delivery output by worker</h3></div><div className="divide-y divide-line/60">{workers.map(item => <DataRow key={item.user.id} titleI18nSkip={false} descriptionI18nSkip={false} title={<span data-i18n-skip>{item.user.name}</span>} description={<span data-i18n-skip>{item.user.workerType || 'employee'}</span>} action={<span className="calm-number text-xs text-muted">{item.completed} {t('tasks')} · {item.delivered} {t('delivered')}</span>} />)}</div></Surface></div>
   </section>;
 
   if (persona === 'projectManager') return <section className="space-y-5" aria-labelledby="portfolio-workbench-title">
-    <WorkbenchHeader id="portfolio-workbench-title" title="Portfolio delivery overview" description="Owned and visible portfolio delivery, workload, output and contracted monthly value. Other portfolios remain outside your scope." />
-    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label="Open delivery tasks" value={scopeTasks.filter(task => !task.isCompleted).length} icon={Clock3} detail={`${dueToday.length} due today · ${overdue.length} overdue in your portfolio.`} /><StatGroup className="grid-cols-3"><CompactStat label="Overdue delivery" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Waiting review" value={waitingInternal.length + waitingClient.length} icon={FileCheck2} tone="warning" /><CompactStat label="Active companies" value={activePlans.length} icon={UsersRound} /></StatGroup></div>
-    <div className="grid gap-4 xl:grid-cols-2"><TaskQueue title="Due today / overdue" tasks={[...overdue, ...dueToday].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty="No urgent portfolio delivery work." accent /><TaskQueue title="Waiting review" tasks={[...waitingInternal, ...waitingClient]} empty="No portfolio review work is waiting." /></div>
+    <WorkbenchHeader id="portfolio-workbench-title" title="Portfolio delivery" description="Companies, deadlines, review work, and output in your portfolio." />
+    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label="Open delivery tasks" value={scopeTasks.filter(task => !task.isCompleted).length} icon={Clock3} detail={<>{dueToday.length} {t('Due today')} · {overdue.length} {t('overdue in your portfolio.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label="Overdue delivery" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Waiting review" value={waitingInternal.length + waitingClient.length} icon={FileCheck2} tone="warning" /><CompactStat label="Active companies" value={activePlans.length} icon={UsersRound} /></StatGroup></div>
+    <div className="grid gap-4 xl:grid-cols-2"><TaskQueue title="Due today / overdue" tasks={[...overdue, ...dueToday].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty="No urgent portfolio delivery work." /><TaskQueue title="Waiting review" tasks={[...waitingInternal, ...waitingClient]} empty="No portfolio review work is waiting." /></div>
     <Surface className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
         <div><h3 className="font-semibold text-ink">Monthly deliverables</h3><p className="mt-1 text-sm text-muted">Current cycle delivery progress for each active company.</p></div>
-        <StatusChip tone="slate">{activeCompanies.length}</StatusChip>
+        <CountLabel>{activeCompanies.length}</CountLabel>
       </div>
       <div className="divide-y divide-line/60">
         {activeCompanies.map(item => (
@@ -155,10 +155,10 @@ const ServiceRoleDashboard = () => {
             <div className="min-w-0">
               <ProgressBar className="mb-1.5" label={`Deliverables ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />
               <div className="flex flex-wrap gap-1.5 text-[11px] text-muted">
-                <StatusChip tone="emerald">{item.delivered} Delivered</StatusChip>
-                <StatusChip tone="blue">{item.ready} Ready</StatusChip>
-                <StatusChip tone="indigo">{item.inProgress} In progress</StatusChip>
-                <StatusChip tone="slate">{item.planned} Planned</StatusChip>
+                <StatusChip tone="emerald">{item.delivered} {t('Delivered')}</StatusChip>
+                <StatusChip tone="blue">{item.ready} {t('Ready')}</StatusChip>
+                <StatusChip tone="indigo">{item.inProgress} {t('In Progress')}</StatusChip>
+                <StatusChip tone="slate">{item.planned} {t('Planned')}</StatusChip>
               </div>
             </div>
           </div>
@@ -166,16 +166,16 @@ const ServiceRoleDashboard = () => {
         {activeCompanies.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">No active companies yet.</p>}
       </div>
     </Surface>
-    <Surface variant="inset" className="flex flex-wrap items-center justify-between gap-3 p-5"><div><p className="calm-eyebrow">Portfolio commercial context</p><p className="mt-1 text-sm text-muted">Contracted value is limited to active plans inside your visible portfolio.</p></div><p className="calm-number text-2xl font-semibold text-ink">{formatMoney(contractedMonthly)}</p></Surface>
+    <Surface variant="inset" className="flex flex-wrap items-center justify-between gap-3 p-5"><div><p className="calm-eyebrow">Commercial summary</p><p className="mt-1 text-sm text-muted">Active plan value in your visible portfolio.</p></div><p className="calm-number text-2xl font-semibold text-ink">{formatMoney(contractedMonthly)}</p></Surface>
   </section>;
 
   return <section className="space-y-5" aria-labelledby="management-workbench-title">
-    <WorkbenchHeader id="management-workbench-title" title="Service management overview" description="Company-wide client delivery, workload, output and contracted monthly value." />
-    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label="Contracted monthly value" value={formatMoney(contractedMonthly)} icon={WalletCards} detail={`${activePlans.length} active client${activePlans.length === 1 ? '' : 's'} under management.`} /><StatGroup className="grid-cols-3"><CompactStat label="Active clients" value={activePlans.length} icon={UsersRound} /><CompactStat label="Overdue production" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Delivered outputs" value={delivered.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
+    <WorkbenchHeader id="management-workbench-title" title="Company operations" description="Client delivery, team workload, output, and commercial records across the company." />
+    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label="Contracted monthly value" value={formatMoney(contractedMonthly)} icon={WalletCards} detail={<>{activePlans.length} {t(activePlans.length === 1 ? 'active client under management.' : 'active clients under management.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label="Active clients" value={activePlans.length} icon={UsersRound} /><CompactStat label="Overdue production" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Delivered outputs" value={delivered.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
     <Surface className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
         <div><h3 className="font-semibold text-ink">Monthly deliverables</h3><p className="mt-1 text-sm text-muted">Current cycle delivery progress for each active company.</p></div>
-        <StatusChip tone="slate">{activeCompanies.length}</StatusChip>
+        <CountLabel>{activeCompanies.length}</CountLabel>
       </div>
       <div className="divide-y divide-line/60">
         {activeCompanies.map(item => (
@@ -187,10 +187,10 @@ const ServiceRoleDashboard = () => {
             <div className="min-w-0">
               <ProgressBar className="mb-1.5" label={`Deliverables ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />
               <div className="flex flex-wrap gap-1.5 text-[11px] text-muted">
-                <StatusChip tone="emerald">{item.delivered} Delivered</StatusChip>
-                <StatusChip tone="blue">{item.ready} Ready</StatusChip>
-                <StatusChip tone="indigo">{item.inProgress} In progress</StatusChip>
-                <StatusChip tone="slate">{item.planned} Planned</StatusChip>
+                <StatusChip tone="emerald">{item.delivered} {t('Delivered')}</StatusChip>
+                <StatusChip tone="blue">{item.ready} {t('Ready')}</StatusChip>
+                <StatusChip tone="indigo">{item.inProgress} {t('In Progress')}</StatusChip>
+                <StatusChip tone="slate">{item.planned} {t('Planned')}</StatusChip>
               </div>
             </div>
           </div>

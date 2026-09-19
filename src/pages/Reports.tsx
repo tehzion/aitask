@@ -29,7 +29,7 @@ const Reports: React.FC = () => {
       ink: themeTokenColor('--calm-ink', '#1a1a1a'),
       onTime: themeTokenColor('--calm-success', '#10b981'),
       late: themeTokenColor('--calm-danger', '#ef4444'),
-      upcoming: themeTokenColor('--calm-accent', '#e5231b'),
+      upcoming: themeTokenColor('--calm-accent', '#c11c15'),
       open: themeTokenColor('--calm-warning', '#f59e0b'),
       overdue: themeTokenColor('--calm-danger', '#ef4444'),
     };
@@ -190,7 +190,7 @@ const Reports: React.FC = () => {
               <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label={t('Weekly due-work data')}>
                 <table className="min-w-[680px] w-full text-left text-sm">
                   <caption className="sr-only">{t('Weekly due-work data')}</caption>
-                  <thead className="text-xs uppercase tracking-wide text-muted">
+                  <thead className="text-xs tracking-wide text-muted">
                     <tr>
                       <th scope="col" className="px-3 py-2 font-semibold">{t('Week')}</th>
                       <th scope="col" className="px-3 py-2 text-right font-semibold">{t('On time')}</th>
@@ -255,7 +255,7 @@ const Reports: React.FC = () => {
                 <div className="mt-3 overflow-x-auto" tabIndex={0} role="region" aria-label={t('Department performance data')}>
                   <table className="min-w-[680px] w-full text-left text-sm">
                     <caption className="sr-only">{t('Department performance data')}</caption>
-                    <thead className="text-xs uppercase tracking-wide text-muted">
+                  <thead className="text-xs tracking-wide text-muted">
                       <tr>
                         <th scope="col" className="px-3 py-2 font-semibold">{t('Department')}</th>
                         <th scope="col" className="px-3 py-2 text-right font-semibold">{t('Total Tasks')}</th>
@@ -300,7 +300,7 @@ const Reports: React.FC = () => {
           <div className="hidden overflow-x-auto xl:block">
             <table className="w-full border-collapse text-left">
               <thead>
-                <tr className="bg-inset text-xs uppercase tracking-wider text-muted">
+                <tr className="bg-inset text-xs tracking-wide text-muted">
                   <th scope="col" className="border-b border-line px-6 py-4 font-semibold">{t('Department')}</th>
                   <th scope="col" className="border-b border-line px-6 py-4 text-center font-semibold">{t('Total Tasks')}</th>
                   <th scope="col" className="border-b border-line px-6 py-4 text-center font-semibold">{t('On time')}</th>

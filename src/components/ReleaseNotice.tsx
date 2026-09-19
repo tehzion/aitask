@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import { CheckCircle2, Sparkles } from 'lucide-react';
+import { CheckCircle2, Megaphone } from 'lucide-react';
 import type { User } from '../types';
 import { hasPasswordResetBypass } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
@@ -91,7 +91,7 @@ const ReleaseNotice: React.FC<ReleaseNoticeProps> = ({ currentUser, isReady }) =
       <div className="overflow-y-auto px-5 pb-5 pt-6 sm:px-7 sm:pb-7 sm:pt-8">
         <div className="flex items-start gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
-            <Sparkles className="h-5 w-5" aria-hidden="true" />
+            <Megaphone className="h-5 w-5" aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <p className="calm-eyebrow">{copy.eyebrow}</p>

@@ -90,13 +90,12 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
   return (
     <div className="space-y-6">
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(280px,.7fr)]" aria-labelledby="client-focus-title">
-        <Surface variant="inset" className="relative overflow-hidden p-6 sm:p-8">
-          <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-accent/10 blur-3xl" aria-hidden="true" />
+        <Surface variant="inset" className="relative overflow-hidden border-l-2 border-accent p-6 sm:p-8">
           {focusTask ? (
             <div className="relative max-w-3xl">
               <div className="flex items-center gap-2 text-accent">
                 {focusStage === 'needs_review' ? <FileCheck2 className="h-4 w-4" /> : focusStage === 'timing_changed' ? <TimerReset className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
-                <p className="calm-eyebrow text-current">{focusStage === 'needs_review' ? 'Your next decision' : focusStage === 'timing_changed' ? 'Timing changed' : 'Next delivery'}</p>
+                <p className="calm-eyebrow text-current">{focusStage === 'needs_review' ? 'Needs your review' : focusStage === 'timing_changed' ? 'Timing changed' : 'Next delivery'}</p>
               </div>
               <h2 id="client-focus-title" data-i18n-skip className="mt-4 max-w-[22ch] text-pretty text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-3xl">{focusTask.title}</h2>
               <p className="mt-3 max-w-[62ch] text-pretty text-sm leading-6 text-muted">
@@ -114,7 +113,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
                 </div>
               )}
               <Link to={taskPath(focusTask)} className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-control bg-accent px-5 text-sm font-semibold text-white shadow-[0_12px_28px_-18px_rgb(var(--calm-accent)/0.9)] transition duration-160 hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 active:translate-y-px dark:text-[rgb(var(--calm-accent-ink))]">
-                {focusStage === 'needs_review' ? 'Review deliverable' : 'View delivery'}<ArrowRight className="h-4 w-4" />
+                {focusStage === 'needs_review' ? 'Review delivery' : 'View delivery'}<ArrowRight className="h-4 w-4" />
               </Link>
             </div>
           ) : (
@@ -127,12 +126,12 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
         </Surface>
 
         <Surface className="p-6">
-          <p className="calm-eyebrow">Monthly service progress</p>
+          <p className="calm-eyebrow">Delivery progress</p>
           <div className="mt-5 flex items-end justify-between gap-4">
-            <div><p className="calm-number text-4xl font-semibold tracking-tight text-ink">{cycleCompletion}%</p><p className="mt-2 text-sm text-muted">{cycleDeliverables.length ? `${deliveredCount} of ${cycleDeliverables.length} delivered this cycle` : 'No published deliverables yet'}</p></div>
+            <div><p className="calm-number text-4xl font-semibold tracking-tight text-ink">{cycleCompletion}%</p><p className="mt-2 text-sm text-muted">{cycleDeliverables.length ? <>{deliveredCount}/{cycleDeliverables.length} {t('delivered this cycle')}</> : t('No published deliverables yet')}</p></div>
             {currentCycle && <StatusChip tone="emerald">{currentCycle.status}</StatusChip>}
           </div>
-          <ProgressBar className="mt-6" value={deliveredCount} max={Math.max(cycleDeliverables.length, 1)} label="Monthly service progress" />
+          <ProgressBar className="mt-6" value={deliveredCount} max={Math.max(cycleDeliverables.length, 1)} label="Delivery progress" />
           {client && activePlan && (
             <Link to={`/clients/${encodeURIComponent(client.id)}`} className="mt-6 inline-flex min-h-11 w-full items-center justify-between rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
               <span data-i18n-skip>{activePlan.name}</span><ArrowRight className="h-4 w-4 text-accent" />
@@ -147,7 +146,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
           <Link to="/tasks?stage=needs_review" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent">View all<ArrowRight className="h-4 w-4" /></Link>
         </header>
         <div className="divide-y divide-line/70">
-          {reviewQueue.map(task => deliveryRow(task, 'Review deliverable'))}
+          {reviewQueue.map(task => deliveryRow(task, 'Review delivery'))}
           {reviewQueue.length === 0 && focusStage !== 'needs_review' && <p className="px-5 py-8 text-sm text-muted">Nothing is waiting for your review.</p>}
           {reviewQueue.length === 0 && focusStage === 'needs_review' && <p className="px-5 py-5 text-sm text-muted">Your current review is highlighted above.</p>}
         </div>

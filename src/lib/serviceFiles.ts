@@ -18,12 +18,19 @@ export const uploadServiceFile = async (input: {
   if (input.file.size > SERVICE_FILE_MAX_BYTES) return { ok: false, error: 'Files must be 100 MB or smaller.' };
   const id = crypto.randomUUID();
   const path = `${input.workspaceId}/${input.clientId}/${input.cycleId}/${id}-${safeName(input.file.name)}`;
-  const { error } = await supabase.storage.from(SERVICE_FILES_BUCKET).upload(path, input.file, {
-    cacheControl: '3600',
-    contentType: input.file.type || 'application/octet-stream',
-    upsert: false,
-  });
-  if (error) return { ok: false, error: error.message || 'The file could not be uploaded.' };
+  try {
+    const { error } = await supabase.storage.from(SERVICE_FILES_BUCKET).upload(path, input.file, {
+      cacheControl: '3600',
+      contentType: input.file.type || 'application/octet-stream',
+      upsert: false,
+    });
+    if (error) return { ok: false, error: error.message || 'The file could not be uploaded.' };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'The file could not be uploaded.',
+    };
+  }
   return {
     ok: true,
     attachment: {

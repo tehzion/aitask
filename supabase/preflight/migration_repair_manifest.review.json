@@ -1,9 +1,9 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-08-24",
-  "status": "production_aligned_through_20260918200000_pending_20260918210000",
+  "status": "production_aligned_through_20260918200000_pending_20260918210000_20260918220000_20260919090000_20260919110000",
   "metadataOnly": false,
-  "warning": "Production history is aligned through 20260918200000_member_security_and_project_visibility. The authorization-hardening follow-up migration is implemented locally but still requires production rollout verification. Historical rollout repair remains prohibited.",
+  "warning": "Production history is aligned through 20260918200000_member_security_and_project_visibility. The authorization-hardening, canonical PM/HOD role, PM/HOD scope-invariant, and task-detail authorization migrations are implemented locally but still require production rollout verification. Historical rollout repair remains prohibited.",
   "productionVerification": {
     "verifiedAt": "2026-09-11",
     "historyThrough": "20260918200000_member_security_and_project_visibility",
@@ -312,26 +312,19 @@
     }
   ],
   "validatedMigrationTail": [
-    "20260904104435_allow_staff_cycle_published_at",
-    "20260907043633_hod_task_ownership_permissions",
-    "20260907120000_harden_legacy_access_privileges",
-    "20260910010207_company_tracker_member_permissions",
-    "20260910120000_client_project_link_authorization",
-    "20260910144226_member_permission_realtime_refresh",
-    "20260911020546_enforce_task_project_link_authorization",
-    "20260918090000_role_authorization_fixes",
-    "20260918095737_allow_unassigned_tasks",
-    "20260918120000_hod_company_creation",
-    "20260918130000_company_delete",
-    "20260918140000_role_template_fixes",
-    "20260918150000_member_role_assignment",
-    "20260918160000_admin_department_optional",
     "20260918170000_delete_member_unassign_tasks",
     "20260918180000_scope_project_manager_ownership",
     "20260918190000_scope_project_manager_followups",
-    "20260918200000_member_security_and_project_visibility"
+    "20260918200000_member_security_and_project_visibility",
+    "20260918210000_authorization_hardening_followups",
+    "20260918220000_project_manager_hod_role_model",
+    "20260919090000_enforce_pm_hod_scope_invariants",
+    "20260919110000_task_detail_authorization"
   ],
   "pendingProductionMigrations": [
-    "20260918210000_authorization_hardening_followups"
+    "20260918210000_authorization_hardening_followups",
+    "20260918220000_project_manager_hod_role_model",
+    "20260919090000_enforce_pm_hod_scope_invariants",
+    "20260919110000_task_detail_authorization"
   ]
 }

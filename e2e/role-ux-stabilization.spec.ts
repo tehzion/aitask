@@ -63,7 +63,7 @@ test('Boss and Staff queues move focus with keyboard tabs', async ({ page }) => 
 
   await page.getByRole('button', { name: 'Logout' }).click();
   await signIn(page, 'Boss Koo');
-  await expect(page.getByRole('heading', { name: 'Super Admin Dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Agency operations' })).toBeVisible();
   const bossTabs = page.getByRole('tablist', { name: 'Boss dashboard views' });
   await bossTabs.getByRole('tab', { name: 'Overview' }).focus();
   await page.keyboard.press('ArrowRight');
@@ -116,7 +116,7 @@ test('Staff collapsed navigation is labelled and mobile layout remains accessibl
 test('Staff and Boss dashboards stay accessible across desktop and mobile', async ({ page }) => {
   for (const role of [
     { username: 'Staff Demo', heading: 'My work' },
-    { username: 'Boss Koo', heading: 'Super Admin Dashboard' },
+    { username: 'Boss Koo', heading: 'Agency operations' },
   ]) {
     const viewports = [{ width: 390, height: 844 }, { width: 1280, height: 800 }];
     for (const [index, viewport] of viewports.entries()) {

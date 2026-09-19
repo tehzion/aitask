@@ -45,6 +45,11 @@ const StaffAllWork: React.FC = () => {
   const [dueFrom, setDueFrom] = React.useState('');
   const [dueTo, setDueTo] = React.useState('');
   const [fullEditorOpen, setFullEditorOpen] = React.useState(false);
+  const routeSearch = searchParams.get('search') || '';
+
+  React.useEffect(() => {
+    setSearch(routeSearch);
+  }, [routeSearch]);
 
   const visibleTasks = React.useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
@@ -105,8 +110,16 @@ const StaffAllWork: React.FC = () => {
     setSearchParams(next, { replace: true });
   };
 
+  const updateSearch = (value: string) => {
+    setSearch(value);
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set('search', value);
+    else next.delete('search');
+    setSearchParams(next, { replace: true });
+  };
+
   const clearFilters = () => {
-    setSearch('');
+    updateSearch('');
     setClient('All');
     setProject('All');
     setAssignee('All');
@@ -138,11 +151,11 @@ const StaffAllWork: React.FC = () => {
             type="search"
             aria-label={t('Search visible work')}
             value={search}
-            onChange={event => setSearch(event.target.value)}
+            onChange={event => updateSearch(event.target.value)}
             placeholder={t('Search visible work')}
             className={`${inputBase} min-h-12 pl-10 pr-10`}
           />
-          {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')} className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-4 w-4" /></button>}
+          {search && <button type="button" aria-label="Clear search" onClick={() => updateSearch('')} className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-4 w-4" /></button>}
         </div>
 
         {isHod && (
@@ -169,7 +182,7 @@ const StaffAllWork: React.FC = () => {
 
         {activeFilterCount > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted">
-            <ListFilter className="h-4 w-4" />{activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
+            <ListFilter className="h-4 w-4" />{activeFilterCount} {t(activeFilterCount === 1 ? 'active filter' : 'active filters')}
             <button type="button" onClick={clearFilters} className="min-h-11 px-2 text-accent hover:underline">Clear filters</button>
           </div>
         )}

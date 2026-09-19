@@ -48,6 +48,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const clientSelectId = React.useId();
   const departmentId = React.useId();
   const assigneeId = React.useId();
+  const attachmentLinkId = React.useId();
+  const attachmentNameId = React.useId();
+  const notesId = React.useId();
 
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectId, setProjectId] = useState('');
@@ -679,14 +682,15 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
             </div>
 
-            {/* Files and notes */}
+            {/* Links and notes */}
             <div className="space-y-4 border-t border-slate-200/80 pt-5">
-              <h3 className="text-sm font-semibold text-slate-900">Files and notes</h3>
+              <h3 className="text-sm font-semibold text-slate-900">Links and notes</h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Attachment Link</label>
+                  <label htmlFor={attachmentLinkId} className="block text-sm font-medium text-slate-700 mb-1">Attachment URL</label>
                   <input
+                    id={attachmentLinkId}
                     type="url"
                     value={attachmentLink}
                     onChange={e => setAttachmentLink(e.target.value)}
@@ -695,8 +699,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Attachment Label</label>
+                  <label htmlFor={attachmentNameId} className="block text-sm font-medium text-slate-700 mb-1">Attachment Label</label>
                   <input
+                    id={attachmentNameId}
                     type="text"
                     value={attachmentName}
                     onChange={e => setAttachmentName(e.target.value)}
@@ -707,8 +712,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Internal Notes</label>
+                <label htmlFor={notesId} className="block text-sm font-medium text-slate-700 mb-1">Internal Notes</label>
                 <input
+                  id={notesId}
                   type="text"
                   value={notes}
                   onChange={e => setNotes(e.target.value)}

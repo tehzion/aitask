@@ -83,7 +83,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(releaseNotice).toBeVisible();
   await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
 
-  await expect(page.getByRole('region', { name: /Service management overview/ })).toBeVisible();
+  await expect(page.getByRole('region', { name: /Company operations/ })).toBeVisible();
   await expect(page.getByText('Contracted monthly value', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Monthly deliverables' })).toBeVisible();
 
@@ -114,10 +114,10 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.setViewportSize({ width: 1280, height: 800 });
   await switchDemoAccount(page, 'Project Manager Demo');
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Portfolio delivery overview' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Portfolio delivery' })).toBeVisible();
   await switchDemoAccount(page, 'Staff Demo');
   await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
-  await expect(page.getByText('Your next move')).toBeVisible();
+  await expect(page.getByText('Next due')).toBeVisible();
   await expect(page.getByRole('region', { name: 'My work pulse' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Workspace metrics' })).toHaveCount(0);
@@ -152,8 +152,9 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.goto('/');
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    useStore.setState({ notifications: [] });
+    const { stopBackendAutoSync, useStore } = await import('/src/store/index.ts');
+    stopBackendAutoSync();
+    useStore.setState({ notifications: [], notificationUnreadCount: 0 });
   });
   await expect(page.locator('[aria-label="New notifications"]')).toHaveAttribute('data-popup-ready', 'true');
   const headerNotificationButton = page.locator('header').getByRole('button', { name: 'Notifications', exact: true });
@@ -435,7 +436,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await newTaskButton.click();
   const createTaskDialog = page.getByRole('dialog', { name: 'Create Task' });
   await expect(createTaskDialog).toBeVisible();
-  await expect(createTaskDialog.getByText('Files and notes')).toBeVisible();
+  await expect(createTaskDialog.getByLabel('Attachment URL')).toBeVisible();
   await expect(createTaskDialog.getByLabel('Recurrence')).toHaveCount(0);
   const taskDepartment = createTaskDialog.getByLabel(/Assign to Position\/Department/);
   await expect(taskDepartment.locator('option[value="Videoshooting"]')).toHaveCount(0);
@@ -512,7 +513,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.locator('[data-calendar-filter="all"]')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('[data-calendar-filter="open"]').click();
   await expect(page.locator('[data-calendar-filter="open"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText('Showing: Open tasks')).toBeVisible();
+  await expect(page.getByText('Showing: Open tasks', { exact: true })).toBeVisible();
   await page.locator('[data-calendar-filter="all"]').click();
   await expect(page.locator('[data-calendar-filter="all"]')).toHaveAttribute('aria-pressed', 'true');
   await page.locator(`[data-calendar-date="${calendarDates.start}"]`).click({ position: { x: 12, y: 12 } });
@@ -595,6 +596,16 @@ test('first login reaches the app and critical responsive routes remain usable',
   await techNovaCard.getByRole('button', { name: 'View work' }).click();
   await expect(techNovaCard.getByRole('heading', { name: 'Tasks' })).toBeVisible();
   await expect(techNovaCard.getByRole('heading', { name: 'Deliverables' })).toBeVisible();
+
+  const trackerSearch = deliveryTracker.getByRole('searchbox', { name: 'Search delivery tracker' });
+  await trackerSearch.fill('UrbanEats');
+  await expect(page).toHaveURL(/\/clients\?search=UrbanEats$/);
+  await expect(deliveryTracker.locator('article')).toHaveCount(1);
+  await deliveryTracker.getByRole('button', { name: 'Clear delivery tracker search' }).click();
+  await expect(trackerSearch).toHaveValue('');
+  await expect(page).toHaveURL(/\/clients$/);
+  await deliveryTracker.getByRole('button', { name: 'Overdue' }).click();
+  await expect(deliveryTracker.getByRole('button', { name: 'Overdue' })).toHaveAttribute('aria-pressed', 'true');
 
   await page.goto('/projects');
   const newClientButton = page.getByRole('button', { name: 'New client' });

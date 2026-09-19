@@ -177,7 +177,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
         <section aria-labelledby="staff-task-state" className="calm-raised p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p id="staff-task-state" className="calm-eyebrow">Current work state</p>
+              <p id="staff-task-state" className="calm-eyebrow">Status</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusChip tone={liveTask.status === 'Waiting Approval' ? 'amber' : liveTask.isCompleted ? 'emerald' : 'blue'}>{liveTask.status}</StatusChip>
                 <span className="text-xs font-semibold text-muted">{liveTask.priority} priority</span>

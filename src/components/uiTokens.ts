@@ -4,7 +4,7 @@ export const raisedCard = 'calm-raised';
 export const mutedPanel = 'calm-inset';
 export const sectionDivider = 'border-t border-line/80 pt-6';
 export const tableShell = 'overflow-hidden rounded-panel bg-surface ring-1 ring-line/80';
-export const tableHeader = 'bg-inset/90 text-xs font-semibold text-muted';
+export const tableHeader = 'bg-inset/80 text-xs font-semibold text-muted';
 export const filterBar = 'rounded-panel bg-inset/80 p-3 ring-1 ring-line/70 sm:p-4';
 export const inputBase = [
   'min-h-11 w-full rounded-control border border-line bg-surface text-sm text-ink shadow-none',

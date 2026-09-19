@@ -24,8 +24,17 @@ import { isLocalServiceDemoEnabled } from '../mock/localServiceDemo';
 
 const AVATAR_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 const AVATAR_UPLOAD_SIZE = 320;
-const AVATAR_UPLOAD_QUALITY = 0.86;
-const AVATAR_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const AVATAR_UPLOAD_MAX_DATA_URL_LENGTH = 60_000;
+const AVATAR_UPLOAD_QUALITIES = [0.84, 0.72, 0.6, 0.48, 0.36, 0.24];
+const AVATAR_UPLOAD_SIZES = [AVATAR_UPLOAD_SIZE, 256, 192, 160, 128];
+const AVATAR_ALLOWED_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']);
+const AVATAR_ALLOWED_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif']);
+
+const hasSupportedAvatarType = (file: File) => {
+  if (AVATAR_ALLOWED_TYPES.has(file.type.toLowerCase())) return true;
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  return !file.type && Boolean(extension && AVATAR_ALLOWED_EXTENSIONS.has(extension));
+};
 
 const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader();
@@ -52,28 +61,29 @@ const resizeAvatarImage = async (file: File) => {
 
   if (!context) throw new Error('This browser cannot prepare the avatar image.');
 
-  canvas.width = AVATAR_UPLOAD_SIZE;
-  canvas.height = AVATAR_UPLOAD_SIZE;
-
   const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
   const sourceX = Math.max(0, (image.naturalWidth - sourceSize) / 2);
   const sourceY = Math.max(0, (image.naturalHeight - sourceSize) / 2);
 
-  context.fillStyle = '#ffffff';
-  context.fillRect(0, 0, AVATAR_UPLOAD_SIZE, AVATAR_UPLOAD_SIZE);
-  context.drawImage(
-    image,
-    sourceX,
-    sourceY,
-    sourceSize,
-    sourceSize,
-    0,
-    0,
-    AVATAR_UPLOAD_SIZE,
-    AVATAR_UPLOAD_SIZE,
-  );
+  for (const size of AVATAR_UPLOAD_SIZES) {
+    canvas.width = size;
+    canvas.height = size;
 
-  return canvas.toDataURL('image/jpeg', AVATAR_UPLOAD_QUALITY);
+    for (const quality of AVATAR_UPLOAD_QUALITIES) {
+      context.clearRect(0, 0, size, size);
+      context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, size, size);
+      const webp = canvas.toDataURL('image/webp', quality);
+      if (webp.length <= AVATAR_UPLOAD_MAX_DATA_URL_LENGTH) return webp;
+
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, size, size);
+      context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, size, size);
+      const jpeg = canvas.toDataURL('image/jpeg', quality);
+      if (jpeg.length <= AVATAR_UPLOAD_MAX_DATA_URL_LENGTH) return jpeg;
+    }
+  }
+
+  throw new Error('This photo is too detailed to save. Choose a smaller image and try again.');
 };
 
 const Settings: React.FC = () => {
@@ -125,7 +135,10 @@ const Settings: React.FC = () => {
   const [profileMessage, setProfileMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [avatarUploadMessage, setAvatarUploadMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [isPreparingAvatar, setIsPreparingAvatar] = React.useState(false);
+  const [avatarPreviewFailed, setAvatarPreviewFailed] = React.useState(false);
+  const [profileRetryDraft, setProfileRetryDraft] = React.useState<Pick<User, 'name' | 'email' | 'avatar'> | null>(null);
   const avatarFileInputRef = React.useRef<HTMLInputElement>(null);
+  const profileFormRef = React.useRef<HTMLFormElement>(null);
   const [soundEnabled, setSoundEnabledState] = React.useState(getSoundEnabled);
 
   React.useEffect(() => {
@@ -218,6 +231,7 @@ const Settings: React.FC = () => {
     profileEmail.trim() !== (currentUser?.email || '') ||
     avatarUrl.trim() !== (currentUser?.avatar || '')
   );
+  const avatarChanged = avatarUrl.trim() !== (currentUser?.avatar || '');
   const profileEmailChanged = profileEmail.trim().toLowerCase() !== (currentUser?.email || '').trim().toLowerCase();
   const isUploadedAvatar = avatarUrl.startsWith('data:image/');
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
@@ -275,14 +289,15 @@ const Settings: React.FC = () => {
     setProfileEmail(currentUser?.email || '');
     setProfileCurrentPassword('');
     setAvatarUrl(currentUser?.avatar || '');
+    setAvatarPreviewFailed(false);
     setProfileMessage(null);
     setAvatarUploadMessage(null);
+    setProfileRetryDraft(null);
     setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setPasswordMessage(null);
   }, [currentUser?.id, currentUser?.name, currentUser?.email, currentUser?.avatar]);
 
-  const handleProfileSave = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const saveProfileChanges = async () => {
     setIsProfileSaving(true);
 
     const previousProfile = {
@@ -295,7 +310,7 @@ const Settings: React.FC = () => {
       const emailResult = await updateCurrentUserEmail(profileEmail, profileCurrentPassword);
       if (!emailResult.ok) {
         setIsProfileSaving(false);
-        setProfileMessage({ tone: 'error', text: emailResult.error || 'Login email could not be updated.' });
+        setProfileMessage({ tone: 'error', text: emailResult.error || t('Login email could not be updated.') });
         return;
       }
       setProfileCurrentPassword('');
@@ -309,7 +324,7 @@ const Settings: React.FC = () => {
 
     if (!result.ok) {
       setIsProfileSaving(false);
-      setProfileMessage({ tone: 'error', text: result.error || 'Profile could not be updated.' });
+      setProfileMessage({ tone: 'error', text: result.error || t('Profile could not be updated.') });
       return;
     }
 
@@ -324,12 +339,31 @@ const Settings: React.FC = () => {
           ? { ...(state.currentUser as User), name: previousProfile.name, email: previousProfile.email, avatar: previousProfile.avatar }
           : state.currentUser,
       }));
+      setProfileRetryDraft({ name: profileName, email: profileEmail, avatar: avatarUrl });
     }
     setProfileMessage({
       tone: saved.ok ? 'success' : 'error',
-      text: saved.ok ? 'Profile updated.' : saved.error || 'Profile is waiting to be saved. Use Retry required to try again.',
+      text: saved.ok ? t('Profile updated.') : saved.error || t('Profile is waiting to be saved. Use Retry required to try again.'),
     });
-    if (saved.ok) setAvatarUploadMessage(null);
+    if (saved.ok) {
+      setProfileRetryDraft(null);
+      setAvatarUploadMessage(null);
+    }
+  };
+
+  const handleProfileSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await saveProfileChanges();
+  };
+
+  const retryProfileSave = () => {
+    if (!profileRetryDraft || isProfileSaving) return;
+    setProfileName(profileRetryDraft.name);
+    setProfileEmail(profileRetryDraft.email);
+    setAvatarUrl(profileRetryDraft.avatar || '');
+    setAvatarPreviewFailed(false);
+    setProfileMessage(null);
+    window.setTimeout(() => profileFormRef.current?.requestSubmit(), 0);
   };
 
   const resetProfileForm = () => {
@@ -337,6 +371,8 @@ const Settings: React.FC = () => {
     setProfileEmail(currentUser?.email || '');
     setProfileCurrentPassword('');
     setAvatarUrl(currentUser?.avatar || '');
+    setAvatarPreviewFailed(false);
+    setProfileRetryDraft(null);
     setProfileMessage(null);
     setAvatarUploadMessage(null);
   };
@@ -344,14 +380,16 @@ const Settings: React.FC = () => {
   const useGeneratedAvatar = () => {
     const seed = encodeURIComponent((profileName || currentUser?.name || 'AiTask User').replace(/\s/g, ''));
     setAvatarUrl(`https://i.pravatar.cc/150?u=${seed}`);
+    setAvatarPreviewFailed(false);
     setProfileMessage(null);
-    setAvatarUploadMessage(null);
+    setAvatarUploadMessage({ tone: 'success', text: t('Photo change ready. Save profile to apply it.') });
   };
 
   const clearAvatar = () => {
     setAvatarUrl('');
+    setAvatarPreviewFailed(false);
     setProfileMessage(null);
-    setAvatarUploadMessage(null);
+    setAvatarUploadMessage({ tone: 'success', text: t('Photo removal ready. Save profile to apply it.') });
   };
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -363,10 +401,10 @@ const Settings: React.FC = () => {
     setProfileMessage(null);
     setAvatarUploadMessage(null);
 
-    if (!AVATAR_ALLOWED_TYPES.has(file.type)) {
+    if (!hasSupportedAvatarType(file)) {
       setAvatarUploadMessage({
         tone: 'error',
-        text: 'Choose a JPG, PNG, WebP, or GIF image.',
+        text: t('Choose a JPG, PNG, WebP, or GIF image.'),
       });
       return;
     }
@@ -374,7 +412,7 @@ const Settings: React.FC = () => {
     if (file.size > AVATAR_UPLOAD_MAX_BYTES) {
       setAvatarUploadMessage({
         tone: 'error',
-        text: 'Photo must be 5 MB or smaller.',
+        text: t('Photo must be 5 MB or smaller.'),
       });
       return;
     }
@@ -383,14 +421,15 @@ const Settings: React.FC = () => {
       setIsPreparingAvatar(true);
       const resizedAvatar = await resizeAvatarImage(file);
       setAvatarUrl(resizedAvatar);
+      setAvatarPreviewFailed(false);
       setAvatarUploadMessage({
         tone: 'success',
-        text: 'Photo ready. Save profile to apply it.',
+        text: t('Photo ready. Save profile to apply it.'),
       });
     } catch (error) {
       setAvatarUploadMessage({
         tone: 'error',
-        text: error instanceof Error ? error.message : 'Could not prepare that photo.',
+        text: error instanceof Error ? t(error.message) : t('Could not prepare that photo.'),
       });
     } finally {
       setIsPreparingAvatar(false);
@@ -518,25 +557,34 @@ const Settings: React.FC = () => {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-3">
-          <h2 className="text-lg font-semibold text-slate-950">Account</h2>
-          <p className="mt-1 text-sm text-slate-500">Profile, sign-in security, and your current access.</p>
+          <h2 className="text-lg font-semibold text-ink">{t('Account')}</h2>
+          <p className="mt-1 text-sm text-muted">{t('Profile, sign-in security, and your current access.')}</p>
         </div>
         <div className={`${isPasswordSetupOnly ? 'xl:col-span-3' : 'xl:col-span-2'} ${cardBase} overflow-hidden`}>
           {!isPasswordSetupOnly && (
             <>
-          <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
-            <UserCircle className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-slate-800">Profile</h2>
+          <div className="flex items-center gap-3 border-b border-line px-6 py-5">
+            <UserCircle className="h-5 w-5 text-accent" aria-hidden="true" />
+            <h2 className="text-lg font-semibold text-ink">{t('Profile')}</h2>
           </div>
-          <form onSubmit={handleProfileSave} className="p-6 space-y-5">
+          <form ref={profileFormRef} onSubmit={handleProfileSave} className="p-6 space-y-5" aria-busy={isProfileSaving || isPreparingAvatar}>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
               <div className="flex flex-col items-start gap-3 lg:w-64 lg:shrink-0">
-                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt={`${profileName || currentUser?.name || 'User'} avatar preview`} className="h-full w-full object-cover" />
+                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-line bg-inset">
+                  {avatarUrl && !avatarPreviewFailed ? (
+                    <img
+                      src={avatarUrl}
+                      alt={`${profileName || currentUser?.name || t('User')} ${t('profile photo preview')}`}
+                      className="h-full w-full object-cover"
+                      onError={() => {
+                        setAvatarPreviewFailed(true);
+                        setAvatarUploadMessage({ tone: 'error', text: t('That photo could not be previewed. Choose another photo or URL.') });
+                      }}
+                    />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-slate-400">
-                      <UserCircle className="h-9 w-9" />
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted" role="img" aria-label={avatarUrl ? t('Photo preview unavailable') : t('No profile photo')}>
+                      <UserCircle className="h-9 w-9" aria-hidden="true" />
+                      {avatarUrl && <span className="px-1 text-center text-[10px] leading-3">{t('Preview unavailable')}</span>}
                     </div>
                   )}
                 </div>
@@ -544,7 +592,9 @@ const Settings: React.FC = () => {
                   <input
                     ref={avatarFileInputRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    id="profile-avatar-file"
+                    accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
+                    aria-describedby="profile-avatar-help profile-avatar-feedback"
                     className="hidden"
                     onChange={handleAvatarUpload}
                   />
@@ -552,30 +602,30 @@ const Settings: React.FC = () => {
                     type="button"
                     variant="secondary"
                     onClick={() => avatarFileInputRef.current?.click()}
-                    disabled={isPreparingAvatar}
-                    className="min-h-9 px-3 py-1.5"
+                    disabled={isPreparingAvatar || isProfileSaving}
+                    aria-busy={isPreparingAvatar}
                   >
-                    <Upload className="h-4 w-4" />
-                    {isPreparingAvatar ? 'Preparing...' : 'Upload photo'}
+                    <Upload className="h-4 w-4" aria-hidden="true" />
+                    {isPreparingAvatar ? t('Preparing...') : t('Upload photo')}
                   </Button>
-                  <Button type="button" variant="secondary" onClick={useGeneratedAvatar} className="min-h-9 px-3 py-1.5">
-                    Generate
+                  <Button type="button" variant="secondary" onClick={useGeneratedAvatar} disabled={isPreparingAvatar || isProfileSaving}>
+                    {t('Generate')}
                   </Button>
                   {avatarUrl && (
-                    <Button type="button" variant="ghost" onClick={clearAvatar} className="min-h-9 px-3 py-1.5 text-red-600 hover:bg-red-50 hover:text-red-700">
-                      <X className="h-4 w-4" />
-                      Remove
+                    <Button type="button" variant="ghost" onClick={clearAvatar} disabled={isPreparingAvatar || isProfileSaving} className="text-[rgb(var(--calm-danger))] hover:bg-[rgb(var(--calm-danger-soft))] hover:text-[rgb(var(--calm-danger))]">
+                      <X className="h-4 w-4" aria-hidden="true" />
+                      {t('Remove photo')}
                     </Button>
                   )}
                 </div>
-                <p className="text-xs leading-5 text-slate-500">
-                  JPG, PNG, WebP, or GIF. Photos are resized before saving.
+                <p id="profile-avatar-help" className="text-xs leading-5 text-muted">
+                  {t('JPG, PNG, WebP, or GIF · maximum 5 MB. Photos are square-cropped and resized before saving. GIFs use the first frame.')}
                 </p>
                 {avatarUploadMessage && (
                   <p className={cn(
                     'text-xs font-medium leading-5',
-                    avatarUploadMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-600'
-                  )} role={avatarUploadMessage.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
+                    avatarUploadMessage.tone === 'success' ? 'text-[rgb(var(--calm-success))]' : 'text-[rgb(var(--calm-danger))]'
+                  )} id="profile-avatar-feedback" role={avatarUploadMessage.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
                     {avatarUploadMessage.text}
                   </p>
                 )}
@@ -583,7 +633,7 @@ const Settings: React.FC = () => {
 
               <div className="grid min-w-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
                 <div>
-                  <label htmlFor="profile-name" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Name</label>
+                  <label htmlFor="profile-name" className="mb-1 block text-xs font-semibold text-muted">{t('Name')}</label>
                   <input
                     id="profile-name"
                     value={profileName}
@@ -597,7 +647,7 @@ const Settings: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="profile-email" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Email</label>
+                  <label htmlFor="profile-email" className="mb-1 block text-xs font-semibold text-muted">{t('Email')}</label>
                   <input
                     id="profile-email"
                     type="email"
@@ -614,8 +664,8 @@ const Settings: React.FC = () => {
                 </div>
                 {backend.mode === 'supabase' && profileEmailChanged && (
                   <div className="lg:col-span-2">
-                    <label htmlFor="profile-current-password" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                      Current password
+                    <label htmlFor="profile-current-password" className="mb-1 block text-xs font-semibold text-muted">
+                      {t('Current password')}
                     </label>
                     <input
                       id="profile-current-password"
@@ -629,67 +679,81 @@ const Settings: React.FC = () => {
                       autoComplete="current-password"
                       required
                     />
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      This changes both your Supabase login email and AiTask profile email.
+                    <p className="mt-1 text-xs leading-5 text-muted">
+                      {t('This changes both your Supabase login email and AiTask profile email.')}
                     </p>
                   </div>
                 )}
                 <div className="lg:col-span-2">
-                  <label htmlFor="profile-avatar" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                    {isUploadedAvatar ? 'Avatar source' : 'Avatar URL'}
+                    <label id="profile-avatar-label" htmlFor={isUploadedAvatar ? undefined : 'profile-avatar'} className="mb-1 block text-xs font-semibold text-muted">
+                    {isUploadedAvatar ? t('Photo source') : t('Avatar URL')}
                   </label>
-                  <input
-                    id="profile-avatar"
-                    value={isUploadedAvatar ? 'Uploaded photo stored with profile' : avatarUrl}
-                    onChange={event => {
-                      setAvatarUrl(event.target.value);
-                      setProfileMessage(null);
-                      setAvatarUploadMessage(null);
-                    }}
-                    readOnly={isUploadedAvatar}
-                    className={cn(inputBase, 'px-3 py-2.5')}
-                    placeholder="Upload a photo, generate an avatar, or use a Supabase image URL"
-                    autoComplete="url"
-                  />
+                  {isUploadedAvatar ? (
+                    <div id="profile-avatar" className="flex min-h-11 items-center justify-between gap-3 rounded-control border border-line bg-inset px-3 text-sm text-ink" role="status" aria-labelledby="profile-avatar-label">
+                      <span>{avatarChanged ? t('New uploaded photo · unsaved') : t('Uploaded photo stored with profile')}</span>
+                      <span className="shrink-0 text-xs text-muted">{t('Use Remove to switch source')}</span>
+                    </div>
+                  ) : (
+                    <input
+                      id="profile-avatar"
+                      value={avatarUrl}
+                      onChange={event => {
+                        setAvatarUrl(event.target.value);
+                        setAvatarPreviewFailed(false);
+                        setProfileMessage(null);
+                        setAvatarUploadMessage(null);
+                      }}
+                      className={cn(inputBase, 'px-3 py-2.5')}
+                      placeholder={t('Upload a photo, generate an avatar, or use a Supabase image URL')}
+                      autoComplete="url"
+                    />
+                  )}
                   {isUploadedAvatar && (
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Remove the uploaded photo if you want to paste a web image URL instead.
+                    <p className="mt-1 text-xs leading-5 text-muted">
+                      {t('Remove the uploaded photo if you want to paste a web image URL instead.')}
                     </p>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Role</label>
-                  <p className="font-semibold text-slate-900">{effectiveRoleName}</p>
-                  {currentUser?.customRoleId && <p className="mt-1 text-xs text-slate-500">Base role: {getRoleDisplayName(currentUser.role)}</p>}
+                  <label className="mb-1 block text-xs font-semibold text-muted">{t('Role')}</label>
+                  <p className="font-semibold text-ink">{effectiveRoleName}</p>
+                  {currentUser?.customRoleId && <p className="mt-1 text-xs text-muted">{t('Base role')}: {getRoleDisplayName(currentUser.role)}</p>}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Department</label>
-                  <p className="font-semibold text-slate-900">
-                    {currentUser ? getMemberDepartments(currentUser).join(', ') : 'Not assigned'}
+                  <label className="mb-1 block text-xs font-semibold text-muted">{t('Department')}</label>
+                  <p className="font-semibold text-ink">
+                    {currentUser ? getMemberDepartments(currentUser).join(', ') : t('Not assigned')}
                   </p>
                 </div>
                 <div className="lg:col-span-2">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Client Company</label>
-                  <p className="font-semibold text-slate-900">{currentUser?.companyName || 'Not linked'}</p>
+                  <label className="mb-1 block text-xs font-semibold text-muted">{t('Client Company')}</label>
+                  <p className="font-semibold text-ink">{currentUser?.companyName || t('Not linked')}</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-h-5 text-sm">
                 {profileMessage && (
-                  <p className={profileMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-600'} role={profileMessage.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
+                  <p className={profileMessage.tone === 'success' ? 'text-[rgb(var(--calm-success))]' : 'text-[rgb(var(--calm-danger))]'} role={profileMessage.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
                     {profileMessage.text}
                   </p>
                 )}
+                {!profileMessage && profileChanged && <p className="text-muted">{t('Unsaved profile changes')}</p>}
               </div>
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button type="button" variant="secondary" onClick={resetProfileForm} disabled={!profileChanged || isProfileSaving}>
                   Reset
                 </Button>
-                <Button type="submit" disabled={!profileChanged || isProfileSaving}>
-                  {isProfileSaving ? 'Saving...' : 'Save profile'}
+                <Button type="submit" disabled={!profileChanged || isProfileSaving} aria-busy={isProfileSaving}>
+                  {isProfileSaving ? t('Saving...') : t('Save profile')}
                 </Button>
+                {profileRetryDraft && (
+                  <Button type="button" variant="secondary" onClick={retryProfileSave} disabled={isProfileSaving}>
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                    {t('Retry save')}
+                  </Button>
+                )}
               </div>
             </div>
           </form>
@@ -711,7 +775,7 @@ const Settings: React.FC = () => {
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div>
-                <label htmlFor="current-password" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Current Password</label>
+                <label htmlFor="current-password" className="block text-xs font-semibold text-slate-400 mb-1">Current Password</label>
                 <input
                   id="current-password"
                   type="password"
@@ -723,7 +787,7 @@ const Settings: React.FC = () => {
                 />
               </div>
               <div>
-                <label htmlFor="new-password" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">New Password</label>
+                <label htmlFor="new-password" className="block text-xs font-semibold text-slate-400 mb-1">New Password</label>
                 <input
                   id="new-password"
                   type="password"
@@ -736,7 +800,7 @@ const Settings: React.FC = () => {
                 />
               </div>
               <div>
-                <label htmlFor="confirm-password" className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Confirm Password</label>
+                <label htmlFor="confirm-password" className="block text-xs font-semibold text-slate-400 mb-1">Confirm Password</label>
                 <input
                   id="confirm-password"
                   type="password"
@@ -799,16 +863,16 @@ const Settings: React.FC = () => {
             </div>
             <div className="p-6 space-y-4 text-sm text-slate-600">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Company</p>
+                <p className="text-xs font-semibold text-slate-400">Company</p>
                 <p className="mt-1 text-base font-semibold text-slate-900">{currentUser?.companyName || 'Not linked'}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tasks</p>
+                  <p className="text-xs font-semibold text-slate-400">Tasks</p>
                   <p className="mt-1 text-xl font-bold text-slate-900">{visibleTasks.length}</p>
                 </div>
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Companies</p>
+                  <p className="text-xs font-semibold text-slate-400">Companies</p>
                   <p className="mt-1 text-xl font-bold text-slate-900">{visibleProjects.length}</p>
                 </div>
               </div>
@@ -920,11 +984,11 @@ const Settings: React.FC = () => {
                         }`} />
                         <span className="text-sm font-semibold text-slate-700 truncate">{status}</span>
                         {isDefault ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold uppercase tracking-wider shrink-0">
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold tracking-wide shrink-0">
                             <Lock className="w-2.5 h-2.5" /> System
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 font-bold uppercase tracking-wider shrink-0">
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 font-bold tracking-wide shrink-0">
                             Custom
                           </span>
                         )}
@@ -1030,19 +1094,19 @@ const Settings: React.FC = () => {
           </div>
           <div className="p-6 grid grid-cols-1 lg:grid-cols-4 gap-4 text-sm">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Status</p>
+              <p className="text-xs font-semibold text-slate-400">Status</p>
               <p className="mt-1 font-semibold text-slate-900">
                 {backend.status === 'loading' ? 'Checking latest workspace...' : backend.status === 'saving' ? 'Saving changes...' : backend.message}
               </p>
               {backend.error && <p className="mt-2 text-red-600" role="alert" aria-live="polite">{backend.error}</p>}
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Supabase Table</p>
+              <p className="text-xs font-semibold text-slate-400">Supabase Table</p>
               <p className="mt-1 font-semibold text-slate-900">{backendStatus.stateTable}</p>
               <p className="mt-1 text-slate-500">Snapshot ID: {backendStatus.stateId}</p>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Last Pull</p>
+              <p className="text-xs font-semibold text-slate-400">Last Pull</p>
               <p className="mt-1 font-semibold text-slate-900">
                 {backend.lastPulledAt ? new Date(backend.lastPulledAt).toLocaleString() : 'Not checked yet'}
               </p>
@@ -1051,7 +1115,7 @@ const Settings: React.FC = () => {
               )}
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Last Save</p>
+              <p className="text-xs font-semibold text-slate-400">Last Save</p>
               <p className="mt-1 font-semibold text-slate-900">
                 {backend.lastSavedAt || backend.lastSyncedAt
                   ? new Date(backend.lastSavedAt || backend.lastSyncedAt || '').toLocaleString()
@@ -1092,7 +1156,7 @@ const Settings: React.FC = () => {
                   <div key={item.label} className="flex items-start gap-2 border-t border-slate-100 pt-3">
                     <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', item.done ? 'text-emerald-600' : 'text-amber-500')} />
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{item.label}</p>
+                      <p className="text-xs font-semibold text-slate-400">{item.label}</p>
                       <p className="mt-1 break-words text-sm font-medium text-slate-800">{item.detail}</p>
                     </div>
                   </div>
@@ -1129,19 +1193,19 @@ const Settings: React.FC = () => {
         </div>
         <div className="grid grid-cols-2 gap-3 px-5 py-4 text-sm lg:grid-cols-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Release</p>
+            <p className="text-xs font-semibold text-slate-400">Release</p>
             <p className="mt-1 font-semibold text-slate-900">{APP_VERSION_LABEL}</p>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Build</p>
+            <p className="text-xs font-semibold text-slate-400">Build</p>
             <p className="mt-1 font-mono font-semibold text-slate-900">{APP_COMMIT}</p>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Channel</p>
+            <p className="text-xs font-semibold text-slate-400">Channel</p>
             <p className="mt-1 font-semibold capitalize text-slate-900">{APP_BUILD_CHANNEL}</p>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Built</p>
+            <p className="text-xs font-semibold text-slate-400">Built</p>
             <p className="mt-1 font-semibold text-slate-900">{new Date(APP_BUILD_TIME).toLocaleString()}</p>
           </div>
         </div>

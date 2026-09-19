@@ -9,8 +9,10 @@ import {
   Pause,
   Play,
   Plus,
+  RefreshCw,
   Send,
   StopCircle,
+  X,
 } from "lucide-react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { useStore } from "../store";
@@ -27,7 +29,6 @@ import {
   PageHeader,
   ProgressBar,
   SegmentedTabs,
-  StatGroup,
   StatusChip,
   Surface,
 } from "../components/ui";
@@ -47,7 +48,7 @@ import {
 } from "../lib/access";
 import { SECURE_WORKSPACE_ID } from "../lib/secureWorkspace";
 import { useI18n } from "../components/I18nProvider";
-import { downloadServiceFile, uploadServiceFile } from "../lib/serviceFiles";
+import { SERVICE_FILE_MAX_BYTES, downloadServiceFile, uploadServiceFile } from "../lib/serviceFiles";
 import DraftServicePlanEditor from "../components/DraftServicePlanEditor";
 import SideSheet from "../components/SideSheet";
 import ClientServiceWorkspace from "../components/ClientServiceWorkspace";
@@ -55,7 +56,18 @@ import CreateClientPlanModal from "../components/CreateClientPlanModal";
 
 type Tab = "overview" | "plan" | "cycles" | "addons" | "activity";
 const CLIENT_WORKSPACE_TABS_ID = "client-workspace";
-const MAX_SERVICE_FILE_BYTES = 100 * 1024 * 1024;
+type ActivityStage = "idle" | "uploading" | "saving";
+type ActivityFeedback = {
+  tone: "status" | "error";
+  text: string;
+  action?: "upload" | "save";
+};
+
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
 const deliverableStatuses: DeliverableStatus[] = [
   "Planned",
   "In Progress",
@@ -74,7 +86,11 @@ const OperationsClientWorkspace = () => {
   const [visibility, setVisibility] =
     React.useState<CommentVisibility>("internal");
   const [file, setFile] = React.useState<File>();
+  const [activityStage, setActivityStage] = React.useState<ActivityStage>("idle");
+  const activityFileInputRef = React.useRef<HTMLInputElement>(null);
+  const activityFormRef = React.useRef<HTMLFormElement>(null);
   const [message, setMessage] = React.useState("");
+  const [activityFeedback, setActivityFeedback] = React.useState<ActivityFeedback | null>(null);
   const [addonSheetOpen, setAddonSheetOpen] = React.useState(false);
   const [activitySheetOpen, setActivitySheetOpen] = React.useState(false);
   const [addonSaving, setAddonSaving] = React.useState(false);
@@ -191,12 +207,16 @@ const OperationsClientWorkspace = () => {
     if (activitySaving) return;
     const cycle = cycles[0];
     if (!cycle)
-      return setMessage("Create a service cycle before adding activity.");
-    if (file && file.size > MAX_SERVICE_FILE_BYTES)
-      return setMessage("Files must be 100 MB or smaller.");
+      return setActivityFeedback({ tone: "error", text: t("Create a service cycle before adding activity.") });
+    if (file && file.size > SERVICE_FILE_MAX_BYTES) {
+      setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller.") });
+      return;
+    }
     setActivitySaving(true);
+    setActivityStage(file ? "uploading" : "saving");
     let attachment: AttachmentRef | undefined;
     if (file && store.currentUser) {
+      setActivityFeedback({ tone: "status", text: t("Uploading file…") });
       const uploaded = await uploadServiceFile({
         file,
         workspaceId: SECURE_WORKSPACE_ID,
@@ -206,30 +226,61 @@ const OperationsClientWorkspace = () => {
       });
       if (uploaded.ok === false) {
         setActivitySaving(false);
-        return setMessage(uploaded.error);
+        setActivityStage("idle");
+        return setActivityFeedback({
+          tone: "error",
+          text: t(uploaded.error),
+          action: uploaded.error === "Private file uploads require the Supabase backend." ? undefined : "upload",
+        });
       }
       attachment = uploaded.attachment;
     }
+    setActivityStage("saving");
+    setActivityFeedback({ tone: "status", text: t("Saving activity…") });
     const result = store.addCycleComment(cycle.id, comment, visibility);
     if (!result.ok || !result.id) {
       setActivitySaving(false);
-      return setMessage(result.error || "Unable to add the comment.");
+      setActivityStage("idle");
+      return setActivityFeedback({ tone: "error", text: t(result.error || "Unable to add the comment.") });
     }
     if (attachment) {
       store.addCycleCommentAttachment(result.id, attachment);
     }
     const saved = await store.commitPendingMutation("cycle_comment.manage");
     setActivitySaving(false);
-    setMessage(
-      saved.ok
-        ? "Activity added."
-        : saved.error || "The activity is waiting to be saved.",
-    );
+    setActivityStage("idle");
+    if (!saved.ok) {
+      setActivityFeedback({ tone: "error", text: t(saved.error || "The activity is waiting to be saved."), action: "save" });
+      return;
+    }
+    setMessage(t("Activity added."));
+    setActivityFeedback(null);
     if (saved.ok) {
       setComment("");
       setFile(undefined);
+      if (activityFileInputRef.current) activityFileInputRef.current.value = "";
       setActivitySheetOpen(false);
     }
+  };
+
+  const retryActivitySave = async () => {
+    if (activitySaving) return;
+    setActivitySaving(true);
+    setActivityStage("saving");
+    setActivityFeedback({ tone: "status", text: t("Saving activity…") });
+    const saved = await store.retryPendingSave("cycle_comment.manage");
+    setActivitySaving(false);
+    setActivityStage("idle");
+    if (!saved.ok) {
+      setActivityFeedback({ tone: "error", text: t(saved.error || "The activity is waiting to be saved."), action: "save" });
+      return;
+    }
+    setMessage(t("Activity added."));
+    setActivityFeedback(null);
+    setComment("");
+    setFile(undefined);
+    if (activityFileInputRef.current) activityFileInputRef.current.value = "";
+    setActivitySheetOpen(false);
   };
   const addAddon = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -307,17 +358,17 @@ const OperationsClientWorkspace = () => {
         className="inline-flex min-h-11 items-center gap-1 rounded-control text-sm font-semibold text-muted hover:text-accent focus:outline-none focus:ring-2 focus:ring-accent/35"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to Companies
+        Back to companies
       </Link>
       <PageHeader
         compact
         title={<span data-i18n-skip>{client.clientName}</span>}
-        description="Service plan, monthly cycles, deliverables and client files."
+        description="Plan details, delivery cycles, deliverables, and shared files."
         meta={
           <>
             <StatusChip tone={activePlan?.status === "Active" ? "emerald" : activePlan?.status === "Paused" ? "amber" : "slate"}>{activePlan?.status || "No plan"}</StatusChip>
             {currentCycle && <span>{currentCycle.periodStart} – {currentCycle.periodEnd}</span>}
-            {activePlan?.contractEndDate && <span>Contract reminder {activePlan.contractEndDate}</span>}
+            {activePlan?.contractEndDate && <span>Renewal date {activePlan.contractEndDate}</span>}
           </>
         }
         action={
@@ -335,6 +386,7 @@ const OperationsClientWorkspace = () => {
         <p
           className="rounded-control border border-line bg-inset px-4 py-3 text-sm font-medium text-ink"
           role="status"
+          aria-live="polite"
         >
           {message}
         </p>
@@ -342,19 +394,19 @@ const OperationsClientWorkspace = () => {
 
       {tab === "overview" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-overview`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-overview`} tabIndex={0} className="grid scroll-mt-36 gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
-          <Surface variant="inset" className="p-6 sm:p-8">
-            <p className="calm-eyebrow">Current delivery progress</p>
+          <Surface variant="inset" className="border-l-2 border-accent p-6 sm:p-8">
+            <p className="calm-eyebrow">Delivery progress</p>
             <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-              <div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{currentProgress}%</p><p className="mt-2 text-sm text-muted">{`${currentDelivered} of ${currentCycleDeliverables.length} deliverables completed`}</p></div>
+              <div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{currentProgress}%</p><p className="mt-2 text-sm text-muted">{currentDelivered}/{currentCycleDeliverables.length} {t('deliverables completed')}</p></div>
               {currentCycle && <StatusChip tone={currentCycle.status === "Completed" || currentCycle.status === "Published" ? "emerald" : "slate"}>{currentCycle.status}</StatusChip>}
             </div>
-            <ProgressBar className="mt-7" value={currentDelivered} max={Math.max(currentCycleDeliverables.length, 1)} label="Monthly deliverables" />
-            <StatGroup className="mt-7 grid-cols-3">
+            <ProgressBar className="mt-7" value={currentDelivered} max={Math.max(currentCycleDeliverables.length, 1)} label="Current cycle" />
+            <div className="mt-7 grid grid-cols-3 border-t border-line/70">
               {[["Included", currentCycleDeliverables.length], ["Completed", currentDelivered], ["Remaining", currentCycleDeliverables.length - currentDelivered]].map(([label, value]) => <div key={label} className="p-4"><p className="calm-number text-2xl font-semibold text-ink">{value}</p><p className="mt-1 text-xs text-muted">{label}</p></div>)}
-            </StatGroup>
+            </div>
           </Surface>
           <Surface className="p-6">
-            <p className="calm-eyebrow">Service context</p>
+            <p className="calm-eyebrow">Plan details</p>
             <dl className="mt-5 divide-y divide-line/70">
               {[["Active plan", activePlan?.name || "Not configured"], ["Plan status", activePlan?.status || "None"], ["Service cycles", String(cycles.length)], ["Next key date", activePlan?.contractEndDate || currentCycle?.periodEnd || "Not scheduled"]].map(([label, value]) => <div key={label} className="grid grid-cols-[120px_1fr] gap-3 py-3 text-sm"><dt className="text-muted">{label}</dt><dd className="text-right font-medium text-ink">{label === 'Active plan' && activePlan?.name ? <span data-i18n-skip>{value}</span> : t(String(value))}</dd></div>)}
             </dl>
@@ -565,7 +617,7 @@ const OperationsClientWorkspace = () => {
                 </div>
                 <div className="border-b border-line bg-inset/70 px-5 py-5">
                   <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-                    <ProgressBar value={completedTotal} max={Math.max(includedTotal, 1)} label={`${completedTotal} of ${includedTotal} deliverables completed`} />
+                    <ProgressBar value={completedTotal} max={Math.max(includedTotal, 1)} label={`${completedTotal}/${includedTotal} ${t('deliverables completed')}`} />
                     <div className="grid grid-cols-3 gap-6 text-right">
                       {[["Included", includedTotal], ["Completed", completedTotal], ["Remaining", Math.max(0, includedTotal - completedTotal)]].map(([label, value]) => <span key={label}><strong className="calm-number block text-lg text-ink">{value}</strong><small className="text-muted">{label}</small></span>)}
                     </div>
@@ -828,7 +880,7 @@ const OperationsClientWorkspace = () => {
 
       {tab === "activity" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-activity`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-activity`} tabIndex={0} className="scroll-mt-36 space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {!isClient && <div className="flex justify-end"><Button onClick={() => setActivitySheetOpen(true)}><MessageSquareText className="h-4 w-4" />Add activity</Button></div>}
+          {!isClient && <div className="flex justify-end"><Button onClick={() => { setActivityFeedback(null); setActivitySheetOpen(true); }}><MessageSquareText className="h-4 w-4" />{t("Add activity")}</Button></div>}
           <section className={cn(cardBase, "divide-y divide-slate-100")}>
             {comments.map((item) => (
               <article key={item.id} className="p-5">
@@ -853,7 +905,7 @@ const OperationsClientWorkspace = () => {
                     }}
                     className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-blue-700"
                   >
-                    <FileUp className="h-4 w-4" />
+                    <FileUp className="h-4 w-4" aria-hidden="true" />
                     {attachment.fileName}
                   </button>
                 ))}
@@ -891,17 +943,97 @@ const OperationsClientWorkspace = () => {
         </form>
       </SideSheet>
 
-      <SideSheet
+        <SideSheet
         isOpen={activitySheetOpen && !isClient}
         onClose={() => { if (!activitySaving) setActivitySheetOpen(false); }}
-        title="Add activity"
-        description="Share an internal note or a client-visible update with an optional private file."
-        footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setActivitySheetOpen(false)} disabled={activitySaving}>Cancel</Button><Button type="submit" form="add-activity-form" disabled={activitySaving}><CheckCircle2 className="h-4 w-4" />{activitySaving ? "Saving…" : "Add activity"}</Button></div>}
+        title={t("Add activity")}
+        description={t("Share an internal note or a client-visible update with an optional private file.")}
+        footer={<div className="flex flex-col-reverse justify-end gap-2 sm:flex-row"><Button variant="secondary" onClick={() => setActivitySheetOpen(false)} disabled={activitySaving}>{t("Cancel")}</Button><Button type="submit" form="add-activity-form" disabled={activitySaving} aria-busy={activitySaving}><CheckCircle2 className="h-4 w-4" aria-hidden="true" />{activityStage === "uploading" ? t("Uploading…") : activityStage === "saving" ? t("Saving…") : activityFeedback?.action === "save" ? t("Retry save") : t("Add activity")}</Button></div>}
       >
-        <form id="add-activity-form" onSubmit={submitComment} className="space-y-5">
-          <label className="block text-sm font-medium text-ink">Update<textarea required className={cn(inputBase, "mt-1.5 min-h-32 px-3 py-2.5")} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Share an update..." /></label>
-          <label className="block text-sm font-medium text-ink">Visibility<select className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={visibility} onChange={(e) => setVisibility(e.target.value as CommentVisibility)}><option value="internal">Internal only</option><option value="client-visible">Visible to client</option></select></label>
-          <label className="block text-sm font-medium text-ink">File <span className="font-normal text-muted">(maximum 100 MB)</span><input type="file" onChange={(e) => { const selected = e.target.files?.[0]; if (selected && selected.size > MAX_SERVICE_FILE_BYTES) { e.target.value = ""; setFile(undefined); setMessage("Files must be 100 MB or smaller."); return; } setFile(selected); setMessage(""); }} className="mt-2 block min-h-11 w-full text-sm text-muted" /></label>
+        <form ref={activityFormRef} id="add-activity-form" onSubmit={activityFeedback?.action === "save" ? (event) => { event.preventDefault(); void retryActivitySave(); } : submitComment} className="space-y-5" aria-busy={activitySaving}>
+          {activityFeedback && (
+            <div
+              id="activity-feedback"
+              className={cn(
+                "rounded-control border px-3 py-3 text-sm",
+                activityFeedback.tone === "error"
+                  ? "border-[rgb(var(--calm-danger)/.35)] bg-[rgb(var(--calm-danger-soft))] text-[rgb(var(--calm-danger))]"
+                  : "border-accent/25 bg-accent-soft text-accent",
+              )}
+              role={activityFeedback.tone === "error" ? "alert" : "status"}
+              aria-live={activityFeedback.tone === "error" ? "assertive" : "polite"}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="min-w-0 flex-1">{activityFeedback.text}</p>
+                {activityFeedback.action === "upload" && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0 px-3 text-xs"
+                    onClick={() => {
+                      setActivityFeedback(null);
+                      activityFormRef.current?.requestSubmit();
+                    }}
+                    disabled={activitySaving}
+                  >
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                    {t("Try again")}
+                  </Button>
+                )}
+                {activityFeedback.action === "save" && (
+                  <Button type="submit" form="add-activity-form" variant="secondary" className="shrink-0 px-3 text-xs" disabled={activitySaving}>
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                    {t("Retry save")}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+          {activityStage === "uploading" && (
+            <div
+              className="overflow-hidden rounded-full bg-inset"
+              role="progressbar"
+              aria-label={t("Uploading file…")}
+              aria-valuetext={t("Uploading file…")}
+            >
+              <div className="motion-safe:animate-pulse h-1.5 w-1/3 rounded-full bg-accent" />
+            </div>
+          )}
+          <label className="block text-sm font-medium text-ink">{t("Update")}<textarea required className={cn(inputBase, "mt-1.5 min-h-32 px-3 py-2.5")} value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t("Share an update...")} /></label>
+          <label className="block text-sm font-medium text-ink">{t("Visibility")}<select className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={visibility} onChange={(e) => setVisibility(e.target.value as CommentVisibility)}><option value="internal">{t("Internal only")}</option><option value="client-visible">{t("Visible to client")}</option></select></label>
+          <div>
+            <label htmlFor="activity-file" className="block text-sm font-medium text-ink">{t("File")} <span className="font-normal text-muted">{t("(maximum 100 MB)")}</span></label>
+            <input
+              id="activity-file"
+              ref={activityFileInputRef}
+              type="file"
+              aria-describedby="activity-file-help activity-file-selection"
+              onChange={(e) => {
+                const selected = e.target.files?.[0];
+                if (selected && selected.size > SERVICE_FILE_MAX_BYTES) {
+                  e.target.value = "";
+                  setFile(undefined);
+                  setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller.") });
+                  return;
+                }
+                setFile(selected);
+                setActivityFeedback(null);
+              }}
+              className="mt-2 block min-h-11 w-full rounded-control border border-line bg-surface px-3 py-2 text-sm text-muted file:mr-3 file:rounded-control file:border-0 file:bg-accent-soft file:px-3 file:py-1.5 file:font-semibold file:text-accent focus:outline-none focus:ring-2 focus:ring-accent/35"
+            />
+            <p id="activity-file-help" className="mt-1 text-xs leading-5 text-muted">{t("Optional private file. Uploads require the secure workspace backend.")}</p>
+            {file && (
+              <div id="activity-file-selection" className="mt-3 flex items-center justify-between gap-3 rounded-control border border-line bg-inset px-3 py-2.5 text-sm" role="status">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-ink" data-i18n-skip>{file.name}</p>
+                  <p className="text-xs text-muted">{formatFileSize(file.size)}</p>
+                </div>
+                <button type="button" onClick={() => { setFile(undefined); setActivityFeedback(null); if (activityFileInputRef.current) activityFileInputRef.current.value = ""; }} disabled={activitySaving} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent/35 disabled:cursor-not-allowed disabled:opacity-50" aria-label={t("Remove selected file")} title={t("Remove selected file")}>
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            )}
+          </div>
         </form>
       </SideSheet>
     </div>

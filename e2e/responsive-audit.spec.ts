@@ -93,7 +93,7 @@ test.describe('responsive role and route audit', () => {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         for (const route of role.routes) {
           await page.goto(route, { waitUntil: 'domcontentloaded' });
-          await expect(page.locator('main'), `${role.id} ${viewport.name}px ${route} should render a main region`).toBeVisible();
+          await expect(page.locator('main'), `${role.id} ${viewport.name}px ${route} should render a main region`).toBeVisible({ timeout: 15_000 });
           await expectNoHorizontalOverflow(page, `${role.id} ${viewport.name}px ${route}`);
           await assertMobileNavigation(page, `${role.id} ${viewport.name}px ${route}`);
           if (viewport.width === 390 && route === '/tasks') {
@@ -103,6 +103,28 @@ test.describe('responsive role and route audit', () => {
             expect(navigationAxe.violations, `${role.id} mobile navigation: ${navigationAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
           }
         }
+      }
+    }
+  });
+
+  test('audits representative changed surfaces for accessibility across roles', async ({ page }) => {
+    test.setTimeout(180_000);
+    const representativeRoutes = [
+      { username: 'Boss Koo', routes: ['/', '/approvals', '/settings'] },
+      { username: 'Project Manager Demo', routes: ['/', '/tasks', '/reports'] },
+      { username: 'HOD Demo', routes: ['/', '/tasks', '/calendar'] },
+      { username: 'Staff Demo', routes: ['/', '/tasks', '/notifications'] },
+      { username: 'UrbanEats Client Demo', routes: ['/', '/clients', '/clients/demo-service-client-urban'] },
+    ];
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    for (const role of representativeRoutes) {
+      await signInAs(page, role.username);
+      for (const route of role.routes) {
+        await page.goto(route, { waitUntil: 'domcontentloaded' });
+        await expect(page.locator('main'), `${role.username} ${route} should render a main region`).toBeVisible({ timeout: 15_000 });
+        const axeResults = await new AxeBuilder({ page }).include('main').analyze();
+        expect(axeResults.violations, `${role.username} ${route}: ${axeResults.violations.map(item => item.id).join(', ')}`).toEqual([]);
       }
     }
   });

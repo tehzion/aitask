@@ -7,9 +7,9 @@ import {
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
 import { isToday, isThisWeek, isBefore, differenceInDays } from 'date-fns';
-import { CheckCircle2, Clock, AlertCircle, LayoutList, Calendar, CalendarDays, ArrowRight, LucideIcon, Plus, FolderKanban, UserPlus, Users, FileCheck2, Sparkles, CalendarClock } from 'lucide-react';
+import { AlertCircle, LayoutList, Calendar, ArrowRight, Plus, FolderKanban, UserPlus, Users, FileCheck2, CalendarClock } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader, SegmentedTabs } from '../components/ui';
+import { Button, ChartCard, ChartEmptyState, PageHeader, SegmentedTabs } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
 import { canCreateTasks, getClientKey, getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import { getClientTaskStage } from '../lib/clientPortal';
@@ -32,14 +32,13 @@ type BossTab = 'overview' | 'pulse' | 'workload';
 interface StatCardProps {
   title: string;
   value: number;
-  icon: LucideIcon;
-  tone: 'emerald' | 'amber' | 'red' | 'blue' | 'slate';
   to: string;
 }
 
-const StatCard = ({ title, value, icon: Icon, tone, to }: StatCardProps) => (
-  <Link to={to} className="block rounded-panel transition-colors hover:bg-inset/70 focus:outline-none focus:ring-2 focus:ring-accent/35">
-    <MetricCard title={title} value={value} icon={Icon} tone={tone} />
+const StatCard = ({ title, value, to }: StatCardProps) => (
+  <Link to={to} className="flex items-baseline justify-between gap-4 border-b border-line/70 py-3 transition-colors hover:bg-inset/70 focus:outline-none focus:ring-2 focus:ring-accent/35">
+    <span className="text-sm text-muted">{title}</span>
+    <span className="calm-number text-xl font-semibold text-ink">{value}</span>
   </Link>
 );
 
@@ -76,11 +75,11 @@ const Dashboard: React.FC = () => {
     return {
       grid: themeTokenColor('--calm-line', '#e2e8f0'),
       tick: themeTokenColor('--calm-muted', '#64748b'),
-      accent: themeTokenColor('--calm-accent', '#e5231b'),
+      accent: themeTokenColor('--calm-accent', '#c11c15'),
       cursor: themeTokenColor('--calm-inset', '#eff3f2'),
       surface: themeTokenColor('--calm-surface', '#ffffff'),
       series: [
-        themeTokenColor('--calm-accent', '#e5231b'),
+        themeTokenColor('--calm-accent', '#c11c15'),
         themeTokenColor('--calm-muted', '#5f6c6f'),
         themeTokenColor('--calm-line', '#dce3e1'),
       ],
@@ -221,11 +220,11 @@ const Dashboard: React.FC = () => {
   );
   const dashboardDescription = currentUser?.role === 'Staff' || currentUser?.role === 'HOD'
     ? staffAssignedTasks.length > 0
-      ? `Welcome back, ${currentUser.name}. Here is what needs your attention and what you have completed.`
-      : `Welcome back, ${currentUser.name}. Your assigned and department-scoped work will appear here.`
+      ? <>{t('Welcome back,')} <span data-i18n-skip>{currentUser.name}</span>{t('. Here is what needs your attention and what you have completed.')}</>
+      : <>{t('Welcome back,')} <span data-i18n-skip>{currentUser.name}</span>{t('. Your assigned and department-scoped work will appear here.')}</>
     : hasTaskData
-      ? `Welcome back, ${currentUser?.name}! Here's your task overview.`
-      : `Welcome back, ${currentUser?.name}! Your live workspace is ready.`;
+      ? <>{t('Welcome back,')} <span data-i18n-skip>{currentUser?.name}</span>{t("! Here's your task overview.")}</>
+      : <>{t('Welcome back,')} <span data-i18n-skip>{currentUser?.name}</span>{t('! Your live workspace is ready.')}</>;
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -410,13 +409,13 @@ const Dashboard: React.FC = () => {
   if (currentUser?.role === 'Project Manager' && !isBossKoo(currentUser)) return (
     <div className={pageShell}>
       <PageHeader
-        title="Project Manager Dashboard"
-        description="Portfolio-scoped delivery first: deadlines, review risk, active companies, and contracted value inside your own portfolio."
+        title="Portfolio work"
+        description="Deadlines, review risk, active companies, and commercial records in your portfolio."
         action={(
           <div className="flex flex-wrap items-center justify-end gap-2.5">
             <BackendFreshness />
             <Link to="/tasks" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink transition hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-              Open portfolio work
+              Open work
               <ArrowRight className="h-4 w-4" />
             </Link>
             {canCreateTask && (
@@ -436,9 +435,9 @@ const Dashboard: React.FC = () => {
     <>
     <div className={pageShell}>
       <PageHeader
-        title={isBossKoo(currentUser) ? 'Super Admin Dashboard' : currentUser?.role === 'Project Manager' ? 'Project Manager Dashboard' : showClientPortal ? 'Home' : 'My Dashboard'}
+        title={isBossKoo(currentUser) ? t('Agency operations') : currentUser?.role === 'Project Manager' ? t('Portfolio work') : showClientPortal ? t('Home') : t('Dashboard')}
         description={showClientPortal
-          ? `Your next decision, delivery timing, and shared updates for ${currentUser?.companyName || 'your company'}.`
+          ? <>{t('Deliveries waiting for review, upcoming work, and shared updates for')} <span data-i18n-skip>{currentUser?.companyName || 'your company'}</span>.</>
           : dashboardDescription}
         action={(
           <div className="flex flex-wrap items-center gap-2.5">
@@ -452,7 +451,7 @@ const Dashboard: React.FC = () => {
             {canCreateTask && (
               <Button onClick={() => setCreateTaskModalOpen(true)}>
                 <Plus className="h-4 w-4" />
-                Create Task
+                Create task
               </Button>
             )}
           </div>
@@ -472,7 +471,7 @@ const Dashboard: React.FC = () => {
                 Open UrbanEats
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              {currentUser?.role !== 'Client' && <Link to="/clients" className="inline-flex min-h-11 items-center justify-center rounded-control px-4 text-sm font-semibold text-accent transition hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">Open task tracker</Link>}
+              {currentUser?.role !== 'Client' && <Link to="/clients" className="inline-flex min-h-11 items-center justify-center rounded-control px-4 text-sm font-semibold text-accent transition hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">Open delivery tracker</Link>}
             </div>
           </div>
         </section>
@@ -527,10 +526,7 @@ const Dashboard: React.FC = () => {
       <div className="flex flex-col gap-6">
         {showBossOperations && onboardingSteps.length > 0 && (
           <section className={cn(cardBase, 'p-5')} aria-labelledby="onboarding-checklist-title">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-accent" />
-              <h2 id="onboarding-checklist-title" className="text-base font-semibold text-ink">{t('Workspace setup')}</h2>
-            </div>
+            <h2 id="onboarding-checklist-title" className="text-base font-semibold text-ink">{t('Finish setup')}</h2>
             <p className="mt-1 text-sm text-muted">{t('A few steps to get the workspace moving.')}</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {onboardingSteps.map(step => (
@@ -641,7 +637,7 @@ const Dashboard: React.FC = () => {
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[560px] text-left text-sm">
-                        <thead className="border-b border-line/60 bg-inset/40 text-xs uppercase tracking-wider text-muted">
+                        <thead className="border-b border-line/60 bg-inset/40 text-xs tracking-wide text-muted">
                           <tr>
                             <th className="px-5 py-3 font-semibold">{t('Type')}</th>
                             <th className="px-5 py-3 font-semibold">{t('Company')}</th>
@@ -739,12 +735,12 @@ const Dashboard: React.FC = () => {
               </div>
             ) : (
               <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 order-1" aria-label="Workspace metrics">
-                <StatCard title="Active Companies" value={stats.activeProjects} icon={LayoutList} tone="blue" to="/projects" />
-                <StatCard title="Pending Tasks" value={stats.pendingTasks} icon={Clock} tone="amber" to="/clients?period=all" />
-                <StatCard title="Completed Tasks" value={stats.completedTasks} icon={CheckCircle2} tone="emerald" to="/clients?period=all" />
-                <StatCard title="Overdue Tasks" value={stats.overdueTasks} icon={AlertCircle} tone="red" to="/clients?period=all" />
-                <StatCard title="Due Today" value={stats.dueTodayTasks} icon={Calendar} tone="blue" to="/calendar" />
-                <StatCard title="Due This Week" value={stats.dueThisWeekTasks} icon={CalendarDays} tone="slate" to="/calendar" />
+                <StatCard title="Active Companies" value={stats.activeProjects} to="/projects" />
+                <StatCard title="Pending Tasks" value={stats.pendingTasks} to="/clients?period=all" />
+                <StatCard title="Completed Tasks" value={stats.completedTasks} to="/clients?period=all" />
+                <StatCard title="Overdue Tasks" value={stats.overdueTasks} to="/clients?period=all" />
+                <StatCard title="Due Today" value={stats.dueTodayTasks} to="/calendar" />
+                <StatCard title="Due This Week" value={stats.dueThisWeekTasks} to="/calendar" />
               </section>
             )}
 
@@ -752,10 +748,7 @@ const Dashboard: React.FC = () => {
               <div className="order-2 space-y-6">
                 {staffOnboardingSteps.length > 0 && (
                   <section className={cn(cardBase, 'p-5')} aria-labelledby="staff-onboarding-title">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-accent" />
-                      <h2 id="staff-onboarding-title" className="text-base font-semibold text-ink">{t('Getting started')}</h2>
-                    </div>
+                    <h2 id="staff-onboarding-title" className="text-base font-semibold text-ink">{t('Start here')}</h2>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {staffOnboardingSteps.map(step => (
                         <Link key={step.key} to={step.to} className="group flex min-h-11 items-center justify-between gap-3 rounded-control border border-line bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-inset">

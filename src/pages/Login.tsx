@@ -25,9 +25,9 @@ const DEMO_ACCOUNTS = [
 
 const LOCAL_STAFF_DEMO_ACCOUNTS = [
   { username: 'Staff Demo', role: 'Staff', badge: 'bg-blue-100 text-blue-700' },
-  { username: 'HOD Demo', role: 'HOD', badge: 'bg-purple-100 text-purple-700' },
+  { username: 'HOD Demo', role: 'HOD', badge: 'bg-accent-soft text-accent' },
   { username: 'Operation Demo', role: 'Operation', badge: 'bg-amber-100 text-amber-800' },
-  { username: 'Account Demo', role: 'Account', badge: 'bg-violet-100 text-violet-800' },
+  { username: 'Account Demo', role: 'Account', badge: 'bg-accent-soft text-accent' },
 ];
 
 const getLoginDestination = (mustResetPassword: boolean, userId: string, requestedPath: string) => (
@@ -440,7 +440,7 @@ const Login: React.FC = () => {
                     </datalist>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <p className="text-xs font-semibold uppercase text-slate-500">Access role</p>
+                    <p className="text-xs font-semibold text-slate-500">Access role</p>
                     <p className="mt-0.5 text-sm font-semibold text-slate-800">Staff</p>
                   </div>
                   {secureAccounts && (

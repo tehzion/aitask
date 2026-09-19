@@ -6,7 +6,7 @@ import { buttonBase, cardBase } from './uiTokens';
 /* ── PageHeader ─────────────────────────────────────────────────────────── */
 interface PageHeaderProps {
   title: React.ReactNode;
-  description?: string;
+  description?: React.ReactNode;
   action?: React.ReactNode;
   breadcrumb?: React.ReactNode;
   meta?: React.ReactNode;
@@ -72,7 +72,7 @@ export const IconButton: React.FC<IconButtonProps> = ({ className, label, type =
 interface MetricCardProps {
   title: string;
   value: React.ReactNode;
-  icon: LucideIcon;
+  icon?: LucideIcon;
   tone?: 'indigo' | 'emerald' | 'amber' | 'red' | 'blue' | 'purple' | 'slate' | 'orange';
   footer?: React.ReactNode;
   className?: string;
@@ -96,9 +96,9 @@ export const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon: Icon
         <p className="text-sm font-medium leading-5 text-muted">{title}</p>
         <div className="calm-number mt-1.5 text-2xl font-semibold leading-8 tracking-[-0.035em] text-ink">{value}</div>
       </div>
-      <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', toneClasses[tone])}>
-        <Icon className="h-5 w-5" />
-      </div>
+      {Icon && <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', toneClasses[tone])}>
+        <Icon className="h-4 w-4" aria-hidden="true" />
+      </div>}
     </div>
     {footer && <div className="mt-3 text-xs text-muted">{footer}</div>}
   </div>
@@ -169,10 +169,51 @@ export const StatGroup: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ clas
 );
 
 export const StatusChip: React.FC<React.HTMLAttributes<HTMLSpanElement> & { tone?: BadgeProps['tone']; dot?: boolean }> = ({ tone = 'slate', dot = false, className, children, ...props }) => (
-  <span className={cn('inline-flex items-center gap-1.5 rounded-tag border px-2 py-1 text-xs font-medium', badgeTones[tone], className)} {...props}>
+  <span className={cn('inline-flex items-center gap-1.5 border-l-2 pl-2 text-xs font-semibold leading-5', tone === 'emerald' ? 'border-emerald-500 text-emerald-700 dark:text-emerald-300' : tone === 'amber' || tone === 'orange' ? 'border-amber-500 text-amber-700 dark:text-amber-300' : tone === 'red' ? 'border-red-500 text-red-700 dark:text-red-300' : tone === 'blue' || tone === 'purple' || tone === 'pink' || tone === 'indigo' ? 'border-accent text-accent' : 'border-line text-muted', className)} {...props}>
     {dot && <span className="h-1.5 w-1.5 rounded-full bg-current opacity-75" aria-hidden="true" />}
     {children}
   </span>
+);
+
+export const CountLabel: React.FC<React.HTMLAttributes<HTMLSpanElement>> = ({ className, children, ...props }) => (
+  <span className={cn('calm-number text-sm font-semibold text-muted', className)} {...props}>{children}</span>
+);
+
+export const FilterToken: React.FC<React.HTMLAttributes<HTMLSpanElement>> = ({ className, children, ...props }) => (
+  <span className={cn('inline-flex min-h-7 items-center rounded-tag border border-line bg-inset px-2 py-1 text-xs font-medium text-ink', className)} {...props}>{children}</span>
+);
+
+export const MetaLine: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className, children, ...props }) => (
+  <div className={cn('calm-meta flex flex-wrap items-center gap-x-2 gap-y-1', className)} {...props}>{children}</div>
+);
+
+type StateTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
+
+const stateToneClasses: Record<StateTone, string> = {
+  neutral: 'border-line text-muted',
+  accent: 'border-accent text-accent',
+  success: 'border-emerald-500 text-emerald-700 dark:text-emerald-300',
+  warning: 'border-amber-500 text-amber-700 dark:text-amber-300',
+  danger: 'border-red-500 text-red-700 dark:text-red-300',
+};
+
+export const StateMark: React.FC<React.HTMLAttributes<HTMLSpanElement> & { tone?: StateTone }> = ({ tone = 'neutral', className, children, ...props }) => (
+  <span className={cn('inline-flex items-center gap-1.5 border-l-2 pl-2 text-xs font-semibold leading-5', stateToneClasses[tone], className)} {...props}>
+    <span className="h-1.5 w-1.5 rounded-full bg-current opacity-75" aria-hidden="true" />
+    {children}
+  </span>
+);
+
+export const PersonSummary: React.FC<{ name: React.ReactNode; metadata?: React.ReactNode; detail?: React.ReactNode; className?: string }> = ({ name, metadata, detail, className }) => (
+  <div className={cn('min-w-0', className)}>
+    <p className="truncate text-sm font-semibold text-ink">{name}</p>
+    {metadata && <MetaLine className="mt-0.5">{metadata}</MetaLine>}
+    {detail && <p className="mt-1 text-xs text-muted">{detail}</p>}
+  </div>
+);
+
+export const ScopeLine: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
+  <p className={cn('calm-meta', className)}>{children}</p>
 );
 
 export interface SegmentTab<T extends string> { id: T; label: string; compactLabel?: string; count?: number; icon?: React.ComponentType<{ className?: string }> }
@@ -228,7 +269,7 @@ export const SegmentedTabs = <T extends string,>({ items, value, onChange, label
           tabIndex={value === item.id ? 0 : -1}
           aria-label={item.label}
           aria-selected={value === item.id}
-          aria-controls={typeof panelId === 'function' ? panelId(item.id) : panelId || `${prefix}-panel-${item.id}`}
+          {...(panelId ? { 'aria-controls': typeof panelId === 'function' ? panelId(item.id) : panelId } : {})}
           onClick={() => onChange(item.id)}
           onKeyDown={event => handleKeyDown(event, index)}
           className={cn(
@@ -270,9 +311,9 @@ export const DataRow: React.FC<Omit<React.HTMLAttributes<HTMLElement>, 'title'> 
   </article>
 );
 
-export const EmptyState: React.FC<{ title: string; description: string; action?: React.ReactNode; className?: string }> = ({ title, description, action, className }) => (
+export const EmptyState: React.FC<{ title: string; description: string; action?: React.ReactNode; icon?: LucideIcon; className?: string }> = ({ title, description, action, icon: Icon = ArrowUpRight, className }) => (
   <div className={cn('rounded-panel bg-inset px-5 py-12 text-center', className)}>
-    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-control bg-accent-soft text-accent"><ArrowUpRight className="h-5 w-5" /></div>
+    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-control bg-accent-soft text-accent"><Icon className="h-5 w-5" aria-hidden="true" /></div>
     <h3 className="mt-4 font-semibold text-ink">{title}</h3><p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">{description}</p>{action && <div className="mt-5">{action}</div>}
   </div>
 );

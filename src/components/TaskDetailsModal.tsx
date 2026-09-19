@@ -48,14 +48,14 @@ const ExternalTaskLink: React.FC<{ value: string; label: string }> = ({ value, l
   if (!href) {
     return (
       <span className="flex items-center gap-1.5 text-sm text-slate-500" title={value}>
-        <Paperclip className="h-3.5 w-3.5" /> {label} (invalid link)
+        <Paperclip className="h-3.5 w-3.5" aria-hidden="true" /> {label} (invalid link)
       </span>
     );
   }
 
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline">
-      <Paperclip className="h-3.5 w-3.5" /> {label}
+      <Paperclip className="h-3.5 w-3.5" aria-hidden="true" /> {label}
     </a>
   );
 };
@@ -636,7 +636,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
 
               {(task.facebookPage || task.website || task.attachmentLink || canEditTask) && (
                 <div className="pt-4 border-t border-slate-100">
-                  <label className="block text-xs font-medium text-slate-500 mb-2">{isClientTaskViewer ? 'Deliverables & Links' : 'Links & Attachments'}</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-2">{isClientTaskViewer ? t('Deliverables & Links') : t('Links & attachment links')}</label>
                   <div className="space-y-2">
                     {task.facebookPage && (
                       <ExternalTaskLink value={task.facebookPage} label="Facebook Page" />
@@ -650,23 +650,29 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   </div>
                   {canEditTask && (
                     <form onSubmit={handleAttachmentSave} className="mt-4 space-y-2">
+                      <label htmlFor={`${titleId}-attachment-url`} className={fieldLabel}>{t('Attachment URL')}</label>
                       <input
+                        id={`${titleId}-attachment-url`}
                         type="url"
                         value={attachmentLink}
                         onChange={(e) => setAttachmentLink(e.target.value)}
-                        placeholder="Attachment URL"
-                        className="min-h-11 w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
+                        placeholder="https://drive.google.com/..."
+                        aria-describedby={`${titleId}-attachment-help`}
+                        className={inputBase}
                       />
+                      <p id={`${titleId}-attachment-help`} className="text-xs leading-5 text-muted">{t('Task attachments are shared as secure HTTPS links, not uploaded files.')}</p>
                       <div className="flex gap-2">
+                        <label htmlFor={`${titleId}-attachment-label`} className="sr-only">{t('Attachment label')}</label>
                         <input
+                          id={`${titleId}-attachment-label`}
                           type="text"
                           value={attachmentName}
                           onChange={(e) => setAttachmentName(e.target.value)}
-                          placeholder="Attachment label"
-                          className="min-h-11 flex-1 bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
+                          placeholder={t('Attachment label')}
+                          className={cn(inputBase, 'flex-1')}
                         />
-                        <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                          Save
+                        <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-accent/35 focus:ring-offset-2 focus:ring-offset-canvas">
+                          {t('Save')}
                         </button>
                       </div>
                     </form>
@@ -726,7 +732,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
 
             {task.approvalHistory && task.approvalHistory.length > 0 && (
               <div className="px-4 py-3 bg-white border-b border-slate-200 space-y-2">
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 tracking-wide">
                   <History className="w-3.5 h-3.5" /> Approval History
                 </div>
                 {task.approvalHistory.slice().reverse().map(event => (

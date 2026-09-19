@@ -9,7 +9,6 @@ import {
   PackageCheck,
   Settings,
   UserPlus,
-  Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CustomRole, User } from '../types';
@@ -67,7 +66,7 @@ const staffMobilePrimary: NavigationItem[] = [
 
 const clientPrimary: NavigationItem[] = [
   { path: '/', label: 'Home', icon: LayoutDashboard },
-  { path: '/clients', label: 'Deliveries', icon: Users },
+  { path: '/clients', label: 'Deliveries', icon: PackageCheck },
   { path: '/notifications', label: 'Inbox', icon: Bell },
 ];
 

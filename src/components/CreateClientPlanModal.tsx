@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, ArrowRight, Check, Copy, PackageCheck, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Copy, PackageCheck, Plus, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, pendingMutationMessage } from '../store';
 import type { ClientProfile, PlanOrigin, ServiceItem } from '../types';
@@ -195,7 +195,7 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
   const modeOptions = [
     { value: 'standard' as const, title: 'Use standard package', text: 'Save the selected Growth Plan as this client’s frozen service scope.', icon: PackageCheck },
     { value: 'customized' as const, title: 'Duplicate as Custom Plan', text: 'Select Growth Plan, duplicate it, then adjust quantity, platform or price for this client only.', icon: Copy },
-    { value: 'custom' as const, title: 'Fully custom', text: 'Build a service plan from a blank scope.', icon: Sparkles },
+    { value: 'custom' as const, title: 'Fully custom', text: 'Build a service plan from a blank scope.', icon: SlidersHorizontal },
   ];
 
   return (
