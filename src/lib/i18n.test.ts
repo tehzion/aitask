@@ -160,24 +160,33 @@ describe('Chinese translation coverage guards', () => {
   it('has no duplicate dictionary keys with conflicting translations', () => {
     const source = readFileSync(join(process.cwd(), 'src', 'lib', 'i18n.ts'), 'utf8');
     const lines = source.split('\n');
-    const followStart = lines.findIndex(line => line.startsWith('const zhCopyFollowups'));
-    const followEnd = lines.findIndex((line, index) => index > followStart && line.startsWith('};'));
-    const ranges: Array<[number, number]> = [[12, 377], [379, 567], [569, 1327], [1337, 1669], [followStart + 1, followEnd]];
-    const entry = /^\s{2}(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*:\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*,?\s*$/;
+    const entry = /^\s{2}(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|([A-Za-z_$][\w$]*))\s*:\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")\s*,?\s*$/;
     const seen = new Map<string, string>();
     const conflicts: string[] = [];
-    for (const [start, end] of ranges) {
-      for (let i = start - 1; i < end; i += 1) {
-        const match = lines[i]?.match(entry);
-        if (!match) continue;
-        const key = match[1] ?? match[2] ?? '';
-        const value = match[3] ?? match[4] ?? '';
-        const previous = seen.get(key);
-        if (previous === undefined) seen.set(key, value);
-        else if (previous !== value) conflicts.push(key);
-      }
+    let inBlock = false;
+    for (const line of lines) {
+      if (/^const \w+: Record<string, string> = \{/.test(line)) { inBlock = true; continue; }
+      if (inBlock && line.startsWith('};')) { inBlock = false; continue; }
+      if (!inBlock) continue;
+      const match = line.match(entry);
+      if (!match) continue;
+      const key = match[1] ?? match[2] ?? match[3] ?? '';
+      const value = match[4] ?? match[5] ?? '';
+      const previous = seen.get(key);
+      if (previous === undefined) seen.set(key, value);
+      else if (previous !== value) conflicts.push(key);
     }
     expect(conflicts).toEqual([]);
+  });
+
+  it('keeps review and revision terms from drifting back to banned variants', () => {
+    const source = readFileSync(join(process.cwd(), 'src', 'lib', 'i18n.ts'), 'utf8');
+    expect(source).not.toContain('内部审阅');
+    for (const key of ['Revision', 'Revisions']) {
+      expect(translateUiText(key, 'zh')).toBe('修订');
+    }
+    expect(translateUiText('Output, blockers, and revision work linked to your assignments.', 'zh'))
+      .not.toContain('修改');
   });
 
   it('translates every explicit t() literal', () => {
@@ -192,6 +201,44 @@ describe('Chinese translation coverage guards', () => {
       while ((match = literal.exec(source))) {
         const value = (match[1] ?? match[2] ?? '').trim();
         if (value.length < 2) continue;
+        if (translateUiText(value, 'zh') === value) missing.add(value);
+      }
+    }
+    expect([...missing].sort()).toEqual([]);
+  });
+
+  it('translates user-facing attribute literals', () => {
+    const files = collectSourceFiles(join(process.cwd(), 'src')).filter(file => (
+      !/\.test\.tsx?$/.test(file)
+      && !/lib\/i18n\.ts$/.test(file)
+      && !/lib\/releaseNotice\.ts$/.test(file)
+      && !/mock\//.test(file)
+      && !/pages\/(Tasks|Projects)\.tsx$/.test(file)
+    ));
+    const attribute = /\b(?:placeholder|title|aria-label|aria-description|alt|description|message|error)\s*[:=]\s*(?:"((?:[^"\\]|\\.)+)"|'((?:[^'\\]|\\.)+)')/g;
+    const cjk = /[\u4e00-\u9fff]/;
+    const natural = (value: string) => {
+      const text = value.trim();
+      if (text.length < 4 || text.length > 160) return false;
+      if (!/[a-z]/.test(text) || cjk.test(text)) return false;
+      if (!/[ ,.:!?'"]/.test(text)) return false;
+      if (/[{}<>`$=;]|=>|\breturn\b|\bconst\b|function\b|\bimport\b|\.map\(|\.filter\(|useState|Record<|Set<|Omit<|Pick</.test(text)) return false;
+      if (/^\w+:\/\//.test(text)) return false;
+      if (/@\w+\.|\.com|\.local|\.google\./.test(text)) return false;
+      if (/^(-?[a-z]+:)+\S+$/.test(text)) return false;
+      return true;
+    };
+    const allowlist = new Set([
+      'bg-white border border-red-100 shadow-red-50/40 text-slate-800',
+    ]);
+    const missing = new Set<string>();
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8');
+      let match: RegExpExecArray | null;
+      attribute.lastIndex = 0;
+      while ((match = attribute.exec(source))) {
+        const value = (match[1] ?? match[2] ?? '').trim();
+        if (!natural(value) || allowlist.has(value)) continue;
         if (translateUiText(value, 'zh') === value) missing.add(value);
       }
     }
