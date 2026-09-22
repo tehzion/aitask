@@ -506,6 +506,46 @@ const makeNotification = (data: Omit<AppNotification, 'id' | 'isRead' | 'created
   })
 );
 
+// Task update notices go to the people accountable for the task instead of a
+// role-wide Project Manager fan-out: Boss Koo (super admin, oversight) plus the
+// PM who assigned it (assignedBy), falling back to the creator, then the owning
+// PM of the task's client or project. This keeps a Staff member who works for
+// several PMs notifying only the right one for each task.
+const resolveTaskUpdateRecipientIds = (
+  users: User[],
+  task: Pick<Task, 'assignedBy' | 'createdBy' | 'clientName' | 'projectId'>,
+  clients: ClientProfile[],
+  projects: Project[],
+): string[] => {
+  const recipientIds = new Set<string>();
+  users.forEach(user => {
+    if (user.isSuperAdmin) recipientIds.add(user.id);
+  });
+  const resolvePm = (id?: string) => {
+    const user = id ? users.find(item => item.id === id) : undefined;
+    return user && user.role === 'Project Manager' && !user.isSuperAdmin ? user.id : undefined;
+  };
+  let ownerPm = resolvePm(task.assignedBy) || resolvePm(task.createdBy);
+  if (!ownerPm) {
+    const client = clients.find(item => normalizeClientKey(item.clientName) === normalizeClientKey(task.clientName));
+    ownerPm = resolvePm(client?.createdBy);
+  }
+  if (!ownerPm && task.projectId) {
+    const project = projects.find(item => item.id === task.projectId);
+    ownerPm = resolvePm(project?.createdBy);
+  }
+  if (ownerPm) recipientIds.add(ownerPm);
+  return [...recipientIds];
+};
+
+const taskUpdateNotifications = (
+  recipientIds: string[],
+  data: Omit<AppNotification, 'id' | 'isRead' | 'createdAt' | 'targetUserId' | 'targetRole' | 'targetClient'>,
+  excludeUserId?: string,
+): AppNotification[] => recipientIds
+  .filter(recipientId => recipientId !== excludeUserId)
+  .map(targetUserId => makeNotification({ ...data, targetUserId }));
+
 const getNotificationReadReceipts = (
   notification: AppNotification,
   users: User[],
@@ -2470,20 +2510,16 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        const newNotifs: AppNotification[] = [];
-
-        const hasOtherAdmin = state.users.some(user => (
-          user.id !== currentUser?.id && (user.role === 'Project Manager' || user.isSuperAdmin)
-        ));
-        if (currentUser?.role !== 'Project Manager' || hasOtherAdmin) {
-          newNotifs.push(makeNotification({
-            targetRole: 'Project Manager',
+        const newNotifs: AppNotification[] = taskUpdateNotifications(
+          resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects),
+          {
             title: 'Task Status Updated',
             message: `"${task.title}" was moved to ${nextStatus} by ${currentUser?.name}.`,
             route: { page: 'tasks', entityId: taskId },
-            iconType: 'status'
-          }));
-        }
+            iconType: 'status',
+          },
+          currentUser?.id,
+        );
 
         if (isReadyForClientReview && task.visibility !== 'internal') {
           newNotifs.push(makeNotification({
@@ -2819,15 +2855,18 @@ export const useStore = create<StoreState>()(
         }
 
         const serverGeneratesStaffDeleteNotification = shouldUseSecureSupabase() && ['Staff', 'HOD'].includes(currentUser.role);
-        const notifications = currentUser.role !== 'Project Manager' && !serverGeneratesStaffDeleteNotification
-          ? [makeNotification({
-              targetRole: 'Project Manager' as Role,
-              title: 'Task Deleted',
-              message: `${currentUser.name} deleted "${task.title}".`,
-              route: { page: 'tasks', entityId: taskId },
-              iconType: 'alert' as const
-            })]
-          : [];
+        const notifications = serverGeneratesStaffDeleteNotification
+          ? []
+          : taskUpdateNotifications(
+              resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects),
+              {
+                title: 'Task Deleted',
+                message: `${currentUser.name} deleted "${task.title}".`,
+                route: { page: 'tasks', entityId: taskId },
+                iconType: 'alert',
+              },
+              currentUser.id,
+            );
 
         set(current => {
           const tasks = current.tasks.filter(item => item.id !== taskId);
@@ -2878,13 +2917,16 @@ export const useStore = create<StoreState>()(
 
         const notifications: AppNotification[] = [];
         if (!shouldUseSecureSupabase()) {
-          notifications.push(makeNotification({
-            targetRole: 'Project Manager',
-            title: status === 'Approved' ? 'Client Approved Task' : 'Client Requested Revision',
-            message: `${currentUser.name} ${status === 'Approved' ? 'approved' : 'rejected'} "${task.title}"${note ? `: ${note}` : '.'}`,
-            route: { page: 'tasks', entityId: taskId },
-            iconType: status === 'Approved' ? 'success' : 'alert'
-          }));
+          notifications.push(...taskUpdateNotifications(
+            resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects),
+            {
+              title: status === 'Approved' ? 'Client Approved Task' : 'Client Requested Revision',
+              message: `${currentUser.name} ${status === 'Approved' ? 'approved' : 'rejected'} "${task.title}"${note ? `: ${note}` : '.'}`,
+              route: { page: 'tasks', entityId: taskId },
+              iconType: status === 'Approved' ? 'success' : 'alert',
+            },
+            currentUser.id,
+          ));
 
           if (status === 'Rejected') {
             notifications.push(makeNotification({
@@ -3055,14 +3097,18 @@ export const useStore = create<StoreState>()(
             tasks,
             ...deriveServiceProgress(tasks, deliverables, state.serviceCycles),
             notifications: [
-              ...(['Staff', 'HOD'].includes(currentUser.role) && (!assignee || assignee.role !== 'Project Manager')
-                ? [makeNotification({
-                    targetRole: 'Project Manager',
-                    title: 'Task Created by Staff',
-                    message: `${currentUser.name} created a new task: "${title}".`,
-                    route: { page: 'tasks', entityId: taskId },
-                    iconType: 'task',
-                  })]
+              ...(['Staff', 'HOD'].includes(currentUser.role)
+                ? taskUpdateNotifications(
+                    resolveTaskUpdateRecipientIds(state.users, newTask, state.clients, state.projects)
+                      .filter(id => id !== taskData.assignedTo),
+                    {
+                      title: 'Task Created by Staff',
+                      message: `${currentUser.name} created a new task: "${title}".`,
+                      route: { page: 'tasks', entityId: taskId },
+                      iconType: 'task',
+                    },
+                    currentUser.id,
+                  )
                 : []),
               ...(taskData.assignedTo ? [makeNotification({
                 targetUserId: taskData.assignedTo,
@@ -4073,14 +4119,18 @@ export const useStore = create<StoreState>()(
 
         const newNotifs: AppNotification[] = [];
         const serverGeneratesClientNotifications = shouldUseSecureSupabase() && currentUser.role === 'Client';
-        if (!serverGeneratesClientNotifications && currentUser.role !== 'Project Manager') {
-          newNotifs.push(makeNotification({
-            targetRole: 'Project Manager',
-            title: currentUser.role === 'Client' ? 'Client Feedback' : 'New Comment',
-            message: `${currentUser.name} commented on "${task.title}".`,
-            route: { page: 'tasks', entityId: taskId },
-            iconType: 'status'
-          }));
+        if (!serverGeneratesClientNotifications) {
+          newNotifs.push(...taskUpdateNotifications(
+            resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects)
+              .filter(id => id !== task.assignedTo),
+            {
+              title: currentUser.role === 'Client' ? 'Client Feedback' : 'New Comment',
+              message: `${currentUser.name} commented on "${task.title}".`,
+              route: { page: 'tasks', entityId: taskId },
+              iconType: 'status',
+            },
+            currentUser.id,
+          ));
         }
 
         if (!serverGeneratesClientNotifications && task.assignedTo !== currentUser.id) {
@@ -4138,13 +4188,17 @@ export const useStore = create<StoreState>()(
             route: { page: 'tasks', entityId: task.id },
             iconType: 'alert'
           }));
-          newNotifs.push(makeNotification({
-            targetRole: 'Project Manager',
-            title: 'Task Deadline Approaching',
-            message: `"${task.title}" for ${task.clientName} is due ${when}.`,
-            route: { page: 'tasks', entityId: task.id },
-            iconType: 'alert'
-          }));
+          newNotifs.push(...taskUpdateNotifications(
+            resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects)
+              .filter(id => id !== task.assignedTo),
+            {
+              title: 'Task Deadline Approaching',
+              message: `"${task.title}" for ${task.clientName} is due ${when}.`,
+              route: { page: 'tasks', entityId: task.id },
+              iconType: 'alert',
+            },
+            state.currentUser?.id,
+          ));
 
           return { ...task, dueReminderSent: true };
         });

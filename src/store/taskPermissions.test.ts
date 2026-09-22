@@ -22,6 +22,14 @@ const otherStaff: User = {
   department: 'Designer',
 };
 
+const owningPm: User = {
+  id: 'pm-task-owner',
+  name: 'Owning PM',
+  role: 'Project Manager',
+  departments: ['Management'],
+  department: 'Management',
+};
+
 const makeTask = (overrides: Partial<Task>): Task => ({
   id: 'task-scope-own',
   clientName: 'Acme',
@@ -230,6 +238,14 @@ describe('task store authorization', () => {
   it('limits Staff task creation to their own departments', () => {
     const taskInput = { ...ownTask, title: 'New scoped work' };
     useStore.setState({
+      users: [...useStore.getState().users, owningPm],
+      clients: [{
+        id: 'client-acme',
+        clientName: 'Acme',
+        createdBy: owningPm.id,
+        createdAt: '2026-07-13T00:00:00.000Z',
+        updatedAt: '2026-07-13T00:00:00.000Z',
+      }],
       projects: [{
         id: 'project-staff-created',
         clientName: 'Acme',
@@ -261,7 +277,7 @@ describe('task store authorization', () => {
     expect(useStore.getState().notifications).toEqual(expect.arrayContaining([
       expect.objectContaining({
         title: 'Task Created by Staff',
-        targetRole: 'Project Manager',
+        targetUserId: owningPm.id,
         route: { page: 'tasks', entityId: createdTaskId },
       }),
       expect.objectContaining({
