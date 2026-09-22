@@ -228,6 +228,10 @@ const Layout: React.FC = () => {
     : missingSupabaseConfig
       ? `Missing ${backendStatus.missing.join(', ')}. Changes will not sync between users until Vercel is rebuilt with Supabase env.`
       : backend.error || backend.message;
+  const conflictEntityLabel = backend.conflict
+    ? ` (${backend.conflict.entityType} ${backend.conflict.entityId})`
+    : '';
+  const syncBannerDetail = conflictEntityLabel ? `${syncBannerMessage || ''}${conflictEntityLabel}`.trim() : syncBannerMessage;
 
   return (
     <div className="relative flex h-[100dvh] overflow-hidden bg-canvas font-sans text-ink">
@@ -256,7 +260,7 @@ const Layout: React.FC = () => {
                 <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">{syncBannerTitle}</p>
-                  <p className="mt-0.5 text-sm leading-5 text-amber-800">{syncBannerMessage}</p>
+                  <p className="mt-0.5 text-sm leading-5 text-amber-800">{syncBannerDetail}</p>
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">

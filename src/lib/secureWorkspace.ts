@@ -2165,11 +2165,13 @@ export const retrySecureWorkspaceCommand = async (
   // for Boss Koo. Older retained commands can still carry these ops.
   if (options.excludeSuperAdminEntities) {
     command.operations = command.operations.filter(operation => !superAdminOnlyEntityTypes.has(operation.entityType));
-    if (command.operations.length === 0) {
-      retryableCommand = null;
-      const revision = await loadSecureWorkspaceRevision();
-      return { ok: true, data: { ok: true, workspaceVersion: revision.version }, commandId: commandId(), workspaceVersion: revision.version };
-    }
+  }
+  if (command.operations.length === 0) {
+    // Nothing left to send (already applied, or every op was reserved for Boss).
+    retryableCommand = null;
+    clearPersistedRetryableCommand();
+    const revision = await loadSecureWorkspaceRevision();
+    return { ok: true, data: { ok: true, workspaceVersion: revision.version }, commandId: commandId(), workspaceVersion: revision.version };
   }
   // Commands retained by older app builds can have a generic workspace.patch
   // type even when every operation belongs to the service workspace. Upgrade
@@ -2186,21 +2188,36 @@ export const retrySecureWorkspaceCommand = async (
 
 export const rebaseRetryableCommand = (conflict: MutationConflict) => {
   if (!retryableCommand) return false;
-  retryableCommand = {
-    ...retryableCommand,
-    id: commandId(),
-    operations: retryableCommand.operations.map(operation => {
-      if (operation.entityType !== conflict.entityType || operation.entityId !== conflict.entityId) return operation;
-      let mergedData = operation.data;
-      if (conflict.changedFields && operation.data && conflict.current) {
-        const userChangedFields = Object.fromEntries(
-          conflict.changedFields.map(key => [key, (operation.data as Record<string, unknown>)[key]]),
-        );
-        mergedData = { ...conflict.current, ...userChangedFields };
-      }
-      return { ...operation, data: mergedData, expectedVersion: conflict.actualVersion };
-    }),
-  };
+  const locallyChangedFields = (operation: WorkspaceOperation) => Object.fromEntries(
+    (conflict.changedFields || []).map(key => [
+      key,
+      (operation.data as Record<string, unknown> | undefined)?.[key],
+    ]),
+  );
+  const operations = retryableCommand.operations.flatMap(operation => {
+    if (operation.entityType !== conflict.entityType || operation.entityId !== conflict.entityId) return [operation];
+    // An insert over a row that already exists is rebased into an update against
+    // the server copy, re-applying only the fields this client changed. If
+    // nothing changed the insert was already applied and can be dropped.
+    if (operation.action === 'insert' && conflict.current) {
+      const changed = locallyChangedFields(operation);
+      if (Object.keys(changed).length === 0) return [];
+      return [{
+        ...operation,
+        action: 'update' as const,
+        data: { ...conflict.current, ...changed },
+        expectedVersion: conflict.actualVersion,
+      }];
+    }
+    let mergedData = operation.data;
+    if (conflict.changedFields && operation.data && conflict.current) {
+      mergedData = { ...conflict.current, ...locallyChangedFields(operation) };
+    }
+    return [{ ...operation, data: mergedData, expectedVersion: conflict.actualVersion }];
+  });
+  // Keep the same command id: a previously applied command replays through the
+  // server receipt instead of conflicting again.
+  retryableCommand = { ...retryableCommand, operations };
   persistRetryableCommand();
   return true;
 };

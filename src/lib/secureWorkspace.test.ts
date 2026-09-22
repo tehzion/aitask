@@ -543,13 +543,14 @@ describe('secure command retry identity', () => {
     expect(rpc.mock.calls[1][1].p_command_id).toBe(firstCommandId);
   });
 
-  it('uses a new command ID and reviewed version after a conflict', async () => {
+  it('reuses the command ID and adopts the reviewed version after a conflict', async () => {
     const conflict = {
       entityType: 'member',
       entityId: '2',
       expectedVersion: 0,
       actualVersion: 4,
       current: { name: 'Latest name' },
+      changedFields: ['name'],
     };
     rpc
       .mockResolvedValueOnce({ data: { ok: false, code: 'CONFLICT', error: 'Conflict', conflict }, error: null })
@@ -565,8 +566,12 @@ describe('secure command retry identity', () => {
 
     const retry = await retrySecureWorkspaceCommand();
     expect(retry.ok).toBe(true);
-    expect(rpc.mock.calls[1][1].p_command_id).not.toBe(firstCommandId);
-    expect(rpc.mock.calls[1][1].p_operations[0].expectedVersion).toBe(4);
+    // The command id is preserved so an already-applied command can replay
+    // through the server receipt instead of conflicting again.
+    expect(rpc.mock.calls[1][1].p_command_id).toBe(firstCommandId);
+    const sentMemberOperation = (rpc.mock.calls[1][1].p_operations as WorkspaceOperation[])
+      .find(operation => operation.entityType === 'member' && operation.entityId === '2');
+    expect(sentMemberOperation?.expectedVersion).toBe(4);
   });
 });
 
@@ -1164,5 +1169,113 @@ describe('secure workspace baseline', () => {
     expect(loaded.state.users[1]).toMatchObject({ name: 'Private Staff', directoryOnly: true });
     expect(loaded.state.users[1].email).toBeUndefined();
     expect(rpc).toHaveBeenCalledWith('aitask_read_client_portal', { p_workspace_id: 'aitask-main' });
+  });
+});
+
+describe('secure command insert-conflict rebase', () => {
+  const seedRetainedCommand = (authUserId: string, command: unknown) => {
+    const values = new Map<string, string>();
+    const sessionStorage: Storage = {
+      get length() { return values.size; },
+      clear: () => values.clear(),
+      getItem: key => values.get(key) ?? null,
+      key: index => [...values.keys()][index] ?? null,
+      removeItem: key => { values.delete(key); },
+      setItem: (key, value) => { values.set(key, value); },
+    };
+    vi.stubGlobal('window', { sessionStorage });
+    sessionStorage.setItem(
+      `aitask:secure-pending-command:v1:aitask-main:${authUserId}`,
+      JSON.stringify({ version: 1, workspaceId: 'aitask-main', authUserId, command }),
+    );
+    restoreSecureWorkspaceCommand(authUserId);
+  };
+
+  const clientInsertCommand = () => ({
+    id: 'cmd-insert-client',
+    type: 'client.upsert',
+    operations: [{
+      kind: 'entity' as const,
+      action: 'insert' as const,
+      entityType: 'client',
+      entityId: 'client-1',
+      expectedVersion: 0,
+      data: {
+        id: 'client-1',
+        clientName: 'Acme',
+        contactPerson: 'Alicia',
+        createdAt: '2026-09-18T00:00:00.000Z',
+        updatedAt: '2026-09-18T00:00:00.000Z',
+      },
+    }],
+  });
+
+  const existingClientRow = (contactPerson: string) => ({
+    id: 'client-1',
+    clientName: 'Acme',
+    contactPerson,
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+  });
+
+  beforeEach(() => {
+    rpc.mockReset();
+    refreshSession.mockReset();
+    from.mockReset();
+  });
+
+  it('converts an insert conflict into an update against the existing row', async () => {
+    seedRetainedCommand('auth-conflict', clientInsertCommand());
+    expect(getRetainedSecureCommand()?.operations[0]).toMatchObject({ action: 'insert', entityId: 'client-1' });
+
+    rebaseRetryableCommand({
+      entityType: 'client',
+      entityId: 'client-1',
+      expectedVersion: 0,
+      actualVersion: 3,
+      current: existingClientRow('Old'),
+      changedFields: ['contactPerson'],
+    });
+
+    const rebased = getRetainedSecureCommand()?.operations[0];
+    expect(rebased).toMatchObject({ action: 'update', entityType: 'client', entityId: 'client-1', expectedVersion: 3 });
+    expect((rebased?.data as Record<string, unknown>).contactPerson).toBe('Alicia');
+    expect((rebased?.data as Record<string, unknown>).clientName).toBe('Acme');
+
+    rpc.mockResolvedValueOnce({ data: { ok: true, workspaceVersion: 5, changed: [] }, error: null });
+    const retry = await retrySecureWorkspaceCommand();
+    expect(retry.ok).toBe(true);
+    const sent = (rpc.mock.calls[0][1].p_operations as WorkspaceOperation[])[0];
+    expect(sent).toMatchObject({ action: 'update', entityType: 'client', entityId: 'client-1', expectedVersion: 3 });
+    expect((sent.data as Record<string, unknown>).contactPerson).toBe('Alicia');
+  });
+
+  it('drops an insert whose data already matches the server row', async () => {
+    seedRetainedCommand('auth-conflict', clientInsertCommand());
+
+    rebaseRetryableCommand({
+      entityType: 'client',
+      entityId: 'client-1',
+      expectedVersion: 0,
+      actualVersion: 3,
+      current: existingClientRow('Alicia'),
+      changedFields: [],
+    });
+
+    expect(getRetainedSecureCommand()?.operations ?? []).toHaveLength(0);
+
+    from.mockImplementation(() => {
+      const result = Promise.resolve({ data: { version: 9, updated_at: '2026-09-18T00:00:00Z', sync_protocol_version: 1 }, error: null });
+      const fluent: Record<string, () => unknown> = {};
+      fluent.select = () => fluent;
+      fluent.eq = () => fluent;
+      fluent.single = () => result;
+      return fluent;
+    });
+    rpc.mockClear();
+
+    const retry = await retrySecureWorkspaceCommand();
+    expect(retry.ok).toBe(true);
+    expect(rpc).not.toHaveBeenCalled();
   });
 });
