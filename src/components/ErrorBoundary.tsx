@@ -1,4 +1,5 @@
 import React from 'react';
+import { isChunkLoadError, recoverFromChunkLoadError } from '../lib/chunkRecovery';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -24,6 +25,12 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   componentDidCatch(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    // A newer deploy removed the chunk this tab is trying to load. Reload once
+    // into the new bundle instead of stranding the user on the error screen.
+    if (isChunkLoadError(message) && recoverFromChunkLoadError()) {
+      return;
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('aitask:uncaught-render-error', { detail: String(error) }));
     }
