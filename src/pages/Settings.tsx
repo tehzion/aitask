@@ -106,6 +106,7 @@ const Settings: React.FC = () => {
     addTaskStatus,
     deleteTaskStatus,
     commitPendingMutation,
+    discardMutation,
     resetLocalServiceDemo,
   } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
@@ -124,6 +125,7 @@ const Settings: React.FC = () => {
     addTaskStatus: state.addTaskStatus,
     deleteTaskStatus: state.deleteTaskStatus,
     commitPendingMutation: state.commitPendingMutation,
+    discardMutation: state.discardMutation,
     resetLocalServiceDemo: state.resetLocalServiceDemo,
   })));
   const isSuperAdmin = isBossKoo(currentUser);
@@ -364,6 +366,13 @@ const Settings: React.FC = () => {
     setAvatarPreviewFailed(false);
     setProfileMessage(null);
     window.setTimeout(() => profileFormRef.current?.requestSubmit(), 0);
+  };
+
+  const discardPendingProfileChange = async () => {
+    if (isProfileSaving) return;
+    await discardMutation();
+    setProfileRetryDraft(null);
+    setProfileMessage(null);
   };
 
   const resetProfileForm = () => {
@@ -752,6 +761,11 @@ const Settings: React.FC = () => {
                   <Button type="button" variant="secondary" onClick={retryProfileSave} disabled={isProfileSaving}>
                     <RefreshCw className="h-4 w-4" aria-hidden="true" />
                     {t('Retry save')}
+                  </Button>
+                )}
+                {profileMessage?.tone === 'error' && (
+                  <Button type="button" variant="secondary" onClick={() => void discardPendingProfileChange()} disabled={isProfileSaving}>
+                    {t('Use latest')}
                   </Button>
                 )}
               </div>

@@ -124,6 +124,19 @@ describe('inferSecureCommandType', () => {
     expect(inferSecureCommandType([operation('project', 'delete'), operation('task')])).toBe('workspace.patch');
   });
 
+  it('treats a self profile update bundled with other entities as member.update', () => {
+    const operations = [operation('member'), operation('client', 'insert')];
+    expect(inferSecureCommandType(operations, { selfMemberId: 'member-1' })).toBe('member.update');
+  });
+
+  it('keeps an update to another member on the Boss-only member.manage command', () => {
+    const operations = [
+      { ...operation('member'), entityId: 'member-2' },
+      operation('task'),
+    ];
+    expect(inferSecureCommandType(operations, { selfMemberId: 'member-1' })).toBe('member.manage');
+  });
+
   it('keeps a deliverable and its derived cycle update on the service RPC', () => {
     expect(inferSecureCommandType([operation('deliverable'), operation('service_cycle')])).toBe('deliverable.manage');
   });
@@ -214,6 +227,22 @@ describe('buildOperations', () => {
     expect(projectManagerOperations.some(operation => operation.entityType === 'custom_role')).toBe(false);
     expect(projectManagerOperations.some(operation => operation.entityType === 'task_status')).toBe(false);
     expect(projectManagerOperations.some(operation => operation.entityType === 'client' && operation.entityId === 'client-1')).toBe(true);
+  });
+
+  it('never emits another member in a non-super-admin diff', () => {
+    const base = stateWithUser('member-1');
+    const state: PersistedWorkspaceState = {
+      ...base,
+      users: [
+        base.users[0],
+        { id: 'member-2', workspaceId: 'aitask-main', name: 'Other', role: 'Staff', departments: ['Designer'], department: 'Designer' },
+      ],
+    };
+
+    const operations = buildOperations(state, { excludeSuperAdminEntities: true, actorMemberId: 'member-1' });
+
+    expect(operations.some(operation => operation.entityType === 'member' && operation.entityId === 'member-2')).toBe(false);
+    expect(operations.some(operation => operation.entityType === 'member' && operation.entityId === 'member-1')).toBe(true);
   });
 
   it('sends a balanced client insert as client.upsert for a non-super-admin', () => {

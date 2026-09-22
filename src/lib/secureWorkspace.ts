@@ -743,6 +743,7 @@ const superAdminOnlyEntityTypes = new Set(['custom_role', 'task_status', 'regist
 
 export type BuildOperationsOptions = {
   excludeSuperAdminEntities?: boolean;
+  actorMemberId?: string;
 };
 
 export const buildOperations = (
@@ -752,10 +753,22 @@ export const buildOperations = (
   const nextRows = stateToRows(state);
   const nextKeys = new Set(nextRows.map(row => entityKey(row.entityType, row.entityId)));
   const excluded = options.excludeSuperAdminEntities ? superAdminOnlyEntityTypes : undefined;
+  // A non-super-admin can only ever change their own member row. Never emit
+  // another member's update, otherwise the whole command is classified as the
+  // Boss-only `member.manage` and rejected with "Super Admin permission required."
+  const skipsRow = (row: BaselineRow) => (
+    Boolean(excluded?.has(row.entityType))
+    || (
+      options.excludeSuperAdminEntities === true
+      && Boolean(options.actorMemberId)
+      && row.entityType === 'member'
+      && row.entityId !== options.actorMemberId
+    )
+  );
   const operations: WorkspaceOperation[] = [];
 
   nextRows.forEach(row => {
-    if (excluded?.has(row.entityType)) return;
+    if (skipsRow(row)) return;
     const key = entityKey(row.entityType, row.entityId);
     const previous = baseline.get(key);
     if (!previous) {
@@ -784,7 +797,7 @@ export const buildOperations = (
   });
 
   baseline.forEach(row => {
-    if (excluded?.has(row.entityType)) return;
+    if (skipsRow(row)) return;
     const key = entityKey(row.entityType, row.entityId);
     if (!nextKeys.has(key)) {
       operations.push({
@@ -807,7 +820,10 @@ const changedFieldsForConflict = (operation: WorkspaceOperation, current?: Recor
   return [...keys].filter(key => stable(operation.data?.[key]) !== stable(current?.[key])).sort();
 };
 
-export const inferSecureCommandType = (operations: WorkspaceOperation[]): SecureCommandType => {
+export const inferSecureCommandType = (
+  operations: WorkspaceOperation[],
+  options: { selfMemberId?: string } = {},
+): SecureCommandType => {
   const entityTypes = new Set(operations.map(operation => operation.entityType));
   const actions = new Set(operations.map(operation => operation.action));
   const only = (entityType: string) => entityTypes.size === 1 && entityTypes.has(entityType);
@@ -829,9 +845,17 @@ export const inferSecureCommandType = (operations: WorkspaceOperation[]): Secure
     return 'service_package.manage';
   }
 
-  if (entityTypes.has('member')) return entityTypes.size === 1 && actions.size === 1 && actions.has('update')
-    ? 'member.update'
-    : 'member.manage';
+  if (entityTypes.has('member')) {
+    // A self profile update is a `member.update`. Only member inserts/deletes
+    // or updates to another member require the Boss-only `member.manage`.
+    const memberOperations = operations.filter(operation => operation.entityType === 'member');
+    const selfUpdatesOnly = memberOperations.length > 0
+      && memberOperations.every(operation => (
+        operation.action === 'update'
+        && (!options.selfMemberId || operation.entityId === options.selfMemberId)
+      ));
+    return selfUpdatesOnly ? 'member.update' : 'member.manage';
+  }
   if (only('task')) return actions.size === 1 && actions.has('insert')
     ? 'task.create'
     : actions.size === 1 && actions.has('delete')
@@ -2149,7 +2173,11 @@ export const saveSecureWorkspace = async (
       error: 'This change touches too many records. Save it in smaller steps.',
     };
   }
-  const command: SecureCommand = { id: commandId(), type: type || inferSecureCommandType(operations), operations };
+  const command: SecureCommand = {
+    id: commandId(),
+    type: type || inferSecureCommandType(operations, { selfMemberId: options.actorMemberId }),
+    operations,
+  };
   return executeCommand(command, expectedWorkspaceVersion);
 };
 
@@ -2162,9 +2190,15 @@ export const retrySecureWorkspaceCommand = async (
   }
   const command = { ...retryableCommand };
   // A non-super-admin must never retry an operation type the server reserves
-  // for Boss Koo. Older retained commands can still carry these ops.
+  // for Boss Koo. Older retained commands can still carry those ops, or an
+  // update to another member that the earlier bundling path misclassified.
   if (options.excludeSuperAdminEntities) {
     command.operations = command.operations.filter(operation => !superAdminOnlyEntityTypes.has(operation.entityType));
+    if (options.actorMemberId) {
+      command.operations = command.operations.filter(operation => (
+        operation.entityType !== 'member' || operation.entityId === options.actorMemberId
+      ));
+    }
   }
   if (command.operations.length === 0) {
     // Nothing left to send (already applied, or every op was reserved for Boss).
@@ -2177,8 +2211,14 @@ export const retrySecureWorkspaceCommand = async (
   // type even when every operation belongs to the service workspace. Upgrade
   // the envelope before retrying so users can keep their intended change.
   if (command.type === 'workspace.patch') {
-    const inferredType = inferSecureCommandType(command.operations);
+    const inferredType = inferSecureCommandType(command.operations, { selfMemberId: options.actorMemberId });
     if (inferredType !== 'workspace.patch') command.type = inferredType;
+  }
+  // Older retained commands may carry the Boss-only `member.manage` envelope
+  // for a self profile update that is now correctly classified as `member.update`.
+  if (command.type === 'member.manage') {
+    const inferredType = inferSecureCommandType(command.operations, { selfMemberId: options.actorMemberId });
+    if (inferredType === 'member.update') command.type = 'member.update';
   }
   if (command.operations.some(operation => operation.expectedVersion < 0)) {
     return { ok: false, code: 'CONFLICT', error: 'Review the latest record before retrying.' };

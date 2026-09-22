@@ -1283,7 +1283,7 @@ export const useStore = create<StoreState>()(
               savedWorkspace,
               pendingCommandType,
               stateToSave.backend.workspaceVersion,
-              { excludeSuperAdminEntities: !stateToSave.currentUser?.isSuperAdmin },
+              { excludeSuperAdminEntities: !stateToSave.currentUser?.isSuperAdmin, actorMemberId: stateToSave.currentUser?.id },
             );
             if (result.ok === false) {
               const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
@@ -1825,6 +1825,7 @@ export const useStore = create<StoreState>()(
 
         const result = await retrySecureWorkspaceCommand(get().backend.workspaceVersion || undefined, {
           excludeSuperAdminEntities: !get().currentUser?.isSuperAdmin,
+          actorMemberId: get().currentUser?.id,
         });
         if (result.ok === false) {
           const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
