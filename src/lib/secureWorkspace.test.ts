@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PersistedWorkspaceState } from './supabaseSnapshot';
+import { BUILTIN_HOD_ROLE_ID, defaultRolePermissions } from './access';
 
 const { rpc, refreshSession, from } = vi.hoisted(() => ({
   rpc: vi.fn(),
@@ -183,6 +184,61 @@ describe('buildOperations', () => {
     expect(notificationOp?.data).not.toHaveProperty('unreadByUserIds');
     expect(notificationOp?.data).not.toHaveProperty('visibleToCurrentUser');
     expect(notificationOp?.data).toHaveProperty('readByUserIds');
+  });
+
+  it('keeps Boss-only entity types out of a non-super-admin diff', () => {
+    const builtinRole = {
+      id: BUILTIN_HOD_ROLE_ID,
+      name: 'HOD',
+      baseRole: 'HOD' as const,
+      permissions: defaultRolePermissions.HOD,
+      departmentScoped: true,
+      isProtected: false,
+      isBuiltin: true,
+      createdAt: '2026-09-18T00:00:00.000Z',
+      updatedAt: '2026-09-18T00:00:00.000Z',
+    };
+    const state: PersistedWorkspaceState = {
+      ...stateWithUser('member-1'),
+      rolePermissions: [builtinRole],
+      taskStatuses: ['Pending'],
+      clients: [{ id: 'client-1', clientName: 'Acme', createdAt: '2026-09-18T00:00:00.000Z', updatedAt: '2026-09-18T00:00:00.000Z' }],
+    };
+
+    const bossOperations = buildOperations(state);
+    expect(bossOperations.some(operation => operation.entityType === 'custom_role')).toBe(true);
+    expect(bossOperations.some(operation => operation.entityType === 'task_status')).toBe(true);
+
+    const projectManagerOperations = buildOperations(state, { excludeSuperAdminEntities: true });
+    expect(projectManagerOperations.some(operation => operation.entityType === 'custom_role')).toBe(false);
+    expect(projectManagerOperations.some(operation => operation.entityType === 'task_status')).toBe(false);
+    expect(projectManagerOperations.some(operation => operation.entityType === 'client' && operation.entityId === 'client-1')).toBe(true);
+  });
+
+  it('sends a balanced client insert as client.upsert for a non-super-admin', () => {
+    const state: PersistedWorkspaceState = {
+      users: [],
+      clients: [{ id: 'client-1', clientName: 'Acme', createdAt: '2026-09-18T00:00:00.000Z', updatedAt: '2026-09-18T00:00:00.000Z' }],
+      projects: [],
+      tasks: [],
+      notifications: [],
+      registrations: [],
+      rolePermissions: [{
+        id: BUILTIN_HOD_ROLE_ID,
+        name: 'HOD',
+        baseRole: 'HOD',
+        permissions: defaultRolePermissions.HOD,
+        departmentScoped: true,
+        isProtected: false,
+        isBuiltin: true,
+        createdAt: '2026-09-18T00:00:00.000Z',
+        updatedAt: '2026-09-18T00:00:00.000Z',
+      }],
+      taskStatuses: ['Pending'],
+    };
+    const operations = buildOperations(state, { excludeSuperAdminEntities: true });
+    expect(operations).toHaveLength(1);
+    expect(inferSecureCommandType(operations)).toBe('client.upsert');
   });
 });
 

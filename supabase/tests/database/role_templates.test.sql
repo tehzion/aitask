@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(6);
+select plan(8);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -44,6 +44,34 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000921
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select is(private.aitask_has_permission('pgtap-role-templates', 'viewApprovals'), false, 'Project Manager cannot access Approvals');
 select is(private.aitask_has_permission('pgtap-role-templates', 'createClients'), true, 'Project Manager can add companies server-side');
+
+select is(
+  (public.aitask_execute_command(
+    'pgtap-role-templates', gen_random_uuid(), 'client.upsert',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'client', 'entityId', 'pgtap-pm-client',
+      'expectedVersion', 0,
+      'data', '{"id":"pgtap-pm-client","clientName":"PM Created Co","createdBy":"pgtap-role-admin"}'::jsonb
+    ))
+  ) ->> 'ok')::boolean,
+  true,
+  'Project Manager can create a company through the command path'
+);
+
+-- Ordinary Staff still cannot add companies.
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000924', true);
+select is(
+  (public.aitask_execute_command(
+    'pgtap-role-templates', gen_random_uuid(), 'client.upsert',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'client', 'entityId', 'pgtap-staff-client',
+      'expectedVersion', 0,
+      'data', '{"id":"pgtap-staff-client","clientName":"Staff Created Co","createdBy":"pgtap-role-staff"}'::jsonb
+    ))
+  ) ->> 'ok')::boolean,
+  false,
+  'Staff without Add companies cannot create a company'
+);
 
 -- HOD is department-scoped for task visibility and editing.
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000922', true);

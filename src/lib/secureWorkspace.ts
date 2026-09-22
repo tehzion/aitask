@@ -735,12 +735,27 @@ const alignBaselineToCanonicalState = (state: PersistedWorkspaceState) => {
   baseline = canonical;
 };
 
-export const buildOperations = (state: PersistedWorkspaceState): WorkspaceOperation[] => {
+// Entity types only Boss Koo (super admin) may write through the generic
+// command path. Non-super-admins must never emit these operations, otherwise a
+// routine save (e.g. adding a company) gets rejected by the server guard with
+// "Super Admin permission required."
+const superAdminOnlyEntityTypes = new Set(['custom_role', 'task_status', 'registration']);
+
+export type BuildOperationsOptions = {
+  excludeSuperAdminEntities?: boolean;
+};
+
+export const buildOperations = (
+  state: PersistedWorkspaceState,
+  options: BuildOperationsOptions = {},
+): WorkspaceOperation[] => {
   const nextRows = stateToRows(state);
   const nextKeys = new Set(nextRows.map(row => entityKey(row.entityType, row.entityId)));
+  const excluded = options.excludeSuperAdminEntities ? superAdminOnlyEntityTypes : undefined;
   const operations: WorkspaceOperation[] = [];
 
   nextRows.forEach(row => {
+    if (excluded?.has(row.entityType)) return;
     const key = entityKey(row.entityType, row.entityId);
     const previous = baseline.get(key);
     if (!previous) {
@@ -769,6 +784,7 @@ export const buildOperations = (state: PersistedWorkspaceState): WorkspaceOperat
   });
 
   baseline.forEach(row => {
+    if (excluded?.has(row.entityType)) return;
     const key = entityKey(row.entityType, row.entityId);
     if (!nextKeys.has(key)) {
       operations.push({
@@ -2112,6 +2128,7 @@ export const saveSecureWorkspace = async (
   state: PersistedWorkspaceState,
   type?: SecureCommandType,
   expectedWorkspaceVersion?: number,
+  options: BuildOperationsOptions = {},
 ): Promise<MutationResult<CommandResponse>> => {
   if (type !== undefined && !isSecureCommandType(type)) {
     return {
@@ -2120,7 +2137,7 @@ export const saveSecureWorkspace = async (
       error: 'The requested workspace command is not supported.',
     };
   }
-  const operations = buildOperations(state);
+  const operations = buildOperations(state, options);
   if (operations.length === 0) {
     const revision = await loadSecureWorkspaceRevision();
     return { ok: true, data: { ok: true, workspaceVersion: revision.version }, commandId: commandId(), workspaceVersion: revision.version };
@@ -2138,11 +2155,22 @@ export const saveSecureWorkspace = async (
 
 export const retrySecureWorkspaceCommand = async (
   expectedWorkspaceVersion?: number,
+  options: BuildOperationsOptions = {},
 ): Promise<MutationResult<CommandResponse>> => {
   if (!retryableCommand) {
     return { ok: false, code: 'NOT_FOUND', error: 'There is no command waiting to retry.' };
   }
   const command = { ...retryableCommand };
+  // A non-super-admin must never retry an operation type the server reserves
+  // for Boss Koo. Older retained commands can still carry these ops.
+  if (options.excludeSuperAdminEntities) {
+    command.operations = command.operations.filter(operation => !superAdminOnlyEntityTypes.has(operation.entityType));
+    if (command.operations.length === 0) {
+      retryableCommand = null;
+      const revision = await loadSecureWorkspaceRevision();
+      return { ok: true, data: { ok: true, workspaceVersion: revision.version }, commandId: commandId(), workspaceVersion: revision.version };
+    }
+  }
   // Commands retained by older app builds can have a generic workspace.patch
   // type even when every operation belongs to the service workspace. Upgrade
   // the envelope before retrying so users can keep their intended change.
