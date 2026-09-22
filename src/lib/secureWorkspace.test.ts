@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PersistedWorkspaceState } from './supabaseSnapshot';
+import type { Task } from '../types';
 import { BUILTIN_HOD_ROLE_ID, defaultRolePermissions } from './access';
 
 const { rpc, refreshSession, from } = vi.hoisted(() => ({
@@ -240,6 +241,53 @@ describe('buildOperations', () => {
     expect(operations).toHaveLength(1);
     expect(inferSecureCommandType(operations)).toBe('client.upsert');
   });
+
+  it('sends a Project Manager task insert as task.create without Boss-only ops', () => {
+    const task: Task = {
+      id: 'task-1',
+      version: 1,
+      clientName: 'Acme',
+      serviceType: 'Design',
+      title: 'Artwork',
+      description: '',
+      department: 'Designer',
+      assignedTo: 'member-1',
+      createdBy: 'member-1',
+      startDate: '2026-09-18',
+      dueDate: '',
+      priority: 'Medium',
+      status: 'Pending',
+      completionPercentage: 0,
+      isCompleted: false,
+      revisionCount: 0,
+      clientApprovalStatus: 'Pending',
+      isRecurring: false,
+      recurrenceFrequency: 'None',
+    };
+    const state: PersistedWorkspaceState = {
+      users: [],
+      clients: [],
+      projects: [],
+      tasks: [task],
+      notifications: [],
+      registrations: [],
+      rolePermissions: [{
+        id: BUILTIN_HOD_ROLE_ID,
+        name: 'HOD',
+        baseRole: 'HOD',
+        permissions: defaultRolePermissions.HOD,
+        departmentScoped: true,
+        isProtected: false,
+        isBuiltin: true,
+        createdAt: '2026-09-18T00:00:00.000Z',
+        updatedAt: '2026-09-18T00:00:00.000Z',
+      }],
+      taskStatuses: ['Pending'],
+    };
+    const operations = buildOperations(state, { excludeSuperAdminEntities: true });
+    expect(operations.every(operation => operation.entityType === 'task')).toBe(true);
+    expect(inferSecureCommandType(operations)).toBe('task.create');
+  });
 });
 
 describe('secure command retry identity', () => {
@@ -315,6 +363,46 @@ describe('secure command retry identity', () => {
     const retry = await retrySecureWorkspaceCommand();
     expect(retry.ok).toBe(true);
     expect(rpc.mock.calls[1][1].p_command_id).toBe(firstCommandId);
+  });
+
+  it('drops Boss-only operations when retrying a retained command as a non-super-admin', async () => {
+    rpc
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockResolvedValueOnce({ data: { ok: true, workspaceVersion: 4, changed: [] }, error: null });
+
+    const state: PersistedWorkspaceState = {
+      users: [],
+      clients: [{ id: 'client-1', clientName: 'Acme', createdAt: '2026-09-18T00:00:00.000Z', updatedAt: '2026-09-18T00:00:00.000Z' }],
+      projects: [],
+      tasks: [],
+      notifications: [],
+      registrations: [],
+      rolePermissions: [{
+        id: BUILTIN_HOD_ROLE_ID,
+        name: 'HOD',
+        baseRole: 'HOD',
+        permissions: defaultRolePermissions.HOD,
+        departmentScoped: true,
+        isProtected: false,
+        isBuiltin: true,
+        createdAt: '2026-09-18T00:00:00.000Z',
+        updatedAt: '2026-09-18T00:00:00.000Z',
+      }],
+      taskStatuses: ['Pending'],
+    };
+
+    const first = await saveSecureWorkspace(state);
+    expect(first).toMatchObject({ ok: false, code: 'RETRY_REQUIRED' });
+    const firstOperations = rpc.mock.calls[0][1].p_operations as WorkspaceOperation[];
+    expect(firstOperations.some(operation => operation.entityType === 'custom_role')).toBe(true);
+    expect(firstOperations.some(operation => operation.entityType === 'task_status')).toBe(true);
+
+    const retry = await retrySecureWorkspaceCommand(undefined, { excludeSuperAdminEntities: true });
+    expect(retry.ok).toBe(true);
+    const retriedOperations = rpc.mock.calls[1][1].p_operations as WorkspaceOperation[];
+    expect(retriedOperations.some(operation => operation.entityType === 'custom_role')).toBe(false);
+    expect(retriedOperations.some(operation => operation.entityType === 'task_status')).toBe(false);
+    expect(retriedOperations.some(operation => operation.entityType === 'client' && operation.entityId === 'client-1')).toBe(true);
   });
 
   it('does not retain a task command rejected by a database permission rule', async () => {
