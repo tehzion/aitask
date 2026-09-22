@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-19",
-  "status": "production_authorization_rollout_verified_20260922131000",
+  "status": "production_authorization_rollout_verified_20260922132000",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
     "verifiedAt": "2026-09-22",
-    "historyThrough": "task_assignment_attribution (repository 20260922131000)",
+    "historyThrough": "staff_deliverable_delivered_at (repository 20260922132000)",
     "historyAligned": false,
     "historyAlignmentNote": "The connector stored deployment IDs 20260919065513, 20260919065609, 20260919065620, 20260919065648, and 20260919072524 for the five matching repository migrations. Names and live SQL are verified; timestamp repair is intentionally prohibited.",
     "authorizationRollout": {
@@ -73,6 +73,10 @@
         {
           "repository": "20260922131000_task_assignment_attribution",
           "production": "20260922131000_task_assignment_attribution"
+        },
+        {
+          "repository": "20260922132000_staff_deliverable_delivered_at",
+          "production": "20260922132000_staff_deliverable_delivered_at"
         }
       ]
     },
@@ -418,7 +422,8 @@
     "20260922110000_pm_portfolio_task_management",
     "20260922120000_idempotent_entity_insert",
     "20260922130000_pm_portfolio_task_reassignment",
-    "20260922131000_task_assignment_attribution"
+    "20260922131000_task_assignment_attribution",
+    "20260922132000_staff_deliverable_delivered_at"
   ],
   "pendingProductionMigrations": []
 }
