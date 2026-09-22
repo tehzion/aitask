@@ -68,6 +68,24 @@
         }
       ]
     },
+    "migrationHistoryRepair": {
+      "performedAt": "2026-09-22",
+      "method": "supabase migration repair --status applied --linked",
+      "recordedVersions": [
+        "20260922100000_fix_pm_role_wording",
+        "20260922110000_pm_portfolio_task_management",
+        "20260922120000_idempotent_entity_insert"
+      ],
+      "connectorEntriesUntouched": true,
+      "note": "The three repository migrations applied through the Management API were recorded in supabase_migrations.schema_migrations so the history table matches the repository. The connector-aliased entries 20260918210000-20260919120000 remain unchanged, as required by the manifest warning."
+    },
+    "advisorSnapshot": {
+      "capturedAt": "2026-09-22",
+      "securityWarnings": 18,
+      "securityInfo": 4,
+      "performanceInfo": 5,
+      "note": "The remaining security warnings are SECURITY DEFINER RPC entrypoints callable by authenticated (intentional and internally authorized). Leaked-password protection is unavailable on the current plan (HTTP 402, Pro Plans and up). Performance items are unused-index INFO only."
+    },
     "rolloutResult": {
       "approvedBaselineMatchedAfterRestore": true,
       "postflightUnchanged": true,
