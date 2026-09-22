@@ -606,14 +606,25 @@ describe('staff permission matrix', () => {
     expect(canViewTask(admin, pmPortfolioTask, [], pmScope)).toBe(true);
     expect(getTaskAccess(admin, pmPortfolioTask, [], pmScope)).toMatchObject({
       canView: true,
-      canEdit: false,
-      canComment: false,
-      canDelete: false,
-      canAssign: false,
+      canEdit: true,
+      canComment: true,
+      canDelete: true,
+      canAssign: true,
     });
     expect(getTaskAccess(admin, pmAssignedTask)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: false });
     expect(getTaskAccess(admin, pmCreatedTask)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: true });
     expect(getTaskAccess(admin, pmUnrelatedTask)).toEqual({ canView: false, canEdit: false, canComment: false, canDelete: false, canAssign: false });
+
+    // A PM cannot manage another PM's portfolio, and the unused service-client
+    // key is no longer part of the PM defaults.
+    const otherPm: User = { ...admin, id: 'admin-2', name: 'Other PM' };
+    const otherPmScope = {
+      clients: [{ id: 'owned-co', clientName: 'Owned Co', createdBy: otherPm.id, createdAt: '', updatedAt: '' }],
+      projects: [],
+    };
+    expect(canEditTask(admin, pmPortfolioTask, [], otherPmScope)).toBe(false);
+    expect(getTaskAccess(admin, pmPortfolioTask, [], otherPmScope).canEdit).toBe(false);
+    expect(getEffectivePermissions(admin).viewAllServiceClients).toBe(false);
 
     const hodRole: CustomRole = {
       id: BUILTIN_HOD_ROLE_ID,

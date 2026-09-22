@@ -305,12 +305,12 @@ const Calendar: React.FC = () => {
   );
   const canEditTaskDates = useCallback(
     (task: Task) => (
-      canEditTaskByRole(currentUser, task, rolePermissions)
+      canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects })
       && savingTaskIdRef.current !== task.id
       && !backend.isSaving
       && !hasBlockedMutation
     ),
-    [backend.isSaving, currentUser, hasBlockedMutation, rolePermissions],
+    [backend.isSaving, clientProfiles, currentUser, hasBlockedMutation, projects, rolePermissions],
   );
 
   const showSavedMessage = (title: string) => {
@@ -396,7 +396,7 @@ const Calendar: React.FC = () => {
   };
 
   const openDateEditor = (task: Task) => {
-    if (!canEditTaskByRole(currentUser, task, rolePermissions)) {
+    if (!canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects })) {
       navigate(`/tasks?taskId=${encodeURIComponent(task.id)}`);
       return;
     }
@@ -1169,7 +1169,7 @@ const Calendar: React.FC = () => {
                 </div>
               ) : (
                 selectedDayTasks.map(task => {
-                  const canEdit = canEditTaskByRole(currentUser, task, rolePermissions);
+                  const canEdit = canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects });
                   const dueDate = parseOptionalDate(task.dueDate);
                   const isOverdue = Boolean(
                     dueDate

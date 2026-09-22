@@ -33,6 +33,11 @@ const ownedProjectIds = (user: User, scope: VisibilityScope) => new Set(
     .map(project => project.id)
 );
 
+const isTaskInOwnedPortfolio = (user: User, task: Task, scope: VisibilityScope) => (
+  ownedClientKeys(user, scope).has(task.clientName.trim().toLowerCase())
+  || (Boolean(task.projectId) && ownedProjectIds(user, scope).has(task.projectId as string))
+);
+
 export type AppPath = '/' | '/tasks' | '/calendar' | '/clients' | '/projects' | '/reports' | '/approvals' | '/settings';
 
 export const appNavigation: { label: string; path: AppPath }[] = [
@@ -157,7 +162,6 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'manageTaskTemplates',
     'manageClientPlans',
     'manageServiceCycles',
-    'viewAllServiceClients',
     'viewServicePrices',
   ]),
   HOD: makePermissions([
@@ -450,9 +454,11 @@ export const canAssignTasksToOthers = (
   user: User | null | undefined,
   customRoles: CustomRole[] = [],
   task?: Task,
+  scope: VisibilityScope = {},
 ) => (
   isBossKoo(user)
   || (user?.role !== 'HOD' && hasPermission(user, 'editTasks', customRoles))
+  || (user?.role === 'Project Manager' && Boolean(task) && isTaskInOwnedPortfolio(user as User, task as Task, scope))
   || (hasPermission(user, 'manageCreatedTasks', customRoles) && (!task || task.createdBy === user?.id))
 );
 
@@ -484,11 +490,17 @@ export const canViewTask = (
   return false;
 };
 
-export const canEditTask = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
+export const canEditTask = (
+  user: User | null | undefined,
+  task: Task,
+  customRoles: CustomRole[] = [],
+  scope: VisibilityScope = {}
+) => (
   isBossKoo(user) ||
   (user?.role !== 'HOD' && hasPermission(user, 'editTasks', customRoles)) ||
   (['Staff', 'HOD', 'Project Manager'].includes(user?.role || '') && task.assignedTo === user.id) ||
   (['Staff', 'HOD', 'Project Manager'].includes(user?.role || '') && task.createdBy === user.id) ||
+  (user?.role === 'Project Manager' && isTaskInOwnedPortfolio(user, task, scope)) ||
   (isDepartmentScopedUser(user, customRoles) && isMemberInDepartment(user, task.department))
 );
 export const canDeleteTask = canEditTask;
@@ -516,8 +528,8 @@ export const canReviewTaskAsClient = (user: User | null | undefined, task: Task,
   (task.isCompleted || task.status === 'Waiting Approval') &&
   task.clientApprovalStatus !== 'Approved'
 );
-export const canCommentOnTask = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
-  canEditTask(user, task, customRoles) ||
+export const canCommentOnTask = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = [], scope: VisibilityScope = {}) => (
+  canEditTask(user, task, customRoles, scope) ||
   (
     user?.role === 'Client' &&
     task.visibility !== 'internal' &&
@@ -534,10 +546,10 @@ export const getTaskAccess = (
   scope: VisibilityScope = {},
 ): TaskAccess => {
   const canView = canViewTask(user, task, customRoles, scope);
-  const canEdit = canView && canEditTask(user, task, customRoles);
-  const canComment = canView && canCommentOnTask(user, task, customRoles);
+  const canEdit = canView && canEditTask(user, task, customRoles, scope);
+  const canComment = canView && canCommentOnTask(user, task, customRoles, scope);
   const canDelete = canEdit;
-  const canAssign = canEdit && canAssignTasksToOthers(user, customRoles, task);
+  const canAssign = canEdit && canAssignTasksToOthers(user, customRoles, task, scope);
   return { canView, canEdit, canComment, canDelete, canAssign };
 };
 

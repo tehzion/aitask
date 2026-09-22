@@ -94,7 +94,7 @@ const TasksWorkspace: React.FC = () => {
   const handleQuickEditClick = (e: React.MouseEvent, task: Task) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!canEditTaskByRole(currentUser, task, rolePermissions)) {
+    if (!canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects })) {
       return;
     }
     const rect = e.currentTarget.getBoundingClientRect();
@@ -106,7 +106,7 @@ const TasksWorkspace: React.FC = () => {
   };
 
   const handleRowContextMenu = (e: React.MouseEvent, task: Task) => {
-    if (!canEditTaskByRole(currentUser, task, rolePermissions)) return;
+    if (!canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects })) return;
     e.preventDefault();
     e.stopPropagation();
     setActiveQuickEdit({
@@ -357,7 +357,7 @@ const TasksWorkspace: React.FC = () => {
   }, [taskIdFilter, tasks]);
 
   const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
-  const canEditTask = (task: Task) => canEditTaskByRole(currentUser, task, rolePermissions);
+  const canEditTask = (task: Task) => canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects });
   const isClientReviewReady = (task: Task) => (
     task.clientApprovalStatus !== 'Approved'
     && (task.status === 'Waiting Approval' || task.status === 'Completed' || task.isCompleted)

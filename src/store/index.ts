@@ -2405,7 +2405,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return state;
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
-        if (!task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
+        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
 
         const nextStatus = resolveTaskStatus(status, state.taskStatuses);
         if (!nextStatus) {
@@ -2499,7 +2499,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return state;
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
-        if (!task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
+        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
         if (!allowedPriorities.has(priority)) {
           useToastStore.getState().addToast('Choose a valid priority.', 'warning');
           return state;
@@ -2519,9 +2519,9 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return state;
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
-        if (!task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
+        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
         if (assignedTo === task.assignedTo) return state;
-        if (!canAssignTasksToOthers(currentUser, state.rolePermissions, task)) return state;
+        if (!canAssignTasksToOthers(currentUser, state.rolePermissions, task, { clients: state.clients, projects: state.projects })) return state;
 
         const assigneeUser = assignedTo ? state.users.find(u => u.id === assignedTo && u.role !== 'Client') : undefined;
         if (assignedTo && !assigneeUser) return state;
@@ -2557,7 +2557,7 @@ export const useStore = create<StoreState>()(
       updateTaskAttachment: (taskId, attachmentLink, attachmentName) => set((state) => {
         if (isWorkspaceMutationLocked(state)) return state;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions)) return state;
+        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
 
         // Validate that the attachment link is a safe http(s) URL
         const trimmedLink = attachmentLink.trim();
@@ -2583,7 +2583,7 @@ export const useStore = create<StoreState>()(
       updateTaskDueDate: (taskId, newDueDate) => set((state) => {
         if (isWorkspaceMutationLocked(state)) return state;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions)) return state;
+        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
         const nextDueDate = normalizeOptionalIsoDate(newDueDate);
 
         if (nextDueDate && !isValidIsoDate(nextDueDate)) {
@@ -2610,7 +2610,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions)) {
+        if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
           return { ok: false, error: 'You do not have permission to edit this task.' };
         }
 
@@ -2619,7 +2619,7 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'Task ownership cannot be changed.' };
         }
 
-        const canAssignOthers = canAssignTasksToOthers(currentUser, state.rolePermissions, task);
+        const canAssignOthers = canAssignTasksToOthers(currentUser, state.rolePermissions, task, { clients: state.clients, projects: state.projects });
         const nextAssigneeId = data.assignedTo ?? task.assignedTo;
         if (!canAssignOthers && nextAssigneeId !== task.assignedTo) {
           return { ok: false, error: 'You do not have permission to reassign this task.' };
@@ -2786,7 +2786,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         const task = state.tasks.find(item => item.id === taskId);
-        if (!currentUser || !task || !canDeleteTask(currentUser, task, state.rolePermissions)) {
+        if (!currentUser || !task || !canDeleteTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
           return { ok: false, error: 'You do not have permission to delete this task.' };
         }
 
@@ -2893,7 +2893,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return state;
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions)) return state;
+        if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
 
         const revisionComment: TaskComment | null = note?.trim()
           ? {
@@ -2950,7 +2950,7 @@ export const useStore = create<StoreState>()(
         if (['Staff', 'HOD'].includes(currentUser.role) && !isMemberInDepartment(currentUser, taskData.department)) return '';
         const assignee = taskData.assignedTo ? state.users.find(user => user.id === taskData.assignedTo && user.role !== 'Client') : undefined;
         if (taskData.assignedTo && !assignee) return '';
-        if (assignee && !canAssignTasksToOthers(currentUser, state.rolePermissions) && assignee.id !== currentUser.id) return '';
+        if (assignee && !canAssignTasksToOthers(currentUser, state.rolePermissions, undefined, { clients: state.clients, projects: state.projects }) && assignee.id !== currentUser.id) return '';
         if (assignee && !isMemberInDepartment(assignee, taskData.department)) return '';
 
         const project = taskData.projectId
@@ -3868,7 +3868,7 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const task = state.tasks.find(item => item.id === taskId);
-        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions)) return { ok: false, error: 'You cannot edit this task.' };
+        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
         const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
         if (deliverableId && (!deliverable || deliverable.cycleId !== cycleId || deliverable.clientId !== task.clientId)) return { ok: false, error: 'The task and deliverable must belong to the same client and cycle.' };
         const now = new Date().toISOString();
@@ -4019,7 +4019,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canCommentOnTask(currentUser, task, state.rolePermissions)) {
+        if (!currentUser || !task || !canCommentOnTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
           return { ok: false, error: 'You do not have permission to comment on this task.' };
         }
 
@@ -4093,7 +4093,7 @@ export const useStore = create<StoreState>()(
             task.isCompleted
             || task.status === 'Cancelled'
             || task.dueReminderSent
-            || !canEditTask(state.currentUser, task, state.rolePermissions)
+            || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })
           ) return task;
           if (!task.dueDate || !isValidIsoDate(task.dueDate)) return task;
           const dueDate = new Date(`${task.dueDate}T00:00:00`);

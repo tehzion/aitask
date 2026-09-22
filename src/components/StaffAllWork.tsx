@@ -219,7 +219,7 @@ const StaffAllWork: React.FC = () => {
         onOpenFullEditor={() => setFullEditorOpen(true)}
       />
       <TaskDetailsModal
-        isOpen={Boolean(selectedTask) && fullEditorOpen && canEditTask(currentUser, selectedTask, rolePermissions)}
+        isOpen={Boolean(selectedTask) && fullEditorOpen && canEditTask(currentUser, selectedTask, rolePermissions, { clients: clientProfiles, projects })}
         task={selectedTask}
         onClose={() => { setFullEditorOpen(false); setTaskId(); }}
       />
