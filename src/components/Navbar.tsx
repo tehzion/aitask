@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { getMemberDepartments } from '../lib/departments';
 import { Bell, Search, Menu, CheckCircle2, Info, AlertCircle, FileText, X, Volume2, VolumeX, Keyboard, Moon, Sun, Monitor, ChevronDown } from 'lucide-react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { IconButton } from './ui';
 import { inputBase } from './uiTokens';
@@ -55,6 +55,7 @@ const Navbar: React.FC<NavbarProps> = ({
   })));
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [soundEnabled, setSoundEnabledState] = useState(getSoundEnabled);
   const [showAppearance, setShowAppearance] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -157,8 +158,27 @@ const Navbar: React.FC<NavbarProps> = ({
     onToggleNotifications();
   };
 
+  // The header is the single search. On the Companies page it drives `?search=`
+  // live (the page reads it as its filter); elsewhere it navigates to the
+  // relevant page's search.
+  const companySearchActive = searchesCompanies;
+  const urlSearch = searchParams.get('search') || '';
+  const globalSearchValue = companySearchActive ? urlSearch : globalSearch;
+  const updateGlobalSearch = (value: string) => {
+    setGlobalSearch(value);
+    if (!companySearchActive) return;
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set('search', value);
+    else next.delete('search');
+    setSearchParams(next, { replace: true });
+  };
+
   const handleGlobalSearch = (event: React.FormEvent) => {
     event.preventDefault();
+    if (companySearchActive) {
+      setShowMobileSearch(false);
+      return;
+    }
     const query = globalSearch.trim();
     if (!query) return;
     navigate(`${searchDestination}?search=${encodeURIComponent(query)}`);
@@ -207,8 +227,8 @@ const Navbar: React.FC<NavbarProps> = ({
             data-global-search
             className={cn(inputBase, 'border-transparent bg-inset py-2.5 pl-10 pr-3 shadow-none focus:bg-surface')}
             placeholder={isClient ? 'Search deliveries…' : searchesCompanies ? 'Search companies…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...'}
-            value={globalSearch}
-            onChange={(event) => setGlobalSearch(event.target.value)}
+            value={globalSearchValue}
+            onChange={(event) => updateGlobalSearch(event.target.value)}
           />
         </form>
       </div>
@@ -358,8 +378,8 @@ const Navbar: React.FC<NavbarProps> = ({
               data-global-search
               className={cn(inputBase, 'py-2.5 pl-10 pr-3')}
               placeholder={isClient ? 'Search deliveries…' : searchesCompanies ? 'Search companies…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...'}
-              value={globalSearch}
-              onChange={(event) => setGlobalSearch(event.target.value)}
+              value={globalSearchValue}
+              onChange={(event) => updateGlobalSearch(event.target.value)}
             />
           </div>
         </form>
