@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import { isToday, isThisWeek, isBefore, differenceInDays } from 'date-fns';
 import { AlertCircle, LayoutList, Calendar, ArrowRight, Plus, FolderKanban, UserPlus, Users, FileCheck2, CalendarClock } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, PageHeader, SegmentedTabs } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
 import { canCreateTasks, getClientKey, getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
@@ -62,7 +62,8 @@ const Dashboard: React.FC = () => {
   const { t } = useI18n();
   const [bossTab, setBossTab] = useState<BossTab>('overview');
   const [portfolioOwner, setPortfolioOwner] = useState('All');
-  const [portfolioSearch, setPortfolioSearch] = useState('');
+  const [searchParams] = useSearchParams();
+  const portfolioSearch = searchParams.get('search') || '';
   const [portfolioPage, setPortfolioPage] = useState(1);
 
   const tasks = useMemo(
@@ -604,15 +605,6 @@ const Dashboard: React.FC = () => {
                       <p className="mt-1 text-sm text-muted">{t('Every company and project with its Project Manager owner.')}</p>
                     </div>
                     <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                      <label className="sr-only" htmlFor="portfolio-search">{t('Search companies or projects')}</label>
-                      <input
-                        id="portfolio-search"
-                        type="search"
-                        value={portfolioSearch}
-                        onChange={event => setPortfolioSearch(event.target.value)}
-                        placeholder={t('Search companies or projects')}
-                        className="min-h-9 w-full rounded-control border border-line bg-surface px-3 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/35 sm:w-56"
-                      />
                       <label className="flex items-center gap-2 text-sm text-muted">
                         <span className="whitespace-nowrap">{t('Filter by owner')}</span>
                       <select

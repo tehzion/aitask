@@ -1,5 +1,5 @@
 import React from 'react';
-import { Filter, ListFilter, Search, X } from 'lucide-react';
+import { Filter, ListFilter } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import type { Priority, TaskStatus } from '../types';
@@ -33,7 +33,6 @@ const StaffAllWork: React.FC = () => {
     users: state.users,
   })));
   const [bucket, setBucket] = React.useState<StaffAllWorkBucket>('all');
-  const [search, setSearch] = React.useState(searchParams.get('search') || '');
   const [filtersOpen, setFiltersOpen] = React.useState(false);
   const [client, setClient] = React.useState('All');
   const [project, setProject] = React.useState('All');
@@ -45,11 +44,7 @@ const StaffAllWork: React.FC = () => {
   const [dueFrom, setDueFrom] = React.useState('');
   const [dueTo, setDueTo] = React.useState('');
   const [fullEditorOpen, setFullEditorOpen] = React.useState(false);
-  const routeSearch = searchParams.get('search') || '';
-
-  React.useEffect(() => {
-    setSearch(routeSearch);
-  }, [routeSearch]);
+  const search = searchParams.get('search') || '';
 
   const visibleTasks = React.useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
@@ -97,12 +92,6 @@ const StaffAllWork: React.FC = () => {
   const selectedTask = taskId ? tasks.find(task => task.id === taskId) || null : null;
   const activeFilterCount = [Boolean(search.trim()), client !== 'All', project !== 'All', assignee !== 'All', department !== 'All', creator !== 'All', status !== 'All', priority !== 'All', Boolean(dueFrom), Boolean(dueTo)].filter(Boolean).length;
 
-  React.useEffect(() => {
-    const handleFocusSearch = () => document.querySelector<HTMLInputElement>('[data-staff-work-search]')?.focus();
-    window.addEventListener('aitask-focus-search', handleFocusSearch);
-    return () => window.removeEventListener('aitask-focus-search', handleFocusSearch);
-  }, []);
-
   const setTaskId = (taskIdValue?: string) => {
     const next = new URLSearchParams(searchParams);
     if (taskIdValue) next.set('taskId', taskIdValue);
@@ -111,7 +100,6 @@ const StaffAllWork: React.FC = () => {
   };
 
   const updateSearch = (value: string) => {
-    setSearch(value);
     const next = new URLSearchParams(searchParams);
     if (value) next.set('search', value);
     else next.delete('search');
@@ -143,20 +131,6 @@ const StaffAllWork: React.FC = () => {
 
       <section aria-labelledby="staff-all-work-list" className="space-y-4">
         <h2 id="staff-all-work-list" className="sr-only">Visible task list</h2>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input
-            data-global-search
-            data-staff-work-search
-            type="search"
-            aria-label={t('Search visible work')}
-            value={search}
-            onChange={event => updateSearch(event.target.value)}
-            placeholder={t('Search visible work')}
-            className={`${inputBase} min-h-12 pl-10 pr-10`}
-          />
-          {search && <button type="button" aria-label="Clear search" onClick={() => updateSearch('')} className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-4 w-4" /></button>}
-        </div>
 
         {isHod && (
           <SegmentedTabs<'mine' | 'department'>

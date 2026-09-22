@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import {
   AlertCircle,
@@ -15,7 +15,6 @@ import {
   LoaderCircle,
   MessageSquareText,
   RefreshCw,
-  Search,
   ShieldCheck,
   UserRoundPlus,
 } from 'lucide-react';
@@ -90,8 +89,9 @@ const Notifications: React.FC = () => {
   const workspaceVersion = useStore(state => state.backend.workspaceVersion);
   const [tab, setTab] = React.useState<NotificationTab>('all');
   const [category, setCategory] = React.useState<NotificationCategory | ''>('');
-  const [searchInput, setSearchInput] = React.useState('');
-  const [search, setSearch] = React.useState('');
+  const [searchParams] = useSearchParams();
+  const routeSearch = searchParams.get('search') || '';
+  const search = React.useDeferredValue(routeSearch.trim());
   const [items, setItems] = React.useState<AppNotification[]>([]);
   const [nextCursor, setNextCursor] = React.useState<NotificationCursor>();
   const [isLoading, setIsLoading] = React.useState(true);
@@ -199,11 +199,6 @@ const Notifications: React.FC = () => {
     navigate(notificationRouteToPath(group.latest.route));
   };
 
-  const submitSearch = (event: React.FormEvent) => {
-    event.preventDefault();
-    setSearch(searchInput.trim());
-  };
-
   const toggleGroup = (groupId: string) => {
     setExpandedGroups(current => {
       const next = new Set(current);
@@ -249,20 +244,6 @@ const Notifications: React.FC = () => {
                 </button>
               ))}
             </div>
-
-            <form onSubmit={submitSearch} className="relative min-w-0 flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                value={searchInput}
-                onChange={event => setSearchInput(event.target.value)}
-                className={cn(inputBase, 'py-2.5 pl-9 pr-20')}
-                placeholder="Search notifications..."
-                aria-label="Search notifications"
-              />
-              <button type="submit" className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50">
-                Search
-              </button>
-            </form>
 
             <select
               value={category}

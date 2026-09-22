@@ -8,7 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { IconButton } from './ui';
 import { inputBase } from './uiTokens';
 import { cn } from '../lib/utils';
-import { getEffectiveRoleName, getUnreadNotifications } from '../lib/access';
+import { getEffectiveRoleName, getUnreadNotifications, isBossKoo } from '../lib/access';
 import { useSoundNotifications } from '../hooks/useSoundNotifications';
 import { NotificationReadActions } from '../hooks/useNotificationReadActions';
 import { getSoundEnabled, setSoundEnabled, SOUND_PREF_EVENT } from '../lib/sounds';
@@ -147,26 +147,37 @@ const Navbar: React.FC<NavbarProps> = ({
   const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : unreadNotifs.length;
   const previewNotifications = unreadNotifs.slice(0, 5);
   const isClient = currentUser?.role === 'Client';
-  const searchesCompanies = location.pathname === '/projects' || location.pathname.startsWith('/projects/');
+  const pathname = location.pathname;
+  const searchesCompanies = pathname === '/projects';
   const searchDestination = searchesCompanies
     ? '/projects'
-    : location.pathname.startsWith('/clients')
+    : pathname.startsWith('/clients')
       ? '/clients'
       : '/tasks';
+  // Routes where the header search filters the current page through `?search=`.
+  const liveSearchPlaceholder = (() => {
+    if (isClient) return null;
+    if (pathname === '/projects') return 'Search companies…';
+    if (pathname === '/clients') return 'Search client work…';
+    if (pathname === '/tasks') return 'Search tasks...';
+    if (pathname === '/notifications') return 'Search notifications...';
+    if (pathname === '/' && isBossKoo(currentUser)) return 'Search companies or projects';
+    return null;
+  })();
+  const liveSearchActive = liveSearchPlaceholder !== null;
 
   const handleBellClick = () => {
     onToggleNotifications();
   };
 
-  // The header is the single search. On the Companies page it drives `?search=`
+  // The header is the single search. On a searchable page it drives `?search=`
   // live (the page reads it as its filter); elsewhere it navigates to the
   // relevant page's search.
-  const companySearchActive = searchesCompanies;
   const urlSearch = searchParams.get('search') || '';
-  const globalSearchValue = companySearchActive ? urlSearch : globalSearch;
+  const globalSearchValue = liveSearchActive ? urlSearch : globalSearch;
   const updateGlobalSearch = (value: string) => {
     setGlobalSearch(value);
-    if (!companySearchActive) return;
+    if (!liveSearchActive) return;
     const next = new URLSearchParams(searchParams);
     if (value) next.set('search', value);
     else next.delete('search');
@@ -175,7 +186,7 @@ const Navbar: React.FC<NavbarProps> = ({
 
   const handleGlobalSearch = (event: React.FormEvent) => {
     event.preventDefault();
-    if (companySearchActive) {
+    if (liveSearchActive) {
       setShowMobileSearch(false);
       return;
     }
@@ -226,7 +237,7 @@ const Navbar: React.FC<NavbarProps> = ({
             aria-keyshortcuts="/"
             data-global-search
             className={cn(inputBase, 'border-transparent bg-inset py-2.5 pl-10 pr-3 shadow-none focus:bg-surface')}
-            placeholder={isClient ? 'Search deliveries…' : searchesCompanies ? 'Search companies…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...'}
+            placeholder={liveSearchPlaceholder ?? (isClient ? 'Search deliveries…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...')}
             value={globalSearchValue}
             onChange={(event) => updateGlobalSearch(event.target.value)}
           />
@@ -377,7 +388,7 @@ const Navbar: React.FC<NavbarProps> = ({
               aria-keyshortcuts="/"
               data-global-search
               className={cn(inputBase, 'py-2.5 pl-10 pr-3')}
-              placeholder={isClient ? 'Search deliveries…' : searchesCompanies ? 'Search companies…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...'}
+              placeholder={liveSearchPlaceholder ?? (isClient ? 'Search deliveries…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...')}
               value={globalSearchValue}
               onChange={(event) => updateGlobalSearch(event.target.value)}
             />

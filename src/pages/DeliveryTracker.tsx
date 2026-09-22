@@ -6,8 +6,6 @@ import {
   ChevronRight,
   ChevronUp,
   Plus,
-  Search,
-  X,
   UsersRound,
 } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
@@ -25,7 +23,7 @@ import {
   type DeliveryTrackerStatusFilter,
 } from '../lib/deliveryTracker';
 import { Badge, Button, EmptyState, PageHeader, ProgressBar, SegmentedTabs, StatusChip } from '../components/ui';
-import { inputBase, pageShell, tableShell } from '../components/uiTokens';
+import { pageShell, tableShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 
 const PERIOD_TABS = [
@@ -80,12 +78,11 @@ const DeliveryTracker: React.FC = () => {
   );
   const [anchor, setAnchor] = React.useState(() => new Date());
   const [statusFilter, setStatusFilter] = React.useState<DeliveryTrackerStatusFilter>('all');
-  const [search, setSearch] = React.useState(routeSearch);
+  const search = routeSearch;
   const [expandedClients, setExpandedClients] = React.useState<Set<string>>(() => new Set());
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
   const deferredSearch = React.useDeferredValue(search);
 
-  React.useEffect(() => setSearch(routeSearch), [routeSearch]);
   React.useEffect(() => {
     if (requestedPeriod === 'week' || requestedPeriod === 'month' || requestedPeriod === 'all') setPeriod(requestedPeriod);
   }, [requestedPeriod]);
@@ -209,12 +206,7 @@ const DeliveryTracker: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="relative w-full lg:max-w-sm">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-              <input data-global-search type="search" value={search} onChange={event => { const value = event.target.value; setSearch(value); updateQuery({ search: value || null }); }} placeholder="Search clients, tasks, or deliverables" aria-label="Search delivery tracker" className={cn(inputBase, search ? 'pl-10 pr-10' : 'pl-10 pr-3')} />
-              {search && <button type="button" aria-label="Clear delivery tracker search" onClick={() => { setSearch(''); updateQuery({ search: null }); }} className="absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"><X className="h-4 w-4" /></button>}
-            </div>
+          <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
             <div className="flex flex-wrap gap-2" aria-label="Filter tracker status">
               {STATUS_FILTERS.map(filter => <button key={filter.id} type="button" aria-pressed={statusFilter === filter.id} onClick={() => setStatusFilter(filter.id)} className={cn('min-h-11 rounded-control px-3 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35', statusFilter === filter.id ? 'bg-accent text-white dark:text-[rgb(var(--calm-accent-ink))]' : 'bg-surface text-muted ring-1 ring-line hover:bg-inset hover:text-ink')}>{filter.label}</button>)}
             </div>
