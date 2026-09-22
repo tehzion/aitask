@@ -444,6 +444,8 @@ export interface Task {
   department: Department;
   assignedTo: string; // User ID
   createdBy: string; // User ID
+  assignedBy?: string; // User ID of the member who last set assignedTo
+  assignedAt?: string; // ISO timestamp of the last assignment change
   startDate: string; // ISO Date String, defaults to the current date
   dueDate: string; // Optional ISO Date String, blank when unset
   priority: Priority;

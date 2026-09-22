@@ -2557,7 +2557,8 @@ export const useStore = create<StoreState>()(
 
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
-          return { ...t, assignedTo, updatedAt: new Date().toISOString() };
+          const now = new Date().toISOString();
+          return { ...t, assignedTo, assignedBy: currentUser?.id || t.assignedBy, assignedAt: now, updatedAt: now };
         });
 
         const newNotifs: AppNotification[] = [];
@@ -2755,6 +2756,8 @@ export const useStore = create<StoreState>()(
           facebookPage: safeFacebookPage || undefined,
           website: safeWebsite || undefined,
           assignedTo: nextAssigneeId,
+          assignedBy: assignmentChanged ? currentUser.id : task.assignedBy,
+          assignedAt: assignmentChanged ? now : task.assignedAt,
           startDate,
           dueDate,
           status,
@@ -3022,6 +3025,8 @@ export const useStore = create<StoreState>()(
             ...taskData,
             id: taskId,
             createdBy: currentUser.id,
+            assignedBy: currentUser.id,
+            assignedAt: now,
             clientId: project?.clientId || taskData.clientId || state.clients.find(client => normalizeClientKey(client.clientName) === normalizeClientKey(clientName))?.id,
             title,
             clientName,

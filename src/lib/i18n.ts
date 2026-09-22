@@ -878,6 +878,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Clear client filter': '清除客户筛选',
   'Back to Delivery tracker': '返回交付跟踪',
   'Assigned to': '分配给',
+  'Assigned by': '指派者',
   'This client is outside your assigned work. Contact details are hidden.': '该客户不在您负责的工作范围内，联系方式已隐藏。',
   // Interpolated JSX text children are split into static pieces at runtime; translate each piece.
   'services ·': '项服务 ·',

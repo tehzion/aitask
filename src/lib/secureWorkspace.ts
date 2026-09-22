@@ -741,6 +741,14 @@ const alignBaselineToCanonicalState = (state: PersistedWorkspaceState) => {
 // "Super Admin permission required."
 const superAdminOnlyEntityTypes = new Set(['custom_role', 'task_status', 'registration']);
 
+// Entity types served by the service RPC (`aitask_execute_service_command`).
+// That RPC also accepts `client` and `task`, which the generic command RPC
+// handles too.
+const serviceEntityTypes = new Set([
+  'service_package', 'service_workflow_template', 'service_pricing_snapshot',
+  'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon',
+]);
+
 export type BuildOperationsOptions = {
   excludeSuperAdminEntities?: boolean;
   actorMemberId?: string;
@@ -831,10 +839,6 @@ export const inferSecureCommandType = (
   // A deliverable status update may also advance its parent cycle. The store
   // subscription can save that paired change before its UI handler supplies a
   // command type, so keep the whole operation on the service RPC.
-  const serviceEntityTypes = new Set([
-    'service_package', 'service_workflow_template', 'service_pricing_snapshot',
-    'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon',
-  ]);
   if ([...entityTypes].every(entityType => serviceEntityTypes.has(entityType))) {
     if (entityTypes.has('deliverable')) return 'deliverable.manage';
     if (entityTypes.has('service_cycle')) return 'service_cycle.manage';
@@ -874,6 +878,33 @@ export const inferSecureCommandType = (
   if (only('registration')) return 'registration.review';
   if (only('task_status')) return 'task_status.manage';
   return 'workspace.patch';
+};
+
+// Split a mixed local diff into command groups that each map to a single RPC.
+// The generic command RPC rejects service entity types, and the service RPC
+// rejects member rows, so an unpartitioned diff could otherwise be sent to the
+// wrong RPC and be stuck as a retry. The service RPC also accepts `client` and
+// `task`, so any generic-only operation forces a separate service command.
+const partitionOperationsForRpc = (
+  operations: WorkspaceOperation[],
+  selfMemberId?: string,
+): { type: SecureCommandType; operations: WorkspaceOperation[] }[] => {
+  const genericOperations = operations.filter(operation => !serviceEntityTypes.has(operation.entityType));
+  const serviceOperations = operations.filter(operation => serviceEntityTypes.has(operation.entityType));
+  const groups: { type: SecureCommandType; operations: WorkspaceOperation[] }[] = [];
+  if (genericOperations.length > 0) {
+    groups.push({
+      type: inferSecureCommandType(genericOperations, { selfMemberId }),
+      operations: genericOperations,
+    });
+  }
+  if (serviceOperations.length > 0) {
+    groups.push({
+      type: inferSecureCommandType(serviceOperations, { selfMemberId }),
+      operations: serviceOperations,
+    });
+  }
+  return groups;
 };
 
 const applyCommandVersions = (command: SecureCommand, response: CommandResponse) => {
@@ -2173,12 +2204,25 @@ export const saveSecureWorkspace = async (
       error: 'This change touches too many records. Save it in smaller steps.',
     };
   }
-  const command: SecureCommand = {
-    id: commandId(),
-    type: type || inferSecureCommandType(operations, { selfMemberId: options.actorMemberId }),
-    operations,
+  const groups = type
+    ? [{ type, operations }]
+    : partitionOperationsForRpc(operations, options.actorMemberId);
+
+  let lastResult: MutationResult<CommandResponse> | null = null;
+  let version = expectedWorkspaceVersion;
+  for (const group of groups) {
+    const command: SecureCommand = { id: commandId(), type: group.type, operations: group.operations };
+    const result = await executeCommand(command, version);
+    if (result.ok === false) return result;
+    lastResult = result;
+    version = result.workspaceVersion ?? version;
+  }
+  return lastResult ?? {
+    ok: true,
+    data: { ok: true, workspaceVersion: version ?? 1 },
+    commandId: commandId(),
+    workspaceVersion: version ?? 1,
   };
-  return executeCommand(command, expectedWorkspaceVersion);
 };
 
 export const retrySecureWorkspaceCommand = async (

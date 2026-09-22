@@ -43,6 +43,7 @@ type ClientSummary = {
   projectIds: Set<string>;
   projectNames: Set<string>;
   assignedUserIds: Set<string>;
+  assignedByIds: Set<string>;
   services: Set<string>;
   accountUsers: string[];
   details?: string;
@@ -247,6 +248,7 @@ const Clients: React.FC = () => {
         projectIds: new Set(),
         projectNames: new Set(),
         assignedUserIds: new Set(),
+        assignedByIds: new Set(),
         services: new Set(),
         accountUsers: [],
       };
@@ -297,6 +299,8 @@ const Clients: React.FC = () => {
         if (task.projectId) summary.projectIds.add(task.projectId);
         if (task.projectName) summary.projectNames.add(task.projectName);
         if (task.assignedTo) summary.assignedUserIds.add(task.assignedTo);
+        const assignedBy = task.assignedBy || task.createdBy;
+        if (assignedBy) summary.assignedByIds.add(assignedBy);
         if (!summary.details && task.customerDetails) summary.details = task.customerDetails;
         if (!summary.facebookPage && task.facebookPage) summary.facebookPage = task.facebookPage;
         if (!summary.website && task.website) summary.website = task.website;
@@ -692,6 +696,9 @@ const Clients: React.FC = () => {
             const assignedTeam = Array.from(client.assignedUserIds)
               .map(userId => users.find(user => user.id === userId)?.name || userId)
               .filter(Boolean);
+            const assignedByTeam = Array.from(client.assignedByIds)
+              .map(userId => users.find(user => user.id === userId)?.name || userId)
+              .filter(Boolean);
 
             return (
               <div key={client.name} className="bg-surface p-5">
@@ -706,7 +713,8 @@ const Clients: React.FC = () => {
                 </div>
 
                 <div className="mt-4">{renderContactSummary(client)}</div>
-                {assignedTeam.length > 0 && <p className="mt-3 text-xs text-slate-500">Assigned staff: {assignedTeam.join(', ')}</p>}
+                {assignedByTeam.length > 0 && <p className="mt-3 text-xs text-slate-500">{t('Assigned by')}: {assignedByTeam.join(', ')}</p>}
+                {assignedTeam.length > 0 && <p className={assignedByTeam.length > 0 ? 'mt-1 text-xs text-slate-500' : 'mt-3 text-xs text-slate-500'}>Assigned staff: {assignedTeam.join(', ')}</p>}
                 {client.projectNames.size > 0 && <p className="mt-1 text-xs text-slate-500">Projects: {Array.from(client.projectNames).join(', ')}</p>}
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
