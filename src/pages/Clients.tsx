@@ -592,6 +592,9 @@ const Clients: React.FC = () => {
         const assignedTeam = Array.from(client.assignedUserIds)
           .map(userId => users.find(user => user.id === userId)?.name || userId)
           .filter(Boolean);
+        const assignedByTeam = Array.from(client.assignedByIds)
+          .map(userId => users.find(user => user.id === userId)?.name || userId)
+          .filter(Boolean);
 
                 return (
                   <tr key={client.name} className="border-b border-line/70 bg-surface text-ink transition-colors duration-160 hover:bg-inset/60">
@@ -618,6 +621,9 @@ const Clients: React.FC = () => {
                           Projects: {Array.from(client.projectNames).slice(0, 2).join(', ')}
                           {client.projectNames.size > 2 ? ` +${client.projectNames.size - 2}` : ''}
                         </p>
+                      )}
+                      {assignedByTeam.length > 0 && (
+                        <p className="mt-1 text-xs text-slate-500">{t('Assigned by')}: {assignedByTeam.join(', ')}</p>
                       )}
                       {assignedTeam.length > 0 && (
                         <p className="mt-1 text-xs text-slate-500">Assigned staff: {assignedTeam.join(', ')}</p>
@@ -912,6 +918,12 @@ const Clients: React.FC = () => {
                       <span className="font-semibold text-slate-500">Last Task Date:</span>{' '}
                       <strong className="text-slate-950">
                         {selectedClient.latestTaskDate ? format(new Date(getActivityTime(selectedClient.latestTaskDate)), 'MMM dd, yyyy') : 'No tasks recorded'}
+                      </strong>
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-500">{t('Assigned by')}:</span>{' '}
+                      <strong className="text-slate-950">
+                        {Array.from(selectedClient.assignedByIds).map(userId => users.find(user => user.id === userId)?.name || userId).join(', ') || 'No assigner recorded'}
                       </strong>
                     </p>
                     <p>

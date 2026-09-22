@@ -159,6 +159,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
 
   const assignee = users.find(u => u.id === task.assignedTo);
   const creator = users.find(u => u.id === task.createdBy);
+  const assignedByMember = users.find(u => u.id === task.assignedBy);
   const taskAccess = getTaskAccess(currentUser, task, rolePermissions, { clients, projects });
   if (!taskAccess.canView) return null;
   const canEditTask = !upgradeRequired && taskAccess.canEdit;
@@ -617,6 +618,10 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                 {!isClientTaskViewer && <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Created By</label>
                   <span data-i18n-skip className="text-sm font-medium text-slate-800">{creator?.name || 'Unknown'}</span>
+                </div>}
+                {!isClientTaskViewer && <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{t('Assigned by')}</label>
+                  <span data-i18n-skip className="text-sm font-medium text-slate-800">{assignedByMember?.name || creator?.name || 'Unknown'}</span>
                 </div>}
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Start Date</label>

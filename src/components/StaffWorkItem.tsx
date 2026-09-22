@@ -27,6 +27,7 @@ const StaffWorkItem: React.FC<StaffWorkItemProps> = ({ task, allTasks, users = [
   const isRevision = task.revisionCount > 0 && !task.isCompleted;
   const assignee = users.find(user => user.id === task.assignedTo)?.name;
   const creator = users.find(user => user.id === task.createdBy)?.name;
+  const assignedBy = users.find(user => user.id === task.assignedBy)?.name;
 
   return (
     <button
@@ -46,6 +47,7 @@ const StaffWorkItem: React.FC<StaffWorkItemProps> = ({ task, allTasks, users = [
           {assignee && <span data-i18n-skip>Assigned: {assignee}</span>}
           {!task.assignedTo && <span>Unassigned</span>}
           {creator && <span data-i18n-skip>Created by: {creator}</span>}
+          {assignedBy && <span data-i18n-skip>Assigned by: {assignedBy}</span>}
           <span>{getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}</span>
           {isRevision && <span className="inline-flex items-center gap-1 text-amber-700"><RotateCcw className="h-3.5 w-3.5" />Revision {task.revisionCount}</span>}
           {incompletePredecessors.length > 0 && <span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />{incompletePredecessors.length} blocker{incompletePredecessors.length === 1 ? '' : 's'}</span>}
