@@ -380,6 +380,24 @@ const isWorkspaceMutationLocked = (state: StoreState) => (
     )
   )
 );
+const isSyncBusy = (state: StoreState) => state.backend.isSaving || state.backend.isPulling;
+const isPullBlockedByPendingChange = (state: StoreState) => (
+  shouldUseSecureSupabase()
+  && (
+    state.backend.hasLocalChanges
+    || state.backend.pendingMutations > 0
+    || ['conflict', 'retry_required', 'offline'].includes(state.backend.status)
+  )
+);
+const waitForSyncIdle = async (timeoutMs = 5000) => {
+  if (!isSyncBusy(useStore.getState())) return true;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    if (!isSyncBusy(useStore.getState())) return true;
+  }
+  return !isSyncBusy(useStore.getState());
+};
 let isApplyingRemoteSnapshot = false;
 let isApplyingNotificationRead = false;
 const seededUserIds = new Set(mockUsers.map(user => user.id));
@@ -1404,7 +1422,9 @@ export const useStore = create<StoreState>()(
 
       pullBackendNow: async (options = {}) => {
         if (!shouldUseSupabase()) return;
+        if (get().backend.isPulling) return;
         if (get().backend.isSaving && !options.force) return;
+        if (!options.force && isPullBlockedByPendingChange(get())) return;
 
         set((state) => ({
           backend: {
@@ -1688,10 +1708,11 @@ export const useStore = create<StoreState>()(
       },
 
       retryMutation: async () => {
-        const current = get();
-        if (current.backend.isSaving || current.backend.isPulling) {
-          return { ok: false, error: 'Another synchronization request is still running.' };
+        if (isSyncBusy(get())) {
+          const idle = await waitForSyncIdle();
+          if (!idle) return { ok: false, error: 'Another synchronization request is still running.' };
         }
+        const current = get();
         const retainedMemberMutation = getRetainedSecureMemberMutation();
         if (!getRetainedSecureCommand() && !retainedMemberMutation) {
           return get().retryPendingSave(current.backend.pendingCommandType);
@@ -1893,10 +1914,13 @@ export const useStore = create<StoreState>()(
 
       retryPendingSave: async (commandType) => {
         if (!shouldUseSupabase()) return { ok: true };
-        const before = get().backend;
-        if (before.isSaving || before.isPulling) {
-          return { ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' };
+        if (isSyncBusy(get())) {
+          const idle = await waitForSyncIdle();
+          if (!idle) {
+            return { ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' };
+          }
         }
+        const before = get().backend;
         if (getRetainedSecureCommand() || getRetainedSecureMemberMutation()) {
           return get().retryMutation();
         }
@@ -5342,6 +5366,7 @@ export const startBackendAutoSync = () => {
     if (!shouldUseSupabase() || document.visibilityState !== 'visible') return;
     const state = useStore.getState();
     if (shouldUseSecureSupabase() && !state.currentUser) return;
+    if (isSyncBusy(state) || isPullBlockedByPendingChange(state)) return;
     void state.pullBackendNow({ silent: true });
   };
 

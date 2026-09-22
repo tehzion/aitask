@@ -922,6 +922,8 @@ const zhCopyAdditions: Record<string, string> = {
   // Sync state messages
   'Retrying pending change.': '正在重试待保存的更改。',
   'Another synchronization request is still running.': '另一个同步请求仍在执行。',
+  'Waiting for sync…': '正在等待同步…',
+  'Use the latest saved workspace and discard this company': '使用最新保存的工作区并放弃此公司',
   'There is no workspace conflict to reapply.': '没有可重新应用的工作区冲突。',
   'Loading the latest saved workspace.': '正在加载最新保存的工作区。',
   'Pending change discarded.': '已放弃待保存的更改。',

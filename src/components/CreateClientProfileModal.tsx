@@ -15,9 +15,10 @@ type Props = {
 };
 
 const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreateProject, onAddServicePlan }) => {
-  const { createClientProfile, retryPendingSave, backend } = useStore(useShallow(state => ({
+  const { createClientProfile, retryPendingSave, discardMutation, backend } = useStore(useShallow(state => ({
     createClientProfile: state.createClientProfile,
     retryPendingSave: state.retryPendingSave,
+    discardMutation: state.discardMutation,
     backend: state.backend,
   })));
   const { t } = useI18n();
@@ -27,6 +28,8 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
   const [saving, setSaving] = React.useState(false);
   const [pendingClientId, setPendingClientId] = React.useState('');
   const [createdClientId, setCreatedClientId] = React.useState('');
+  const syncBusy = backend.isSaving || backend.isPulling;
+  const busy = saving || syncBusy;
 
   const update = (key: keyof typeof form, value: string) => {
     setForm(current => ({ ...current, [key]: value }));
@@ -72,6 +75,19 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
     callback?.(createdClientId);
   };
 
+  const handleDiscard = async () => {
+    if (busy) return;
+    setSaving(true);
+    try {
+      await discardMutation();
+      setPendingClientId('');
+      setError('');
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <ModalShell labelledBy={titleId} onClose={() => { if (!saving) onClose(); }} closeOnBackdrop={!saving} panelClassName="max-w-2xl">
       <header className="flex items-start justify-between gap-4 border-b border-line px-5 pb-5 pt-6 sm:px-6">
@@ -110,9 +126,19 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
             <label className="text-sm font-medium text-ink md:col-span-2">{t('Notes')}<textarea disabled={Boolean(pendingClientId)} rows={4} className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.notes} onChange={event => update('notes', event.target.value)} /></label>
           </div>
           {error && <p className="mt-5 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert">{error}</p>}
+          {pendingClientId && error && (
+            <button
+              type="button"
+              onClick={() => void handleDiscard()}
+              disabled={busy}
+              className="mt-3 text-left text-sm font-medium text-muted underline decoration-dotted underline-offset-4 transition hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {t('Use the latest saved workspace and discard this company')}
+            </button>
+          )}
           <div className={modalFooter}>
             <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>{t('Cancel')}</Button>
-            <Button type="submit" disabled={saving}>{saving ? t('Saving…') : pendingClientId ? t('Retry save') : t('Save client')}</Button>
+            <Button type="submit" disabled={busy}>{saving ? t('Saving…') : syncBusy && pendingClientId ? t('Waiting for sync…') : pendingClientId ? t('Retry save') : t('Save client')}</Button>
           </div>
         </form>
       )}

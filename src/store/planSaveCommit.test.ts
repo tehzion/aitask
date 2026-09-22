@@ -349,4 +349,34 @@ describe('retryPendingSave', () => {
       p_expected_workspace_version: 5,
     }));
   });
+
+  it('waits for an in-flight synchronization instead of failing the retry', async () => {
+    const created = useStore.getState().createClientWithPlan(planInput);
+    expect(created.ok).toBe(true);
+    useStore.setState(state => ({ backend: { ...state.backend, isPulling: true } }));
+
+    rpc.mockResolvedValueOnce({
+      data: { ok: true, commandId: '00000000-0000-4000-8000-000000000221', workspaceVersion: 6, changed: [] },
+      error: null,
+    });
+    setTimeout(() => {
+      useStore.setState(state => ({ backend: { ...state.backend, isPulling: false } }));
+    }, 60);
+
+    const result = await useStore.getState().retryPendingSave('client_plan.manage');
+
+    expect(result).toMatchObject({ ok: true });
+    expect(useStore.getState().backend.hasLocalChanges).toBe(false);
+    expect(useStore.getState().backend.status).toBe('live');
+  });
+
+  it('skips a background pull while a local change is pending', async () => {
+    useStore.setState(state => ({ backend: { ...state.backend, hasLocalChanges: true } }));
+
+    await useStore.getState().pullBackendNow({ silent: true });
+
+    expect(rpc).not.toHaveBeenCalled();
+    expect(useStore.getState().backend.isPulling).toBe(false);
+    expect(useStore.getState().backend.hasLocalChanges).toBe(true);
+  });
 });
