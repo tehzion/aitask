@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { Check, X, Plus } from 'lucide-react';
@@ -29,11 +30,21 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     rolePermissions: state.rolePermissions,
     retryPendingSave: state.retryPendingSave,
   })));
+  const [searchParams, setSearchParams] = useSearchParams();
   const titleId = React.useId();
   const descriptionId = React.useId();
   const clientSelectId = React.useId();
   const projectNameId = React.useId();
   const isEditing = Boolean(project);
+
+  // A company search filter on the Companies page would hide the company this
+  // project is linked to. Clear it whenever the project is created or updated.
+  const clearCompanySearch = React.useCallback(() => {
+    if (!searchParams.get('search')) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('search');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const [clientId, setClientId] = useState('');
   const [projectName, setProjectName] = useState('');
@@ -178,6 +189,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       }
       if (project) onProjectUpdated?.(pendingProjectId);
       else onProjectCreated?.(pendingProjectId);
+      clearCompanySearch();
       handleClose();
       return;
     }
@@ -235,6 +247,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       }
 
       if (onProjectUpdated) onProjectUpdated(project.id);
+      clearCompanySearch();
       handleClose();
       return;
     }
@@ -263,6 +276,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     }
 
     if (onProjectCreated) onProjectCreated(newProjectId);
+    clearCompanySearch();
     handleClose();
   };
 

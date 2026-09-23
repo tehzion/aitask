@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowRight, Building2, Check, X } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
 import { inputBase, modalFooter } from './uiTokens';
@@ -22,6 +23,7 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
     backend: state.backend,
   })));
   const { t } = useI18n();
+  const [searchParams, setSearchParams] = useSearchParams();
   const titleId = React.useId();
   const [form, setForm] = React.useState({ clientName: '', contactPerson: '', email: '', phone: '', address: '', website: '', facebookPage: '', notes: '' });
   const [error, setError] = React.useState('');
@@ -35,6 +37,16 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
     setForm(current => ({ ...current, [key]: value }));
     setError('');
   };
+
+  // A company search filter on the Companies page would hide the record that
+  // was just created. Clear it for every entry point (top-level "New client"
+  // and the "New project" modal's "+ Add client") so the company shows at once.
+  const clearCompanySearch = React.useCallback(() => {
+    if (!searchParams.get('search')) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('search');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -64,6 +76,7 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
       }
       setPendingClientId('');
       setCreatedClientId(clientId);
+      clearCompanySearch();
       onCreated?.(clientId);
     } finally {
       setSaving(false);

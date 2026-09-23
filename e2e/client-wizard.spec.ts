@@ -35,6 +35,50 @@ const seedAdminAndPackage = async (page: Page) => {
   });
 };
 
+const seedProjectManager = async (page: Page) => {
+  await page.goto('/login');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    const pm = state.users.find(user => user.name === 'Project Manager Demo' && !user.isSuperAdmin);
+    if (!pm) throw new Error('Project Manager demo account is missing.');
+    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${pm.id}`, 'acknowledged');
+    useStore.setState({
+      currentUser: { ...pm, mustResetPassword: false },
+      clients: [],
+      clientPlans: [],
+      serviceCycles: [],
+      deliverables: [],
+      cycleComments: [],
+      addons: [],
+      servicePricingSnapshots: [],
+      backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
+    });
+  });
+};
+
+test('shows a company added through project creation while a company search is active', async ({ page }) => {
+  test.setTimeout(120_000);
+  await seedProjectManager(page);
+  await page.goto('/projects');
+
+  const search = page.getByLabel('Search companies');
+  await search.fill('zzz-no-match');
+  await expect(page.getByText('No companies found')).toBeVisible();
+
+  await page.getByRole('button', { name: 'New project' }).click();
+  const projectDialog = page.getByRole('dialog', { name: 'Create project' });
+  await projectDialog.getByRole('button', { name: '+ Add client' }).click();
+  const clientDialog = page.getByRole('dialog', { name: 'Add a client company' });
+  await clientDialog.getByLabel('Company name *').fill('Filtered Company E2E');
+  await clientDialog.getByRole('button', { name: 'Save client' }).click();
+  await expect(projectDialog.getByLabel('Company name *')).toHaveValue(/CL-/);
+  await projectDialog.getByRole('button', { name: 'Cancel' }).click();
+
+  await expect(page).not.toHaveURL(/search=/);
+  await expect(page.getByRole('heading', { name: 'Filtered Company E2E' })).toBeVisible();
+});
+
 test('creates a client profile first, then a named project', async ({ page }) => {
   test.setTimeout(120_000);
   await seedAdminAndPackage(page);
