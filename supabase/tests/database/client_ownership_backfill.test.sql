@@ -29,9 +29,8 @@ values
   -- A client with no creator and no linked work at all.
   ('pgtap-client-ownership', 'client', 'stranded-client', '{"id":"stranded-client","clientName":"Stranded Co"}'::jsonb);
 
-select is(
-  (select created_by from public.aitask_entities where workspace_id = 'pgtap-client-ownership' and entity_type = 'client' and entity_id = 'orphan-client'),
-  null,
+select ok(
+  (select created_by from public.aitask_entities where workspace_id = 'pgtap-client-ownership' and entity_type = 'client' and entity_id = 'orphan-client') is null,
   'ownerless client starts without a created_by'
 );
 
@@ -47,9 +46,8 @@ select is(
   'pgtap-owner-pm-one',
   'backfill records createdBy in the client data'
 );
-select is(
-  (select created_by from public.aitask_entities where workspace_id = 'pgtap-client-ownership' and entity_type = 'client' and entity_id = 'stranded-client'),
-  null,
+select ok(
+  (select created_by from public.aitask_entities where workspace_id = 'pgtap-client-ownership' and entity_type = 'client' and entity_id = 'stranded-client') is null,
   'a client with no derivable creator stays ownerless'
 );
 
