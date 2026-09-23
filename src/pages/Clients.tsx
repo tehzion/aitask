@@ -152,9 +152,15 @@ const Clients: React.FC = () => {
     commitPendingMutation: state.commitPendingMutation,
     upgradeRequired: state.backend.upgradeRequired === true,
   })));
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const routeSearch = searchParams.get('search') || '';
   const searchTerm = routeSearch;
+  const clearSearch = () => {
+    if (!searchParams.get('search')) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('search');
+    setSearchParams(next, { replace: true });
+  };
   const [selectedClientName, setSelectedClientName] = React.useState('');
   const [isEditingProfile, setIsEditingProfile] = React.useState(false);
   const [isRenamingClient, setIsRenamingClient] = React.useState(false);
@@ -525,7 +531,7 @@ const Clients: React.FC = () => {
         description={isClientUser ? t('Review your company details, services, contacts, and linked work.') : t('The complete client database for company details, contacts, accounts, services, and linked work.')}
         meta={<><span>{clients.length} visible companies</span><span aria-hidden="true">·</span><span>{totalTasks} linked tasks</span></>}
         action={<div className="flex flex-wrap gap-2">
-          {canCreateClientProfiles(currentUser, rolePermissions) && <Button onClick={() => setIsCreateClientOpen(true)} disabled={upgradeRequired}><Building2 className="h-4 w-4" />New client</Button>}
+          {canCreateClientProfiles(currentUser, rolePermissions) && <Button onClick={() => { clearSearch(); setIsCreateClientOpen(true); }} disabled={upgradeRequired}><Building2 className="h-4 w-4" />New client</Button>}
           {canAddProjects && <Button variant="secondary" onClick={() => { setInitialProjectClientId(''); setIsCreateProjectOpen(true); }}><Plus className="h-4 w-4" />New project</Button>}
           {canAddTasks && <Button variant="secondary" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />New task</Button>}
         </div>}
@@ -1046,7 +1052,7 @@ const Clients: React.FC = () => {
         </ModalShell>
       )}
       {isCreateClientOpen && <CreateClientProfileModal
-        onClose={() => setIsCreateClientOpen(false)}
+        onClose={() => { setIsCreateClientOpen(false); clearSearch(); }}
         onCreateProject={canAddProjects ? (clientId) => {
           setIsCreateClientOpen(false);
           setInitialProjectClientId(clientId);

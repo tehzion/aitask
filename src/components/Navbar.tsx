@@ -236,11 +236,16 @@ const Navbar: React.FC<NavbarProps> = ({
             aria-label={isClient ? 'Search deliveries' : searchesCompanies ? 'Search companies' : searchDestination === '/clients' ? 'Search client work' : 'Search tasks'}
             aria-keyshortcuts="/"
             data-global-search
-            className={cn(inputBase, 'border-transparent bg-inset py-2.5 pl-10 pr-3 shadow-none focus:bg-surface')}
+            className={cn(inputBase, 'border-transparent bg-inset py-2.5 pl-10 pr-10 shadow-none focus:bg-surface')}
             placeholder={liveSearchPlaceholder ?? (isClient ? 'Search deliveries…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...')}
             value={globalSearchValue}
             onChange={(event) => updateGlobalSearch(event.target.value)}
           />
+          {globalSearchValue && (
+            <button type="button" aria-label={t('Clear search')} onClick={() => updateGlobalSearch('')} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink">
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </form>
       </div>
 
@@ -387,11 +392,16 @@ const Navbar: React.FC<NavbarProps> = ({
               aria-label={isClient ? 'Search deliveries' : searchesCompanies ? 'Search companies' : searchDestination === '/clients' ? 'Search client work' : 'Search tasks'}
               aria-keyshortcuts="/"
               data-global-search
-              className={cn(inputBase, 'py-2.5 pl-10 pr-3')}
+              className={cn(inputBase, 'py-2.5 pl-10 pr-10')}
               placeholder={liveSearchPlaceholder ?? (isClient ? 'Search deliveries…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...')}
               value={globalSearchValue}
               onChange={(event) => updateGlobalSearch(event.target.value)}
             />
+            {globalSearchValue && (
+              <button type="button" aria-label={t('Clear search')} onClick={() => updateGlobalSearch('')} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink">
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </form>
       )}
