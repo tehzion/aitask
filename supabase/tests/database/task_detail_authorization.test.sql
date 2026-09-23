@@ -93,28 +93,28 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000001102
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 select ok(private.aitask_can_view_task('pgtap-task-detail-auth', 'task-pm-portfolio'), 'PM can view an owned portfolio task');
-select ok(not private.aitask_can_edit_task('pgtap-task-detail-auth', 'task-pm-portfolio'), 'PM cannot edit a portfolio-only task');
+select ok(private.aitask_can_edit_task('pgtap-task-detail-auth', 'task-pm-portfolio'), 'PM can edit a task in a portfolio they own');
 select ok(private.aitask_can_edit_task('pgtap-task-detail-auth', 'task-pm-assigned'), 'PM can edit an assigned task');
 select ok(private.aitask_can_edit_task('pgtap-task-detail-auth', 'task-pm-created'), 'PM can edit a created task');
 select ok(private.aitask_can_comment_task('pgtap-task-detail-auth', 'task-pm-assigned'), 'PM can comment on an assigned task');
 select ok(not private.aitask_can_view_task('pgtap-task-detail-auth', 'task-staff-unrelated'), 'PM cannot view unrelated work');
-select ok(not private.aitask_can_comment_task('pgtap-task-detail-auth', 'task-pm-portfolio'), 'PM cannot comment on a read-only portfolio task');
+select ok(private.aitask_can_comment_task('pgtap-task-detail-auth', 'task-pm-portfolio'), 'PM can comment on a task in a portfolio they own');
 
-select throws_ok($$
+select lives_ok($$
   insert into public.aitask_entities(workspace_id, entity_type, entity_id, parent_id, data)
   values ('pgtap-task-detail-auth', 'comment', 'pm-portfolio-comment', 'task-pm-portfolio',
-    jsonb_build_object('id', 'pm-portfolio-comment', 'taskId', 'task-pm-portfolio', 'userId', 'pgtap-task-pm', 'text', 'forbidden'))
-$$, '42501', 'new row violates row-level security policy for table "aitask_entities"', 'PM direct comment on a read-only task is rejected');
+    jsonb_build_object('id', 'pm-portfolio-comment', 'taskId', 'task-pm-portfolio', 'userId', 'pgtap-task-pm', 'text', 'allowed'))
+$$, 'PM direct comment on an owned portfolio task is allowed');
 
 select lives_ok($$
   update public.aitask_entities
   set data = data || jsonb_build_object('title', 'forbidden')
   where workspace_id = 'pgtap-task-detail-auth' and entity_type = 'task' and entity_id = 'task-pm-portfolio'
-$$, 'PM direct update on a read-only task is contained by RLS');
+$$, 'PM direct update on an owned portfolio task is allowed');
 select is(
   (select data ->> 'title' from public.aitask_entities where workspace_id = 'pgtap-task-detail-auth' and entity_type = 'task' and entity_id = 'task-pm-portfolio'),
-  'Portfolio-only task',
-  'PM direct update on a read-only task changes zero rows'
+  'forbidden',
+  'PM direct update on an owned portfolio task changes the row'
 );
 reset role;
 

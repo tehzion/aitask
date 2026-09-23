@@ -58,7 +58,7 @@ select is(
       'expectedVersion', 0,
       'data', '{"id":"idem-client","clientName":"Different Co","createdBy":"pgtap-idem-pm"}'::jsonb
     ))
-  ) ->> 'code',
+  ) ->> 'code'),
   'CONFLICT',
   'a conflicting insert with different data is still rejected'
 );

@@ -59,6 +59,7 @@ select is(
     'pgtap-pm-task-mgmt', gen_random_uuid(), 'task.create',
     jsonb_build_array(jsonb_build_object(
       'kind', 'entity', 'action', 'insert', 'entityType', 'task', 'entityId', 'pmtask-pm1-new-task',
+      'parentId', 'pmtask-pm1-project',
       'expectedVersion', 0,
       'data', '{"id":"pmtask-pm1-new-task","clientId":"pmtask-pm1-client","clientName":"PM One Co","projectId":"pmtask-pm1-project","title":"PM One New Task","department":"Designer","assignedTo":"pgtap-pmtask-staff","createdBy":"pgtap-pmtask-pm1","status":"Pending","visibility":"internal"}'::jsonb
     ))
