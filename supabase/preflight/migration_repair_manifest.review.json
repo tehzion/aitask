@@ -1,14 +1,31 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "client_ownership_and_task_guard_fixes_pending_20260923130000",
+  "status": "client_ownership_and_task_guard_fixes_verified_20260923130000",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
-    "verifiedAt": "2026-09-22",
-    "historyThrough": "staff_notification_recipients (repository 20260922133000)",
+    "verifiedAt": "2026-09-23",
+    "historyThrough": "client_ownership_backfill + task_guard_fixes (repository 20260923130000)",
     "historyAligned": false,
     "historyAlignmentNote": "The connector stored deployment IDs 20260919065513, 20260919065609, 20260919065620, 20260919065648, and 20260919072524 for the five matching repository migrations. Names and live SQL are verified; timestamp repair is intentionally prohibited.",
+    "clientOwnershipRollout": {
+      "appliedAt": "2026-09-23",
+      "method": "Supabase Management API database/query (owner personal access token); versions recorded in supabase_migrations.schema_migrations",
+      "migrations": [
+        "20260923120000_client_ownership_backfill",
+        "20260923130000_task_guard_fixes"
+      ],
+      "liveVerification": {
+        "clientsTotal": 66,
+        "clientsOwnerlessBefore": 62,
+        "clientsBackfilled": 61,
+        "clientsOwnerlessAfter": 1,
+        "clientsWithValidOwnerMember": 65,
+        "deliverableGuardAllowsDeliveredAt": true,
+        "taskGuardPreservesAssignedBy": true
+      }
+    },
     "authorizationRollout": {
       "repositoryMigrations": [
         "20260918210000_authorization_hardening_followups",
@@ -81,6 +98,14 @@
         {
           "repository": "20260922133000_staff_notification_recipients",
           "production": "20260922133000_staff_notification_recipients"
+        },
+        {
+          "repository": "20260923120000_client_ownership_backfill",
+          "production": "20260923120000_client_ownership_backfill"
+        },
+        {
+          "repository": "20260923130000_task_guard_fixes",
+          "production": "20260923130000_task_guard_fixes"
         }
       ]
     },
@@ -432,8 +457,5 @@
     "20260923120000_client_ownership_backfill",
     "20260923130000_task_guard_fixes"
   ],
-  "pendingProductionMigrations": [
-    "20260923120000_client_ownership_backfill",
-    "20260923130000_task_guard_fixes"
-  ]
+  "pendingProductionMigrations": []
 }
