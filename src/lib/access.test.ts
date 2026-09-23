@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CustomRole, Project, RolePermissions, Task, User } from '../types';
+import type { ClientProfile, CustomRole, Project, RolePermissions, Task, User } from '../types';
 import {
   canAssignTasksToOthers,
   canAccessPath,
@@ -174,6 +174,23 @@ describe('staff permission matrix', () => {
     expect(getVisibleProjects(staff, projects, tasks).map(project => project.id)).toEqual(['project-acme']);
     expect(canRenameClient(staff)).toBe(false);
     expect(canRenameClient(admin)).toBe(true);
+  });
+
+  it('shows a Project Manager the companies they created or are assigned, hides ownerless companies, and lets Boss see all', () => {
+    const created: ClientProfile = { id: 'c-created', clientName: 'Created Co', createdBy: admin.id, createdAt: '', updatedAt: '' };
+    const assigned: ClientProfile = { id: 'c-assigned', clientName: 'Assigned Co', createdAt: '', updatedAt: '' };
+    const ownerless: ClientProfile = { id: 'c-ownerless', clientName: 'Orphan Co', createdAt: '', updatedAt: '' };
+    const otherPms: ClientProfile = { id: 'c-other', clientName: 'Other Co', createdBy: otherStaff.id, createdAt: '', updatedAt: '' };
+    const scope = { clients: [created, assigned, ownerless, otherPms], projects: [] };
+    const assignedTask = makeTask({ id: 'pm-assigned-task', clientName: 'Assigned Co', assignedTo: admin.id, createdBy: otherStaff.id });
+
+    expect(getVisibleClientNames(admin, [assignedTask], [], [], scope)).toEqual(['Assigned Co', 'Created Co']);
+    expect(getVisibleClientNames(superAdmin, [assignedTask], [], [], scope)).toEqual([
+      'Assigned Co',
+      'Created Co',
+      'Orphan Co',
+      'Other Co',
+    ]);
   });
 
   it('offers only Project Manager-created or legacy companies when Staff create tasks', () => {

@@ -592,6 +592,21 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
   const pricingByParent = new Map(parsed.servicePricingSnapshots.map(item => [item.parentId, item]));
   const clients = [...parsed.clients];
   const byKey = new Map(clients.map(client => [normalizeClientKey(client.clientName), client]));
+  // A company discovered from a plan, project, task, or client account should
+  // inherit that record's creator so the owning PM/Staff keeps seeing it under
+  // portfolio scoping. Rows with no derivable owner stay ownerless (Boss Koo).
+  const ownerByKey = new Map<string, string>();
+  const rememberOwner = (name: string | undefined, ownerId: string | undefined) => {
+    const key = normalizeClientKey(name || '');
+    if (!key || !ownerId || ownerByKey.has(key)) return;
+    ownerByKey.set(key, ownerId);
+  };
+  (parsed.clientPlans || []).forEach(plan => rememberOwner(plan.clientName, plan.createdBy));
+  parsed.projects.forEach(project => rememberOwner(project.clientName, project.createdBy));
+  parsed.tasks.forEach(task => rememberOwner(task.clientName, task.createdBy));
+  parsed.users
+    .filter(user => user.role === 'Client' && user.companyName)
+    .forEach(user => rememberOwner(user.companyName, user.id));
   const discoveredNames = [
     ...parsed.tasks.map(task => task.clientName),
     ...parsed.projects.map(project => project.clientName),
@@ -603,7 +618,7 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
     if (byKey.has(key)) return;
     const now = new Date(0).toISOString();
     const slug = key.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'client';
-    const client: ClientProfile = { id: `CL-${slug}`, clientName: name, createdAt: now, updatedAt: now };
+    const client: ClientProfile = { id: `CL-${slug}`, clientName: name, createdBy: ownerByKey.get(key), createdAt: now, updatedAt: now };
     byKey.set(key, client);
     clients.push(client);
   });

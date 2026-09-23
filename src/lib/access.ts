@@ -426,6 +426,7 @@ export const getVisibleClientNames = (
 
   if (canViewAllClients(user, customRoles)) {
     return collectNames([
+      ...(scope.clients || []).map(client => client.clientName),
       ...tasks.map(task => task.clientName),
       ...projects.map(project => project.clientName),
     ]);
