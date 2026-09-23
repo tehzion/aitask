@@ -4,6 +4,24 @@ AiTask uses semantic versioning for user-facing releases. Every build also inclu
 its Git commit, for example `v1.5.1+d9494d6`, so deployments with the same release
 number remain uniquely identifiable.
 
+## [Unreleased]
+
+### Added
+
+- Simplified Chinese coverage for the internal workspaces that previously
+  rendered in English: Approvals, the create/edit client, plan, project, and
+  task dialogs, Feedback results, the Settings backend panel, release notices,
+  role and permission labels, Malaysia holiday labels, and the page-level
+  labels across Dashboard, Tasks, Calendar, Notifications, Clients, Delivery
+  tracker, and Client workspace.
+
+### Fixed
+
+- Chinese coverage guardrails in `i18n.test.ts` now also fail on untranslated
+  raw JSX text, template-literal `t()` copy without a pattern, unwrapped
+  `window.confirm`/`window.alert` copy, and Malaysia holiday labels.
+- Reset-workspace confirmation is now translated.
+
 ## [2.6.1] - 2026-09-18
 
 ### Fixed

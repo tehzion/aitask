@@ -207,6 +207,92 @@ describe('Chinese translation coverage guards', () => {
     expect([...missing].sort()).toEqual([]);
   });
 
+  it('translates raw JSX text nodes', () => {
+    const files = collectSourceFiles(join(process.cwd(), 'src')).filter(file => (
+      !/\.test\.tsx?$/.test(file)
+      && !/lib\/i18n\.ts$/.test(file)
+      && !/mock\//.test(file)
+      && !/pages\/Projects\.tsx$/.test(file)
+    ));
+    const cjk = /[\u4e00-\u9fff]/;
+    const allowlist = new Set(['Boss Koo', 'Facebook', 'Esc', 'Shift', 'Enter', 'Ctrl', 'Cmd', 'Alt', 'Tab', 'new Promise']);
+    const looksUi = (value: string) => {
+      const text = value.replace(/&amp;/g, '&').trim();
+      if (text.length < 4 || text.length > 120 || cjk.test(text)) return false;
+      if (!/^[A-Za-z]/.test(text) || !/[a-z]/.test(text) || !/[A-Z]/.test(text)) return false;
+      if (!/^[A-Za-z0-9 ,.'’&%/-]+$/.test(text)) return false;
+      if (!/\s/.test(text)) return false;
+      return true;
+    };
+    const missing = new Set<string>();
+    for (const file of files) {
+      if (!/\.tsx$/.test(file)) continue;
+      const source = readFileSync(file, 'utf8');
+      let match: RegExpExecArray | null;
+      const textNode = />\s*([^<>{}]{2,160}?)\s*</g;
+      while ((match = textNode.exec(source))) {
+        const value = match[1].replace(/&amp;/g, '&').trim();
+        if (!looksUi(value) || allowlist.has(value)) continue;
+        if (translateUiText(value, 'zh') === value) missing.add(value);
+      }
+    }
+    expect([...missing].sort()).toEqual([]);
+  });
+
+  it('translates template-literal t() copy through a pattern', () => {
+    const files = collectSourceFiles(join(process.cwd(), 'src')).filter(file => (
+      !/\.test\.tsx?$/.test(file) && !/lib\/i18n\.ts$/.test(file)
+    ));
+    const missing = new Set<string>();
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8');
+      let match: RegExpExecArray | null;
+      const template = /\bt\(\s*`([^`]*)`\s*\)/g;
+      while ((match = template.exec(source))) {
+        const raw = match[1];
+        if (!/[A-Za-z]/.test(raw)) continue;
+        const probe = raw
+          .replace(/\$\{[^}]*\?\s*''\s*:\s*'s'\s*\}/g, 's')
+          .replace(/\$\{[^}]*\}/g, '3');
+        if (translateUiText(probe, 'zh') === probe) missing.add(probe);
+      }
+    }
+    expect([...missing].sort()).toEqual([]);
+  });
+
+  it('wraps confirm and alert copy in the translator', () => {
+    const files = collectSourceFiles(join(process.cwd(), 'src')).filter(file => (
+      !/\.test\.tsx?$/.test(file)
+      && !/lib\/i18n\.ts$/.test(file)
+      && !/pages\/Projects\.tsx$/.test(file)
+    ));
+    const offenders: string[] = [];
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8');
+      const lines = source.split('\n');
+      lines.forEach((line, index) => {
+        if (!/window\.(confirm|alert)\(/.test(line)) return;
+        const window = [line, lines[index + 1] || '', lines[index + 2] || ''].join('\n');
+        if (/\bt\(\s*['"`]/.test(window) || /translateUiText\(/.test(window)) return;
+        offenders.push(`${file}:${index + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('translates every Malaysia holiday label', () => {
+    const source = readFileSync(join(process.cwd(), 'src', 'lib', 'malaysiaHolidays.ts'), 'utf8');
+    let match: RegExpExecArray | null;
+    const name = /name: (?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/g;
+    const missing = new Set<string>();
+    while ((match = name.exec(source))) {
+      const value = (match[1] ?? match[2] ?? '').trim();
+      if (value.length < 3) continue;
+      if (translateUiText(value, 'zh') === value) missing.add(value);
+    }
+    expect([...missing].sort()).toEqual([]);
+  });
+
   it('translates user-facing attribute literals', () => {
     const files = collectSourceFiles(join(process.cwd(), 'src')).filter(file => (
       !/\.test\.tsx?$/.test(file)

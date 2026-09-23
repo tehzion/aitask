@@ -493,7 +493,7 @@ const Settings: React.FC = () => {
 
   const handleResetLocalDemo = () => {
     const confirmed = window.confirm(
-      'Reset the local sample workspace? This recreates the UrbanEats, TechNova, and EcoLife demo records without deleting your other local records.',
+      t('Reset the local sample workspace? This recreates the UrbanEats, TechNova, and EcoLife demo records without deleting your other local records.'),
     );
     if (!confirmed) return;
 
