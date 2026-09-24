@@ -5328,12 +5328,49 @@ export const startBackendAutoSync = () => {
     );
   };
 
+  // A role, permission, department, or custom-role change can invalidate a
+  // pending command that was built under the previous access level. When that
+  // happens, discard the stale pending work and reload the canonical workspace
+  // so the member can retry cleanly instead of hitting a permanent
+  // "You do not have permission to make this change." denial.
+  const accessSignature = (user: User | null | undefined) => (
+    user
+      ? JSON.stringify({
+        role: user.role,
+        super: Boolean(user.isSuperAdmin),
+        customRoleId: user.customRoleId || '',
+        departments: user.departments || [],
+        permissions: user.permissions || {},
+      })
+      : null
+  );
+
+  const discardPendingForAccessChange = () => {
+    const state = useStore.getState();
+    const hasPending = state.backend.hasLocalChanges
+      || (state.backend.pendingMutations || 0) > 0
+      || Boolean(getRetainedSecureCommand())
+      || Boolean(getRetainedSecureMemberMutation());
+    if (!hasPending) return;
+    void state.discardMutation({ confirm: false });
+    useToastStore.getState().addToast(
+      'Your access changed. Reloaded the latest workspace; retry your change.',
+      'warning',
+    );
+  };
+
   syncAccessRealtime();
   const unsubscribeAccessRealtime = useStore.subscribe((state, previousState) => {
     if (
       state.currentUser?.authUserId !== previousState.currentUser?.authUserId
       || state.currentUser?.customRoleId !== previousState.currentUser?.customRoleId
     ) syncAccessRealtime();
+
+    const previousSignature = accessSignature(previousState.currentUser);
+    const nextSignature = accessSignature(state.currentUser);
+    if (previousSignature && nextSignature && previousSignature !== nextSignature) {
+      discardPendingForAccessChange();
+    }
   });
 
   const unsubscribeBackendState = useStore.subscribe((state, previousState) => {

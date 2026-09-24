@@ -2612,6 +2612,7 @@ const zhCopyCoverage: Record<string, string> = {
   'Hide work': '隐藏工作',
   'View work': '查看工作',
   'No Company Link / Independent Task': '无公司关联／独立任务',
+  'Your access changed. Reloaded the latest workspace; retry your change.': '您的权限已更改。已重新加载最新工作区，请重试您的更改。',
   'Secure Supabase session is active.': '安全 Supabase 会话已启用。',
   'Recovered browser-local workspace changes. Syncing them to Supabase.': '已恢复浏览器本地工作区更改。正在同步到 Supabase。',
   'Task is now unassigned': '任务现已取消分配',
