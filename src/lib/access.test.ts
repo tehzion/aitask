@@ -193,6 +193,37 @@ describe('staff permission matrix', () => {
     ]);
   });
 
+  it('resolves base-role permissions through the editable built-in template', () => {
+    const staffTemplate: CustomRole = {
+      id: 'builtin-staff',
+      name: 'Staff',
+      baseRole: 'Staff',
+      isBuiltin: true,
+      departmentScoped: false,
+      permissions: { ...defaultRolePermissions.Staff, manageAssignedClients: true, viewAssignedServiceClients: false },
+      createdAt: '',
+      updatedAt: '',
+    };
+    const staffPermissions = getEffectivePermissions(staff, [staffTemplate]);
+    expect(staffPermissions.manageAssignedClients).toBe(true);
+    expect(staffPermissions.viewAssignedServiceClients).toBe(false);
+
+    const pmTemplate: CustomRole = {
+      id: 'builtin-project-manager',
+      name: 'Project Manager',
+      baseRole: 'Project Manager',
+      isBuiltin: true,
+      departmentScoped: false,
+      permissions: { ...defaultRolePermissions['Project Manager'], viewServicePrices: false },
+      createdAt: '',
+      updatedAt: '',
+    };
+    const pmPermissions = getEffectivePermissions(admin, [pmTemplate]);
+    expect(pmPermissions.viewServicePrices).toBe(false);
+    expect(pmPermissions.createProjects).toBe(true);
+    expect(pmPermissions.editTasks).toBe(false);
+  });
+
   it('offers only Project Manager-created or legacy companies when Staff create tasks', () => {
     const companySet: Project[] = [
       { ...projects[0], createdBy: admin.id },
