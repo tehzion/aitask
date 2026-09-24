@@ -9,7 +9,7 @@ import { Badge, Button, IconButton, MetricCard, PageHeader, SegmentedTabs } from
 import { cardBase, fieldLabel, inputBase, pageShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { useI18n } from '../components/I18nProvider';
-import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, hodRestrictedPermissionKeys, isBossKoo, nonSuperAdminOnlyPermissionKeys, permissionGroups, permissionLabels, BUILTIN_HOD_ROLE_ID } from '../lib/access';
+import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getBuiltinRoleId, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, hodRestrictedPermissionKeys, isBossKoo, nonSuperAdminOnlyPermissionKeys, permissionGroups, permissionLabels } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
@@ -20,6 +20,13 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import DepartmentMultiSelect from '../components/DepartmentMultiSelect';
 
 const ROLES: Role[] = ['Project Manager', 'HOD', 'Staff', 'Client'];
+
+const BUILTIN_ROLE_DESCRIPTIONS: Record<Role, string> = {
+  'Project Manager': 'Portfolio-scoped operational access. Account and role administration stays with Boss Koo.',
+  HOD: 'Editable department lead role. Sees and edits work in their own departments.',
+  Staff: 'Standard employee access to assigned work.',
+  Client: 'Reviews and approves their company work.',
+};
 const APPROVAL_TABS = ['registrations', 'members', 'roles', 'history'] as const;
 type ApprovalTab = typeof APPROVAL_TABS[number];
 
@@ -344,6 +351,7 @@ const Approvals: React.FC = () => {
   const [roleDeptPending, setRoleDeptPending] = useState<{ role: Role; customRoleId?: string } | null>(null);
   const [roleDeptValue, setRoleDeptValue] = useState<Department[]>([]);
   const superAdmin = isBossKoo(currentUser);
+  const editingBuiltinRole = Boolean(roleEditorId && rolePermissions.find(role => role.id === roleEditorId)?.isBuiltin);
   const [roleForm, setRoleForm] = useState({
     name: '',
     description: '',
@@ -1441,7 +1449,7 @@ const Approvals: React.FC = () => {
                   value={roleForm.name}
                   onChange={e => setRoleForm({ ...roleForm, name: e.target.value })}
                   placeholder="e.g. Account Manager"
-                  disabled={roleEditorId === BUILTIN_HOD_ROLE_ID}
+                  disabled={editingBuiltinRole}
                   required
                 />
               </div>
@@ -1452,7 +1460,7 @@ const Approvals: React.FC = () => {
                   className={cn(inputBase, 'px-3 py-2.5')}
                   value={roleForm.baseRole}
                   onChange={e => handleRoleBaseChange(e.target.value as Role)}
-                  disabled={roleEditorId === BUILTIN_HOD_ROLE_ID}
+                  disabled={editingBuiltinRole}
                 >
                   {ROLES.map(r => <option key={r} value={r}>{t(getRoleDisplayName(r))}</option>)}
                 </select>
@@ -1470,7 +1478,7 @@ const Approvals: React.FC = () => {
             </div>
 
             <div className="space-y-4">
-              {roleForm.baseRole === 'Staff' && (
+              {roleForm.baseRole === 'Staff' && !editingBuiltinRole && (
                 <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                   <input
                     type="checkbox"
@@ -1535,24 +1543,26 @@ const Approvals: React.FC = () => {
             <div>
               <p className="mb-2 text-xs font-semibold tracking-wide text-slate-400">Default roles</p>
               <div className="space-y-2">
-                {([['Project Manager', defaultRolePermissions['Project Manager'], 'Portfolio-scoped operational access. Account and role administration stays with Boss Koo.'],
-                  ['HOD', rolePermissions.find(role => role.isBuiltin && role.baseRole === 'HOD')?.permissions || defaultRolePermissions.HOD, 'Editable department lead role. Sees and edits work in their own departments.'],
-                  ['Staff', defaultRolePermissions.Staff, 'Standard employee access to assigned work.'],
-                  ['Client', defaultRolePermissions.Client, 'Reviews and approves their company work.']] as const).map(([name, permissions, description]) => (
-                  <div key={name} className="rounded-lg border border-slate-200 p-4">
-                    <div className="flex items-center gap-2">
-                      <h3 data-i18n-skip className="font-semibold text-slate-900">{name}</h3>
-                      <Badge tone={name === 'HOD' ? 'purple' : 'slate'}>{name === 'HOD' ? 'Editable default' : 'Default'}</Badge>
-                      {name === 'HOD' && superAdmin && <Button type="button" variant="secondary" className="ml-auto" onClick={() => handleEditRole(BUILTIN_HOD_ROLE_ID)}>Edit permissions</Button>}
+                {ROLES.map(role => {
+                  const template = rolePermissions.find(item => item.isBuiltin && item.baseRole === role);
+                  const templateId = template?.id || getBuiltinRoleId(role);
+                  const permissions = template?.permissions || defaultRolePermissions[role];
+                  return (
+                    <div key={templateId} className="rounded-lg border border-slate-200 p-4">
+                      <div className="flex items-center gap-2">
+                        <h3 data-i18n-skip className="font-semibold text-slate-900">{t(getRoleDisplayName(role))}</h3>
+                        <Badge tone="purple">{t('Editable default')}</Badge>
+                        {superAdmin && <Button type="button" variant="secondary" className="ml-auto" onClick={() => handleEditRole(templateId)}>{t('Edit permissions')}</Button>}
+                      </div>
+                      <p className="mt-1 text-sm text-slate-500">{t(BUILTIN_ROLE_DESCRIPTIONS[role])}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {Object.entries(permissions).filter(([, enabled]) => enabled).map(([key]) => (
+                          <Badge key={key} tone="indigo">{permissionLabels[key as RolePermissionKey]}</Badge>
+                        ))}
+                      </div>
                     </div>
-                    <p className="mt-1 text-sm text-slate-500">{description}</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {Object.entries(permissions).filter(([, enabled]) => enabled).map(([key]) => (
-                        <Badge key={key} tone="indigo">{permissionLabels[key as RolePermissionKey]}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
             <p className="pt-2 text-xs font-semibold tracking-wide text-slate-400">Custom roles</p>

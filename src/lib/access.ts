@@ -216,6 +216,18 @@ export const isBossKoo = (user: User | null | undefined) => Boolean(user?.isSupe
 export const isProjectManager = (user: User | null | undefined) => user?.role === 'Project Manager';
 export const BUILTIN_HOD_ROLE_ID = 'builtin-hod';
 
+// Every base role has one editable built-in template that supplies that role's
+// default permissions. Boss Koo edits the template from Approvals; members on
+// the base role inherit it unless they hold a custom role or member overrides.
+export const BUILTIN_ROLE_IDS: Record<Role, string> = {
+  'Project Manager': 'builtin-project-manager',
+  HOD: BUILTIN_HOD_ROLE_ID,
+  Staff: 'builtin-staff',
+  Client: 'builtin-client',
+};
+
+export const getBuiltinRoleId = (role: Role) => BUILTIN_ROLE_IDS[role];
+
 export const getDashboardPersona = (user: User | null | undefined): DashboardPersona => {
   if (isBossKoo(user)) return 'boss';
   if (user?.role === 'Project Manager') return 'projectManager';

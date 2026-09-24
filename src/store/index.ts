@@ -73,8 +73,8 @@ import {
   canManageTaskTemplates,
   canViewAllClients,
   canOpenServiceClient,
-  BUILTIN_HOD_ROLE_ID,
   defaultRolePermissions,
+  getBuiltinRoleId,
   getAssignableProjects,
   getVisibleClientNames,
   isNotificationReadByUser,
@@ -227,38 +227,49 @@ type AddMemberInput = Omit<User, 'id' | 'avatar' | 'isSuperAdmin'> & {
   sendInvitation?: boolean;
 };
 
-const makeBuiltinHodRole = (): CustomRole => ({
-  id: BUILTIN_HOD_ROLE_ID,
-  name: 'HOD',
-  description: 'Department lead with scoped task ownership and review access.',
-  baseRole: 'HOD',
-  permissions: { ...defaultRolePermissions.HOD },
-  departmentScoped: true,
+const BUILTIN_ROLE_DESCRIPTIONS: Record<Role, string> = {
+  'Project Manager': 'Portfolio-scoped operational access. Account and role administration stays with Boss Koo.',
+  HOD: 'Department lead with scoped task ownership and review access.',
+  Staff: 'Standard employee access to assigned work.',
+  Client: 'Reviews and approves their company work.',
+};
+const BUILTIN_ROLE_SEEDED_AT = '2026-09-18T00:00:00.000Z';
+const BUILTIN_BASE_ROLES: Role[] = ['Project Manager', 'HOD', 'Staff', 'Client'];
+
+const makeBuiltinRole = (role: Role): CustomRole => ({
+  id: getBuiltinRoleId(role),
+  name: role,
+  description: BUILTIN_ROLE_DESCRIPTIONS[role],
+  baseRole: role,
+  permissions: { ...defaultRolePermissions[role] },
+  departmentScoped: role === 'HOD',
   isProtected: false,
   isBuiltin: true,
-  createdAt: '2026-09-18T00:00:00.000Z',
-  updatedAt: '2026-09-18T00:00:00.000Z',
+  createdAt: BUILTIN_ROLE_SEEDED_AT,
+  updatedAt: BUILTIN_ROLE_SEEDED_AT,
 });
 
 const ensureBuiltinRoleTemplate = (roles: CustomRole[] = []) => {
   const normalized = roles
     .filter(role => role.id !== 'system-hod')
-    .map(role => role.id === BUILTIN_HOD_ROLE_ID
-      ? {
-          ...makeBuiltinHodRole(),
-          ...role,
-          id: BUILTIN_HOD_ROLE_ID,
-          name: 'HOD',
-          baseRole: 'HOD' as const,
-          permissions: sanitizeRolePermissions(role.permissions, 'HOD'),
-          departmentScoped: true,
-          isProtected: false,
-          isBuiltin: true,
-        }
-      : role);
-  return normalized.some(role => role.id === BUILTIN_HOD_ROLE_ID)
-    ? normalized
-    : [makeBuiltinHodRole(), ...normalized];
+    .filter(role => !(role.isBuiltin && !BUILTIN_BASE_ROLES.includes(role.baseRole)))
+    .map(role => {
+      if (!role.isBuiltin) return role;
+      const builtin = makeBuiltinRole(role.baseRole);
+      return {
+        ...builtin,
+        ...role,
+        id: builtin.id,
+        name: builtin.name,
+        baseRole: builtin.baseRole,
+        permissions: sanitizeRolePermissions(role.permissions, role.baseRole),
+        departmentScoped: builtin.departmentScoped,
+        isProtected: false,
+        isBuiltin: true,
+      };
+    });
+  const missing = BUILTIN_BASE_ROLES.filter(role => !normalized.some(item => item.id === getBuiltinRoleId(role)));
+  return [...missing.map(makeBuiltinRole), ...normalized];
 };
 
 interface StoreState {
@@ -1142,7 +1153,7 @@ export const useStore = create<StoreState>()(
       notifications: [],
       notificationUnreadCount: 0,
       registrations: [],
-      rolePermissions: [makeBuiltinHodRole()],
+      rolePermissions: BUILTIN_BASE_ROLES.map(makeBuiltinRole),
       backend: makeBackendRuntimeState(),
 
       initializeBackend: async () => {
@@ -4517,11 +4528,11 @@ export const useStore = create<StoreState>()(
 
         const targetRole = get().rolePermissions.find(role => role.id === id);
         if (!targetRole) return { ok: false, error: 'Custom role was not found.' };
-        const editingHod = isHodRole(targetRole);
-        if (targetRole.isProtected && !editingHod) return { ok: false, error: 'Protected roles cannot be changed.' };
+        const editingBuiltin = targetRole.isBuiltin;
+        if (targetRole.isProtected && !editingBuiltin) return { ok: false, error: 'Protected roles cannot be changed.' };
 
-        const nextName = editingHod ? 'HOD' : data.name?.trim() || targetRole.name;
-        const nextBaseRole = editingHod ? 'HOD' : data.baseRole || targetRole.baseRole;
+        const nextName = editingBuiltin ? targetRole.name : data.name?.trim() || targetRole.name;
+        const nextBaseRole = editingBuiltin ? targetRole.baseRole : data.baseRole || targetRole.baseRole;
         const duplicate = get().rolePermissions.some(role => role.id !== id && role.name.toLowerCase() === nextName.toLowerCase());
         if (duplicate) return { ok: false, error: 'A role with this name already exists.' };
         const nextPermissions = sanitizeRolePermissions(data.permissions ?? targetRole.permissions, nextBaseRole);
@@ -4538,10 +4549,10 @@ export const useStore = create<StoreState>()(
                   permissions: nextPermissions,
                   name: nextName,
                   baseRole: nextBaseRole,
-                  departmentScoped: editingHod ? true : (data.departmentScoped ?? role.departmentScoped),
-                  isProtected: editingHod ? false : role.isProtected,
-                  isBuiltin: editingHod ? true : role.isBuiltin,
-                  description: data.description?.trim() || undefined,
+                  departmentScoped: editingBuiltin ? nextBaseRole === 'HOD' : (data.departmentScoped ?? role.departmentScoped),
+                  isProtected: editingBuiltin ? false : role.isProtected,
+                  isBuiltin: editingBuiltin ? true : role.isBuiltin,
+                  description: editingBuiltin ? role.description : (data.description?.trim() || undefined),
                   updatedAt: new Date().toISOString(),
                 }
               : role
@@ -5314,7 +5325,8 @@ export const startBackendAutoSync = () => {
   const syncAccessRealtime = () => {
     const currentUser = useStore.getState().currentUser;
     const authUserId = currentUser?.authUserId;
-    const key = authUserId ? `${authUserId}:${currentUser?.customRoleId || ''}` : null;
+    const builtinRoleId = currentUser ? getBuiltinRoleId(currentUser.role) : undefined;
+    const key = authUserId ? `${authUserId}:${currentUser?.customRoleId || ''}:${builtinRoleId || ''}` : null;
     if (key === accessRealtimeKey) return;
     accessRefresh.reset();
     accessRealtimeCleanup?.();
@@ -5324,6 +5336,7 @@ export const startBackendAutoSync = () => {
     accessRealtimeCleanup = subscribeToCurrentMemberAccessChanges(
       authUserId,
       currentUser?.customRoleId,
+      builtinRoleId,
       accessRefresh.request,
     );
   };
@@ -5364,6 +5377,7 @@ export const startBackendAutoSync = () => {
     if (
       state.currentUser?.authUserId !== previousState.currentUser?.authUserId
       || state.currentUser?.customRoleId !== previousState.currentUser?.customRoleId
+      || state.currentUser?.role !== previousState.currentUser?.role
     ) syncAccessRealtime();
 
     const previousSignature = accessSignature(previousState.currentUser);

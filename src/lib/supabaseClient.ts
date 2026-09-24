@@ -29,6 +29,7 @@ const isSafeRealtimeFilterValue = (value: string | undefined, maxLength = 160) =
 export const subscribeToCurrentMemberAccessChanges = (
   authUserId: string,
   customRoleId: string | undefined,
+  builtinRoleId: string | undefined,
   onChange: () => void,
 ) => {
   if (!isSafeRealtimeFilterValue(authUserId)) return () => undefined;
@@ -41,14 +42,19 @@ export const subscribeToCurrentMemberAccessChanges = (
       filter: `auth_user_id=eq.${authUserId}`,
     }, onChange);
 
-  if (isSafeRealtimeFilterValue(customRoleId)) {
+  // Refresh when the member's custom role, or the editable default template for
+  // their base role, changes so permission edits take effect without a reload.
+  const watchedRoleIds = new Set(
+    [customRoleId, builtinRoleId].filter((id): id is string => isSafeRealtimeFilterValue(id)),
+  );
+  watchedRoleIds.forEach(roleId => {
     channel.on('postgres_changes', {
       event: 'UPDATE',
       schema: 'public',
       table: 'aitask_entities',
-      filter: `entity_type=eq.custom_role,entity_id=eq.${customRoleId}`,
+      filter: `entity_type=eq.custom_role,entity_id=eq.${roleId}`,
     }, onChange);
-  }
+  });
 
   channel.subscribe();
   return () => {

@@ -8,6 +8,11 @@ number remain uniquely identifiable.
 
 ### Added
 
+- Boss Koo can now edit the permission template for every default role
+  (Project Manager, HOD, Staff, Client) from Approvals, not just HOD. Members
+  on a base role inherit the edited template unless they hold a custom role or
+  member-level overrides; built-in templates keep their fixed identity and the
+  protected Boss Koo keys stay non-delegable.
 - Simplified Chinese coverage for the internal workspaces that previously
   rendered in English: Approvals, the create/edit client, plan, project, and
   task dialogs, Feedback results, the Settings backend panel, release notices,
@@ -21,6 +26,8 @@ number remain uniquely identifiable.
   raw JSX text, template-literal `t()` copy without a pattern, unwrapped
   `window.confirm`/`window.alert` copy, and Malaysia holiday labels.
 - Reset-workspace confirmation is now translated.
+- A member's session now refreshes when their base role's default template is
+  edited, so permission changes apply without a reload.
 
 ## [2.6.1] - 2026-09-18
 
