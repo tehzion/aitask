@@ -29,6 +29,7 @@ import {
   loadSecureNotificationPage,
   loadSecureWorkspace,
   overlayRetainedWorkspaceEntities,
+  partitionOperationsWithExplicitType,
   rebaseRetryableCommand,
   restoreSecureWorkspaceCommand,
   restoreSecureMemberMutation,
@@ -346,6 +347,24 @@ describe('secure command retry identity', () => {
 
     expect(result).toMatchObject({ ok: false, code: 'VALIDATION' });
     expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('routes a mixed task and service diff to both RPCs under task.create', () => {
+    const operations = [
+      operation('task', 'insert'),
+      operation('notification', 'insert'),
+      operation('service_cycle'),
+    ];
+    const groups = partitionOperationsWithExplicitType(operations, 'task.create');
+    const byType = new Map(groups.map(group => [group.type, group.operations.map(item => item.entityType)]));
+    expect(byType.get('task.create')).toEqual(['task', 'notification']);
+    expect(byType.get('service_cycle.manage')).toEqual(['service_cycle']);
+  });
+
+  it('keeps a service-typed command whole', () => {
+    const operations = [operation('deliverable'), operation('service_cycle')];
+    const groups = partitionOperationsWithExplicitType(operations, 'deliverable.manage');
+    expect(groups).toEqual([{ type: 'deliverable.manage', operations }]);
   });
 
   it('sends versioned multi-department updates through the dedicated RPC', async () => {

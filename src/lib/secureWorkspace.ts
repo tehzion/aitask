@@ -753,6 +753,14 @@ const serviceEntityTypes = new Set([
   'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon',
 ]);
 
+// Command types handled by the service RPC. The generic RPC rejects service
+// entity types, so a mixed diff must never be sent under a single generic type.
+const serviceCommandTypes = new Set<SecureCommandType>([
+  'service_package.manage', 'client_plan.manage', 'service_cycle.manage',
+  'deliverable.manage', 'cycle_comment.manage', 'addon.manage',
+  'service_workflow.manage', 'deliverable.workflow.generate',
+]);
+
 export type BuildOperationsOptions = {
   excludeSuperAdminEntities?: boolean;
   actorMemberId?: string;
@@ -901,6 +909,37 @@ const partitionOperationsForRpc = (
       type: inferSecureCommandType(genericOperations, { selfMemberId }),
       operations: genericOperations,
     });
+  }
+  if (serviceOperations.length > 0) {
+    groups.push({
+      type: inferSecureCommandType(serviceOperations, { selfMemberId }),
+      operations: serviceOperations,
+    });
+  }
+  return groups;
+};
+
+// A caller may supply the command type it knows its own change belongs to (for
+// example `task.create`). The local diff can still contain unrelated service
+// rows (a cycle that changed server-side, derived deliverable progress), and the
+// generic RPC rejects service entity types, failing the whole command with
+// "Unsupported entity type." Keep the requested generic type on the generic
+// operations and send the service rows to the service RPC. Service-typed
+// commands are left whole: the service RPC already accepts `client` and `task`,
+// and `deliverable.workflow.generate` consumes its operation list directly.
+export const partitionOperationsWithExplicitType = (
+  operations: WorkspaceOperation[],
+  type: SecureCommandType,
+  selfMemberId?: string,
+): { type: SecureCommandType; operations: WorkspaceOperation[] }[] => {
+  if (serviceCommandTypes.has(type)) {
+    return [{ type, operations }];
+  }
+  const genericOperations = operations.filter(operation => !serviceEntityTypes.has(operation.entityType));
+  const serviceOperations = operations.filter(operation => serviceEntityTypes.has(operation.entityType));
+  const groups: { type: SecureCommandType; operations: WorkspaceOperation[] }[] = [];
+  if (genericOperations.length > 0) {
+    groups.push({ type, operations: genericOperations });
   }
   if (serviceOperations.length > 0) {
     groups.push({
@@ -1110,11 +1149,7 @@ const executeCommand = async (
     return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before retrying this change.' };
   }
 
-  const serviceCommand = new Set<SecureCommandType>([
-    'service_package.manage', 'client_plan.manage', 'service_cycle.manage',
-    'deliverable.manage', 'cycle_comment.manage', 'addon.manage',
-    'service_workflow.manage', 'deliverable.workflow.generate',
-  ]).has(command.type);
+  const serviceCommand = serviceCommandTypes.has(command.type);
   const invoke = () => command.type === 'deliverable.workflow.generate'
     ? withSyncTimeout(supabase.rpc('aitask_generate_deliverable_task_chain', {
       p_workspace_id: SECURE_WORKSPACE_ID,
@@ -2209,7 +2244,7 @@ export const saveSecureWorkspace = async (
     };
   }
   const groups = type
-    ? [{ type, operations }]
+    ? partitionOperationsWithExplicitType(operations, type, options.actorMemberId)
     : partitionOperationsForRpc(operations, options.actorMemberId);
 
   let lastResult: MutationResult<CommandResponse> | null = null;
