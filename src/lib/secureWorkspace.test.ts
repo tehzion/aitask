@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PersistedWorkspaceState } from './supabaseSnapshot';
-import type { Task } from '../types';
+import type { ServiceWorkflowTemplate, Task } from '../types';
 import { BUILTIN_HOD_ROLE_ID, defaultRolePermissions } from './access';
 
 const { rpc, refreshSession, from } = vi.hoisted(() => ({
@@ -270,6 +270,20 @@ describe('buildOperations', () => {
     const operations = buildOperations(state, { excludeSuperAdminEntities: true });
     expect(operations).toHaveLength(1);
     expect(inferSecureCommandType(operations)).toBe('client.upsert');
+  });
+
+  it('omits service metadata the actor cannot read', () => {
+    const template: ServiceWorkflowTemplate = {
+      id: 'SWT-default', name: 'Default', serviceTypes: ['Design'], revision: 1,
+      isActive: true, steps: [], createdAt: '2026-09-25T00:00:00.000Z', updatedAt: '2026-09-25T00:00:00.000Z',
+    };
+    const state: PersistedWorkspaceState = { ...stateWithUser('reader-1'), serviceWorkflowTemplates: [template] };
+
+    const included = buildOperations(state);
+    expect(included.some(operation => operation.entityType === 'service_workflow_template')).toBe(true);
+
+    const excluded = buildOperations(state, { excludedEntityTypes: new Set(['service_workflow_template']) });
+    expect(excluded.some(operation => operation.entityType === 'service_workflow_template')).toBe(false);
   });
 
   it('never emits an auto-discovered placeholder client as an insert', () => {

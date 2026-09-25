@@ -71,6 +71,7 @@ import {
   canManageServiceCatalog,
   canManageServiceCycles,
   canManageTaskTemplates,
+  canViewServicePrices,
   canViewAllClients,
   canOpenServiceClient,
   defaultRolePermissions,
@@ -999,6 +1000,18 @@ const getCurrentUserFromSnapshot = (currentUser: User | null, users: User[]) => 
   return nextUser ? stripPassword(normalizeUserAccount(nextUser)) as User : null;
 };
 
+// Service package/workflow/pricing rows are only readable with the matching
+// manage/view permission. Without this, a member who cannot read them still
+// carries the locally seeded default template and every save tries to insert a
+// row they are not allowed to create (HOD and Staff hit this).
+const excludedServiceMetadataEntityTypes = (user: User | null | undefined, rolePermissions: CustomRole[]) => {
+  const excluded = new Set<string>();
+  if (!canManageTaskTemplates(user, rolePermissions)) excluded.add('service_workflow_template');
+  if (!canManageServiceCatalog(user, rolePermissions)) excluded.add('service_package');
+  if (!canViewServicePrices(user, rolePermissions)) excluded.add('service_pricing_snapshot');
+  return excluded;
+};
+
 const makeWorkspacePatch = (current: StoreState, snapshot: SnapshotResult) => {
   const workspace = normalizeWorkspaceState(snapshot.state);
   const secureAuth = shouldUseSecureSupabase();
@@ -1351,7 +1364,11 @@ export const useStore = create<StoreState>()(
               savedWorkspace,
               pendingCommandType,
               stateToSave.backend.workspaceVersion,
-              { excludeSuperAdminEntities: !stateToSave.currentUser?.isSuperAdmin, actorMemberId: stateToSave.currentUser?.id },
+              {
+                excludeSuperAdminEntities: !stateToSave.currentUser?.isSuperAdmin,
+                actorMemberId: stateToSave.currentUser?.id,
+                excludedEntityTypes: excludedServiceMetadataEntityTypes(stateToSave.currentUser, stateToSave.rolePermissions),
+              },
             );
             if (result.ok === false) {
               const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;

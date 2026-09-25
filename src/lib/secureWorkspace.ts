@@ -764,6 +764,10 @@ const serviceCommandTypes = new Set<SecureCommandType>([
 export type BuildOperationsOptions = {
   excludeSuperAdminEntities?: boolean;
   actorMemberId?: string;
+  // Entity types the actor cannot read. The server row stays hidden from the
+  // baseline, so the locally seeded copy would otherwise look like a new insert
+  // the actor is not allowed to send.
+  excludedEntityTypes?: Set<string>;
 };
 
 export const buildOperations = (
@@ -772,12 +776,15 @@ export const buildOperations = (
 ): WorkspaceOperation[] => {
   const nextRows = stateToRows(state);
   const nextKeys = new Set(nextRows.map(row => entityKey(row.entityType, row.entityId)));
-  const excluded = options.excludeSuperAdminEntities ? superAdminOnlyEntityTypes : undefined;
+  const excludedEntityTypes = new Set<string>(
+    options.excludeSuperAdminEntities ? superAdminOnlyEntityTypes : [],
+  );
+  options.excludedEntityTypes?.forEach(entityType => excludedEntityTypes.add(entityType));
   // A non-super-admin can only ever change their own member row. Never emit
   // another member's update, otherwise the whole command is classified as the
   // Boss-only `member.manage` and rejected with "Super Admin permission required."
   const skipsRow = (row: BaselineRow) => (
-    Boolean(excluded?.has(row.entityType))
+    excludedEntityTypes.has(row.entityType)
     || (
       options.excludeSuperAdminEntities === true
       && Boolean(options.actorMemberId)

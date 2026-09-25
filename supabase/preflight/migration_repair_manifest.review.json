@@ -1,7 +1,7 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "editable_default_roles_verified_20260923140000",
+  "status": "staff_comment_notification_context_verified_20260925110000",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
@@ -110,8 +110,23 @@
         {
           "repository": "20260923140000_editable_default_roles",
           "production": "20260923140000_editable_default_roles"
+        },
+        {
+          "repository": "20260925110000_staff_comment_notification_context",
+          "production": "20260925110000_staff_comment_notification_context"
         }
       ]
+    },
+    "staffNotificationContext": {
+      "appliedAt": "2026-09-25",
+      "migration": "20260925110000_staff_comment_notification_context",
+      "method": "Supabase Management API database/query (owner personal access token)",
+      "rootCause": "aitask_seed_staff_task_context only collected task operations, so a Staff comment/add command carried no task context and aitask_guard_staff_notification_insert raised check_violation (surfaced as 'The command contains invalid data.').",
+      "liveVerification": {
+        "simulatedStaffCommentContext": "[\"T-404673\"]",
+        "staffCommentNotificationInsert": "succeeded_after_fix",
+        "preFixReproduction": "23514 Staff notifications must belong to the task changed by this command."
+      }
     },
     "migrationHistoryRepair": {
       "performedAt": "2026-09-22",
@@ -460,7 +475,8 @@
     "20260922133000_staff_notification_recipients",
     "20260923120000_client_ownership_backfill",
     "20260923130000_task_guard_fixes",
-    "20260923140000_editable_default_roles"
+    "20260923140000_editable_default_roles",
+    "20260925110000_staff_comment_notification_context"
   ],
   "pendingProductionMigrations": []
 }
