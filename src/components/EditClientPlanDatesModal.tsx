@@ -4,6 +4,7 @@ import ModalShell from './ModalShell';
 import { Button } from './ui';
 import { inputBase, modalFooter } from './uiTokens';
 import { useStore } from '../store';
+import { useToastStore } from '../store/useToastStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useI18n } from './I18nProvider';
 import type { ClientServicePlan } from '../types';
@@ -56,6 +57,7 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
       setError(t(committed.error || 'The plan date change is waiting to be saved.'));
       return;
     }
+    useToastStore.getState().addToast(`Plan dates updated for "${plan.clientName}".`, 'success');
     onClose();
   };
 

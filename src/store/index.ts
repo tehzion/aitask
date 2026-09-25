@@ -3944,7 +3944,6 @@ export const useStore = create<StoreState>()(
             ? { ...item, billingDay: nextBillingDay, contractEndDate: nextContractEnd, updatedAt: now }
             : item),
         }));
-        useToastStore.getState().addToast(`Plan dates updated for "${plan.clientName}".`, 'success');
         return { ok: true };
       },
 
