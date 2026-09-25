@@ -260,6 +260,28 @@ describe('Chinese translation coverage guards', () => {
     expect([...missing].sort()).toEqual([]);
   });
 
+  it('translates every addToast message, including interpolated ones', () => {
+    const files = collectSourceFiles(join(process.cwd(), 'src')).filter(file => (
+      !/\.test\.tsx?$/.test(file) && !/lib\/i18n\.ts$/.test(file)
+    ));
+    const probe = (raw: string) => raw
+      .replace(/\$\{[^}]*\?\s*''\s*:\s*'s'\s*\}/g, 's')
+      .replace(/\$\{[^}]*\}/g, '3');
+    const missing = new Set<string>();
+    const call = /addToast\(\s*(?:`((?:[^`\\]|\\.)*)`|'((?:[^'\\]|\\.)*)')/g;
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8');
+      let match: RegExpExecArray | null;
+      call.lastIndex = 0;
+      while ((match = call.exec(source))) {
+        const raw = (match[1] ?? match[2] ?? '').replace(/\\"/g, '"').trim();
+        if (!/[A-Za-z]/.test(raw)) continue;
+        if (translateUiText(probe(raw), 'zh') === probe(raw)) missing.add(raw);
+      }
+    }
+    expect([...missing].sort()).toEqual([]);
+  });
+
   it('wraps confirm and alert copy in the translator', () => {
     const files = collectSourceFiles(join(process.cwd(), 'src')).filter(file => (
       !/\.test\.tsx?$/.test(file)
