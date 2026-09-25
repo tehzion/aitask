@@ -209,6 +209,17 @@ describe('remote snapshot validation', () => {
     expect(parsed.clients[0].clientName).toBe('35 Hair Lab');
   });
 
+  it('preserves task assignment attribution when parsing a task', () => {
+    const parsed = parseTask({
+      ...taskFixture,
+      assignedBy: 'pm-1',
+      assignedAt: '2026-09-25T03:00:00.000Z',
+    });
+
+    expect(parsed?.assignedBy).toBe('pm-1');
+    expect(parsed?.assignedAt).toBe('2026-09-25T03:00:00.000Z');
+  });
+
   it('does not carry password or token fields into users', () => {
     const parsed = parseWorkspaceSnapshot({
       users: [{

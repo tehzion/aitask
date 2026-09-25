@@ -365,6 +365,8 @@ export const parseTask = (value: unknown): Task | null => {
     department,
     assignedTo,
     createdBy,
+    assignedBy: optionalText(value.assignedBy, 160),
+    assignedAt: safeIsoTimestamp(value.assignedAt),
     startDate: safeIsoDate(value.startDate, today),
     dueDate: cleanText(value.dueDate, 10) ? safeIsoDate(value.dueDate, '') : '',
     priority,
