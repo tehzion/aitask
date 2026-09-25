@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(2);
+select plan(3);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -26,7 +26,9 @@ insert into public.aitask_members(
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values
   ('pgtap-notify', 'client', 'notify-client', '{"id":"notify-client","clientName":"Notify Co","createdBy":"pgtap-notify-pm"}'::jsonb),
-  ('pgtap-notify', 'task', 'notify-task', '{"id":"notify-task","clientId":"notify-client","clientName":"Notify Co","title":"Notify Task","department":"Designer","assignedTo":"pgtap-notify-staff","createdBy":"pgtap-notify-staff","status":"Pending","visibility":"internal"}'::jsonb);
+  ('pgtap-notify', 'client', 'notify-client-boss', '{"id":"notify-client-boss","clientName":"Notify Boss Co","createdBy":"pgtap-notify-boss"}'::jsonb),
+  ('pgtap-notify', 'task', 'notify-task', '{"id":"notify-task","clientId":"notify-client","clientName":"Notify Co","title":"Notify Task","department":"Designer","assignedTo":"pgtap-notify-staff","createdBy":"pgtap-notify-staff","status":"Pending","visibility":"internal"}'::jsonb),
+  ('pgtap-notify', 'task', 'notify-task-assigner', '{"id":"notify-task-assigner","clientId":"notify-client-boss","clientName":"Notify Boss Co","title":"Assigned Task","department":"Designer","assignedTo":"pgtap-notify-staff","assignedBy":"pgtap-notify-pm","createdBy":"pgtap-notify-pm","status":"Pending","visibility":"internal"}'::jsonb);
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000963', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -72,6 +74,28 @@ select is(
   ) ->> 'ok')::boolean,
   false,
   'Staff cannot notify an unrelated member'
+);
+
+-- Staff may notify the PM who assigned the task even when that PM is not the
+-- company owner (the company belongs to Boss here).
+select is(
+  (public.aitask_execute_command(
+    'pgtap-notify', gen_random_uuid(), 'task.update',
+    jsonb_build_array(
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'update', 'entityType', 'task', 'entityId', 'notify-task-assigner',
+        'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-notify' and entity_type = 'task' and entity_id = 'notify-task-assigner'),
+        'data', '{"id":"notify-task-assigner","clientId":"notify-client-boss","clientName":"Notify Boss Co","title":"Assigned Task","department":"Designer","assignedTo":"pgtap-notify-staff","assignedBy":"pgtap-notify-pm","createdBy":"pgtap-notify-pm","status":"In Progress","visibility":"internal"}'::jsonb
+      ),
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'insert', 'entityType', 'notification', 'entityId', 'notify-assigner-op',
+        'expectedVersion', 0,
+        'data', '{"id":"notify-assigner-op","title":"Task Status Updated","message":"Assigned Task was moved to In Progress.","route":{"page":"tasks","entityId":"notify-task-assigner"},"iconType":"status","targetUserId":"pgtap-notify-pm"}'::jsonb
+      )
+    )
+  ) ->> 'ok')::boolean,
+  true,
+  'Staff can notify the assigning PM when another member owns the company'
 );
 
 reset role;
