@@ -1,7 +1,7 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "staff_comment_notification_context_verified_20260925110000",
+  "status": "service_role_member_grants_verified_20260925120000",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
@@ -114,8 +114,23 @@
         {
           "repository": "20260925110000_staff_comment_notification_context",
           "production": "20260925110000_staff_comment_notification_context"
+        },
+        {
+          "repository": "20260925120000_service_role_member_grants",
+          "production": "20260925120000_service_role_member_grants"
         }
       ]
+    },
+    "serviceRoleMemberGrants": {
+      "appliedAt": "2026-09-25",
+      "migration": "20260925120000_service_role_member_grants",
+      "method": "Supabase Management API database/query (owner personal access token)",
+      "rootCause": "The invite edge function finalizes the member through a SECURITY DEFINER RPC then sets worker_type with a direct service_role PostgREST update. service_role held only REFERENCES/TRIGGER/TRUNCATE on aitask_members, so the update was denied and the function returned 'Member created, but worker type could not be saved.'",
+      "liveVerification": {
+        "serviceRoleMemberUpdateBefore": "42501 permission denied for table aitask_members",
+        "serviceRoleMemberUpdateAfter": "200 updated row",
+        "inviteEdgeFunctionResponse": "201 created without warning"
+      }
     },
     "staffNotificationContext": {
       "appliedAt": "2026-09-25",
@@ -476,7 +491,8 @@
     "20260923120000_client_ownership_backfill",
     "20260923130000_task_guard_fixes",
     "20260923140000_editable_default_roles",
-    "20260925110000_staff_comment_notification_context"
+    "20260925110000_staff_comment_notification_context",
+    "20260925120000_service_role_member_grants"
   ],
   "pendingProductionMigrations": []
 }
