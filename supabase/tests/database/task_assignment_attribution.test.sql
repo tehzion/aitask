@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(5);
+select plan(8);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -11,7 +11,8 @@ insert into auth.users (
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000942', 'authenticated', 'authenticated', 'pgtap-assign-pm1@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000943', 'authenticated', 'authenticated', 'pgtap-assign-pm2@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000944', 'authenticated', 'authenticated', 'pgtap-assign-staff@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
-  ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000945', 'authenticated', 'authenticated', 'pgtap-assign-staff2@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
+  ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000945', 'authenticated', 'authenticated', 'pgtap-assign-staff2@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000946', 'authenticated', 'authenticated', 'pgtap-assign-pmempty@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
 
 insert into public.aitask_workspaces(id, name)
 values ('pgtap-assign', 'Task assignment attribution test workspace');
@@ -23,7 +24,8 @@ insert into public.aitask_members(
   ('pgtap-assign-pm1', 'pgtap-assign', '00000000-0000-0000-0000-000000000942', 'PM One', 'pgtap-assign-pm1@aitask.local', 'Project Manager', 'Management', array['Management'], '{}'::jsonb, false),
   ('pgtap-assign-pm2', 'pgtap-assign', '00000000-0000-0000-0000-000000000943', 'PM Two', 'pgtap-assign-pm2@aitask.local', 'Project Manager', 'Management', array['Management'], '{}'::jsonb, false),
   ('pgtap-assign-staff', 'pgtap-assign', '00000000-0000-0000-0000-000000000944', 'Staff One', 'pgtap-assign-staff@aitask.local', 'Staff', 'Designer', array['Designer'], '{}'::jsonb, false),
-  ('pgtap-assign-staff2', 'pgtap-assign', '00000000-0000-0000-0000-000000000945', 'Staff Two', 'pgtap-assign-staff2@aitask.local', 'Staff', 'Designer', array['Designer'], '{}'::jsonb, false);
+  ('pgtap-assign-staff2', 'pgtap-assign', '00000000-0000-0000-0000-000000000945', 'Staff Two', 'pgtap-assign-staff2@aitask.local', 'Staff', 'Designer', array['Designer'], '{}'::jsonb, false),
+  ('pgtap-assign-pmempty', 'pgtap-assign', '00000000-0000-0000-0000-000000000946', 'PM Empty', 'pgtap-assign-pmempty@aitask.local', 'Project Manager', '', array[]::text[], '{}'::jsonb, false);
 
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values
@@ -74,6 +76,40 @@ select is(
   (select data ->> 'assignedBy' from public.aitask_entities where workspace_id = 'pgtap-assign' and entity_type = 'task' and entity_id = 'assign-pm1-task'),
   'pgtap-assign-pm1',
   'a non-assignment edit keeps the original assigner'
+);
+
+-- A payload that tries to spoof the assigner on a non-assignment edit is ignored.
+select is(
+  (public.aitask_execute_command(
+    'pgtap-assign', gen_random_uuid(), 'task.update',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'update', 'entityType', 'task', 'entityId', 'assign-pm1-task',
+      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-assign' and entity_type = 'task' and entity_id = 'assign-pm1-task'),
+      'data', '{"id":"assign-pm1-task","clientId":"assign-pm1-client","clientName":"Assign PM One Co","projectId":"assign-pm1-project","title":"Portfolio Task Renamed","department":"Designer","assignedTo":"pgtap-assign-staff2","assignedBy":"pgtap-assign-pm2","assignedAt":"2000-01-01T00:00:00.000Z","createdBy":"pgtap-assign-staff","status":"Pending","visibility":"internal"}'::jsonb
+    ))
+  ) ->> 'ok')::boolean,
+  true,
+  'a non-assignment edit with a spoofed assigner is accepted'
+);
+
+select is(
+  (select data ->> 'assignedBy' from public.aitask_entities where workspace_id = 'pgtap-assign' and entity_type = 'task' and entity_id = 'assign-pm1-task'),
+  'pgtap-assign-pm1',
+  'the spoofed assigner is overwritten with the stored attribution'
+);
+
+-- A Project Manager with no departments can still be the assignee.
+select is(
+  (public.aitask_execute_command(
+    'pgtap-assign', gen_random_uuid(), 'task.update',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'update', 'entityType', 'task', 'entityId', 'assign-pm1-task',
+      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-assign' and entity_type = 'task' and entity_id = 'assign-pm1-task'),
+      'data', '{"id":"assign-pm1-task","clientId":"assign-pm1-client","clientName":"Assign PM One Co","projectId":"assign-pm1-project","title":"Portfolio Task","department":"Designer","assignedTo":"pgtap-assign-pmempty","createdBy":"pgtap-assign-staff","status":"Pending","visibility":"internal"}'::jsonb
+    ))
+  ) ->> 'ok')::boolean,
+  true,
+  'a department-less Project Manager can be the assignee'
 );
 
 reset role;

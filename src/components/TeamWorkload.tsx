@@ -397,13 +397,14 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
           <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-5">
             <div className="min-w-0">
               <p className="text-xs font-medium text-blue-700">Team workload</p>
-              <h3 id={titleId} data-autofocus tabIndex={-1} className="mt-1 truncate text-xl font-semibold text-slate-950 outline-none">{selectedSummary.member.name}</h3>
+              <h3 id={titleId} tabIndex={-1} className="mt-1 truncate text-xl font-semibold text-slate-950 outline-none">{selectedSummary.member.name}</h3>
               <p id={descriptionId} className="mt-1 text-sm text-slate-500">
                 {getMemberDepartments(selectedSummary.member).join(' · ') || getRoleDisplayName(selectedSummary.member.role)}
               </p>
             </div>
             <button
               type="button"
+              data-autofocus
               onClick={() => setSelectedMemberId(null)}
               className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
               aria-label="Close team member details"

@@ -2294,7 +2294,6 @@ const Approvals: React.FC = () => {
         <ModalShell
           labelledBy={deleteMemberTitleId}
           onClose={() => setUserToDelete(null)}
-          overlayClassName="z-[60]"
           panelClassName="max-w-sm "
         >
             <div className="p-6 text-center">

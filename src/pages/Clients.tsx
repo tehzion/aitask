@@ -20,6 +20,7 @@ import { Badge, Button, PageHeader, ProgressBar, StatusChip } from '../component
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
 import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canEditProject, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
+import { resolveClientAddedDate } from '../lib/clientDates';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
@@ -51,6 +52,9 @@ type ClientSummary = {
   latestTaskId?: string;
   lastActivity?: string;
   addedAt?: string;
+  /** Set when the company has an explicit "Client since" date, which then wins
+   *  over older task/project start dates for the "Client Added" column. */
+  addedAtPinned?: boolean;
   latestTaskDate?: string;
 };
 
@@ -262,6 +266,7 @@ const Clients: React.FC = () => {
     };
 
     const rememberAdded = (summary: ClientSummary, value?: string) => {
+      if (summary.addedAtPinned) return;
       if (!value) return;
       const t = getActivityTime(value);
       if (!t) return;
@@ -278,7 +283,13 @@ const Clients: React.FC = () => {
       summary.profile = profile;
       summary.sources.add('Profile');
       rememberActivity(summary, profile.updatedAt || profile.createdAt);
-      rememberAdded(summary, profile.clientSince || profile.createdAt);
+      const added = resolveClientAddedDate(profile.clientSince, profile.createdAt);
+      if (added.pinned && added.value) {
+        summary.addedAt = added.value;
+        summary.addedAtPinned = true;
+      } else {
+        rememberAdded(summary, added.value);
+      }
     });
 
     [...tasks]
@@ -941,7 +952,7 @@ const Clients: React.FC = () => {
                           }}
                         >
                           <option value="">{t('Unassigned')}</option>
-                          {users.filter(user => user.role !== 'Client').sort((a, b) => a.name.localeCompare(b.name)).map(user => (
+                          {users.filter(user => ['Project Manager', 'HOD'].includes(user.role)).sort((a, b) => a.name.localeCompare(b.name)).map(user => (
                             <option key={user.id} value={user.id}>{user.name} · {t(getRoleDisplayName(user.role))}</option>
                           ))}
                         </select>

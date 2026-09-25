@@ -3359,7 +3359,7 @@ export const useStore = create<StoreState>()(
         if (data.website?.trim() && !website) return { ok: false, error: 'Website must be a valid HTTPS URL.' };
         if (data.facebookPage?.trim() && !facebookPage) return { ok: false, error: 'Facebook page must be a valid HTTPS URL.' };
         const clientSince = data.clientSince?.trim() || undefined;
-        if (clientSince && !/^\d{4}-\d{2}-\d{2}$/.test(clientSince)) return { ok: false, error: 'Choose a valid client since date.' };
+        if (clientSince && !isValidIsoDate(clientSince)) return { ok: false, error: 'Choose a valid client since date.' };
 
         const now = new Date().toISOString();
         const client: ClientProfile = {
@@ -3401,7 +3401,7 @@ export const useStore = create<StoreState>()(
 
         const existing = state.clients.find(client => normalizeClientKey(client.clientName) === normalizeClientKey(name));
         const clientSince = data.clientSince !== undefined ? (data.clientSince.trim() || undefined) : existing?.clientSince;
-        if (clientSince && !/^\d{4}-\d{2}-\d{2}$/.test(clientSince)) return { ok: false, error: 'Choose a valid client since date.' };
+        if (clientSince && !isValidIsoDate(clientSince)) return { ok: false, error: 'Choose a valid client since date.' };
         const now = new Date().toISOString();
         const profile: ClientProfile = {
           id: existing?.id || nowId('CL'),
@@ -3533,7 +3533,9 @@ export const useStore = create<StoreState>()(
         const nextOwner = ownerId || undefined;
         if (nextOwner) {
           const owner = state.users.find(user => user.id === nextOwner);
-          if (!owner || owner.role === 'Client') return { ok: false, error: 'Choose an internal member as the owner.' };
+          if (!owner || !['Project Manager', 'HOD'].includes(owner.role)) {
+            return { ok: false, error: 'Choose a Project Manager or HOD as the owner.' };
+          }
         }
         if ((client.createdBy || undefined) === nextOwner) return { ok: true };
         const now = new Date().toISOString();
@@ -3914,7 +3916,11 @@ export const useStore = create<StoreState>()(
         const nextBillingDay = data.billingDay !== undefined
           ? Math.min(31, Math.max(1, Math.trunc(data.billingDay)))
           : plan.billingDay;
-        const nextContractEnd = data.contractEndDate && isValidIsoDate(data.contractEndDate) ? data.contractEndDate : undefined;
+        // Only change the contract end when the caller supplies the field; an
+        // omitted key preserves the stored value. Callers clear it by passing ''.
+        const nextContractEnd = data.contractEndDate !== undefined
+          ? (data.contractEndDate && isValidIsoDate(data.contractEndDate) ? data.contractEndDate : undefined)
+          : plan.contractEndDate;
         if (nextContractEnd && nextContractEnd < nextStartDate) return { ok: false, error: 'Contract end date cannot be before the start date.' };
         const now = new Date().toISOString();
         const next: ClientServicePlan = {

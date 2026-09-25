@@ -287,7 +287,6 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       labelledBy={titleId}
       describedBy={descriptionId}
       onClose={handleClose}
-      overlayClassName="z-[60]"
       panelClassName="max-w-md"
     >
 

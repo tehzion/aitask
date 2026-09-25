@@ -1,7 +1,7 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "staff_notification_assigner_recipient_verified_20260925130000",
+  "status": "task_attribution_and_assignment_hardening_20260926120000",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
@@ -122,8 +122,30 @@
         {
           "repository": "20260925130000_staff_notification_assigner_recipient",
           "production": "20260925130000_staff_notification_assigner_recipient"
+        },
+        {
+          "repository": "20260926100000_task_attribution_and_staff_context_hardening",
+          "production": "20260926100000_task_attribution_and_staff_context_hardening"
+        },
+        {
+          "repository": "20260926110000_service_role_least_privilege",
+          "production": "20260926110000_service_role_least_privilege"
+        },
+        {
+          "repository": "20260926120000_pm_assignee_department_optional",
+          "production": "20260926120000_pm_assignee_department_optional"
         }
       ]
+    },
+    "taskAttributionAndAssignmentHardening": {
+      "appliedAt": "2026-09-26",
+      "method": "Supabase Management API database/query (owner personal access token)",
+      "migrations": [
+        "20260926100000_task_attribution_and_staff_context_hardening",
+        "20260926110000_service_role_least_privilege",
+        "20260926120000_pm_assignee_department_optional"
+      ],
+      "notes": "Restore stored assignedBy/assignedAt on non-assignment task edits; seed the Staff task context from data.taskId only; reduce service_role on aitask_members to SELECT/UPDATE; allow department-less Project Managers as task assignees. Verified with pgTAP task_assignment_attribution and live probes."
     },
     "staffNotificationAssignerRecipient": {
       "appliedAt": "2026-09-25",
@@ -510,7 +532,10 @@
     "20260923140000_editable_default_roles",
     "20260925110000_staff_comment_notification_context",
     "20260925120000_service_role_member_grants",
-    "20260925130000_staff_notification_assigner_recipient"
+    "20260925130000_staff_notification_assigner_recipient",
+    "20260926100000_task_attribution_and_staff_context_hardening",
+    "20260926110000_service_role_least_privilege",
+    "20260926120000_pm_assignee_department_optional"
   ],
   "pendingProductionMigrations": []
 }

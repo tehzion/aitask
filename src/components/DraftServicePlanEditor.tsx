@@ -48,7 +48,7 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
     if (serviceItems.some(item => item.unitPriceMinor < 0 || !Number.isFinite(item.unitPriceMinor))) return setMessage('Unit prices must be non-negative.');
     if (discountType === 'percent' && discountValue > 10000) return setMessage('Percent discount cannot exceed 100%.');
 
-    const result = updateDraftClientPlan(plan.id, { name: trimmedName, contractEndDate: contractEndDate || undefined, serviceItems, discountType, discountValue, taxRateBps });
+    const result = updateDraftClientPlan(plan.id, { name: trimmedName, contractEndDate, serviceItems, discountType, discountValue, taxRateBps });
     if (!result.ok) return setMessage(result.error || 'Unable to update this revision.');
     setSaving(true);
     const committed = await commitPendingMutation('client_plan.manage');

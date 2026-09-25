@@ -102,14 +102,14 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
   };
 
   return (
-    <ModalShell labelledBy={titleId} onClose={() => { if (!saving) onClose(); }} panelClassName="max-w-2xl">
+    <ModalShell labelledBy={titleId} onClose={onClose} panelClassName="max-w-2xl">
       <header className="flex items-start justify-between gap-4 border-b border-line px-5 pb-5 pt-6 sm:px-6">
         <div>
           <p className="calm-eyebrow">{t('Companies · New client')}</p>
           <h2 id={titleId} className="mt-1 text-2xl font-semibold tracking-[-0.035em] text-ink">{createdClientId ? t('Client added') : t('Add a client company')}</h2>
           <p className="mt-1 text-sm text-muted">{createdClientId ? t('The company is ready for projects, service plans, and tasks.') : t('Save the company profile first. A service plan and project can be added next.')}</p>
         </div>
-        <button type="button" aria-label={t('Close')} onClick={onClose} disabled={saving} className="flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink disabled:cursor-wait disabled:opacity-50"><X className="h-5 w-5" /></button>
+        <button type="button" aria-label={t('Close')} onClick={onClose} className="flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-5 w-5" /></button>
       </header>
 
       {createdClientId ? (
@@ -151,7 +151,7 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
             </button>
           )}
           <div className={modalFooter}>
-            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>{t('Cancel')}</Button>
+            <Button type="button" variant="secondary" onClick={onClose}>{t('Cancel')}</Button>
             <Button type="submit" disabled={busy}>{saving ? t('Saving…') : syncBusy && pendingClientId ? t('Waiting for sync…') : pendingClientId ? t('Retry save') : t('Save client')}</Button>
           </div>
         </form>

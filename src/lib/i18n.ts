@@ -2577,6 +2577,7 @@ const zhCopyCoverage: Record<string, string> = {
   'You cannot edit client plans.': '您无法编辑客户方案。',
   'Only Boss Koo can assign a company owner.': '只有 Boss Koo 可以分配公司负责人。',
   'Choose an internal member as the owner.': '请选择一名内部成员作为负责人。',
+  'Choose a Project Manager or HOD as the owner.': '请选择项目经理或部门主管作为负责人。',
   'Unable to assign owner.': '无法分配负责人。',
   'The owner change is waiting to be saved.': '负责人更改正在等待保存。',
 

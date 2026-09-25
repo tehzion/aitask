@@ -56,6 +56,27 @@ describe('client service plan store', () => {
     expect(useStore.getState().clientPlans.find(plan => plan.id === planId)).toMatchObject({ startDate: '2026-09-01', billingDay: 20, contractEndDate: '2028-01-01' });
   });
 
+  it('preserves the contract end date when a draft update omits it and clears it on empty', () => {
+    const created = useStore.getState().createClientWithPlan({
+      clientName: 'Preserve Co', planName: 'Plan', origin: 'custom',
+      serviceItems: [{ id: 'svc-preserve', name: 'Design', platforms: [], unit: 'post', quantity: 1, unitPriceMinor: 10000 }],
+      startDate: '2026-08-15', billingDay: 15, discountType: 'none', discountValue: 0, taxRateBps: 0,
+    });
+    const planId = created.planId!;
+    expect(useStore.getState().updateDraftClientPlan(planId, { contractEndDate: '2027-08-15' }).ok).toBe(true);
+
+    // A name-only update must not wipe the stored contract end date.
+    expect(useStore.getState().updateDraftClientPlan(planId, { name: 'Renamed plan' }).ok).toBe(true);
+    expect(useStore.getState().clientPlans.find(plan => plan.id === planId)).toMatchObject({
+      name: 'Renamed plan',
+      contractEndDate: '2027-08-15',
+    });
+
+    // Passing an empty string clears it.
+    expect(useStore.getState().updateDraftClientPlan(planId, { contractEndDate: '' }).ok).toBe(true);
+    expect(useStore.getState().clientPlans.find(plan => plan.id === planId)?.contractEndDate).toBeUndefined();
+  });
+
   it('keeps commercial actions Project Manager-only', () => {
     useStore.setState({ currentUser: { ...admin, role: 'Staff', departments: ['Designer'], department: 'Designer' } });
     const result = useStore.getState().createClientWithPlan({

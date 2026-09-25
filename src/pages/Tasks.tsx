@@ -347,6 +347,15 @@ const TasksWorkspace: React.FC = () => {
   const activeQuickTask = activeQuickEdit ? tasks.find(t => t.id === activeQuickEdit.taskId) : undefined;
 
   useEffect(() => {
+    if (!activeQuickEdit) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActiveQuickEdit(null);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [activeQuickEdit]);
+
+  useEffect(() => {
     if (!taskIdFilter) return;
     const routedTask = tasks.find(task => task.id === taskIdFilter);
     if (!routedTask) {
@@ -1176,6 +1185,9 @@ const TasksWorkspace: React.FC = () => {
               }}
             />
             <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Quick edit ${currentTask.title}`}
               className="animate-fade-in fixed z-50 bg-white border border-slate-200 rounded-lg shadow-xl p-4 w-64 space-y-4 text-slate-700"
               style={{
                 top: Math.min(activeQuickEdit.y, window.innerHeight - 280),
@@ -1188,6 +1200,7 @@ const TasksWorkspace: React.FC = () => {
                 </span>
                 <button
                   type="button"
+                  autoFocus
                   onClick={() => setActiveQuickEdit(null)}
                   className="text-slate-400 hover:text-slate-600 rounded p-0.5 hover:bg-slate-50"
                   aria-label="Close quick edit"

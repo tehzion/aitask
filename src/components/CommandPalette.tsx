@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, CalendarDays, CheckSquare, FolderKanban, Languages, LayoutDashboard, ListChecks, Moon, Search, Settings, Sun, UserCheck, UserPlus, Users, Keyboard } from 'lucide-react';
+import { BarChart3, CalendarDays, CheckSquare, FolderKanban, Languages, LayoutDashboard, ListChecks, Moon, Search, Settings, Sun, UserCheck, UserPlus, Users, Keyboard, X } from 'lucide-react';
 import ModalShell from './ModalShell';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
@@ -109,6 +109,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onOpen
           className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted/70"
         />
         <kbd className="rounded border border-line bg-inset px-1.5 py-0.5 font-mono text-[10px] text-muted">Esc</kbd>
+        <button type="button" aria-label={t('Close')} onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-4 w-4" /></button>
       </div>
       <h2 id={titleId} className="sr-only">{t('Command palette')}</h2>
       <div className="custom-scrollbar max-h-80 overflow-y-auto p-2">
