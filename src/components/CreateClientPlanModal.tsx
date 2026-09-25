@@ -199,7 +199,7 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
   ];
 
   return (
-    <ModalShell labelledBy={titleId} onClose={() => { if (!saving) onClose(); }} closeOnBackdrop={!saving} panelClassName="h-[min(54rem,calc(100dvh-2rem))] max-w-[88rem]">
+    <ModalShell labelledBy={titleId} onClose={() => { if (!saving) onClose(); }} panelClassName="h-[min(54rem,calc(100dvh-2rem))] max-w-[88rem]">
       <header className="flex items-start justify-between gap-4 border-b border-line px-5 pb-5 pt-6 sm:px-6">
         <div><p className="calm-eyebrow">{client ? 'Service plan' : 'New client'} · Step {step} of 5</p><h2 id={titleId} className="mt-1 text-2xl font-semibold tracking-[-0.035em] text-ink">{client ? 'Create service plan' : 'Create client and service plan'}</h2><p className="mt-1 text-sm text-muted">{client ? 'Create a frozen Draft plan for this existing company.' : 'Save the client and a frozen Draft plan in one workflow.'}</p></div>
         <button type="button" aria-label="Close" onClick={onClose} disabled={saving} className="flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink disabled:cursor-wait disabled:opacity-50"><X className="h-5 w-5" /></button>

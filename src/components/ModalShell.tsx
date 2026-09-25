@@ -12,6 +12,10 @@ interface ModalShellProps {
   closeOnBackdrop?: boolean;
 }
 
+// Backdrop clicks intentionally do NOT close modals by default: forms often hold
+// unsaved data, and a stray click on the gray area should not discard it. Pass
+// closeOnBackdrop to opt a simple, read-only modal back in.
+
 const focusableSelector = [
   'a[href]',
   'button:not([disabled])',
@@ -33,7 +37,7 @@ const ModalShell: React.FC<ModalShellProps> = ({
   onClose,
   panelClassName,
   overlayClassName,
-  closeOnBackdrop = true,
+  closeOnBackdrop = false,
 }) => {
   const panelRef = React.useRef<HTMLDivElement>(null);
   const tokenRef = React.useRef(Symbol('aitask-modal'));

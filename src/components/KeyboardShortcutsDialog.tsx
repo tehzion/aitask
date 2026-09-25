@@ -26,7 +26,7 @@ const KeyboardShortcutsDialog: React.FC<KeyboardShortcutsDialogProps> = ({ isOpe
   if (!isOpen) return null;
 
   return (
-    <ModalShell labelledBy="keyboard-shortcuts-title" describedBy="keyboard-shortcuts-description" onClose={onClose} panelClassName="max-w-2xl">
+    <ModalShell labelledBy="keyboard-shortcuts-title" describedBy="keyboard-shortcuts-description" onClose={onClose} closeOnBackdrop panelClassName="max-w-2xl">
       <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
         <div>
           <h2 id="keyboard-shortcuts-title" className="text-lg font-semibold text-slate-950 dark:text-white">Keyboard shortcuts</h2>

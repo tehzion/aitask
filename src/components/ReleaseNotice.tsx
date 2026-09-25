@@ -86,6 +86,7 @@ const ReleaseNotice: React.FC<ReleaseNoticeProps> = ({ currentUser, isReady }) =
       labelledBy="service-operations-update-title"
       describedBy="service-operations-update-description"
       onClose={dismiss}
+      closeOnBackdrop
       panelClassName="max-w-2xl"
     >
       <div className="overflow-y-auto px-5 pb-5 pt-6 sm:px-7 sm:pb-7 sm:pt-8">

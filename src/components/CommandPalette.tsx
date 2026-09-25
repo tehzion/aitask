@@ -91,7 +91,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onOpen
   if (!isOpen) return null;
 
   return (
-    <ModalShell labelledBy={titleId} onClose={onClose} panelClassName="max-w-xl">
+    <ModalShell labelledBy={titleId} onClose={onClose} closeOnBackdrop panelClassName="max-w-xl">
       <div className="flex items-center gap-3 border-b border-line px-4 py-3">
         <Search className="h-4 w-4 shrink-0 text-muted" />
         <input

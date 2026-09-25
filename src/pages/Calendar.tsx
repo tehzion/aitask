@@ -1289,7 +1289,6 @@ const Calendar: React.FC = () => {
           labelledBy="calendar-date-editor-title"
           describedBy="calendar-date-editor-description"
           onClose={closeDateEditor}
-          closeOnBackdrop={savingTaskId !== editingTask.id}
           panelClassName="max-w-md"
         >
           <div className={panelHeader}>

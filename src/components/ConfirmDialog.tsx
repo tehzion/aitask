@@ -26,7 +26,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onClose,
   busy = false,
 }) => (
-  <ModalShell labelledBy={labelledBy} onClose={busy ? () => undefined : onClose} panelClassName="max-w-md">
+  <ModalShell labelledBy={labelledBy} onClose={busy ? () => undefined : onClose} closeOnBackdrop={!busy} panelClassName="max-w-md">
     <div className="flex items-start gap-3 border-b border-line/70 px-5 py-4">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-red-50 text-red-700">
         <AlertTriangle className="h-5 w-5" aria-hidden="true" />

@@ -102,7 +102,7 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
   };
 
   return (
-    <ModalShell labelledBy={titleId} onClose={() => { if (!saving) onClose(); }} closeOnBackdrop={!saving} panelClassName="max-w-2xl">
+    <ModalShell labelledBy={titleId} onClose={() => { if (!saving) onClose(); }} panelClassName="max-w-2xl">
       <header className="flex items-start justify-between gap-4 border-b border-line px-5 pb-5 pt-6 sm:px-6">
         <div>
           <p className="calm-eyebrow">{t('Companies · New client')}</p>
