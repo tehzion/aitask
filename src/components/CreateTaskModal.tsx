@@ -114,6 +114,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
         .map(name => name.trim().toLowerCase())
     );
     const names = clients
+      .filter(client => !client.discovered)
       .filter(client => client.createdBy === currentUser?.id || visibleKeys.has(client.clientName.trim().toLowerCase()))
       .map(client => client.clientName.trim());
     if (selectedProject) names.push(selectedProject.clientName.trim());

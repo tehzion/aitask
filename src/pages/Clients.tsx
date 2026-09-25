@@ -18,7 +18,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { Badge, Button, PageHeader, ProgressBar, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
-import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
@@ -132,6 +132,7 @@ const Clients: React.FC = () => {
     setCreateTaskModalOpen,
     upsertClientProfile,
     renameClient,
+    assignClientOwner,
     deleteClientProfile,
     commitPendingMutation,
     upgradeRequired,
@@ -148,6 +149,7 @@ const Clients: React.FC = () => {
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
     upsertClientProfile: state.upsertClientProfile,
     renameClient: state.renameClient,
+    assignClientOwner: state.assignClientOwner,
     deleteClientProfile: state.deleteClientProfile,
     commitPendingMutation: state.commitPendingMutation,
     upgradeRequired: state.backend.upgradeRequired === true,
@@ -889,6 +891,27 @@ const Clients: React.FC = () => {
                 <section className="rounded-lg border border-slate-200 bg-white p-4">
                   <h3 className="text-sm font-bold text-slate-900">Work Summary</h3>
                   <div className="mt-3 space-y-2 text-sm text-slate-600">
+                    {isBossKoo(currentUser) && selectedClient.profile && !selectedClient.profile.discovered && (
+                      <p>
+                        <span className="font-semibold text-slate-500">{t('Owner')}:</span>{' '}
+                        <select
+                          aria-label={t('Owner')} data-i18n-skip
+                          className={cn(inputBase, 'mt-1 inline-block w-auto p-2 text-xs')}
+                          value={selectedClient.profile.createdBy || ''}
+                          onChange={async (event) => {
+                            const result = assignClientOwner(selectedClient.profile!.id, event.target.value || undefined);
+                            if (!result.ok) { setProfileError(result.error || 'Unable to assign owner.'); return; }
+                            const saveResult = await commitPendingMutation();
+                            if (!saveResult.ok) setProfileError(saveResult.error || 'The owner change is waiting to be saved.');
+                          }}
+                        >
+                          <option value="">{t('Unassigned')}</option>
+                          {users.filter(user => user.role !== 'Client').sort((a, b) => a.name.localeCompare(b.name)).map(user => (
+                            <option key={user.id} value={user.id}>{user.name} · {t(getRoleDisplayName(user.role))}</option>
+                          ))}
+                        </select>
+                      </p>
+                    )}
                     <p>
                       <span className="font-semibold text-slate-500">Client Added:</span>{' '}
                       <strong className="text-slate-950">

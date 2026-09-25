@@ -2071,6 +2071,8 @@ const translatePattern = (value: string) => {
     [/^New notification: (.+)$/, name => `新通知：${name}`],
     [/^(Personal|Agency) completion period$/, scope => `${scope === 'Personal' ? '个人' : '机构'}完成周期`],
     [/^Review registration for (.+)$/, name => `审核 ${name} 的注册`],
+    [/^Owner updated for "(.+)"\.$/, name => `已更新“${name}”的负责人。`],
+    [/^Owner cleared for "(.+)"\.$/, name => `已清除“${name}”的负责人。`],
     [/^Approve (\d+) registrations as (.+) with their requested departments\?$/, (count, role) => `批准 ${count} 个注册（角色：${role}），并使用其申请的部门？`],
     [/^This step still has (\d+) incomplete predecessor task\(s\)\. Start it anyway\?$/, count => `此步骤仍有 ${count} 个未完成的前置任务，仍要开始吗？`],
   ];
@@ -2554,6 +2556,10 @@ const zhCopyCoverage: Record<string, string> = {
   'View company tasks': '查看公司任务',
   'No tasks in this status': '此状态下没有任务',
   'Viewing tasks for': '正在查看以下任务：',
+  'Only Boss Koo can assign a company owner.': '只有 Boss Koo 可以分配公司负责人。',
+  'Choose an internal member as the owner.': '请选择一名内部成员作为负责人。',
+  'Unable to assign owner.': '无法分配负责人。',
+  'The owner change is waiting to be saved.': '负责人更改正在等待保存。',
 
   // Page-level labels and messages
   'dates updated': '日期已更新',

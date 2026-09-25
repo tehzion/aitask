@@ -337,6 +337,7 @@ interface StoreState {
   createClientProfile: (data: { clientName: string } & ClientProfileInput) => { ok: boolean; id?: string; error?: string };
   upsertClientProfile: (clientName: string, data: ClientProfileInput) => { ok: boolean; id?: string; error?: string };
   renameClient: (oldClientName: string, newClientName: string) => { ok: boolean; error?: string };
+  assignClientOwner: (clientId: string, ownerId?: string) => { ok: boolean; error?: string };
   deleteClientProfile: (clientId: string) => { ok: boolean; error?: string };
   saveServicePackage: (data: Omit<ServicePackage, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'currency'> & { id?: string }) => { ok: boolean; id?: string; error?: string };
   deleteServicePackage: (id: string) => { ok: boolean; error?: string };
@@ -3173,7 +3174,7 @@ export const useStore = create<StoreState>()(
         if (!isValidIsoDate(startDate)) return '';
         if (deadline && (!isValidIsoDate(deadline) || new Date(deadline) < new Date(startDate))) return '';
         if (!projectData.clientId) return '';
-        const client = state.clients.find(item => item.id === projectData.clientId);
+        const client = state.clients.find(item => item.id === projectData.clientId && !item.discovered);
         const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions, { clients: state.clients, projects: state.projects }).map(normalizeClientKey));
         if (!client || normalizeClientKey(client.clientName) !== normalizeClientKey(clientName) || (!canViewAllClients(currentUser, state.rolePermissions) && !visibleClientKeys.has(normalizeClientKey(clientName)))) return '';
         if (state.projects.some(item => {
@@ -3227,7 +3228,7 @@ export const useStore = create<StoreState>()(
         }
         const nextClientId = data.clientId !== undefined ? data.clientId : project.clientId;
         if (nextClientId) {
-          const client = state.clients.find(item => item.id === nextClientId);
+          const client = state.clients.find(item => item.id === nextClientId && !item.discovered);
           const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions, { clients: state.clients, projects: state.projects }).map(normalizeClientKey));
           if (!client || normalizeClientKey(client.clientName) !== normalizeClientKey(clientName) || (!canViewAllClients(currentUser, state.rolePermissions) && !visibleClientKeys.has(normalizeClientKey(clientName)))) {
             return { ok: false, error: 'You can only link this project to a company you can access.' };
@@ -3326,7 +3327,7 @@ export const useStore = create<StoreState>()(
         const name = data.clientName.trim();
         if (!name) return { ok: false, error: 'Company name is required.' };
         if (name.length > 240) return { ok: false, error: 'Company name must be 240 characters or less.' };
-        if (state.clients.some(client => normalizeClientKey(client.clientName) === normalizeClientKey(name))) {
+        if (state.clients.some(client => !client.discovered && normalizeClientKey(client.clientName) === normalizeClientKey(name))) {
           return { ok: false, error: 'This company already exists in the Companies database.' };
         }
         if (data.email?.trim() && !profileEmailPattern.test(data.email.trim())) {
@@ -3493,6 +3494,34 @@ export const useStore = create<StoreState>()(
         }));
 
         useToastStore.getState().addToast(`Client renamed to "${nextName}".`, 'success');
+        return { ok: true };
+      },
+
+      assignClientOwner: (clientId, ownerId) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const currentUser = state.currentUser;
+        if (!canCreateUsers(currentUser, state.rolePermissions)) {
+          return { ok: false, error: 'Only Boss Koo can assign a company owner.' };
+        }
+        const client = state.clients.find(item => item.id === clientId);
+        if (!client) return { ok: false, error: 'Company not found.' };
+        const nextOwner = ownerId || undefined;
+        if (nextOwner) {
+          const owner = state.users.find(user => user.id === nextOwner);
+          if (!owner || owner.role === 'Client') return { ok: false, error: 'Choose an internal member as the owner.' };
+        }
+        if ((client.createdBy || undefined) === nextOwner) return { ok: true };
+        const now = new Date().toISOString();
+        set(current => ({
+          clients: current.clients.map(item => item.id === clientId
+            ? { ...item, createdBy: nextOwner, updatedAt: now }
+            : item),
+        }));
+        useToastStore.getState().addToast(
+          nextOwner ? `Owner updated for "${client.clientName}".` : `Owner cleared for "${client.clientName}".`,
+          'success',
+        );
         return { ok: true };
       },
 
@@ -3666,7 +3695,7 @@ export const useStore = create<StoreState>()(
         if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot create client plans.' };
         const clientName = data.clientName.trim().slice(0, 240);
         if (!clientName) return { ok: false, error: 'Client name is required.' };
-        if (state.clients.some(client => normalizeClientKey(client.clientName) === normalizeClientKey(clientName))) {
+        if (state.clients.some(client => !client.discovered && normalizeClientKey(client.clientName) === normalizeClientKey(clientName))) {
           return { ok: false, error: 'This client already exists. Open the client workspace to add a plan.' };
         }
         const serviceItems = data.serviceItems.map(item => ({
@@ -4552,7 +4581,7 @@ export const useStore = create<StoreState>()(
                   departmentScoped: editingBuiltin ? nextBaseRole === 'HOD' : (data.departmentScoped ?? role.departmentScoped),
                   isProtected: editingBuiltin ? false : role.isProtected,
                   isBuiltin: editingBuiltin ? true : role.isBuiltin,
-                  description: editingBuiltin ? role.description : (data.description?.trim() || undefined),
+                  description: data.description !== undefined ? (data.description.trim() || undefined) : role.description,
                   updatedAt: new Date().toISOString(),
                 }
               : role

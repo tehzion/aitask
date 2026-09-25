@@ -79,6 +79,44 @@ describe('client profile store authorization', () => {
     expect(useStore.getState().clients[0]?.contactPerson).toBe('Alicia');
   });
 
+  it('lets a Project Manager create a real profile for a name that only exists as a discovered placeholder', () => {
+    const admin: User = { id: 'admin-placeholder', name: 'Project Manager', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    useStore.setState({
+      ...initialState,
+      currentUser: admin,
+      users: [admin],
+      clients: [{ id: 'CL-urbaneats', clientName: 'UrbanEats', discovered: true, createdAt: '', updatedAt: '' }],
+      tasks: [],
+      projects: [],
+      rolePermissions: [],
+    }, true);
+
+    const created = useStore.getState().createClientProfile({ clientName: 'UrbanEats' });
+    expect(created.ok).toBe(true);
+    expect(useStore.getState().clients.filter(client => client.clientName === 'UrbanEats')).toHaveLength(2);
+  });
+
+  it('lets only Boss Koo assign a company owner', () => {
+    const boss: User = { id: 'boss-owner', name: 'Boss Koo', role: 'Project Manager', isSuperAdmin: true, departments: ['Management'], department: 'Management' };
+    const pm: User = { id: 'pm-owner', name: 'PM One', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    useStore.setState({
+      ...initialState,
+      currentUser: boss,
+      users: [boss, pm],
+      clients: [{ id: 'CL-owner', clientName: 'Owner Co', createdAt: '', updatedAt: '' }],
+      tasks: [],
+      projects: [],
+      rolePermissions: [],
+    }, true);
+
+    expect(useStore.getState().assignClientOwner('CL-owner', pm.id)).toEqual({ ok: true });
+    expect(useStore.getState().clients[0]?.createdBy).toBe(pm.id);
+
+    useStore.setState({ currentUser: pm });
+    expect(useStore.getState().assignClientOwner('CL-owner', boss.id).ok).toBe(false);
+    expect(useStore.getState().clients[0]?.createdBy).toBe(pm.id);
+  });
+
   it('keeps global rename Project Manager-only', () => {
     useStore.setState({ currentUser: makeStaff(true) });
     const result = useStore.getState().renameClient('Acme', 'Acme Global');
