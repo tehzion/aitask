@@ -62,6 +62,7 @@ import DraftServicePlanEditor from "../components/DraftServicePlanEditor";
 import SideSheet from "../components/SideSheet";
 import ClientServiceWorkspace from "../components/ClientServiceWorkspace";
 import CreateClientPlanModal from "../components/CreateClientPlanModal";
+import EditClientPlanDatesModal from "../components/EditClientPlanDatesModal";
 
 type Tab = "overview" | "plan" | "cycles" | "addons" | "activity";
 const CLIENT_WORKSPACE_TABS_ID = "client-workspace";
@@ -91,6 +92,7 @@ const OperationsClientWorkspace = () => {
   const client = store.clients.find((item) => item.id === clientId);
   const [tab, setTab] = React.useState<Tab>("overview");
   const [planModalOpen, setPlanModalOpen] = React.useState(false);
+  const [planDatesOpen, setPlanDatesOpen] = React.useState(false);
   const [comment, setComment] = React.useState("");
   const [visibility, setVisibility] =
     React.useState<CommentVisibility>("internal");
@@ -453,19 +455,24 @@ const OperationsClientWorkspace = () => {
                   </p>
                 )}
               </div>
-              {activePlan && (
-                <Badge
-                  tone={
-                    activePlan.status === "Active"
-                      ? "emerald"
-                      : activePlan.status === "Draft"
-                        ? "amber"
-                        : "slate"
-                  }
-                >
-                  {activePlan.status}
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                {activePlan && (
+                  <Badge
+                    tone={
+                      activePlan.status === "Active"
+                        ? "emerald"
+                        : activePlan.status === "Draft"
+                          ? "amber"
+                          : "slate"
+                    }
+                  >
+                    {activePlan.status}
+                  </Badge>
+                )}
+                {activePlan && activePlan.status !== "Ended" && canManagePlans && (
+                  <Button variant="secondary" onClick={() => setPlanDatesOpen(true)}>{t('Edit plan dates')}</Button>
+                )}
+              </div>
             </div>
             {activePlan ? (
               <div className="divide-y divide-line/70">
@@ -940,6 +947,7 @@ const OperationsClientWorkspace = () => {
       )}
 
       {planModalOpen && <CreateClientPlanModal client={client} onClose={() => setPlanModalOpen(false)} />}
+      {planDatesOpen && activePlan && <EditClientPlanDatesModal plan={activePlan} onClose={() => setPlanDatesOpen(false)} />}
 
       <SideSheet
         isOpen={addonSheetOpen}

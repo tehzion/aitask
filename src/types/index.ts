@@ -184,6 +184,8 @@ export interface ClientProfile {
   version?: number;
   clientName: string;
   createdBy?: string;
+  /** Optional business date for when the client engagement started (YYYY-MM-DD). */
+  clientSince?: string;
   /** Runtime-only marker for a client created from a work-record name. Never persisted. */
   discovered?: boolean;
   contactPerson?: string;

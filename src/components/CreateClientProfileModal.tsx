@@ -25,7 +25,7 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
   const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const titleId = React.useId();
-  const [form, setForm] = React.useState({ clientName: '', contactPerson: '', email: '', phone: '', address: '', website: '', facebookPage: '', notes: '' });
+  const [form, setForm] = React.useState({ clientName: '', clientSince: '', contactPerson: '', email: '', phone: '', address: '', website: '', facebookPage: '', notes: '' });
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [pendingClientId, setPendingClientId] = React.useState('');
@@ -130,6 +130,7 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
         <form onSubmit={save} className="max-h-[min(44rem,calc(100dvh-10rem))] overflow-y-auto p-5 sm:p-6">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="text-sm font-medium text-ink">{t('Company name *')}<input autoFocus required disabled={Boolean(pendingClientId)} maxLength={240} className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.clientName} onChange={event => update('clientName', event.target.value)} /></label>
+            <label className="text-sm font-medium text-ink">{t('Client since')}<input type="date" disabled={Boolean(pendingClientId)} className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.clientSince} onChange={event => update('clientSince', event.target.value)} /></label>
             <label className="text-sm font-medium text-ink">{t('Contact person')}<input disabled={Boolean(pendingClientId)} className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.contactPerson} onChange={event => update('contactPerson', event.target.value)} /></label>
             <label className="text-sm font-medium text-ink">{t('Email')}<input disabled={Boolean(pendingClientId)} type="email" className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.email} onChange={event => update('email', event.target.value)} /></label>
             <label className="text-sm font-medium text-ink">{t('Phone')}<input disabled={Boolean(pendingClientId)} type="tel" className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.phone} onChange={event => update('phone', event.target.value)} /></label>

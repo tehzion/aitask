@@ -18,12 +18,12 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { Badge, Button, PageHeader, ProgressBar, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
-import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
+import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canEditProject, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
-import { ClientProfile, ClientServicePlan, ServiceCycle } from '../types';
+import { ClientProfile, ClientServicePlan, Project, ServiceCycle } from '../types';
 import ModalShell from '../components/ModalShell';
 import CreateClientProfileModal from '../components/CreateClientProfileModal';
 import CreateClientPlanModal from '../components/CreateClientPlanModal';
@@ -55,6 +55,7 @@ type ClientSummary = {
 };
 
 type ClientProfileForm = {
+  clientSince: string;
   contactPerson: string;
   email: string;
   phone: string;
@@ -65,6 +66,7 @@ type ClientProfileForm = {
 };
 
 const emptyProfileForm: ClientProfileForm = {
+  clientSince: '',
   contactPerson: '',
   email: '',
   phone: '',
@@ -107,6 +109,7 @@ const getClientContact = (client: ClientSummary) => ({
 const getProfileForm = (client: ClientSummary): ClientProfileForm => {
   const contact = getClientContact(client);
   return {
+    clientSince: client.profile?.clientSince || '',
     contactPerson: contact.contactPerson || '',
     email: contact.email || '',
     phone: contact.phone || '',
@@ -174,6 +177,7 @@ const Clients: React.FC = () => {
   const [isDeleteConfirming, setIsDeleteConfirming] = React.useState(false);
   const [isCreateClientOpen, setIsCreateClientOpen] = React.useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = React.useState(false);
+  const [editingProject, setEditingProject] = React.useState<Project | null>(null);
   const [initialProjectClientId, setInitialProjectClientId] = React.useState('');
   const [planClientId, setPlanClientId] = React.useState('');
   const [openMenuClientKey, setOpenMenuClientKey] = React.useState<string | null>(null);
@@ -274,7 +278,7 @@ const Clients: React.FC = () => {
       summary.profile = profile;
       summary.sources.add('Profile');
       rememberActivity(summary, profile.updatedAt || profile.createdAt);
-      rememberAdded(summary, profile.createdAt);
+      rememberAdded(summary, profile.clientSince || profile.createdAt);
     });
 
     [...tasks]
@@ -371,6 +375,16 @@ const Clients: React.FC = () => {
       : null
   ), [clients, selectedClientName]);
 
+  const selectedClientProjects = React.useMemo(() => {
+    if (!selectedClient) return [];
+    const key = getClientKey(selectedClient.name);
+    const profileId = selectedClient.profile?.id;
+    return projects.filter(project => (
+      (profileId && project.clientId === profileId)
+      || getClientKey(project.clientName) === key
+    ));
+  }, [projects, selectedClient]);
+
   const totalTasks = React.useMemo(() => clients.reduce((sum, client) => sum + client.taskCount, 0), [clients]);
   const openTasks = React.useMemo(() => clients.reduce((sum, client) => sum + client.openTaskCount, 0), [clients]);
   const linkedAccounts = React.useMemo(() => clients.reduce((sum, client) => sum + client.accountUsers.length, 0), [clients]);
@@ -422,6 +436,18 @@ const Clients: React.FC = () => {
     setIsDeleteConfirming(false);
     setProfileError('');
     setRenameError('');
+  };
+
+  const openProjectEditor = (project: Project | null, clientId = '') => {
+    setEditingProject(project);
+    setInitialProjectClientId(project?.clientId || clientId);
+    setIsCreateProjectOpen(true);
+  };
+
+  const closeProjectEditor = () => {
+    setIsCreateProjectOpen(false);
+    setEditingProject(null);
+    setInitialProjectClientId('');
   };
 
   const handleProfileSave = async () => {
@@ -534,7 +560,7 @@ const Clients: React.FC = () => {
         meta={<><span>{clients.length} visible companies</span><span aria-hidden="true">·</span><span>{totalTasks} linked tasks</span></>}
         action={<div className="flex flex-wrap gap-2">
           {canCreateClientProfiles(currentUser, rolePermissions) && <Button onClick={() => { clearSearch(); setIsCreateClientOpen(true); }} disabled={upgradeRequired}><Building2 className="h-4 w-4" />New client</Button>}
-          {canAddProjects && <Button variant="secondary" onClick={() => { setInitialProjectClientId(''); setIsCreateProjectOpen(true); }}><Plus className="h-4 w-4" />New project</Button>}
+          {canAddProjects && <Button variant="secondary" onClick={() => openProjectEditor(null)}><Plus className="h-4 w-4" />New project</Button>}
           {canAddTasks && <Button variant="secondary" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />New task</Button>}
         </div>}
       />
@@ -809,6 +835,15 @@ const Clients: React.FC = () => {
                     {isEditingProfile ? (
                       <div className="space-y-3">
                         <div>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">{t('Client since')}</label>
+                          <input
+                            type="date"
+                            className={cn(inputBase, 'p-2 text-xs')}
+                            value={profileForm.clientSince}
+                            onChange={e => setProfileForm({ ...profileForm, clientSince: e.target.value })}
+                          />
+                        </div>
+                        <div>
                           <label className="mb-1 block text-xs font-medium text-slate-600">Contact Person</label>
                           <input
                             type="text"
@@ -958,6 +993,31 @@ const Clients: React.FC = () => {
                     <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{getClientContact(selectedClient).notes}</p>
                   )}
                 </section>
+                <section className="rounded-lg border border-slate-200 bg-white p-4 md:col-span-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-bold text-slate-900">{t('Projects')}</h3>
+                    {canAddProjects && <button type="button" onClick={() => openProjectEditor(null, selectedClient.profile?.id)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">{t('New project')}</button>}
+                  </div>
+                  {selectedClientProjects.length === 0 ? (
+                    <p className="mt-3 text-sm text-slate-400">{t('No projects recorded')}</p>
+                  ) : (
+                    <ul className="mt-3 divide-y divide-slate-100">
+                      {selectedClientProjects.map(project => (
+                        <li key={project.id} className="flex flex-wrap items-center justify-between gap-3 py-2">
+                          <div className="min-w-0">
+                            <p data-i18n-skip className="truncate text-sm font-semibold text-slate-800">{project.projectName}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">{t('Start date')}: {project.startDate || '—'} · {t('Deadline')}: {project.deadline || '—'}</p>
+                          </div>
+                          {canEditProject(currentUser, project, rolePermissions) && (
+                            <button type="button" onClick={() => openProjectEditor(project)} className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50">
+                              {t('Edit project')}
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
               </div>
             </div>
 
@@ -1078,8 +1138,7 @@ const Clients: React.FC = () => {
         onClose={() => { setIsCreateClientOpen(false); clearSearch(); }}
         onCreateProject={canAddProjects ? (clientId) => {
           setIsCreateClientOpen(false);
-          setInitialProjectClientId(clientId);
-          setIsCreateProjectOpen(true);
+          openProjectEditor(null, clientId);
         } : undefined}
         onAddServicePlan={canManageClientPlans(currentUser, rolePermissions) ? (clientId) => {
           setIsCreateClientOpen(false);
@@ -1088,8 +1147,9 @@ const Clients: React.FC = () => {
       />}
       <CreateProjectModal
         isOpen={isCreateProjectOpen}
+        project={editingProject}
         initialClientId={initialProjectClientId}
-        onClose={() => { setIsCreateProjectOpen(false); setInitialProjectClientId(''); }}
+        onClose={closeProjectEditor}
       />
       {planClientId && <CreateClientPlanModal
         client={clientProfiles.find(client => client.id === planClientId)}

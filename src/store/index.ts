@@ -219,7 +219,7 @@ export type ClientPlanSetupInput = {
 };
 
 type ProjectUpdateInput = Partial<Pick<Project, 'clientId' | 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline'>>;
-type ClientProfileInput = Partial<Pick<ClientProfile, 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes'>>;
+type ClientProfileInput = Partial<Pick<ClientProfile, 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes' | 'clientSince'>>;
 type ClientPlanInput = Omit<ClientPlanSetupInput, 'clientName' | 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes'>;
 type AddMemberInput = Omit<User, 'id' | 'avatar' | 'isSuperAdmin'> & {
   registrationId?: string;
@@ -346,7 +346,8 @@ interface StoreState {
   createClientWithPlan: (data: ClientPlanSetupInput) => { ok: boolean; clientId?: string; planId?: string; error?: string };
   createClientPlan: (clientId: string, data: ClientPlanInput) => { ok: boolean; planId?: string; error?: string };
   createClientPlanRevision: (planId: string) => { ok: boolean; planId?: string; error?: string };
-  updateDraftClientPlan: (planId: string, data: Partial<Pick<ClientServicePlan, 'name' | 'serviceItems' | 'discountType' | 'discountValue' | 'taxRateBps' | 'contractEndDate'>>) => { ok: boolean; error?: string };
+  updateDraftClientPlan: (planId: string, data: Partial<Pick<ClientServicePlan, 'name' | 'serviceItems' | 'discountType' | 'discountValue' | 'taxRateBps' | 'startDate' | 'billingDay' | 'contractEndDate'>>) => { ok: boolean; error?: string };
+  updateActivePlanDates: (planId: string, data: Partial<Pick<ClientServicePlan, 'billingDay' | 'contractEndDate'>>) => { ok: boolean; error?: string };
   activateClientPlan: (planId: string) => { ok: boolean; cycleId?: string; error?: string };
   setClientPlanStatus: (planId: string, status: ClientServicePlan['status']) => { ok: boolean; error?: string };
   setServiceCycleStatus: (cycleId: string, status: ServiceCycleStatus) => { ok: boolean; error?: string };
@@ -3340,12 +3341,15 @@ export const useStore = create<StoreState>()(
         const facebookPage = data.facebookPage?.trim() ? safeHttpsUrl(data.facebookPage) : undefined;
         if (data.website?.trim() && !website) return { ok: false, error: 'Website must be a valid HTTPS URL.' };
         if (data.facebookPage?.trim() && !facebookPage) return { ok: false, error: 'Facebook page must be a valid HTTPS URL.' };
+        const clientSince = data.clientSince?.trim() || undefined;
+        if (clientSince && !/^\d{4}-\d{2}-\d{2}$/.test(clientSince)) return { ok: false, error: 'Choose a valid client since date.' };
 
         const now = new Date().toISOString();
         const client: ClientProfile = {
           id: nowId('CL'),
           clientName: name,
           createdBy: currentUser.id,
+          clientSince,
           contactPerson: cleanProfileText(data.contactPerson, 160),
           email: cleanProfileText(data.email, 320),
           phone: cleanProfileText(data.phone, 80),
@@ -3379,11 +3383,14 @@ export const useStore = create<StoreState>()(
         if (data.facebookPage?.trim() && !facebookPage) return { ok: false, error: 'Facebook page must be a valid HTTPS URL.' };
 
         const existing = state.clients.find(client => normalizeClientKey(client.clientName) === normalizeClientKey(name));
+        const clientSince = data.clientSince !== undefined ? (data.clientSince.trim() || undefined) : existing?.clientSince;
+        if (clientSince && !/^\d{4}-\d{2}-\d{2}$/.test(clientSince)) return { ok: false, error: 'Choose a valid client since date.' };
         const now = new Date().toISOString();
         const profile: ClientProfile = {
           id: existing?.id || nowId('CL'),
           clientName: existing?.clientName || name,
           createdBy: existing?.createdBy || currentUser?.id,
+          clientSince,
           contactPerson: cleanProfileText(data.contactPerson, 160),
           email: cleanProfileText(data.email, 320),
           phone: cleanProfileText(data.phone, 80),
@@ -3884,15 +3891,25 @@ export const useStore = create<StoreState>()(
           workflow: item.workflow ? { ...item.workflow, steps: item.workflow.steps.map(step => ({ ...step })) } : undefined,
         })).filter(item => item.name);
         if (!serviceItems.length || serviceItems.reduce((sum, item) => sum + item.quantity, 0) > 400) return { ok: false, error: 'Draft plans need 1–400 deliverable slots.' };
+        const nextStartDate = data.startDate !== undefined
+          ? (isValidIsoDate(data.startDate) ? data.startDate : plan.startDate)
+          : plan.startDate;
+        const nextBillingDay = data.billingDay !== undefined
+          ? Math.min(31, Math.max(1, Math.trunc(data.billingDay)))
+          : plan.billingDay;
+        const nextContractEnd = data.contractEndDate && isValidIsoDate(data.contractEndDate) ? data.contractEndDate : undefined;
+        if (nextContractEnd && nextContractEnd < nextStartDate) return { ok: false, error: 'Contract end date cannot be before the start date.' };
         const now = new Date().toISOString();
         const next: ClientServicePlan = {
           ...plan,
           ...data,
           name: data.name?.trim().slice(0, 160) || plan.name,
           serviceItems,
+          startDate: nextStartDate,
+          billingDay: nextBillingDay,
           discountValue: Math.max(0, Math.trunc(data.discountValue ?? plan.discountValue)),
           taxRateBps: Math.min(10_000, Math.max(0, Math.trunc(data.taxRateBps ?? plan.taxRateBps))),
-          contractEndDate: data.contractEndDate && isValidIsoDate(data.contractEndDate) ? data.contractEndDate : undefined,
+          contractEndDate: nextContractEnd,
           updatedAt: now,
         };
         const pricing = makePricingSnapshot({
@@ -3906,6 +3923,28 @@ export const useStore = create<StoreState>()(
             ? current.servicePricingSnapshots.map(item => item.parentId === plan.id ? { ...pricing, createdAt: item.createdAt } : item)
             : [...current.servicePricingSnapshots, pricing],
         }));
+        return { ok: true };
+      },
+
+      updateActivePlanDates: (planId, data) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot edit client plans.' };
+        const plan = state.clientPlans.find(item => item.id === planId);
+        if (!plan) return { ok: false, error: 'Plan not found.' };
+        if (plan.status !== 'Active' && plan.status !== 'Paused') return { ok: false, error: 'Only active or paused plans can be edited here.' };
+        const nextBillingDay = data.billingDay !== undefined ? Math.min(31, Math.max(1, Math.trunc(data.billingDay))) : plan.billingDay;
+        const nextContractEnd = data.contractEndDate !== undefined
+          ? (data.contractEndDate && isValidIsoDate(data.contractEndDate) ? data.contractEndDate : undefined)
+          : plan.contractEndDate;
+        if (nextContractEnd && nextContractEnd < plan.startDate) return { ok: false, error: 'Contract end date cannot be before the start date.' };
+        const now = new Date().toISOString();
+        set(current => ({
+          clientPlans: current.clientPlans.map(item => item.id === planId
+            ? { ...item, billingDay: nextBillingDay, contractEndDate: nextContractEnd, updatedAt: now }
+            : item),
+        }));
+        useToastStore.getState().addToast(`Plan dates updated for "${plan.clientName}".`, 'success');
         return { ok: true };
       },
 

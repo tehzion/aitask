@@ -284,6 +284,7 @@ const parseClientProfile = (value: unknown): ClientProfile | null => {
     version: Math.max(1, Number(value.version) || 1),
     clientName,
     createdBy: optionalText(value.createdBy, 160),
+    clientSince: /^\d{4}-\d{2}-\d{2}$/.test(String(value.clientSince || '')) ? String(value.clientSince) : undefined,
     contactPerson: optionalText(value.contactPerson, 160),
     email: optionalText(value.email, 320),
     phone: optionalText(value.phone, 80),

@@ -35,6 +35,27 @@ describe('client service plan store', () => {
     expect(useStore.getState().serviceCycles).toHaveLength(1);
   });
 
+  it('lets a Project Manager edit draft plan dates and active billing/contract dates', () => {
+    const created = useStore.getState().createClientWithPlan({
+      clientName: 'Dates Co', planName: 'Plan', origin: 'custom',
+      serviceItems: [{ id: 'svc-dates', name: 'Design', platforms: [], unit: 'post', quantity: 1, unitPriceMinor: 10000 }],
+      startDate: '2026-08-15', billingDay: 15, discountType: 'none', discountValue: 0, taxRateBps: 0,
+    });
+    const planId = created.planId!;
+
+    const rejected = useStore.getState().updateDraftClientPlan(planId, { startDate: '2026-09-01', contractEndDate: '2025-01-01' });
+    expect(rejected.ok).toBe(false);
+
+    const draft = useStore.getState().updateDraftClientPlan(planId, { startDate: '2026-09-01', billingDay: 5, contractEndDate: '2027-09-01' });
+    expect(draft.ok).toBe(true);
+    expect(useStore.getState().clientPlans.find(plan => plan.id === planId)).toMatchObject({ startDate: '2026-09-01', billingDay: 5, contractEndDate: '2027-09-01' });
+
+    expect(useStore.getState().activateClientPlan(planId).ok).toBe(true);
+    const active = useStore.getState().updateActivePlanDates(planId, { billingDay: 20, contractEndDate: '2028-01-01' });
+    expect(active.ok).toBe(true);
+    expect(useStore.getState().clientPlans.find(plan => plan.id === planId)).toMatchObject({ startDate: '2026-09-01', billingDay: 20, contractEndDate: '2028-01-01' });
+  });
+
   it('keeps commercial actions Project Manager-only', () => {
     useStore.setState({ currentUser: { ...admin, role: 'Staff', departments: ['Designer'], department: 'Designer' } });
     const result = useStore.getState().createClientWithPlan({
