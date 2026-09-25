@@ -193,6 +193,22 @@ describe('remote snapshot validation', () => {
     expect(parseTask({ ...taskFixture, department: 'Video Shooting' })?.department).toBe('Video Shooting');
   });
 
+  it('preserves company ownership when parsing a workspace snapshot', () => {
+    const parsed = parseWorkspaceSnapshot({
+      clients: [{
+        id: 'CL-1',
+        clientName: '35 Hair Lab',
+        createdBy: 'pm-1',
+        createdAt: '2026-09-25T00:00:00.000Z',
+        updatedAt: '2026-09-25T00:00:00.000Z',
+      }],
+    } as never);
+
+    expect(parsed.clients).toHaveLength(1);
+    expect(parsed.clients[0].createdBy).toBe('pm-1');
+    expect(parsed.clients[0].clientName).toBe('35 Hair Lab');
+  });
+
   it('does not carry password or token fields into users', () => {
     const parsed = parseWorkspaceSnapshot({
       users: [{
