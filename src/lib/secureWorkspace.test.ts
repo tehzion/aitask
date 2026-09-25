@@ -271,6 +271,21 @@ describe('buildOperations', () => {
     expect(inferSecureCommandType(operations)).toBe('client.upsert');
   });
 
+  it('never emits an auto-discovered placeholder client as an insert', () => {
+    const state: PersistedWorkspaceState = {
+      ...stateWithUser('member-1'),
+      clients: [{
+        id: 'CL-urbaneats',
+        clientName: 'UrbanEats',
+        discovered: true,
+        createdAt: '1970-01-01T00:00:00.000Z',
+        updatedAt: '1970-01-01T00:00:00.000Z',
+      }],
+    };
+    const operations = buildOperations(state, { excludeSuperAdminEntities: true, actorMemberId: 'member-1' });
+    expect(operations.some(op => op.entityType === 'client')).toBe(false);
+  });
+
   it('sends a Project Manager task insert as task.create without Boss-only ops', () => {
     const task: Task = {
       id: 'task-1',

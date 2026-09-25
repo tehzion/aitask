@@ -538,6 +538,7 @@ const stripRuntimeFields = <T extends Record<string, unknown>>(value: T) => {
   delete copy.clientProjection;
   delete copy.visibleToCurrentUser;
   delete copy.unreadByUserIds;
+  delete copy.discovered;
   return copy;
 };
 
@@ -643,7 +644,10 @@ const stateToRows = (state: PersistedWorkspaceState) => {
   state.users.filter(user => !user.directoryOnly).forEach(user => (
     push('member', 'member', user.id, memberData(user), user.version)
   ));
-  state.clients?.forEach(item => push('entity', 'client', item.id, item as unknown as Record<string, unknown>, item.version));
+  // Clients discovered from work records exist only in the local view. Skipping
+  // them here keeps them out of the command diff so a save never tries to insert
+  // a placeholder that collides with a company another member owns.
+  state.clients?.filter(item => !item.discovered).forEach(item => push('entity', 'client', item.id, item as unknown as Record<string, unknown>, item.version));
   state.projects.forEach(item => push('entity', 'project', item.id, item as unknown as Record<string, unknown>, item.version));
   state.tasks.forEach(item => {
     const { comments = [], approvalHistory = [], ...task } = item;

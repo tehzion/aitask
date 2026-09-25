@@ -184,6 +184,8 @@ export interface ClientProfile {
   version?: number;
   clientName: string;
   createdBy?: string;
+  /** Runtime-only marker for a client created from a work-record name. Never persisted. */
+  discovered?: boolean;
   contactPerson?: string;
   email?: string;
   phone?: string;

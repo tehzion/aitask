@@ -629,7 +629,7 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
     if (byKey.has(key)) return;
     const now = new Date(0).toISOString();
     const slug = key.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'client';
-    const client: ClientProfile = { id: `CL-${slug}`, clientName: name, createdBy: ownerByKey.get(key), createdAt: now, updatedAt: now };
+    const client: ClientProfile = { id: `CL-${slug}`, clientName: name, createdBy: ownerByKey.get(key), discovered: true, createdAt: now, updatedAt: now };
     byKey.set(key, client);
     clients.push(client);
   });
