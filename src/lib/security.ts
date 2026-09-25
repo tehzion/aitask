@@ -336,7 +336,10 @@ export const parseTask = (value: unknown): Task | null => {
   const clientApprovalStatus = cleanText(value.clientApprovalStatus, 20) as ClientApprovalStatus;
   const recurrenceFrequency = cleanText(value.recurrenceFrequency, 20) as RecurrenceFrequency;
   const generatedFromDeliverable = value.generatedFromDeliverable === true;
-  if (!id || !clientName || !serviceType || !title || !department || (!assignedTo && !generatedFromDeliverable) || !createdBy || !priorities.has(priority) || !status) return null;
+  // Unassigned tasks are a supported state (the create form offers "Unassigned"
+  // and deliverable-generated chains can start without an assignee), so do not
+  // drop a task just because it has no assignee.
+  if (!id || !clientName || !serviceType || !title || !department || !createdBy || !priorities.has(priority) || !status) return null;
   const today = getTodayInputDate();
 
   return {

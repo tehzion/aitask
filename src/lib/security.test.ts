@@ -132,6 +132,12 @@ describe('remote snapshot validation', () => {
     expect(parsed?.comments?.[0].version).toBe(3);
   });
 
+  it('keeps unassigned tasks instead of dropping them', () => {
+    const parsed = parseTask({ ...taskFixture, assignedTo: '' });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.assignedTo).toBe('');
+  });
+
   it('accepts only valid ISO completion timestamps', () => {
     expect(parseTask({
       ...taskFixture,

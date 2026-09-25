@@ -20,6 +20,7 @@ import type { User } from '../types';
 import { getMemberDepartments } from '../lib/departments';
 import OperationsGlance from '../components/OperationsGlance';
 import { getTrackedMonthlyCompletions, isTaskOpen } from '../lib/taskReporting';
+import { isTaskCompleted } from '../lib/taskCompletion';
 import ClientPortalDashboard from '../components/ClientPortalDashboard';
 import TeamWorkload from '../components/TeamWorkload';
 import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
@@ -233,21 +234,21 @@ const Dashboard: React.FC = () => {
     const activeProjects = visibleProjects.length;
       
     const pendingTasks = tasks.filter(isTaskOpen).length;
-    const completedTasks = tasks.filter(t => t.isCompleted).length;
+    const completedTasks = tasks.filter(isTaskCompleted).length;
     
     const overdueTasks = tasks.filter(t => {
       const dueDate = parseOptionalDate(t.dueDate);
-      return Boolean(dueDate && !t.isCompleted && isBefore(dueDate, today) && !isToday(dueDate));
+      return Boolean(dueDate && isTaskOpen(t) && isBefore(dueDate, today) && !isToday(dueDate));
     }).length;
     
     const dueTodayTasks = tasks.filter(t => {
       const dueDate = parseOptionalDate(t.dueDate);
-      return Boolean(dueDate && !t.isCompleted && isToday(dueDate));
+      return Boolean(dueDate && isTaskOpen(t) && isToday(dueDate));
     }).length;
     
     const dueThisWeekTasks = tasks.filter(t => {
       const dueDate = parseOptionalDate(t.dueDate);
-      return Boolean(dueDate && !t.isCompleted && isThisWeek(dueDate));
+      return Boolean(dueDate && isTaskOpen(t) && isThisWeek(dueDate));
     }).length;
 
     return { activeProjects, pendingTasks, completedTasks, overdueTasks, dueTodayTasks, dueThisWeekTasks };

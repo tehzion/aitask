@@ -6,6 +6,8 @@ import { useStore } from '../store';
 import { canViewServicePrices, getClientKey, getDashboardPersona, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { formatMoney } from '../lib/serviceManagement';
 import { parseOptionalDate } from '../lib/utils';
+import { isTaskCompleted } from '../lib/taskCompletion';
+import { isTaskOpen } from '../lib/taskReporting';
 import { CountLabel, DataRow, ProgressBar, StatGroup, StatusChip, Surface } from './ui';
 import { formatLocalizedDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
@@ -75,20 +77,20 @@ const ServiceRoleDashboard = () => {
   const serviceTasks = visibleTasks.filter(task => Boolean(task.clientId));
   const myTasks = serviceTasks.filter(task => task.assignedTo === store.currentUser?.id);
   const scopeTasks = persona === 'production' ? myTasks : persona === 'boss' ? visibleTasks : serviceTasks;
-  const overdue = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && !task.isCompleted && task.status !== 'Cancelled' && isBefore(due, now) && !isToday(due)); });
-  const dueToday = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && !task.isCompleted && isToday(due)); });
+  const overdue = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && isTaskOpen(task) && isBefore(due, now) && !isToday(due)); });
+  const dueToday = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && isTaskOpen(task) && isToday(due)); });
   const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && visibleClientKeys.has(getClientKey(plan.clientName)));
   const contractedMonthly = canSeePrices ? activePlans.reduce((sum, plan) => sum + (store.servicePricingSnapshots.find(item => item.parentType === 'client_plan' && item.parentId === plan.id)?.totalMinor || 0), 0) : 0;
   const delivered = store.deliverables.filter(item => item.status === 'Delivered' && visibleClientKeys.has(getClientKey(item.clientName)));
   const waitingInternal = scopeTasks.filter(task => task.status === 'Waiting Approval' && task.visibility !== 'client-visible');
   const waitingClient = scopeTasks.filter(task => task.status === 'Waiting Approval' && task.visibility === 'client-visible');
-  const revisions = scopeTasks.filter(task => task.revisionCount > 0 && !task.isCompleted);
-  const completed = scopeTasks.filter(task => task.isCompleted);
+  const revisions = scopeTasks.filter(task => task.revisionCount > 0 && isTaskOpen(task));
+  const completed = scopeTasks.filter(isTaskCompleted);
   const renewalPlans = activePlans.filter(plan => plan.contractEndDate).sort((a, b) => (a.contractEndDate || '').localeCompare(b.contractEndDate || ''));
   const workers = store.users.filter(user => user.role === 'Staff' || user.role === 'HOD').map(user => ({
     user,
-    open: serviceTasks.filter(task => task.assignedTo === user.id && !task.isCompleted).length,
-    completed: serviceTasks.filter(task => task.assignedTo === user.id && task.isCompleted).length,
+    open: serviceTasks.filter(task => task.assignedTo === user.id && isTaskOpen(task)).length,
+    completed: serviceTasks.filter(task => task.assignedTo === user.id && isTaskCompleted(task)).length,
     delivered: delivered.filter(item => serviceTasks.some(task => task.assignedTo === user.id && task.deliverableId === item.id)).length,
   }));
   const activeCompanies = React.useMemo(() => activePlans.map(plan => {
@@ -115,7 +117,7 @@ const ServiceRoleDashboard = () => {
   if (persona === 'client') return null;
 
   if (persona === 'production') {
-    const open = myTasks.filter(task => !task.isCompleted);
+    const open = myTasks.filter(isTaskOpen);
     return <section className="space-y-5" aria-labelledby="production-workbench-title">
       <WorkbenchHeader id="production-workbench-title" title="Assigned production work" description="Deadlines, revisions, review queues, and completed output." />
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label="My open tasks" value={open.length} icon={Clock3} detail="Only tasks assigned to you are included." /><StatGroup className="grid-cols-3"><CompactStat label="Overdue" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Revisions" value={revisions.length} icon={FileCheck2} tone="warning" /><CompactStat label="Completed" value={completed.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
@@ -138,7 +140,7 @@ const ServiceRoleDashboard = () => {
 
   if (persona === 'projectManager') return <section className="space-y-5" aria-labelledby="portfolio-workbench-title">
     <WorkbenchHeader id="portfolio-workbench-title" title="Portfolio delivery" description="Companies, deadlines, review work, and output in your portfolio." />
-    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label="Open delivery tasks" value={scopeTasks.filter(task => !task.isCompleted).length} icon={Clock3} detail={<>{dueToday.length} {t('Due today')} · {overdue.length} {t('overdue in your portfolio.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label="Overdue delivery" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Waiting review" value={waitingInternal.length + waitingClient.length} icon={FileCheck2} tone="warning" /><CompactStat label="Active companies" value={activePlans.length} icon={UsersRound} /></StatGroup></div>
+    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label="Open delivery tasks" value={scopeTasks.filter(isTaskOpen).length} icon={Clock3} detail={<>{dueToday.length} {t('Due today')} · {overdue.length} {t('overdue in your portfolio.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label="Overdue delivery" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Waiting review" value={waitingInternal.length + waitingClient.length} icon={FileCheck2} tone="warning" /><CompactStat label="Active companies" value={activePlans.length} icon={UsersRound} /></StatGroup></div>
     <div className="grid gap-4 xl:grid-cols-2"><TaskQueue title="Due today / overdue" tasks={[...overdue, ...dueToday].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty="No urgent portfolio delivery work." /><TaskQueue title="Waiting review" tasks={[...waitingInternal, ...waitingClient]} empty="No portfolio review work is waiting." /></div>
     <Surface className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
