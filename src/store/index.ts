@@ -87,7 +87,6 @@ import {
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
 import { getWorkWeekRange } from '../lib/workWeek';
-import { getInitialLocale, translateUiText } from '../lib/i18n';
 import { createAccessRefreshCoordinator } from '../lib/accessRefresh';
 import {
   BACKEND_UPGRADE_REQUIRED_MESSAGE,
@@ -510,15 +509,33 @@ const makeBackendRuntimeState = (): BackendRuntimeState => {
   };
 };
 
-const makeNotification = (data: Omit<AppNotification, 'id' | 'isRead' | 'createdAt'>): AppNotification => (
-  enrichNotificationMetadata({
+type NotificationDraft = Omit<AppNotification, 'id' | 'isRead' | 'createdAt'>;
+
+const makeNotification = (data: NotificationDraft): AppNotification | null => {
+  const targetUserId = data.targetUserId?.trim() || undefined;
+  const targetClient = data.targetClient?.trim() || undefined;
+  const audienceCount = [targetUserId, data.targetRole, targetClient].filter(Boolean).length;
+
+  // Keep malformed drafts out of both the local store and secure workspace
+  // commands. The database enforces the same one-audience invariant for Staff
+  // commands; enforcing it here avoids blank-target rows and retry loops.
+  if (audienceCount !== 1) return null;
+
+  return enrichNotificationMetadata({
     ...data,
+    targetUserId,
+    targetClient,
     id: nowId('N'),
     isRead: false,
     readByUserIds: [],
     createdAt: new Date().toISOString(),
-  })
-);
+  });
+};
+
+const appendNotification = (notifications: AppNotification[], data: NotificationDraft) => {
+  const notification = makeNotification(data);
+  if (notification) notifications.push(notification);
+};
 
 // Task update notices go to the people accountable for the task instead of a
 // role-wide Project Manager fan-out: Boss Koo (super admin, oversight) plus the
@@ -558,7 +575,8 @@ const taskUpdateNotifications = (
   excludeUserId?: string,
 ): AppNotification[] => recipientIds
   .filter(recipientId => recipientId !== excludeUserId)
-  .map(targetUserId => makeNotification({ ...data, targetUserId }));
+  .map(targetUserId => makeNotification({ ...data, targetUserId }))
+  .filter((notification): notification is AppNotification => Boolean(notification));
 
 const getNotificationReadReceipts = (
   notification: AppNotification,
@@ -1963,18 +1981,6 @@ export const useStore = create<StoreState>()(
       },
 
       discardMutation: async (options = {}) => {
-        if (
-          shouldUseSecureSupabase()
-          && get().backend.pendingMutations > 0
-          && options.confirm !== false
-          && typeof window !== 'undefined'
-          && !window.confirm(translateUiText(
-            'Use the latest saved workspace? Your pending change in this browser tab will be permanently discarded.',
-            getInitialLocale(),
-          ))
-        ) {
-          return;
-        }
         discardSecureWorkspaceCommand();
         discardRetainedSecureMemberMutation();
         set((state) => ({
@@ -2567,13 +2573,13 @@ export const useStore = create<StoreState>()(
         );
 
         if (isReadyForClientReview && task.visibility !== 'internal') {
-          newNotifs.push(makeNotification({
+          appendNotification(newNotifs, {
             targetClient: task.clientName,
             title: isCompleted ? 'Task Completed' : 'Task Ready for Approval',
             message: `"${task.title}" is ready for client review.`,
             route: { page: 'tasks', entityId: taskId },
             iconType: 'success'
-          }));
+          });
         }
 
         useToastStore.getState().addToast(`Status updated to "${nextStatus}"`, 'success');
@@ -2644,13 +2650,13 @@ export const useStore = create<StoreState>()(
 
         const newNotifs: AppNotification[] = [];
         if (assignedTo && assignedTo !== task.assignedTo) {
-          newNotifs.push(makeNotification({
+          appendNotification(newNotifs, {
             targetUserId: assignedTo,
             title: 'Task Assigned To You',
             message: `"${task.title}" has been assigned to you by ${currentUser?.name}.`,
             route: { page: 'tasks', entityId: taskId },
             iconType: 'task'
-          }));
+          });
         }
 
         useToastStore.getState().addToast(assigneeUser ? `Task assigned to ${assigneeUser.name}` : 'Task is now unassigned', 'success');
@@ -2868,13 +2874,13 @@ export const useStore = create<StoreState>()(
 
         const notifications: AppNotification[] = [];
         if (updatedTask.assignedTo && updatedTask.assignedTo !== task.assignedTo) {
-          notifications.push(makeNotification({
+          appendNotification(notifications, {
             targetUserId: updatedTask.assignedTo,
             title: 'Task Assigned To You',
             message: `"${updatedTask.title}" has been assigned to you by ${currentUser.name}.`,
             route: { page: 'tasks', entityId: taskId },
             iconType: 'task'
-          }));
+          });
         }
 
         set(current => {
@@ -2974,21 +2980,21 @@ export const useStore = create<StoreState>()(
           ));
 
           if (status === 'Rejected') {
-            notifications.push(makeNotification({
+            appendNotification(notifications, {
               targetUserId: task.assignedTo,
               title: 'Client Requested Revision',
               message: `${currentUser.name} requested changes on "${task.title}"${note ? `: ${note}` : '.'}`,
               route: { page: 'tasks', entityId: taskId },
               iconType: 'alert'
-            }));
+            });
           } else {
-            notifications.push(makeNotification({
+            appendNotification(notifications, {
               targetUserId: task.assignedTo,
               title: 'Client Approved Task',
               message: `${currentUser.name} approved "${task.title}".`,
               route: { page: 'tasks', entityId: taskId },
               iconType: 'success'
-            }));
+            });
           }
         }
 
@@ -3037,16 +3043,18 @@ export const useStore = create<StoreState>()(
 
         useToastStore.getState().addToast('Revision requested successfully', 'warning');
 
+        const revisionNotification = makeNotification({
+          targetUserId: task.assignedTo,
+          title: 'Revision Requested',
+          message: `${currentUser.name} requested a revision on "${task.title}".`,
+          route: { page: 'tasks', entityId: taskId },
+          iconType: 'alert'
+        });
+
         return {
           tasks: newTasks,
           notifications: [
-            makeNotification({
-              targetUserId: task.assignedTo,
-              title: 'Revision Requested',
-              message: `${currentUser.name} requested a revision on "${task.title}".`,
-              route: { page: 'tasks', entityId: taskId },
-              iconType: 'alert'
-            }),
+            ...(revisionNotification ? [revisionNotification] : []),
             ...(state.notifications || [])
           ],
           ...deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles),
@@ -3155,13 +3163,18 @@ export const useStore = create<StoreState>()(
                     currentUser.id,
                   )
                 : []),
-              ...(taskData.assignedTo ? [makeNotification({
-                targetUserId: taskData.assignedTo,
-                title: 'New Task Assigned',
-                message: `You have been assigned a new task: "${title}".`,
-                route: { page: 'tasks', entityId: taskId },
-                iconType: 'task'
-              })] : []),
+              ...(taskData.assignedTo
+                ? (() => {
+                    const assignmentNotification = makeNotification({
+                      targetUserId: taskData.assignedTo,
+                      title: 'New Task Assigned',
+                      message: `You have been assigned a new task: "${title}".`,
+                      route: { page: 'tasks', entityId: taskId },
+                      iconType: 'task'
+                    });
+                    return assignmentNotification ? [assignmentNotification] : [];
+                  })()
+                : []),
               ...(state.notifications || [])
             ]
           };
@@ -4249,24 +4262,24 @@ export const useStore = create<StoreState>()(
           ));
         }
 
-        if (!serverGeneratesClientNotifications && task.assignedTo !== currentUser.id) {
-          newNotifs.push(makeNotification({
+        if (!serverGeneratesClientNotifications && task.assignedTo && task.assignedTo !== currentUser.id) {
+          appendNotification(newNotifs, {
             targetUserId: task.assignedTo,
             title: currentUser.role === 'Client' ? 'Client Feedback' : 'New Comment',
             message: `${currentUser.name} commented on your task "${task.title}".`,
             route: { page: 'tasks', entityId: taskId },
             iconType: 'status'
-          }));
+          });
         }
 
         if (currentUser.role !== 'Client' && task.visibility !== 'internal' && task.clientName) {
-          newNotifs.push(makeNotification({
+          appendNotification(newNotifs, {
             targetClient: task.clientName,
             title: 'Team Update',
             message: `${currentUser.name} posted an update on "${task.title}".`,
             route: { page: 'tasks', entityId: taskId },
             iconType: 'status'
-          }));
+          });
         }
 
         set({
@@ -4297,13 +4310,15 @@ export const useStore = create<StoreState>()(
           if (!isApproaching) return task;
 
           const when = dueDate.getTime() === today.getTime() ? 'today' : 'tomorrow';
-          newNotifs.push(makeNotification({
-            targetUserId: task.assignedTo,
-            title: 'Task Deadline Approaching',
-            message: `"${task.title}" is due ${when}.`,
-            route: { page: 'tasks', entityId: task.id },
-            iconType: 'alert'
-          }));
+          if (task.assignedTo) {
+            appendNotification(newNotifs, {
+              targetUserId: task.assignedTo,
+              title: 'Task Deadline Approaching',
+              message: `"${task.title}" is due ${when}.`,
+              route: { page: 'tasks', entityId: task.id },
+              iconType: 'alert'
+            });
+          }
           newNotifs.push(...taskUpdateNotifications(
             resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects)
               .filter(id => id !== task.assignedTo),
@@ -4397,13 +4412,14 @@ export const useStore = create<StoreState>()(
 
           if (superAdmins.length > 0) {
             superAdmins.forEach(admin => {
-              newNotifs.unshift(makeNotification({
+              const notification = makeNotification({
                 targetUserId: admin.id,
                 title: 'New Registration',
                 message: `${name} has registered and is waiting for your approval.`,
                 route: { page: 'approvals' },
                 iconType: 'status'
-              }));
+              });
+              if (notification) newNotifs.unshift(notification);
             });
           }
 
@@ -4553,19 +4569,23 @@ export const useStore = create<StoreState>()(
           updatedAt: new Date().toISOString()
         };
 
-        set((state) => ({
+        set((state) => {
+          const notification = makeNotification({
+            targetRole: 'Project Manager',
+            title: 'Member Added',
+            message: `${currentUser.name} added ${name} as ${data.role}.`,
+            route: { page: 'approvals' },
+            iconType: 'success'
+          });
+
+          return {
           users: [...state.users, newUser],
           notifications: [
-            makeNotification({
-              targetRole: 'Project Manager',
-              title: 'Member Added',
-              message: `${currentUser.name} added ${name} as ${data.role}.`,
-              route: { page: 'approvals' },
-              iconType: 'success'
-            }),
+            ...(notification ? [notification] : []),
             ...(state.notifications || [])
           ]
-        }));
+          };
+        });
 
         return { ok: true };
       },
@@ -5146,7 +5166,16 @@ export const useStore = create<StoreState>()(
           return { ok: true };
         }
 
-        set((current) => ({
+        set((current) => {
+          const notification = makeNotification({
+            targetRole: 'Project Manager',
+            title: 'Member Removed',
+            message: `${state.currentUser?.name || 'Super admin'} removed ${targetUser?.name}. ${state.tasks.some(task => task.assignedTo === userId) ? 'Their assigned tasks are now unassigned.' : ''}`,
+            route: { page: 'approvals' },
+            iconType: 'alert'
+          });
+
+          return {
           users: current.users.filter(user => user.id !== userId),
           deletedUserIds: Array.from(new Set([...(current.deletedUserIds || []), userId])),
           tasks: current.tasks.map(task => task.assignedTo === userId
@@ -5154,16 +5183,11 @@ export const useStore = create<StoreState>()(
             : task
           ),
           notifications: [
-            makeNotification({
-              targetRole: 'Project Manager',
-              title: 'Member Removed',
-              message: `${state.currentUser?.name || 'Super admin'} removed ${targetUser?.name}. ${state.tasks.some(task => task.assignedTo === userId) ? 'Their assigned tasks are now unassigned.' : ''}`,
-              route: { page: 'approvals' },
-              iconType: 'alert'
-            }),
+            ...(notification ? [notification] : []),
             ...(current.notifications || []).filter(notification => notification.targetUserId !== userId)
           ],
-        }));
+          };
+        });
         try {
           clearLocalUserPassword(userId);
         } catch {

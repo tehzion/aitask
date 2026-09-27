@@ -233,7 +233,7 @@ const Navbar: React.FC<NavbarProps> = ({
           </span>
           <input
             type="text"
-            aria-label={isClient ? 'Search deliveries' : searchesCompanies ? 'Search companies' : searchDestination === '/clients' ? 'Search client work' : 'Search tasks'}
+            aria-label={isClient ? 'Search deliveries' : pathname === '/notifications' ? 'Search notifications' : searchesCompanies ? 'Search companies' : searchDestination === '/clients' ? 'Search client work' : 'Search tasks'}
             aria-keyshortcuts="/"
             data-global-search
             className={cn(inputBase, 'border-transparent bg-inset py-2.5 pl-10 pr-10 shadow-none focus:bg-surface')}

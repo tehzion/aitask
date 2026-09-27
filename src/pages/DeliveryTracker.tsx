@@ -5,6 +5,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Search,
+  X,
   Plus,
   UsersRound,
 } from 'lucide-react';
@@ -207,6 +209,24 @@ const DeliveryTracker: React.FC = () => {
           </div>
 
           <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
+            <div className="relative min-w-0 flex-1 lg:max-w-sm">
+              <label htmlFor="delivery-tracker-search" className="sr-only">{t('Search delivery tracker')}</label>
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <input
+                id="delivery-tracker-search"
+                type="search"
+                value={search}
+                onChange={event => updateQuery({ search: event.target.value || null })}
+                placeholder={t('Search delivery tracker')}
+                aria-label={t('Search delivery tracker')}
+                className="min-h-11 w-full rounded-control border border-line bg-surface px-10 pr-10 text-sm text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+              />
+              {search && (
+                <button type="button" onClick={() => updateQuery({ search: null })} aria-label={t('Clear delivery tracker search')} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink">
+                  <X aria-hidden="true" className="h-4 w-4" />
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2" aria-label="Filter tracker status">
               {STATUS_FILTERS.map(filter => <button key={filter.id} type="button" aria-pressed={statusFilter === filter.id} onClick={() => setStatusFilter(filter.id)} className={cn('min-h-11 rounded-control px-3 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35', statusFilter === filter.id ? 'bg-accent text-white dark:text-[rgb(var(--calm-accent-ink))]' : 'bg-surface text-muted ring-1 ring-line hover:bg-inset hover:text-ink')}>{filter.label}</button>)}
             </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Filter, ListFilter } from 'lucide-react';
+import { Filter, ListFilter, Search, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import type { Priority, TaskStatus } from '../types';
@@ -128,6 +128,31 @@ const StaffAllWork: React.FC = () => {
         meta={<span className="calm-number">{filteredTasks.length} task{filteredTasks.length === 1 ? '' : 's'}</span>}
         action={<Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>}
       />
+
+      <div className="mt-5 flex items-center gap-2">
+        <label className="relative block min-w-0 flex-1">
+          <span className="sr-only">{t('Search visible work')}</span>
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <input
+            type="search"
+            aria-label={t('Search visible work')}
+            placeholder={t('Search visible work')}
+            value={search}
+            onChange={event => updateSearch(event.target.value)}
+            className={`${inputBase} min-h-11 w-full pl-10 ${search ? 'pr-10' : 'pr-3'}`}
+          />
+          {search && (
+            <button
+              type="button"
+              aria-label={t('Clear search')}
+              onClick={() => updateSearch('')}
+              className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"
+            >
+              <X aria-hidden="true" className="h-4 w-4" />
+            </button>
+          )}
+        </label>
+      </div>
 
       <section aria-labelledby="staff-all-work-list" className="space-y-4">
         <h2 id="staff-all-work-list" className="sr-only">Visible task list</h2>

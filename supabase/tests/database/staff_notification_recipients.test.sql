@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(3);
+select plan(4);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -28,7 +28,8 @@ values
   ('pgtap-notify', 'client', 'notify-client', '{"id":"notify-client","clientName":"Notify Co","createdBy":"pgtap-notify-pm"}'::jsonb),
   ('pgtap-notify', 'client', 'notify-client-boss', '{"id":"notify-client-boss","clientName":"Notify Boss Co","createdBy":"pgtap-notify-boss"}'::jsonb),
   ('pgtap-notify', 'task', 'notify-task', '{"id":"notify-task","clientId":"notify-client","clientName":"Notify Co","title":"Notify Task","department":"Designer","assignedTo":"pgtap-notify-staff","createdBy":"pgtap-notify-staff","status":"Pending","visibility":"internal"}'::jsonb),
-  ('pgtap-notify', 'task', 'notify-task-assigner', '{"id":"notify-task-assigner","clientId":"notify-client-boss","clientName":"Notify Boss Co","title":"Assigned Task","department":"Designer","assignedTo":"pgtap-notify-staff","assignedBy":"pgtap-notify-pm","createdBy":"pgtap-notify-pm","status":"Pending","visibility":"internal"}'::jsonb);
+  ('pgtap-notify', 'task', 'notify-task-assigner', '{"id":"notify-task-assigner","clientId":"notify-client-boss","clientName":"Notify Boss Co","title":"Assigned Task","department":"Designer","assignedTo":"pgtap-notify-staff","assignedBy":"pgtap-notify-pm","createdBy":"pgtap-notify-pm","status":"Pending","visibility":"internal"}'::jsonb),
+  ('pgtap-notify', 'task', 'notify-task-unassigned', '{"id":"notify-task-unassigned","clientId":"notify-client","clientName":"Notify Co","title":"Unassigned Task","department":"Designer","assignedTo":"","assignedBy":"pgtap-notify-pm","createdBy":"pgtap-notify-staff","status":"Pending","visibility":"internal"}'::jsonb);
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000963', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -96,6 +97,29 @@ select is(
   ) ->> 'ok')::boolean,
   true,
   'Staff can notify the assigning PM when another member owns the company'
+);
+
+-- An unassigned task must still be saveable when the client sends only a
+-- valid Project Manager notification; the frontend must not serialize a blank
+-- assignee audience alongside it.
+select is(
+  (public.aitask_execute_command(
+    'pgtap-notify', gen_random_uuid(), 'task.update',
+    jsonb_build_array(
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'update', 'entityType', 'task', 'entityId', 'notify-task-unassigned',
+        'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-notify' and entity_type = 'task' and entity_id = 'notify-task-unassigned'),
+        'data', '{"id":"notify-task-unassigned","clientId":"notify-client","clientName":"Notify Co","title":"Unassigned Task","department":"Designer","assignedTo":"","assignedBy":"pgtap-notify-pm","createdBy":"pgtap-notify-staff","status":"In Progress","visibility":"internal"}'::jsonb
+      ),
+      jsonb_build_object(
+        'kind', 'entity', 'action', 'insert', 'entityType', 'notification', 'entityId', 'notify-unassigned-op',
+        'expectedVersion', 0,
+        'data', '{"id":"notify-unassigned-op","title":"Task Status Updated","message":"Unassigned Task was moved to In Progress.","route":{"page":"tasks","entityId":"notify-task-unassigned"},"iconType":"status","targetUserId":"pgtap-notify-pm"}'::jsonb
+      )
+    )
+  ) ->> 'ok')::boolean,
+  true,
+  'Staff can update an unassigned task without a blank-target notification'
 );
 
 reset role;

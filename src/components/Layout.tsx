@@ -326,7 +326,7 @@ const Layout: React.FC = () => {
               <>
                 <span className="relative flex h-7 w-7 items-center justify-center">
                   <Icon aria-hidden="true" className={cn("h-5 w-5", isActive && "text-accent")} />
-                  {item.path === '/notifications' && unreadCount > 0 && <span className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-surface bg-accent px-0.5 text-[8px] font-black text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+                  {item.path === '/notifications' && unreadCount > 0 && <span aria-hidden="true" className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-surface bg-accent px-0.5 text-[8px] font-black text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>}
                 </span>
                 <span className="max-w-full truncate text-[10px] leading-4">{t(item.label)}</span>
               </>
@@ -339,7 +339,9 @@ const Layout: React.FC = () => {
               <NavLink
                 key={item.path}
                 to={item.path}
-                aria-label={t(item.label)}
+                aria-label={item.path === '/notifications'
+                  ? `${t('Notifications')}${unreadCount > 0 ? `, ${t(`${unreadCount} unread`)}` : ''}`
+                  : t(item.label)}
                 className={({ isActive }) => navClass(isActive)}
               >
                 {({ isActive }) => renderContent(isActive)}

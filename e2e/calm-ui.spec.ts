@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 const routes = [
-  { path: '/', heading: 'Project Manager Dashboard' },
+  { path: '/', heading: 'Portfolio work' },
   { path: '/projects', heading: 'Companies' },
   { path: '/clients', heading: 'Delivery tracker' },
   { path: '/tasks', heading: 'Portfolio work' },
@@ -22,7 +22,7 @@ const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
   await expect(releaseNotice).toBeVisible();
   await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
-  await expect(page.getByRole('heading', { name: 'Project Manager Dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Portfolio work' })).toBeVisible();
 };
 
 const setTheme = async (page: import('@playwright/test').Page, theme: 'Light' | 'Dark') => {

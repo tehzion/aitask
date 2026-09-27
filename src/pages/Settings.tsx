@@ -21,6 +21,7 @@ import { discardSecureWorkspaceCommand, getRetainedSecureCommand } from '../lib/
 import ServicePackageManager from '../components/ServicePackageManager';
 import WorkflowTemplateManager from '../components/WorkflowTemplateManager';
 import { isLocalServiceDemoEnabled } from '../mock/localServiceDemo';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const AVATAR_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 const AVATAR_UPLOAD_SIZE = 320;
@@ -163,6 +164,14 @@ const Settings: React.FC = () => {
   const [isStatusSaving, setIsStatusSaving] = React.useState(false);
   const [hasPendingStatusAdd, setHasPendingStatusAdd] = React.useState(false);
   const [localDemoMessage, setLocalDemoMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [confirmation, setConfirmation] = React.useState<{
+    title: string;
+    description: string;
+    confirmLabel: string;
+    action: () => void | Promise<void>;
+  } | null>(null);
+  const [isConfirming, setIsConfirming] = React.useState(false);
+  const confirmationTitleId = React.useId();
 
   const handleStatusAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,26 +199,31 @@ const Settings: React.FC = () => {
   };
 
   const handleDeleteStatus = async (status: string) => {
-    const confirmed = window.confirm(t(`Delete the "${status}" status?`));
-    if (!confirmed) return;
-    const previousStatuses = useStore.getState().taskStatuses;
-    const result = deleteTaskStatus(status);
-    if (!result.ok) {
-      setStatusError(result.error || 'Failed to delete status.');
-      return;
-    }
+    setConfirmation({
+      title: t(`Delete the "${status}" status?`),
+      description: t('Tasks using another status are not changed.'),
+      confirmLabel: t('Delete status'),
+      action: async () => {
+        const previousStatuses = useStore.getState().taskStatuses;
+        const result = deleteTaskStatus(status);
+        if (!result.ok) {
+          setStatusError(result.error || 'Failed to delete status.');
+          return;
+        }
 
-    setIsStatusSaving(true);
-    const saved = await commitPendingMutation();
-    setIsStatusSaving(false);
-    if (!saved.ok) {
-      useStore.setState({ taskStatuses: previousStatuses });
-      setStatusError(saved.error || 'The status could not be deleted.');
-      return;
-    }
+        setIsStatusSaving(true);
+        const saved = await commitPendingMutation();
+        setIsStatusSaving(false);
+        if (!saved.ok) {
+          useStore.setState({ taskStatuses: previousStatuses });
+          setStatusError(saved.error || 'The status could not be deleted.');
+          return;
+        }
 
-    setStatusError('');
-    useToastStore.getState().addToast(`Status "${status}" deleted successfully`, 'success');
+        setStatusError('');
+        useToastStore.getState().addToast(`Status "${status}" deleted successfully`, 'success');
+      },
+    });
   };
 
   const backendStatus = getBackendStatus();
@@ -244,6 +258,27 @@ const Settings: React.FC = () => {
   const canResetLocalDemo = !isPasswordSetupOnly && currentUser?.role === 'Project Manager' && isLocalServiceDemoEnabled();
   const secureAccounts = shouldUseSecureSupabase();
   const defaultAccessiblePath = getDefaultAccessiblePath(currentUser, rolePermissions);
+  const completeSignOut = async () => {
+    if (secureAccounts) {
+      discardSecureWorkspaceCommand();
+      await signOutSecureSession();
+    }
+    useStore.setState({ currentUser: null });
+    navigate('/login', { replace: true });
+  };
+  const handleSettingsSignOut = () => {
+    const hasPendingChange = backend.pendingMutations > 0 || getRetainedSecureCommand() !== null;
+    if (secureAccounts && hasPendingChange) {
+      setConfirmation({
+        title: t('Sign out with an unsaved change?'),
+        description: t('Your pending change in this browser tab will be permanently discarded.'),
+        confirmLabel: t('Sign out anyway'),
+        action: completeSignOut,
+      });
+      return;
+    }
+    void completeSignOut();
+  };
   const isSupabaseMode = backendStatus.mode === 'supabase';
   const hostedLocalBuild = backendStatus.mode === 'local' && backendStatus.isHostedRuntime;
   const hasSupabaseKey = isSupabaseMode && !backendStatus.missing.includes('VITE_SUPABASE_PUBLISHABLE_KEY');
@@ -492,17 +527,19 @@ const Settings: React.FC = () => {
   };
 
   const handleResetLocalDemo = () => {
-    const confirmed = window.confirm(
-      t('Reset the local sample workspace? This recreates the UrbanEats, TechNova, and EcoLife demo records without deleting your other local records.'),
-    );
-    if (!confirmed) return;
-
-    const result = resetLocalServiceDemo();
-    setLocalDemoMessage({
-      tone: result.ok ? 'success' : 'error',
-      text: result.ok
-        ? t('Sample workspace reset. Open Delivery tracker to explore the seeded service plans and cycles.')
-        : result.error || 'The sample workspace could not be reset.',
+    setConfirmation({
+      title: t('Reset the local sample workspace?'),
+      description: t('This recreates the UrbanEats, TechNova, and EcoLife demo records without deleting your other local records.'),
+      confirmLabel: t('Reset sample workspace'),
+      action: () => {
+        const result = resetLocalServiceDemo();
+        setLocalDemoMessage({
+          tone: result.ok ? 'success' : 'error',
+          text: result.ok
+            ? t('Sample workspace reset. Open Delivery tracker to explore the seeded service plans and cycles.')
+            : result.error || 'The sample workspace could not be reset.',
+        });
+      },
     });
   };
 
@@ -541,19 +578,7 @@ const Settings: React.FC = () => {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => {
-                  if (secureAccounts) {
-                    const backend = useStore.getState().backend;
-                    const hasPendingChange = backend.pendingMutations > 0 || getRetainedSecureCommand() !== null;
-                    if (hasPendingChange && !window.confirm(t('Sign out anyway? Your pending change in this browser tab will be permanently discarded.'))) {
-                      return;
-                    }
-                    discardSecureWorkspaceCommand();
-                    void signOutSecureSession();
-                  }
-                  useStore.setState({ currentUser: null });
-                  navigate('/login', { replace: true });
-                }}
+                onClick={handleSettingsSignOut}
                 className="min-h-9 whitespace-nowrap px-3 py-1.5 text-xs"
               >
                 Sign out
@@ -1227,6 +1252,22 @@ const Settings: React.FC = () => {
           <p className="font-mono text-[11px] text-slate-400">{APP_BUILD_LABEL}</p>
         </div>
       </section>
+      {confirmation && (
+        <ConfirmDialog
+          labelledBy={confirmationTitleId}
+          title={confirmation.title}
+          description={confirmation.description}
+          confirmLabel={confirmation.confirmLabel}
+          busy={isConfirming}
+          onClose={() => setConfirmation(null)}
+          onConfirm={async () => {
+            setIsConfirming(true);
+            await confirmation.action();
+            setIsConfirming(false);
+            setConfirmation(null);
+          }}
+        />
+      )}
     </div>
     </div>
   );

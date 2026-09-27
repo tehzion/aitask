@@ -58,7 +58,7 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   await workSearch.fill('Video');
   await expect(page).toHaveURL(/\/tasks\?search=Video$/);
   await expect(page.getByText('6. Video Editing', { exact: true }).first()).toBeVisible();
-  await page.getByRole('button', { name: 'Clear search' }).click();
+  await page.locator('main').getByRole('button', { name: 'Clear search' }).click();
   await expect(workSearch).toHaveValue('');
   await expect(page).toHaveURL(/\/tasks$/);
   if (hasCommittedVisualBaseline) {

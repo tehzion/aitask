@@ -63,6 +63,7 @@ import SideSheet from "../components/SideSheet";
 import ClientServiceWorkspace from "../components/ClientServiceWorkspace";
 import CreateClientPlanModal from "../components/CreateClientPlanModal";
 import EditClientPlanDatesModal from "../components/EditClientPlanDatesModal";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 type Tab = "overview" | "plan" | "cycles" | "addons" | "activity";
 const CLIENT_WORKSPACE_TABS_ID = "client-workspace";
@@ -107,6 +108,8 @@ const OperationsClientWorkspace = () => {
   const [activitySheetOpen, setActivitySheetOpen] = React.useState(false);
   const [addonSaving, setAddonSaving] = React.useState(false);
   const [activitySaving, setActivitySaving] = React.useState(false);
+  const [planAction, setPlanAction] = React.useState<"pause" | "end" | null>(null);
+  const planConfirmationTitleId = React.useId();
   const [addonEndDates, setAddonEndDates] = React.useState<
     Record<string, string>
   >({});
@@ -213,6 +216,14 @@ const OperationsClientWorkspace = () => {
       saved.ok ? "Saved." : saved.error || "The change is waiting to be saved.",
     );
     return saved.ok;
+  };
+  const confirmPlanAction = async () => {
+    if (!activePlan || !planAction) return;
+    await saveAndCommit(
+      store.setClientPlanStatus(activePlan.id, planAction === "pause" ? "Paused" : "Ended"),
+      "client_plan.manage",
+    );
+    setPlanAction(null);
   };
   const submitComment = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -537,34 +548,16 @@ const OperationsClientWorkspace = () => {
                     Create next revision
                   </Button>
                 )}
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    const confirmed = window.confirm(t(
-                      `Pause the "${activePlan.name}" plan? The current cycle stays unchanged and future cycles stop generating.`,
-                    ));
-                    if (!confirmed) return;
-                    void saveAndCommit(
-                      store.setClientPlanStatus(activePlan.id, "Paused"),
-                      "client_plan.manage",
-                    );
-                  }}
+                  <Button
+                    variant="secondary"
+                    onClick={() => setPlanAction("pause")}
                 >
                   <Pause className="h-4 w-4" />
                   Pause
                 </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    const confirmed = window.confirm(t(
-                      `End the "${activePlan.name}" plan? This cannot be reopened; the client keeps access to completed work.`,
-                    ));
-                    if (!confirmed) return;
-                    void saveAndCommit(
-                      store.setClientPlanStatus(activePlan.id, "Ended"),
-                      "client_plan.manage",
-                    );
-                  }}
+                  <Button
+                    variant="secondary"
+                    onClick={() => setPlanAction("end")}
                 >
                   <StopCircle className="h-4 w-4" />
                   End
@@ -1072,6 +1065,18 @@ const OperationsClientWorkspace = () => {
           </div>
         </form>
       </SideSheet>
+      {planAction && activePlan && (
+        <ConfirmDialog
+          labelledBy={planConfirmationTitleId}
+          title={planAction === "pause" ? t(`Pause the "${activePlan.name}" plan?`) : t(`End the "${activePlan.name}" plan?`)}
+          description={planAction === "pause"
+            ? t("The current cycle stays unchanged and future cycles stop generating.")
+            : t("This cannot be reopened; the client keeps access to completed work.")}
+          confirmLabel={planAction === "pause" ? t("Pause plan") : t("End plan")}
+          onClose={() => setPlanAction(null)}
+          onConfirm={confirmPlanAction}
+        />
+      )}
     </div>
   );
 };

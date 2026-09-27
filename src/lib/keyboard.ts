@@ -6,7 +6,7 @@ export interface NavigationShortcut {
 
 export const NAVIGATION_SHORTCUTS: NavigationShortcut[] = [
   { key: 'd', label: 'Dashboard', path: '/' },
-  { key: 't', label: 'Delivery tracker', path: '/clients' },
+  { key: 't', label: 'Tasks', path: '/tasks' },
   { key: 'c', label: 'Calendar', path: '/calendar' },
   { key: 'l', label: 'Delivery tracker', path: '/clients' },
   { key: 'p', label: 'Companies', path: '/projects' },

@@ -8,7 +8,7 @@ describe('keyboard navigation shortcuts', () => {
   });
 
   it('matches page keys without case sensitivity', () => {
-    expect(getNavigationShortcut('T')).toMatchObject({ label: 'Delivery tracker', path: '/clients' });
+    expect(getNavigationShortcut('T')).toMatchObject({ label: 'Tasks', path: '/tasks' });
     expect(getNavigationShortcut('L')).toMatchObject({ label: 'Delivery tracker', path: '/clients' });
     expect(getNavigationShortcut('x')).toBeUndefined();
   });

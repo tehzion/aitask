@@ -149,14 +149,7 @@ export default defineConfig(({ mode }) => {
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,svg,png}'],
         globIgnores: [
-          '**/Dashboard-*.js',
-          '**/Tasks-*.js',
-          '**/Calendar-*.js',
-          '**/Clients-*.js',
-          '**/Projects-*.js',
           '**/Reports-*.js',
-          '**/Approvals-*.js',
-          '**/Settings-*.js',
           '**/BarChart-*.js',
         ],
       },

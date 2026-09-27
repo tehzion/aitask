@@ -1,5 +1,5 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
+import { createClient, type User as SupabaseAuthUser } from 'npm:@supabase/supabase-js@2.116.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,6 +13,16 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 });
 
 const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const listAllAuthUsers = async (adminClient: ReturnType<typeof createClient>): Promise<{ users: SupabaseAuthUser[]; error: unknown }> => {
+  const users: SupabaseAuthUser[] = [];
+  for (let page = 1; page <= 100; page += 1) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) return { users, error };
+    users.push(...data.users);
+    if (data.users.length < 1000) return { users, error: null };
+  }
+  return { users, error: new Error('Auth user list exceeded the pagination safety limit') };
+};
 const departmentOrder = [
   'Operation',
   'Management',
@@ -126,9 +136,9 @@ Deno.serve(async (request) => {
     });
     if (passwordError) return json({ error: 'Current password is incorrect' }, 403);
 
-    const { data: authUsers, error: listError } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const { users: authUsers, error: listError } = await listAllAuthUsers(adminClient);
     if (listError) return json({ error: 'Unable to verify the new email address' }, 500);
-    const duplicate = authUsers.users.some(user => user.id !== authData.user.id && user.email?.toLowerCase() === nextEmail);
+    const duplicate = authUsers.some(user => user.id !== authData.user.id && user.email?.toLowerCase() === nextEmail);
     if (duplicate) return json({ error: 'Another account already uses this email address' }, 409);
 
     const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(authData.user.id, {
@@ -252,9 +262,9 @@ Deno.serve(async (request) => {
     customRoleName = typeof customRole.data?.name === 'string' ? customRole.data.name : null;
   }
 
-  const { data: authUsers, error: listError } = await adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const { users: authUsers, error: listError } = await listAllAuthUsers(adminClient);
   if (listError) return json({ error: 'Unable to verify the Auth user' }, 500);
-  let authUser = authUsers.users.find(user => user.email?.toLowerCase() === email);
+  let authUser = authUsers.find(user => user.email?.toLowerCase() === email);
   let createdAuthUser = false;
   const appUrl = publicAppUrl();
   if (!appUrl) return json({ error: 'The public AiTask URL is not configured' }, 500);

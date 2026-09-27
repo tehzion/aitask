@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { useStore } from '../store';
 import { FolderKanban, Users, ArrowRight, Pencil, Trash2, Plus } from 'lucide-react';
 import clsx from 'clsx';
@@ -10,12 +10,17 @@ import { canDeleteProject, canEditProject, canManageProjects, getVisibleProjects
 import { isTaskOpen } from '../lib/taskReporting';
 import { useI18n } from '../components/I18nProvider';
 import { Project } from '../types';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { useToastStore } from '../store/useToastStore';
 
 const Projects: React.FC = () => {
   const { t } = useI18n();
   const { projects: allProjects, clients, tasks: allTasks, users, currentUser, rolePermissions, deleteProject, commitPendingMutation } = useStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const confirmationTitleId = useId();
 
   const tasks = React.useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects: allProjects }),
@@ -43,15 +48,17 @@ const Projects: React.FC = () => {
   };
 
   const handleDeleteProject = async (project: Project) => {
-    const confirmed = window.confirm(t(`Delete "${project.clientName}"? Existing tasks will be kept and unlinked from this company.`));
-    if (!confirmed) return;
     const result = deleteProject(project.id);
     if (!result.ok) {
-      window.alert(result.error || 'Unable to delete this company.');
+      useToastStore.getState().addToast(result.error || 'Unable to delete this company.', 'error');
       return;
     }
     const saveResult = await commitPendingMutation();
-    if (!saveResult.ok) window.alert(saveResult.error || 'The company deletion is waiting to be saved.');
+    if (!saveResult.ok) {
+      useToastStore.getState().addToast(saveResult.error || 'The company deletion is waiting to be saved.', 'error');
+      return;
+    }
+    useToastStore.getState().addToast('Company deleted.', 'success');
   };
 
   const getProjectStats = (projectId: string) => {
@@ -160,7 +167,7 @@ const Projects: React.FC = () => {
                 {canDelete && (
                   <button
                     type="button"
-                    onClick={() => handleDeleteProject(project)}
+                    onClick={() => setProjectToDelete(project)}
                     className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
                     title="Delete company"
                     aria-label={`Delete ${project.clientName}`}
@@ -181,6 +188,22 @@ const Projects: React.FC = () => {
       </section>
       
       <CreateProjectModal isOpen={isModalOpen} project={editingProject} onClose={closeCompanyModal} />
+      {projectToDelete && (
+        <ConfirmDialog
+          labelledBy={confirmationTitleId}
+          title={t(`Delete "${projectToDelete.clientName}"?`)}
+          description={t('Existing tasks will be kept and unlinked from this company.')}
+          confirmLabel={t('Delete company')}
+          busy={isDeleting}
+          onClose={() => setProjectToDelete(null)}
+          onConfirm={async () => {
+            setIsDeleting(true);
+            await handleDeleteProject(projectToDelete);
+            setIsDeleting(false);
+            setProjectToDelete(null);
+          }}
+        />
+      )}
     </div>
   );
 };

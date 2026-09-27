@@ -7,6 +7,7 @@ import { cardBase, inputBase } from './uiTokens';
 import { formatMoney, snapshotWorkflow } from '../lib/serviceManagement';
 import { cn } from '../lib/utils';
 import { useI18n } from './I18nProvider';
+import ConfirmDialog from './ConfirmDialog';
 
 const blankItem = (): ServiceItem => ({
   id: crypto.randomUUID(), name: '', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 0,
@@ -23,12 +24,9 @@ const ServicePackageManager = () => {
   const [draft, setDraft] = React.useState(blankPackage);
   const [message, setMessage] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const [packageToDelete, setPackageToDelete] = React.useState<ServicePackage | null>(null);
 
   const handleDelete = async (pkg: ServicePackage) => {
-    const confirmed = window.confirm(
-      t(`Delete the "${pkg.name}" package from the catalog? Existing client plans keep their own snapshots and are unaffected.`),
-    );
-    if (!confirmed) return;
     const result = deleteServicePackage(pkg.id);
     if (!result.ok) return setMessage(result.error || 'Unable to delete the package.');
     setSaving(true);
@@ -96,7 +94,7 @@ const ServicePackageManager = () => {
               </button>
               <button
                 type="button"
-                onClick={() => void handleDelete(pkg)}
+                onClick={() => setPackageToDelete(pkg)}
                 disabled={saving}
                 aria-label={`Delete package ${pkg.name}`}
                 title={`Delete ${pkg.name}`}
@@ -144,6 +142,20 @@ const ServicePackageManager = () => {
           <div className="sticky bottom-0 -mx-5 -mb-5 flex justify-end border-t border-line bg-surface/95 px-5 py-4 backdrop-blur sm:-mx-6 sm:-mb-6 sm:px-6"><Button onClick={save} disabled={saving}><Save className="h-4 w-4" />{saving ? 'Saving...' : 'Save package'}</Button></div>
         </div>
       </div>
+      {packageToDelete && (
+        <ConfirmDialog
+          labelledBy="delete-service-package-title"
+          title={t(`Delete the "${packageToDelete.name}" package?`)}
+          description={t('Existing client plans keep their own snapshots and are unaffected.')}
+          confirmLabel={t('Delete package')}
+          busy={saving}
+          onClose={() => setPackageToDelete(null)}
+          onConfirm={async () => {
+            await handleDelete(packageToDelete);
+            setPackageToDelete(null);
+          }}
+        />
+      )}
     </section>
   );
 };

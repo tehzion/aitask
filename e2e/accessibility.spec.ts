@@ -20,7 +20,7 @@ const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
   await expect(releaseNotice).toBeVisible();
   await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
-  await expect(page.getByRole('heading', { name: 'Project Manager Dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Portfolio work' })).toBeVisible();
 };
 
 test('day/night mode and keyboard shortcuts remain accessible', async ({ page }) => {
@@ -80,11 +80,11 @@ test('day/night mode and keyboard shortcuts remain accessible', async ({ page })
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Open menu' }).click();
-  const navigation = page.locator('aside[aria-label="Primary navigation"]');
+  const navigation = page.locator('nav[aria-label="Primary navigation"]');
   await expect(navigation).toHaveAttribute('aria-hidden', 'false');
   await expect(navigation.getByRole('link', { name: 'Dashboard' })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
-  await expect(navigation.getByRole('link', { name: 'Settings' })).toBeFocused();
+  await expect(navigation.getByRole('button', { name: 'Close navigation menu' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(navigation.getByRole('link', { name: 'Dashboard' })).toBeFocused();
   await page.keyboard.press('Escape');

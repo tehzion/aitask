@@ -433,7 +433,7 @@ const TasksWorkspace: React.FC = () => {
     canEditTask(task) ? (
       <div className="relative inline-block">
         <select
-          aria-label={`Change status for `} data-i18n-skip
+          aria-label={`Change status for ${task.title}`} data-i18n-skip
           className={`text-xs pl-2.5 pr-6 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none ${getStatusColor(task.status)}`}
           value={task.status}
           disabled={backend.isSaving}
@@ -912,7 +912,7 @@ const TasksWorkspace: React.FC = () => {
 	                                {canEditTask(task) && <button
                                   className="rounded-md p-1 transition-colors hover:bg-slate-200 hover:text-slate-700"
                                   title="Quick Edit"
-                                  aria-label={`Quick edit `} data-i18n-skip
+                                  aria-label={`Quick edit ${task.title}`} data-i18n-skip
                                   onClick={(e) => handleQuickEditClick(e, task)}
                                 >
                                   <MoreHorizontal className="w-4 h-4" />
@@ -968,7 +968,7 @@ const TasksWorkspace: React.FC = () => {
                         type="button"
                         onClick={() => setSelectedTask(task)}
                         className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-                        aria-label={`View task `} data-i18n-skip
+                        aria-label={`View task ${task.title}`} data-i18n-skip
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">

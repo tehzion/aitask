@@ -63,7 +63,7 @@ assert(
   serviceWorker.indexOf('aitask-navigation') < serviceWorker.indexOf('manifest.webmanifest'),
   'The network-first navigation route must be registered before the precache route.',
 );
-assert(!/Dashboard-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'Dashboard route must not be in the install-time precache.');
+assert(/Dashboard-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'Dashboard route must be in the install-time precache for first-time offline deep links.');
 assert(!/charts-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'Charts must not be in the install-time precache.');
 
 const headersFor = (source) => new Map(

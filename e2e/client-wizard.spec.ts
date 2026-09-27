@@ -114,7 +114,7 @@ test('creates a client profile first, then a named project', async ({ page }) =>
   await taskDialog.getByLabel(/Assign to Position\/Department/).selectOption('Designer');
   await taskDialog.getByRole('button', { name: 'Create & open task' }).click();
   await expect(taskDialog).toBeHidden();
-  await expect(page).toHaveURL(/\/clients\?taskId=/);
+  await expect(page).toHaveURL(/\/tasks\?taskId=/);
   await expect(page.getByRole('dialog', { name: 'Launch creative brief' })).toBeVisible();
 
   const task = await page.evaluate(async () => {

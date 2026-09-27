@@ -18,6 +18,9 @@ const baseQuestionIds = [
 ];
 const superAdminQuestionIds = ['registration_approval', 'permissions', 'audit', 'developer_scope'];
 const feedbackDeadline = new Date('2026-07-30T15:59:59.999Z').getTime();
+const submitRateWindowMs = 10 * 60 * 1000;
+const submitRateLimit = 8;
+const submitAttempts = new Map<string, { startedAt: number; count: number }>();
 
 const corsHeaders = (origin: string | null) => ({
   'Access-Control-Allow-Origin': origin && allowedOrigins.has(origin) ? origin : 'https://aitask-virid.vercel.app',
@@ -36,12 +39,31 @@ const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const validRating = (value: unknown, nullable = false) => (
   (nullable && value === null) || (Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 5)
 );
+const requestIdentity = (request: Request) => (
+  request.headers.get('cf-connecting-ip')?.trim() ||
+  request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+  'unknown'
+);
+const allowSubmission = (request: Request) => {
+  const now = Date.now();
+  const key = requestIdentity(request);
+  const previous = submitAttempts.get(key);
+  if (!previous || now - previous.startedAt >= submitRateWindowMs) {
+    submitAttempts.set(key, { startedAt: now, count: 1 });
+    return true;
+  }
+  if (previous.count >= submitRateLimit) return false;
+  previous.count += 1;
+  return true;
+};
 
 Deno.serve(async request => {
   const origin = request.headers.get('Origin');
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(origin) });
   if (request.method !== 'POST') return json(origin, { error: 'Method not allowed' }, 405);
   if (origin && !allowedOrigins.has(origin)) return json(origin, { error: 'Origin not allowed' }, 403);
+  const contentLength = Number(request.headers.get('content-length') || 0);
+  if (Number.isFinite(contentLength) && contentLength > 256_000) return json(origin, { error: 'Feedback payload is too large' }, 413);
 
   const url = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -51,6 +73,7 @@ Deno.serve(async request => {
   const action = body.action === 'results' ? 'results' : 'submit';
 
   if (action === 'submit') {
+    if (!allowSubmission(request)) return json(origin, { error: 'Too many submissions. Please try again later.' }, 429);
     if (text(body.website, 200)) return json(origin, { ok: true, receipt: crypto.randomUUID() }, 201);
     const name = text(body.name, 100);
     const email = text(body.email, 254).toLowerCase();

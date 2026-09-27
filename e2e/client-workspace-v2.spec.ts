@@ -70,7 +70,7 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
   const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
   await expect(mobileNav.getByRole('link', { name: 'Home' })).toBeVisible();
   await expect(mobileNav.getByRole('link', { name: 'Deliveries' })).toBeVisible();
-  await expect(mobileNav.getByRole('link', { name: 'Inbox' })).toBeVisible();
+  await expect(mobileNav.getByRole('link', { name: /^Notifications(?:, \d+ unread)?$/ })).toBeVisible();
   await expect(mobileNav.getByRole('button', { name: 'Open more destinations' })).toBeVisible();
   const widths = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth }));
   expect(widths.content).toBeLessThanOrEqual(widths.viewport);

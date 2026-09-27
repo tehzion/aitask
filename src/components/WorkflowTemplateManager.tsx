@@ -7,6 +7,7 @@ import { Button } from './ui';
 import { cardBase, inputBase } from './uiTokens';
 import { cn } from '../lib/utils';
 import { useI18n } from './I18nProvider';
+import ConfirmDialog from './ConfirmDialog';
 
 const stepKinds: { value: WorkflowStepKind; label: string }[] = [
   { value: 'work', label: 'Work' },
@@ -30,12 +31,9 @@ const WorkflowTemplateManager = () => {
   const [draft, setDraft] = React.useState(blankTemplate);
   const [message, setMessage] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const [templateToDelete, setTemplateToDelete] = React.useState<ServiceWorkflowTemplate | null>(null);
 
   const handleDelete = async (template: ServiceWorkflowTemplate) => {
-    const confirmed = window.confirm(
-      t(`Delete the "${template.name}" workflow template? Plans that already froze this workflow keep their copy.`),
-    );
-    if (!confirmed) return;
     const result = deleteWorkflowTemplate(template.id);
     if (!result.ok) return setMessage(result.error || 'Unable to delete the workflow template.');
     setSaving(true);
@@ -106,7 +104,7 @@ const WorkflowTemplateManager = () => {
               </button>
               <button
                 type="button"
-                onClick={() => void handleDelete(template)}
+                onClick={() => setTemplateToDelete(template)}
                 disabled={saving}
                 aria-label={`Delete workflow ${template.name}`}
                 title={`Delete ${template.name}`}
@@ -156,6 +154,20 @@ const WorkflowTemplateManager = () => {
           {message && <p className="text-sm font-medium text-blue-700" role="status">{message}</p>}
         </div>
       </div>
+      {templateToDelete && (
+        <ConfirmDialog
+          labelledBy="delete-workflow-template-title"
+          title={t(`Delete the "${templateToDelete.name}" workflow template?`)}
+          description={t('Plans that already froze this workflow keep their copy.')}
+          confirmLabel={t('Delete workflow')}
+          busy={saving}
+          onClose={() => setTemplateToDelete(null)}
+          onConfirm={async () => {
+            await handleDelete(templateToDelete);
+            setTemplateToDelete(null);
+          }}
+        />
+      )}
     </section>
   );
 };

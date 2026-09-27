@@ -48,7 +48,9 @@ test('service catalog: template and package creation, frozen plan and delete gua
   await expect(page.getByText(/Revision 1 · 1 services/)).toBeVisible();
 
   // Deleting a workflow template that is frozen into a package is blocked.
-  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Delete workflow QA Video Chain' }).click();
+  const deleteDialog = page.getByRole('dialog', { name: /Delete the/ });
+  await expect(deleteDialog).toBeVisible();
+  await deleteDialog.getByRole('button', { name: 'Delete workflow' }).click();
   await expect(page.getByText(/Deactivate it instead of deleting./)).toBeVisible();
 });

@@ -10,6 +10,7 @@ import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseCl
 import { discardSecureWorkspaceCommand, getRetainedSecureCommand } from '../lib/secureWorkspace';
 import { getMobileNavigation, getNavigationSections, type NavigationItem } from '../lib/navigation';
 import { useI18n } from './I18nProvider';
+import ConfirmDialog from './ConfirmDialog';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -29,6 +30,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
     typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
   ));
   const [collapsedLabel, setCollapsedLabel] = React.useState<CollapsedLabel | null>(null);
+  const [showLogoutConfirmation, setShowLogoutConfirmation] = React.useState(false);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const logoutConfirmationTitleId = React.useId();
   const sidebarRef = React.useRef<HTMLElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -54,14 +58,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
   const moreActive = visibleSecondary.some(item => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
   const [staffMoreOpen, setStaffMoreOpen] = React.useState(moreActive);
 
-  const handleLogout = async () => {
+  const completeLogout = async () => {
     const signingOutUser = useStore.getState().currentUser;
     if (shouldUseSecureSupabase()) {
-      const backend = useStore.getState().backend;
-      const hasPendingChange = backend.pendingMutations > 0 || getRetainedSecureCommand() !== null;
-      if (hasPendingChange && !window.confirm(t('Sign out anyway? Your pending change in this browser tab will be permanently discarded.'))) {
-        return;
-      }
       discardSecureWorkspaceCommand();
       await signOutSecureSession();
     }
@@ -69,6 +68,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
     stopBackendAutoSync();
     useStore.setState({ currentUser: null });
     navigate('/login', { replace: true });
+  };
+  const handleLogout = () => {
+    const backend = useStore.getState().backend;
+    const hasPendingChange = backend.pendingMutations > 0 || getRetainedSecureCommand() !== null;
+    if (shouldUseSecureSupabase() && hasPendingChange) {
+      setShowLogoutConfirmation(true);
+      return;
+    }
+    void completeLogout();
   };
 
   const showCollapsedLabel = (event: React.SyntheticEvent<HTMLElement>, label: string) => {
@@ -318,6 +326,22 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
           {t(collapsedLabel.label)}
         </span>,
         document.body,
+      )}
+      {showLogoutConfirmation && (
+        <ConfirmDialog
+          labelledBy={logoutConfirmationTitleId}
+          title={t('Sign out with an unsaved change?')}
+          description={t('Your pending change in this browser tab will be permanently discarded.')}
+          confirmLabel={t('Sign out anyway')}
+          busy={isLoggingOut}
+          onClose={() => setShowLogoutConfirmation(false)}
+          onConfirm={async () => {
+            setIsLoggingOut(true);
+            await completeLogout();
+            setIsLoggingOut(false);
+            setShowLogoutConfirmation(false);
+          }}
+        />
       )}
     </>
   );

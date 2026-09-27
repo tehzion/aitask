@@ -393,10 +393,8 @@ test('first login reaches the app and critical responsive routes remain usable',
       })),
     });
   });
-  const mobileNotificationsButton = page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('button', { name: /Notifications, 6 unread/ });
+  const mobileNotificationsButton = page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('link', { name: /Notifications, 6 unread/ });
   await mobileNotificationsButton.click();
-  await expect(page.getByRole('link', { name: 'View all notifications' })).toBeVisible();
-  await page.getByRole('link', { name: 'View all notifications' }).click();
   await expect(page).toHaveURL(/\/notifications$/);
   await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
   await expect(page.getByText('Center QA 1', { exact: true })).toBeVisible();
@@ -409,11 +407,9 @@ test('first login reaches the app and critical responsive routes remain usable',
   await headerNotificationButton.click();
 
   await page.getByLabel('Search notifications').fill('Center QA 7');
-  await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page.getByText('Center QA 7', { exact: true })).toBeVisible();
   await expect(page.getByText('Center QA 1', { exact: true })).toHaveCount(0);
   await page.getByLabel('Search notifications').fill('');
-  await page.getByRole('button', { name: 'Search', exact: true }).click();
   await page.getByLabel('Filter notification category').selectOption('status');
   await expect(page.getByText('Center QA 1', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Unread (6)' }).click();
@@ -797,7 +793,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
   const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
   await expect(mobileNav.getByText('Dashboard', { exact: true })).toHaveCount(0);
-  await expect(mobileNav.getByText('Inbox', { exact: true })).toBeVisible();
+  await expect(mobileNav.getByRole('link', { name: /^Notifications(?:, \d+ unread)?$/ })).toBeVisible();
   await mobileNav.getByRole('button', { name: 'Open more destinations' }).click();
   await expect(page.getByRole('link', { name: 'All work' })).toBeVisible();
   await expect(mobileNav.getByText('Calendar', { exact: true })).toHaveCount(0);
