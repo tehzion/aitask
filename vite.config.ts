@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tsconfigPaths from "vite-tsconfig-paths";
 import { VitePWA } from 'vite-plugin-pwa';
+import { visualizer } from 'rollup-plugin-visualizer';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
@@ -43,6 +44,12 @@ const verifyProductionBackend = (mode: string) => {
   if (mode !== 'production') return;
   const loaded = loadEnv(mode, process.cwd(), '');
   const buildEnv = { ...loaded, ...process.env };
+  if (process.env.PWA_E2E_LOCAL === 'true') {
+    if (buildEnv.VITE_AITASK_BACKEND !== 'local') {
+      throw new Error('PWA_E2E_LOCAL builds must explicitly use VITE_AITASK_BACKEND=local.');
+    }
+    return;
+  }
   if (buildEnv.VITE_AITASK_BACKEND !== 'supabase') {
     throw new Error('Production builds require VITE_AITASK_BACKEND=supabase.');
   }
@@ -93,6 +100,12 @@ export default defineConfig(({ mode }) => {
           icons: ['lucide-react'],
           // Auth/data client is loaded on demand and should not inflate the offline shell.
           supabase: ['@supabase/supabase-js'],
+          // Keep the class-merging runtime out of the application entry chunk.
+          // Components still receive it through the normal static import.
+          tailwindMerge: ['tailwind-merge'],
+          // Reports are lazy-loaded; keep the chart renderer isolated from the
+          // authenticated shell and report tables.
+          reportsCharts: ['recharts'],
         },
       },
     },
@@ -108,6 +121,15 @@ export default defineConfig(({ mode }) => {
       },
     }),
     tsconfigPaths(),
+    ...(process.env.ANALYZE_BUNDLE === 'true'
+      ? [visualizer({
+        filename: 'dist/bundle-stats.html',
+        template: 'treemap',
+        gzipSize: true,
+        brotliSize: true,
+        open: false,
+      })]
+      : []),
     VitePWA({
       strategies: 'injectManifest',
       srcDir: 'src',
@@ -148,10 +170,7 @@ export default defineConfig(({ mode }) => {
       },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,svg,png}'],
-        globIgnores: [
-          '**/Reports-*.js',
-          '**/BarChart-*.js',
-        ],
+        globIgnores: ['bundle-stats.html'],
       },
     }),
   ],

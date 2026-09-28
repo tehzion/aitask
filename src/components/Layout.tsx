@@ -3,10 +3,6 @@ import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-do
 import { useShallow } from 'zustand/react/shallow';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
-import { ToastContainer } from './Toast';
-import { NotificationPopupHost } from './NotificationPopupHost';
-import ReleaseNotice from './ReleaseNotice';
-import CreateTaskModal from './CreateTaskModal';
 import { useStore } from '../store';
 import { useNotificationReadActions } from '../hooks/useNotificationReadActions';
 import { canAccessPath, canCreateTasks, getUnreadNotifications } from '../lib/access';
@@ -16,10 +12,16 @@ import { cn } from '../lib/utils';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { useColorTheme } from '../hooks/useColorTheme';
 import { getNavigationShortcut, isEditableShortcutTarget } from '../lib/keyboard';
-import KeyboardShortcutsDialog from './KeyboardShortcutsDialog';
-import CommandPalette from './CommandPalette';
 import { useI18n } from './I18nProvider';
 import { getMobileNavigation } from '../lib/navigation';
+import { useToastStore } from '../store/useToastStore';
+
+const CreateTaskModal = React.lazy(() => import('./CreateTaskModal'));
+const KeyboardShortcutsDialog = React.lazy(() => import('./KeyboardShortcutsDialog'));
+const CommandPalette = React.lazy(() => import('./CommandPalette'));
+const ReleaseNotice = React.lazy(() => import('./ReleaseNotice'));
+const NotificationPopupHost = React.lazy(() => import('./NotificationPopupHost').then(module => ({ default: module.NotificationPopupHost })));
+const ToastContainer = React.lazy(() => import('./Toast').then(module => ({ default: module.ToastContainer })));
 
 export interface LayoutOutletContext {
   notificationReadActions: ReturnType<typeof useNotificationReadActions>;
@@ -42,6 +44,7 @@ const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useI18n();
+  const toastCount = useToastStore(state => state.toasts.length);
   const { preference, resolvedTheme, setPreference, toggleTheme } = useColorTheme();
 
   const {
@@ -361,28 +364,49 @@ const Layout: React.FC = () => {
         </nav>
       </div>
 
-      <NotificationPopupHost
-        currentUser={currentUser}
-        notifications={notifications}
-        isReady={!backend.isLoading && backend.status !== 'loading'}
-        readActions={notificationReadActions}
-      />
-      <ReleaseNotice
-        currentUser={currentUser}
-        isReady={!backend.isLoading && backend.status !== 'loading'}
-      />
-      <ToastContainer />
-      <CreateTaskModal isOpen={isCreateTaskModalOpen} onClose={() => setCreateTaskModalOpen(false)} />
-      <KeyboardShortcutsDialog
-        isOpen={isShortcutHelpOpen}
-        canCreateTask={userCanCreateTasks}
-        onClose={() => setIsShortcutHelpOpen(false)}
-      />
-      <CommandPalette
-        isOpen={isCommandPaletteOpen}
-        onClose={() => setIsCommandPaletteOpen(false)}
-        onOpenShortcuts={() => setIsShortcutHelpOpen(true)}
-      />
+      {currentUser && !backend.isLoading && backend.status !== 'loading' && (
+        <React.Suspense fallback={null}>
+          <NotificationPopupHost
+            currentUser={currentUser}
+            notifications={notifications}
+            isReady
+            readActions={notificationReadActions}
+          />
+        </React.Suspense>
+      )}
+      {currentUser && !backend.isLoading && backend.status !== 'loading' && (
+        <React.Suspense fallback={null}>
+          <ReleaseNotice currentUser={currentUser} isReady />
+        </React.Suspense>
+      )}
+      {toastCount > 0 && (
+        <React.Suspense fallback={null}>
+          <ToastContainer />
+        </React.Suspense>
+      )}
+      {isCreateTaskModalOpen && (
+        <React.Suspense fallback={null}>
+          <CreateTaskModal isOpen onClose={() => setCreateTaskModalOpen(false)} />
+        </React.Suspense>
+      )}
+      {isShortcutHelpOpen && (
+        <React.Suspense fallback={null}>
+          <KeyboardShortcutsDialog
+            isOpen
+            canCreateTask={userCanCreateTasks}
+            onClose={() => setIsShortcutHelpOpen(false)}
+          />
+        </React.Suspense>
+      )}
+      {isCommandPaletteOpen && (
+        <React.Suspense fallback={null}>
+          <CommandPalette
+            isOpen
+            onClose={() => setIsCommandPaletteOpen(false)}
+            onOpenShortcuts={() => setIsShortcutHelpOpen(true)}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 };

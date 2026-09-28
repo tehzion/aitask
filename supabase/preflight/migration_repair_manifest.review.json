@@ -535,7 +535,10 @@
     "20260925130000_staff_notification_assigner_recipient",
     "20260926100000_task_attribution_and_staff_context_hardening",
     "20260926110000_service_role_least_privilege",
-    "20260926120000_pm_assignee_department_optional"
+    "20260926120000_pm_assignee_department_optional",
+    "20260928140058_server_reminders_and_feedback_rate_limit"
   ],
-  "pendingProductionMigrations": []
+  "pendingProductionMigrations": [
+    "20260928140058_server_reminders_and_feedback_rate_limit"
+  ]
 }

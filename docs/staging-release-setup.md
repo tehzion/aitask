@@ -16,12 +16,12 @@ Add these GitHub secrets for Vercel: the production `VERCEL_TOKEN`, `VERCEL_ORG_
 
 ## 3. Configure the staging QA fixture
 
-The pull-request and tagged workflows run `scripts/reset-staging-qa.mjs` to create one resettable workspace named `Release QA`, with non-client accounts for Super Admin, Operations, Production, Account, and password setup, plus one Client account. The fixture includes:
+The pull-request and tagged workflows run `scripts/reset-staging-qa.mjs` to create one resettable workspace named `Release QA`, with non-client accounts for Super Admin, Operations, HOD, Production, Account, and password setup, plus one Client account. The fixture includes:
 
 - one known client plan with a published service cycle and a client-visible delivery awaiting review;
 - one client-visible delivery belonging to another company, used only to verify denial;
-- deterministic client, plan, cycle, deliverable, task-chain, notification, and foreign-company records;
-- a cleanup operation that refuses production, checks the staging project reference, and removes only workspace `aitask-main` when its name is `AiTask` or `Release QA`, plus the six exact QA emails.
+- deterministic client, plan, cycle, deliverable, assigned/unassigned task, stale-version task, notification, and foreign-company records;
+- a cleanup operation that refuses production, checks the staging project reference, and removes only workspace `aitask-main` when its name is `AiTask` or `Release QA`, plus the seven exact QA emails.
 
 Store account credentials in the `STAGING_QA_*_EMAIL` and `STAGING_QA_*_PASSWORD` secrets, including `STAGING_QA_PASSWORD_SETUP_NEW_PASSWORD`. Fixture identifiers are non-secret deterministic constants shared by the reset script and staging suite. Both workflows use the exact deployment URL returned by Vercel and fail before verification if required configuration is absent.
 

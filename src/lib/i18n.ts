@@ -1,5 +1,6 @@
 import { format, formatDistanceToNow } from 'date-fns';
-import { enUS, zhCN } from 'date-fns/locale';
+import { enUS } from 'date-fns/locale/en-US';
+import { zhCN } from 'date-fns/locale/zh-CN';
 
 export type AppLocale = 'en' | 'zh';
 
@@ -2554,6 +2555,7 @@ const zhCopyCoverage: Record<string, string> = {
 
   // Remaining raw JSX labels
   'Loading AiTask...': '正在加载 AiTask…',
+  'Loading charts...': '正在加载图表…',
   'The cached app shell is available. Live workspace sync will resume when you are back online.': '已提供缓存的应用程序外壳。恢复联网后将自动继续实时工作区同步。',
   'Go to your workspace': '前往您的工作区',
   'Company name': '公司名称',

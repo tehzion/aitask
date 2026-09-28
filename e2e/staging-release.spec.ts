@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-type QaRole = 'SUPER_ADMIN' | 'OPERATION' | 'PRODUCTION' | 'ACCOUNT' | 'CLIENT';
+type QaRole = 'SUPER_ADMIN' | 'OPERATION' | 'HOD' | 'PRODUCTION' | 'ACCOUNT' | 'CLIENT';
 
 const required = (name: string) => {
   const value = process.env[name];
@@ -20,6 +20,9 @@ const fixture = {
   productionTaskId: 'TASK-release-qa-client',
   approvalTaskId: 'TASK-release-qa-approval',
   accountTaskId: 'TASK-release-qa-account',
+  hodTaskId: 'TASK-release-qa-hod',
+  unassignedTaskId: 'TASK-release-qa-unassigned',
+  conflictTaskId: 'TASK-release-qa-conflict',
   foreignTaskId: 'TASK-release-qa-foreign',
 };
 
@@ -36,6 +39,62 @@ const signIn = async (page: Page, role: QaRole) => {
   const releaseNotice = page.getByRole('button', { name: 'Happy working' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
   if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
+};
+
+const accessToken = async (page: Page) => page.evaluate(() => {
+  const stores = [localStorage, sessionStorage];
+  for (const store of stores) {
+    for (let index = 0; index < store.length; index += 1) {
+      const key = store.key(index);
+      if (!key?.startsWith('sb-') || !key.endsWith('-auth-token')) continue;
+      try {
+        const session = JSON.parse(store.getItem(key) || 'null') as {
+          access_token?: string;
+          currentSession?: { access_token?: string };
+        } | null;
+        const token = session?.access_token || session?.currentSession?.access_token;
+        if (token) return token;
+      } catch {
+        // Ignore unrelated or incomplete persisted sessions and keep looking.
+      }
+    }
+  }
+  throw new Error('The authenticated staging session did not expose an access token.');
+});
+
+const stagingApi = () => ({
+  url: required('STAGING_SUPABASE_URL').replace(/\/$/, ''),
+  publishableKey: required('STAGING_SUPABASE_PUBLISHABLE_KEY'),
+});
+
+const rpc = async (page: Page, token: string, functionName: string, payload: unknown) => {
+  const { url, publishableKey } = stagingApi();
+  const response = await page.request.post(`${url}/rest/v1/rpc/${functionName}`, {
+    headers: {
+      apikey: publishableKey,
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    data: payload,
+  });
+  return { status: response.status(), body: await response.json() };
+};
+
+const stagingMemberVersion = async (page: Page, token: string, memberId: string) => {
+  const { url, publishableKey } = stagingApi();
+  const response = await page.request.get(
+    `${url}/rest/v1/aitask_members?workspace_id=eq.aitask-main&id=eq.${encodeURIComponent(memberId)}&select=id,version`,
+    {
+      headers: {
+        apikey: publishableKey,
+        authorization: `Bearer ${token}`,
+      },
+    },
+  );
+  expect(response.ok()).toBeTruthy();
+  const members = await response.json() as Array<{ id: string; version: number }>;
+  expect(members).toHaveLength(1);
+  return members[0].version;
 };
 
 const advanceClientWizard = async (page: Page, clientName: string) => {
@@ -56,10 +115,11 @@ const advanceClientWizard = async (page: Page, clientName: string) => {
   return dialog;
 };
 
-test('all five release roles can access their scoped staging workspace', async ({ browser }) => {
+test('all six release roles can access their scoped staging workspace', async ({ browser }) => {
   const checks: Array<{ role: QaRole; expected: RegExp }> = [
     { role: 'SUPER_ADMIN', expected: /AiTask|Dashboard|Delivery tracker/ },
     { role: 'OPERATION', expected: /My work/ },
+    { role: 'HOD', expected: /My work|Department work/ },
     { role: 'PRODUCTION', expected: /My work/ },
     { role: 'ACCOUNT', expected: /My work/ },
     { role: 'CLIENT', expected: /Home/ },
@@ -79,6 +139,7 @@ test('internal roles can follow the deterministic delivery task chain', async ({
     { role: 'OPERATION', taskId: fixture.operationTaskId, title: 'Release QA prepare content' },
     { role: 'PRODUCTION', taskId: fixture.productionTaskId, title: 'Release QA delivery ready' },
     { role: 'ACCOUNT', taskId: fixture.accountTaskId, title: 'Release QA account follow-up' },
+    { role: 'HOD', taskId: fixture.hodTaskId, title: 'Release QA HOD review' },
   ];
 
   for (const check of checks) {
@@ -89,6 +150,55 @@ test('internal roles can follow the deterministic delivery task chain', async ({
     await expect(page.getByText(check.title, { exact: true })).toBeVisible();
     await context.close();
   }
+});
+
+test('HOD work search, assigned updates, and unassigned visibility are server-enforced', async ({ page }) => {
+  await signIn(page, 'HOD');
+  await page.goto(`/tasks?search=${encodeURIComponent('Release QA unassigned work')}`);
+  await expect(page.getByText('Release QA unassigned work', { exact: true })).toBeVisible();
+
+  await page.goto(`/tasks?taskId=${encodeURIComponent(fixture.hodTaskId)}`);
+  const dialog = page.getByRole('dialog', { name: 'Release QA HOD review' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Task status').selectOption('In Progress');
+  await dialog.getByPlaceholder('Write a comment or update...').fill('HOD staging update.');
+  await dialog.getByRole('button', { name: 'Send comment' }).click();
+  await expect(dialog.getByText('HOD staging update.', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
+});
+
+test('a stale task version returns a conflict while preserving the draft comment', async ({ page }) => {
+  await signIn(page, 'OPERATION');
+  await page.goto(`/tasks?taskId=${encodeURIComponent(fixture.conflictTaskId)}`);
+  const dialog = page.getByRole('dialog', { name: 'Release QA stale version fixture' });
+  await expect(dialog).toBeVisible();
+
+  await page.route('**/rest/v1/rpc/aitask_execute_command', async route => {
+    const request = route.request();
+    const body = request.postDataJSON() as {
+      p_command_type?: string;
+      p_operations?: Array<{ entityId?: string; expectedVersion?: number }>;
+    } | null;
+    if (body?.p_command_type === 'task.update' && body.p_operations?.some(operation => operation.entityId === fixture.conflictTaskId)) {
+      await route.continue({
+        postData: JSON.stringify({
+          ...body,
+          p_operations: body.p_operations.map(operation => operation.entityId === fixture.conflictTaskId
+            ? { ...operation, expectedVersion: 1 }
+            : operation),
+        }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  const draft = 'Keep this draft while the task is refreshed.';
+  await dialog.getByPlaceholder('Write a comment or update...').fill(draft);
+  await dialog.getByLabel('Task status').selectOption('In Progress');
+  await expect(dialog.getByRole('alert')).toContainText(/newer|conflict|save/i);
+  await expect(dialog.getByPlaceholder('Write a comment or update...')).toHaveValue(draft);
+  await page.unroute('**/rest/v1/rpc/aitask_execute_command');
 });
 
 test('Account reports remain scoped to assigned work', async ({ page }) => {
@@ -207,6 +317,82 @@ test('an interrupted client-plan save retries the same change without a duplicat
 
   await page.goto('/clients');
   await expect(page.getByText('Release QA Retry Client', { exact: true })).toHaveCount(1);
+});
+
+test('a revoked Staff task capability is rejected by the server command boundary', async ({ browser }) => {
+  const adminContext = await browser.newContext();
+  const staffContext = await browser.newContext();
+  const adminPage = await adminContext.newPage();
+  const staffPage = await staffContext.newPage();
+
+  try {
+    await signIn(adminPage, 'SUPER_ADMIN');
+    await signIn(staffPage, 'OPERATION');
+    const adminToken = await accessToken(adminPage);
+    const staffToken = await accessToken(staffPage);
+    const staffMemberId = 'release-qa-operation';
+    const originalVersion = await stagingMemberVersion(adminPage, adminToken, staffMemberId);
+    const permissionChangeId = await adminPage.evaluate(() => crypto.randomUUID());
+
+    const revoked = await rpc(adminPage, adminToken, 'aitask_update_member_permissions', {
+      p_workspace_id: 'aitask-main',
+      p_command_id: permissionChangeId,
+      p_member_id: staffMemberId,
+      // Keep workspace access but deliberately exclude Staff's createTasks default.
+      p_permissions: {
+        viewDashboard: true,
+        viewTasks: true,
+        viewCalendar: true,
+        viewProjects: true,
+        viewDeliveryTracker: true,
+        viewReports: true,
+        viewSettings: true,
+        viewAssignedServiceClients: true,
+      },
+      p_expected_version: originalVersion,
+    });
+    expect(revoked.status).toBe(200);
+    expect(revoked.body).toMatchObject({ ok: true });
+
+    const probeTaskId = `TASK-release-qa-revoked-${await staffPage.evaluate(() => crypto.randomUUID())}`;
+    const rejected = await rpc(staffPage, staffToken, 'aitask_execute_command', {
+      p_workspace_id: 'aitask-main',
+      p_command_id: await staffPage.evaluate(() => crypto.randomUUID()),
+      p_command_type: 'task.create',
+      p_expected_workspace_version: null,
+      p_operations: [{
+        kind: 'entity',
+        action: 'insert',
+        entityType: 'task',
+        entityId: probeTaskId,
+        expectedVersion: 0,
+        data: {
+          id: probeTaskId,
+          title: 'Release QA revoked capability probe',
+          clientName: fixture.clientName,
+          department: 'Operation',
+          assignedTo: staffMemberId,
+          createdBy: staffMemberId,
+          status: 'Pending',
+          visibility: 'internal',
+        },
+      }],
+    });
+    expect(rejected.status).toBe(200);
+    expect(rejected.body).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+
+    const restore = await rpc(adminPage, adminToken, 'aitask_update_member_permissions', {
+      p_workspace_id: 'aitask-main',
+      p_command_id: await adminPage.evaluate(() => crypto.randomUUID()),
+      p_member_id: staffMemberId,
+      p_permissions: null,
+      p_expected_version: Number(revoked.body.member?.version),
+    });
+    expect(restore.status).toBe(200);
+    expect(restore.body).toMatchObject({ ok: true });
+  } finally {
+    await Promise.all([adminContext.close(), staffContext.close()]);
+  }
 });
 
 test('a real hosted password setup updates Auth and finalizes the member account', async ({ page }) => {

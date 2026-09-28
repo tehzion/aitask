@@ -2,8 +2,6 @@ import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { startBackendAutoSync, useStore } from './store';
 import Layout from './components/Layout';
-import Login from './pages/Login';
-import AccessDenied from './components/AccessDenied';
 import { canAccessPath } from './lib/access';
 import { hasPasswordResetBypass } from './lib/auth';
 import { RefreshCw, WifiOff } from 'lucide-react';
@@ -11,6 +9,8 @@ import { shouldUseSecureSupabase, supabase } from './lib/supabaseClient';
 import { useAppNoticeState } from './hooks/useAppNoticeState';
 
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const AccessDenied = React.lazy(() => import('./components/AccessDenied'));
+const Login = React.lazy(() => import('./pages/Login'));
 const Calendar = React.lazy(() => import('./pages/Calendar'));
 const DeliveryTracker = React.lazy(() => import('./pages/DeliveryTracker'));
 const ClientWorkspace = React.lazy(() => import('./pages/ClientWorkspace'));
@@ -101,7 +101,7 @@ function App() {
       startBackendAutoSync();
       forceSyncMockData();
       let store = useStore.getState();
-      if (!shouldUseSecureSupabase() || (store.currentUser && store.currentUser.role !== 'Client')) {
+      if (!shouldUseSecureSupabase()) {
         sendDueDateReminders();
         store = useStore.getState();
       }
@@ -118,6 +118,7 @@ function App() {
   }, [forceSyncMockData, initializeBackend, sendDueDateReminders]);
 
   useEffect(() => {
+    if (shouldUseSecureSupabase()) return;
     const remind = () => {
       if (document.visibilityState === 'visible') sendDueDateReminders();
     };

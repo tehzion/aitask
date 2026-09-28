@@ -18,9 +18,8 @@ const baseQuestionIds = [
 ];
 const superAdminQuestionIds = ['registration_approval', 'permissions', 'audit', 'developer_scope'];
 const feedbackDeadline = new Date('2026-07-30T15:59:59.999Z').getTime();
-const submitRateWindowMs = 10 * 60 * 1000;
 const submitRateLimit = 8;
-const submitAttempts = new Map<string, { startedAt: number; count: number }>();
+const submitRateWindowSeconds = 10 * 60;
 
 const corsHeaders = (origin: string | null) => ({
   'Access-Control-Allow-Origin': origin && allowedOrigins.has(origin) ? origin : 'https://aitask-virid.vercel.app',
@@ -29,9 +28,9 @@ const corsHeaders = (origin: string | null) => ({
   'Vary': 'Origin',
 });
 
-const json = (origin: string | null, body: unknown, status = 200) => new Response(JSON.stringify(body), {
+const json = (origin: string | null, body: unknown, status = 200, extraHeaders: Record<string, string> = {}) => new Response(JSON.stringify(body), {
   status,
-  headers: { ...corsHeaders(origin), 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  headers: { ...corsHeaders(origin), 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...extraHeaders },
 });
 
 const text = (value: unknown, max: number) => typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -44,17 +43,9 @@ const requestIdentity = (request: Request) => (
   request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
   'unknown'
 );
-const allowSubmission = (request: Request) => {
-  const now = Date.now();
-  const key = requestIdentity(request);
-  const previous = submitAttempts.get(key);
-  if (!previous || now - previous.startedAt >= submitRateWindowMs) {
-    submitAttempts.set(key, { startedAt: now, count: 1 });
-    return true;
-  }
-  if (previous.count >= submitRateLimit) return false;
-  previous.count += 1;
-  return true;
+const hashIdentity = async (identity: string) => {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 };
 
 Deno.serve(async request => {
@@ -69,11 +60,36 @@ Deno.serve(async request => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !serviceKey) return json(origin, { error: 'Feedback service is unavailable' }, 500);
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
-  const body = await request.json().catch(() => ({}));
+  const rawBody = await request.text().catch(() => '');
+  if (new TextEncoder().encode(rawBody).byteLength > 256_000) {
+    return json(origin, { error: 'Feedback payload is too large' }, 413);
+  }
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(rawBody || '{}') as Record<string, unknown>;
+  } catch {
+    return json(origin, { error: 'Feedback payload must be valid JSON' }, 400);
+  }
   const action = body.action === 'results' ? 'results' : 'submit';
 
   if (action === 'submit') {
-    if (!allowSubmission(request)) return json(origin, { error: 'Too many submissions. Please try again later.' }, 429);
+    const rateLimit = await admin.rpc('aitask_consume_feedback_rate_limit', {
+      p_key_hash: await hashIdentity(requestIdentity(request)),
+      p_limit: submitRateLimit,
+      p_window_seconds: submitRateWindowSeconds,
+    });
+    if (rateLimit.error || !rateLimit.data || rateLimit.data.ok !== true || typeof rateLimit.data.allowed !== 'boolean') {
+      return json(origin, { error: 'Feedback service is temporarily unavailable. Please try again later.' }, 503);
+    }
+    if (!rateLimit.data.allowed) {
+      const retryAfterSeconds = Math.max(1, Number(rateLimit.data.retryAfterSeconds) || submitRateWindowSeconds);
+      return json(
+        origin,
+        { error: 'Too many submissions. Please try again later.' },
+        429,
+        { 'Retry-After': String(retryAfterSeconds) },
+      );
+    }
     if (text(body.website, 200)) return json(origin, { ok: true, receipt: crypto.randomUUID() }, 201);
     const name = text(body.name, 100);
     const email = text(body.email, 254).toLowerCase();

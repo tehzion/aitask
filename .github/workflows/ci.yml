@@ -58,6 +58,9 @@ jobs:
       - name: Production build
         run: pnpm build
 
+      - name: Verify bundle budgets
+        run: pnpm verify:bundle 2>&1 | tee bundle-verification.log
+
       - name: Verify PWA output
         run: pnpm verify:pwa
 
@@ -74,6 +77,18 @@ jobs:
 
       - name: Hosted login localization
         run: pnpm test:e2e:login-i18n
+
+      - name: Retain bundle and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-evidence-${{ github.run_id }}
+          path: |
+            bundle-verification.log
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 30
 
   database:
     runs-on: ubuntu-latest
@@ -97,5 +112,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Docker diagnostics
+        run: docker info
+
       - name: Validate migrations, pgTAP, lint, advisors, and postflight
-        run: pnpm verify:supabase:rollout
+        run: pnpm verify:supabase:rollout 2>&1 | tee supabase-rollout.log
+
+      - name: Retain database rollout evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-rollout-${{ github.run_id }}
+          path: supabase-rollout.log
+          if-no-files-found: ignore
+          retention-days: 30

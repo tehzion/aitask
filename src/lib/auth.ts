@@ -3,7 +3,10 @@ import type { LoginFailureCode, LoginResult } from '../types';
 const env = (key: string) => (import.meta.env[key] as string | undefined)?.trim() || '';
 
 // Local demo credentials must never be emitted into hosted production bundles.
-export const DEFAULT_USER_PASSWORD = import.meta.env.DEV
+// A production-mode PWA browser test may still build the app with the local
+// backend explicitly selected; that build is not a hosted release artifact.
+const isLocalBackendBuild = env('VITE_AITASK_BACKEND').toLowerCase() === 'local';
+export const DEFAULT_USER_PASSWORD = (import.meta.env.DEV || isLocalBackendBuild)
   ? env('VITE_AITASK_LOCAL_DEFAULT_PASSWORD') || 'password123'
   : '';
 export const PASSWORD_RESET_BYPASS_SESSION_PREFIX = 'aitask:password-reset-bypass:';

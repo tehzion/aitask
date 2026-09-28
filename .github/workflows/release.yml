@@ -49,6 +49,8 @@ jobs:
           STAGING_QA_SUPER_ADMIN_PASSWORD: ${{ secrets.STAGING_QA_SUPER_ADMIN_PASSWORD }}
           STAGING_QA_OPERATION_EMAIL: ${{ secrets.STAGING_QA_OPERATION_EMAIL }}
           STAGING_QA_OPERATION_PASSWORD: ${{ secrets.STAGING_QA_OPERATION_PASSWORD }}
+          STAGING_QA_HOD_EMAIL: ${{ secrets.STAGING_QA_HOD_EMAIL }}
+          STAGING_QA_HOD_PASSWORD: ${{ secrets.STAGING_QA_HOD_PASSWORD }}
           STAGING_QA_PRODUCTION_EMAIL: ${{ secrets.STAGING_QA_PRODUCTION_EMAIL }}
           STAGING_QA_PRODUCTION_PASSWORD: ${{ secrets.STAGING_QA_PRODUCTION_PASSWORD }}
           STAGING_QA_ACCOUNT_EMAIL: ${{ secrets.STAGING_QA_ACCOUNT_EMAIL }}
@@ -66,7 +68,6 @@ jobs:
           test "$(git rev-parse origin/master)" = "$GITHUB_SHA"
           grep -F "## [$version]" CHANGELOG.md
           grep -F "## v$version" docs/client-release-notes-2026-08.md
-          node scripts/verify-release-db-alignment.mjs
           test -n "$VERCEL_CLI_VERSION"
           for value in \
             "$STAGING_VERCEL_TOKEN" "$STAGING_VERCEL_ORG_ID" "$STAGING_VERCEL_PROJECT_ID" \
@@ -74,6 +75,7 @@ jobs:
             "$PRODUCTION_SUPABASE_URL" "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" \
             "$STAGING_QA_SUPER_ADMIN_EMAIL" "$STAGING_QA_SUPER_ADMIN_PASSWORD" \
             "$STAGING_QA_OPERATION_EMAIL" "$STAGING_QA_OPERATION_PASSWORD" \
+            "$STAGING_QA_HOD_EMAIL" "$STAGING_QA_HOD_PASSWORD" \
             "$STAGING_QA_PRODUCTION_EMAIL" "$STAGING_QA_PRODUCTION_PASSWORD" \
             "$STAGING_QA_ACCOUNT_EMAIL" "$STAGING_QA_ACCOUNT_PASSWORD" \
             "$STAGING_QA_CLIENT_EMAIL" "$STAGING_QA_CLIENT_PASSWORD" \
@@ -101,11 +103,16 @@ jobs:
           pnpm lint
           pnpm test
           pnpm build
+          pnpm verify:bundle 2>&1 | tee bundle-verification.log
           pnpm verify:pwa
           pnpm verify:release-provenance -- --file dist/build-info.json --version "${GITHUB_REF_NAME#v}" --commit "$GITHUB_SHA"
 
       - name: Validate Supabase rollout in a disposable stack
-        run: pnpm verify:supabase:rollout
+        run: |
+          mkdir -p release-evidence
+          docker info
+          pnpm verify:supabase:rollout 2>&1 | tee release-evidence/supabase-rollout.log
+          pnpm verify:release-db-alignment
 
       - name: Install browser runtime and run local browser gates
         run: |
@@ -168,6 +175,8 @@ jobs:
           STAGING_QA_SUPER_ADMIN_PASSWORD: ${{ secrets.STAGING_QA_SUPER_ADMIN_PASSWORD }}
           STAGING_QA_OPERATION_EMAIL: ${{ secrets.STAGING_QA_OPERATION_EMAIL }}
           STAGING_QA_OPERATION_PASSWORD: ${{ secrets.STAGING_QA_OPERATION_PASSWORD }}
+          STAGING_QA_HOD_EMAIL: ${{ secrets.STAGING_QA_HOD_EMAIL }}
+          STAGING_QA_HOD_PASSWORD: ${{ secrets.STAGING_QA_HOD_PASSWORD }}
           STAGING_QA_PRODUCTION_EMAIL: ${{ secrets.STAGING_QA_PRODUCTION_EMAIL }}
           STAGING_QA_PRODUCTION_PASSWORD: ${{ secrets.STAGING_QA_PRODUCTION_PASSWORD }}
           STAGING_QA_ACCOUNT_EMAIL: ${{ secrets.STAGING_QA_ACCOUNT_EMAIL }}
@@ -185,6 +194,8 @@ jobs:
           STAGING_QA_SUPER_ADMIN_PASSWORD: ${{ secrets.STAGING_QA_SUPER_ADMIN_PASSWORD }}
           STAGING_QA_OPERATION_EMAIL: ${{ secrets.STAGING_QA_OPERATION_EMAIL }}
           STAGING_QA_OPERATION_PASSWORD: ${{ secrets.STAGING_QA_OPERATION_PASSWORD }}
+          STAGING_QA_HOD_EMAIL: ${{ secrets.STAGING_QA_HOD_EMAIL }}
+          STAGING_QA_HOD_PASSWORD: ${{ secrets.STAGING_QA_HOD_PASSWORD }}
           STAGING_QA_PRODUCTION_EMAIL: ${{ secrets.STAGING_QA_PRODUCTION_EMAIL }}
           STAGING_QA_PRODUCTION_PASSWORD: ${{ secrets.STAGING_QA_PRODUCTION_PASSWORD }}
           STAGING_QA_ACCOUNT_EMAIL: ${{ secrets.STAGING_QA_ACCOUNT_EMAIL }}
@@ -207,6 +218,8 @@ jobs:
           STAGING_QA_SUPER_ADMIN_PASSWORD: ${{ secrets.STAGING_QA_SUPER_ADMIN_PASSWORD }}
           STAGING_QA_OPERATION_EMAIL: ${{ secrets.STAGING_QA_OPERATION_EMAIL }}
           STAGING_QA_OPERATION_PASSWORD: ${{ secrets.STAGING_QA_OPERATION_PASSWORD }}
+          STAGING_QA_HOD_EMAIL: ${{ secrets.STAGING_QA_HOD_EMAIL }}
+          STAGING_QA_HOD_PASSWORD: ${{ secrets.STAGING_QA_HOD_PASSWORD }}
           STAGING_QA_PRODUCTION_EMAIL: ${{ secrets.STAGING_QA_PRODUCTION_EMAIL }}
           STAGING_QA_PRODUCTION_PASSWORD: ${{ secrets.STAGING_QA_PRODUCTION_PASSWORD }}
           STAGING_QA_ACCOUNT_EMAIL: ${{ secrets.STAGING_QA_ACCOUNT_EMAIL }}
@@ -261,6 +274,7 @@ jobs:
           name: ${{ github.ref_name }}-release-evidence
           path: |
             release-evidence/
+            bundle-verification.log
             staging-fixture.json
             test-results/
             playwright-report/

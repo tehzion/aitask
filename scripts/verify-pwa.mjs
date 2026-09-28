@@ -64,7 +64,9 @@ assert(
   'The network-first navigation route must be registered before the precache route.',
 );
 assert(/Dashboard-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'Dashboard route must be in the install-time precache for first-time offline deep links.');
-assert(!/charts-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'Charts must not be in the install-time precache.');
+assert(/Reports-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'Reports route must be in the install-time precache for first-time offline deep links.');
+assert(/ReportsCharts-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'Report chart code must be in the install-time precache for first-time offline deep links.');
+assert(/reportsCharts-[A-Za-z0-9_-]+[.]js/.test(serviceWorker), 'Recharts vendor code must be in the install-time precache for first-time offline deep links.');
 
 const headersFor = (source) => new Map(
   vercelConfig.headers.find(rule => rule.source === source)?.headers.map(header => [header.key, header.value]) || [],

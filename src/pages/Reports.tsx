@@ -1,15 +1,18 @@
 import React, { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
 import { AlertCircle, CheckCircle2, Clock, Download, Users } from 'lucide-react';
 import { useStore } from '../store';
-import { Button, ChartCard, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
+import { Button, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { useI18n } from '../components/I18nProvider';
 import { cardBase, pageShell } from '../components/uiTokens';
 import { getVisibleTasks } from '../lib/access';
 import { getDueWorkDepartmentPerformance, getDueWorkPerformance, type DueWorkOutcome } from '../lib/taskReporting';
+import type { ReportChartColors } from '../components/ReportsCharts';
 import { formatLocalizedDate } from '../lib/i18n';
 import { themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
+
+const ReportsTrendChart = React.lazy(() => import('../components/ReportsCharts').then(module => ({ default: module.ReportsTrendChart })));
+const ReportsDepartmentChart = React.lazy(() => import('../components/ReportsCharts').then(module => ({ default: module.ReportsDepartmentChart })));
 
 const Reports: React.FC = () => {
   const { tasks: allTasks, currentUser, rolePermissions, clients, projects } = useStore();
@@ -19,7 +22,7 @@ const Reports: React.FC = () => {
     [allTasks, clients, currentUser, projects, rolePermissions]
   );
   const { resolvedTheme } = useColorTheme();
-  const chartColors = useMemo(() => {
+  const chartColors: ReportChartColors = useMemo(() => {
     void resolvedTheme;
     return {
       grid: themeTokenColor('--calm-line', '#e2e8f0'),
@@ -156,31 +159,9 @@ const Reports: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="min-w-0 space-y-3">
-          <ChartCard
-            title={t('Due work by week')}
-            description={t('Each week contains tasks due in that Monday-to-Saturday window. Completion rate uses only completed tasks with a recorded completion time.')}
-          >
-            {!dueTasks.length ? (
-              <ChartEmptyState>{t('No tracked weekly activity yet')}</ChartEmptyState>
-            ) : (
-              <div aria-hidden="true" className="h-full w-full">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
-                  <LineChart accessibilityLayer={false} data={trendData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 11 }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: chartColors.tick }} allowDecimals={false} />
-                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: chartColors.cursor }} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                    <Line type="monotone" dataKey="onTime" name={t('On time')} stroke={chartColors.onTime} strokeWidth={3} activeDot={{ r: 8 }} />
-                    <Line type="monotone" dataKey="late" name={t('Late')} stroke={chartColors.late} strokeWidth={3} strokeDasharray="6 3" />
-                    <Line type="monotone" dataKey="upcoming" name={t('Upcoming')} stroke={chartColors.upcoming} strokeWidth={2} />
-                    <Line type="monotone" dataKey="open" name={t('Open today')} stroke={chartColors.open} strokeWidth={2} />
-                    <Line type="monotone" dataKey="overdue" name={t('Overdue')} stroke={chartColors.overdue} strokeWidth={3} strokeDasharray="2 2" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </ChartCard>
+          <React.Suspense fallback={<div className="flex min-h-[320px] items-center justify-center text-sm text-muted" role="status">{t('Loading charts...')}</div>}>
+            <ReportsTrendChart chartColors={chartColors} tooltipStyle={tooltipStyle} data={trendData} hasTasks={dueTasks.length > 0} />
+          </React.Suspense>
 
           {dueTasks.length > 0 && (
             <details className="rounded-control border border-line bg-surface px-4 py-3">
@@ -224,28 +205,9 @@ const Reports: React.FC = () => {
 
         {!isClientUser && (
           <div className="min-w-0 space-y-3">
-            <ChartCard title={t('Department Productivity Overview')}>
-              {departmentStats.length === 0 ? (
-                <ChartEmptyState>{t('No department data yet')}</ChartEmptyState>
-              ) : (
-                <div aria-hidden="true" className="h-full w-full">
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 288 }}>
-                    <BarChart accessibilityLayer={false} data={departmentStats} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chartColors.grid} />
-                      <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick }} allowDecimals={false} />
-                      <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} width={100} />
-                      <Tooltip contentStyle={tooltipStyle} cursor={{ fill: chartColors.cursor }} />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                      <Bar dataKey="onTime" name={t('On time')} stackId="a" fill={chartColors.onTime} />
-                      <Bar dataKey="late" name={t('Late')} stackId="a" fill={chartColors.late} />
-                      <Bar dataKey="upcoming" name={t('Upcoming')} stackId="a" fill={chartColors.upcoming} />
-                      <Bar dataKey="open" name={t('Open today')} stackId="a" fill={chartColors.open} />
-                      <Bar dataKey="overdue" name={t('Overdue')} stackId="a" fill={chartColors.overdue} radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </ChartCard>
+            <React.Suspense fallback={<div className="flex min-h-[320px] items-center justify-center text-sm text-muted" role="status">{t('Loading charts...')}</div>}>
+              <ReportsDepartmentChart chartColors={chartColors} tooltipStyle={tooltipStyle} data={departmentStats} />
+            </React.Suspense>
 
             {departmentStats.length > 0 && (
               <details className="rounded-control border border-line bg-surface px-4 py-3">

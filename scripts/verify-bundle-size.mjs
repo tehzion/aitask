@@ -12,8 +12,8 @@ const findAsset = (pattern, label) => {
 };
 
 const budgets = [
-  { label: 'initial index JS', file: findAsset(/^index-[A-Za-z0-9_-]+\.js$/, 'index'), rawBytes: 650_000, gzipBytes: 180_000 },
-  { label: 'chart JS', file: findAsset(/^BarChart-[A-Za-z0-9_-]+\.js$/, 'BarChart'), rawBytes: 420_000, gzipBytes: 125_000 },
+  { label: 'initial index JS', file: findAsset(/^index-[A-Za-z0-9_-]+\.js$/, 'index'), rawBytes: 500_000, gzipBytes: 150_000 },
+  { label: 'report chart JS', file: findAsset(/^(?:reportsCharts|BarChart|recharts)-[A-Za-z0-9_-]+\.js$/, 'report charts'), rawBytes: 420_000, gzipBytes: 125_000 },
 ];
 
 for (const budget of budgets) {
