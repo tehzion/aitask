@@ -33,6 +33,7 @@ import { parseNotification, parseWorkspaceSnapshot, safeAvatarSource } from './s
 import { enrichNotificationMetadata } from './notificationCenter';
 import { supabase } from './supabaseClient';
 import { stripServiceItemPrices } from './serviceManagement';
+import { msg } from './messages';
 import { useToastStore } from '../store/useToastStore';
 
 export const SECURE_WORKSPACE_ID = 'aitask-main';
@@ -367,7 +368,7 @@ const persistRetryableCommand = () => {
     storage.setItem(pendingCommandStorageKey(activeSecureAuthUserId), JSON.stringify(envelope));
   } catch {
     // In-memory retry remains available; large payloads may exceed session storage quota.
-    useToastStore.getState().addToast('Browser storage is full. The pending change survives in this tab only until it is saved.', 'warning');
+    useToastStore.getState().addToast(msg('errors.storageFullPending'), 'warning');
   }
 };
 
@@ -403,7 +404,7 @@ const persistRetryableMemberMutation = () => {
   try {
     storage.setItem(pendingMemberMutationStorageKey(activeSecureAuthUserId), JSON.stringify(envelope));
   } catch {
-    useToastStore.getState().addToast('Browser storage is full. The pending member change survives in this tab only until it is saved.', 'warning');
+    useToastStore.getState().addToast(msg('errors.storageFullMember'), 'warning');
   }
 };
 

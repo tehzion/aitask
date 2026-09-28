@@ -3,7 +3,6 @@ import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save, ChevronDown, AlertTriangle } from 'lucide-react';
 import { Department, Priority, Task, TaskStatus } from '../types';
-import { format, formatDistanceToNow } from 'date-fns';
 import { getTaskAccess, canReviewTaskAsClient } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate, parseOptionalDate, cn } from '../lib/utils';
@@ -12,6 +11,7 @@ import type { SecureCommandType } from '../lib/secureWorkspace';
 import ModalShell from './ModalShell';
 import ConfirmDialog from './ConfirmDialog';
 import { useI18n } from './I18nProvider';
+import { formatLocalizedDate, formatLocalizedDistanceToNow } from '../lib/i18n';
 import { ProgressBar } from './ui';
 import { fieldLabel, inputBase } from './uiTokens';
 
@@ -43,12 +43,12 @@ type ConfirmationState = {
   tone?: 'danger' | 'primary';
 };
 
-const ExternalTaskLink: React.FC<{ value: string; label: string }> = ({ value, label }) => {
+const ExternalTaskLink: React.FC<{ value: string; label: string; invalidLabel: string }> = ({ value, label, invalidLabel }) => {
   const href = safeHttpsUrl(value);
   if (!href) {
     return (
       <span className="flex items-center gap-1.5 text-sm text-slate-500" title={value}>
-        <Paperclip className="h-3.5 w-3.5" aria-hidden="true" /> {label} (invalid link)
+        <Paperclip className="h-3.5 w-3.5" aria-hidden="true" /> {label} {invalidLabel}
       </span>
     );
   }
@@ -61,7 +61,7 @@ const ExternalTaskLink: React.FC<{ value: string; label: string }> = ({ value, l
 };
 
 const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTask }) => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const {
     users,
     tasks,
@@ -292,7 +292,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
       onClose={onClose}
       panelClassName="max-w-4xl max-sm:max-h-none max-sm:rounded-none"
     >
-        <p id={descriptionId} className="sr-only">Task details, status, dates, links and comments for {task.title}.</p>
+        <p id={descriptionId} className="sr-only">{t('Task details, status, dates, links and comments for')} <span data-i18n-skip>{task.title}</span>.</p>
         <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 bg-slate-50/50 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
@@ -309,18 +309,18 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   onClick={() => setIsEditingDetails(value => !value)}
                   className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                 >
-                  <Pencil className="h-3.5 w-3.5" /> {isEditingDetails ? 'Cancel Edit' : 'Edit'}
+                  <Pencil className="h-3.5 w-3.5" /> {t(isEditingDetails ? 'Cancel Edit' : 'Edit')}
                 </button>
                 <button
                   type="button"
                   onClick={handleDeleteTask}
                   className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100"
                 >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                  <Trash2 className="h-3.5 w-3.5" /> {t('Delete')}
                 </button>
               </>
             )}
-            <button onClick={onClose} aria-label="Close task details" title="Close" className="inline-flex h-11 w-11 items-center justify-center rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
+            <button onClick={onClose} aria-label={t('task.closeDetails', { title: task.title })} title={t('common.close')} className="inline-flex h-11 w-11 items-center justify-center rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -337,15 +337,15 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Current Status</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{t('Current Status')}</label>
                   {!canEditTask ? (
                     <span className={`text-sm px-3 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
-                      {task.status}
+                      {t(task.status)}
                     </span>
                   ) : (
                     <div className="relative inline-block">
                       <select
-                        aria-label="Task status"
+                        aria-label={t('Task status')}
                         disabled={isSubmitting}
                         className={`min-h-11 text-sm pl-3 pr-7 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none shadow-sm disabled:cursor-not-allowed disabled:opacity-60 ${getStatusColor(task.status)}`}
                         value={task.status}
@@ -354,9 +354,9 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                           const nextStatus = e.target.value as TaskStatus;
                           if (incompletePredecessors.length > 0 && nextStatus !== 'Pending' && nextStatus !== 'Cancelled') {
                             setConfirmation({
-                              title: 'Start with an incomplete earlier step?',
+                              title: t('Start with an incomplete earlier step?'),
                               description: t(`This step still has ${incompletePredecessors.length} incomplete predecessor task(s). Start it anyway?`),
-                              confirmLabel: 'Continue',
+                              confirmLabel: t('Continue'),
                               tone: 'primary',
                               action: async () => {
                                 updateTaskStatus(task.id, nextStatus);
@@ -370,7 +370,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                         }}
                       >
                         {taskStatuses.map(status => (
-                          <option key={status} value={status} className="bg-white text-slate-900">{status}</option>
+                          <option key={status} value={status} className="bg-white text-slate-900">{t(status)}</option>
                         ))}
                       </select>
                       <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 text-current" />
@@ -378,21 +378,21 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   )}
                 </div>
                 <div className="text-right">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">{isClientTaskViewer ? 'Progress' : 'Priority'}</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{t(isClientTaskViewer ? 'Progress' : 'Priority')}</label>
                   {isClientTaskViewer ? (
                     <div className="flex items-center justify-end gap-2">
-                      <ProgressBar className="w-24" label="Task progress" value={task.completionPercentage} max={100} />
+                      <ProgressBar className="w-24" label={t('Task progress')} value={task.completionPercentage} max={100} />
                       <span className="text-sm font-bold text-slate-800">{task.completionPercentage}%</span>
                     </div>
                   ) : (
-                    <span className="text-sm font-bold text-slate-800">{task.priority}</span>
+                    <span className="text-sm font-bold text-slate-800">{t(task.priority)}</span>
                   )}
                 </div>
               </div>
 
               {incompletePredecessors.length > 0 && !isClientTaskViewer && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                  <div className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">Soft dependency warning</p><p className="mt-1 text-amber-800">This task may start early after confirmation, but the following predecessor step{incompletePredecessors.length === 1 ? '' : 's'} remain incomplete:</p><ul className="mt-2 list-disc space-y-1 pl-5">{incompletePredecessors.map(item => <li key={item.id}>{item.title}</li>)}</ul></div></div>
+                  <div className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{t('Soft dependency warning')}</p><p className="mt-1 text-amber-800">{t('This task may start early after confirmation, but the following predecessor steps remain incomplete:')}</p><ul className="mt-2 list-disc space-y-1 pl-5">{incompletePredecessors.map(item => <li key={item.id} data-i18n-skip>{item.title}</li>)}</ul></div></div>
                 </div>
               )}
 
@@ -401,7 +401,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="md:col-span-2">
                       <label className="block">
-                        <span className={fieldLabel}>Task Title</span>
+                        <span className={fieldLabel}>{t('Task Title')}</span>
                         <input
                           type="text"
                           value={editForm.title}
@@ -411,7 +411,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                       </label>
                     </div>
                     <label className="block">
-                      <span className={fieldLabel}>Client / Brand</span>
+                      <span className={fieldLabel}>{t('Client / Brand')}</span>
                       <input
                         type="text"
                         value={editForm.clientName}
@@ -421,7 +421,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                       />
                     </label>
                     <label className="block">
-                      <span className={fieldLabel}>Service</span>
+                      <span className={fieldLabel}>{t('Service')}</span>
                       <input
                         type="text"
                         value={editForm.serviceType}
@@ -431,7 +431,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                       />
                     </label>
                     <label className="block">
-                      <span className={fieldLabel}>Department</span>
+                      <span className={fieldLabel}>{t('Department')}</span>
                       <span className="relative block">
                         <select
                           value={editForm.department}
@@ -447,13 +447,13 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                           }}
                           className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}
                         >
-                          {STAFF_DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}
+                          {STAFF_DEPARTMENTS.map(department => <option key={department} value={department}>{t(department)}</option>)}
                         </select>
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
                       </span>
                     </label>
                     <label className="block">
-                      <span className={fieldLabel}>Assignee</span>
+                      <span className={fieldLabel}>{t('Assignee')}</span>
                       <span className="relative block">
                         <select
                           value={editForm.assignedTo}
@@ -461,27 +461,27 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                           onChange={(e) => setEditForm({ ...editForm, assignedTo: e.target.value })}
                           className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}
                         >
-                          {canAssignOthers && <option value="">Unassigned</option>}
+                          {canAssignOthers && <option value="">{t('Unassigned')}</option>}
                           {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{user.name}</option>)}
                         </select>
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
                       </span>
                     </label>
                     <label className="block">
-                      <span className={fieldLabel}>Priority</span>
+                      <span className={fieldLabel}>{t('Priority')}</span>
                       <span className="relative block">
                         <select
                           value={editForm.priority}
                           onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as Priority })}
                           className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}
                         >
-                          {PRIORITIES.map(priority => <option key={priority} value={priority}>{priority}</option>)}
+                          {PRIORITIES.map(priority => <option key={priority} value={priority}>{t(priority)}</option>)}
                         </select>
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
                       </span>
                     </label>
                     <label className="block">
-                      <span className={fieldLabel}>Start Date <span className="text-red-500">*</span></span>
+                      <span className={fieldLabel}>{t('Start Date')} <span className="text-red-500">*</span></span>
                       <input
                         type="date"
                         required
@@ -491,7 +491,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                       />
                     </label>
                     <label className="block">
-                      <span className={fieldLabel}>Due Date</span>
+                      <span className={fieldLabel}>{t('Due Date')}</span>
                       <input
                         type="date"
                         value={editForm.dueDate}
@@ -501,7 +501,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                     </label>
                     <div className="md:col-span-2">
                       <label className="block">
-                        <span className={fieldLabel}>Description</span>
+                        <span className={fieldLabel}>{t('Description')}</span>
                         <textarea
                           rows={3}
                           value={editForm.description}
@@ -512,7 +512,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                     </div>
                     <div className="md:col-span-2">
                       <label className="block">
-                        <span className={fieldLabel}>Internal Notes</span>
+                        <span className={fieldLabel}>{t('Internal Notes')}</span>
                         <textarea
                           rows={2}
                           value={editForm.notes}
@@ -529,7 +529,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   )}
                   <div className="flex justify-end">
                     <button type="submit" disabled={isSubmitting} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
-                      <Save className="h-4 w-4" /> {isSubmitting ? 'Saving...' : 'Save Changes'}
+                      <Save className="h-4 w-4" /> {isSubmitting ? t('Saving...') : t('Save Changes')}
                     </button>
                   </div>
                 </form>
@@ -537,7 +537,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Client Approval</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{t('Client Approval')}</label>
                   <span className={`inline-flex text-xs px-2 py-1 rounded-md font-semibold ${
                     task.clientApprovalStatus === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
                     task.clientApprovalStatus === 'Rejected' ? 'bg-red-100 text-red-700' :
@@ -545,15 +545,15 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   }`}>
                     {isClientTaskViewer
                       ? task.clientApprovalStatus === 'Approved'
-                        ? 'Approved'
+                        ? t('Approved')
                         : task.clientApprovalStatus === 'Rejected'
-                          ? 'Changes requested'
-                          : 'Not reviewed'
-                      : task.clientApprovalStatus}
+                          ? t('Changes requested')
+                          : t('Not reviewed')
+                      : t(task.clientApprovalStatus)}
                   </span>
                 </div>
                 <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Revisions</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{t('Revisions')}</label>
                   <span className="text-sm font-bold text-slate-800">{task.revisionCount}</span>
                 </div>
               </div>
@@ -563,22 +563,22 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   <div className="flex items-start gap-3">
                     <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
                     <div>
-                      <p className="font-semibold">Your task status and feedback</p>
+                      <p className="font-semibold">{t('Your task status and feedback')}</p>
                       <p className="mt-1 leading-6 text-blue-800">
-                        This task is currently <strong>{task.status}</strong>. You can leave feedback anytime in the comments panel.
+                        {t('This task is currently')} <strong>{t(task.status)}</strong>. {t('You can leave feedback anytime in the comments panel.')}
                         {canClientReview
-                          ? ' Approval and revision actions are available below.'
-                          : ' Approval actions appear when the task is completed or waiting for your review.'}
+                          ? ` ${t('Approval and revision actions are available below.')}`
+                          : ` ${t('Approval actions appear when the task is completed or waiting for your review.')}`}
                       </p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 border-t border-blue-100 pt-3">
                     <div>
-                      <p className="text-xs font-medium text-blue-700">Service</p>
+                      <p className="text-xs font-medium text-blue-700">{t('Service')}</p>
                       <p className="mt-1 font-semibold text-blue-950">{task.serviceType}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-medium text-blue-700">Assigned contact</p>
+                      <p className="text-xs font-medium text-blue-700">{t('Assigned contact')}</p>
                       <p data-i18n-skip className="mt-1 font-semibold text-blue-950">{assignee?.name || 'Agency team'}</p>
                     </div>
                   </div>
@@ -586,15 +586,15 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
               )}
 
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1.5">Description</label>
+                <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('Description')}</label>
                 <div data-i18n-skip className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">
-                  {task.description || 'No description provided.'}
+                    {task.description ? <span data-i18n-skip>{task.description}</span> : t('No description provided.')}
                 </div>
               </div>
 
               {!isClientTaskViewer && task.notes && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Internal Notes</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">{t('Internal Notes')}</label>
                   <div data-i18n-skip className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 whitespace-pre-wrap">
                     {task.notes}
                   </div>
@@ -603,7 +603,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">{isClientTaskViewer ? 'Assigned Contact' : 'Assignee'}</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{t(isClientTaskViewer ? 'Assigned Contact' : 'Assignee')}</label>
                   <div className="flex items-center gap-2">
                     {assignee?.avatar ? (
                       <img src={assignee.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
@@ -616,7 +616,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   </div>
                 </div>
                 {!isClientTaskViewer && <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Created By</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">{t('Created By')}</label>
                   <span data-i18n-skip className="text-sm font-medium text-slate-800">{creator?.name || 'Unknown'}</span>
                 </div>}
                 {!isClientTaskViewer && <div>
@@ -624,17 +624,17 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   <span data-i18n-skip className="text-sm font-medium text-slate-800">{assignedByMember?.name || creator?.name || 'Unknown'}</span>
                 </div>}
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Start Date</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">{t('Start Date')}</label>
                   <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    {startDateValue ? format(startDateValue, 'MMM dd, yyyy') : 'No start date'}
+                    {startDateValue ? formatLocalizedDate(startDateValue, locale) : t('common.noStartDate')}
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Due Date</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">{t('Due Date')}</label>
                   <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
                     <Clock className="w-3.5 h-3.5 text-red-400" />
-                    {dueDateValue ? format(dueDateValue, 'MMM dd, yyyy') : 'No due date'}
+                    {dueDateValue ? formatLocalizedDate(dueDateValue, locale) : t('common.noDueDate')}
                   </div>
                 </div>
               </div>
@@ -644,13 +644,13 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   <label className="block text-xs font-medium text-slate-500 mb-2">{isClientTaskViewer ? t('Deliverables & Links') : t('Links & attachment links')}</label>
                   <div className="space-y-2">
                     {task.facebookPage && (
-                      <ExternalTaskLink value={task.facebookPage} label="Facebook Page" />
+                      <ExternalTaskLink value={task.facebookPage} label={t('Facebook Page')} invalidLabel={t('(invalid link)')} />
                     )}
                     {task.website && (
-                      <ExternalTaskLink value={task.website} label="Website" />
+                      <ExternalTaskLink value={task.website} label={t('Website')} invalidLabel={t('(invalid link)')} />
                     )}
                     {task.attachmentLink && (
-                      <ExternalTaskLink value={task.attachmentLink} label={task.attachmentName || 'Task Attachment'} />
+                      <ExternalTaskLink value={task.attachmentLink} label={task.attachmentName || t('Task Attachment')} invalidLabel={t('(invalid link)')} />
                     )}
                   </div>
                   {canEditTask && (
@@ -687,16 +687,16 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
 
               {canEditTask && (
                 <form onSubmit={handleRevisionRequest} className="pt-4 border-t border-slate-100 space-y-2">
-                  <label className="block text-xs font-medium text-slate-500">Revision Control</label>
+                  <label className="block text-xs font-medium text-slate-500">{t('Revision Control')}</label>
                   <textarea
                     value={revisionNote}
                     onChange={(e) => setRevisionNote(e.target.value)}
                     rows={2}
-                    placeholder="Optional revision note..."
+                    placeholder={t('Optional revision note...')}
                     className="min-h-11 w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 outline-none shadow-sm resize-none"
                   />
                   <button type="submit" disabled={isSubmitting} className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
-                    <RotateCcw className="w-4 h-4" /> {isSubmitting ? 'Requesting...' : 'Request Revision'}
+                    <RotateCcw className="w-4 h-4" /> {isSubmitting ? t('Requesting...') : t('Request Revision')}
                   </button>
                 </form>
               )}
@@ -704,24 +704,22 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
               {canClientReview && (
                 <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 p-4 space-y-3">
                   <div>
-                    <label className="block text-sm font-semibold text-emerald-950">Ready for your review</label>
-                    <p className="mt-1 text-xs leading-5 text-emerald-800">
-                      Approve the task or request changes. Add a note if the team needs context.
-                    </p>
+                    <label className="block text-sm font-semibold text-emerald-950">{t('Ready for your review')}</label>
+                    <p className="mt-1 text-xs leading-5 text-emerald-800">{t('Approve the task or request changes. Add a note if the team needs context.')}</p>
                   </div>
                   <textarea
                     value={approvalNote}
                     onChange={(e) => setApprovalNote(e.target.value)}
                     rows={2}
-                    placeholder="Optional approval or revision note..."
+                    placeholder={t('Optional approval or revision note...')}
                     className="min-h-11 w-full bg-white border border-emerald-200 text-slate-900 text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block p-3 outline-none shadow-sm resize-none"
                   />
                   <div className="flex gap-2">
                     <button disabled={isSubmitting} onClick={() => handleClientReview('Approved')} type="button" className="min-h-11 flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
-                      <CheckCircle2 className="w-4 h-4" /> {isSubmitting ? 'Saving...' : 'Approve'}
+                      <CheckCircle2 className="w-4 h-4" /> {isSubmitting ? t('Saving...') : t('Approve')}
                     </button>
                     <button disabled={isSubmitting} onClick={() => handleClientReview('Rejected')} type="button" className="min-h-11 flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-2 text-sm font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
-                      <XCircle className="w-4 h-4" /> Request changes
+                      <XCircle className="w-4 h-4" /> {t('Request changes')}
                     </button>
                   </div>
                 </div>
@@ -732,17 +730,17 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
           <div className="w-full md:w-1/2 flex flex-col bg-slate-50">
             <div className="p-4 border-b border-slate-200 bg-white flex items-center gap-2 shrink-0">
               <MessageSquare className="w-4 h-4 text-slate-500" />
-              <h3 className="font-semibold text-slate-800">{isClientTaskViewer ? 'Feedback & Updates' : 'Comments & Updates'}</h3>
+              <h3 className="font-semibold text-slate-800">{t(isClientTaskViewer ? 'Feedback & Updates' : 'Comments & Updates')}</h3>
             </div>
 
             {task.approvalHistory && task.approvalHistory.length > 0 && (
               <div className="px-4 py-3 bg-white border-b border-slate-200 space-y-2">
                 <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 tracking-wide">
-                  <History className="w-3.5 h-3.5" /> Approval History
+                  <History className="w-3.5 h-3.5" /> {t('Approval History')}
                 </div>
                 {task.approvalHistory.slice().reverse().map(event => (
                   <div key={event.id} className="text-xs text-slate-600">
-                    <span className="font-semibold text-slate-800">{getUserName(event.userId)}</span> marked {event.status} {formatDistanceToNow(new Date(event.createdAt), { addSuffix: true })}
+                    <span className="font-semibold text-slate-800">{getUserName(event.userId)}</span> {t('marked')} {t(event.status)} {formatLocalizedDistanceToNow(new Date(event.createdAt), locale)}
                     {event.note && <div data-i18n-skip className="mt-1 bg-slate-50 border border-slate-100 rounded-md p-2 text-slate-700">{event.note}</div>}
                   </div>
                 ))}
@@ -753,7 +751,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
               {(!task.comments || task.comments.length === 0) ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-400">
                   <MessageSquare className="w-8 h-8 mb-2 opacity-20" />
-                  <p className="text-sm">No comments yet.</p>
+                  <p className="text-sm">{t('No comments yet.')}</p>
                 </div>
               ) : (
                 task.comments.map(comment => {
@@ -770,7 +768,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                     <div className="flex-1">
                       <div className="flex items-baseline justify-between mb-1">
                         <span data-i18n-skip className="text-sm font-semibold text-slate-800">{getUserName(comment.userId)}</span>
-                        <span className="text-xs text-slate-400">{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</span>
+                        <span className="text-xs text-slate-400">{formatLocalizedDistanceToNow(new Date(comment.createdAt), locale)}</span>
                       </div>
                       <div data-i18n-skip className="text-sm text-slate-700 bg-white p-3 rounded-lg border border-slate-200 shadow-sm whitespace-pre-wrap">
                         {comment.text}
@@ -788,27 +786,27 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   <textarea
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
-                    placeholder={isClientTaskViewer ? 'Share feedback for the team...' : 'Write a comment or update...'}
+                    placeholder={t(isClientTaskViewer ? 'Share feedback for the team...' : 'Write a comment or update...')}
                     className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 pr-12 outline-none shadow-sm resize-none"
                     rows={2}
                   />
                   <button
                     type="submit"
                     disabled={!commentText.trim() || isSubmitting}
-                    aria-label="Send comment"
+                    aria-label={t('Send comment')}
                     className="absolute bottom-2 right-2 inline-flex h-11 w-11 items-center justify-center rounded-md bg-blue-600 p-1.5 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isSubmitting ? <span className="text-xs font-semibold">Saving</span> : <Send className="w-4 h-4" />}
+                    {isSubmitting ? <span className="text-xs font-semibold">{t('Saving')}</span> : <Send className="w-4 h-4" />}
                   </button>
                 </form>
               </div>
             ) : currentUser?.role === 'Staff' || currentUser?.role === 'HOD' ? (
               <div className="p-4 bg-white border-t border-slate-200 text-sm text-slate-500 shrink-0">
-                Only the assigned staff member or a Project Manager can add updates to this task.
+                {t('Only the assigned staff member or a Project Manager can add updates to this task.')}
               </div>
             ) : currentUser?.role === 'Client' ? (
               <div className="p-4 bg-white border-t border-slate-200 text-sm text-slate-500 shrink-0">
-                Feedback is only available for tasks linked to your company with client review access.
+                {t('Feedback is only available for tasks linked to your company with client review access.')}
               </div>
             ) : null}
           </div>

@@ -2,7 +2,6 @@ import {
   addMonths,
   addWeeks,
   endOfMonth,
-  format,
   isAfter,
   isBefore,
   isEqual,
@@ -12,6 +11,7 @@ import {
 } from 'date-fns';
 import type { Deliverable, ServiceCycle, Task, User } from '../types';
 import { getWorkWeekRange } from './workWeek';
+import { formatLocalizedDate, formatLocalizedMonth, type AppLocale } from './i18n';
 
 export type DeliveryTrackerPeriod = 'week' | 'month' | 'all';
 export type DeliveryTrackerStatusFilter = 'all' | 'open' | 'overdue' | 'completed';
@@ -59,19 +59,20 @@ const isTaskCancelled = (task: Task) => task.status === 'Cancelled';
 export const getDeliveryPeriodRange = (
   period: DeliveryTrackerPeriod,
   anchor: Date,
+  locale: AppLocale = 'en',
 ): DeliveryPeriodRange => {
   if (period === 'all') {
     // The range remains available to consumers, while the summary builder uses
     // the period itself to include every visible record.
-    return { start: new Date(2000, 0, 1), end: new Date(2100, 11, 31), label: 'All work' };
+    return { start: new Date(2000, 0, 1), end: new Date(2100, 11, 31), label: locale === 'zh' ? '全部工作' : 'All work' };
   }
   if (period === 'week') {
     const { start, end } = getWorkWeekRange(anchor);
-    return { start, end, label: `${format(start, 'd MMM')} – ${format(end, 'd MMM yyyy')}` };
+    return { start, end, label: `${formatLocalizedDate(start, locale)} – ${formatLocalizedDate(end, locale)}` };
   }
   const start = startOfMonth(anchor);
   const end = endOfMonth(anchor);
-  return { start, end, label: format(start, 'MMMM yyyy') };
+  return { start, end, label: formatLocalizedMonth(start, locale) };
 };
 
 export const moveDeliveryPeriod = (

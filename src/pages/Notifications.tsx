@@ -1,6 +1,5 @@
 import React from 'react';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
-import { formatDistanceToNow } from 'date-fns';
 import {
   AlertCircle,
   Bell,
@@ -33,6 +32,8 @@ import {
 import { loadNotificationFeedPage } from '../lib/notificationFeed';
 import { notificationRouteToPath } from '../lib/security';
 import { cn } from '../lib/utils';
+import { formatLocalizedDistanceToNow } from '../lib/i18n';
+import { useI18n } from '../components/I18nProvider';
 import { useStore } from '../store';
 import type { AppNotification, NotificationCategory, NotificationCursor } from '../types';
 
@@ -81,6 +82,7 @@ const updateReadState = (
 };
 
 const Notifications: React.FC = () => {
+  const { locale, t } = useI18n();
   const navigate = useNavigate();
   const { notificationReadActions } = useOutletContext<LayoutOutletContext>();
   const currentUser = useStore(state => state.currentUser);
@@ -130,7 +132,7 @@ const Notifications: React.FC = () => {
       setNextCursor(current => resetList || !current ? page.nextCursor : current);
       useStore.setState({ notificationUnreadCount: page.unreadCount });
     }).catch(loadError => {
-      if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Unable to load notifications.');
+      if (!cancelled) setError(loadError instanceof Error ? t(loadError.message) : t('Unable to load notifications.'));
     }).finally(() => {
       if (!cancelled) setIsLoading(false);
     });
@@ -162,7 +164,7 @@ const Notifications: React.FC = () => {
       setNextCursor(page.nextCursor);
       useStore.setState({ notificationUnreadCount: page.unreadCount });
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Unable to load more notifications.');
+      setError(loadError instanceof Error ? t(loadError.message) : t('Unable to load more notifications.'));
     } finally {
       setIsLoadingMore(false);
     }
@@ -211,8 +213,8 @@ const Notifications: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title="Notifications"
-        description="Review assignments, deadlines, feedback, approvals, and workspace updates."
+        title={t('notifications.title')}
+        description={t('notifications.description')}
         action={displayedUnreadCount > 0 ? (
           <Button
             variant="secondary"
@@ -220,15 +222,15 @@ const Notifications: React.FC = () => {
             disabled={notificationReadActions.isUpdating}
           >
             <CheckCheck className="h-4 w-4" />
-            {notificationReadActions.isUpdating ? 'Saving...' : 'Mark all read'}
+            {notificationReadActions.isUpdating ? t('Saving...') : t('Mark all read')}
           </Button>
         ) : undefined}
       />
 
-      <section className={cn(cardBase, 'overflow-hidden')} aria-label="Notification center">
+      <section className={cn(cardBase, 'overflow-hidden')} aria-label={t('Notification center')}>
         <div className="border-b border-slate-200 p-4 sm:p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="inline-flex w-full rounded-lg bg-slate-100 p-1 sm:w-auto" aria-label="Notification view">
+            <div className="inline-flex w-full rounded-lg bg-slate-100 p-1 sm:w-auto" aria-label={t('Notification view')}>
               {(['all', 'unread'] as NotificationTab[]).map(value => (
                 <button
                   key={value}
@@ -240,7 +242,7 @@ const Notifications: React.FC = () => {
                   )}
                   aria-pressed={tab === value}
                 >
-                  {value}{value === 'unread' && displayedUnreadCount > 0 ? ` (${displayedUnreadCount})` : ''}
+                  {t(value === 'unread' ? 'Unread' : 'All')}{value === 'unread' && displayedUnreadCount > 0 ? ` (${displayedUnreadCount})` : ''}
                 </button>
               ))}
             </div>
@@ -249,9 +251,9 @@ const Notifications: React.FC = () => {
               value={category}
               onChange={event => setCategory(event.target.value as NotificationCategory | '')}
               className={cn(inputBase, 'min-h-10 py-2.5 lg:w-48')}
-              aria-label="Filter notification category"
+              aria-label={t('Filter notification category')}
             >
-              <option value="">All categories</option>
+              <option value="">{t('All categories')}</option>
               {NOTIFICATION_CATEGORIES.map(value => (
                 <option key={value} value={value}>{notificationCategoryLabels[value]}</option>
               ))}
@@ -260,17 +262,17 @@ const Notifications: React.FC = () => {
         </div>
 
         <div aria-live="polite" className="sr-only">
-          {isLoading ? 'Loading notifications.' : `${groups.length} notification groups loaded.`}
+          {isLoading ? t('Loading notifications.') : t('{count} notification groups loaded.', { count: groups.length })}
         </div>
 
         {error && (
           <div className="m-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800" role="alert">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">Notifications could not be refreshed</p>
+              <p className="text-sm font-semibold">{t('Notifications could not be refreshed')}</p>
               <p className="mt-0.5 text-sm">{error}</p>
             </div>
-            <button type="button" onClick={() => setRefreshToken(value => value + 1)} className="rounded-md p-1.5 hover:bg-red-100" aria-label="Retry loading notifications">
+            <button type="button" onClick={() => setRefreshToken(value => value + 1)} className="rounded-md p-1.5 hover:bg-red-100" aria-label={t('Retry loading notifications')}>
               <RefreshCw className="h-4 w-4" />
             </button>
           </div>
@@ -279,18 +281,18 @@ const Notifications: React.FC = () => {
         {isLoading && items.length === 0 ? (
           <div className="flex min-h-64 items-center justify-center gap-2 text-sm font-medium text-slate-500" role="status">
             <LoaderCircle className="h-5 w-5 animate-spin" />
-            Loading notifications...
+            {t('Loading notifications...')}
           </div>
         ) : groups.length === 0 ? (
           <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
             <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
               <Bell className="h-5 w-5" />
             </div>
-            <h2 className="mt-4 text-base font-semibold text-slate-900">{tab === 'unread' ? 'No unread notifications' : 'No notifications found'}</h2>
+            <h2 className="mt-4 text-base font-semibold text-slate-900">{tab === 'unread' ? t('No unread notifications') : t('No notifications found')}</h2>
             <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">
               {tab === 'unread'
-                ? 'You are all caught up. New assignments, deadlines, and reviews will appear here.'
-                : 'Try another category or search, or switch back to All.'}
+                ? t('You are all caught up. New assignments, deadlines, and reviews will appear here.')
+                : t('Try another category or search, or switch back to All.')}
             </p>
           </div>
         ) : (
@@ -299,7 +301,7 @@ const Notifications: React.FC = () => {
               sections[section].length > 0 && (
                 <section key={section} aria-labelledby={`notification-section-${section.toLowerCase()}`}>
                   <div className="border-b border-slate-200 bg-slate-50 px-4 py-2.5 sm:px-5">
-                    <h2 id={`notification-section-${section.toLowerCase()}`} className="text-xs font-semibold text-slate-500">{section}</h2>
+                    <h2 id={`notification-section-${section.toLowerCase()}`} className="text-xs font-semibold text-slate-500">{t(section)}</h2>
                   </div>
                   {sections[section].map(group => {
                     const Icon = categoryIcon(group.category);
@@ -317,17 +319,17 @@ const Notifications: React.FC = () => {
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className={cn('text-sm text-slate-950', allRead ? 'font-medium' : 'font-semibold')}>{group.latest.title}</h3>
                               <Badge tone="slate">{notificationCategoryLabels[group.category]}</Badge>
-                              {group.notifications.length > 1 && <Badge tone="blue">{group.notifications.length} updates</Badge>}
-                              {group.unreadCount > 0 && <span className="text-xs font-semibold text-blue-700">{group.unreadCount} unread</span>}
+                              {group.notifications.length > 1 && <Badge tone="blue">{t('{count} updates', { count: group.notifications.length })}</Badge>}
+                              {group.unreadCount > 0 && <span className="text-xs font-semibold text-blue-700">{t('{count} unread', { count: group.unreadCount })}</span>}
                             </div>
                             <p className="mt-1 text-sm leading-6 text-slate-600">{group.latest.message}</p>
-                            <p className="mt-1.5 text-xs text-slate-400">{formatDistanceToNow(new Date(group.latest.createdAt), { addSuffix: true })}</p>
+                            <p className="mt-1.5 text-xs text-slate-400">{formatLocalizedDistanceToNow(new Date(group.latest.createdAt), locale)}</p>
                           </div>
                           <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
                             {group.notifications.length > 1 && (
                               <button type="button" onClick={() => toggleGroup(group.id)} className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-slate-600 hover:bg-slate-100" aria-expanded={expanded}>
                                 {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                {expanded ? 'Hide updates' : 'Show updates'}
+                                {expanded ? t('Hide updates') : t('Show updates')}
                               </button>
                             )}
                             <button
@@ -337,11 +339,11 @@ const Notifications: React.FC = () => {
                               className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-3 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:cursor-wait disabled:opacity-60"
                             >
                               <Check className="h-4 w-4" />
-                              {allRead ? 'Mark unread' : 'Mark read'}
+                              {allRead ? t('Mark unread') : t('Mark read')}
                             </button>
                             <button type="button" onClick={() => viewGroup(group)} className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700">
                               <ExternalLink className="h-4 w-4" />
-                              View
+                              {t('View')}
                             </button>
                           </div>
                         </div>
@@ -354,7 +356,7 @@ const Notifications: React.FC = () => {
                                 <div key={notification.id} className="flex flex-col gap-2 border-b border-slate-200/70 py-3 last:border-b-0 sm:flex-row sm:items-center">
                                   <div className="min-w-0 flex-1">
                                     <p data-i18n-skip className={cn('text-sm text-slate-700', !isRead && 'font-semibold text-slate-950')}>{notification.message}</p>
-                                    <p className="mt-1 text-xs text-slate-400">{formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}</p>
+                                    <p className="mt-1 text-xs text-slate-400">{formatLocalizedDistanceToNow(new Date(notification.createdAt), locale)}</p>
                                   </div>
                                   <button
                                     type="button"
@@ -362,7 +364,7 @@ const Notifications: React.FC = () => {
                                     disabled={notificationReadActions.isUpdating}
                                     className="self-start rounded-md px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60 sm:self-auto"
                                   >
-                                    {isRead ? 'Mark unread' : 'Mark read'}
+                                    {isRead ? t('Mark unread') : t('Mark read')}
                                   </button>
                                 </div>
                               );
@@ -382,7 +384,7 @@ const Notifications: React.FC = () => {
           <div className="flex justify-center border-t border-slate-200 p-4">
             <Button variant="secondary" onClick={() => void loadMore()} disabled={isLoadingMore}>
               {isLoadingMore ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ChevronDown className="h-4 w-4" />}
-              {isLoadingMore ? 'Loading...' : 'Load more'}
+              {isLoadingMore ? t('Loading...') : t('Load more')}
             </Button>
           </div>
         )}

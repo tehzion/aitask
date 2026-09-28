@@ -10,6 +10,7 @@ import {
   formatLocalizedWeekdayDate,
   translateUiText,
 } from './i18n';
+import { isMessageId } from './messages';
 
 describe('Chinese UI translations', () => {
   it('keeps English as the default and translates shared interface copy to Simplified Chinese', () => {
@@ -201,6 +202,7 @@ describe('Chinese translation coverage guards', () => {
       while ((match = literal.exec(source))) {
         const value = (match[1] ?? match[2] ?? '').trim();
         if (value.length < 2) continue;
+        if (isMessageId(value)) continue;
         if (translateUiText(value, 'zh') === value) missing.add(value);
       }
     }

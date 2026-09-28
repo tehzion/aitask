@@ -57,7 +57,7 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
       setError(t(committed.error || 'The plan date change is waiting to be saved.'));
       return;
     }
-    useToastStore.getState().addToast(`Plan dates updated for "${plan.clientName}".`, 'success');
+    useToastStore.getState().addToast({ id: 'errors.planDatesUpdated', values: { name: plan.clientName } }, 'success');
     onClose();
   };
 

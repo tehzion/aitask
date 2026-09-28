@@ -429,20 +429,20 @@ const OperationsClientWorkspace = () => {
       {tab === "overview" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-overview`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-overview`} tabIndex={0} className="grid scroll-mt-36 gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
           <Surface variant="inset" className="border-l-2 border-accent p-6 sm:p-8">
-            <p className="calm-eyebrow">Delivery progress</p>
+            <p className="calm-eyebrow">{t('Delivery progress')}</p>
             <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
               <div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{currentProgress}%</p><p className="mt-2 text-sm text-muted">{currentDelivered}/{currentCycleDeliverables.length} {t('deliverables completed')}</p></div>
               {currentCycle && <StatusChip tone={currentCycle.status === "Completed" || currentCycle.status === "Published" ? "emerald" : "slate"}>{currentCycle.status}</StatusChip>}
             </div>
-            <ProgressBar className="mt-7" value={currentDelivered} max={Math.max(currentCycleDeliverables.length, 1)} label="Current cycle" />
+            <ProgressBar className="mt-7" value={currentDelivered} max={Math.max(currentCycleDeliverables.length, 1)} label={t('Current cycle')} />
             <div className="mt-7 grid grid-cols-3 border-t border-line/70">
-              {[["Included", currentCycleDeliverables.length], ["Completed", currentDelivered], ["Remaining", currentCycleDeliverables.length - currentDelivered]].map(([label, value]) => <div key={label} className="p-4"><p className="calm-number text-2xl font-semibold text-ink">{value}</p><p className="mt-1 text-xs text-muted">{label}</p></div>)}
+              {[["Included", currentCycleDeliverables.length], ["Completed", currentDelivered], ["Remaining", currentCycleDeliverables.length - currentDelivered]].map(([label, value]) => <div key={label} className="p-4"><p className="calm-number text-2xl font-semibold text-ink">{value}</p><p className="mt-1 text-xs text-muted">{t(String(label))}</p></div>)}
             </div>
           </Surface>
           <Surface className="p-6">
-            <p className="calm-eyebrow">Plan details</p>
+            <p className="calm-eyebrow">{t('Plan details')}</p>
             <dl className="mt-5 divide-y divide-line/70">
-              {[["Active plan", activePlan?.name || "Not configured"], ["Plan status", activePlan?.status || "None"], ["Service cycles", String(cycles.length)], ["Next key date", activePlan?.contractEndDate || currentCycle?.periodEnd || "Not scheduled"]].map(([label, value]) => <div key={label} className="grid grid-cols-[120px_1fr] gap-3 py-3 text-sm"><dt className="text-muted">{label}</dt><dd className="text-right font-medium text-ink">{label === 'Active plan' && activePlan?.name ? <span data-i18n-skip>{value}</span> : t(String(value))}</dd></div>)}
+              {[["Active plan", activePlan?.name || "Not configured"], ["Plan status", activePlan?.status || "None"], ["Service cycles", String(cycles.length)], ["Next key date", activePlan?.contractEndDate || currentCycle?.periodEnd || "Not scheduled"]].map(([label, value]) => <div key={label} className="grid grid-cols-[120px_1fr] gap-3 py-3 text-sm"><dt className="text-muted">{t(label)}</dt><dd className="text-right font-medium text-ink">{label === 'Active plan' && activePlan?.name ? <span data-i18n-skip>{value}</span> : t(String(value))}</dd></div>)}
             </dl>
           </Surface>
         </div>
@@ -454,7 +454,7 @@ const OperationsClientWorkspace = () => {
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
               <div>
                 <h2 className="font-semibold text-ink">
-                  {activePlan?.name ? <span data-i18n-skip>{activePlan.name}</span> : "No service plan"}
+                  {activePlan?.name ? <span data-i18n-skip>{activePlan.name}</span> : t("No service plan")}
                 </h2>
                 {activePlan && (
                   <p className="mt-1 text-sm text-muted">
@@ -497,24 +497,24 @@ const OperationsClientWorkspace = () => {
                         {item.name}
                       </p>
                       <p className="mt-1 text-sm text-muted">
-                        {item.platforms.join(", ") || "No platform"} ·{" "}
-                        {item.quantity} {item.unit}
+                        <span data-i18n-skip>{item.platforms.join(", ") || t("No platform")}</span> ·{" "}
+                        {item.quantity} <span data-i18n-skip>{item.unit}</span>
                       </p>
                       {item.workflow && (
                         <p className="mt-1 text-xs font-medium text-accent">
-                          {item.workflow.name} · rev{" "}
+                          <span data-i18n-skip>{item.workflow.name}</span> · {t("rev")}{" "}
                           {item.workflow.templateRevision} ·{" "}
-                          {item.workflow.steps.length} tasks
+                          {item.workflow.steps.length} {t("tasks")}
                         </p>
                       )}
                     </div>
                     {canSeePrices && (
                       <p className="text-sm font-medium text-ink">
-                        {formatMoney(item.unitPriceMinor)} each
+                        {formatMoney(item.unitPriceMinor, 'MYR', locale)} {t("each")}
                       </p>
                     )}
                     <span className="text-sm text-muted">
-                      {item.quantity} slots
+                      {item.quantity} {t("slots")}
                     </span>
                   </div>
                 ))}
@@ -522,7 +522,7 @@ const OperationsClientWorkspace = () => {
             ) : (
               <div className="space-y-4 p-8 text-center">
                 <p className="text-sm text-muted">{t("This company does not have a service plan yet.")}</p>
-                {canManagePlans && <Button onClick={() => setPlanModalOpen(true)}><Plus className="h-4 w-4" />Add service plan</Button>}
+                {canManagePlans && <Button onClick={() => setPlanModalOpen(true)}><Plus className="h-4 w-4" />{t("Add service plan")}</Button>}
               </div>
             )}
             {canSeePrices && planTotals && (
@@ -532,7 +532,7 @@ const OperationsClientWorkspace = () => {
                     {t("Internal monthly total")}
                   </p>
                   <p className="text-xl font-semibold text-ink">
-                    {formatMoney(planTotals.total)}
+                    {formatMoney(planTotals.total, 'MYR', locale)}
                   </p>
                 </div>
               </div>
@@ -545,7 +545,7 @@ const OperationsClientWorkspace = () => {
                     onClick={() => void createRevision()}
                   >
                     <GitBranchPlus className="h-4 w-4" />
-                    Create next revision
+                    {t("Create next revision")}
                   </Button>
                 )}
                   <Button
@@ -553,14 +553,14 @@ const OperationsClientWorkspace = () => {
                     onClick={() => setPlanAction("pause")}
                 >
                   <Pause className="h-4 w-4" />
-                  Pause
+                  {t("Pause")}
                 </Button>
                   <Button
                     variant="secondary"
                     onClick={() => setPlanAction("end")}
                 >
                   <StopCircle className="h-4 w-4" />
-                  End
+                  {t("End")}
                 </Button>
               </div>
             )}
@@ -575,7 +575,7 @@ const OperationsClientWorkspace = () => {
                   }
                 >
                   <Play className="h-4 w-4" />
-                  Resume from next billing day
+                  {t("Resume from next billing day")}
                 </Button>
               </div>
             )}
@@ -606,7 +606,7 @@ const OperationsClientWorkspace = () => {
                       {cycle.periodStart} – {cycle.periodEnd}
                     </h2>
                     <p className="mt-1 text-sm text-muted">
-                      {cycleDeliverables.length} deliverables · plan revision{" "}
+                      {cycleDeliverables.length} {t("deliverables")} · {t("plan revision")}{" "}
                       {cycle.planRevision}
                     </p>
                   </div>
@@ -631,7 +631,7 @@ const OperationsClientWorkspace = () => {
                         }
                       >
                         <Send className="h-4 w-4" />
-                        Publish
+                        {t("Publish")}
                       </Button>
                     )}
                   </div>
@@ -640,7 +640,7 @@ const OperationsClientWorkspace = () => {
                   <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                     <ProgressBar value={completedTotal} max={Math.max(includedTotal, 1)} label={`${completedTotal}/${includedTotal} ${t('deliverables completed')}`} />
                     <div className="grid grid-cols-3 gap-6 text-right">
-                      {[["Included", includedTotal], ["Completed", completedTotal], ["Remaining", Math.max(0, includedTotal - completedTotal)]].map(([label, value]) => <span key={label}><strong className="calm-number block text-lg text-ink">{value}</strong><small className="text-muted">{label}</small></span>)}
+                      {[["Included", includedTotal], ["Completed", completedTotal], ["Remaining", Math.max(0, includedTotal - completedTotal)]].map(([label, value]) => <span key={label}><strong className="calm-number block text-lg text-ink">{value}</strong><small className="text-muted">{t(String(label))}</small></span>)}
                     </div>
                   </div>
                   {progress.length > 1 && <p className="mt-4 text-xs text-muted">{progress.map((item) => `${item.name} ${item.completed}/${item.included}`).join(" · ")}</p>}
@@ -667,7 +667,7 @@ const OperationsClientWorkspace = () => {
                             {deliverable.title}
                           </p>
                           <p className="mt-1 text-xs text-muted">
-                            {linkedTasks.length} linked task(s)
+                            {linkedTasks.length} {t("linked task(s)")}
                             {serviceItem?.workflow
                               ? <> · <span data-i18n-skip>{serviceItem.workflow.name}</span></>
                               : ""}
@@ -758,10 +758,9 @@ const OperationsClientWorkspace = () => {
                                   }
                                 >
                                   <ListChecks className="h-4 w-4" />
-                                  Generate {
+                                  {t("Generate")} {
                                     serviceItem.workflow.steps.length
-                                  }{" "}
-                                  tasks
+                                  }{" "}{t("tasks")}
                                 </Button>
                               )}
                             {canLinkTasks && (
@@ -782,7 +781,7 @@ const OperationsClientWorkspace = () => {
                                 )
                               }
                             >
-                              <option value="">Link a task...</option>
+                              <option value="">{t("Link a task...")}</option>
                               {tasks
                                 .filter(
                                   (task) =>
@@ -809,7 +808,7 @@ const OperationsClientWorkspace = () => {
                               }
                             >
                               <Plus className="h-4 w-4" />
-                              Task
+                              {t("Task")}
                             </Button>
                           </div>
                         )}
@@ -822,7 +821,7 @@ const OperationsClientWorkspace = () => {
           })}
           {cycles.length === 0 && (
             <p className="rounded-control border border-dashed border-line p-10 text-center text-sm text-muted">
-              No visible service cycles yet.
+              {t("No visible service cycles yet.")}
             </p>
           )}
         </div>
@@ -830,7 +829,7 @@ const OperationsClientWorkspace = () => {
 
       {tab === "addons" && canManagePlans && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-addons`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-addons`} tabIndex={0} className="scroll-mt-36 space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold text-ink">Service add-ons</h2><p className="mt-1 text-sm text-muted">One-off and recurring scope changes remain visible in the history.</p></div><Button onClick={() => setAddonSheetOpen(true)}><Plus className="h-4 w-4" />Add service add-on</Button></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold text-ink">{t("Service add-ons")}</h2><p className="mt-1 text-sm text-muted">{t("One-off and recurring scope changes remain visible in the history.")}</p></div><Button onClick={() => setAddonSheetOpen(true)}><Plus className="h-4 w-4" />{t("Add service add-on")}</Button></div>
           <section className={cn(cardBase, "divide-y divide-line/70")}>
             {addons.map((item) => (
               <div
@@ -841,12 +840,12 @@ const OperationsClientWorkspace = () => {
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-ink">{item.name}</p>
                     <Badge tone={item.isActive ? "emerald" : "slate"}>
-                      {item.isActive ? "Active" : "Stopped"}
+                      {t(item.isActive ? "Active" : "Stopped")}
                     </Badge>
                   </div>
                   <p className="mt-1 text-sm text-muted">
                     {item.billingMode} ·{" "}
-                    {item.platforms.join(", ") || "No platform"}
+                    {item.platforms.join(", ") || t("No platform")}
                     {item.effectiveUntil
                       ? ` · through ${item.effectiveUntil}`
                       : ""}
@@ -855,13 +854,13 @@ const OperationsClientWorkspace = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   {canSeePrices && (
                     <p className="mr-2 font-semibold text-ink">
-                      {formatMoney(item.quantity * item.unitPriceMinor)}
+                        {formatMoney(item.quantity * item.unitPriceMinor, 'MYR', locale)}
                     </p>
                   )}
                   {item.billingMode === "monthly" && item.isActive && (
                     <>
                       <input
-                        aria-label={`End date for ${item.name}`}
+                        aria-label={t('End date')}
                         type="date"
                         min={item.effectiveFrom}
                         className={cn(inputBase, "w-auto px-3 py-2")}
@@ -877,7 +876,7 @@ const OperationsClientWorkspace = () => {
                         variant="secondary"
                         onClick={() => void changeAddonState(item.id, false)}
                       >
-                        Stop future cycles
+                        {t("Stop future cycles")}
                       </Button>
                     </>
                   )}
@@ -886,14 +885,14 @@ const OperationsClientWorkspace = () => {
                       variant="secondary"
                       onClick={() => void changeAddonState(item.id, true)}
                     >
-                      Reactivate
+                      {t("Reactivate")}
                     </Button>
                   )}
                 </div>
               </div>
             ))}
             {addons.length === 0 && (
-              <EmptyState title="No add-ons yet" description="Add one-off or monthly scope when this client needs work outside the active plan." className="m-4" />
+              <EmptyState title={t("No add-ons yet")} description={t("Add one-off or monthly scope when this client needs work outside the active plan.")} className="m-4" />
             )}
           </section>
         </div>
@@ -909,7 +908,7 @@ const OperationsClientWorkspace = () => {
                   <MessageSquareText className="h-4 w-4 text-muted" aria-hidden="true" />
                   <p className="text-sm font-semibold text-ink">
                     {store.users.find((user) => user.id === item.userId)
-                      ?.name || "Team member"}
+                      ?.name || t("Team member")}
                   </p>
                   {!isClient && <Badge tone="slate">{item.visibility}</Badge>}
                 </div>
@@ -933,7 +932,7 @@ const OperationsClientWorkspace = () => {
               </article>
             ))}
             {comments.length === 0 && (
-              <EmptyState title="No activity yet" description="Comments and private service files will appear here in chronological order." className="m-4" />
+              <EmptyState title={t("No activity yet")} description={t("Comments and private service files will appear here in chronological order.")} className="m-4" />
             )}
           </section>
         </div>
@@ -945,22 +944,22 @@ const OperationsClientWorkspace = () => {
       <SideSheet
         isOpen={addonSheetOpen}
         onClose={() => { if (!addonSaving) setAddonSheetOpen(false); }}
-        title="Add service add-on"
-        description="Add one-off work to a cycle or recurring work from an effective date. Prices remain internal."
-        footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setAddonSheetOpen(false)} disabled={addonSaving}>Cancel</Button><Button type="submit" form="add-addon-form" disabled={addonSaving}><Plus className="h-4 w-4" />{addonSaving ? "Saving…" : "Add add-on"}</Button></div>}
+        title={t("Add service add-on")}
+        description={t("Add one-off work to a cycle or recurring work from an effective date. Prices remain internal.")}
+        footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setAddonSheetOpen(false)} disabled={addonSaving}>{t("Cancel")}</Button><Button type="submit" form="add-addon-form" disabled={addonSaving}><Plus className="h-4 w-4" />{addonSaving ? t("Saving…") : t("Add add-on")}</Button></div>}
       >
         <form id="add-addon-form" onSubmit={addAddon} className="space-y-5">
-          <label className="block text-sm font-medium text-ink">Add-on name<input required className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.name} onChange={(e) => setAddon({ ...addon, name: e.target.value })} /></label>
-          <label className="block text-sm font-medium text-ink">Platforms<input placeholder="Instagram, TikTok" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.platforms} onChange={(e) => setAddon({ ...addon, platforms: e.target.value })} /></label>
+          <label className="block text-sm font-medium text-ink">{t("Add-on name")}<input data-i18n-skip required className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.name} onChange={(e) => setAddon({ ...addon, name: e.target.value })} /></label>
+          <label className="block text-sm font-medium text-ink">{t("Platforms")}<input data-i18n-skip placeholder={t("Instagram, TikTok")} className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.platforms} onChange={(e) => setAddon({ ...addon, platforms: e.target.value })} /></label>
           <div className="grid grid-cols-2 gap-3">
-            <label className="text-sm font-medium text-ink">Quantity<input type="number" min="1" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.quantity} onChange={(e) => setAddon({ ...addon, quantity: Number(e.target.value) })} /></label>
-            <label className="text-sm font-medium text-ink">Unit price<input type="number" min="0" step="0.01" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.unitPrice} onChange={(e) => setAddon({ ...addon, unitPrice: Number(e.target.value) })} /></label>
+            <label className="text-sm font-medium text-ink">{t("Quantity")}<input type="number" min="1" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.quantity} onChange={(e) => setAddon({ ...addon, quantity: Number(e.target.value) })} /></label>
+            <label className="text-sm font-medium text-ink">{t("Unit price")}<input type="number" min="0" step="0.01" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.unitPrice} onChange={(e) => setAddon({ ...addon, unitPrice: Number(e.target.value) })} /></label>
           </div>
-          <label className="block text-sm font-medium text-ink">Billing mode<select className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.billingMode} onChange={(e) => setAddon({ ...addon, billingMode: e.target.value as AddonBillingMode })}><option value="one_off">One-off</option><option value="monthly">Monthly</option></select></label>
+          <label className="block text-sm font-medium text-ink">{t("Billing mode")}<select className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.billingMode} onChange={(e) => setAddon({ ...addon, billingMode: e.target.value as AddonBillingMode })}><option value="one_off">{t("One-off")}</option><option value="monthly">{t("Monthly")}</option></select></label>
           {addon.billingMode === "one_off" ? (
-            <label className="block text-sm font-medium text-ink">Service cycle<select className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.targetCycleId} onChange={(e) => setAddon({ ...addon, targetCycleId: e.target.value })}><option value="">Choose cycle</option>{allCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.periodStart}</option>)}</select></label>
+            <label className="block text-sm font-medium text-ink">{t("Service cycle")}<select className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.targetCycleId} onChange={(e) => setAddon({ ...addon, targetCycleId: e.target.value })}><option value="">{t("Choose cycle")}</option>{allCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.periodStart}</option>)}</select></label>
           ) : (
-            <label className="block text-sm font-medium text-ink">Effective from<input type="date" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.effectiveFrom} onChange={(e) => setAddon({ ...addon, effectiveFrom: e.target.value })} /></label>
+            <label className="block text-sm font-medium text-ink">{t("Effective from")}<input type="date" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.effectiveFrom} onChange={(e) => setAddon({ ...addon, effectiveFrom: e.target.value })} /></label>
           )}
         </form>
       </SideSheet>

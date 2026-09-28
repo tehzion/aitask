@@ -25,24 +25,30 @@ const getFreshnessTone = (backend: ReturnType<typeof useStore.getState>['backend
   return 'emerald';
 };
 
-const getFreshnessLabel = (backend: ReturnType<typeof useStore.getState>['backend'], isLocal: boolean) => {
-  if (isLocal) return 'Local';
-  if (backend.upgradeRequired) return 'Read only';
-  if (backend.status === 'conflict') return 'Conflict';
-  if (backend.status === 'retry_required') return 'Retry required';
-  if (backend.status === 'offline') return 'Offline';
-  if (backend.status === 'loading') return 'Refreshing';
-  if (backend.status === 'saving') return 'Saving';
-  if (backend.hasRemoteUpdate) return 'Update available';
-  return 'Live';
-};
-
 const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, className }) => {
   const { locale, t } = useI18n();
   const { backend, pullBackendNow, retryPendingSave, discardMutation } = useStore();
   const backendStatus = getBackendStatus();
   const isLocal = backendStatus.mode === 'local';
-  const label = isLocal && backendStatus.isHostedRuntime ? 'Local build' : getFreshnessLabel(backend, isLocal);
+  const label = isLocal && backendStatus.isHostedRuntime
+    ? t('shell.localBuild')
+    : isLocal
+      ? t('shell.local')
+      : backend.upgradeRequired
+        ? t('shell.readOnly')
+        : backend.status === 'conflict'
+          ? t('shell.conflict')
+          : backend.status === 'retry_required'
+            ? t('shell.retryRequired')
+            : backend.status === 'offline'
+              ? t('shell.offline')
+              : backend.status === 'loading'
+                ? t('shell.refreshing')
+                : backend.status === 'saving'
+                  ? t('shell.saving')
+                  : backend.hasRemoteUpdate
+                    ? t('shell.updateAvailable')
+                    : t('shell.live');
   const tone = isLocal ? 'slate' : getFreshnessTone(backend);
   const needsResolution = !backend.upgradeRequired && (backend.status === 'conflict' || backend.status === 'retry_required' || (backend.status === 'offline' && backend.hasLocalChanges));
   const Icon = isLocal || backend.status === 'offline'
@@ -65,10 +71,10 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
         {!compact && (
           <span className="whitespace-nowrap text-slate-500">
             {isLocal && backendStatus.isHostedRuntime
-              ? 'Vercel configuration required'
+              ? t('shell.vercelConfigurationRequired')
               : isLocal
-                ? 'Local demo mode'
-                : t(`Last sync: ${formatSyncTime(lastChecked, locale)}`)}
+                ? t('shell.localDemo')
+                : t('shell.lastSync', { time: formatSyncTime(lastChecked, locale) })}
           </span>
         )}
       </div>
@@ -78,8 +84,8 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           onClick={() => pullBackendNow({ silent: false })}
           disabled={backend.isPulling || backend.isSaving}
           className="h-11 w-11 p-0 rounded-md flex items-center justify-center shrink-0 border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm"
-          title="Refresh sync status"
-          aria-label="Refresh sync status"
+          title={t('shell.refreshSyncStatus')}
+          aria-label={t('shell.refreshSyncStatus')}
         >
           <RefreshCw className={cn('h-3 w-3 text-slate-500', backend.isPulling && 'animate-spin')} />
         </Button>
@@ -91,26 +97,26 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
             onClick={() => void retryPendingSave()}
             disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
             className="min-h-11 px-3 py-2 text-xs"
-            title="Retry my pending changes"
+            title={t('shell.retryPendingChanges')}
           >
             <RotateCcw className="h-3 w-3" />
-            Retry my changes
+            {t('shell.retryMyChanges')}
           </Button>
           <Button
             variant="secondary"
             onClick={() => void discardMutation()}
             disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
             className="min-h-11 px-3 py-2 text-xs"
-            title="Discard pending changes and load the latest saved version"
+            title={t('shell.discardPendingChanges')}
           >
             <X className="h-3 w-3" />
-            Use latest
+            {t('shell.useLatest')}
           </Button>
         </div>
       )}
       {!compact && backend.conflict && (
         <span className="basis-full text-xs text-amber-700">
-          {backend.conflict.entityType} {backend.conflict.entityId} changed remotely
+          {t('shell.changedRemotely', { entityType: backend.conflict.entityType, entityId: backend.conflict.entityId })}
           {backend.conflict.changedFields?.length ? `: ${backend.conflict.changedFields.join(', ')}` : '.'}
         </span>
       )}

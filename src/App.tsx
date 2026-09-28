@@ -7,6 +7,8 @@ import { hasPasswordResetBypass } from './lib/auth';
 import { RefreshCw, WifiOff } from 'lucide-react';
 import { shouldUseSecureSupabase, supabase } from './lib/supabaseClient';
 import { useAppNoticeState } from './hooks/useAppNoticeState';
+import { useI18n } from './components/I18nProvider';
+import { msg } from './lib/messages';
 
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const AccessDenied = React.lazy(() => import('./components/AccessDenied'));
@@ -24,11 +26,14 @@ const FeedbackResults = React.lazy(() => import('./pages/FeedbackResults'));
 const Notifications = React.lazy(() => import('./pages/Notifications'));
 const Tasks = React.lazy(() => import('./pages/Tasks'));
 
-const RouteLoading = () => (
+const RouteLoading = () => {
+  const { t } = useI18n();
+  return (
   <div className="flex min-h-[40vh] items-center justify-center px-4 text-sm font-medium text-slate-500" role="status">
-    Loading AiTask...
+    {t('common.loading')}
   </div>
-);
+  );
+};
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const currentUser = useStore((state) => state.currentUser);
@@ -54,13 +59,14 @@ const RoleRoute: React.FC<{ path: string; children: React.ReactNode }> = ({ path
   return (
     <AccessDenied
       message={path === '/approvals'
-        ? 'Approvals are restricted to Boss Koo. Your role can continue in its own operational workspace.'
+        ? msg('shell.approvalsRestricted')
         : undefined}
     />
   );
 };
 
 function App() {
+  const { t } = useI18n();
   const { isOnline, isUpdateReady } = useAppNoticeState();
   const initializeBackend = useStore(state => state.initializeBackend);
   const forceSyncMockData = useStore(state => state._forceSyncMockData);
@@ -82,14 +88,14 @@ function App() {
             ...state.backend,
             status: 'loading',
             isLoading: true,
-            message: 'Refreshing the signed-in account.',
+            message: t('shell.refreshingAccount'),
           },
         }));
         queueMicrotask(() => void useStore.getState().initializeBackend());
       }
     });
     return () => subscription.unsubscribe();
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     let isMounted = true;
@@ -171,9 +177,9 @@ function App() {
         >
           <WifiOff className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
           <div>
-            <p className="text-sm font-semibold">You are offline</p>
+          <p className="text-sm font-semibold">{t('shell.offlineTitle')}</p>
             <p className="mt-0.5 text-xs leading-5 text-slate-300">
-              The cached app shell is available. Live workspace sync will resume when you are back online.
+              {t('shell.offlineDescription')}
             </p>
           </div>
         </div>
@@ -187,15 +193,15 @@ function App() {
         >
           <RefreshCw className="h-5 w-5 shrink-0 text-blue-600" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">New version ready</p>
-            <p className="mt-0.5 text-xs leading-5 text-slate-500">Refresh to use the latest AiTask fixes.</p>
+            <p className="text-sm font-semibold">{t('Update available')}</p>
+            <p className="mt-0.5 text-xs leading-5 text-slate-500">{t('Refresh to use the latest AiTask fixes.')}</p>
           </div>
           <button
             type="button"
             onClick={() => window.location.reload()}
             className="shrink-0 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
-            Refresh now
+            {t('Refresh now')}
           </button>
         </div>
       )}

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatDistanceToNow } from 'date-fns';
 import {
   AlertCircle,
   Check,
@@ -17,6 +16,8 @@ import { notificationRouteToPath } from '../lib/security';
 import { cn } from '../lib/utils';
 import { NotificationReadActions } from '../hooks/useNotificationReadActions';
 import { useAppNoticeState } from '../hooks/useAppNoticeState';
+import { useI18n } from './I18nProvider';
+import { formatLocalizedDistanceToNow } from '../lib/i18n';
 
 interface NotificationPopupHostProps {
   currentUser: User | null;
@@ -66,6 +67,7 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
   onMarkRead,
   onView,
 }) => {
+  const { locale, t } = useI18n();
   const [isMarkingRead, setIsMarkingRead] = useState(false);
 
   useEffect(() => {
@@ -82,7 +84,7 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
 
   return (
     <article
-      aria-label={`New notification: ${notification.title}`}
+      aria-label={t('New notification')}
       className="pointer-events-auto overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.14)] "
     >
       <div className="flex items-start gap-3 p-4">
@@ -102,13 +104,13 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
               type="button"
               onClick={() => onDismiss(notification.id)}
               className="-mr-1 -mt-1 shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-              aria-label={`Dismiss notification: ${notification.title}`}
+              aria-label={t('Dismiss notification')}
             >
               <X className="h-4 w-4" />
             </button>
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+            {formatLocalizedDistanceToNow(new Date(notification.createdAt), locale)}
           </p>
         </div>
       </div>
@@ -121,7 +123,7 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
           className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-white hover:text-slate-950 disabled:cursor-wait disabled:opacity-60"
         >
           <Check className="h-3.5 w-3.5" />
-          {isMarkingRead || isReadUpdating ? 'Saving...' : 'Mark as read'}
+          {isMarkingRead || isReadUpdating ? t('Saving...') : t('Mark as read')}
         </button>
         <button
           type="button"
@@ -129,7 +131,7 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
           className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
         >
           <ExternalLink className="h-3.5 w-3.5" />
-          View
+          {t('View')}
         </button>
       </div>
     </article>
@@ -143,6 +145,7 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
   readActions,
 }) => {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const { hasBottomNotice } = useAppNoticeState();
   const tracker = useRef<{ userId?: string; initialized: boolean; seenIds: Set<string> }>({
     initialized: false,
@@ -218,7 +221,7 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
 
   return (
     <aside
-      aria-label="New notifications"
+      aria-label={t('New notifications')}
       aria-live="polite"
       aria-atomic="false"
       data-popup-ready={readyUserId === currentUser?.id ? 'true' : 'false'}

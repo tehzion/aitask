@@ -107,29 +107,33 @@ const ClientDeliveries = () => {
     setSearchParams(next, { replace: true });
   };
 
+  const stageLabel = (stage: ClientDeliveryStage | 'all') => stage === 'all'
+    ? t('delivery.allStages')
+    : t(CLIENT_DELIVERY_STAGE_LABELS[stage]);
+
   return (
     <div className={pageShell}>
-      <PageHeader title="Deliveries" description={`Review, track, and discuss work shared with ${currentUser?.companyName || 'your company'}.`} />
+      <PageHeader title={t('Deliveries')} description={t({ id: 'delivery.pageDescription', values: { company: currentUser?.companyName || t('your company') } })} />
 
       {taskId && !selectedTask && (
         <div role="status" className="flex items-center justify-between gap-3 rounded-control border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
-          <span>This delivery is not available for your company.</span>
-          <button type="button" onClick={() => setParam('taskId')} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control hover:bg-amber-100" aria-label="Dismiss unavailable delivery"><X className="h-4 w-4" /></button>
+          <span>{t('delivery.unavailable')}</span>
+          <button type="button" onClick={() => setParam('taskId')} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control hover:bg-amber-100" aria-label={t('delivery.dismissUnavailable')}><X className="h-4 w-4" /></button>
         </div>
       )}
 
-      <section className="rounded-panel bg-surface p-4 ring-1 ring-line/80" aria-label="Find deliveries">
+      <section className="rounded-panel bg-surface p-4 ring-1 ring-line/80" aria-label={t('delivery.find')}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <label className="relative min-w-0 flex-1">
-            <span className="sr-only">Search deliveries</span>
+            <span className="sr-only">{t('delivery.search')}</span>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <input value={searchTerm} onChange={event => setParam('search', event.target.value)} className={cn(inputBase, 'min-h-11 pl-10 pr-3')} placeholder="Search deliveries…" />
+            <input value={searchTerm} onChange={event => setParam('search', event.target.value)} className={cn(inputBase, 'min-h-11 pl-10 pr-3')} placeholder={t('delivery.search')} />
           </label>
-          <Button variant="secondary" onClick={() => setFiltersOpen(true)} aria-label={`${t('Open delivery filters')}${activeFilterCount ? `${locale === 'zh' ? '，' : ', '}${activeFilterCount} ${t('active')}` : ''}`}>
-            <Filter className="h-4 w-4" />Filters{activeFilterCount > 0 && <span className="calm-number rounded-tag bg-accent-soft px-1.5 py-0.5 text-xs text-accent">{activeFilterCount}</span>}
+          <Button variant="secondary" onClick={() => setFiltersOpen(true)} aria-label={activeFilterCount ? t('delivery.openFiltersCount', { count: activeFilterCount }) : t('delivery.openFilters')}>
+            <Filter className="h-4 w-4" />{t('delivery.filters')}{activeFilterCount > 0 && <span className="calm-number rounded-tag bg-accent-soft px-1.5 py-0.5 text-xs text-accent">{activeFilterCount}</span>}
           </Button>
         </div>
-        {activeFilterCount > 0 && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className="text-muted">Showing:</span>{stageFilter !== 'all' && <FilterToken>{CLIENT_DELIVERY_STAGE_LABELS[stageFilter]}</FilterToken>}{serviceFilter !== 'All' && <FilterToken>{serviceFilter}</FilterToken>}{dateFilter !== 'any' && <FilterToken>{dateFilter === 'next_7' ? 'Next 7 days' : dateFilter === 'this_month' ? 'This month' : 'No date'}</FilterToken>}<button type="button" onClick={clearFilters} className="min-h-11 px-2 font-semibold text-accent">Clear filters</button></div>}
+        {activeFilterCount > 0 && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs"><span className="text-muted">{t('delivery.showing')}</span>{stageFilter !== 'all' && <FilterToken>{stageLabel(stageFilter)}</FilterToken>}{serviceFilter !== 'All' && <FilterToken>{serviceFilter}</FilterToken>}{dateFilter !== 'any' && <FilterToken>{dateFilter === 'next_7' ? t('delivery.nextSevenDays') : dateFilter === 'this_month' ? t('delivery.thisMonth') : t('delivery.noDate')}</FilterToken>}<button type="button" onClick={clearFilters} className="min-h-11 px-2 font-semibold text-accent">{t('delivery.clearFilters')}</button></div>}
       </section>
 
       {visibleStages.length > 0 ? (
@@ -137,7 +141,7 @@ const ClientDeliveries = () => {
           {visibleStages.map(stage => (
             <section key={stage} className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80" aria-labelledby={`client-deliveries-${stage}`}>
               <header className="flex items-center justify-between gap-3 border-b border-line/70 px-4 py-4 sm:px-5">
-                <div className="flex items-center gap-2">{stage === 'timing_changed' ? <TimerReset className="h-4 w-4 text-amber-600" /> : stage === 'delivered' ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <CalendarDays className="h-4 w-4 text-accent" />}<h2 id={`client-deliveries-${stage}`} className="font-semibold text-ink">{CLIENT_DELIVERY_STAGE_LABELS[stage]}</h2></div>
+                <div className="flex items-center gap-2">{stage === 'timing_changed' ? <TimerReset className="h-4 w-4 text-amber-600" /> : stage === 'delivered' ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <CalendarDays className="h-4 w-4 text-accent" />}<h2 id={`client-deliveries-${stage}`} className="font-semibold text-ink">{stageLabel(stage)}</h2></div>
                 <span className="calm-number text-sm text-muted">{groups[stage].length}</span>
               </header>
               <div className="divide-y divide-line/70">
@@ -147,11 +151,11 @@ const ClientDeliveries = () => {
                   return (
                     <article key={task.id} className="group grid gap-4 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5">
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2"><Link data-i18n-skip to={taskUrl(task.id)} className="truncate text-sm font-semibold text-ink transition-colors duration-160 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">{task.title}</Link><StatusChip tone={stageTone[stage]}>{CLIENT_DELIVERY_STAGE_LABELS[stage]}</StatusChip></div>
+                        <div className="flex flex-wrap items-center gap-2"><Link data-i18n-skip to={taskUrl(task.id)} className="truncate text-sm font-semibold text-ink transition-colors duration-160 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">{task.title}</Link><StatusChip tone={stageTone[stage]}>{stageLabel(stage)}</StatusChip></div>
                         <p className="mt-1 text-xs leading-5 text-muted"><span data-i18n-skip>{task.serviceType}</span> · {contactName(task.assignedTo)}<span> · {dueDate ? formatLocalizedDate(dueDate, locale) : t('Date to be confirmed')}</span></p>
                         {stage === 'timing_changed' && <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-6 text-amber-800 dark:text-amber-200">{latestTeamComment?.text ? <span data-i18n-skip>{latestTeamComment.text}</span> : <>{t('The expected date has changed.')} {contactName(task.assignedTo)} {t('is your contact for timing.')}</>}</p>}
                       </div>
-                      <Link to={taskUrl(task.id)} className={cn('inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control px-3 text-sm font-semibold transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 active:translate-y-px', stage === 'needs_review' ? 'bg-accent text-white hover:brightness-95 dark:text-[rgb(var(--calm-accent-ink))]' : 'text-accent hover:bg-accent-soft')}>{stage === 'needs_review' ? 'Review deliverable' : 'View delivery'}<ArrowRight className="h-4 w-4" /></Link>
+                      <Link to={taskUrl(task.id)} className={cn('inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control px-3 text-sm font-semibold transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 active:translate-y-px', stage === 'needs_review' ? 'bg-accent text-white hover:brightness-95 dark:text-[rgb(var(--calm-accent-ink))]' : 'text-accent hover:bg-accent-soft')}>{stage === 'needs_review' ? t('delivery.review') : t('delivery.view')}<ArrowRight className="h-4 w-4" /></Link>
                     </article>
                   );
                 })}
@@ -160,14 +164,14 @@ const ClientDeliveries = () => {
           ))}
         </div>
       ) : (
-        <EmptyState title={tasks.length ? 'No matching deliveries' : 'No deliveries shared yet'} description={tasks.length ? 'Try clearing a filter or searching for another service.' : 'Your agency team will share scheduled work and review requests here.'} />
+        <EmptyState title={tasks.length ? t('delivery.noMatch') : t('delivery.noneShared')} description={tasks.length ? t('delivery.tryAnother') : t('delivery.teamWillShare')} />
       )}
 
-      <SideSheet isOpen={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filter deliveries" description="Narrow this list without changing what your company can access." footer={<div className="flex justify-between gap-2"><Button variant="secondary" onClick={clearFilters}>Clear</Button><Button onClick={() => setFiltersOpen(false)}>Show {filteredTasks.length} deliveries</Button></div>}>
+      <SideSheet isOpen={filtersOpen} onClose={() => setFiltersOpen(false)} title={t('delivery.filterTitle')} description={t('delivery.filterDescription')} footer={<div className="flex justify-between gap-2"><Button variant="secondary" onClick={clearFilters}>{t('delivery.clear')}</Button><Button onClick={() => setFiltersOpen(false)}>{t('delivery.showCount', { count: filteredTasks.length })}</Button></div>}>
         <div className="space-y-6">
-          <fieldset><legend className="text-sm font-semibold text-ink">Delivery stage</legend><div className="mt-3 grid gap-2">{(['all', ...CLIENT_DELIVERY_STAGE_ORDER] as const).map(stage => <label key={stage} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-control border border-line px-3 text-sm text-ink hover:bg-inset"><input type="radio" name="client-delivery-stage" checked={stageFilter === stage} onChange={() => setParam('stage', stage === 'all' ? undefined : stage)} className="h-4 w-4 accent-[rgb(var(--calm-accent))]" />{stage === 'all' ? 'All delivery stages' : CLIENT_DELIVERY_STAGE_LABELS[stage]}</label>)}</div></fieldset>
-          <label className="block text-sm font-semibold text-ink">Service<select value={serviceFilter} onChange={event => setServiceFilter(event.target.value)} className={cn(inputBase, 'mt-2 min-h-11 px-3')}><option value="All">All services</option>{services.map(service => <option key={service} data-i18n-skip>{service}</option>)}</select></label>
-          <label className="block text-sm font-semibold text-ink">Expected date<select value={dateFilter} onChange={event => setDateFilter(event.target.value as DateFilter)} className={cn(inputBase, 'mt-2 min-h-11 px-3')}><option value="any">Any date</option><option value="next_7">Next 7 days</option><option value="this_month">This month</option><option value="no_date">No date</option></select></label>
+          <fieldset><legend className="text-sm font-semibold text-ink">{t('delivery.stage')}</legend><div className="mt-3 grid gap-2">{(['all', ...CLIENT_DELIVERY_STAGE_ORDER] as const).map(stage => <label key={stage} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-control border border-line px-3 text-sm text-ink hover:bg-inset"><input type="radio" name="client-delivery-stage" checked={stageFilter === stage} onChange={() => setParam('stage', stage === 'all' ? undefined : stage)} className="h-4 w-4 accent-[rgb(var(--calm-accent))]" />{stageLabel(stage)}</label>)}</div></fieldset>
+          <label className="block text-sm font-semibold text-ink">{t('delivery.service')}<select value={serviceFilter} onChange={event => setServiceFilter(event.target.value)} className={cn(inputBase, 'mt-2 min-h-11 px-3')}><option value="All">{t('delivery.allServices')}</option>{services.map(service => <option key={service} data-i18n-skip>{service}</option>)}</select></label>
+          <label className="block text-sm font-semibold text-ink">{t('delivery.expectedDate')}<select value={dateFilter} onChange={event => setDateFilter(event.target.value as DateFilter)} className={cn(inputBase, 'mt-2 min-h-11 px-3')}><option value="any">{t('delivery.anyDate')}</option><option value="next_7">{t('delivery.nextSevenDays')}</option><option value="this_month">{t('delivery.thisMonth')}</option><option value="no_date">{t('delivery.noDate')}</option></select></label>
         </div>
       </SideSheet>
 

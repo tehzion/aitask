@@ -2,6 +2,7 @@ import React from 'react';
 import { useToastStore, Toast as ToastType } from '../store/useToastStore';
 import { CheckCircle2, AlertTriangle, XCircle, Info, X } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useI18n } from './I18nProvider';
 
 const iconMap = {
   success: <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />,
@@ -19,6 +20,7 @@ const bgClasses = {
 
 const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
   const removeToast = useToastStore((state) => state.removeToast);
+  const { t } = useI18n();
 
   return (
     <div
@@ -31,11 +33,11 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
       )}
     >
       {iconMap[toast.type]}
-      <p className="text-sm font-semibold flex-1 leading-5 pr-2">{toast.message}</p>
+      <p className="min-w-0 flex-1 break-words pr-2 text-sm font-semibold leading-5">{typeof toast.message === 'string' ? t(toast.message) : t(toast.message)}</p>
       <button
         onClick={() => removeToast(toast.id)}
         className="text-slate-400 hover:text-slate-600 p-0.5 rounded-lg hover:bg-slate-100 transition-colors"
-        aria-label="Close notification"
+        aria-label={t('common.closeNotification')}
       >
         <X className="w-4 h-4" />
       </button>

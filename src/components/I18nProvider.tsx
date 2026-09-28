@@ -7,83 +7,17 @@ import {
   translateUiText,
   type AppLocale,
 } from '../lib/i18n';
+import { formatMessage, isMessageId, type MessageDescriptor, type MessageId, type MessageValues } from '../lib/messages';
 import { cn } from '../lib/utils';
 
 interface I18nContextValue {
   locale: AppLocale;
   setLocale: (locale: AppLocale) => void;
   toggleLocale: () => void;
-  t: (value: string) => string;
+  t: (value: MessageId | string | MessageDescriptor, values?: MessageValues) => string;
 }
 
 const I18nContext = React.createContext<I18nContextValue | null>(null);
-
-interface LocalizedSource {
-  source: string;
-  rendered: string;
-}
-
-const textSources = new WeakMap<Text, LocalizedSource>();
-const attributeSources = new WeakMap<HTMLElement, Map<string, LocalizedSource>>();
-const localizedAttributes = ['aria-label', 'aria-description', 'placeholder', 'title', 'alt'] as const;
-
-const isExcluded = (element: Element | null) => Boolean(element?.closest(
-  '[data-i18n-skip], script, style, code, pre, [contenteditable="true"]',
-));
-
-const sourceForText = (node: Text) => {
-  const current = node.nodeValue || '';
-  const known = textSources.get(node);
-  if (!known) {
-    textSources.set(node, { source: current, rendered: current });
-    return current;
-  }
-  if (current !== known.rendered) {
-    known.source = current;
-    known.rendered = current;
-  }
-  return known.source;
-};
-
-const localizeTextNode = (node: Text, locale: AppLocale) => {
-  if (isExcluded(node.parentElement)) return;
-  const source = sourceForText(node);
-  const translated = translateUiText(source, locale);
-  if (node.nodeValue !== translated) node.nodeValue = translated;
-  const known = textSources.get(node);
-  if (known) known.rendered = translated;
-};
-
-const sourceForAttribute = (element: HTMLElement, attribute: string) => {
-  const current = element.getAttribute(attribute) || '';
-  const sources = attributeSources.get(element) || new Map<string, LocalizedSource>();
-  const known = sources.get(attribute);
-  if (!known) sources.set(attribute, { source: current, rendered: current });
-  else if (current !== known.rendered) {
-    known.source = current;
-    known.rendered = current;
-  }
-  attributeSources.set(element, sources);
-  return sources.get(attribute)?.source || '';
-};
-
-const localizeAttribute = (element: HTMLElement, attribute: string, locale: AppLocale) => {
-  if (isExcluded(element) || !element.hasAttribute(attribute)) return;
-  const source = sourceForAttribute(element, attribute);
-  const translated = translateUiText(source, locale);
-  if (element.getAttribute(attribute) !== translated) element.setAttribute(attribute, translated);
-  const known = attributeSources.get(element)?.get(attribute);
-  if (known) known.rendered = translated;
-};
-
-const localizeElement = (element: Element, locale: AppLocale) => {
-  if (isExcluded(element)) return;
-  localizedAttributes.forEach(attribute => localizeAttribute(element as HTMLElement, attribute, locale));
-  element.childNodes.forEach(child => {
-    if (child.nodeType === Node.TEXT_NODE) localizeTextNode(child as Text, locale);
-    if (child.nodeType === Node.ELEMENT_NODE) localizeElement(child as Element, locale);
-  });
-};
 
 export const I18nProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const [locale, setLocaleState] = React.useState<AppLocale>(getInitialLocale);
@@ -94,32 +28,21 @@ export const I18nProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   }, []);
 
   const toggleLocale = React.useCallback(() => setLocale(locale === 'en' ? 'zh' : 'en'), [locale, setLocale]);
-  const translate = React.useCallback((value: string) => translateUiText(value, locale), [locale]);
+  const translate = React.useCallback((value: MessageId | string | MessageDescriptor, values?: MessageValues) => {
+    if (typeof value === 'object') return formatMessage(value, locale);
+    if (isMessageId(value)) return formatMessage({ id: value, values }, locale);
+    const resolvedValue = values
+      ? value.replace(/\{(\w+)\}/g, (match, key: string) => (
+        Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : match
+      ))
+      : value;
+    return translateUiText(resolvedValue, locale);
+  }, [locale]);
 
   React.useEffect(() => {
     document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en';
     document.documentElement.dataset.locale = locale;
     document.title = translateUiText('AiTask - Marketing Agency Task Management', locale);
-    const localizationRoots = [
-      document.getElementById('root'),
-      document.getElementById('i18n-portals'),
-    ].filter((element): element is HTMLElement => Boolean(element));
-    if (localizationRoots.length === 0) return;
-
-    const translateAll = () => localizationRoots.forEach(root => localizeElement(root, locale));
-    translateAll();
-    const observer = new MutationObserver(records => {
-      records.forEach(record => {
-        if (record.type === 'characterData') localizeTextNode(record.target as Text, locale);
-        if (record.type === 'attributes') localizeAttribute(record.target as HTMLElement, record.attributeName || '', locale);
-        if (record.type === 'childList') record.addedNodes.forEach(node => {
-          if (node.nodeType === Node.TEXT_NODE) localizeTextNode(node as Text, locale);
-          if (node.nodeType === Node.ELEMENT_NODE) localizeElement(node as Element, locale);
-        });
-      });
-    });
-    localizationRoots.forEach(root => observer.observe(root, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: [...localizedAttributes] }));
-    return () => observer.disconnect();
   }, [locale]);
 
   const value = React.useMemo<I18nContextValue>(() => ({ locale, setLocale, toggleLocale, t: translate }), [locale, setLocale, toggleLocale, translate]);

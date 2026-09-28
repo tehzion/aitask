@@ -12,6 +12,7 @@ import { cardBase, inputBase, pageShell } from '../components/uiTokens';
 import { canManageServiceCatalog, canManageTaskTemplates, getDefaultAccessiblePath, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
+import { formatLocalizedDateTime } from '../lib/i18n';
 import BackendFreshness from '../components/BackendFreshness';
 import { getSoundEnabled, setSoundEnabled, SOUND_PREF_EVENT } from '../lib/sounds';
 import { canUsePasswordResetBypass, enablePasswordResetBypass, hasPasswordResetBypass } from '../lib/auth';
@@ -88,7 +89,7 @@ const resizeAvatarImage = async (file: File) => {
 };
 
 const Settings: React.FC = () => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const navigate = useNavigate();
   const {
     currentUser,
@@ -195,7 +196,7 @@ const Settings: React.FC = () => {
     setHasPendingStatusAdd(false);
     setNewStatusInput('');
     setStatusError('');
-    useToastStore.getState().addToast('Status added successfully', 'success');
+    useToastStore.getState().addToast(t('Status added successfully'), 'success');
   };
 
   const handleDeleteStatus = async (status: string) => {
@@ -221,7 +222,7 @@ const Settings: React.FC = () => {
         }
 
         setStatusError('');
-        useToastStore.getState().addToast(`Status "${status}" deleted successfully`, 'success');
+        useToastStore.getState().addToast(t(`Status "${status}" deleted successfully`), 'success');
       },
     });
   };
@@ -546,8 +547,8 @@ const Settings: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title={mustResetPassword ? 'Account Setup' : 'Settings'}
-        description={mustResetPassword ? 'Set your own password to unlock the workspace.' : scopeDescription}
+        title={mustResetPassword ? t('Account Setup') : t('Settings')}
+        description={mustResetPassword ? t('Set your own password to unlock the workspace.') : scopeDescription}
       />
 
       {mustResetPassword && (
@@ -558,20 +559,20 @@ const Settings: React.FC = () => {
                 <Lock className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-bold">Password reset required</p>
+                <p className="font-bold">{t('Password reset required')}</p>
                 <p className="mt-1 text-sm leading-6 text-amber-800">
                   {secureAccounts
-                    ? 'Choose a private password with at least 12 characters to unlock the workspace.'
-                    : 'Use the default password once as the current password, then choose a private password with at least 12 characters.'}
+                    ? t('Choose a private password with at least 12 characters to unlock the workspace.')
+                    : t('Use the default password once as the current password, then choose a private password with at least 12 characters.')}
                 </p>
               </div>
             </div>
             <div className="flex flex-col gap-2 lg:items-end">
-              <Badge tone="amber" className="self-start lg:self-end">Required</Badge>
+              <Badge tone="amber" className="self-start lg:self-end">{t('Required')}</Badge>
               <div className="flex flex-col gap-2 sm:flex-row">
               {canBypassPasswordReset && (
                 <Button type="button" variant="secondary" onClick={handlePasswordResetBypass} className="min-h-9 whitespace-nowrap px-3 py-1.5 text-xs">
-                  Continue for now
+                  {t('Continue for now')}
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               )}
@@ -581,7 +582,7 @@ const Settings: React.FC = () => {
                 onClick={handleSettingsSignOut}
                 className="min-h-9 whitespace-nowrap px-3 py-1.5 text-xs"
               >
-                Sign out
+                {t('Sign out')}
               </Button>
               </div>
             </div>
@@ -608,7 +609,7 @@ const Settings: React.FC = () => {
                   {avatarUrl && !avatarPreviewFailed ? (
                     <img
                       src={avatarUrl}
-                      alt={`${profileName || currentUser?.name || t('User')} ${t('profile photo preview')}`}
+                      alt={t('profile photo preview')}
                       className="h-full w-full object-cover"
                       onError={() => {
                         setAvatarPreviewFailed(true);
@@ -691,6 +692,7 @@ const Settings: React.FC = () => {
                       setProfileMessage(null);
                     }}
                     className={cn(inputBase, 'px-3 py-2.5')}
+                    data-i18n-skip
                     placeholder="name@company.com"
                     autoComplete="email"
                     maxLength={320}
@@ -777,7 +779,7 @@ const Settings: React.FC = () => {
               </div>
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button type="button" variant="secondary" onClick={resetProfileForm} disabled={!profileChanged || isProfileSaving}>
-                  Reset
+                  {t('Reset')}
                 </Button>
                 <Button type="submit" disabled={!profileChanged || isProfileSaving} aria-busy={isProfileSaving}>
                   {isProfileSaving ? t('Saving...') : t('Save profile')}
@@ -803,18 +805,18 @@ const Settings: React.FC = () => {
             <div className="mb-4 flex items-center gap-3">
               <Lock className="h-5 w-5 text-blue-600" />
               <div>
-                <h3 className="text-base font-semibold text-slate-900">{mustResetPassword ? 'Reset Password' : 'Password'}</h3>
+                <h3 className="text-base font-semibold text-slate-900">{mustResetPassword ? t('Reset Password') : t('Password')}</h3>
                 <p className="text-sm text-slate-500">
                   {mustResetPassword
-                    ? 'Set your own password before continuing to the workspace.'
-                    : 'Update the login password for this user profile.'}
+                    ? t('Set your own password before continuing to the workspace.')
+                    : t('Update the login password for this user profile.')}
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div>
-                <label htmlFor="current-password" className="block text-xs font-semibold text-slate-400 mb-1">Current Password</label>
+                <label htmlFor="current-password" className="block text-xs font-semibold text-slate-400 mb-1">{t('Current Password')}</label>
                 <input
                   id="current-password"
                   type="password"
@@ -826,7 +828,7 @@ const Settings: React.FC = () => {
                 />
               </div>
               <div>
-                <label htmlFor="new-password" className="block text-xs font-semibold text-slate-400 mb-1">New Password</label>
+                <label htmlFor="new-password" className="block text-xs font-semibold text-slate-400 mb-1">{t('New Password')}</label>
                 <input
                   id="new-password"
                   type="password"
@@ -839,7 +841,7 @@ const Settings: React.FC = () => {
                 />
               </div>
               <div>
-                <label htmlFor="confirm-password" className="block text-xs font-semibold text-slate-400 mb-1">Confirm Password</label>
+                <label htmlFor="confirm-password" className="block text-xs font-semibold text-slate-400 mb-1">{t('Confirm Password')}</label>
                 <input
                   id="confirm-password"
                   type="password"
@@ -862,7 +864,7 @@ const Settings: React.FC = () => {
                 )}
               </div>
               <Button type="submit" disabled={!passwordChanged}>
-                {mustResetPassword ? 'Set password' : 'Update password'}
+                {mustResetPassword ? t('Set password') : t('Update password')}
               </Button>
             </div>
           </form>
@@ -879,13 +881,13 @@ const Settings: React.FC = () => {
         <section className={`${cardBase} overflow-hidden xl:col-span-3`} aria-labelledby="local-demo-title">
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="calm-eyebrow">Local development only</p>
-              <h2 id="local-demo-title" className="mt-1 text-lg font-semibold text-slate-900">Sample service workspace</h2>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">UrbanEats, TechNova, and EcoLife demonstrate package modes, frozen plans, cycles, task chains, client-visible activity, add-ons, revisions, and role-specific workbenches. This data stays in this browser.</p>
+              <p className="calm-eyebrow">{t('Local development only')}</p>
+              <h2 id="local-demo-title" className="mt-1 text-lg font-semibold text-slate-900">{t('Sample service workspace')}</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{t('UrbanEats, TechNova, and EcoLife demonstrate package modes, frozen plans, cycles, task chains, client-visible activity, add-ons, revisions, and role-specific workbenches. This data stays in this browser.')}</p>
             </div>
             <Button type="button" variant="secondary" onClick={handleResetLocalDemo}>
               <Database className="h-4 w-4" />
-              Reset sample workspace
+              {t('Reset sample workspace')}
             </Button>
           </div>
           {localDemoMessage && <p className={cn('border-t border-line px-5 py-3 text-sm font-medium', localDemoMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-700')} role={localDemoMessage.tone === 'error' ? 'alert' : 'status'}>{localDemoMessage.text}</p>}
@@ -898,28 +900,28 @@ const Settings: React.FC = () => {
           <div className={`${cardBase} overflow-hidden xl:col-span-3`}>
             <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
               <ShieldCheck className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-slate-800">Client Access</h2>
+              <h2 className="text-lg font-semibold text-slate-800">{t('Client Access')}</h2>
             </div>
             <div className="p-6 space-y-4 text-sm text-slate-600">
               <div>
-                <p className="text-xs font-semibold text-slate-400">Company</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{currentUser?.companyName || 'Not linked'}</p>
+                <p className="text-xs font-semibold text-slate-400">{t('Company')}</p>
+                <p data-i18n-skip className="mt-1 text-base font-semibold text-slate-900">{currentUser?.companyName || t('Not linked')}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold text-slate-400">Tasks</p>
+                  <p className="text-xs font-semibold text-slate-400">{t('Tasks')}</p>
                   <p className="mt-1 text-xl font-bold text-slate-900">{visibleTasks.length}</p>
                 </div>
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold text-slate-400">Companies</p>
+                  <p className="text-xs font-semibold text-slate-400">{t('Companies')}</p>
                   <p className="mt-1 text-xl font-bold text-slate-900">{visibleProjects.length}</p>
                 </div>
               </div>
               <p className="leading-6">
-                You can check task progress, leave feedback on your company tasks, and approve or request revisions when work is ready for review.
+                {t('You can check task progress, leave feedback on your company tasks, and approve or request revisions when work is ready for review.')}
               </p>
               <Button type="button" variant="secondary" onClick={() => navigate('/clients?period=all')} className="w-full justify-center">
-                View company tasks
+                {t('View company tasks')}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
@@ -928,15 +930,15 @@ const Settings: React.FC = () => {
           <div className={`${cardBase} overflow-hidden xl:col-span-3`}>
             <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
               <ShieldCheck className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-slate-800">Permissions</h2>
+              <h2 className="text-lg font-semibold text-slate-800">{t('Permissions')}</h2>
             </div>
             <div className="p-6 space-y-3 text-sm text-slate-600">
-              <p><strong className="text-slate-800">Boss Koo:</strong> has super admin access to add members, manage users, approve registrations, companies, and all task workflows.</p>
-              <p><strong className="text-slate-800">Project Manager:</strong> can create and edit their own projects, companies, and tasks.</p>
-              <p><strong className="text-slate-800">Staff and Finance:</strong> can create tasks for internal teammates, update tasks assigned to them, and see companies they created or participate in.</p>
-              <p><strong className="text-slate-800">Client:</strong> can view company tasks, calendar, reports, and review completed or waiting-approval work.</p>
+              <p><strong className="text-slate-800">{t('Boss Koo:')}</strong> {t('has super admin access to add members, manage users, approve registrations, companies, and all task workflows.')}</p>
+              <p><strong className="text-slate-800">{t('Project Manager:')}</strong> {t('can create and edit their own projects, companies, and tasks.')}</p>
+              <p><strong className="text-slate-800">{t('Staff and Finance:')}</strong> {t('can create tasks for internal teammates, update tasks assigned to them, and see companies they created or participate in.')}</p>
+              <p><strong className="text-slate-800">{t('Client:')}</strong> {t('can view company tasks, calendar, reports, and review completed or waiting-approval work.')}</p>
               <div className="pt-3 border-t border-slate-100">
-                <p className="font-semibold text-slate-800 mb-2">Your effective permissions</p>
+                <p className="font-semibold text-slate-800 mb-2">{t('Your effective permissions')}</p>
                 <div className="flex flex-wrap gap-2">
                   {enabledPermissions.map(permission => (
                     <Badge key={permission} tone="indigo">{permission}</Badge>
@@ -948,23 +950,23 @@ const Settings: React.FC = () => {
         )}
 
         <div className="border-t border-slate-200 pt-6 xl:col-span-3">
-          <h2 className="text-lg font-semibold text-slate-950">Workspace</h2>
-          <p className="mt-1 text-sm text-slate-500">Notifications, workflow preferences, and operational status.</p>
+          <h2 className="text-lg font-semibold text-slate-950">{t('Workspace')}</h2>
+          <p className="mt-1 text-sm text-slate-500">{t('Notifications, workflow preferences, and operational status.')}</p>
         </div>
 
         {/* Sound Notifications */}
         <div className={`${cardBase} overflow-hidden xl:col-span-3`}>
           <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
             {soundEnabled ? <Volume2 className="w-5 h-5 text-blue-600" /> : <VolumeX className="w-5 h-5 text-slate-400" />}
-            <h2 className="text-lg font-semibold text-slate-800">Sound Notifications</h2>
+            <h2 className="text-lg font-semibold text-slate-800">{t('Sound Notifications')}</h2>
           </div>
           <div className="p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-medium text-slate-800">
-                {soundEnabled ? 'Sound alerts are enabled' : 'Sound alerts are muted'}
+                {soundEnabled ? t('Sound alerts are enabled') : t('Sound alerts are muted')}
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                Play a chime for new assignments, deadlines, reviews, feedback, and registration requests. You can also toggle sound from the volume icon in the top bar.
+                {t('Play a chime for new assignments, deadlines, reviews, feedback, and registration requests. You can also toggle sound from the volume icon in the top bar.')}
               </p>
             </div>
             <button
@@ -981,7 +983,7 @@ const Settings: React.FC = () => {
               )}
               role="switch"
               aria-checked={soundEnabled}
-              aria-label="Toggle sound notifications"
+              aria-label={t('Toggle sound notifications')}
             >
               <span
                 className={cn(
@@ -997,11 +999,11 @@ const Settings: React.FC = () => {
           <div className={`${cardBase} overflow-hidden xl:col-span-3`}>
             <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
               <SlidersHorizontal className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-slate-800">Workflow Statuses</h2>
+              <h2 className="text-lg font-semibold text-slate-800">{t('Workflow Statuses')}</h2>
             </div>
             <div className="p-6 space-y-6">
               <p className="text-sm text-slate-500">
-                Manage workspace task statuses. Default statuses are locked. Custom statuses can only be deleted if they are not in active use.
+                {t('Manage workspace task statuses. Default statuses are locked. Custom statuses can only be deleted if they are not in active use.')}
               </p>
 
               {/* Status List */}
@@ -1021,14 +1023,14 @@ const Settings: React.FC = () => {
                           status === 'Cancelled' ? 'bg-red-500' :
                           'bg-slate-400'
                         }`} />
-                        <span className="text-sm font-semibold text-slate-700 truncate">{status}</span>
+                        <span className="text-sm font-semibold text-slate-700 truncate">{t(status)}</span>
                         {isDefault ? (
                           <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold tracking-wide shrink-0">
-                            <Lock className="w-2.5 h-2.5" /> System
+                            <Lock className="w-2.5 h-2.5" /> {t('System')}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 font-bold tracking-wide shrink-0">
-                            Custom
+                            {t('Custom')}
                           </span>
                         )}
                       </div>
@@ -1036,7 +1038,7 @@ const Settings: React.FC = () => {
                       <div className="flex items-center gap-3 shrink-0">
                         {taskCount > 0 && (
                           <span className="text-xs text-slate-400 font-medium">
-                            {taskCount} task{taskCount === 1 ? '' : 's'}
+                            {taskCount} {taskCount === 1 ? t('task') : t('tasks')}
                           </span>
                         )}
                         {!isDefault && (
@@ -1045,8 +1047,8 @@ const Settings: React.FC = () => {
                             onClick={() => void handleDeleteStatus(status)}
                             disabled={isStatusSaving || taskCount > 0}
                             className="text-slate-400 hover:text-red-600 p-1 rounded transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
-                            title={taskCount > 0 ? `In use by ${taskCount} task${taskCount === 1 ? '' : 's'} and cannot be deleted` : `Delete ${status}`}
-                            aria-label={`Delete ${status}`}
+                            title={taskCount > 0 ? t('In-use status cannot be deleted') : t('Delete status')}
+                            aria-label={t('Delete status')}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -1059,7 +1061,7 @@ const Settings: React.FC = () => {
 
               {/* Add Custom Status Form */}
               <div className="pt-4 border-t border-slate-100">
-                <h3 className="text-sm font-semibold text-slate-800 mb-2">Create Custom Status</h3>
+                <h3 className="text-sm font-semibold text-slate-800 mb-2">{t('Create Custom Status')}</h3>
                 <form onSubmit={handleStatusAdd} className="flex gap-2">
                   <input
                     type="text"
@@ -1068,12 +1070,12 @@ const Settings: React.FC = () => {
                       setNewStatusInput(e.target.value);
                       setStatusError('');
                     }}
-                    placeholder="e.g. Under QA, Draft"
+                    placeholder={t('e.g. Under QA, Draft')}
                     className={cn(inputBase, 'flex-1 px-3 py-2 text-sm')}
                     maxLength={50}
                   />
                   <Button type="submit" disabled={!newStatusInput.trim() || isStatusSaving}>
-                    {isStatusSaving ? 'Saving...' : 'Add Status'}
+                    {isStatusSaving ? t('Saving...') : t('Add Status')}
                   </Button>
                 </form>
                 {statusError && (
@@ -1093,7 +1095,7 @@ const Settings: React.FC = () => {
           <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <Cloud className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-slate-800">Data Backend</h2>
+              <h2 className="text-lg font-semibold text-slate-800">{t('Data Backend')}</h2>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <BackendFreshness compact />
@@ -1105,7 +1107,7 @@ const Settings: React.FC = () => {
                   className="min-h-9 px-3 py-1.5 text-xs"
                 >
                   <RefreshCw className={cn('h-3.5 w-3.5', backend.isPulling && 'animate-spin')} />
-                  Check now
+                  {t('Check now')}
                 </Button>
               )}
               <Button
@@ -1119,12 +1121,12 @@ const Settings: React.FC = () => {
                   anchor.download = `aitask-workspace-${new Date().toISOString().slice(0, 10)}.json`;
                   anchor.click();
                   URL.revokeObjectURL(url);
-                  useToastStore.getState().addToast('Workspace exported as JSON', 'success');
+                  useToastStore.getState().addToast(t('settings.exported'), 'success');
                 }}
                 className="min-h-9 px-3 py-1.5 text-xs"
               >
                 <Download className="h-3.5 w-3.5" />
-                Export workspace
+                {t('Export workspace')}
               </Button>
               <Badge tone={backendStatus.ready ? 'emerald' : 'amber'}>
                 {backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
@@ -1133,35 +1135,35 @@ const Settings: React.FC = () => {
           </div>
           <div className="p-6 grid grid-cols-1 lg:grid-cols-4 gap-4 text-sm">
             <div>
-              <p className="text-xs font-semibold text-slate-400">Status</p>
+              <p className="text-xs font-semibold text-slate-400">{t('Status')}</p>
               <p className="mt-1 font-semibold text-slate-900">
-                {backend.status === 'loading' ? 'Checking latest workspace...' : backend.status === 'saving' ? 'Saving changes...' : backend.message}
+                {backend.status === 'loading' ? t('settings.checkingWorkspace') : backend.status === 'saving' ? t('settings.savingChanges') : t(backend.message)}
               </p>
               {backend.error && <p className="mt-2 text-red-600" role="alert" aria-live="polite">{backend.error}</p>}
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-400">Supabase Table</p>
+              <p className="text-xs font-semibold text-slate-400">{t('Supabase Table')}</p>
               <p className="mt-1 font-semibold text-slate-900">{backendStatus.stateTable}</p>
-              <p className="mt-1 text-slate-500">Snapshot ID: {backendStatus.stateId}</p>
+              <p className="mt-1 text-slate-500">{t('Snapshot ID')}: {backendStatus.stateId}</p>
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-400">Last Pull</p>
+              <p className="text-xs font-semibold text-slate-400">{t('Last Pull')}</p>
               <p className="mt-1 font-semibold text-slate-900">
-                {backend.lastPulledAt ? new Date(backend.lastPulledAt).toLocaleString() : 'Not checked yet'}
+                {backend.lastPulledAt ? formatLocalizedDateTime(new Date(backend.lastPulledAt), locale) : t('settings.notChecked')}
               </p>
               {backend.remoteVersion && (
-                <p className="mt-1 text-slate-500">Remote version: {backend.remoteVersion}</p>
+                <p className="mt-1 text-slate-500">{t('Remote version')}: {backend.remoteVersion}</p>
               )}
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-400">Last Save</p>
+              <p className="text-xs font-semibold text-slate-400">{t('Last Save')}</p>
               <p className="mt-1 font-semibold text-slate-900">
                 {backend.lastSavedAt || backend.lastSyncedAt
-                  ? new Date(backend.lastSavedAt || backend.lastSyncedAt || '').toLocaleString()
-                  : 'Not synced yet'}
+                  ? formatLocalizedDateTime(new Date(backend.lastSavedAt || backend.lastSyncedAt || ''), locale)
+                  : t('settings.notSynced')}
               </p>
               {backendStatus.missing.length > 0 && (
-                <p className="mt-1 text-slate-500">Missing: {backendStatus.missing.join(', ')}</p>
+                <p className="mt-1 text-slate-500">{t('Missing')}: {backendStatus.missing.join(', ')}</p>
               )}
             </div>
           </div>
@@ -1169,15 +1171,15 @@ const Settings: React.FC = () => {
           <div className="border-t border-slate-100 px-6 py-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p className="text-sm font-semibold text-slate-900">Supabase readiness</p>
+                <p className="text-sm font-semibold text-slate-900">{t('Supabase readiness')}</p>
                 <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
                   {hostedLocalBuild
-                    ? 'This hosted build is running with local browser storage. Add the Supabase environment variables in Vercel, then redeploy.'
+                    ? t('This hosted build is running with local browser storage. Add the Supabase environment variables in Vercel, then redeploy.')
                     : isSupabaseMode
                     ? backendStatus.ready
-                      ? 'The app is using versioned Supabase workspace commands with row-scoped access.'
-                      : 'Supabase mode is selected, but required environment variables are missing.'
-                    : 'The app is running locally. Set Supabase mode in deployment to share live workspace data.'}
+                      ? t('The app is using versioned Supabase workspace commands with row-scoped access.')
+                      : t('Supabase mode is selected, but required environment variables are missing.')
+                    : t('The app is running locally. Set Supabase mode in deployment to share live workspace data.')}
                 </p>
               </div>
               {backend.error ? (
@@ -1210,16 +1212,16 @@ const Settings: React.FC = () => {
 
       {!isClientUser && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 xl:col-span-3">
-          <MetricCard title="Visible Tasks" value={visibleTasks.length} icon={Database} tone="indigo" />
-          <MetricCard title="Visible Companies" value={visibleProjects.length} icon={Database} tone="emerald" />
-          <MetricCard title="Unread Notices" value={unreadCount} icon={Bell} tone="amber" />
+          <MetricCard title={t('Visible Tasks')} value={visibleTasks.length} icon={Database} tone="indigo" />
+          <MetricCard title={t('Visible Companies')} value={visibleProjects.length} icon={Database} tone="emerald" />
+          <MetricCard title={t('Unread Notices')} value={unreadCount} icon={Bell} tone="amber" />
           {isSuperAdmin && (
             <MetricCard
-              title="Backend"
+              title={t('Backend')}
               value={backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
               icon={Cloud}
               tone={backendStatus.ready ? 'blue' : 'amber'}
-              footer={backendStatus.ready ? 'Configured' : 'Needs env keys'}
+              footer={backendStatus.ready ? t('Configured') : t('Needs env keys')}
             />
           )}
         </div>
@@ -1228,24 +1230,24 @@ const Settings: React.FC = () => {
       <section className={`${cardBase} overflow-hidden xl:col-span-3`}>
         <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
           <PackageCheck className="h-5 w-5 text-blue-600" />
-          <h2 className="text-base font-semibold text-slate-900">Application release</h2>
+          <h2 className="text-base font-semibold text-slate-900">{t('Application release')}</h2>
         </div>
         <div className="grid grid-cols-2 gap-3 px-5 py-4 text-sm lg:grid-cols-4">
           <div>
-            <p className="text-xs font-semibold text-slate-400">Release</p>
+            <p className="text-xs font-semibold text-slate-400">{t('Release')}</p>
             <p className="mt-1 font-semibold text-slate-900">{APP_VERSION_LABEL}</p>
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-400">Build</p>
+            <p className="text-xs font-semibold text-slate-400">{t('Build')}</p>
             <p className="mt-1 font-mono font-semibold text-slate-900">{APP_COMMIT}</p>
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-400">Channel</p>
+            <p className="text-xs font-semibold text-slate-400">{t('Channel')}</p>
             <p className="mt-1 font-semibold capitalize text-slate-900">{APP_BUILD_CHANNEL}</p>
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-400">Built</p>
-            <p className="mt-1 font-semibold text-slate-900">{new Date(APP_BUILD_TIME).toLocaleString()}</p>
+            <p className="text-xs font-semibold text-slate-400">{t('Built')}</p>
+            <p className="mt-1 font-semibold text-slate-900">{formatLocalizedDateTime(new Date(APP_BUILD_TIME), locale)}</p>
           </div>
         </div>
         <div className="border-t border-slate-100 px-5 py-2.5">

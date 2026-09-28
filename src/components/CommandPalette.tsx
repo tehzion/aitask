@@ -108,7 +108,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onOpen
           aria-label={t('Search pages and actions...')}
           className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted/70"
         />
-        <kbd className="rounded border border-line bg-inset px-1.5 py-0.5 font-mono text-[10px] text-muted">Esc</kbd>
+        <kbd className="rounded border border-line bg-inset px-1.5 py-0.5 font-mono text-[10px] text-muted">{t('common.escape')}</kbd>
         <button type="button" aria-label={t('Close')} onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-4 w-4" /></button>
       </div>
       <h2 id={titleId} className="sr-only">{t('Command palette')}</h2>

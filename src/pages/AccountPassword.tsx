@@ -8,10 +8,11 @@ import { getPasswordSetupMode } from '../lib/authRecovery';
 import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
 import { useStore } from '../store';
-import { LanguageSwitcher } from '../components/I18nProvider';
+import { LanguageSwitcher, useI18n } from '../components/I18nProvider';
 
 const AccountPassword: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const completePasswordSetup = useStore(state => state.completePasswordSetup);
   const backendLoading = useStore(state => state.backend.isLoading);
   const [isChecking, setIsChecking] = React.useState(true);
@@ -61,7 +62,7 @@ const AccountPassword: React.FC = () => {
     const result = await completePasswordSetup({ newPassword, confirmPassword });
     setIsSaving(false);
     if (!result.ok) {
-      setError(result.error || 'Unable to set your password.');
+      setError(t(result.error || 'Unable to set your password.'));
       return;
     }
     setIsComplete(true);
@@ -79,29 +80,29 @@ const AccountPassword: React.FC = () => {
 
         {isChecking || backendLoading ? (
           <div className="py-6 text-center" role="status" aria-live="polite">
-            <h1 id="password-title" className="text-xl font-semibold text-slate-950">Checking your secure link</h1>
-            <p className="mt-2 text-sm text-slate-600">Please wait while AiTask verifies this session.</p>
+            <h1 id="password-title" className="text-xl font-semibold text-slate-950">{t('auth.checkingLink')}</h1>
+            <p className="mt-2 text-sm text-slate-600">{t('auth.checkingLinkDescription')}</p>
           </div>
         ) : unavailable ? (
           <div className="py-6 text-center">
-            <h1 id="password-title" className="text-xl font-semibold text-slate-950">Link unavailable</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-600">This password link is invalid, expired, or has already been used.</p>
-            <Button className="mt-6 w-full" onClick={() => navigate('/login', { replace: true })}>Return to Login</Button>
+            <h1 id="password-title" className="text-xl font-semibold text-slate-950">{t('auth.linkUnavailable')}</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{t('auth.invalidLink')}</p>
+            <Button className="mt-6 w-full" onClick={() => navigate('/login', { replace: true })}>{t('auth.returnToLogin')}</Button>
           </div>
         ) : isComplete ? (
           <div className="py-6 text-center" role="status" aria-live="polite">
-            <h1 id="password-title" className="text-xl font-semibold text-slate-950">Password ready</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Your account password has been securely updated.</p>
-            <Button className="mt-6 w-full" onClick={() => navigate('/', { replace: true })}>Continue to AiTask</Button>
+            <h1 id="password-title" className="text-xl font-semibold text-slate-950">{t('auth.passwordReady')}</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{t('auth.passwordUpdated')}</p>
+            <Button className="mt-6 w-full" onClick={() => navigate('/', { replace: true })}>{t('auth.continueToAiTask')}</Button>
           </div>
         ) : (
           <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
             <div className="text-center">
-              <h1 id="password-title" className="text-xl font-semibold text-slate-950">Choose your password</h1>
-              <p className="mt-2 text-sm leading-6 text-slate-600">Use at least 12 characters and keep this password private.</p>
+              <h1 id="password-title" className="text-xl font-semibold text-slate-950">{t('auth.choosePassword')}</h1>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{t('auth.passwordGuidance')}</p>
             </div>
             <div>
-              <label htmlFor="new-password" className="block text-sm font-medium text-slate-700">New password</label>
+              <label htmlFor="new-password" className="block text-sm font-medium text-slate-700">{t('auth.newPassword')}</label>
               <input
                 id="new-password"
                 type="password"
@@ -114,7 +115,7 @@ const AccountPassword: React.FC = () => {
               />
             </div>
             <div>
-              <label htmlFor="confirm-password" className="block text-sm font-medium text-slate-700">Confirm password</label>
+              <label htmlFor="confirm-password" className="block text-sm font-medium text-slate-700">{t('auth.confirmPassword')}</label>
               <input
                 id="confirm-password"
                 type="password"
@@ -128,7 +129,7 @@ const AccountPassword: React.FC = () => {
             </div>
             {error && <p className="text-sm font-medium text-red-600" role="alert" aria-live="assertive">{error}</p>}
             <Button type="submit" className="w-full py-3" disabled={isSaving}>
-              {isSaving ? 'Saving password...' : 'Set password'}
+              {isSaving ? t('auth.savingPassword') : t('auth.setPassword')}
             </Button>
           </form>
         )}

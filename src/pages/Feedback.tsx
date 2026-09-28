@@ -18,43 +18,15 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import { cn } from '../lib/utils';
 import { useI18n } from '../components/I18nProvider';
+import { formatMessage, msg, type MessageId } from '../lib/messages';
 
 const roles: FeedbackRole[] = ['Super Admin', 'Project Manager', 'HOD', 'Staff', 'Client'];
 const devices = ['Desktop', 'Laptop', 'Tablet', 'Mobile', 'Other'];
-const answerOptions: Array<{ value: FeedbackAnswer; en: string; zh: string }> = [
-  { value: 'pass', en: 'Pass', zh: '通过' },
-  { value: 'issue', en: 'Issue', zh: '有问题' },
-  { value: 'na', en: 'N/A', zh: '不适用' },
+const answerOptions: Array<{ value: FeedbackAnswer; id: MessageId }> = [
+  { value: 'pass', id: 'feedback.answerPass' },
+  { value: 'issue', id: 'feedback.answerIssue' },
+  { value: 'na', id: 'feedback.answerNa' },
 ];
-
-const copy = {
-  en: {
-    title: 'AiTask one-week feedback',
-    intro: 'Use this checklist after testing AiTask. Your feedback will help us fix problems before wider use.',
-    deadline: `Please submit by ${FEEDBACK_DEADLINE_EN}.`,
-    details: 'Your details', name: 'Name', email: 'Email', role: 'Role', organization: 'Department or company', device: 'Main device',
-    progress: 'Checklist progress', explain: 'Briefly explain what happened', ratings: 'One-week review',
-    overall: 'Overall experience', usability: 'Ease of use', reliability: 'Reliability', mobile: 'Mobile experience',
-    mobileNa: 'Not applicable', useful: 'Most useful part', confusing: 'Most confusing part', recommendation: 'One improvement you recommend',
-    consent: 'I confirm this feedback is accurate and contains no passwords, recovery links, MFA codes, or private tokens.',
-    submit: 'Submit feedback', submitting: 'Submitting...', required: 'Please complete every checklist item, rating, and required field.',
-    issueRequired: 'Please explain every item marked as an issue.', failed: 'Feedback could not be submitted. Please try again.',
-    success: 'Thank you. Your feedback was submitted.', receipt: 'Receipt', late: 'This response was received after the requested deadline.', results: 'Reviewer results', duplicate: 'Feedback for this email has already been submitted for this review.',
-  },
-  zh: {
-    title: 'AiTask 一周使用反馈',
-    intro: '请在测试 AiTask 后完成这份检查表。您的反馈将帮助我们在更广泛使用前修复问题。',
-    deadline: `请在${FEEDBACK_DEADLINE_ZH}前提交。`,
-    details: '您的资料', name: '姓名', email: '电子邮箱', role: '角色', organization: '部门或公司', device: '主要设备',
-    progress: '检查进度', explain: '请简单说明发生了什么', ratings: '一周使用评价',
-    overall: '整体体验', usability: '易用程度', reliability: '稳定程度', mobile: '手机体验',
-    mobileNa: '不适用', useful: '最实用的部分', confusing: '最不清楚的部分', recommendation: '您建议的一项改善',
-    consent: '我确认反馈内容属实，并且没有包含密码、恢复链接、MFA 验证码或私人令牌。',
-    submit: '提交反馈', submitting: '提交中...', required: '请完成所有检查项目、评分和必填资料。',
-    issueRequired: '请说明每个标记为有问题的项目。', failed: '无法提交反馈，请重试。',
-    success: '谢谢，您的反馈已成功提交。', receipt: '收据编号', late: '此反馈在指定截止日期后收到。', results: '查看反馈结果', duplicate: '此电子邮箱已提交过本次使用反馈。',
-  },
-};
 
 const Rating: React.FC<{ label: string; value: number | null; onChange: (value: number | null) => void; allowNa?: boolean; naLabel: string; isSelected?: boolean }> = ({ label, value, onChange, allowNa, naLabel, isSelected = true }) => (
   <fieldset>
@@ -82,9 +54,10 @@ const Feedback: React.FC = () => {
   const [language, setLanguage] = React.useState<FeedbackLanguage>(() => searchParams.get('lang') === 'zh' ? 'zh' : locale);
 
   React.useEffect(() => {
+    if (locale !== language) setLocale(language);
     document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
     return () => { document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en'; };
-  }, [language, locale]);
+  }, [language, locale, setLocale]);
   const [role, setRole] = React.useState<FeedbackRole>(() => parseFeedbackRole(searchParams.get('role')));
   const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -102,7 +75,20 @@ const Feedback: React.FC = () => {
   const [error, setError] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [receipt, setReceipt] = React.useState<{ id: string; isLate: boolean } | null>(null);
-  const t = copy[language];
+  const formT = React.useCallback((id: MessageId, values?: Record<string, string | number>) => (
+    formatMessage(msg(id, values), language)
+  ), [language]);
+  const t = React.useMemo(() => ({
+    title: formT('feedback.formTitle'),
+    intro: formT('feedback.formIntro'),
+    deadline: formT('feedback.formDeadline', { date: language === 'zh' ? FEEDBACK_DEADLINE_ZH : FEEDBACK_DEADLINE_EN }),
+    details: formT('feedback.formDetails'), name: formT('feedback.formName'), email: formT('feedback.formEmail'), role: formT('feedback.formRole'), organization: formT('feedback.formOrganization'), device: formT('feedback.formDevice'),
+    progress: formT('feedback.formProgress'), explain: formT('feedback.formExplain'), ratings: formT('feedback.formRatings'),
+    overall: formT('feedback.formOverall'), usability: formT('feedback.formUsability'), reliability: formT('feedback.formReliability'), mobile: formT('feedback.formMobile'),
+    mobileNa: formT('feedback.formMobileNa'), useful: formT('feedback.formUseful'), confusing: formT('feedback.formConfusing'), recommendation: formT('feedback.formRecommendation'),
+    consent: formT('feedback.formConsent'), submit: formT('feedback.formSubmit'), submitting: formT('feedback.formSubmitting'), required: formT('feedback.formRequired'),
+    issueRequired: formT('feedback.formIssueRequired'), failed: formT('feedback.formFailed'), success: formT('feedback.formSuccess'), receipt: formT('feedback.formReceipt'), late: formT('feedback.formLate'), results: formT('feedback.formResults'), duplicate: formT('feedback.formDuplicate'),
+  }), [formT, language]);
   const questions = React.useMemo(() => visibleFeedbackQuestions(role), [role]);
   const answered = questions.filter(question => answers[question.id]).length;
 
@@ -165,8 +151,8 @@ const Feedback: React.FC = () => {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">AT</div>
-            <div><p className="font-semibold text-slate-950">AiTask</p><p className="text-xs text-slate-500">Launch feedback</p></div>
+            <div data-i18n-skip className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">AT</div>
+            <div><p data-i18n-skip className="font-semibold text-slate-950">AiTask</p><p className="text-xs text-slate-500">{formT('feedback.formLaunch')}</p></div>
           </div>
           <button type="button" data-i18n-skip onClick={() => { const next = language === 'en' ? 'zh' : 'en'; setLanguage(next); setLocale(next); }} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
             <Languages className="h-4 w-4" /> {language === 'en' ? '中文' : 'English'}
@@ -195,7 +181,7 @@ const Feedback: React.FC = () => {
             <label className="text-sm font-medium text-slate-700">{t.organization}<input maxLength={120} className={cn(inputBase, 'mt-2 px-3 py-2.5')} value={organization} onChange={event => setOrganization(event.target.value)} /></label>
             <label className="text-sm font-medium text-slate-700 sm:col-span-2">{t.device}<select required className={cn(inputBase, 'mt-2 px-3 py-2.5')} value={device} onChange={event => setDevice(event.target.value)}><option value="">-</option>{devices.map(item => <option key={item}>{item}</option>)}</select></label>
           </div>
-          <label className="absolute -left-[9999px]" aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={website} onChange={event => setWebsite(event.target.value)} /></label>
+          <label className="absolute -left-[9999px]" aria-hidden="true">{formT('feedback.formEmail')}<input tabIndex={-1} autoComplete="off" value={website} onChange={event => setWebsite(event.target.value)} /></label>
         </section>
 
         <div className="sticky top-0 z-10 rounded-lg border border-blue-100 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
@@ -217,7 +203,7 @@ const Feedback: React.FC = () => {
                       {answerOptions.map(option => (
                         <label key={option.value} className={cn('flex min-h-10 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-medium', answers[question.id] === option.value ? option.value === 'issue' ? 'border-red-500 bg-red-50 text-red-700' : 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300')}>
                           <input className="sr-only" type="radio" name={question.id} checked={answers[question.id] === option.value} onChange={() => setAnswers(current => ({ ...current, [question.id]: option.value }))} />
-                          {option[language]}
+                          {formT(option.id)}
                         </label>
                       ))}
                     </div>

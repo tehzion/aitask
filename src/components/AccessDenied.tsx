@@ -3,12 +3,15 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, ShieldAlert } from 'lucide-react';
 import { useStore } from '../store';
 import { getDefaultAccessiblePath } from '../lib/access';
+import { useI18n } from './I18nProvider';
+import type { MessageDescriptor } from '../lib/messages';
 
 interface AccessDeniedProps {
-  message?: string;
+  message?: string | MessageDescriptor;
 }
 
-const AccessDenied: React.FC<AccessDeniedProps> = ({ message = 'You do not have permission to view this page.' }) => {
+const AccessDenied: React.FC<AccessDeniedProps> = ({ message }) => {
+  const { t } = useI18n();
   const currentUser = useStore(state => state.currentUser);
   const rolePermissions = useStore(state => state.rolePermissions);
   const fallbackPath = getDefaultAccessiblePath(currentUser, rolePermissions);
@@ -18,13 +21,13 @@ const AccessDenied: React.FC<AccessDeniedProps> = ({ message = 'You do not have 
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
         <ShieldAlert className="h-7 w-7" />
       </div>
-      <h1 className="text-2xl font-bold text-slate-800">Access Denied</h1>
-      <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">{message}</p>
+      <h1 className="text-2xl font-bold text-slate-800">{t('shell.accessDeniedTitle')}</h1>
+      <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">{message ? t(message) : t('shell.accessDenied')}</p>
       <Link
         to={fallbackPath}
         className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
       >
-        Go to your workspace <ArrowRight className="h-4 w-4" />
+        {t('shell.goWorkspace')} <ArrowRight className="h-4 w-4" />
       </Link>
     </div>
   );

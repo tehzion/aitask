@@ -50,15 +50,15 @@ const Projects: React.FC = () => {
   const handleDeleteProject = async (project: Project) => {
     const result = deleteProject(project.id);
     if (!result.ok) {
-      useToastStore.getState().addToast(result.error || 'Unable to delete this company.', 'error');
+      useToastStore.getState().addToast(result.error ? t(result.error) : t('client.deleteUnavailable'), 'error');
       return;
     }
     const saveResult = await commitPendingMutation();
     if (!saveResult.ok) {
-      useToastStore.getState().addToast(saveResult.error || 'The company deletion is waiting to be saved.', 'error');
+      useToastStore.getState().addToast(saveResult.error ? t(saveResult.error) : t('client.companyDeleteWaiting'), 'error');
       return;
     }
-    useToastStore.getState().addToast('Company deleted.', 'success');
+    useToastStore.getState().addToast(t('client.companyDeleted'), 'success');
   };
 
   const getProjectStats = (projectId: string) => {
@@ -77,25 +77,25 @@ const Projects: React.FC = () => {
   return (
     <div className={`${pageShell} flex flex-col h-full`}>
       <PageHeader
-        title="Companies"
-        description="Review company task groupings, service scope, and assigned team members."
+        title={t('Companies')}
+        description={t('Review company task groupings, service scope, and assigned team members.')}
         action={canManageProjects(currentUser, rolePermissions) ? (
           <Button onClick={openCreateCompany}>
             <Plus className="h-4 w-4" />
-            New company
+            {t('New company')}
           </Button>
         ) : null}
       />
 
-      <section className={`${tableShell} divide-y divide-line/70`} aria-label="Companies">
+      <section className={`${tableShell} divide-y divide-line/70`} aria-label={t('Companies')}>
         <div className={clsx(
           'hidden items-center gap-4 border-b border-line/80 bg-inset/70 px-5 py-3 text-xs font-semibold text-muted xl:grid',
           isClientUser ? 'xl:grid-cols-[minmax(15rem,1.45fr)_minmax(12rem,1fr)_auto]' : 'xl:grid-cols-[minmax(15rem,1.45fr)_minmax(12rem,1fr)_minmax(11rem,.8fr)_auto]'
         )}>
-          <span>Company</span>
-          <span>Delivery progress</span>
-          {!isClientUser && <span>Assigned team</span>}
-          <span className="text-right">Actions</span>
+          <span>{t('Company')}</span>
+          <span>{t('Delivery progress')}</span>
+          {!isClientUser && <span>{t('Assigned team')}</span>}
+          <span className="text-right">{t('Actions')}</span>
         </div>
         {projects.map(project => {
           const stats = getProjectStats(project.id);
@@ -118,7 +118,7 @@ const Projects: React.FC = () => {
                   </div>
                   <div className="min-w-0">
                     <h2 data-i18n-skip className="truncate text-base font-semibold text-ink">{project.clientName}</h2>
-                    <p className="mt-0.5 text-sm text-muted">{hasLegacyProjectName ? project.projectName : 'Company'}</p>
+                    <p className="mt-0.5 text-sm text-muted">{hasLegacyProjectName ? project.projectName : t('Company')}</p>
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-1.5">
@@ -129,7 +129,7 @@ const Projects: React.FC = () => {
               </div>
 
               <div className="min-w-0">
-                <ProgressBar value={stats.completed} max={Math.max(stats.total, 1)} label="Task progress" />
+                <ProgressBar value={stats.completed} max={Math.max(stats.total, 1)} label={t('Task progress')} />
                 <p className="mt-2 text-xs text-muted"><span className="calm-number font-semibold text-ink">{stats.completed}/{stats.total}</span> {t('complete')} · {stats.pending} {t('open')}</p>
               </div>
 
@@ -137,10 +137,10 @@ const Projects: React.FC = () => {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-sm text-muted">
                     <Users className="h-4 w-4 shrink-0 text-accent" />
-                    <span className="font-medium text-ink">Assigned team</span>
+                    <span className="font-medium text-ink">{t('Assigned team')}</span>
                   </div>
                   {stats.teamMembers.length > 0 ? (
-                    <div className="mt-2 flex items-center gap-1.5" aria-label={`Assigned team for ${project.clientName}`}>
+                    <div className="mt-2 flex items-center gap-1.5" aria-label={t('Assigned team')}>
                       {stats.teamMembers.slice(0, 3).map(user => user ? (
                         <div key={user.id} className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-control bg-inset text-[10px] font-semibold text-ink ring-1 ring-line" title={user.name}>
                           {user.avatar ? <img src={user.avatar} alt={user.name} className="h-full w-full object-cover" /> : user.name.charAt(0)}
@@ -148,7 +148,7 @@ const Projects: React.FC = () => {
                       ) : null)}
                       {stats.teamMembers.length > 3 && <span className="calm-number ml-1 text-xs font-medium text-muted">+{stats.teamMembers.length - 3}</span>}
                     </div>
-                  ) : <p className="mt-2 text-xs text-muted">No assignees yet</p>}
+                  ) : <p className="mt-2 text-xs text-muted">{t('No assignees yet')}</p>}
                 </div>
               )}
 
@@ -158,8 +158,8 @@ const Projects: React.FC = () => {
                     type="button"
                     onClick={() => openEditCompany(project)}
                     className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-                    title="Edit company"
-                    aria-label={`Edit ${project.clientName}`}
+                    title={t('Edit company')}
+                    aria-label={t('Edit company')}
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
@@ -169,21 +169,21 @@ const Projects: React.FC = () => {
                     type="button"
                     onClick={() => setProjectToDelete(project)}
                     className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
-                    title="Delete company"
-                    aria-label={`Delete ${project.clientName}`}
+                    title={t('Delete company')}
+                    aria-label={t('Delete company')}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 )}
                 <Link to={`/tasks?projectId=${encodeURIComponent(project.id)}`} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control px-3 text-sm font-semibold text-accent transition-colors hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-                  View Tasks <ArrowRight className="h-4 w-4" />
+                  {t('View Tasks')} <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
             </article>
           );
         })}
         {projects.length === 0 && (
-          <EmptyState title="No companies yet" description="Companies will appear here when they are created or linked to visible task work." className="m-4" />
+          <EmptyState title={t('No companies yet')} description={t('Companies will appear here when they are created or linked to visible task work.')} className="m-4" />
         )}
       </section>
       

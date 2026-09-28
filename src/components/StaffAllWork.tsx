@@ -125,8 +125,8 @@ const StaffAllWork: React.FC = () => {
         compact
         title={t(isProjectManager ? 'Portfolio work' : isHod ? 'Department work' : 'All work')}
         description={t(isProjectManager ? 'Your portfolio work, ordered by delivery risk and next action.' : isHod ? 'Department work, including delegated tasks and items that need review.' : 'All visible work, ordered by what needs attention first.')}
-        meta={<span className="calm-number">{filteredTasks.length} task{filteredTasks.length === 1 ? '' : 's'}</span>}
-        action={<Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>}
+        meta={<span className="calm-number">{filteredTasks.length} {t(filteredTasks.length === 1 ? 'task' : 'tasks')}</span>}
+        action={<Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />{t('Filters')}{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>}
       />
 
       <div className="mt-5 flex items-center gap-2">
@@ -155,14 +155,14 @@ const StaffAllWork: React.FC = () => {
       </div>
 
       <section aria-labelledby="staff-all-work-list" className="space-y-4">
-        <h2 id="staff-all-work-list" className="sr-only">Visible task list</h2>
+        <h2 id="staff-all-work-list" className="sr-only">{t('Visible task list')}</h2>
 
         {isHod && (
           <SegmentedTabs<'mine' | 'department'>
             items={[{ id: 'mine', label: t('My work'), count: visibleTasks.filter(task => task.assignedTo === currentUser?.id || task.createdBy === currentUser?.id).length }, { id: 'department', label: t('Department work'), count: visibleTasks.length }]}
             value={scopeView}
             onChange={setScopeView}
-            label="HOD work scope"
+            label={t('HOD work scope')}
             idPrefix="hod-scope"
             panelId="all-work-panel"
             variant="underline"
@@ -170,10 +170,10 @@ const StaffAllWork: React.FC = () => {
         )}
 
         <SegmentedTabs<StaffAllWorkBucket>
-          items={buckets.map(item => ({ id: item, label: item === 'all' ? 'All' : getStaffBucketLabel(item), count: item === 'all' ? tasks.length : queue[item].length }))}
+          items={buckets.map(item => ({ id: item, label: item === 'all' ? t('All') : t(getStaffBucketLabel(item)), count: item === 'all' ? tasks.length : queue[item].length }))}
           value={bucket}
           onChange={setBucket}
-          label="All work queues"
+          label={t('All work queues')}
           idPrefix="all-work"
           panelId="all-work-panel"
           variant="underline"
@@ -182,7 +182,7 @@ const StaffAllWork: React.FC = () => {
         {activeFilterCount > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted">
             <ListFilter className="h-4 w-4" />{activeFilterCount} {t(activeFilterCount === 1 ? 'active filter' : 'active filters')}
-            <button type="button" onClick={clearFilters} className="min-h-11 px-2 text-accent hover:underline">Clear filters</button>
+            <button type="button" onClick={clearFilters} className="min-h-11 px-2 text-accent hover:underline">{t('Clear filters')}</button>
           </div>
         )}
 
@@ -195,19 +195,19 @@ const StaffAllWork: React.FC = () => {
       <SideSheet
         isOpen={filtersOpen}
         onClose={() => setFiltersOpen(false)}
-        title="Filter visible work"
-        description="Narrow your queue without manager-only controls."
-        footer={<div className="flex gap-2"><Button variant="secondary" className="flex-1" onClick={clearFilters}>Clear</Button><Button className="flex-1" onClick={() => setFiltersOpen(false)}>Show {filteredTasks.length}</Button></div>}
+        title={t('Filter visible work')}
+        description={t('Narrow your queue without manager-only controls.')}
+        footer={<div className="flex gap-2"><Button variant="secondary" className="flex-1" onClick={clearFilters}>{t('Clear')}</Button><Button className="flex-1" onClick={() => setFiltersOpen(false)}>{t('Show')} {filteredTasks.length}</Button></div>}
       >
         <div className="space-y-5">
-          <label className="block text-sm font-medium text-ink">Client<select aria-label="Filter by client" value={client} onChange={event => setClient(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{clients.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
-          <label className="block text-sm font-medium text-ink">Project<select aria-label="Filter by project" value={project} onChange={event => setProject(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{projectsForFilter.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
-          <label className="block text-sm font-medium text-ink">Assignee<select aria-label="Filter by assignee" value={assignee} onChange={event => setAssignee(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{assignees.map(user => <option data-i18n-skip key={user.id} value={user.id}>{user.name}</option>)}</select></label>
-          <label className="block text-sm font-medium text-ink">Department<select aria-label="Filter by department" value={department} onChange={event => setDepartment(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{departments.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
-          <label className="block text-sm font-medium text-ink">Created by<select aria-label="Filter by creator" value={creator} onChange={event => setCreator(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{creators.map(user => <option data-i18n-skip key={user.id} value={user.id}>{user.name}</option>)}</select></label>
-          <label className="block text-sm font-medium text-ink">Status<select aria-label="Filter by status" value={status} onChange={event => setStatus(event.target.value as TaskStatus)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{taskStatuses.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
-          <label className="block text-sm font-medium text-ink">Priority<select aria-label="Filter by priority" value={priority} onChange={event => setPriority(event.target.value as Priority | 'All')} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">All</option>{priorities.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
-          <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium text-ink">Due from<input type="date" aria-label="Due from" value={dueFrom} onChange={event => setDueFrom(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`} /></label><label className="block text-sm font-medium text-ink">Due to<input type="date" aria-label="Due to" value={dueTo} onChange={event => setDueTo(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`} /></label></div>
+          <label className="block text-sm font-medium text-ink">{t('Client')}<select aria-label={t('Filter by client')} value={client} onChange={event => setClient(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{clients.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Project')}<select aria-label={t('Filter by project')} value={project} onChange={event => setProject(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{projectsForFilter.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Assignee')}<select aria-label={t('Filter by assignee')} value={assignee} onChange={event => setAssignee(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{assignees.map(user => <option data-i18n-skip key={user.id} value={user.id}>{user.name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Department')}<select aria-label={t('Filter by department')} value={department} onChange={event => setDepartment(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{departments.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Created by')}<select aria-label={t('Filter by creator')} value={creator} onChange={event => setCreator(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{creators.map(user => <option data-i18n-skip key={user.id} value={user.id}>{user.name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Status')}<select aria-label={t('Filter by status')} value={status} onChange={event => setStatus(event.target.value as TaskStatus)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{taskStatuses.map(name => <option key={name} value={name}>{t(name)}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Priority')}<select aria-label={t('Filter by priority')} value={priority} onChange={event => setPriority(event.target.value as Priority | 'All')} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{priorities.map(name => <option key={name} value={name}>{t(name)}</option>)}</select></label>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium text-ink">{t('Due from')}<input type="date" aria-label={t('Due from')} value={dueFrom} onChange={event => setDueFrom(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`} /></label><label className="block text-sm font-medium text-ink">{t('Due to')}<input type="date" aria-label={t('Due to')} value={dueTo} onChange={event => setDueTo(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`} /></label></div>
         </div>
       </SideSheet>
 

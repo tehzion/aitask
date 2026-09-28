@@ -42,6 +42,7 @@ import {
   LOCAL_SERVICE_DEMO_VERSION_KEY,
 } from '../mock/localServiceDemo';
 import { canLoginWithSeedAccount, classifyLoginFailure, DEFAULT_USER_PASSWORD, loginFailure, shouldShowDemoLogin } from '../lib/auth';
+import { msg } from '../lib/messages';
 import { clearLocalUserPassword, getLocalUserPassword, setLocalUserPassword, verifyLocalUserPassword } from '../lib/localCredentials';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
 import {
@@ -1101,7 +1102,7 @@ const safeStorageAdapter: StateStorage = {
   setItem: (name, value) => {
     try { window.localStorage.setItem(name, value); }
     catch {
-      useToastStore.getState().addToast('Browser storage is full. Recent changes may not survive a reload.', 'error');
+      useToastStore.getState().addToast(msg('errors.storageFull'), 'error');
     }
   },
   removeItem: (name) => {
@@ -1321,7 +1322,7 @@ export const useStore = create<StoreState>()(
           }));
           isApplyingRemoteSnapshot = false;
           if (shouldUploadRecoveredState) {
-            useToastStore.getState().addToast('Recovered local workspace changes and queued them for Supabase sync.', 'info');
+            useToastStore.getState().addToast(msg('errors.recoveredWorkspace'), 'info');
           }
         } catch (error) {
           set({
@@ -1468,7 +1469,7 @@ export const useStore = create<StoreState>()(
               }));
               isApplyingRemoteSnapshot = false;
 
-              useToastStore.getState().addToast('Sync resolved: concurrent edits merged.', 'success');
+              useToastStore.getState().addToast(msg('errors.syncMerged'), 'success');
 
               setTimeout(() => {
                 get().syncBackendNow();
@@ -1687,7 +1688,7 @@ export const useStore = create<StoreState>()(
             }));
             isApplyingRemoteSnapshot = false;
 
-            useToastStore.getState().addToast('Sync resolved: concurrent edits merged.', 'success');
+            useToastStore.getState().addToast(msg('errors.syncMerged'), 'success');
 
             setTimeout(() => {
               get().syncBackendNow();
@@ -1804,7 +1805,7 @@ export const useStore = create<StoreState>()(
         await get().syncBackendNow();
         const after = get().backend;
         if (!after.hasLocalChanges && after.status === 'live') {
-          useToastStore.getState().addToast('Your change was reapplied on the latest workspace.', 'success');
+          useToastStore.getState().addToast(msg('task.reapplied'), 'success');
           return { ok: true };
         }
         return { ok: false, error: after.error || 'Your change could not be reapplied.' };
@@ -2525,7 +2526,7 @@ export const useStore = create<StoreState>()(
 
         const nextStatus = resolveTaskStatus(status, state.taskStatuses);
         if (!nextStatus) {
-          useToastStore.getState().addToast('Choose a valid task status.', 'warning');
+          useToastStore.getState().addToast(msg('task.statusRequired'), 'warning');
           return state;
         }
 
@@ -2582,7 +2583,7 @@ export const useStore = create<StoreState>()(
           });
         }
 
-        useToastStore.getState().addToast(`Status updated to "${nextStatus}"`, 'success');
+        useToastStore.getState().addToast(msg('task.statusUpdated', { status: nextStatus }), 'success');
 
         if (isCompleted && !wasCompleted && currentUser) {
           const celebrateKey = `aitask:completion-celebrated:${currentUser.id}`;
@@ -2596,7 +2597,7 @@ export const useStore = create<StoreState>()(
               const completedAt = new Date(item.completedAt);
               return completedAt >= weekStart && completedAt <= weekEnd;
             }).length;
-            useToastStore.getState().addToast(`Nice work — ${weekCompletions} task${weekCompletions === 1 ? '' : 's'} completed this week.`, 'success');
+            useToastStore.getState().addToast(msg('task.completedThisWeek', { count: weekCompletions }), 'success');
           }
         }
 
@@ -2613,7 +2614,7 @@ export const useStore = create<StoreState>()(
         const currentUser = state.currentUser;
         if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
         if (!allowedPriorities.has(priority)) {
-          useToastStore.getState().addToast('Choose a valid priority.', 'warning');
+          useToastStore.getState().addToast(msg('task.priorityRequired'), 'warning');
           return state;
         }
 
@@ -2622,7 +2623,7 @@ export const useStore = create<StoreState>()(
           return { ...t, priority, updatedAt: new Date().toISOString() };
         });
 
-        useToastStore.getState().addToast(`Priority updated to "${priority}"`, 'success');
+        useToastStore.getState().addToast(msg('task.priorityUpdated', { priority }), 'success');
 
         return { tasks: newTasks };
       }),
@@ -2638,7 +2639,7 @@ export const useStore = create<StoreState>()(
         const assigneeUser = assignedTo ? state.users.find(u => u.id === assignedTo && u.role !== 'Client') : undefined;
         if (assignedTo && !assigneeUser) return state;
         if (assigneeUser && !isMemberInDepartment(assigneeUser, task.department)) {
-          useToastStore.getState().addToast(`${assigneeUser.name} is not assigned to ${task.department}.`, 'warning');
+          useToastStore.getState().addToast(msg('errors.assigneeDepartment', { name: assigneeUser.name, department: task.department }), 'warning');
           return state;
         }
 
@@ -2659,7 +2660,7 @@ export const useStore = create<StoreState>()(
           });
         }
 
-        useToastStore.getState().addToast(assigneeUser ? `Task assigned to ${assigneeUser.name}` : 'Task is now unassigned', 'success');
+        useToastStore.getState().addToast(assigneeUser ? msg('task.assignedTo', { name: assigneeUser.name }) : msg('task.unassigned'), 'success');
 
         return {
           tasks: newTasks,
@@ -2677,7 +2678,7 @@ export const useStore = create<StoreState>()(
         const validatedLink = trimmedLink ? safeHttpsUrl(trimmedLink) : null;
         if (trimmedLink && !validatedLink) return state;
 
-        useToastStore.getState().addToast('Attachment updated successfully', 'success');
+        useToastStore.getState().addToast(msg('task.attachmentUpdated'), 'success');
 
         return {
           tasks: state.tasks.map(task =>
@@ -2700,12 +2701,12 @@ export const useStore = create<StoreState>()(
         const nextDueDate = normalizeOptionalIsoDate(newDueDate);
 
         if (nextDueDate && !isValidIsoDate(nextDueDate)) {
-          useToastStore.getState().addToast('Choose a valid due date.', 'warning');
+          useToastStore.getState().addToast(msg('task.dueDateRequired'), 'warning');
           return state;
         }
 
         if (nextDueDate && isValidIsoDate(task.startDate) && new Date(nextDueDate) < new Date(task.startDate)) {
-          useToastStore.getState().addToast('Due date cannot be earlier than the start date.', 'warning');
+          useToastStore.getState().addToast(msg('task.dueDateOrder'), 'warning');
           return state;
         }
 
@@ -2892,7 +2893,7 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        useToastStore.getState().addToast(`Task "${updatedTask.title}" updated successfully`, 'success');
+        useToastStore.getState().addToast(msg('task.updated', { title: updatedTask.title }), 'success');
         return { ok: true };
       },
 
@@ -2930,7 +2931,7 @@ export const useStore = create<StoreState>()(
             ...deriveServiceProgress(tasks, deliverables, current.serviceCycles),
           };
         });
-        useToastStore.getState().addToast(`Task "${task.title}" deleted`, 'success');
+        useToastStore.getState().addToast(msg('task.deleted', { title: task.title }), 'success');
         return { ok: true };
       },
 
@@ -3041,7 +3042,7 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        useToastStore.getState().addToast('Revision requested successfully', 'warning');
+        useToastStore.getState().addToast(msg('task.revisionRequested'), 'warning');
 
         const revisionNotification = makeNotification({
           targetUserId: task.assignedTo,
@@ -3180,7 +3181,7 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        useToastStore.getState().addToast(`Task "${taskData.title}" created successfully`, 'success');
+        useToastStore.getState().addToast(msg('task.created', { title: taskData.title }), 'success');
         return taskId;
       },
 
@@ -3229,7 +3230,7 @@ export const useStore = create<StoreState>()(
           updatedAt: new Date().toISOString(),
         };
         set((state) => ({ projects: [...state.projects, newProject] }));
-        useToastStore.getState().addToast(`Project "${projectName}" created successfully`, 'success');
+        useToastStore.getState().addToast(msg('project.created', { name: projectName }), 'success');
         return newProject.id;
       },
 
@@ -3313,7 +3314,7 @@ export const useStore = create<StoreState>()(
             )
             : current.tasks,
         }));
-        useToastStore.getState().addToast(`Project "${projectName}" updated successfully`, 'success');
+        useToastStore.getState().addToast(msg('project.updated', { name: projectName }), 'success');
         return { ok: true };
       },
 
@@ -3343,7 +3344,7 @@ export const useStore = create<StoreState>()(
             : task
           ),
         }));
-        useToastStore.getState().addToast(`Project "${project.projectName}" deleted. Existing tasks were kept.`, 'success');
+        useToastStore.getState().addToast(msg('project.deleted', { name: project.projectName }), 'success');
         return { ok: true };
       },
 
@@ -3391,7 +3392,7 @@ export const useStore = create<StoreState>()(
           updatedAt: now,
         };
         set(current => ({ clients: [...current.clients, client] }));
-        useToastStore.getState().addToast(`Company "${name}" added to the client database.`, 'success');
+        useToastStore.getState().addToast(msg('client.companyAdded', { name }), 'success');
         return { ok: true, id: client.id };
       },
 
@@ -3438,7 +3439,7 @@ export const useStore = create<StoreState>()(
             : [...current.clients, profile],
         }));
 
-        useToastStore.getState().addToast(`Client details saved for "${profile.clientName}".`, 'success');
+        useToastStore.getState().addToast(msg('client.detailsSaved', { name: profile.clientName }), 'success');
         return { ok: true, id: profile.id };
       },
 
@@ -3530,7 +3531,7 @@ export const useStore = create<StoreState>()(
           addons: current.addons.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
         }));
 
-        useToastStore.getState().addToast(`Client renamed to "${nextName}".`, 'success');
+        useToastStore.getState().addToast(msg('client.renamed', { name: nextName }), 'success');
         return { ok: true };
       },
 
@@ -3593,7 +3594,7 @@ export const useStore = create<StoreState>()(
           servicePricingSnapshots: current.servicePricingSnapshots.filter(item => item.clientId !== clientId),
         }));
 
-        useToastStore.getState().addToast(`Company "${client.clientName}" deleted.`, 'success');
+        useToastStore.getState().addToast(msg('client.companyDeletedNamed', { name: client.clientName }), 'success');
         return { ok: true };
       },
 
@@ -3642,7 +3643,7 @@ export const useStore = create<StoreState>()(
             ? current.servicePackages.map(pkg => pkg.id === existing.id ? item : pkg)
             : [...current.servicePackages, item],
         }));
-        useToastStore.getState().addToast(`Package "${item.name}" saved.`, 'success');
+        useToastStore.getState().addToast(msg('package.saved', { name: item.name }), 'success');
         return { ok: true, id: item.id };
       },
 
@@ -3699,7 +3700,7 @@ export const useStore = create<StoreState>()(
         set(current => ({
           servicePackages: current.servicePackages.filter(item => item.id !== id),
         }));
-        useToastStore.getState().addToast(`Package "${existing.name}" deleted. Existing client plans keep their own snapshots.`, 'success');
+        useToastStore.getState().addToast(msg('package.deleted', { name: existing.name }), 'success');
         return { ok: true };
       },
 
@@ -3723,7 +3724,7 @@ export const useStore = create<StoreState>()(
         set(current => ({
           serviceWorkflowTemplates: current.serviceWorkflowTemplates.filter(item => item.id !== id),
         }));
-        useToastStore.getState().addToast(`Workflow template "${existing.name}" deleted.`, 'success');
+        useToastStore.getState().addToast(msg('workflow.deleted', { name: existing.name }), 'success');
         return { ok: true };
       },
 
@@ -3799,7 +3800,7 @@ export const useStore = create<StoreState>()(
           clientPlans: [...current.clientPlans, plan],
           servicePricingSnapshots: [...current.servicePricingSnapshots, pricing],
         }));
-        useToastStore.getState().addToast(`Client "${clientName}" and draft plan created.`, 'success');
+        useToastStore.getState().addToast(msg('plan.draftCreated', { name: clientName }), 'success');
         return { ok: true, clientId, planId };
       },
 
@@ -3858,7 +3859,7 @@ export const useStore = create<StoreState>()(
           clientPlans: [...current.clientPlans, plan],
           servicePricingSnapshots: [...current.servicePricingSnapshots, pricing],
         }));
-        useToastStore.getState().addToast(`Draft plan created for "${client.clientName}".`, 'success');
+        useToastStore.getState().addToast(msg('plan.createdForClient', { name: client.clientName }), 'success');
         return { ok: true, planId };
       },
 
@@ -4017,7 +4018,7 @@ export const useStore = create<StoreState>()(
           deliverables: records ? [...current.deliverables, ...records.deliverables] : current.deliverables,
           servicePricingSnapshots: cyclePricing ? [...current.servicePricingSnapshots, cyclePricing] : current.servicePricingSnapshots,
         }));
-        useToastStore.getState().addToast(`Plan "${plan.name}" activated.`, 'success');
+        useToastStore.getState().addToast(msg('plan.activated', { name: plan.name }), 'success');
         return { ok: true, cycleId: existing?.id || records?.cycle.id };
       },
 
@@ -5380,7 +5381,7 @@ export const useStore = create<StoreState>()(
       onRehydrateStorage: () => (_state, error) => {
         if (error) {
           safeStorageAdapter.removeItem(PERSIST_KEY);
-          useToastStore.getState().addToast('Stored workspace data was corrupted and has been reset.', 'error');
+          useToastStore.getState().addToast(msg('errors.workspaceReset'), 'error');
         }
       },
       partialize: (state) => {
@@ -5481,7 +5482,7 @@ export const startBackendAutoSync = () => {
     if (!hasPending) return;
     void state.discardMutation({ confirm: false });
     useToastStore.getState().addToast(
-      'Your access changed. Reloaded the latest workspace; retry your change.',
+      msg('errors.accessChanged'),
       'warning',
     );
   };

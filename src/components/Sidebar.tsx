@@ -223,10 +223,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
       >
         <div className={clsx('flex h-[4.5rem] shrink-0 items-center gap-3 border-b border-line/70 px-5', isCollapsed && 'md:justify-center md:px-2')}>
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent text-sm font-semibold tracking-[-0.03em] text-white shadow-[0_10px_24px_-16px_rgb(var(--calm-accent)/0.9)]">
-            AT
+            <span data-i18n-skip>AT</span>
           </div>
           <div className={clsx('min-w-0', isCollapsed && 'md:hidden')}>
-            <div className="font-sans text-lg font-semibold tracking-[-0.03em] text-ink">AiTask</div>
+            <div data-i18n-skip className="font-sans text-lg font-semibold tracking-[-0.03em] text-ink">AiTask</div>
             <p className="text-[11px] font-medium text-muted">{t(isClient ? 'Client workspace' : 'Operations workspace')}</p>
           </div>
           <button

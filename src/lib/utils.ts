@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { parseISO, differenceInDays, startOfDay } from 'date-fns'
+import type { AppLocale } from './i18n'
+import { formatMessage, msg } from './messages'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -31,23 +33,28 @@ export function themeTokenColor(token: string, fallback: string): string {
   return value ? `rgb(${value})` : fallback;
 }
 
-export function getRelativeDueDateString(dueDateStr: string | undefined, isCompleted: boolean, status: string): string {
+export function getRelativeDueDateString(
+  dueDateStr: string | undefined,
+  isCompleted: boolean,
+  status: string,
+  locale: AppLocale = 'en',
+): string {
   const parsedDueDate = parseDateOnlyLocal(dueDateStr);
-  if (!parsedDueDate) return 'No due date';
+  if (!parsedDueDate) return formatMessage(msg('common.noDueDate'), locale);
 
   const today = startOfDay(new Date());
   const dueDate = startOfDay(parsedDueDate);
   const diff = differenceInDays(dueDate, today);
 
   if (diff === 0) {
-    return 'Due today';
+    return formatMessage(msg('task.dueToday'), locale);
   } else if (diff < 0) {
     const absDiff = Math.abs(diff);
     if (isCompleted || status === 'Cancelled') {
-      return `${absDiff} day${absDiff === 1 ? '' : 's'} ago`;
+      return formatMessage(msg(absDiff === 1 ? 'task.dayAgo' : 'task.daysAgo', { count: absDiff }), locale);
     }
-    return `${absDiff} day${absDiff === 1 ? '' : 's'} overdue`;
+    return formatMessage(msg(absDiff === 1 ? 'task.dayOverdue' : 'task.daysOverdue', { count: absDiff }), locale);
   } else {
-    return `Due in ${diff} day${diff === 1 ? '' : 's'}`;
+    return formatMessage(msg(diff === 1 ? 'task.dueInDay' : 'task.dueInDays', { count: diff }), locale);
   }
 }

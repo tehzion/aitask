@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { format } from 'date-fns';
 import {
   ArrowRight,
   CheckCircle2,
@@ -26,6 +25,9 @@ import { cn, parseOptionalDate } from '../lib/utils';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
 import { cardBase, inputBase, modalFooter } from './uiTokens';
+import { useI18n } from './I18nProvider';
+import { formatLocalizedDate } from '../lib/i18n';
+import { getLocalizedDepartment, getLocalizedPriority, getLocalizedRole, getLocalizedStatus } from '../lib/localeLabels';
 
 interface TeamWorkloadProps {
   tasks: Task[];
@@ -56,7 +58,7 @@ const priorityClasses: Record<Task['priority'], string> = {
   Urgent: 'bg-red-50 text-red-700',
 };
 
-const MemberIdentity = ({ member }: { member: User }) => (
+const MemberIdentity = ({ member, locale }: { member: User; locale: Parameters<typeof formatLocalizedDate>[1] }) => (
   <div className="flex min-w-0 items-center gap-3">
     {member.avatar ? (
       <img src={member.avatar} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
@@ -67,19 +69,22 @@ const MemberIdentity = ({ member }: { member: User }) => (
     )}
     <div className="min-w-0">
       <p data-i18n-skip className="truncate text-sm font-semibold text-slate-900">{member.name}</p>
-      <p className="truncate text-xs text-slate-500">{getMemberDepartments(member).join(' · ') || getRoleDisplayName(member.role)}</p>
+      <p className="truncate text-xs text-slate-500">{getMemberDepartments(member).map(value => getLocalizedDepartment(value, locale)).join(' · ') || getLocalizedRole(getRoleDisplayName(member.role), locale)}</p>
     </div>
   </div>
 );
 
-const WorkloadSignal = ({ summary }: { summary: TeamWorkloadSummary }) => (
+const WorkloadSignal = ({ summary }: { summary: TeamWorkloadSummary }) => {
+  const { t } = useI18n();
+  return (
   <span
     className={cn('inline-flex rounded-md border px-2 py-1 text-xs font-semibold', signalClasses[summary.signal])}
-    title="Based on assigned due work for the selected period; this is not a performance score."
+    title={t('Based on assigned due work for the selected period; this is not a performance score.')}
   >
-    {signalLabels[summary.signal]}
+    {t(signalLabels[summary.signal])}
   </span>
-);
+  );
+};
 
 const Metric = ({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) => (
   <div className="min-w-0">
@@ -88,19 +93,23 @@ const Metric = ({ label, value, danger = false }: { label: string; value: number
   </div>
 );
 
-const formatTaskDate = (value?: string) => {
+const formatTaskDate = (value: string | undefined, locale: Parameters<typeof formatLocalizedDate>[1], noDateLabel: string) => {
   const date = parseOptionalDate(value);
-  return date ? format(date, 'd MMM') : 'No date';
+  return date ? formatLocalizedDate(date, locale) : noDateLabel;
 };
 
 const TaskGroup = ({
   title,
   tasks,
   tone = 'default',
+  locale,
+  noDateLabel,
 }: {
   title: string;
   tasks: Task[];
   tone?: 'default' | 'danger' | 'success';
+  locale: Parameters<typeof formatLocalizedDate>[1];
+  noDateLabel: string;
 }) => {
   if (tasks.length === 0) return null;
 
@@ -123,12 +132,12 @@ const TaskGroup = ({
           >
             <div className="min-w-0">
               <p data-i18n-skip className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
-              <p className="mt-1 truncate text-xs text-slate-500">{task.clientName} · {task.status}</p>
+              <p className="mt-1 truncate text-xs text-slate-500"><span data-i18n-skip>{task.clientName}</span> · {getLocalizedStatus(task.status, locale)}</p>
             </div>
             <div className="flex items-center justify-between gap-3 sm:justify-end">
-              <span className={cn('rounded-md px-2 py-1 text-[11px] font-semibold', priorityClasses[task.priority])}>{task.priority}</span>
+              <span className={cn('rounded-md px-2 py-1 text-[11px] font-semibold', priorityClasses[task.priority])}>{getLocalizedPriority(task.priority, locale)}</span>
               <span className="text-xs font-medium text-slate-500">
-                {formatTaskDate(task.startDate)} - {formatTaskDate(task.dueDate)}
+                {formatTaskDate(task.startDate, locale, noDateLabel)} - {formatTaskDate(task.dueDate, locale, noDateLabel)}
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-blue-600" aria-hidden="true" />
             </div>
@@ -140,6 +149,7 @@ const TaskGroup = ({
 };
 
 const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskFor }) => {
+  const { locale, t } = useI18n();
   const [period] = useState<TeamWorkloadPeriod>('week');
   const [query, setQuery] = useState('');
   const [department, setDepartment] = useState<Department | 'All'>('All');
@@ -229,10 +239,10 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
     <section className="space-y-4" aria-labelledby="team-workload-title">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 id="team-workload-title" className="text-lg font-semibold text-slate-950">Team workload</h2>
-          <p className="mt-1 text-sm text-slate-500">See assigned work by person, grouped by day, week, and open review state.</p>
+          <h2 id="team-workload-title" className="text-lg font-semibold text-slate-950">{t('Team workload')}</h2>
+          <p className="mt-1 text-sm text-slate-500">{t('See assigned work by person, grouped by day, week, and open review state.')}</p>
         </div>
-        <div className="inline-flex w-fit rounded-lg border border-slate-200 bg-slate-50 p-1" aria-label="Workload view">
+        <div className="inline-flex w-fit rounded-lg border border-slate-200 bg-slate-50 p-1" aria-label={t('Workload view')}>
           {([['person', 'By person'], ['department', 'By department']] as const).map(([value, label]) => (
             <button
               key={value}
@@ -244,7 +254,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                 view === value && 'bg-white text-blue-700 shadow-sm',
               )}
             >
-              {label}
+              {t(label)}
             </button>
           ))}
         </div>
@@ -253,34 +263,34 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
       <div className={cn(cardBase, 'overflow-hidden')}>
         <div className="grid gap-3 border-b border-slate-200 bg-slate-50/70 p-4 md:grid-cols-[minmax(0,1fr)_12rem_11rem]">
           <label className="relative block">
-            <span className="sr-only">Search team members</span>
+            <span className="sr-only">{t('Search team members')}</span>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
             <input
               type="search"
               value={query}
               onChange={event => setQuery(event.target.value)}
               className={cn(inputBase, 'py-2 pl-9 pr-3')}
-              placeholder="Search team members"
+              placeholder={t('Search team members')}
             />
           </label>
           <select
             value={department}
             onChange={event => setDepartment(event.target.value as Department | 'All')}
             className={cn(inputBase, 'px-3 py-2')}
-            aria-label="Filter team by department"
+            aria-label={t('Filter team by department')}
           >
-            <option value="All">All departments</option>
-            {departmentOptions.map(option => <option key={option} value={option}>{option}</option>)}
+            <option value="All">{t('All departments')}</option>
+            {departmentOptions.map(option => <option key={option} value={option}>{getLocalizedDepartment(option, locale)}</option>)}
           </select>
           <select
             value={sort}
             onChange={event => setSort(event.target.value as TeamSort)}
             className={cn(inputBase, 'px-3 py-2')}
-            aria-label="Sort team workload"
+            aria-label={t('Sort team workload')}
           >
-            <option value="attention">Needs attention</option>
-            <option value="name">Name</option>
-            <option value="open">Most open tasks</option>
+            <option value="attention">{t('Needs attention')}</option>
+            <option value="name">{t('Name')}</option>
+            <option value="open">{t('Most open tasks')}</option>
           </select>
         </div>
 
@@ -288,14 +298,14 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
           <table className="w-full min-w-[1020px] text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
               <tr>
-                <th className="px-4 py-3 font-semibold">Team member</th>
-                <th className="px-3 py-3 text-center font-semibold">Today</th>
-                <th className="px-3 py-3 text-center font-semibold">This week</th>
-                <th className="px-3 py-3 text-center font-semibold">Open</th>
-                <th className="px-3 py-3 text-center font-semibold">Overdue</th>
-                <th className="px-3 py-3 text-center font-semibold">Waiting review</th>
-                <th className="px-3 py-3 text-center font-semibold">Done this week</th>
-                <th className="px-4 py-3 text-right font-semibold">Workload</th>
+                <th className="px-4 py-3 font-semibold">{t('Team member')}</th>
+                <th className="px-3 py-3 text-center font-semibold">{t('Today')}</th>
+                <th className="px-3 py-3 text-center font-semibold">{t('This week')}</th>
+                <th className="px-3 py-3 text-center font-semibold">{t('Open')}</th>
+                <th className="px-3 py-3 text-center font-semibold">{t('Overdue')}</th>
+                <th className="px-3 py-3 text-center font-semibold">{t('Waiting review')}</th>
+                <th className="px-3 py-3 text-center font-semibold">{t('Done this week')}</th>
+                <th className="px-4 py-3 text-right font-semibold">{t('Workload')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -307,9 +317,9 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                         type="button"
                         onClick={() => openMember(summary.member.id)}
                         className="w-full rounded-md text-left focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        aria-label={`View ${summary.member.name} workload`}
+                        aria-label={t('View workload for team member')}
                       >
-                        <MemberIdentity member={summary.member} />
+                        <MemberIdentity member={summary.member} locale={locale} />
                       </button>
                     ) : (
                       <span className="flex items-center gap-3">
@@ -343,19 +353,19 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
               type="button"
               onClick={() => openMember(summary.member.id)}
               className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 text-left transition-colors hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              aria-label={`View ${summary.member.name} workload`}
+              aria-label={t('View workload for team member')}
             >
               <div className="flex items-start justify-between gap-3">
-                <MemberIdentity member={summary.member} />
+                <MemberIdentity member={summary.member} locale={locale} />
                 <WorkloadSignal summary={summary} />
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3 border-t border-slate-100 pt-3">
-                <Metric label="Today" value={summary.dueToday} />
-                <Metric label="This week" value={summary.dueThisWeek} />
-                <Metric label="Open" value={summary.open} />
-                <Metric label="Overdue" value={summary.overdue} danger />
-                <Metric label="Waiting review" value={summary.waitingApproval} />
-                <Metric label="Done week" value={summary.completedThisWeek} />
+                <Metric label={t('Today')} value={summary.dueToday} />
+                <Metric label={t('This week')} value={summary.dueThisWeek} />
+                <Metric label={t('Open')} value={summary.open} />
+                <Metric label={t('Overdue')} value={summary.overdue} danger />
+                <Metric label={t('Waiting review')} value={summary.waitingApproval} />
+                <Metric label={t('Done week')} value={summary.completedThisWeek} />
               </div>
             </button>
             ) : (
@@ -365,12 +375,12 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                 <WorkloadSignal summary={summary} />
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3 border-t border-slate-100 pt-3">
-                <Metric label="Today" value={summary.dueToday} />
-                <Metric label="This week" value={summary.dueThisWeek} />
-                <Metric label="Open" value={summary.open} />
-                <Metric label="Overdue" value={summary.overdue} danger />
-                <Metric label="Waiting review" value={summary.waitingApproval} />
-                <Metric label="Done week" value={summary.completedThisWeek} />
+                <Metric label={t('Today')} value={summary.dueToday} />
+                <Metric label={t('This week')} value={summary.dueThisWeek} />
+                <Metric label={t('Open')} value={summary.open} />
+                <Metric label={t('Overdue')} value={summary.overdue} danger />
+                <Metric label={t('Waiting review')} value={summary.waitingApproval} />
+                <Metric label={t('Done week')} value={summary.completedThisWeek} />
               </div>
             </div>
             )
@@ -380,8 +390,8 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
         {visibleSummaries.length === 0 && (
           <div className="px-5 py-12 text-center">
             <Users className="mx-auto h-6 w-6 text-slate-400" aria-hidden="true" />
-            <p className="mt-2 text-sm font-semibold text-slate-700">No matching team members</p>
-            <p className="mt-1 text-xs text-slate-500">Try another name or department.</p>
+            <p className="mt-2 text-sm font-semibold text-slate-700">{t('No matching team members')}</p>
+            <p className="mt-1 text-xs text-slate-500">{t('Try another name or department.')}</p>
           </div>
         )}
       </div>
@@ -396,10 +406,10 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
         >
           <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-5">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-blue-700">Team workload</p>
+              <p className="text-xs font-medium text-blue-700">{t('Team workload')}</p>
               <h3 id={titleId} tabIndex={-1} className="mt-1 truncate text-xl font-semibold text-slate-950 outline-none">{selectedSummary.member.name}</h3>
               <p id={descriptionId} className="mt-1 text-sm text-slate-500">
-                {getMemberDepartments(selectedSummary.member).join(' · ') || getRoleDisplayName(selectedSummary.member.role)}
+                {getMemberDepartments(selectedSummary.member).map(value => getLocalizedDepartment(value, locale)).join(' · ') || getLocalizedRole(getRoleDisplayName(selectedSummary.member.role), locale)}
               </p>
             </div>
             <button
@@ -407,34 +417,34 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
               data-autofocus
               onClick={() => setSelectedMemberId(null)}
               className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              aria-label="Close team member details"
+              aria-label={t('Close team member details')}
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
           <div className="grid grid-cols-2 border-b border-slate-200 sm:grid-cols-4">
-            <div className="border-b border-r border-slate-100 px-4 py-3 sm:border-b-0"><Metric label="Open" value={selectedSummary.open} /></div>
-            <div className="border-b border-slate-100 px-4 py-3 sm:border-b-0 sm:border-r"><Metric label="Overdue" value={selectedSummary.overdue} danger /></div>
-            <div className="border-r border-slate-100 px-4 py-3"><Metric label="Waiting review" value={selectedSummary.waitingApproval} /></div>
-            <div className="px-4 py-3"><Metric label="Done this week" value={selectedSummary.completedThisWeek} /></div>
+            <div className="border-b border-r border-slate-100 px-4 py-3 sm:border-b-0"><Metric label={t('Open')} value={selectedSummary.open} /></div>
+            <div className="border-b border-slate-100 px-4 py-3 sm:border-b-0 sm:border-r"><Metric label={t('Overdue')} value={selectedSummary.overdue} danger /></div>
+            <div className="border-r border-slate-100 px-4 py-3"><Metric label={t('Waiting review')} value={selectedSummary.waitingApproval} /></div>
+            <div className="px-4 py-3"><Metric label={t('Done this week')} value={selectedSummary.completedThisWeek} /></div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
             {selectedTaskCount === 0 ? (
               <div className="px-6 py-16 text-center">
                 <CheckCircle2 className="mx-auto h-7 w-7 text-emerald-600" aria-hidden="true" />
-                <p className="mt-3 text-sm font-semibold text-slate-800">No current or recently completed tasks</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">Create a task or view this member’s full assignment history.</p>
+                <p className="mt-3 text-sm font-semibold text-slate-800">{t('No current or recently completed tasks')}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{t('Create a task or view this member’s full assignment history.')}</p>
               </div>
             ) : (
               <>
-                <TaskGroup title="Overdue" tasks={selectedGroups.overdue} tone="danger" />
-                <TaskGroup title="Due today" tasks={selectedGroups.today} />
-                <TaskGroup title="Due this week" tasks={selectedGroups.thisWeek} />
-                <TaskGroup title="Later" tasks={selectedGroups.later} />
-                <TaskGroup title="No due date" tasks={selectedGroups.noDueDate} />
-                <TaskGroup title="Completed this week" tasks={selectedGroups.completedThisWeek} tone="success" />
+                <TaskGroup title={t('Overdue')} tasks={selectedGroups.overdue} tone="danger" locale={locale} noDateLabel={t('No date')} />
+                <TaskGroup title={t('Due today')} tasks={selectedGroups.today} locale={locale} noDateLabel={t('No date')} />
+                <TaskGroup title={t('Due this week')} tasks={selectedGroups.thisWeek} locale={locale} noDateLabel={t('No date')} />
+                <TaskGroup title={t('Later')} tasks={selectedGroups.later} locale={locale} noDateLabel={t('No date')} />
+                <TaskGroup title={t('No due date')} tasks={selectedGroups.noDueDate} locale={locale} noDateLabel={t('No date')} />
+                <TaskGroup title={t('Completed this week')} tasks={selectedGroups.completedThisWeek} tone="success" locale={locale} noDateLabel={t('No date')} />
               </>
             )}
           </div>
@@ -444,7 +454,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
               to={`/tasks?assignee=${encodeURIComponent(selectedSummary.member.id)}&period=${period}`}
               className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
             >
-              View assigned tasks <ArrowRight className="h-4 w-4" />
+              {t('View assigned tasks')} <ArrowRight className="h-4 w-4" />
             </Link>
             <Button
               type="button"
@@ -454,7 +464,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                 onCreateTaskFor(member);
               }}
             >
-              <Plus className="h-4 w-4" /> Create task for {selectedSummary.member.name.split(' ')[0]}
+              <Plus className="h-4 w-4" /> {t('Create task for')} <span data-i18n-skip>{selectedSummary.member.name.split(' ')[0]}</span>
             </Button>
           </div>
         </ModalShell>

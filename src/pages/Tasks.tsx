@@ -16,6 +16,8 @@ import { safeHttpsUrl } from '../lib/security';
 import { DEPARTMENTS } from '../lib/departments';
 import { getOperationsPeriod, type TeamWorkloadPeriod } from '../lib/taskReporting';
 import { getClientTaskStage } from '../lib/clientPortal';
+import { getLocalizedDepartment, getLocalizedPriority, getLocalizedStatus } from '../lib/localeLabels';
+import { formatLocalizedDate } from '../lib/i18n';
 import StaffAllWork from '../components/StaffAllWork';
 import ClientDeliveries from '../components/ClientDeliveries';
 
@@ -49,7 +51,7 @@ const priorityColors: Record<Priority, string> = {
 };
 
 const TasksWorkspace: React.FC = () => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore(useShallow(state => ({
     tasks: state.tasks,
     clients: state.clients,
@@ -265,11 +267,11 @@ const TasksWorkspace: React.FC = () => {
     const today = format(new Date(), 'yyyy-MM-dd');
     if (periodRouteFilter === 'today') return { from: today, to: today };
     if (periodRouteFilter === 'week') {
-      const period = getOperationsPeriod();
+      const period = getOperationsPeriod(new Date(), locale);
       return { from: format(period.start, 'yyyy-MM-dd'), to: format(period.end, 'yyyy-MM-dd') };
     }
     return null;
-  }, [periodRouteFilter]);
+  }, [locale, periodRouteFilter]);
 
   const filteredTasks = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -433,7 +435,7 @@ const TasksWorkspace: React.FC = () => {
     canEditTask(task) ? (
       <div className="relative inline-block">
         <select
-          aria-label={`Change status for ${task.title}`} data-i18n-skip
+          aria-label={t('task.changeStatusFor', { title: task.title })}
           className={`text-xs pl-2.5 pr-6 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none ${getStatusColor(task.status)}`}
           value={task.status}
           disabled={backend.isSaving}
@@ -442,15 +444,15 @@ const TasksWorkspace: React.FC = () => {
             await persistQuickChange(task, 'status');
           }}
         >
-          {taskStatuses.map(status => (
-            <option key={status} value={status} className="bg-white text-slate-900">{status}</option>
+        {taskStatuses.map(status => (
+            <option key={status} value={status} className="bg-white text-slate-900">{getLocalizedStatus(status, locale)}</option>
           ))}
         </select>
         <ChevronDown className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 text-current" />
       </div>
     ) : (
       <span className={`text-xs px-2.5 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
-        {isClientUser ? clientStatusLabel(task) : task.status}
+        {isClientUser ? t(clientStatusLabel(task)) : getLocalizedStatus(task.status, locale)}
       </span>
     )
   );
@@ -458,14 +460,14 @@ const TasksWorkspace: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title={isClientUser ? 'Company Tasks' : 'Tasks Management'}
+        title={isClientUser ? t('Company Tasks') : t('Tasks Management')}
         description={isClientUser
-          ? `Track ${currentUser?.companyName || 'your company'} work, review deliverables, and share feedback.`
-          : 'Manage assignments, approvals, revisions, files, and deadlines.'}
+          ? t('Track your company work, review deliverables, and share feedback.')
+          : t('Manage assignments, approvals, revisions, files, and deadlines.')}
         action={canCreateTasks(currentUser, rolePermissions) ? (
           <Button onClick={() => setCreateTaskModalOpen(true)}>
             <Plus className="h-4 w-4" />
-            New task
+            {t('New task')}
           </Button>
         ) : null}
       />
@@ -479,9 +481,9 @@ const TasksWorkspace: React.FC = () => {
       {activeProject && (
         <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-blue-800">
           <span className="text-sm font-medium flex-1">
-            Viewing tasks for <strong className="font-bold">{activeProject.projectName}</strong> ({activeProject.clientName})
+            {t('Viewing tasks for')} <strong className="font-bold" data-i18n-skip>{activeProject.projectName}</strong> <span data-i18n-skip>({activeProject.clientName})</span>
           </span>
-          <button onClick={() => clearRouteFilter('projectId')} className="p-1.5 hover:bg-blue-200/50 rounded-md transition-colors" title="Clear project filter" aria-label="Clear project filter">
+          <button onClick={() => clearRouteFilter('projectId')} className="p-1.5 hover:bg-blue-200/50 rounded-md transition-colors" title={t('Clear project filter')} aria-label={t('Clear project filter')}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -489,8 +491,8 @@ const TasksWorkspace: React.FC = () => {
 
       {taskIdFilter && (
         <div className="flex items-center gap-3 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-amber-800">
-          <span className="text-sm font-medium flex-1">Viewing specific task: <strong className="font-bold">{taskIdFilter}</strong></span>
-          <button onClick={() => { setSelectedTask(null); clearRouteFilter('taskId'); }} className="p-1.5 hover:bg-amber-200/50 rounded-md transition-colors" title="Clear task filter" aria-label="Clear task filter">
+          <span className="text-sm font-medium flex-1">{t('Viewing specific task:')} <strong className="font-bold" data-i18n-skip>{taskIdFilter}</strong></span>
+          <button onClick={() => { setSelectedTask(null); clearRouteFilter('taskId'); }} className="p-1.5 hover:bg-amber-200/50 rounded-md transition-colors" title={t('Clear task filter')} aria-label={t('Clear task filter')}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -499,8 +501,8 @@ const TasksWorkspace: React.FC = () => {
       {activeAssignee && (
         <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-blue-800">
           <span className="min-w-0 flex-1 text-sm font-medium">
-            Assigned to <strong data-i18n-skip className="font-bold">{activeAssignee.name}</strong>
-            {periodRouteFilter && periodRouteFilter !== 'overall' ? ` · ${periodRouteFilter === 'today' ? 'Today' : 'This week'}` : ''}
+            {t('Assigned to')} <strong data-i18n-skip className="font-bold">{activeAssignee.name}</strong>
+            {periodRouteFilter && periodRouteFilter !== 'overall' ? ` · ${periodRouteFilter === 'today' ? t('Today') : t('This week')}` : ''}
           </span>
           <button
             type="button"
@@ -511,8 +513,8 @@ const TasksWorkspace: React.FC = () => {
               setSearchParams(next);
             }}
             className="rounded-md p-1.5 transition hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            title="Clear assignee filter"
-            aria-label="Clear assignee filter"
+            title={t('Clear assignee filter')}
+            aria-label={t('Clear assignee filter')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -522,14 +524,14 @@ const TasksWorkspace: React.FC = () => {
       {routeFocus && (
         <div className="flex items-center gap-3 rounded-lg border border-accent/20 bg-accent-soft px-4 py-3 text-accent">
           <span className="min-w-0 flex-1 text-sm font-medium">
-            Showing <strong className="font-bold">{routeFocus === 'overdue' ? 'overdue tasks' : routeFocus === 'waiting' ? 'tasks waiting for approval' : 'focused tasks'}</strong>
+            {t('Showing')} <strong className="font-bold">{routeFocus === 'overdue' ? t('overdue tasks') : routeFocus === 'waiting' ? t('tasks waiting for approval') : t('focused tasks')}</strong>
           </span>
           <button
             type="button"
             onClick={() => clearRouteFilter('focus')}
             className="rounded-md p-1.5 transition hover:bg-accent/10 focus:outline-none focus:ring-2 focus:ring-accent/30"
-            title="Clear focus filter"
-            aria-label="Clear focus filter"
+            title={t('Clear focus filter')}
+            aria-label={t('Clear focus filter')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -549,10 +551,10 @@ const TasksWorkspace: React.FC = () => {
                     <Building2 className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-blue-700">Client task view</p>
+                    <p className="text-xs font-medium text-blue-700">{t('Client task view')}</p>
                     <h2 data-i18n-skip className="mt-1 truncate text-xl font-bold text-slate-950">{activeClient}</h2>
                     <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                      {activeClientProfile?.contactPerson || activeClientFallbackDetails ? <span data-i18n-skip>{activeClientProfile?.contactPerson || activeClientFallbackDetails}</span> : 'No saved contact person yet.'}
+                      {activeClientProfile?.contactPerson || activeClientFallbackDetails ? <span data-i18n-skip>{activeClientProfile?.contactPerson || activeClientFallbackDetails}</span> : t('No saved contact person yet.')}
                     </p>
                   </div>
                 </div>
@@ -562,7 +564,7 @@ const TasksWorkspace: React.FC = () => {
                 onClick={() => clearRouteFilter('client')}
                 className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm transition-colors hover:bg-blue-100"
               >
-                <X className="h-4 w-4" /> Clear client filter
+                <X className="h-4 w-4" /> {t('Clear client filter')}
               </button>
             </div>
           </div>
@@ -570,15 +572,15 @@ const TasksWorkspace: React.FC = () => {
           <div className="grid grid-cols-1 gap-4 px-5 py-4 lg:grid-cols-[1.1fr_1fr]">
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-3">
-                <p className="text-xs font-medium text-slate-500">Tasks</p>
+                <p className="text-xs font-medium text-slate-500">{t('Tasks')}</p>
                 <p className="mt-1 text-xl font-bold text-slate-950">{activeClientTasks.length}</p>
               </div>
               <div className="rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-3">
-                <p className="text-xs font-medium text-slate-500">Open</p>
+                <p className="text-xs font-medium text-slate-500">{t('Open')}</p>
                 <p className="mt-1 text-xl font-bold text-slate-950">{activeClientOpenTasks}</p>
               </div>
               <div className="rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-3">
-                <p className="text-xs font-medium text-slate-500">Done</p>
+                <p className="text-xs font-medium text-slate-500">{t('Done')}</p>
                 <p className="mt-1 text-xl font-bold text-slate-950">{activeClientCompletedTasks}</p>
               </div>
             </div>
@@ -586,7 +588,7 @@ const TasksWorkspace: React.FC = () => {
             <div className="grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
               {!canViewActiveClient ? (
                 <span className="inline-flex items-center gap-2 sm:col-span-2">
-                  <MapPin className="h-4 w-4 shrink-0 text-slate-400" /> This client is outside your assigned work. Contact details are hidden.
+                  <MapPin className="h-4 w-4 shrink-0 text-slate-400" /> {t('This client is outside your assigned work. Contact details are hidden.')}
                 </span>
               ) : (
                 <>
@@ -608,18 +610,18 @@ const TasksWorkspace: React.FC = () => {
                 </>
               )}
               <span className="inline-flex items-center gap-2">
-                <Building2 className="h-4 w-4 shrink-0 text-slate-400" /> {activeClientProjects.length} company record{activeClientProjects.length === 1 ? '' : 's'}
+                <Building2 className="h-4 w-4 shrink-0 text-slate-400" /> {activeClientProjects.length} {activeClientProjects.length === 1 ? t('company record') : t('company records')}
               </span>
               {(activeClientWebsite || activeClientFacebook) && (
                 <span className="inline-flex items-center gap-3">
                   {activeClientWebsite && (
                     <a href={activeClientWebsite} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-700">
-                      Website <ExternalLink className="h-3.5 w-3.5" />
+                      {t('Website')} <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   )}
                   {activeClientFacebook && (
                     <a href={activeClientFacebook} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-700">
-                      Facebook <ExternalLink className="h-3.5 w-3.5" />
+                      <span data-i18n-skip>Facebook</span> <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   )}
                 </span>
@@ -632,7 +634,7 @@ const TasksWorkspace: React.FC = () => {
       <div className={`${tableShell} flex flex-col`}>
         <div className="space-y-4 border-b border-slate-200 bg-slate-50/70 p-4">
           {!isClientUser && (
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Quick task filters">
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('Quick task filters')}>
               {([
                 ['all', t('All')],
                 ['today', t('Due today')],
@@ -693,9 +695,9 @@ const TasksWorkspace: React.FC = () => {
               </span>
               <input
                 type="text"
-                aria-label="Filter tasks"
+                aria-label={t('Filter tasks')}
                 className={cn(inputBase, 'block py-2 pl-10 pr-3')}
-                placeholder={isClientUser ? 'Search company tasks...' : 'Search tasks, clients, assignees...'}
+                placeholder={isClientUser ? t('Search company tasks...') : t('Search tasks, clients, assignees...')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -703,11 +705,11 @@ const TasksWorkspace: React.FC = () => {
 
             <div className="flex items-center gap-2 text-sm text-slate-500">
               <Filter className="w-4 h-4" />
-              <span>{filteredTasks.length} matching task{filteredTasks.length === 1 ? '' : 's'}</span>
+              <span>{filteredTasks.length} {filteredTasks.length === 1 ? t('matching task') : t('matching tasks')}</span>
             </div>
 
             {/* View Toggle */}
-            <div className="flex shrink-0 items-center rounded-lg border border-slate-200 bg-white p-1 sm:ml-auto" role="group" aria-label="Task view">
+            <div className="flex shrink-0 items-center rounded-lg border border-slate-200 bg-white p-1 sm:ml-auto" role="group" aria-label={t('Task view')}>
               <button
                 type="button"
                 onClick={() => setViewType('table')}
@@ -719,7 +721,7 @@ const TasksWorkspace: React.FC = () => {
                     : "text-slate-600 hover:bg-slate-50"
                 )}
               >
-                Table
+                {t('Table')}
               </button>
               <button
                 type="button"
@@ -733,7 +735,7 @@ const TasksWorkspace: React.FC = () => {
                     : "text-slate-600 hover:bg-slate-50"
                 )}
               >
-                Board
+                {t('Board')}
               </button>
             </div>
 
@@ -745,14 +747,14 @@ const TasksWorkspace: React.FC = () => {
             >
               <span className="inline-flex items-center gap-2">
                 <SlidersHorizontal className="w-4 h-4" />
-                Filters {activeFilterLabels.length > 0 && `(${activeFilterLabels.length})`}
+                {t('Filters')} {activeFilterLabels.length > 0 && `(${activeFilterLabels.length})`}
               </span>
               <ChevronDown className={cn('w-4 h-4 transition-transform', filtersOpen && 'rotate-180')} />
             </Button>
 
             {hasAnyFilter && (
               <button onClick={clearAllFilters} className="lg:ml-auto text-sm font-semibold text-slate-600 hover:text-blue-600">
-                Clear filters
+                {t('Clear filters')}
               </button>
             )}
           </div>
@@ -765,15 +767,15 @@ const TasksWorkspace: React.FC = () => {
 
           <div className={cn('grid-cols-1 gap-3 sm:grid-cols-2', isClientUser ? 'lg:grid-cols-3' : 'lg:grid-cols-4', filtersOpen ? 'grid' : 'hidden lg:grid')}>
             {!isClientUser && <div className="relative">
-              <select aria-label="Filter by department" value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
-                <option value="All">All departments</option>
-                {departmentOptions.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+              <select aria-label={t('Filter by department')} value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                <option value="All">{t('All departments')}</option>
+                {departmentOptions.map(dept => <option key={dept} value={dept}>{getLocalizedDepartment(dept, locale)}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>}
             {!isClientUser && <div className="relative">
               <select
-                aria-label="Filter by assignee"
+                aria-label={t('Filter by assignee')}
                 value={filterAssignee}
                 onChange={(e) => {
                   setFilterAssignee(e.target.value);
@@ -786,13 +788,13 @@ const TasksWorkspace: React.FC = () => {
                 }}
                 className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}
               >
-                <option value="All">All assignees</option>
+                <option value="All">{t('All assignees')}</option>
                 {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{user.name}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>}
             {!isClientUser && <div className="relative">
-              <select aria-label="Filter by client" value={filterClient} onChange={(e) => {
+              <select aria-label={t('Filter by client')} value={filterClient} onChange={(e) => {
                 setFilterClient(e.target.value);
                 if (clientRouteFilter || periodRouteFilter) {
                   const next = new URLSearchParams(searchParams);
@@ -801,27 +803,27 @@ const TasksWorkspace: React.FC = () => {
                   setSearchParams(next);
                 }
               }} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
-                <option value="All">All clients</option>
+                <option value="All">{t('All clients')}</option>
                 {clientOptions.map(client => <option key={client} value={client}>{client}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>}
             {!isClientUser && <div className="relative">
-              <select aria-label="Filter by status" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
-                <option value="All">All statuses</option>
-                {taskStatuses.map(status => <option key={status} value={status}>{status}</option>)}
+              <select aria-label={t('Filter by status')} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                <option value="All">{t('All statuses')}</option>
+                {taskStatuses.map(status => <option key={status} value={status}>{getLocalizedStatus(status, locale)}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>}
             {!isClientUser && <div className="relative">
-              <select aria-label="Filter by priority" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
-                <option value="All">All priorities</option>
-                {PRIORITY_OPTIONS.map(priority => <option key={priority} value={priority}>{priority}</option>)}
+              <select aria-label={t('Filter by priority')} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                <option value="All">{t('All priorities')}</option>
+                {PRIORITY_OPTIONS.map(priority => <option key={priority} value={priority}>{getLocalizedPriority(priority, locale)}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>}
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label="Due from" />
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label="Due to" />
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label={t('Due from')} />
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label={t('Due to')} />
           </div>
         </div>
 
@@ -831,14 +833,14 @@ const TasksWorkspace: React.FC = () => {
 	              <table className={cn('w-full text-left text-sm text-slate-500', isClientUser ? 'min-w-[820px]' : 'min-w-[1020px]')}>
                 <thead className="text-xs text-slate-700 bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-3 py-3 font-semibold">Task Details</th>
-	                    {!isClientUser && <th className="px-3 py-3 font-semibold">Client / Company</th>}
-	                    {!isClientUser && <th className="px-3 py-3 font-semibold">Department</th>}
-	                    <th className="px-3 py-3 font-semibold">Timeline</th>
-	                    {!isClientUser && <th className="w-[100px] px-3 py-3 text-center font-semibold">Priority</th>}
-	                    <th className="w-[130px] px-3 py-3 text-center font-semibold">Status</th>
-	                    <th className="px-3 py-3 text-center font-semibold">Progress</th>
-	                    <th className="px-3 py-3 font-semibold">{isClientUser ? 'Contact / Action' : 'Actions'}</th>
+                    <th className="px-3 py-3 font-semibold">{t('Task Details')}</th>
+	                    {!isClientUser && <th className="px-3 py-3 font-semibold">{t('Client / Company')}</th>}
+	                    {!isClientUser && <th className="px-3 py-3 font-semibold">{t('Department')}</th>}
+	                    <th className="px-3 py-3 font-semibold">{t('Timeline')}</th>
+	                    {!isClientUser && <th className="w-[100px] px-3 py-3 text-center font-semibold">{t('Priority')}</th>}
+	                    <th className="w-[130px] px-3 py-3 text-center font-semibold">{t('Status')}</th>
+	                    <th className="px-3 py-3 text-center font-semibold">{t('Progress')}</th>
+	                    <th className="px-3 py-3 font-semibold">{isClientUser ? t('Contact / Action') : t('Actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -869,19 +871,19 @@ const TasksWorkspace: React.FC = () => {
                             <div data-i18n-skip className="text-xs text-slate-500 truncate mt-0.5">{task.projectName || 'Independent task'}</div>
 	                          </td>}
 	                          {!isClientUser && <td className="whitespace-nowrap px-3 py-3">
-                            <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-md font-medium border border-slate-200">{task.department}</span>
+                            <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-md font-medium border border-slate-200">{getLocalizedDepartment(task.department, locale)}</span>
 	                          </td>}
                           <td className="whitespace-nowrap px-3 py-3 text-xs">
-                            <div className="text-slate-500 mb-0.5">Start: {startDateParsed ? format(startDateParsed, 'MMM dd') : 'No start date'}</div>
+                            <div className="text-slate-500 mb-0.5">{t('Start')}: {startDateParsed ? formatLocalizedDate(startDateParsed, locale) : t('common.noStartDate')}</div>
                             <div
                               className={cn("font-medium", isOverdue ? "text-red-700 font-bold" : "text-slate-800")}
-                              title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
+                              title={dueDateParsed ? `${t('Due')}: ${formatLocalizedDate(dueDateParsed, locale)}` : t('common.noDueDate')}
                             >
-                              {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
+                              {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}
                             </div>
                           </td>
 	                          {!isClientUser && <td className="w-[100px] whitespace-nowrap px-3 py-3 text-center">
-                            <span className={`inline-block text-xs px-2.5 py-1 rounded-md font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>
+                            <span className={`inline-block text-xs px-2.5 py-1 rounded-md font-semibold ${priorityColors[task.priority]}`}>{getLocalizedPriority(task.priority, locale)}</span>
 	                          </td>}
                           <td className="w-[130px] whitespace-nowrap px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                             {renderStatusControl(task)}
@@ -903,7 +905,7 @@ const TasksWorkspace: React.FC = () => {
                                       <Paperclip className="w-4 h-4" />
                                     </a>
                                   ) : (
-                                    <span title="Invalid attachment link" className="text-slate-400">
+                                    <span title={t('Invalid attachment link')} className="text-slate-400">
                                       <Paperclip className="w-4 h-4" />
                                     </span>
                                   )
@@ -911,14 +913,14 @@ const TasksWorkspace: React.FC = () => {
                                 {task.isCompleted && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
 	                                {canEditTask(task) && <button
                                   className="rounded-md p-1 transition-colors hover:bg-slate-200 hover:text-slate-700"
-                                  title="Quick Edit"
-                                  aria-label={`Quick edit ${task.title}`} data-i18n-skip
+                                  title={t('Quick Edit')}
+                                  aria-label={t('Quick Edit')}
                                   onClick={(e) => handleQuickEditClick(e, task)}
                                 >
                                   <MoreHorizontal className="w-4 h-4" />
 	                                </button>}
 	                              </div>}
-	                              <div className="flex items-center gap-1.5" title={`Assigned contact: ${getUserName(task.assignedTo)}`}>
+	                              <div className="flex items-center gap-1.5" title={t('Assigned contact')}>
                                 <div className="w-5 h-5 rounded-full bg-accent-soft text-accent flex items-center justify-center text-[10px] font-bold">
                                   {getUserName(task.assignedTo).charAt(0)}
                                 </div>
@@ -939,7 +941,7 @@ const TasksWorkspace: React.FC = () => {
                   )}
                   {!backend?.isLoading && pagedTasks.length === 0 && (
                     <tr>
-	                      <td colSpan={TABLE_COLUMN_COUNT} className="px-4 py-8 text-center text-slate-500">No tasks found matching your criteria.</td>
+	                      <td colSpan={TABLE_COLUMN_COUNT} className="px-4 py-8 text-center text-slate-500">{t('No tasks found matching your criteria.')}</td>
                     </tr>
                   )}
                 </tbody>
@@ -968,31 +970,31 @@ const TasksWorkspace: React.FC = () => {
                         type="button"
                         onClick={() => setSelectedTask(task)}
                         className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-                        aria-label={`View task ${task.title}`} data-i18n-skip
+                        aria-label={t('task.viewFor', { title: task.title })}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div data-i18n-skip className={cn("font-semibold leading-5", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
                             <div data-i18n-skip className="text-xs text-slate-500 mt-1 leading-5">{task.id} - {task.clientName} - {task.projectName || 'Independent task'}</div>
                           </div>
-	                          {!isClientUser && <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${priorityColors[task.priority]}`}>{task.priority}</span>}
+	                          {!isClientUser && <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${priorityColors[task.priority]}`}>{getLocalizedPriority(task.priority, locale)}</span>}
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
                         <span
                           className={cn("inline-flex items-center gap-1", isOverdue ? "text-red-700 font-bold" : "text-slate-600")}
-                          title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
+                          title={dueDateParsed ? `${t('Due')}: ${formatLocalizedDate(dueDateParsed, locale)}` : t('common.noDueDate')}
                         >
                           <CalendarClock className="w-3.5 h-3.5" />
-                          {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
+                            {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}
                         </span>
                         <span className="truncate text-right">{getUserName(task.assignedTo)}</span>
-	                        {!isClientUser && <span>{task.department}</span>}
+	                        {!isClientUser && <span>{getLocalizedDepartment(task.department, locale)}</span>}
 	                          <span className="truncate text-right">{task.serviceType}</span>
                         </div>
                         {isOverdue && (
                           <div className="mt-2 text-[10px] text-red-500 font-extrabold flex items-center gap-1.5">
                             <span className="h-2 w-2 rounded-full bg-red-500" />
-                            Overdue
+                            {t('Overdue')}
                           </div>
                         )}
                         {isClientUser && (
@@ -1014,17 +1016,17 @@ const TasksWorkspace: React.FC = () => {
                   );
                 })
               )}
-              {!backend?.isLoading && pagedTasks.length === 0 && <div className="p-8 text-center text-sm text-slate-700">No tasks found matching your criteria.</div>}
+              {!backend?.isLoading && pagedTasks.length === 0 && <div className="p-8 text-center text-sm text-slate-700">{t('No tasks found matching your criteria.')}</div>}
             </div>
 
             <div className="p-4 border-t border-slate-200 flex flex-col sm:flex-row gap-3 justify-between items-center bg-slate-50 text-sm">
               <span className="text-slate-500">
-                Showing {filteredTasks.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1} to {Math.min(currentPage * PAGE_SIZE, filteredTasks.length)} of {filteredTasks.length} entries
+                {t('Showing')} {filteredTasks.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1} {t('to')} {Math.min(currentPage * PAGE_SIZE, filteredTasks.length)} {t('of')} {filteredTasks.length} {t('entries')}
               </span>
               <div className="flex gap-1">
-                <button disabled={currentPage === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-3 py-1 border border-slate-300 rounded-md bg-white text-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed">Previous</button>
+                <button disabled={currentPage === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-3 py-1 border border-slate-300 rounded-md bg-white text-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed">{t('Previous')}</button>
                 <span className="px-3 py-1 border border-blue-600 rounded-md bg-blue-600 text-white font-medium">{currentPage} / {totalPages}</span>
-                <button disabled={currentPage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} className="px-3 py-1 border border-slate-300 rounded-md bg-white text-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed">Next</button>
+                <button disabled={currentPage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} className="px-3 py-1 border border-slate-300 rounded-md bg-white text-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed">{t('Next')}</button>
               </div>
             </div>
           </>
@@ -1089,7 +1091,7 @@ const TasksWorkspace: React.FC = () => {
                                   {task.title}
                                 </h4>
                                 {!isClientUser && <Badge tone={task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : task.priority === 'Medium' ? 'blue' : 'slate'} className="text-[9px] px-1.5 py-0 shrink-0">
-                                  {task.priority}
+                                  {getLocalizedPriority(task.priority, locale)}
                                 </Badge>}
                               </div>
 
@@ -1099,7 +1101,7 @@ const TasksWorkspace: React.FC = () => {
 
                               {!isClientUser && <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                                 <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-md", getDeptBadge(task.department))}>
-                                  {task.department}
+                                  {getLocalizedDepartment(task.department, locale)}
                                 </span>
                                 <span className="text-[9px] text-slate-500 font-medium">
                                   {task.serviceType}
@@ -1109,9 +1111,9 @@ const TasksWorkspace: React.FC = () => {
                               <div className="mt-3 flex items-center justify-between text-[10px]">
                                 <span
                                   className={cn("font-medium", isOverdue ? "text-red-600 font-extrabold" : "text-slate-500")}
-                                  title={dueDateParsed ? `Due: ${format(dueDateParsed, 'yyyy-MM-dd')}` : 'No due date'}
+                                  title={dueDateParsed ? `${t('Due')}: ${formatLocalizedDate(dueDateParsed, locale)}` : t('common.noDueDate')}
                                 >
-                                  {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
+                                  {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}
                                 </span>
                                 <div className="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
                                   <div className="w-4 h-4 rounded-full bg-accent-soft text-accent flex items-center justify-center text-[9px] font-bold">
@@ -1139,7 +1141,7 @@ const TasksWorkspace: React.FC = () => {
                               {(task.attachmentLink || task.revisionCount > 0) && (
                                 <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-2 text-[9px] text-slate-500">
                                   {task.attachmentLink && <Paperclip className="w-3 h-3 text-slate-400" />}
-                                  {task.revisionCount > 0 && <span className="text-amber-700 font-bold">{task.revisionCount} rev</span>}
+                                  {task.revisionCount > 0 && <span className="text-amber-700 font-bold">{task.revisionCount} {t('rev')}</span>}
                                 </div>
                               )}
                             </div>
@@ -1148,7 +1150,7 @@ const TasksWorkspace: React.FC = () => {
                       )}
                       {!backend?.isLoading && columnTasks.length === 0 && (
                         <div className="text-center py-6 text-[11px] text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50/30">
-                          No tasks in this status
+                          {t('No tasks in this status')}
                         </div>
                       )}
                     </div>
@@ -1187,7 +1189,7 @@ const TasksWorkspace: React.FC = () => {
             <div
               role="dialog"
               aria-modal="true"
-              aria-label={`Quick edit ${currentTask.title}`}
+              aria-label={t('Quick Edit')}
               className="animate-fade-in fixed z-50 bg-white border border-slate-200 rounded-lg shadow-xl p-4 w-64 space-y-4 text-slate-700"
               style={{
                 top: Math.min(activeQuickEdit.y, window.innerHeight - 280),
@@ -1196,15 +1198,15 @@ const TasksWorkspace: React.FC = () => {
             >
               <div className="flex justify-between items-center border-b border-slate-100 pb-2">
                 <span className="text-xs font-bold text-slate-800 truncate pr-2" title={currentTask.title}>
-                  Quick Edit: {currentTask.title}
+                  {t('Quick Edit')}: <span data-i18n-skip>{currentTask.title}</span>
                 </span>
                 <button
                   type="button"
                   autoFocus
                   onClick={() => setActiveQuickEdit(null)}
                   className="text-slate-400 hover:text-slate-600 rounded p-0.5 hover:bg-slate-50"
-                  aria-label="Close quick edit"
-                  title="Close quick edit"
+                  aria-label={t('Close quick edit')}
+                  title={t('Close quick edit')}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -1212,7 +1214,7 @@ const TasksWorkspace: React.FC = () => {
 
               {/* Status */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-1">Status</label>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1">{t('Status')}</label>
                 <div className="relative">
                   <select
                     className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white appearance-none cursor-pointer")}
@@ -1224,7 +1226,7 @@ const TasksWorkspace: React.FC = () => {
                     }}
                   >
                     {taskStatuses.map(status => (
-                      <option key={status} value={status}>{status}</option>
+                      <option key={status} value={status}>{getLocalizedStatus(status, locale)}</option>
                     ))}
                   </select>
                   <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
@@ -1233,7 +1235,7 @@ const TasksWorkspace: React.FC = () => {
 
               {/* Priority */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-1">Priority</label>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1">{t('Priority')}</label>
                 <div className="relative">
                   <select
                     className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white appearance-none cursor-pointer")}
@@ -1245,7 +1247,7 @@ const TasksWorkspace: React.FC = () => {
                     }}
                   >
                     {PRIORITY_OPTIONS.map(prio => (
-                      <option key={prio} value={prio}>{prio}</option>
+                      <option key={prio} value={prio}>{getLocalizedPriority(prio, locale)}</option>
                     ))}
                   </select>
                   <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
@@ -1254,7 +1256,7 @@ const TasksWorkspace: React.FC = () => {
 
               {/* Assignee */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-1">Assignee</label>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1">{t('Assignee')}</label>
                 <div className="relative">
                   <select
                     className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white disabled:bg-slate-50 disabled:text-slate-400 appearance-none cursor-pointer")}
@@ -1273,7 +1275,7 @@ const TasksWorkspace: React.FC = () => {
                   <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                 </div>
                 {!canAssignOthers && (
-                  <p className="mt-1 text-[10px] text-slate-400">Only Boss Koo can reassign tasks.</p>
+                  <p className="mt-1 text-[10px] text-slate-400">{t('Only Boss Koo can reassign tasks.')}</p>
                 )}
               </div>
             </div>

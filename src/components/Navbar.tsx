@@ -4,7 +4,6 @@ import { useShallow } from 'zustand/react/shallow';
 import { getMemberDepartments } from '../lib/departments';
 import { Bell, Search, Menu, CheckCircle2, Info, AlertCircle, FileText, X, Volume2, VolumeX, Keyboard, Moon, Sun, Monitor, ChevronDown } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { formatDistanceToNow } from 'date-fns';
 import { IconButton } from './ui';
 import { inputBase } from './uiTokens';
 import { cn } from '../lib/utils';
@@ -16,6 +15,7 @@ import { notificationRouteToPath } from '../lib/security';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import type { ResolvedTheme, ThemePreference } from '../lib/theme';
 import { LanguageSwitcher, useI18n } from './I18nProvider';
+import { formatLocalizedDistanceToNow } from '../lib/i18n';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -65,7 +65,7 @@ const Navbar: React.FC<NavbarProps> = ({
   const mobileSearchRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
 
   useEffect(() => {
     const handleSoundPreference = (event: Event) => {
@@ -252,24 +252,24 @@ const Navbar: React.FC<NavbarProps> = ({
       <div className="flex items-center gap-1 sm:gap-2">
         <LanguageSwitcher compact />
         <IconButton
-          label="Search"
+          label={t('Search')}
           onClick={() => setShowMobileSearch(value => !value)}
           className="sm:hidden"
         >
           {showMobileSearch ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
         </IconButton>
         <div className="relative flex items-center" ref={appearanceRef}>
-          <IconButton onClick={onToggleTheme} label={`Switch to ${resolvedTheme === 'dark' ? 'day' : 'night'} mode`} aria-pressed={resolvedTheme === 'dark'} aria-keyshortcuts="Shift+D" className="rounded-r-none">
+          <IconButton onClick={onToggleTheme} label={t('Switch to {mode} mode', { mode: resolvedTheme === 'dark' ? t('day') : t('night') })} aria-pressed={resolvedTheme === 'dark'} aria-keyshortcuts="Shift+D" className="rounded-r-none">
             {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </IconButton>
-          <button ref={appearanceTriggerRef} type="button" onClick={() => setShowAppearance(value => !value)} onKeyDown={event => { if (event.key === 'Escape' && showAppearance) { event.preventDefault(); closeAppearance(true); } }} aria-label="Appearance settings" aria-haspopup="menu" aria-expanded={showAppearance} aria-controls="appearance-menu" className="flex h-11 w-11 items-center justify-center rounded-r-control text-muted hover:bg-inset hover:text-ink"><ChevronDown className="h-4 w-4" /></button>
-          {showAppearance && <div id="appearance-menu" role="menu" aria-label="Appearance" className="absolute right-0 top-12 z-50 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line">
-            {([{ id: 'light', label: 'Light', icon: Sun }, { id: 'dark', label: 'Dark', icon: Moon }, { id: 'system', label: 'System', icon: Monitor }] as const).map((option, index) => <button key={option.id} ref={node => { appearanceItemRefs.current[index] = node; }} type="button" role="menuitemradio" aria-checked={themePreference === option.id} onKeyDown={event => handleAppearanceKeyDown(event, index)} onClick={() => { onSetThemePreference(option.id); closeAppearance(true); }} className={cn('flex min-h-11 w-full items-center gap-2.5 rounded-control px-3 text-sm transition-colors duration-160', themePreference === option.id ? 'bg-accent-soft font-semibold text-accent' : 'text-muted hover:bg-inset hover:text-ink')}><option.icon className="h-4 w-4" />{option.label}</button>)}
+          <button ref={appearanceTriggerRef} type="button" onClick={() => setShowAppearance(value => !value)} onKeyDown={event => { if (event.key === 'Escape' && showAppearance) { event.preventDefault(); closeAppearance(true); } }} aria-label={t('Appearance settings')} aria-haspopup="menu" aria-expanded={showAppearance} aria-controls="appearance-menu" className="flex h-11 w-11 items-center justify-center rounded-r-control text-muted hover:bg-inset hover:text-ink"><ChevronDown className="h-4 w-4" /></button>
+          {showAppearance && <div id="appearance-menu" role="menu" aria-label={t('Appearance')} className="absolute right-0 top-12 z-50 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line">
+            {([{ id: 'light', label: 'Light', icon: Sun }, { id: 'dark', label: 'Dark', icon: Moon }, { id: 'system', label: 'System', icon: Monitor }] as const).map((option, index) => <button key={option.id} ref={node => { appearanceItemRefs.current[index] = node; }} type="button" role="menuitemradio" aria-checked={themePreference === option.id} onKeyDown={event => handleAppearanceKeyDown(event, index)} onClick={() => { onSetThemePreference(option.id); closeAppearance(true); }} className={cn('flex min-h-11 w-full items-center gap-2.5 rounded-control px-3 text-sm transition-colors duration-160', themePreference === option.id ? 'bg-accent-soft font-semibold text-accent' : 'text-muted hover:bg-inset hover:text-ink')}><option.icon className="h-4 w-4" />{t(option.label)}</button>)}
           </div>}
         </div>
         <IconButton
           onClick={onOpenShortcuts}
-          label="Keyboard shortcuts"
+          label={t('Keyboard shortcuts')}
           aria-keyshortcuts="?"
           className="hidden sm:inline-flex"
         >
@@ -277,7 +277,7 @@ const Navbar: React.FC<NavbarProps> = ({
         </IconButton>
         <IconButton
           onClick={handleToggleSound}
-          label={soundEnabled ? 'Mute notifications' : 'Unmute notifications'}
+          label={soundEnabled ? t('Mute notifications') : t('Unmute notifications')}
         >
           {soundEnabled
             ? <Volume2 className="w-5 h-5" />
@@ -287,7 +287,7 @@ const Navbar: React.FC<NavbarProps> = ({
         <div className="relative" ref={notifRef}>
           <IconButton
             onClick={handleBellClick}
-            label="Notifications"
+            label={t('Notifications')}
             aria-expanded={showNotifications}
             aria-controls="header-notifications-menu"
             className="relative"
@@ -302,17 +302,17 @@ const Navbar: React.FC<NavbarProps> = ({
 
           {/* Notifications Dropdown */}
           {showNotifications && (
-            <div id="header-notifications-menu" role="region" aria-label="Notification preview" className="calm-raised absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] max-w-80 overflow-hidden">
+            <div id="header-notifications-menu" role="region" aria-label={t('Notification preview')} className="calm-raised absolute right-0 z-50 mt-2 w-[calc(100vw-2rem)] max-w-80 overflow-hidden">
               <div className="flex items-center justify-between border-b border-line/80 bg-inset/80 px-4 py-3">
                 <div>
-                  <h3 className="font-bold text-slate-900">Notifications</h3>
+                  <h3 className="font-bold text-slate-900">{t('Notifications')}</h3>
                   <p className="text-xs text-slate-500">
-                    {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+                    {unreadCount > 0 ? t('{count} unread', { count: unreadCount }) : t('All caught up')}
                   </p>
                 </div>
                 {unreadCount > 0 ? (
                   <span className="rounded-tag bg-accent-soft px-2 py-1 text-xs font-medium text-accent">
-                    {unreadCount} New
+                    {unreadCount} {t('New')}
                   </span>
                 ) : null}
               </div>
@@ -333,14 +333,14 @@ const Navbar: React.FC<NavbarProps> = ({
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium text-slate-500">{notif.title}</p>
                       <p data-i18n-skip className="mt-0.5 text-sm font-semibold leading-5 text-slate-950">{notif.message}</p>
-                      <p className="mt-1 text-xs text-slate-400">{formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}</p>
+                      <p className="mt-1 text-xs text-slate-400">{formatLocalizedDistanceToNow(new Date(notif.createdAt), locale)}</p>
                     </div>
                     <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true"></div>
                   </Link>
                 )) : (
                   <div className="px-4 py-8 text-center">
-                    <p className="text-sm font-semibold text-slate-600">No unread notifications</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-400">You are all caught up.</p>
+                    <p className="text-sm font-semibold text-slate-600">{t('No unread notifications')}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">{t('You are all caught up.')}</p>
                   </div>
                 )}
               </div>
@@ -350,7 +350,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   onClick={onCloseNotifications}
                   className="rounded-tag px-2 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-accent-soft"
                 >
-                  View all notifications
+                  {t('View all notifications')}
                 </Link>
                 {unreadCount > 0 && (
                   <button
@@ -359,7 +359,7 @@ const Navbar: React.FC<NavbarProps> = ({
                     disabled={notificationReadActions.isUpdating}
                     className="rounded-tag px-2 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface hover:text-accent disabled:cursor-wait disabled:opacity-60"
                   >
-                    {notificationReadActions.isUpdating ? 'Saving...' : 'Mark all read'}
+                    {notificationReadActions.isUpdating ? t('Saving...') : t('Mark all read')}
                   </button>
                 )}
               </div>

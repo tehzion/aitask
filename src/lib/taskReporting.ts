@@ -11,6 +11,7 @@ import type { Task, User } from '../types';
 import { parseOptionalDate } from './utils';
 import { isTaskCompleted } from './taskCompletion';
 import { getWorkWeekRange } from './workWeek';
+import { formatLocalizedDate, formatLocalizedMonth, type AppLocale } from './i18n';
 
 export interface OperationsPeriod {
   start: Date;
@@ -109,19 +110,21 @@ export const getWorkloadSignal = (
   return 'available';
 };
 
-export const getOperationsPeriod = (now = new Date()): OperationsPeriod => {
+export const getOperationsPeriod = (now = new Date(), locale: AppLocale = 'en'): OperationsPeriod => {
   const { start, end } = getWorkWeekRange(now);
   return {
     start,
     end,
-    label: `${format(start, 'd MMM')} - ${format(end, 'd MMM yyyy')}`,
+    label: locale === 'zh'
+      ? `${formatLocalizedDate(start, locale)} - ${formatLocalizedDate(end, locale)}`
+      : `${format(start, 'd MMM')} - ${format(end, 'd MMM yyyy')}`,
   };
 };
 
-export const getAgencyPulseMetrics = (tasks: Task[], now = new Date()): AgencyPulseMetrics => {
+export const getAgencyPulseMetrics = (tasks: Task[], now = new Date(), locale: AppLocale = 'en'): AgencyPulseMetrics => {
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
-  const period = getOperationsPeriod(now);
+  const period = getOperationsPeriod(now, locale);
   const dueToday = tasks.filter(task => !isCancelled(task) && isInPeriod(task.dueDate, todayStart, todayEnd));
   const dueThisWeek = tasks.filter(task => !isCancelled(task) && isInPeriod(task.dueDate, period.start, period.end));
 
@@ -277,11 +280,11 @@ export const getTeamMemberTaskGroups = (
   return { overdue, today, thisWeek, later, noDueDate, completedThisWeek };
 };
 
-export const getTrackedMonthlyCompletions = (tasks: Task[], now = new Date(), months = 6) => (
+export const getTrackedMonthlyCompletions = (tasks: Task[], now = new Date(), months = 6, locale: AppLocale = 'en') => (
   Array.from({ length: months }, (_, index) => months - index - 1).map(offset => {
     const month = subMonths(now, offset);
     return {
-      name: format(month, 'MMM'),
+      name: formatLocalizedMonth(month, locale),
       completed: tasks.filter(task => {
         const completedAt = parseOptionalDate(task.completedAt);
         return Boolean(isTaskCompleted(task) && completedAt && isSameMonth(completedAt, month));
@@ -290,13 +293,13 @@ export const getTrackedMonthlyCompletions = (tasks: Task[], now = new Date(), mo
   })
 );
 
-export const getTrackedWeeklyCompletions = (tasks: Task[], now = new Date(), weeks = 4) => {
+export const getTrackedWeeklyCompletions = (tasks: Task[], now = new Date(), weeks = 4, locale: AppLocale = 'en') => {
   const currentStart = getWorkWeekRange(now).start;
   return Array.from({ length: weeks }, (_, index) => weeks - index - 1).map(offset => {
     const { start, end } = getWorkWeekRange(subWeeks(currentStart, offset));
     const dueTasks = tasks.filter(task => isInPeriod(task.dueDate, start, end));
     return {
-      name: format(start, 'MMM d'),
+      name: formatLocalizedDate(start, locale),
       completed: tasks.filter(task => isTaskCompleted(task) && isInPeriod(task.completedAt, start, end)).length,
       pending: dueTasks.filter(task => isTaskOpen(task)).length,
     };
@@ -316,7 +319,7 @@ export const classifyDueWork = (task: Task, now = new Date()): DueWorkOutcome =>
 };
 
 /** Groups due work into Monday-to-Saturday cohorts for performance reporting. */
-export const getDueWorkPerformance = (tasks: Task[], now = new Date(), weeks = 4): DueWorkWeek[] => {
+export const getDueWorkPerformance = (tasks: Task[], now = new Date(), weeks = 4, locale: AppLocale = 'en'): DueWorkWeek[] => {
   const currentStart = getWorkWeekRange(now).start;
   return Array.from({ length: weeks }, (_, index) => weeks - index - 1).map(offset => {
     const { start, end } = getWorkWeekRange(subWeeks(currentStart, offset));
@@ -333,7 +336,7 @@ export const getDueWorkPerformance = (tasks: Task[], now = new Date(), weeks = 4
     return {
       start,
       end,
-      label: `${format(start, 'MMM d')}–${format(end, 'MMM d')}${start.getFullYear() === end.getFullYear() ? ` ${format(end, 'yyyy')}` : ` ${format(start, 'yyyy')}–${format(end, 'yyyy')}`}`,
+      label: `${formatLocalizedDate(start, locale)}–${formatLocalizedDate(end, locale)}`,
       isCurrent: offset === 0,
       tasks: cohort,
       outcomes,

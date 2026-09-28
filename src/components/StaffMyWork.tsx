@@ -87,7 +87,7 @@ const StaffMyWork: React.FC = () => {
               <MetaLine className="mt-2"><span data-i18n-skip>{focusTask.clientName}{focusTask.projectName ? ` · ${focusTask.projectName}` : ''}</span> · {t('Assigned')}</MetaLine>
               <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
                 <StatusChip tone={focusTask.revisionCount > 0 ? 'amber' : focusTask.status === 'In Progress' ? 'blue' : 'slate'}>{focusTask.revisionCount > 0 ? `${t('Revision')} ${focusTask.revisionCount}` : t(focusTask.status)}</StatusChip>
-                <span className="calm-meta">{getRelativeDueDateString(focusTask.dueDate, focusTask.isCompleted, focusTask.status)}</span>
+                <span className="calm-meta">{getRelativeDueDateString(focusTask.dueDate, focusTask.isCompleted, focusTask.status, locale)}</span>
                 <span className="calm-meta">{t('Priority')}: {t(focusTask.priority)}</span>
               </div>
               {focusTask.status === 'In Progress' && (

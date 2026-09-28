@@ -1,10 +1,12 @@
 import { create } from 'zustand';
+import type { MessageDescriptor } from '../lib/messages';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
+export type ToastMessage = string | MessageDescriptor;
 
 export interface Toast {
   id: string;
-  message: string;
+  message: ToastMessage;
   type: ToastType;
 }
 
@@ -14,7 +16,7 @@ const toastTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 interface ToastState {
   toasts: Toast[];
-  addToast: (message: string, type?: ToastType) => void;
+  addToast: (message: ToastMessage, type?: ToastType) => void;
   removeToast: (id: string) => void;
 }
 

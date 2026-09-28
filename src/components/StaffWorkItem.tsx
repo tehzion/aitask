@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, Paperclip, RotateCcw } from 'lucide-react';
 import type { Task, User } from '../types';
 import { getRelativeDueDateString } from '../lib/utils';
 import { ProgressBar, StatusChip } from './ui';
+import { useI18n } from './I18nProvider';
 
 const statusTone = (task: Task) => {
   if (task.isCompleted || task.status === 'Completed') return 'emerald' as const;
@@ -21,6 +22,7 @@ interface StaffWorkItemProps {
 }
 
 const StaffWorkItem: React.FC<StaffWorkItemProps> = ({ task, allTasks, users = [], onOpen, emphasized = false }) => {
+  const { locale, t } = useI18n();
   const incompletePredecessors = (task.predecessorTaskIds || []).filter(id => (
     allTasks.some(item => item.id === id && !item.isCompleted && item.status !== 'Completed')
   ));
@@ -39,22 +41,22 @@ const StaffWorkItem: React.FC<StaffWorkItemProps> = ({ task, allTasks, users = [
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-2">
           <span data-i18n-skip className="min-w-0 flex-1 truncate font-semibold text-ink">{task.title}</span>
-          <StatusChip tone={statusTone(task)}>{task.status}</StatusChip>
+          <StatusChip tone={statusTone(task)}>{t(task.status)}</StatusChip>
         </span>
         <span data-i18n-skip className="mt-1 block truncate text-sm text-muted">{task.clientName}{task.projectName ? ` · ${task.projectName}` : ''}</span>
         <span className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-muted">
           {task.department && <span data-i18n-skip>{task.department}</span>}
-          {assignee && <span data-i18n-skip>Assigned: {assignee}</span>}
-          {!task.assignedTo && <span>Unassigned</span>}
-          {creator && <span data-i18n-skip>Created by: {creator}</span>}
-          {assignedBy && <span data-i18n-skip>Assigned by: {assignedBy}</span>}
-          <span>{getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}</span>
-          {isRevision && <span className="inline-flex items-center gap-1 text-amber-700"><RotateCcw className="h-3.5 w-3.5" />Revision {task.revisionCount}</span>}
-          {incompletePredecessors.length > 0 && <span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />{incompletePredecessors.length} blocker{incompletePredecessors.length === 1 ? '' : 's'}</span>}
-          {task.attachmentLink && <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" />File</span>}
+          {assignee && <span><span>{t('Assigned')}:</span> <span data-i18n-skip>{assignee}</span></span>}
+          {!task.assignedTo && <span>{t('Unassigned')}</span>}
+          {creator && <span><span>{t('Created by')}:</span> <span data-i18n-skip>{creator}</span></span>}
+          {assignedBy && <span><span>{t('Assigned by')}:</span> <span data-i18n-skip>{assignedBy}</span></span>}
+          <span>{getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}</span>
+          {isRevision && <span className="inline-flex items-center gap-1 text-amber-700"><RotateCcw className="h-3.5 w-3.5" />{t('Revision')} {task.revisionCount}</span>}
+          {incompletePredecessors.length > 0 && <span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />{incompletePredecessors.length} {t(incompletePredecessors.length === 1 ? 'blocker' : 'blockers')}</span>}
+          {task.attachmentLink && <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" />{t('File')}</span>}
         </span>
         {task.status === 'In Progress' && (
-          <ProgressBar className="mt-3 max-w-64" label={`${task.title} progress`} value={task.completionPercentage} />
+          <ProgressBar className="mt-3 max-w-64" label={t('Task progress')} value={task.completionPercentage} />
         )}
       </span>
       <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-muted transition-transform duration-160 group-hover:translate-x-0.5 group-hover:text-accent" />

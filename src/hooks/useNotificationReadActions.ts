@@ -12,6 +12,7 @@ import {
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { useStore } from '../store';
 import { useToastStore } from '../store/useToastStore';
+import { msg } from '../lib/messages';
 
 export interface NotificationReadActions {
   markRead: (notificationIds: string | string[]) => Promise<boolean>;
@@ -45,11 +46,11 @@ export const useNotificationReadActions = (): NotificationReadActions => {
       return false;
     }
     if (backendState?.isLoading === true) {
-      useToastStore.getState().addToast('The workspace is still loading. Try again in a moment.', 'warning');
+      useToastStore.getState().addToast(msg('errors.workspaceLoading'), 'warning');
       return false;
     }
     if (!notificationMutationLock.tryAcquire()) {
-      useToastStore.getState().addToast('Another notification update is still saving.', 'warning');
+      useToastStore.getState().addToast(msg('errors.notificationSaving'), 'warning');
       return false;
     }
 
@@ -85,8 +86,8 @@ export const useNotificationReadActions = (): NotificationReadActions => {
         }));
         useToastStore.getState().addToast(
           result.code === 'OFFLINE'
-            ? 'You are offline. The notification state was not changed.'
-            : 'Unable to update notifications. The previous read state was restored.',
+            ? msg('errors.notificationsOffline')
+            : msg('errors.notificationsUpdate'),
           'error',
         );
         return false;

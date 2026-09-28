@@ -9,6 +9,7 @@ import ModalShell from './ModalShell';
 import { fieldLabel, modalFooter } from './uiTokens';
 import { canCreateClientProfiles, canViewAllClients, getVisibleClientNames } from '../lib/access';
 import CreateClientProfileModal from './CreateClientProfileModal';
+import { useI18n } from './I18nProvider';
 
 interface Props {
   isOpen: boolean;
@@ -20,6 +21,7 @@ interface Props {
 }
 
 const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initialClientId, onProjectCreated, onProjectUpdated }) => {
+  const { t } = useI18n();
   const { addProject, updateProject, projects, clients, tasks, currentUser, rolePermissions, retryPendingSave } = useStore(useShallow(state => ({
     addProject: state.addProject,
     updateProject: state.updateProject,
@@ -293,12 +295,12 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
           <div>
-            <h2 id={titleId} className="text-xl font-semibold text-slate-950">{isEditing ? 'Edit project' : 'Create project'}</h2>
-            <p id={descriptionId} className="mt-0.5 text-xs text-slate-500">{isEditing ? 'Update the project name, company, dates, and services.' : 'Add a named project under an existing company.'}</p>
+            <h2 id={titleId} className="text-xl font-semibold text-slate-950">{t(isEditing ? 'Edit project' : 'Create project')}</h2>
+            <p id={descriptionId} className="mt-0.5 text-xs text-slate-500">{t(isEditing ? 'Update the project name, company, dates, and services.' : 'Add a named project under an existing company.')}</p>
           </div>
           <button
             onClick={handleClose}
-            aria-label="Close create project modal"
+            aria-label={t('Close create project modal')}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
@@ -312,9 +314,9 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
             <div>
               <div className="mb-1 flex items-center justify-between gap-3">
                 <label htmlFor={clientSelectId} className={fieldLabel}>
-                  Company name <span className="text-red-500">*</span>
+                  {t('Company name')} <span className="text-red-500">*</span>
                 </label>
-                {canCreateClientProfiles(currentUser, rolePermissions) && <button type="button" onClick={() => setIsClientModalOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">+ Add client</button>}
+                {canCreateClientProfiles(currentUser, rolePermissions) && <button type="button" onClick={() => setIsClientModalOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">+ {t('Add client')}</button>}
               </div>
               <select
                 required
@@ -322,26 +324,26 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                 value={clientId} onChange={e => { setClientId(e.target.value); setFormError(''); }}
                 className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
               >
-                <option value="">Choose a company</option>
+                <option value="">{t('Choose a company')}</option>
                 {clientOptions.map(option => <option key={option.id || option.name} value={option.id}>{option.name}</option>)}
               </select>
-              {clientOptions.length === 0 && <p className="mt-2 text-xs text-amber-700">{canCreateClientProfiles(currentUser, rolePermissions) ? 'Add a client profile first, then continue creating this project.' : 'Ask Boss Koo to add or assign a company before creating this project.'}</p>}
+              {clientOptions.length === 0 && <p className="mt-2 text-xs text-amber-700">{t(canCreateClientProfiles(currentUser, rolePermissions) ? 'Add a client profile first, then continue creating this project.' : 'Ask Boss Koo to add or assign a company before creating this project.')}</p>}
             </div>
 
             <div>
-              <label htmlFor={projectNameId} className={fieldLabel}>Project name <span className="text-red-500">*</span></label>
-              <input id={projectNameId} type="text" required maxLength={160} value={projectName} onChange={e => { setProjectName(e.target.value); setFormError(''); }} placeholder="e.g., Q4 Social Campaign" className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm" />
+              <label htmlFor={projectNameId} className={fieldLabel}>{t('Project name')} <span className="text-red-500">*</span></label>
+              <input id={projectNameId} type="text" required maxLength={160} value={projectName} onChange={e => { setProjectName(e.target.value); setFormError(''); }} placeholder={t('e.g., Q4 Social Campaign')} className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm" />
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className={fieldLabel}>Start date <span className="text-red-500">*</span><input type="date" required value={startDate} onChange={e => { setStartDate(e.target.value); setFormError(''); }} className="mt-1.5 w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg p-2.5 outline-none shadow-sm" /></label>
-              <label className={fieldLabel}>Deadline<input type="date" min={startDate || undefined} value={deadline} onChange={e => { setDeadline(e.target.value); setFormError(''); }} className="mt-1.5 w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg p-2.5 outline-none shadow-sm" /></label>
+              <label className={fieldLabel}>{t('Start date')} <span className="text-red-500">*</span><input type="date" required value={startDate} onChange={e => { setStartDate(e.target.value); setFormError(''); }} className="mt-1.5 w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg p-2.5 outline-none shadow-sm" /></label>
+              <label className={fieldLabel}>{t('Deadline')}<input type="date" min={startDate || undefined} value={deadline} onChange={e => { setDeadline(e.target.value); setFormError(''); }} className="mt-1.5 w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg p-2.5 outline-none shadow-sm" /></label>
             </div>
 
             {/* Required Services */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Required Services <span className="text-red-500">*</span>
+                {t('Required Services')} <span className="text-red-500">*</span>
               </label>
 
               {/* Preset service toggles */}
@@ -359,7 +361,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                           : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'
                       }`}
                     >
-                      {isSelected && <Check className="mr-1 inline h-3 w-3" />}{service}
+                      {isSelected && <Check className="mr-1 inline h-3 w-3" />}{t(service)}
                     </button>
                   );
                 })}
@@ -372,8 +374,9 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                     return (
                       <button
                         key={service}
-                        type="button"
-                        onClick={() => togglePreset(service)}
+                      type="button"
+                      onClick={() => togglePreset(service)}
+                      data-i18n-skip
                         className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
                           isSelected
                             ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
@@ -400,7 +403,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                         type="button"
                         onClick={() => removeCustomService(name)}
                         className="ml-0.5 text-blue-500 hover:text-blue-700 transition-colors rounded"
-                        aria-label={`Remove ${name}`}
+                        aria-label={`${t('Remove')} ${name}`}
+                        data-i18n-skip
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -418,7 +422,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                     value={customInput}
                     onChange={e => { setCustomInput(e.target.value); setCustomError(''); }}
                     onKeyDown={handleCustomKeyDown}
-                    placeholder="Add custom service…"
+                    placeholder={t('Add custom service…')}
                     maxLength={40}
                     className="w-full bg-white border border-dashed border-slate-300 text-slate-800 text-sm rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 block px-3 py-2 outline-none placeholder:text-slate-400"
                   />
@@ -429,7 +433,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                   disabled={!customInput.trim()}
                   className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
                 >
-                  <Plus className="w-4 h-4" /> Add
+                  <Plus className="w-4 h-4" /> {t('Add')}
                 </button>
               </div>
 
@@ -438,13 +442,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
               )}
 
               {!customError && customInput && (
-                <p className="text-xs text-slate-400 mt-1.5">Press Enter or click Add</p>
+                <p className="text-xs text-slate-400 mt-1.5">{t('Press Enter or click Add')}</p>
               )}
 
               {/* Selected summary */}
               {allServices.length > 0 && (
                 <p className="text-xs text-slate-500 mt-2">
-                  <span className="font-semibold text-slate-700">{allServices.length}</span> service{allServices.length !== 1 ? 's' : ''} selected
+                  <span className="font-semibold text-slate-700">{allServices.length}</span> {t(allServices.length === 1 ? 'service' : 'services')} {t('selected')}
                 </p>
               )}
             </div>
@@ -464,14 +468,14 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
             type="button" onClick={handleClose}
             className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="submit" form="create-project-form"
             disabled={isSubmitting}
             className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-        {isSubmitting ? 'Saving...' : pendingProjectId ? 'Retry saving' : isEditing ? 'Save changes' : 'Create project'}
+        {isSubmitting ? t('Saving...') : pendingProjectId ? t('Retry saving') : isEditing ? t('Save changes') : t('Create project')}
           </button>
         </div>
       </ModalShell>

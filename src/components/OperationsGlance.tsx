@@ -13,6 +13,7 @@ import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { cardBase } from './uiTokens';
 import { formatLocalizedDateTime, formatLocalizedWeekdayDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
+import { getLocalizedDepartment, getLocalizedStatus } from '../lib/localeLabels';
 
 type OperationsScope = 'agency' | 'staff';
 
@@ -58,10 +59,10 @@ const TaskEntry = ({
   const timestamp = mode === 'completion' ? completedAt : dueDate;
   const timing = mode === 'completion'
     ? completedAt ? <>{t('Completed')} {formatLocalizedDateTime(completedAt, locale)}</> : t('Completion time unavailable')
-    : getRelativeDueDateString(task.dueDate, task.isCompleted, task.status);
+    : getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale);
   const context = scope === 'agency'
-    ? <><span data-i18n-skip>{task.clientName}</span> · <span data-i18n-skip>{usersById.get(task.assignedTo)?.name || t('Unassigned')}</span> · <span data-i18n-skip>{task.department}</span></>
-    : <><span data-i18n-skip>{task.clientName}</span> · <span data-i18n-skip>{task.department}</span> · <span>{t(task.status)}</span></>;
+    ? <><span data-i18n-skip>{task.clientName}</span> · <span data-i18n-skip>{usersById.get(task.assignedTo)?.name || t('Unassigned')}</span> · <span>{getLocalizedDepartment(task.department, locale)}</span></>
+    : <><span data-i18n-skip>{task.clientName}</span> · <span>{getLocalizedDepartment(task.department, locale)}</span> · <span>{getLocalizedStatus(task.status, locale)}</span></>;
 
   return (
     <Link
@@ -94,10 +95,10 @@ const TaskEntry = ({
 };
 
 const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope }) => {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const [completionSegment, setCompletionSegment] = useState<CompletionSegment>('today');
   const now = new Date();
-  const pulse = getAgencyPulseMetrics(tasks, now);
+  const pulse = getAgencyPulseMetrics(tasks, now, locale);
   const attention = getNeedsAttentionTasks(tasks, now).slice(0, 6);
   const completions = getRecentCompletionTasks(tasks, completionSegment, now).slice(0, 6);
   const usersById = useMemo(() => new Map(users.map(user => [user.id, user])), [users]);
@@ -105,9 +106,9 @@ const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope
   const titleId = isStaffScope ? 'staff-work-pulse-title' : 'agency-pulse-title';
 
   const segments: Array<{ value: CompletionSegment; label: string }> = [
-    { value: 'today', label: 'Today' },
-    { value: 'week', label: 'This Week' },
-    { value: 'all', label: 'All Time' },
+    { value: 'today', label: t('Today') },
+    { value: 'week', label: t('This Week') },
+    { value: 'all', label: t('All Time') },
   ];
 
   return (
@@ -115,44 +116,44 @@ const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 id={titleId} className="text-lg font-semibold text-slate-950">
-            {isStaffScope ? 'My work pulse' : 'Agency pulse'}
+            {isStaffScope ? t('My work pulse') : t('Agency pulse')}
           </h2>
-          <p className="mt-1 text-sm text-slate-600">{formatLocalizedWeekdayDate(now, locale, true)} · Week {pulse.period.label}</p>
+          <p className="mt-1 text-sm text-slate-600">{formatLocalizedWeekdayDate(now, locale, true)} · {t('Week')} {pulse.period.label}</p>
         </div>
-        <p className="text-xs text-slate-500">{isStaffScope ? 'Your assigned workload' : 'Agency-wide operational status'}</p>
+        <p className="text-xs text-slate-500">{isStaffScope ? t('Your assigned workload') : t('Agency-wide operational status')}</p>
       </div>
 
       <div className={cn(cardBase, 'overflow-hidden')}>
         <div className="grid border-b border-slate-100 lg:grid-cols-[10rem_1fr]">
           <div className="flex items-center gap-2 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 sm:px-5">
-            <CircleDot className="h-4 w-4 text-blue-600" aria-hidden="true" /> Today
+            <CircleDot className="h-4 w-4 text-blue-600" aria-hidden="true" /> {t('Today')}
           </div>
           <div className="grid grid-cols-3 divide-x divide-slate-100">
-            <PulseValue label="Completed" value={pulse.today.completed} tone="success" />
-            <PulseValue label="Due" value={pulse.today.due} />
-            <PulseValue label="Still open" value={pulse.today.open} tone="warning" />
+            <PulseValue label={t('Completed')} value={pulse.today.completed} tone="success" />
+            <PulseValue label={t('Due')} value={pulse.today.due} />
+            <PulseValue label={t('Still open')} value={pulse.today.open} tone="warning" />
           </div>
         </div>
         <div className="grid border-b border-slate-100 lg:grid-cols-[10rem_1fr]">
           <div className="flex items-center gap-2 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 sm:px-5">
-            <Clock3 className="h-4 w-4 text-blue-600" aria-hidden="true" /> This week
+            <Clock3 className="h-4 w-4 text-blue-600" aria-hidden="true" /> {t('This week')}
           </div>
           <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 sm:grid-cols-4 sm:divide-y-0">
-            <PulseValue label="Completed" value={pulse.week.completed} tone="success" />
-            <PulseValue label="Due" value={pulse.week.due} />
-            <PulseValue label="Remaining" value={pulse.week.remaining} tone="warning" />
-            <PulseValue label="Overdue now" value={pulse.week.overdue} tone="danger" />
+            <PulseValue label={t('Completed')} value={pulse.week.completed} tone="success" />
+            <PulseValue label={t('Due')} value={pulse.week.due} />
+            <PulseValue label={t('Remaining')} value={pulse.week.remaining} tone="warning" />
+            <PulseValue label={t('Overdue now')} value={pulse.week.overdue} tone="danger" />
           </div>
         </div>
         <div className="grid lg:grid-cols-[10rem_1fr]">
           <div className="flex items-center gap-2 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 sm:px-5">
-            <CheckCircle2 className="h-4 w-4 text-blue-600" aria-hidden="true" /> Overall
+            <CheckCircle2 className="h-4 w-4 text-blue-600" aria-hidden="true" /> {t('Overall')}
           </div>
           <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 sm:grid-cols-4 sm:divide-y-0">
-            <PulseValue label={isStaffScope ? 'Assigned open' : 'Total open'} value={pulse.overall.open} />
-            <PulseValue label="In progress" value={pulse.overall.inProgress} />
-            <PulseValue label="Waiting approval" value={pulse.overall.waitingApproval} tone="warning" />
-            <PulseValue label="Completed all time" value={pulse.overall.completed} tone="success" />
+            <PulseValue label={isStaffScope ? t('Assigned open') : t('Total open')} value={pulse.overall.open} />
+            <PulseValue label={t('In progress')} value={pulse.overall.inProgress} />
+            <PulseValue label={t('Waiting approval')} value={pulse.overall.waitingApproval} tone="warning" />
+            <PulseValue label={t('Completed all time')} value={pulse.overall.completed} tone="success" />
           </div>
         </div>
       </div>
@@ -161,10 +162,10 @@ const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope
         <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby={`${scope}-attention-title`}>
           <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
             <h3 id={`${scope}-attention-title`} className="text-base font-semibold text-slate-900">
-              {isStaffScope ? 'My focus' : 'Needs attention'}
+              {isStaffScope ? t('My focus') : t('Needs attention')}
             </h3>
             <p className="mt-1 text-sm text-slate-500">
-              {isStaffScope ? 'Your overdue assignments first, then work waiting for approval.' : 'Overdue work first, then tasks waiting for approval.'}
+              {isStaffScope ? t('Your overdue assignments first, then work waiting for approval.') : t('Overdue work first, then tasks waiting for approval.')}
             </p>
           </div>
           <div className="divide-y divide-slate-100">
@@ -173,9 +174,9 @@ const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope
               <div className="px-5 py-10 text-center">
                 <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-600" aria-hidden="true" />
                 <p className="mt-2 text-sm font-semibold text-slate-700">
-                  {isStaffScope ? "You're caught up" : 'Nothing urgent right now'}
+                  {isStaffScope ? t("You're caught up") : t('Nothing urgent right now')}
                 </p>
-                <p className="mt-1 text-xs text-slate-500">Overdue and approval-ready tasks will appear here.</p>
+                <p className="mt-1 text-xs text-slate-500">{t('Overdue and approval-ready tasks will appear here.')}</p>
               </div>
             )}
           </div>
@@ -186,11 +187,11 @@ const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h3 id={`${scope}-completions-title`} className="text-base font-semibold text-slate-900">
-                  {isStaffScope ? 'My recent completions' : 'Recent completions'}
+                  {isStaffScope ? t('My recent completions') : t('Recent completions')}
                 </h3>
-                <p className="mt-1 text-sm text-slate-500">Tracked from the actual completion time.</p>
+                <p className="mt-1 text-sm text-slate-500">{t('Tracked from the actual completion time.')}</p>
               </div>
-              <div className="inline-flex w-fit rounded-lg border border-slate-200 bg-slate-50 p-1" aria-label={`${isStaffScope ? 'Personal' : 'Agency'} completion period`}>
+              <div className="inline-flex w-fit rounded-lg border border-slate-200 bg-slate-50 p-1" aria-label={t('Completion period')}>
                 {segments.map(segment => (
                   <button
                     key={segment.value}
@@ -213,14 +214,14 @@ const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope
             {completions.length === 0 && (
               <div className="px-5 py-10 text-center">
                 <Clock3 className="mx-auto h-6 w-6 text-slate-400" aria-hidden="true" />
-                <p className="mt-2 text-sm font-semibold text-slate-700">No tracked completions in this period</p>
-                <p className="mt-1 text-xs text-slate-500">New completions will be timestamped automatically.</p>
+                <p className="mt-2 text-sm font-semibold text-slate-700">{t('No tracked completions in this period')}</p>
+                <p className="mt-1 text-xs text-slate-500">{t('New completions will be timestamped automatically.')}</p>
               </div>
             )}
           </div>
           {pulse.untrackedHistoricalCompletions > 0 && (
             <p className="border-t border-slate-100 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500 sm:px-5">
-              {pulse.untrackedHistoricalCompletions} historical completed task{pulse.untrackedHistoricalCompletions === 1 ? '' : 's'} remain in all-time totals, but have no reliable completion date.
+              {pulse.untrackedHistoricalCompletions} {t(pulse.untrackedHistoricalCompletions === 1 ? 'historical completed task' : 'historical completed tasks')} {t('remain in all-time totals, but have no reliable completion date.')}
             </p>
           )}
         </section>

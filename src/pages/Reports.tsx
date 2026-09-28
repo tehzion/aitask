@@ -38,7 +38,7 @@ const Reports: React.FC = () => {
     };
   }, [resolvedTheme]);
   const isClientUser = currentUser?.role === 'Client';
-  const performance = useMemo(() => getDueWorkPerformance(tasks), [tasks]);
+  const performance = useMemo(() => getDueWorkPerformance(tasks, new Date(), 4, locale), [locale, tasks]);
   const dueTasks = performance.flatMap(week => week.tasks);
 
   const formatWeekLabel = (week: { start: Date; end: Date; isCurrent: boolean }) => {
@@ -318,7 +318,7 @@ const Reports: React.FC = () => {
                   </div>
                   <span className="shrink-0 text-sm font-bold text-ink">{dept.completionRate}%</span>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-line/60" aria-label={`${dept.name} ${t('Tracked completion rate')} ${dept.completionRate}%`} role="img">
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-line/60" aria-label={t('Tracked completion rate')} role="img">
                   <div
                     className={`h-full rounded-full ${dept.completionRate >= 80 ? 'bg-emerald-500' : dept.completionRate >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
                     style={{ width: `${dept.completionRate}%` }}

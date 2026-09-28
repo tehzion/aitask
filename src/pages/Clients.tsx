@@ -15,7 +15,6 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
 import { Badge, Button, PageHeader, ProgressBar, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
 import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canEditProject, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
@@ -30,6 +29,7 @@ import CreateClientProfileModal from '../components/CreateClientProfileModal';
 import CreateClientPlanModal from '../components/CreateClientPlanModal';
 import CreateProjectModal from '../components/CreateProjectModal';
 import { useI18n } from '../components/I18nProvider';
+import { formatLocalizedDate, formatLocalizedDistanceToNow, type AppLocale } from '../lib/i18n';
 
 type ClientSource = 'Profile' | 'Task' | 'Company' | 'Account';
 
@@ -95,9 +95,9 @@ const getActivityTime = (value?: string) => {
   return Number.isNaN(time) ? 0 : time;
 };
 
-const formatLastActivity = (value?: string) => {
+const formatLastActivity = (value: string | undefined, locale: AppLocale) => {
   const time = getActivityTime(value);
-  return time ? formatDistanceToNow(new Date(time), { addSuffix: true }) : 'No activity yet';
+  return time ? formatLocalizedDistanceToNow(new Date(time), locale) : 'No activity yet';
 };
 
 const getClientContact = (client: ClientSummary) => ({
@@ -125,7 +125,7 @@ const getProfileForm = (client: ClientSummary): ClientProfileForm => {
 };
 
 const Clients: React.FC = () => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const {
     clients: clientProfiles,
     tasks: allTasks,
@@ -531,7 +531,7 @@ const Clients: React.FC = () => {
     const hasStructuredContact = contact.contactPerson || contact.email || contact.phone || contact.address;
 
     if (!hasStructuredContact && !client.details) {
-      return <p className="text-sm text-slate-400">No contact details saved yet.</p>;
+      return <p className="text-sm text-slate-400">{t('No contact details saved yet.')}</p>;
     }
 
     return (
@@ -568,15 +568,15 @@ const Clients: React.FC = () => {
       <PageHeader
         title={isClientUser ? t('Company profile') : t('Companies')}
         description={isClientUser ? t('Review your company details, services, contacts, and linked work.') : t('The complete client database for company details, contacts, accounts, services, and linked work.')}
-        meta={<><span>{clients.length} visible companies</span><span aria-hidden="true">·</span><span>{totalTasks} linked tasks</span></>}
+        meta={<><span>{clients.length} {t('visible companies')}</span><span aria-hidden="true">·</span><span>{totalTasks} {t('linked tasks')}</span></>}
         action={<div className="flex flex-wrap gap-2">
-          {canCreateClientProfiles(currentUser, rolePermissions) && <Button onClick={() => { clearSearch(); setIsCreateClientOpen(true); }} disabled={upgradeRequired}><Building2 className="h-4 w-4" />New client</Button>}
-          {canAddProjects && <Button variant="secondary" onClick={() => openProjectEditor(null)}><Plus className="h-4 w-4" />New project</Button>}
-          {canAddTasks && <Button variant="secondary" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />New task</Button>}
+          {canCreateClientProfiles(currentUser, rolePermissions) && <Button onClick={() => { clearSearch(); setIsCreateClientOpen(true); }} disabled={upgradeRequired}><Building2 className="h-4 w-4" />{t('New client')}</Button>}
+          {canAddProjects && <Button variant="secondary" onClick={() => openProjectEditor(null)}><Plus className="h-4 w-4" />{t('New project')}</Button>}
+          {canAddTasks && <Button variant="secondary" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
         </div>}
       />
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-line/70 py-3 text-sm" aria-label="Client summary">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-line/70 py-3 text-sm" aria-label={t('Client summary')}>
         {(isClientUser
           ? [[t('Company'), clients.length], [t('Saved profile'), savedProfiles], [t('Open tasks'), openTasks], [t('Team accounts'), linkedAccounts]]
           : [[t('Companies'), clients.length], [t('Saved profiles'), savedProfiles], [t('Open tasks'), openTasks], [t('Client accounts'), linkedAccounts]]
@@ -586,7 +586,7 @@ const Clients: React.FC = () => {
       <div className={tableShell}>
         <div className="flex flex-col gap-3 border-b border-line bg-inset/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <p className="text-sm text-slate-500">
-            {filteredClients.length} shown from {clients.length} total, {totalTasks} linked task{totalTasks === 1 ? '' : 's'}
+            {filteredClients.length} {t('shown from')} {clients.length} {t('total')}, {totalTasks} {t(totalTasks === 1 ? 'linked task' : 'linked tasks')}
           </p>
         </div>
 
@@ -594,12 +594,12 @@ const Clients: React.FC = () => {
           <table className="w-full min-w-[1180px] text-left text-sm">
             <thead className="sticky top-0 z-[1] border-b border-line bg-inset text-xs text-muted">
               <tr>
-                <th className="px-5 py-4 font-semibold">Company / Client</th>
-                <th className="px-5 py-4 font-semibold">Contact</th>
-                <th className="px-5 py-4 font-semibold">Services</th>
-                <th className="px-5 py-4 font-semibold">Tasks</th>
-                <th className="px-5 py-4 font-semibold">Links</th>
-                <th className="px-5 py-4 font-semibold">Actions</th>
+                <th className="px-5 py-4 font-semibold">{t('Company / Client')}</th>
+                <th className="px-5 py-4 font-semibold">{t('Contact')}</th>
+                <th className="px-5 py-4 font-semibold">{t('Services')}</th>
+                <th className="px-5 py-4 font-semibold">{t('Tasks')}</th>
+                <th className="px-5 py-4 font-semibold">{t('Links')}</th>
+                <th className="px-5 py-4 font-semibold">{t('Actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -619,26 +619,26 @@ const Clients: React.FC = () => {
                 return (
                   <tr key={client.name} className="border-b border-line/70 bg-surface text-ink transition-colors duration-160 hover:bg-inset/60">
                     <td className="px-5 py-6 align-top">
-                      <div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{client.name.slice(0, 2).toUpperCase()}</span><div><div data-i18n-skip className="font-semibold text-ink">{client.name}</div><div className="mt-1.5 flex flex-wrap gap-1.5">{serviceContext?.plan && <StatusChip tone={serviceContext.plan.status === 'Active' ? 'emerald' : serviceContext.plan.status === 'Paused' ? 'amber' : 'slate'}>{serviceContext.plan.status}</StatusChip>}{!client.profile && <StatusChip tone="amber">Needs profile</StatusChip>}</div></div></div>
+                      <div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{client.name.slice(0, 2).toUpperCase()}</span><div><div data-i18n-skip className="font-semibold text-ink">{client.name}</div><div className="mt-1.5 flex flex-wrap gap-1.5">{serviceContext?.plan && <StatusChip tone={serviceContext.plan.status === 'Active' ? 'emerald' : serviceContext.plan.status === 'Paused' ? 'amber' : 'slate'}>{t(serviceContext.plan.status)}</StatusChip>}{!client.profile && <StatusChip tone="amber">{t('Needs profile')}</StatusChip>}</div></div></div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {Array.from(client.sources).map(source => (
                           <span key={source} className={cn('rounded-md border px-2 py-0.5 text-[10px] font-medium', sourceClasses[source])}>
-                            {source}
+                            {t(source)}
                           </span>
                         ))}
                       </div>
-                      <p className="mt-2 text-xs text-slate-500">Updated {formatLastActivity(client.lastActivity)}</p>
+                      <p className="mt-2 text-xs text-slate-500">{t('Updated')} {formatLastActivity(client.lastActivity, locale)}</p>
                     </td>
                     <td className="max-w-[340px] px-5 py-6 align-top">
                       {renderContactSummary(client)}
                       {client.accountUsers.length > 0 && (
                         <p className="mt-2 text-xs text-slate-500">
-                          Account: {client.accountUsers.join(', ')}
+                          {t('Account:')} {client.accountUsers.join(', ')}
                         </p>
                       )}
                       {client.projectNames.size > 0 && (
                         <p className="mt-1 text-xs text-slate-500">
-                          Projects: {Array.from(client.projectNames).slice(0, 2).join(', ')}
+                          {t('Projects:')} {Array.from(client.projectNames).slice(0, 2).join(', ')}
                           {client.projectNames.size > 2 ? ` +${client.projectNames.size - 2}` : ''}
                         </p>
                       )}
@@ -646,7 +646,7 @@ const Clients: React.FC = () => {
                         <p className="mt-1 text-xs text-slate-500">{t('Assigned by')}: {assignedByTeam.join(', ')}</p>
                       )}
                       {assignedTeam.length > 0 && (
-                        <p className="mt-1 text-xs text-slate-500">Assigned staff: {assignedTeam.join(', ')}</p>
+                        <p className="mt-1 text-xs text-slate-500">{t('Assigned staff:')} {assignedTeam.join(', ')}</p>
                       )}
                     </td>
                     <td className="px-5 py-6 align-top">
@@ -658,50 +658,50 @@ const Clients: React.FC = () => {
                           </Badge>
                         ))}
                         {client.services.size > 4 && <Badge tone="slate">+{client.services.size - 4}</Badge>}
-                        {client.services.size === 0 && <span className="text-sm text-slate-400">No services</span>}
+                        {client.services.size === 0 && <span className="text-sm text-slate-400">{t('No services')}</span>}
                       </div>
                     </td>
                     <td className="px-5 py-6 align-top">
-                      <div className="font-semibold text-ink">{client.taskCount} total</div>
+                      <div className="font-semibold text-ink">{client.taskCount} {t('total')}</div>
                       <p className="mt-1 text-xs text-slate-500">{client.openTaskCount} {t('open')}, {client.completedTaskCount} {t('completed')}</p>
-                      <p className="mt-1 text-xs text-slate-500">{client.projectIds.size} company record{client.projectIds.size === 1 ? '' : 's'}</p>
+                      <p className="mt-1 text-xs text-slate-500">{client.projectIds.size} {t(client.projectIds.size === 1 ? 'company record' : 'company records')}</p>
                       {serviceContext?.cycle && <ProgressBar className="mt-3 w-40" label="Cycle delivered" value={serviceContext.delivered} max={Math.max(1, serviceContext.included)} />}
                     </td>
                     <td className="px-5 py-6 align-top">
                       <div className="flex flex-col items-start gap-2">
                         {website && (
                           <a href={website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700">
-                            Website <ExternalLink className="h-3.5 w-3.5" />
+                            {t('Website')} <ExternalLink className="h-3.5 w-3.5" />
                           </a>
                         )}
                         {facebookPage && (
                           <a href={facebookPage} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:text-blue-700">
-                            Facebook <ExternalLink className="h-3.5 w-3.5" />
+                            <span data-i18n-skip>Facebook</span> <ExternalLink className="h-3.5 w-3.5" />
                           </a>
                         )}
-                        {!website && !facebookPage && <span className="text-sm text-slate-400">No links saved</span>}
+                        {!website && !facebookPage && <span className="text-sm text-slate-400">{t('No links saved')}</span>}
                       </div>
                     </td>
                     <td className="px-5 py-6 align-top">
                       <div className="flex min-w-[150px] items-center gap-2">
-                        {client.profile && canOpenWorkspace ? <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>Workspace <ArrowRight className="h-4 w-4" /></Link> : <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>View tasks</Link>}
+                        {client.profile && canOpenWorkspace ? <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>{t('Workspace')} <ArrowRight className="h-4 w-4" /></Link> : <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>{t('View tasks')}</Link>}
                         <div className="relative">
                           <button
                             type="button"
                             aria-haspopup="menu"
                             aria-expanded={openMenuClientKey === client.name}
-                            aria-label={`More actions for ${client.name}`} data-i18n-skip
+                            aria-label={t('More actions')}
                             onClick={() => setOpenMenuClientKey(prev => prev === client.name ? null : client.name)}
                             className="flex h-10 w-10 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"
                           >
                             <MoreHorizontal className="h-5 w-5" />
                           </button>
                           {openMenuClientKey === client.name && (
-                            <div role="menu" data-i18n-skip aria-label={`Actions for ${client.name}`} className="absolute right-0 top-11 z-20 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line">
-                              <Link role="menuitem" to={`/tasks?client=${encodeURIComponent(client.name)}`} onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">View tasks</Link>
-                              <button type="button" role="menuitem" onClick={() => openClientPanel(client)} className="flex min-h-10 w-full items-center rounded-control px-3 text-left text-sm text-ink hover:bg-inset">Details</button>
-                              {website && <a role="menuitem" href={website} target="_blank" rel="noopener noreferrer" onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">Website</a>}
-                              {facebookPage && <a role="menuitem" href={facebookPage} target="_blank" rel="noopener noreferrer" onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">Facebook</a>}
+                            <div role="menu" aria-label={t('Client actions')} className="absolute right-0 top-11 z-20 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line">
+                              <Link role="menuitem" to={`/tasks?client=${encodeURIComponent(client.name)}`} onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">{t('View tasks')}</Link>
+                              <button type="button" role="menuitem" onClick={() => openClientPanel(client)} className="flex min-h-10 w-full items-center rounded-control px-3 text-left text-sm text-ink hover:bg-inset">{t('Details')}</button>
+                              {website && <a role="menuitem" href={website} target="_blank" rel="noopener noreferrer" onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">{t('Website')}</a>}
+                              {facebookPage && <a role="menuitem" href={facebookPage} target="_blank" rel="noopener noreferrer" onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset"><span data-i18n-skip>Facebook</span></a>}
                             </div>
                           )}
                         </div>
@@ -731,17 +731,17 @@ const Clients: React.FC = () => {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 data-i18n-skip className="truncate font-semibold text-slate-950">{client.name}</h2>
-                    <p className="mt-1 text-xs text-slate-500">Updated {formatLastActivity(client.lastActivity)}</p>
+                    <p className="mt-1 text-xs text-slate-500">{t('Updated')} {formatLastActivity(client.lastActivity, locale)}</p>
                   </div>
                   <span className="shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
-                    {client.taskCount} tasks
+                    {client.taskCount} {t('tasks')}
                   </span>
                 </div>
 
                 <div className="mt-4">{renderContactSummary(client)}</div>
                 {assignedByTeam.length > 0 && <p className="mt-3 text-xs text-slate-500">{t('Assigned by')}: {assignedByTeam.join(', ')}</p>}
-                {assignedTeam.length > 0 && <p className={assignedByTeam.length > 0 ? 'mt-1 text-xs text-slate-500' : 'mt-3 text-xs text-slate-500'}>Assigned staff: {assignedTeam.join(', ')}</p>}
-                {client.projectNames.size > 0 && <p className="mt-1 text-xs text-slate-500">Projects: {Array.from(client.projectNames).join(', ')}</p>}
+                {assignedTeam.length > 0 && <p className={assignedByTeam.length > 0 ? 'mt-1 text-xs text-slate-500' : 'mt-3 text-xs text-slate-500'}>{t('Assigned staff')}: {assignedTeam.join(', ')}</p>}
+                {client.projectNames.size > 0 && <p className="mt-1 text-xs text-slate-500">{t('Projects')}: {Array.from(client.projectNames).join(', ')}</p>}
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {Array.from(client.services).slice(0, 3).map(service => (
@@ -753,21 +753,21 @@ const Clients: React.FC = () => {
                 </div>
 
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                  {client.profile && canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles) && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>Workspace <ArrowRight className="h-4 w-4" /></Link>}
+                  {client.profile && canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles) && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>{t('Workspace')} <ArrowRight className="h-4 w-4" /></Link>}
                   <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>
-                    View tasks <ArrowRight className="h-4 w-4" />
+                    {t('View tasks')} <ArrowRight className="h-4 w-4" />
                   </Link>
                   <button
                     type="button"
                     onClick={() => openClientPanel(client)}
                     className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm')}
                   >
-                    Details
+                    {t('Details')}
                   </button>
                   {(website || facebookPage) && (
                     <div className="flex items-center gap-3 text-sm">
-                      {website && <a href={website} target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-600">Website</a>}
-                      {facebookPage && <a href={facebookPage} target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-600">Facebook</a>}
+                      {website && <a href={website} target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-600">{t('Website')}</a>}
+                      {facebookPage && <a href={facebookPage} target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-600"><span data-i18n-skip>Facebook</span></a>}
                     </div>
                   )}
                 </div>
@@ -778,9 +778,9 @@ const Clients: React.FC = () => {
 
         {filteredClients.length === 0 && (
           <div className="px-4 py-12 text-center">
-            <p className="text-sm font-semibold text-slate-700">No companies found</p>
+            <p className="text-sm font-semibold text-slate-700">{t('No companies found')}</p>
             <p className="mt-1 text-sm text-slate-500">
-              Create a client profile and service plan, or clear the current search.
+              {t('Create a client profile and service plan, or clear the current search.')}
             </p>
           </div>
         )}
@@ -794,18 +794,18 @@ const Clients: React.FC = () => {
         >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50/80 px-6 py-4">
               <div className="min-w-0">
-                <p className="text-xs font-medium text-blue-700">Company profile</p>
+                <p className="text-xs font-medium text-blue-700">{t('Company profile')}</p>
                 <h2 data-i18n-skip id={clientDialogTitleId} className="mt-1 truncate text-xl font-semibold text-slate-950">{selectedClient.name}</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  {selectedClient.taskCount} linked task{selectedClient.taskCount === 1 ? '' : 's'} · {selectedClient.projectIds.size} company record{selectedClient.projectIds.size === 1 ? '' : 's'}
+                  {selectedClient.taskCount} {t(selectedClient.taskCount === 1 ? 'linked task' : 'linked tasks')} · {selectedClient.projectIds.size} {t(selectedClient.projectIds.size === 1 ? 'company record' : 'company records')}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={closeClientPanel}
                 className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                aria-label="Close client details"
-                title="Close"
+                aria-label={t('Close client details')}
+                title={t('Close')}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -820,10 +820,10 @@ const Clients: React.FC = () => {
               {isRenamingClient && (
                 <section className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-4">
                   <label htmlFor="client-rename" className="block text-xs font-medium text-blue-700">
-                    Rename client / brand
+                    {t('Rename client / brand')}
                   </label>
                   <p className="mt-1 text-xs leading-5 text-blue-700/80">
-                    This updates the client name across linked tasks, companies, client accounts, and notifications.
+                    {t('This updates the client name across linked tasks, companies, client accounts, and notifications.')}
                   </p>
                   <input
                     id="client-rename"
@@ -841,7 +841,7 @@ const Clients: React.FC = () => {
               )}
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <section className="rounded-lg border border-slate-200 bg-white p-4">
-                  <h3 className="text-sm font-bold text-slate-900">Contact</h3>
+                  <h3 className="text-sm font-bold text-slate-900">{t('Contact')}</h3>
                   <div className="mt-3">
                     {isEditingProfile ? (
                       <div className="space-y-3">
@@ -855,40 +855,41 @@ const Clients: React.FC = () => {
                           />
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">Contact Person</label>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">{t('Contact Person')}</label>
                           <input
                             type="text"
                             className={cn(inputBase, 'p-2 text-xs')}
                             value={profileForm.contactPerson}
                             onChange={e => setProfileForm({ ...profileForm, contactPerson: e.target.value })}
-                            placeholder="e.g. John Doe"
+                            placeholder={t('e.g. John Doe')}
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="mb-1 block text-xs font-medium text-slate-600">Email</label>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">{t('Email')}</label>
                             <input
                               type="email"
                               className={cn(inputBase, 'p-2 text-xs')}
                               value={profileForm.email}
                               onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                              data-i18n-skip
                               placeholder="john@brand.com"
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs font-medium text-slate-600">Phone</label>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">{t('Phone')}</label>
                             <input
                               type="text"
                               className={cn(inputBase, 'p-2 text-xs')}
                               value={profileForm.phone}
                               onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
-                              placeholder="Phone number"
+                              placeholder={t('Phone number')}
                             />
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="mb-1 block text-xs font-medium text-slate-600">Website</label>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">{t('Website')}</label>
                             <input
                               type="url"
                               className={cn(inputBase, 'p-2 text-xs')}
@@ -898,34 +899,34 @@ const Clients: React.FC = () => {
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs font-medium text-slate-600">Facebook Page</label>
+                            <label className="mb-1 block text-xs font-medium text-slate-600">{t('Facebook Page')}</label>
                             <input
                               type="url"
                               className={cn(inputBase, 'p-2 text-xs')}
                               value={profileForm.facebookPage}
                               onChange={e => setProfileForm({ ...profileForm, facebookPage: e.target.value })}
-                              placeholder="Facebook URL"
+                              placeholder={t('Facebook URL')}
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">Address</label>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">{t('Address')}</label>
                           <textarea
                             rows={2}
                             className={cn(inputBase, 'resize-none p-2 text-xs')}
                             value={profileForm.address}
                             onChange={e => setProfileForm({ ...profileForm, address: e.target.value })}
-                            placeholder="Business address..."
+                            placeholder={t('Business address...')}
                           />
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">Note / Details</label>
+                          <label className="mb-1 block text-xs font-medium text-slate-600">{t('Note / Details')}</label>
                           <textarea
                             rows={3}
                             className={cn(inputBase, 'resize-none p-2 text-xs')}
                             value={profileForm.notes}
                             onChange={e => setProfileForm({ ...profileForm, notes: e.target.value })}
-                            placeholder="Notes about contact or client details..."
+                            placeholder={t('Notes about contact or client details...')}
                           />
                         </div>
                       </div>
@@ -935,7 +936,7 @@ const Clients: React.FC = () => {
                   </div>
                 </section>
                 <section className="rounded-lg border border-slate-200 bg-white p-4">
-                  <h3 className="text-sm font-bold text-slate-900">Work Summary</h3>
+                  <h3 className="text-sm font-bold text-slate-900">{t('Work Summary')}</h3>
                   <div className="mt-3 space-y-2 text-sm text-slate-600">
                     {isBossKoo(currentUser) && selectedClient.profile && !selectedClient.profile.discovered && (
                       <p>
@@ -959,46 +960,46 @@ const Clients: React.FC = () => {
                       </p>
                     )}
                     <p>
-                      <span className="font-semibold text-slate-500">Client Added:</span>{' '}
+                      <span className="font-semibold text-slate-500">{t('Client Added:')}</span>{' '}
                       <strong className="text-slate-950">
-                        {selectedClient.addedAt ? format(new Date(getActivityTime(selectedClient.addedAt)), 'MMM dd, yyyy') : 'No date recorded'}
+                        {selectedClient.addedAt ? formatLocalizedDate(new Date(getActivityTime(selectedClient.addedAt)), locale) : t('No date recorded')}
                       </strong>
                     </p>
                     <p>
-                      <span className="font-semibold text-slate-500">Last Task Date:</span>{' '}
+                      <span className="font-semibold text-slate-500">{t('Last Task Date:')}</span>{' '}
                       <strong className="text-slate-950">
-                        {selectedClient.latestTaskDate ? format(new Date(getActivityTime(selectedClient.latestTaskDate)), 'MMM dd, yyyy') : 'No tasks recorded'}
+                        {selectedClient.latestTaskDate ? formatLocalizedDate(new Date(getActivityTime(selectedClient.latestTaskDate)), locale) : t('No tasks recorded')}
                       </strong>
                     </p>
                     <p>
                       <span className="font-semibold text-slate-500">{t('Assigned by')}:</span>{' '}
                       <strong className="text-slate-950">
-                        {Array.from(selectedClient.assignedByIds).map(userId => users.find(user => user.id === userId)?.name || userId).join(', ') || 'No assigner recorded'}
+                        {Array.from(selectedClient.assignedByIds).map(userId => users.find(user => user.id === userId)?.name || userId).join(', ') || t('No assigner recorded')}
                       </strong>
                     </p>
                     <p>
-                      <span className="font-semibold text-slate-500">Assigned Staff:</span>{' '}
+                      <span className="font-semibold text-slate-500">{t('Assigned Staff:')}</span>{' '}
                       <strong className="text-slate-950">
-                        {Array.from(selectedClient.assignedUserIds).map(userId => users.find(user => user.id === userId)?.name || userId).join(', ') || 'No staff assigned'}
+                        {Array.from(selectedClient.assignedUserIds).map(userId => users.find(user => user.id === userId)?.name || userId).join(', ') || t('No staff assigned')}
                       </strong>
                     </p>
                     <p>
-                      <span className="font-semibold text-slate-500">Linked Projects:</span>{' '}
+                      <span className="font-semibold text-slate-500">{t('Linked Projects:')}</span>{' '}
                       <strong className="text-slate-950">
-                        {Array.from(selectedClient.projectNames).join(', ') || 'No projects linked'}
+                        {Array.from(selectedClient.projectNames).join(', ') || t('No projects linked')}
                       </strong>
                     </p>
                   </div>
                 </section>
                 <section className="rounded-lg border border-slate-200 bg-white p-4 md:col-span-2">
-                  <h3 className="text-sm font-bold text-slate-900">Services & Notes</h3>
+                  <h3 className="text-sm font-bold text-slate-900">{t('Services & Notes')}</h3>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {Array.from(selectedClient.services).map(service => (
                       <Badge key={service} tone="slate" className="text-[10px]">
                         {service}
                       </Badge>
                     ))}
-                    {selectedClient.services.size === 0 && <span className="text-sm text-slate-400">No services recorded yet.</span>}
+                    {selectedClient.services.size === 0 && <span className="text-sm text-slate-400">{t('No services recorded yet.')}</span>}
                   </div>
                   {!isEditingProfile && !isClientUser && getClientContact(selectedClient).notes && (
                     <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{getClientContact(selectedClient).notes}</p>
@@ -1038,7 +1039,7 @@ const Clients: React.FC = () => {
                 className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-blue-700')}
                 onClick={closeClientPanel}
               >
-                View tasks <ArrowRight className="h-4 w-4" />
+                {t('View tasks')} <ArrowRight className="h-4 w-4" />
               </Link>
               <div className={cn(isEditingProfile || isRenamingClient ? 'grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto' : 'flex flex-col gap-2 sm:flex-row')}>
                 {isRenamingClient ? (
@@ -1048,7 +1049,7 @@ const Clients: React.FC = () => {
                       onClick={() => { setIsRenamingClient(false); setRenameError(''); }}
                       className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
                     >
-                      Cancel
+                      {t('Cancel')}
                     </button>
                     <button
                       type="button"
@@ -1056,7 +1057,7 @@ const Clients: React.FC = () => {
                       disabled={isSavingClient}
                       className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-blue-700')}
                     >
-                      <Save className="h-4 w-4" /> Rename
+                      <Save className="h-4 w-4" /> {t('Rename')}
                     </button>
                   </>
                 ) : isEditingProfile ? (
@@ -1066,7 +1067,7 @@ const Clients: React.FC = () => {
                         onClick={() => { setIsEditingProfile(false); setProfileError(''); }}
                         className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
                       >
-                        Cancel
+                        {t('Cancel')}
                       </button>
                       <button
                         type="button"
@@ -1074,20 +1075,20 @@ const Clients: React.FC = () => {
                         disabled={isSavingClient}
                         className={cn(buttonBase, 'min-h-10 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-emerald-700')}
                       >
-                        <Save className="h-4 w-4" /> Save
+                        <Save className="h-4 w-4" /> {t('Save')}
                       </button>
                     </>
                 ) : (
                   isDeleteConfirming ? (
                     <>
-                      <p className="self-center text-sm font-medium text-red-700 sm:mr-2">Delete this company profile? Linked service plans must be archived first.</p>
+                    <p className="self-center text-sm font-medium text-red-700 sm:mr-2">{t('Delete this company profile? Linked service plans must be archived first.')}</p>
                       <button
                         type="button"
                         onClick={() => setIsDeleteConfirming(false)}
                         disabled={isSavingClient}
                         className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
                       >
-                        Cancel
+                        {t('Cancel')}
                       </button>
                       <button
                         type="button"
@@ -1095,7 +1096,7 @@ const Clients: React.FC = () => {
                         disabled={isSavingClient}
                         className={cn(buttonBase, 'min-h-10 rounded-lg bg-red-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60')}
                       >
-                        <Trash2 className="h-4 w-4" /> {isSavingClient ? 'Deleting…' : 'Delete company'}
+                        <Trash2 className="h-4 w-4" /> {isSavingClient ? t('Deleting…') : t('Delete company')}
                       </button>
                     </>
                   ) : (
@@ -1110,7 +1111,7 @@ const Clients: React.FC = () => {
                         }}
                         className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
                       >
-                        <Pencil className="h-4 w-4" /> Rename
+                        <Pencil className="h-4 w-4" /> {t('Rename')}
                       </button>
                     )}
                     {selectedClientCanEditProfile && (
@@ -1123,7 +1124,7 @@ const Clients: React.FC = () => {
                         }}
                         className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
                       >
-                        <Pencil className="h-4 w-4" /> Edit details
+                        <Pencil className="h-4 w-4" /> {t('Edit details')}
                       </button>
                     )}
                     {selectedClientCanDelete && (
@@ -1135,7 +1136,7 @@ const Clients: React.FC = () => {
                         }}
                         className={cn(buttonBase, 'min-h-10 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm text-red-700 shadow-sm hover:bg-red-50')}
                       >
-                        <Trash2 className="h-4 w-4" /> Delete company
+                        <Trash2 className="h-4 w-4" /> {t('Delete company')}
                       </button>
                     )}
                   </>

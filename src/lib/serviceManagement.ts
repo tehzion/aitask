@@ -9,6 +9,7 @@ import type {
   ServiceWorkflowTemplate,
   Task,
 } from '../types';
+import type { AppLocale } from './i18n';
 
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 const utcDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
@@ -253,7 +254,7 @@ export const makeCycleRecords = (
   return { cycle, deliverables };
 };
 
-export const formatMoney = (minor: number, currency = 'MYR') => new Intl.NumberFormat('en-MY', {
+export const formatMoney = (minor: number, currency = 'MYR', locale: AppLocale = 'en') => new Intl.NumberFormat(locale === 'zh' ? 'zh-CN' : 'en-MY', {
   style: 'currency',
   currency,
 }).format(minor / 100);

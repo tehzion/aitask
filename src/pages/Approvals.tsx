@@ -3,17 +3,18 @@ import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { ArrowLeft, CheckCircle2, XCircle, UserPlus, Users, Trash2, AlertTriangle, ShieldCheck, Save, Pencil, Search, X, Clock3, UserCheck, History, ChevronRight } from 'lucide-react';
 import { CustomRole, Department, Role, Registration, RolePermissionKey, RolePermissions, User } from '../types';
-import { format } from 'date-fns';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Badge, Button, IconButton, MetricCard, PageHeader, SegmentedTabs } from '../components/ui';
 import { cardBase, fieldLabel, inputBase, pageShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
+import { formatLocalizedDate } from '../lib/i18n';
 import { useI18n } from '../components/I18nProvider';
 import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getBuiltinRoleId, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, hodRestrictedPermissionKeys, isBossKoo, nonSuperAdminOnlyPermissionKeys, permissionGroups, permissionLabels } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
 import { getRetainedSecureMemberMutation } from '../lib/secureWorkspace';
+import { msg } from '../lib/messages';
 import { useToastStore } from '../store/useToastStore';
 import ModalShell from '../components/ModalShell';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -96,6 +97,7 @@ const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
   onTemporaryPasswordChange,
   onGeneratePassword,
 }) => {
+  const { locale, t } = useI18n();
   const descriptionId = `approval-review-description-${registration.id}`;
   const errorId = `approval-review-error-${registration.id}`;
   const roleNeedsDepartments = role === 'Staff' || role === 'HOD';
@@ -105,14 +107,14 @@ const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
       <header className="flex shrink-0 items-start justify-between gap-4 border-b border-line/80 bg-inset/50 px-4 py-4 sm:px-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs font-semibold tracking-wide text-ink">Registration review</p>
-            <Badge tone="amber">Pending</Badge>
-            {waitingDays >= 7 && <Badge tone="red">{waitingDays}d waiting</Badge>}
+            <p className="text-xs font-semibold tracking-wide text-ink">{t('Registration review')}</p>
+            <Badge tone="amber">{t('Pending')}</Badge>
+            {waitingDays >= 7 && <Badge tone="red">{waitingDays}d {t('waiting')}</Badge>}
           </div>
           <h2 id={`approval-review-title-${registration.id}`} className="mt-2 truncate text-xl font-semibold tracking-[-0.025em] text-ink sm:text-2xl">{registration.name}</h2>
-          <p id={descriptionId} className="mt-1 text-sm leading-6 text-muted">Review identity, requested access, and onboarding before approving this account.</p>
+          <p id={descriptionId} className="mt-1 text-sm leading-6 text-muted">{t('Review identity, requested access, and onboarding before approving this account.')}</p>
         </div>
-        <IconButton label="Close registration review" onClick={onClose} className="shrink-0">
+        <IconButton label={t('approval.closeReview')} onClick={onClose} className="shrink-0">
           <X className="h-5 w-5" aria-hidden="true" />
         </IconButton>
       </header>
@@ -127,26 +129,26 @@ const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
 
           <section aria-labelledby={`applicant-details-${registration.id}`} className="rounded-panel border border-line/80 bg-surface p-4 sm:p-5">
             <div className="flex items-center justify-between gap-3">
-              <h3 id={`applicant-details-${registration.id}`} className="text-sm font-semibold text-ink">Applicant details</h3>
-              <span className="text-xs text-muted">Applied {format(new Date(registration.createdAt), 'MMM d, yyyy')}</span>
+              <h3 id={`applicant-details-${registration.id}`} className="text-sm font-semibold text-ink">{t('approval.applicantDetails')}</h3>
+              <span className="text-xs text-muted">{t({ id: 'approval.applied', values: { date: formatLocalizedDate(new Date(registration.createdAt), locale) } })}</span>
             </div>
             <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="min-w-0"><dt className="text-xs font-medium text-muted">Email</dt><dd data-i18n-skip className="mt-1 break-words text-sm font-medium text-ink">{registration.email || 'No email provided'}</dd></div>
-              <div className="min-w-0"><dt className="text-xs font-medium text-muted">Phone</dt><dd data-i18n-skip className="mt-1 break-words text-sm font-medium text-ink">{registration.phone || 'No phone provided'}</dd></div>
-              <div className="min-w-0"><dt className="text-xs font-medium text-muted">Requested position</dt><dd data-i18n-skip className="mt-1 break-words text-sm font-medium text-ink">{registration.jobPosition || 'Not specified'}</dd></div>
-              <div className="min-w-0"><dt className="text-xs font-medium text-muted">Onboarding</dt><dd className="mt-1 text-sm font-medium text-ink">{registration.onboardingMode === 'legacy_invite' ? 'Invitation' : 'Self signup'}</dd></div>
+              <div className="min-w-0"><dt className="text-xs font-medium text-muted">{t('Email')}</dt><dd data-i18n-skip className="mt-1 break-words text-sm font-medium text-ink">{registration.email || t('approval.noEmail')}</dd></div>
+              <div className="min-w-0"><dt className="text-xs font-medium text-muted">{t('Phone')}</dt><dd data-i18n-skip className="mt-1 break-words text-sm font-medium text-ink">{registration.phone || t('approval.noPhone')}</dd></div>
+              <div className="min-w-0"><dt className="text-xs font-medium text-muted">{t('Requested position')}</dt><dd data-i18n-skip className="mt-1 break-words text-sm font-medium text-ink">{registration.jobPosition || t('approval.notSpecified')}</dd></div>
+              <div className="min-w-0"><dt className="text-xs font-medium text-muted">{t('Onboarding')}</dt><dd className="mt-1 text-sm font-medium text-ink">{registration.onboardingMode === 'legacy_invite' ? t('approval.invitation') : t('approval.selfSignup')}</dd></div>
             </dl>
           </section>
 
           <section aria-labelledby={`access-details-${registration.id}`} className="mt-4 rounded-panel border border-line/80 bg-surface p-4 sm:p-5">
             <div>
-              <h3 id={`access-details-${registration.id}`} className="text-sm font-semibold text-ink">Access assignment</h3>
-              <p className="mt-1 text-sm leading-6 text-muted">Assign the smallest workspace access needed for this member.</p>
+              <h3 id={`access-details-${registration.id}`} className="text-sm font-semibold text-ink">{t('approval.accessAssignment')}</h3>
+              <p className="mt-1 text-sm leading-6 text-muted">{t('approval.assignSmallestAccess')}</p>
             </div>
 
             <div className="mt-5 space-y-5">
               <div>
-                <label htmlFor={`approval-role-${registration.id}`} className={fieldLabel}>System role</label>
+                <label htmlFor={`approval-role-${registration.id}`} className={fieldLabel}>{t('System role')}</label>
                 <select
                   id={`approval-role-${registration.id}`}
                   className={cn(inputBase, 'px-3 py-2.5')}
@@ -156,35 +158,35 @@ const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
                 >
                   {ROLES.map(option => <option key={option} value={option}>{option}</option>)}
                 </select>
-                <p className="mt-1 text-xs leading-5 text-muted">Requested role: <span className="font-medium text-ink">{registration.requestedRole}</span></p>
+                <p className="mt-1 text-xs leading-5 text-muted">{t('Requested role:')} <span data-i18n-skip className="font-medium text-ink">{registration.requestedRole}</span></p>
               </div>
 
               {role === 'Client' ? (
                 <div>
-                  <label htmlFor={`approval-company-${registration.id}`} className={fieldLabel}>Client company</label>
+                  <label htmlFor={`approval-company-${registration.id}`} className={fieldLabel}>{t('Client company')}</label>
                   <input
                     id={`approval-company-${registration.id}`}
                     className={cn(inputBase, 'px-3 py-2.5')}
                     value={companyName}
                     onChange={event => onCompanyNameChange(event.target.value)}
-                    placeholder="Choose or enter a company"
+                    placeholder={t('Choose or enter a company')}
                     disabled={isSaving}
                     aria-required="true"
                   />
-                  <p className="mt-1 text-xs leading-5 text-muted">The client account will only see work linked to this company.</p>
+                  <p className="mt-1 text-xs leading-5 text-muted">{t('The client account will only see work linked to this company.')}</p>
                 </div>
               ) : (
                 <DepartmentMultiSelect
                   value={departments}
                   onChange={onDepartmentsChange}
                   disabled={isSaving}
-                  label={roleNeedsDepartments ? 'Departments' : 'Departments (optional)'}
-                  description={roleNeedsDepartments ? 'Select every department this member can receive assignments from.' : 'Add departments when this Project Manager needs a narrower portfolio scope.'}
+                  label={t(roleNeedsDepartments ? 'Departments' : 'Departments (optional)')}
+                  description={t(roleNeedsDepartments ? 'Select every department this member can receive assignments from.' : 'Add departments when this Project Manager needs a narrower portfolio scope.')}
                 />
               )}
 
               <div>
-                <label htmlFor={`approval-custom-role-${registration.id}`} className={fieldLabel}>Custom role</label>
+                <label htmlFor={`approval-custom-role-${registration.id}`} className={fieldLabel}>{t('Custom role')}</label>
                 <select
                   id={`approval-custom-role-${registration.id}`}
                   className={cn(inputBase, 'px-3 py-2.5')}
@@ -192,17 +194,17 @@ const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
                   onChange={event => onCustomRoleChange(event.target.value)}
                   disabled={isSaving}
                 >
-                  <option value="">Base role only</option>
+                  <option value="">{t('Base role only')}</option>
                   {getAssignableCustomRoles(role, rolePermissions).filter(customRole => !customRole.isBuiltin).map(customRole => <option key={customRole.id} value={customRole.id}>{customRole.name}</option>)}
                 </select>
-                <p className="mt-1 text-xs leading-5 text-muted">Custom roles are limited to the selected system role.</p>
+                <p className="mt-1 text-xs leading-5 text-muted">{t('Custom roles are limited to the selected system role.')}</p>
               </div>
             </div>
           </section>
 
           {secureAccounts && (
             <section aria-labelledby={`onboarding-details-${registration.id}`} className="mt-4 rounded-panel border border-line/80 bg-inset/60 p-4 sm:p-5">
-              <h3 id={`onboarding-details-${registration.id}`} className="text-sm font-semibold text-ink">Onboarding</h3>
+              <h3 id={`onboarding-details-${registration.id}`} className="text-sm font-semibold text-ink">{t('Onboarding')}</h3>
               <label className="mt-3 flex min-h-11 items-start gap-3 text-sm text-ink">
                 <input
                   type="checkbox"
@@ -212,14 +214,14 @@ const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
                   disabled={isSaving}
                 />
                 <span>
-                  <span className="block font-medium">{registration.onboardingMode === 'legacy_invite' ? 'Send email invitation' : 'Require verified email'}</span>
-                  <span className="mt-1 block text-xs leading-5 text-muted">{sendInvitation ? 'Approval waits for email delivery or verification.' : 'Approve without SMTP using the member\'s existing password.'}</span>
+                  <span className="block font-medium">{t(registration.onboardingMode === 'legacy_invite' ? 'Send email invitation' : 'Require verified email')}</span>
+                  <span className="mt-1 block text-xs leading-5 text-muted">{t(sendInvitation ? 'Approval waits for email delivery or verification.' : 'Approve without SMTP using the member\'s existing password.')}</span>
                 </span>
               </label>
 
               {registration.onboardingMode === 'legacy_invite' && !sendInvitation && (
                 <div className="mt-4">
-                  <label htmlFor={`approval-password-${registration.id}`} className={fieldLabel}>Temporary password</label>
+                  <label htmlFor={`approval-password-${registration.id}`} className={fieldLabel}>{t('Temporary password')}</label>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <input
                       id={`approval-password-${registration.id}`}
@@ -232,15 +234,15 @@ const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
                       disabled={isSaving}
                       required
                     />
-                    <Button type="button" variant="secondary" className="shrink-0" onClick={onGeneratePassword} disabled={isSaving}>Generate &amp; copy</Button>
+                    <Button type="button" variant="secondary" className="shrink-0" onClick={onGeneratePassword} disabled={isSaving}>{t('Generate & copy')}</Button>
                   </div>
-                  <p className="mt-1 text-xs leading-5 text-muted">Share it privately. AiTask does not store the password.</p>
+                  <p className="mt-1 text-xs leading-5 text-muted">{t('Share it privately. AiTask does not store the password.')}</p>
                 </div>
               )}
 
               {!sendInvitation && registration.onboardingMode !== 'legacy_invite' && (
                 <div className="mt-4 rounded-control border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-900" role="note">
-                  Confirm the applicant&apos;s identity before approving. Without email verification, approval activates the password chosen during signup.
+                  {t("Confirm the applicant's identity before approving. Without email verification, approval activates the password chosen during signup.")}
                 </div>
               )}
             </section>
@@ -248,8 +250,8 @@ const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
         </div>
 
         <footer className="modalFooter shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to queue</Button>
-          <Button type="submit" disabled={isSaving}>{isSaving ? 'Saving…' : 'Confirm & approve'}<CheckCircle2 className="h-4 w-4" aria-hidden="true" /></Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}><ArrowLeft className="h-4 w-4" aria-hidden="true" />{t('Back to queue')}</Button>
+          <Button type="submit" disabled={isSaving}>{isSaving ? t('Saving…') : t('Confirm & approve')}<CheckCircle2 className="h-4 w-4" aria-hidden="true" /></Button>
         </footer>
       </form>
     </div>
@@ -257,7 +259,7 @@ const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
 };
 
 const Approvals: React.FC = () => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const addMemberTitleId = React.useId();
   const deleteMemberTitleId = React.useId();
   const editDepartmentsTitleId = React.useId();
@@ -507,8 +509,8 @@ const Approvals: React.FC = () => {
         const done = count - failures.length;
         useToastStore.getState().addToast(
           done > 0
-            ? `${done} registration(s) approved; ${failures.length} could not be approved. ${failures.slice(0, 3).join(', ')}`
-            : `No registrations could be approved. ${failures.slice(0, 3).join(', ')}`,
+            ? msg('approval.bulkApproveFailed', { approved: done, failed: failures.length, names: failures.slice(0, 3).join(', ') })
+            : msg('approval.bulkApproveNone', { names: failures.slice(0, 3).join(', ') }),
           'error',
         );
         setActionError(failures.length > 0
@@ -516,7 +518,7 @@ const Approvals: React.FC = () => {
           : 'No registrations were approved.');
         return;
       }
-      useToastStore.getState().addToast(`${count} registration(s) approved.`, 'success');
+      useToastStore.getState().addToast(msg('approval.registrationApproved', { count }), 'success');
       return;
     }
 
@@ -540,11 +542,11 @@ const Approvals: React.FC = () => {
     if (fallbackPositions.length > 0) {
       const uniq = Array.from(new Set(fallbackPositions));
       useToastStore.getState().addToast(
-        `${targets.length} approved. ${uniq.slice(0, 3).join(', ')} ${uniq.length === 1 ? 'has' : 'have'} no matching department and ${uniq.length === 1 ? 'was' : 'were'} assigned to Designer.`,
+        msg('approval.departmentFallback', { count: targets.length, departments: uniq.slice(0, 3).join(', ') }),
         'warning',
       );
     } else {
-      useToastStore.getState().addToast(`${count} registration(s) approved.`, 'success');
+      useToastStore.getState().addToast(msg('approval.registrationApproved', { count }), 'success');
     }
   };
 
@@ -1074,16 +1076,16 @@ const Approvals: React.FC = () => {
     return (
       <div className={pageShell}>
         <PageHeader
-          title="Approvals — Boss Koo only"
-          description="Registration approvals, member management, and role controls are restricted to the Boss Koo account."
+          title={t('Approvals — Boss Koo only')}
+          description={t('Registration approvals, member management, and role controls are restricted to the Boss Koo account.')}
         />
         <section className="mt-6 rounded-panel border border-amber-200 bg-amber-50 p-6 text-amber-950" role="alert" aria-labelledby="approvals-access-denied-title">
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
             <div>
-              <h2 id="approvals-access-denied-title" className="font-semibold">Access denied</h2>
-              <p className="mt-1 text-sm leading-6">Only Boss Koo can review registrations, change member roles, or edit role permissions.</p>
-              <Link to="/tasks" className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">Return to work</Link>
+              <h2 id="approvals-access-denied-title" className="font-semibold">{t('Access denied')}</h2>
+              <p className="mt-1 text-sm leading-6">{t('Only Boss Koo can review registrations, change member roles, or edit role permissions.')}</p>
+              <Link to="/tasks" className="mt-4 inline-flex min-h-11 items-center rounded-control bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">{t('Return to work')}</Link>
             </div>
           </div>
         </section>
@@ -1094,12 +1096,12 @@ const Approvals: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title="Approvals"
-        description="Review access requests and manage workspace members, roles, and decisions."
+        title={t('Approvals')}
+        description={t('Review access requests and manage workspace members, roles, and decisions.')}
         action={superAdmin ? (
           <Button onClick={() => setIsAddUserOpen(true)} disabled={isActionSaving || backend.isSaving}>
             <UserPlus className="w-4 h-4" />
-            Add Member
+            {t('Add Member')}
           </Button>
         ) : undefined}
       />
@@ -1110,11 +1112,11 @@ const Approvals: React.FC = () => {
         </div>
       )}
 
-      <section aria-label="Approval overview" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricCard title="Pending registrations" value={pendingRegs.length} icon={UserCheck} tone="blue" footer="Awaiting review" />
-        <MetricCard title="Aging 7+ days" value={agedRegistrationCount} icon={Clock3} tone={agedRegistrationCount > 0 ? 'red' : 'emerald'} footer={agedRegistrationCount > 0 ? 'Prioritize these requests' : 'Queue is current'} />
-        <MetricCard title="Active members" value={activeMemberCount} icon={Users} tone="purple" footer="Workspace accounts" />
-        <MetricCard title="Recent decisions" value={historyRegs.length} icon={History} tone="slate" footer="Approved or rejected" />
+      <section aria-label={t('Approval overview')} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard title={t('Pending registrations')} value={pendingRegs.length} icon={UserCheck} tone="blue" footer={t('Awaiting review')} />
+        <MetricCard title={t('Aging 7+ days')} value={agedRegistrationCount} icon={Clock3} tone={agedRegistrationCount > 0 ? 'red' : 'emerald'} footer={agedRegistrationCount > 0 ? t('Prioritize these requests') : t('Queue is current')} />
+        <MetricCard title={t('Active members')} value={activeMemberCount} icon={Users} tone="purple" footer={t('Workspace accounts')} />
+        <MetricCard title={t('Recent decisions')} value={historyRegs.length} icon={History} tone="slate" footer={t('Approved or rejected')} />
       </section>
 
       <SegmentedTabs
@@ -1124,7 +1126,7 @@ const Approvals: React.FC = () => {
         }))}
         value={activeTab}
         onChange={handleTabChange}
-        label="Approval workspace sections"
+        label={t('Approval workspace sections')}
         idPrefix="approval-sections"
         variant="underline"
       />
@@ -1138,7 +1140,7 @@ const Approvals: React.FC = () => {
               <UserPlus className="h-5 w-5" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <h2 className="text-base font-semibold text-ink sm:text-lg">Pending registrations</h2>
+              <h2 className="text-base font-semibold text-ink sm:text-lg">{t('Pending registrations')}</h2>
               <p className="mt-0.5 text-xs text-muted">{pendingRegs.length} {t('awaiting review')}</p>
             </div>
           </div>
@@ -1156,7 +1158,7 @@ const Approvals: React.FC = () => {
         </div>
 
         <div className="border-b border-line/80 bg-inset/60 p-3 sm:p-4">
-          <label htmlFor="registration-search" className="sr-only">Search registrations</label>
+          <label htmlFor="registration-search" className="sr-only">{t('Search registrations')}</label>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
             <input
@@ -1164,12 +1166,12 @@ const Approvals: React.FC = () => {
               type="search"
               value={registrationSearch}
               onChange={event => setRegistrationSearch(event.target.value)}
-              placeholder="Search name, email, phone, or position"
+              placeholder={t('Search name, email, phone, or position')}
               className={cn(inputBase, 'pl-9 pr-10')}
             />
             {registrationSearch && (
               <IconButton
-                label="Clear registration search"
+                label={t('Clear registration search')}
                 className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2"
                 onClick={() => setRegistrationSearch('')}
               >
@@ -1177,7 +1179,7 @@ const Approvals: React.FC = () => {
               </IconButton>
             )}
           </div>
-          <p className="mt-2 text-xs text-muted">Oldest requests appear first so aging access requests stay visible.</p>
+          <p className="mt-2 text-xs text-muted">{t('Oldest requests appear first so aging access requests stay visible.')}</p>
         </div>
 
         {selectedBulkRegIds.size > 0 && (
@@ -1209,9 +1211,9 @@ const Approvals: React.FC = () => {
         {filteredPendingRegs.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <UserCheck className="mx-auto h-7 w-7 text-muted/60" aria-hidden="true" />
-            <p className="mt-3 text-sm font-semibold text-ink">{pendingRegs.length === 0 ? 'No pending registrations' : 'No registrations match this search'}</p>
-            <p className="mt-1 text-sm text-muted">{pendingRegs.length === 0 ? 'New access requests will appear here.' : 'Try a different name, email, phone number, or position.'}</p>
-            {pendingRegs.length > 0 && <Button type="button" variant="secondary" className="mt-4" onClick={() => setRegistrationSearch('')}>Clear search</Button>}
+            <p className="mt-3 text-sm font-semibold text-ink">{t(pendingRegs.length === 0 ? 'No pending registrations' : 'No registrations match this search')}</p>
+            <p className="mt-1 text-sm text-muted">{t(pendingRegs.length === 0 ? 'New access requests will appear here.' : 'Try a different name, email, phone number, or position.')}</p>
+            {pendingRegs.length > 0 && <Button type="button" variant="secondary" className="mt-4" onClick={() => setRegistrationSearch('')}>{t('Clear search')}</Button>}
           </div>
         ) : (
           <>
@@ -1223,7 +1225,7 @@ const Approvals: React.FC = () => {
               <article
                 key={reg.id}
                 tabIndex={0}
-                aria-label={`Review registration for ${reg.name}`}
+                aria-label={t('Review registration')}
                 onClick={() => handleOpenApproval(reg)}
                 onKeyDown={event => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -1242,12 +1244,12 @@ const Approvals: React.FC = () => {
                         checked={selectedBulkRegIds.has(reg.id)}
                         onChange={() => toggleBulkSelect(reg.id)}
                         onClick={event => event.stopPropagation()}
-                        aria-label={`Select ${reg.name}`}
+                        aria-label={t('Select registration')}
                       />
                     )}
                     <div className="min-w-0">
                       <p data-i18n-skip className="font-semibold text-slate-800">{reg.name}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">Applied {format(new Date(reg.createdAt), 'MMM dd, yyyy')}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{t({ id: 'approval.applied', values: { date: formatLocalizedDate(new Date(reg.createdAt), locale) } })}</p>
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
@@ -1269,18 +1271,18 @@ const Approvals: React.FC = () => {
                         disabled={isActionSaving || backend.isSaving}
                         className="flex min-h-11 flex-1 items-center justify-center rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
+                        <CheckCircle2 className="w-4 h-4 mr-1.5" /> {t('Approve')}
                       </button>
                       <button
                         onClick={event => { event.stopPropagation(); handleRejectRegistration(reg); }}
                         disabled={isActionSaving || backend.isSaving}
                         className="flex min-h-11 flex-1 items-center justify-center rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <XCircle className="w-4 h-4 mr-1.5" /> Reject
+                        <XCircle className="w-4 h-4 mr-1.5" /> {t('Reject')}
                       </button>
                     </>
                   ) : (
-                    <span className="text-xs font-medium text-muted">Boss Koo approval required</span>
+                    <span className="text-xs font-medium text-muted">{t('Boss Koo approval required')}</span>
                   )}
                 </div>
               </article>
@@ -1294,12 +1296,12 @@ const Approvals: React.FC = () => {
               <thead>
                 <tr className="bg-inset/70 text-xs tracking-wide text-muted">
                   <th className="w-10 border-b border-line px-4 py-4">
-                    <span className="sr-only">Select</span>
+                    <span className="sr-only">{t('Select')}</span>
                   </th>
-                  <th className="border-b border-line px-6 py-4 font-semibold">Name</th>
-                  <th className="border-b border-line px-6 py-4 font-semibold">Contact</th>
-                  <th className="border-b border-line px-6 py-4 font-semibold">Requested access</th>
-                  <th className="border-b border-line px-6 py-4 text-right font-semibold">Actions</th>
+                  <th className="border-b border-line px-6 py-4 font-semibold">{t('Name')}</th>
+                  <th className="border-b border-line px-6 py-4 font-semibold">{t('Contact')}</th>
+                  <th className="border-b border-line px-6 py-4 font-semibold">{t('Requested access')}</th>
+                  <th className="border-b border-line px-6 py-4 text-right font-semibold">{t('Actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/70">
@@ -1309,7 +1311,7 @@ const Approvals: React.FC = () => {
                   <tr
                     key={reg.id}
                     tabIndex={0}
-                    aria-label={`Review registration for ${reg.name}`}
+                    aria-label={t('Review registration')}
                     onClick={() => handleOpenApproval(reg)}
                     onKeyDown={event => {
                       if (event.key === 'Enter' || event.key === ' ') {
@@ -1327,16 +1329,16 @@ const Approvals: React.FC = () => {
                           checked={selectedBulkRegIds.has(reg.id)}
                           onChange={() => toggleBulkSelect(reg.id)}
                           onClick={event => event.stopPropagation()}
-                          aria-label={`Select ${reg.name}`}
+                          aria-label={t('Select registration')}
                         />
                       ) : null}
                     </td>
                     <td className="px-6 py-4">
                       <div data-i18n-skip className="font-semibold text-slate-800">{reg.name}</div>
                       <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                        Applied: {format(new Date(reg.createdAt), 'MMM dd, yyyy')}
+                        {t({ id: 'approval.appliedColon', values: { date: formatLocalizedDate(new Date(reg.createdAt), locale) } })}
                         {days >= 7 && (
-                          <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">{days}d pending</span>
+                        <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">{days}d {t('pending')}</span>
                         )}
                       </div>
                     </td>
@@ -1362,18 +1364,18 @@ const Approvals: React.FC = () => {
                             disabled={isActionSaving || backend.isSaving}
                             className="inline-flex min-h-11 items-center rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            <CheckCircle2 className="w-4 h-4 mr-1.5" /> Approve
+                            <CheckCircle2 className="w-4 h-4 mr-1.5" /> {t('Approve')}
                           </button>
                           <button
                             onClick={event => { event.stopPropagation(); handleRejectRegistration(reg); }}
                             disabled={isActionSaving || backend.isSaving}
                             className="inline-flex min-h-11 items-center rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            <XCircle className="w-4 h-4 mr-1.5" /> Reject
+                            <XCircle className="w-4 h-4 mr-1.5" /> {t('Reject')}
                           </button>
                         </>
                       ) : (
-                        <span className="text-xs font-medium text-muted">Boss Koo approval required</span>
+                        <span className="text-xs font-medium text-muted">{t('Boss Koo approval required')}</span>
                       )}
                     </td>
                   </tr>
@@ -1416,8 +1418,8 @@ const Approvals: React.FC = () => {
         <aside className="hidden min-h-[26rem] items-center justify-center rounded-panel border border-dashed border-line bg-inset/30 p-8 text-center lg:flex">
           <div className="max-w-sm">
             <ChevronRight className="mx-auto h-8 w-8 text-accent/60" aria-hidden="true" />
-            <h2 className="mt-4 text-base font-semibold text-ink">Select a registration to review</h2>
-            <p className="mt-2 text-sm leading-6 text-muted">Choose an applicant from the queue to inspect their request and assign access.</p>
+            <h2 className="mt-4 text-base font-semibold text-ink">{t('Select a registration to review')}</h2>
+            <p className="mt-2 text-sm leading-6 text-muted">{t('Choose an applicant from the queue to inspect their request and assign access.')}</p>
           </div>
         </aside>
       )}
@@ -1428,14 +1430,14 @@ const Approvals: React.FC = () => {
         <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
           <ShieldCheck className="w-5 h-5 text-blue-600" />
           <div>
-            <h2 className="text-lg font-semibold text-slate-800">Roles & Permissions</h2>
-            <p className="text-sm text-slate-500">Manage Project Manager, HOD, Staff, and Client access. Boss Koo powers and HOD scope stay protected.</p>
+            <h2 className="text-lg font-semibold text-slate-800">{t('Roles & Permissions')}</h2>
+            <p className="text-sm text-slate-500">{t('Manage Project Manager, HOD, Staff, and Client access. Boss Koo powers and HOD scope stay protected.')}</p>
           </div>
         </div>
 
         {!superAdmin && (
           <div className="border-b border-slate-100 bg-amber-50 px-6 py-3 text-sm text-amber-800" role="status">
-            Only Boss Koo can manage roles and members. The controls below are read-only for your account.
+            {t('Only Boss Koo can manage roles and members. The controls below are read-only for your account.')}
           </div>
         )}
         <fieldset disabled={!superAdmin} className="p-0 m-0 border-0 min-w-0">
@@ -1443,20 +1445,20 @@ const Approvals: React.FC = () => {
           <form onSubmit={handleSaveRole} className="p-6 border-b xl:border-b-0 xl:border-r border-slate-100 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Role Name</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">{t('Role Name')}</label>
                 <input
                   className={cn(inputBase, 'px-3 py-2.5')}
                   value={roleForm.name}
                   onChange={e => setRoleForm({ ...roleForm, name: e.target.value })}
-                  placeholder="e.g. Account Manager"
+                  placeholder={t('e.g. Account Manager')}
                   disabled={editingBuiltinRole}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Base Role</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">{t('Base Role')}</label>
                 <select
-                  aria-label="Base Role"
+                  aria-label={t('Base Role')}
                   className={cn(inputBase, 'px-3 py-2.5')}
                   value={roleForm.baseRole}
                   onChange={e => handleRoleBaseChange(e.target.value as Role)}
@@ -1468,12 +1470,12 @@ const Approvals: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">{t('Description')}</label>
               <input
                 className={cn(inputBase, 'px-3 py-2.5')}
                 value={roleForm.description}
                 onChange={e => setRoleForm({ ...roleForm, description: e.target.value })}
-                placeholder="Short internal note"
+                placeholder={t('Short internal note')}
               />
             </div>
 
@@ -1487,8 +1489,8 @@ const Approvals: React.FC = () => {
                     className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
                   <span>
-                    Limit this role to its departments
-                    <span className="mt-0.5 block text-xs text-slate-500">Members only see and edit work in their own departments.</span>
+                    {t('Limit this role to its departments')}
+                    <span className="mt-0.5 block text-xs text-slate-500">{t('Members only see and edit work in their own departments.')}</span>
                   </span>
                 </label>
               )}
@@ -1510,7 +1512,7 @@ const Approvals: React.FC = () => {
                           className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                         />
                         <span>{permissionLabels[key]}</span>
-                        {protectedPermission && <span className="ml-auto text-[10px] font-semibold tracking-wide text-slate-400">Protected</span>}
+                        {protectedPermission && <span className="ml-auto text-[10px] font-semibold tracking-wide text-slate-400">{t('Protected')}</span>}
                       </label>
                         );
                       })()
@@ -1529,19 +1531,19 @@ const Approvals: React.FC = () => {
             <div className="flex flex-wrap justify-end gap-3">
               {roleEditorId && (
                 <Button type="button" variant="secondary" onClick={() => resetRoleForm()}>
-                  Cancel Edit
+                  {t('Cancel Edit')}
                 </Button>
               )}
               <Button type="submit">
                 <Save className="w-4 h-4" />
-                {roleEditorId ? 'Update Role' : 'Create Role'}
+                {roleEditorId ? t('Update Role') : t('Create Role')}
               </Button>
             </div>
           </form>
 
           <div className="p-6 space-y-3">
             <div>
-              <p className="mb-2 text-xs font-semibold tracking-wide text-slate-400">Default roles</p>
+              <p className="mb-2 text-xs font-semibold tracking-wide text-slate-400">{t('Default roles')}</p>
               <div className="space-y-2">
                 {ROLES.map(role => {
                   const template = rolePermissions.find(item => item.isBuiltin && item.baseRole === role);
@@ -1565,10 +1567,10 @@ const Approvals: React.FC = () => {
                 })}
               </div>
             </div>
-            <p className="pt-2 text-xs font-semibold tracking-wide text-slate-400">Custom roles</p>
+            <p className="pt-2 text-xs font-semibold tracking-wide text-slate-400">{t('Custom roles')}</p>
             {rolePermissions.length === 0 ? (
               <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-                No custom roles yet. Create one to assign it to team members.
+                {t('No custom roles yet. Create one to assign it to team members.')}
               </div>
             ) : rolePermissions.filter(customRole => !customRole.isBuiltin).map(customRole => (
               <div key={customRole.id} className="rounded-lg border border-slate-200 p-4">
@@ -1576,14 +1578,14 @@ const Approvals: React.FC = () => {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 data-i18n-skip className="font-semibold text-slate-900">{customRole.name}</h3>
-                      <Badge tone="slate">Base: {t(getRoleDisplayName(customRole.baseRole))}</Badge>
-                      {customRole.isProtected && <Badge tone="purple">Protected</Badge>}
+                      <Badge tone="slate">{t('Base:')} {t(getRoleDisplayName(customRole.baseRole))}</Badge>
+                      {customRole.isProtected && <Badge tone="purple">{t('Protected')}</Badge>}
                     </div>
                     {customRole.description && <p className="mt-1 text-sm text-slate-500">{customRole.description}</p>}
                   </div>
                   <div className="flex gap-2">
-                    <Button type="button" variant="secondary" onClick={() => handleEditRole(customRole.id)} disabled={customRole.isProtected}>Edit permissions</Button>
-                    <Button type="button" variant="danger" onClick={() => void handleDeleteRole(customRole.id)} disabled={isActionSaving || customRole.isProtected}>Delete</Button>
+                    <Button type="button" variant="secondary" onClick={() => handleEditRole(customRole.id)} disabled={customRole.isProtected}>{t('Edit permissions')}</Button>
+                    <Button type="button" variant="danger" onClick={() => void handleDeleteRole(customRole.id)} disabled={isActionSaving || customRole.isProtected}>{t('Delete')}</Button>
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1606,16 +1608,16 @@ const Approvals: React.FC = () => {
         <div className={`${cardBase} overflow-hidden`}>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/80 px-4 py-4 sm:px-5">
             <div>
-              <h2 className="text-base font-semibold text-ink sm:text-lg">Decision history</h2>
-              <p className="mt-1 text-sm text-muted">Review previously approved and rejected access requests.</p>
+              <h2 className="text-base font-semibold text-ink sm:text-lg">{t('Decision history')}</h2>
+              <p className="mt-1 text-sm text-muted">{t('Review previously approved and rejected access requests.')}</p>
             </div>
-            <Badge tone="slate">{historyRegs.length} decisions</Badge>
+            <Badge tone="slate">{historyRegs.length} {t('decisions')}</Badge>
           </div>
           {historyRegs.length === 0 ? (
             <div className="px-6 py-12 text-center">
               <History className="mx-auto h-7 w-7 text-muted/60" aria-hidden="true" />
-              <p className="mt-3 text-sm font-semibold text-ink">No decisions yet</p>
-              <p className="mt-1 text-sm text-muted">Completed reviews will appear here.</p>
+              <p className="mt-3 text-sm font-semibold text-ink">{t('No decisions yet')}</p>
+              <p className="mt-1 text-sm text-muted">{t('Completed reviews will appear here.')}</p>
             </div>
           ) : (
             <>
@@ -1632,7 +1634,7 @@ const Approvals: React.FC = () => {
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
                       <span>{reg.requestedRole}</span>
                       <span>{reg.jobPosition || 'Position not specified'}</span>
-                      <span>{format(new Date(reg.createdAt), 'MMM d, yyyy')}</span>
+                      <span>{formatLocalizedDate(new Date(reg.createdAt), locale)}</span>
                     </div>
                   </article>
                 ))}
@@ -1640,15 +1642,15 @@ const Approvals: React.FC = () => {
               <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-inset/70 text-xs tracking-wide text-muted">
-                    <tr><th className="px-5 py-3 font-semibold">Applicant</th><th className="px-5 py-3 font-semibold">Requested access</th><th className="px-5 py-3 font-semibold">Decision</th><th className="px-5 py-3 font-semibold">Date</th></tr>
+                    <tr><th className="px-5 py-3 font-semibold">{t('Applicant')}</th><th className="px-5 py-3 font-semibold">{t('Requested access')}</th><th className="px-5 py-3 font-semibold">{t('Decision')}</th><th className="px-5 py-3 font-semibold">{t('Date')}</th></tr>
                   </thead>
                   <tbody className="divide-y divide-line/70">
                     {historyRegs.map(reg => (
                       <tr key={reg.id} className="hover:bg-inset/40">
                         <td data-i18n-skip className="px-5 py-4 font-medium text-ink"><span className="block">{reg.name}</span><span data-i18n-skip className="mt-1 block text-xs font-normal text-muted">{reg.email}</span></td>
-                        <td className="px-5 py-4 text-muted">{reg.requestedRole} · {reg.jobPosition || 'Position not specified'}</td>
+                        <td className="px-5 py-4 text-muted">{reg.requestedRole} · {reg.jobPosition || t('Position not specified')}</td>
                         <td className="px-5 py-4"><Badge tone={reg.status === 'Approved' ? 'emerald' : 'red'}>{reg.status}</Badge></td>
-                        <td className="px-5 py-4 text-muted">{format(new Date(reg.createdAt), 'MMM d, yyyy')}</td>
+                        <td className="px-5 py-4 text-muted">{formatLocalizedDate(new Date(reg.createdAt), locale)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1664,7 +1666,7 @@ const Approvals: React.FC = () => {
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Users className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-slate-800">Active System Users</h2>
+            <h2 className="text-lg font-semibold text-slate-800">{t('Active System Users')}</h2>
           </div>
         </div>
         {assignmentError && (
@@ -1694,8 +1696,8 @@ const Approvals: React.FC = () => {
         {visibleMembers.length === 0 && (
           <div className="px-6 py-12 text-center">
             <Users className="mx-auto h-7 w-7 text-muted/60" aria-hidden="true" />
-            <p className="mt-3 text-sm font-semibold text-ink">No members match these filters</p>
-            <p className="mt-1 text-sm text-muted">Try a different name, email, or role.</p>
+            <p className="mt-3 text-sm font-semibold text-ink">{t('No members match these filters')}</p>
+            <p className="mt-1 text-sm text-muted">{t('Try a different name, email, or role.')}</p>
           </div>
         )}
         <div className="divide-y divide-slate-100 sm:hidden">
@@ -1706,22 +1708,22 @@ const Approvals: React.FC = () => {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span data-i18n-skip className="font-semibold text-slate-800">{u.name}</span>
-                    {isBossKoo(u) && <Badge tone="purple">Boss Koo</Badge>}
+                    {isBossKoo(u) && <Badge tone="purple"><span data-i18n-skip>Boss Koo</span></Badge>}
                   </div>
-                  <p data-i18n-skip className="mt-1 truncate text-xs text-slate-500">{u.email || 'No email on file'}</p>
+                  <p data-i18n-skip className="mt-1 truncate text-xs text-slate-500">{u.email || t('No email on file')}</p>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone={u.role === 'Project Manager' ? 'purple' : u.role === 'Client' ? 'amber' : 'blue'}>{t(getRoleDisplayName(u.role))}</Badge>
                 {u.role === 'Client' ? (
-                  <span className="text-sm font-medium text-slate-600">{u.companyName || 'No company'}</span>
-                ) : getMemberDepartments(u).map(department => <Badge key={department} tone="slate">{department}</Badge>)}
+                  <span data-i18n-skip className="text-sm font-medium text-slate-600">{u.companyName || t('No company')}</span>
+                ) : getMemberDepartments(u).map(department => <Badge key={department} tone="slate">{t(department)}</Badge>)}
               </div>
               {isBossKoo(u) ? (
-                <Badge tone="purple">Protected Boss Koo account</Badge>
+                <Badge tone="purple">{t('Protected Boss Koo account')}</Badge>
               ) : superAdmin ? (
                 <div className="space-y-2">
-                  <label className="sr-only" htmlFor={`mobile-role-${u.id}`}>Role for {u.name}</label>
+                  <label className="sr-only" htmlFor={`mobile-role-${u.id}`}>{t('Role')}</label>
                   <select
                     id={`mobile-role-${u.id}`}
                     className={cn(inputBase, 'w-full px-3 py-2 text-sm')}
@@ -1730,16 +1732,16 @@ const Approvals: React.FC = () => {
                     disabled={isActionSaving}
                   >
                     <option value="role:project-manager">{t(getRoleDisplayName('Project Manager'))}</option>
-                    <option value="role:hod">HOD</option>
-                    <option value="role:staff">Staff</option>
-                    <option value="role:client">Client</option>
+                    <option value="role:hod">{t('HOD')}</option>
+                    <option value="role:staff">{t('Staff')}</option>
+                    <option value="role:client">{t('Client')}</option>
                     {rolePermissions.filter(customRole => !customRole.isBuiltin).map(customRole => (
                       <option key={customRole.id} data-i18n-skip value={`custom:${customRole.id}`}>{customRole.name}</option>
                     ))}
                   </select>
                   {roleCompanyUserId === u.id && (
                     <>
-                      <label className="sr-only" htmlFor={`mobile-company-${u.id}`}>Company for {u.name}</label>
+                      <label className="sr-only" htmlFor={`mobile-company-${u.id}`}>{t('Company')}</label>
                       <select
                         id={`mobile-company-${u.id}`}
                         className={cn(inputBase, 'w-full px-3 py-2 text-sm')}
@@ -1747,34 +1749,34 @@ const Approvals: React.FC = () => {
                         onChange={event => setRoleCompanyName(event.target.value)}
                         disabled={isActionSaving}
                       >
-                        <option value="">Choose a company…</option>
+                        <option value="">{t('Choose a company…')}</option>
                         {clients.map(client => <option key={client.id} data-i18n-skip value={client.clientName}>{client.clientName}</option>)}
                       </select>
-                      <Button type="button" className="w-full" onClick={() => void handleConfirmClientCompany(u)} disabled={isActionSaving || !roleCompanyName.trim()}>Confirm company</Button>
+                      <Button type="button" className="w-full" onClick={() => void handleConfirmClientCompany(u)} disabled={isActionSaving || !roleCompanyName.trim()}>{t('Confirm company')}</Button>
                     </>
                   )}
                   {roleDeptUserId === u.id && (
                     <>
                       <DepartmentMultiSelect value={roleDeptValue} onChange={setRoleDeptValue} />
-                      <Button type="button" className="w-full" onClick={() => void handleConfirmRoleDepartments(u)} disabled={isActionSaving || roleDeptValue.length === 0}>Confirm departments</Button>
+                      <Button type="button" className="w-full" onClick={() => void handleConfirmRoleDepartments(u)} disabled={isActionSaving || roleDeptValue.length === 0}>{t('Confirm departments')}</Button>
                     </>
                   )}
                 </div>
               ) : (
-                <Badge tone="slate">{getEffectiveRoleName(u, rolePermissions)}</Badge>
+                <Badge tone="slate" data-i18n-skip>{getEffectiveRoleName(u, rolePermissions)}</Badge>
               )}
-              {!isBossKoo(u) && u.permissions && Object.keys(u.permissions).length > 0 && <Badge tone="indigo">Custom access</Badge>}
+              {!isBossKoo(u) && u.permissions && Object.keys(u.permissions).length > 0 && <Badge tone="indigo">{t('Custom access')}</Badge>}
               <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
                 {superAdmin && u.role !== 'Client' && !isBossKoo(u) && (
-                  <Button type="button" variant="secondary" onClick={() => handleEditDepartments(u.id)} disabled={isActionSaving}>Edit departments</Button>
+                  <Button type="button" variant="secondary" onClick={() => handleEditDepartments(u.id)} disabled={isActionSaving}>{t('Edit departments')}</Button>
                 )}
                 {superAdmin && ['Staff', 'HOD'].includes(u.role) && !isBossKoo(u) && (
-                  <Button type="button" variant="secondary" onClick={() => handleEditPermissions(u.id)} disabled={isActionSaving}>Manage access</Button>
+                  <Button type="button" variant="secondary" onClick={() => handleEditPermissions(u.id)} disabled={isActionSaving}>{t('Manage access')}</Button>
                 )}
                 {canDeleteUser(currentUser, u, rolePermissions) ? (
-                  <Button type="button" variant="danger" onClick={() => { setDeleteUserError(''); setUserToDelete(u.id); }}>Remove</Button>
+                  <Button type="button" variant="danger" onClick={() => { setDeleteUserError(''); setUserToDelete(u.id); }}>{t('Remove')}</Button>
                 ) : (
-                  <span className="inline-flex min-h-11 items-center rounded-control bg-inset px-3 text-xs font-semibold text-muted">{isBossKoo(u) || u.id === currentUser?.id ? 'Protected account' : 'No access'}</span>
+                  <span className="inline-flex min-h-11 items-center rounded-control bg-inset px-3 text-xs font-semibold text-muted">{isBossKoo(u) || u.id === currentUser?.id ? t('Protected account') : t('No access')}</span>
                 )}
               </div>
             </article>
@@ -1784,11 +1786,11 @@ const Approvals: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-inset text-muted text-xs tracking-wide">
-                <th className="px-6 py-4 font-semibold border-b border-slate-200">User</th>
-                <th className="px-6 py-4 font-semibold border-b border-slate-200">Role & Departments</th>
-                <th className="px-6 py-4 font-semibold border-b border-slate-200">Custom Role</th>
-                <th className="px-6 py-4 font-semibold border-b border-slate-200">Contact</th>
-                <th className="px-6 py-4 font-semibold border-b border-slate-200 text-right">Actions</th>
+                <th className="px-6 py-4 font-semibold border-b border-slate-200">{t('User')}</th>
+                <th className="px-6 py-4 font-semibold border-b border-slate-200">{t('Role & Departments')}</th>
+                <th className="px-6 py-4 font-semibold border-b border-slate-200">{t('Custom Role')}</th>
+                <th className="px-6 py-4 font-semibold border-b border-slate-200">{t('Contact')}</th>
+                <th className="px-6 py-4 font-semibold border-b border-slate-200 text-right">{t('Actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1800,7 +1802,7 @@ const Approvals: React.FC = () => {
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <span data-i18n-skip className="font-semibold text-slate-800">{u.name}</span>
-                          {isBossKoo(u) && <Badge tone="purple">Boss Koo</Badge>}
+                          {isBossKoo(u) && <Badge tone="purple"><span data-i18n-skip>Boss Koo</span></Badge>}
                         </div>
                         {u.email && <div data-i18n-skip className="text-xs text-slate-500 mt-0.5">{u.email}</div>}
                       </div>
@@ -1816,28 +1818,28 @@ const Approvals: React.FC = () => {
                         {t(getRoleDisplayName(u.role))}
                       </span>
                       {u.role === 'Client' ? (
-                        <span className="text-sm font-medium text-slate-600">({u.companyName})</span>
+                        <span data-i18n-skip className="text-sm font-medium text-slate-600">({u.companyName})</span>
                       ) : getMemberDepartments(u).map(department => (
-                        <Badge key={department} tone="slate">{department}</Badge>
+                        <Badge key={department} tone="slate">{t(department)}</Badge>
                       ))}
                     </div>
                   </td>
                   <td className="px-6 py-4 min-w-[240px]">
                     {isBossKoo(u) ? (
-                      <Badge tone="purple">Protected Boss Koo account</Badge>
+                      <Badge tone="purple">{t('Protected Boss Koo account')}</Badge>
                     ) : superAdmin ? (
                       <div className="space-y-2">
                         <select
-                          aria-label={`Role for ${u.name}`}
+                          aria-label={t('Role')}
                           className={cn(inputBase, 'px-3 py-2 text-sm')}
                           value={roleSelectValue(u)}
                           onChange={e => void handleChangeRole(u, e.target.value)}
                           disabled={isActionSaving}
                         >
                           <option value="role:project-manager">{t(getRoleDisplayName('Project Manager'))}</option>
-                          <option value="role:hod">HOD</option>
-                          <option value="role:staff">Staff</option>
-                          <option value="role:client">Client</option>
+                          <option value="role:hod">{t('HOD')}</option>
+                          <option value="role:staff">{t('Staff')}</option>
+                          <option value="role:client">{t('Client')}</option>
                           {rolePermissions
                             .filter(customRole => !customRole.isBuiltin)
                             .map(customRole => (
@@ -1846,13 +1848,13 @@ const Approvals: React.FC = () => {
                         </select>
                         {roleCompanyUserId === u.id && (
                           <select
-                            aria-label={`Company for ${u.name}`}
+                            aria-label={t('Company')}
                             className={cn(inputBase, 'px-3 py-2 text-sm')}
                             value={roleCompanyName}
                             onChange={e => setRoleCompanyName(e.target.value)}
                             disabled={isActionSaving}
                           >
-                            <option value="">Choose a company…</option>
+                            <option value="">{t('Choose a company…')}</option>
                             {clients.map(client => (
                               <option key={client.id} data-i18n-skip value={client.clientName}>{client.clientName}</option>
                             ))}
@@ -1865,7 +1867,7 @@ const Approvals: React.FC = () => {
                             disabled={isActionSaving || !roleCompanyName.trim()}
                             className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                           >
-                            Confirm
+                            {t('Confirm')}
                           </button>
                         )}
                         {roleDeptUserId === u.id && (
@@ -1877,18 +1879,18 @@ const Approvals: React.FC = () => {
                               disabled={isActionSaving || roleDeptValue.length === 0}
                               className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                             >
-                              Confirm
+                              {t('Confirm')}
                             </button>
                           </>
                         )}
                       </div>
                     ) : (
-                      <Badge tone="slate">{getEffectiveRoleName(u, rolePermissions)}</Badge>
+                      <Badge tone="slate" data-i18n-skip>{getEffectiveRoleName(u, rolePermissions)}</Badge>
                     )}
-                    {!isBossKoo(u) && u.permissions && Object.keys(u.permissions).length > 0 && <Badge className="mt-2" tone="indigo">Custom access</Badge>}
+                    {!isBossKoo(u) && u.permissions && Object.keys(u.permissions).length > 0 && <Badge className="mt-2" tone="indigo">{t('Custom access')}</Badge>}
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-500">
-                    {u.email || 'No email on file'}
+                    {u.email || t('No email on file')}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -1898,8 +1900,8 @@ const Approvals: React.FC = () => {
                           onClick={() => handleEditDepartments(u.id)}
                           disabled={isActionSaving}
                           className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-accent-soft hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
-                          title="Edit departments"
-                          aria-label={`Edit departments for ${u.name}`}
+                          title={t('Edit departments')}
+                          aria-label={t('Edit departments')}
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -1910,8 +1912,8 @@ const Approvals: React.FC = () => {
                           onClick={() => handleEditPermissions(u.id)}
                           disabled={isActionSaving}
                           className="inline-flex h-11 w-11 items-center justify-center rounded-control text-slate-500 transition-colors hover:bg-accent-soft hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50"
-                          title="Manage permissions"
-                          aria-label={`Manage permissions for ${u.name}`}
+                          title={t('Manage permissions')}
+                          aria-label={t('Manage permissions')}
                         >
                           <ShieldCheck className="h-4 w-4" />
                         </button>
@@ -1923,17 +1925,17 @@ const Approvals: React.FC = () => {
                           setUserToDelete(u.id);
                         }}
                         className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
-                        title="Remove User"
-                        aria-label={`Remove ${u.name}`}
+                        title={t('Remove User')}
+                        aria-label={t('Remove User')}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                       ) : isBossKoo(u) || u.id === currentUser?.id ? (
                       <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
-                        Protected account
+                        {t('Protected account')}
                       </span>
                       ) : (
-                      <span className="text-xs font-medium text-slate-400">No access</span>
+                      <span className="text-xs font-medium text-slate-400">{t('No access')}</span>
                       )}
                     </div>
                   </td>
@@ -1956,10 +1958,10 @@ const Approvals: React.FC = () => {
         >
           <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
             <h2 id={editDepartmentsTitleId} className="text-lg font-semibold text-slate-950">
-              Edit departments
+              {t('Edit departments')}
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Existing task assignments remain unchanged when a department is removed.
+              {t('Existing task assignments remain unchanged when a department is removed.')}
             </p>
           </div>
           <form onSubmit={handleSaveDepartments} className="space-y-5 p-6">
@@ -1977,7 +1979,7 @@ const Approvals: React.FC = () => {
                   disabled={isActionSaving || backend.isSaving}
                   onClick={() => void handleRetryMemberMutation('departments', memberDepartmentsId)}
                 >
-                  Retry saved change
+                  {t('Retry saved change')}
                 </Button>
               )}
               <Button
@@ -1986,10 +1988,10 @@ const Approvals: React.FC = () => {
                 disabled={isActionSaving}
                 onClick={() => setMemberDepartmentsId(null)}
               >
-                Cancel
+                {t('Cancel')}
               </Button>
               <Button type="submit" disabled={isActionSaving || backend.isSaving}>
-                {isActionSaving ? 'Saving...' : 'Save departments'}
+                {isActionSaving ? t('Saving...') : t('Save departments')}
               </Button>
             </div>
           </form>
@@ -2007,49 +2009,51 @@ const Approvals: React.FC = () => {
           panelClassName="max-w-3xl"
         >
           <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
-            <h2 id={editPermissionsTitleId} data-i18n-skip className="text-lg font-semibold text-slate-950">Manage access for {memberPermissionsUser.name}</h2>
-            <p className="mt-1 text-sm text-slate-500">Assigned tasks remain editable and deletable. Protected Boss Koo permissions are never delegated.</p>
+            <h2 id={editPermissionsTitleId} className="text-lg font-semibold text-slate-950">
+              {t('approval.manageAccessFor', { name: memberPermissionsUser.name })}
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">{t('Assigned tasks remain editable and deletable. Protected Boss Koo permissions are never delegated.')}</p>
           </div>
           <form onSubmit={handleSaveMemberPermissions} className="space-y-5 p-6">
             <div className="grid gap-3 sm:grid-cols-2">
               <button type="button" aria-pressed={!memberPermissionsCustom} onClick={() => setMemberPermissionsCustom(false)} className={cn('min-h-20 rounded-lg border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400', !memberPermissionsCustom ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50')}>
-                <span className="block text-sm font-semibold text-slate-900">Use role defaults</span>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">Follow {getEffectiveRoleName({ ...memberPermissionsUser, permissions: undefined }, rolePermissions)} permissions and future role updates.</span>
+                <span className="block text-sm font-semibold text-slate-900">{t('approval.useRoleDefaults')}</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">{t('Follow {role} permissions and future role updates.', { role: getEffectiveRoleName({ ...memberPermissionsUser, permissions: undefined }, rolePermissions) })}</span>
               </button>
               <button type="button" aria-pressed={memberPermissionsCustom} onClick={() => setMemberPermissionsCustom(true)} className={cn('min-h-20 rounded-lg border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400', memberPermissionsCustom ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50')}>
-                <span className="block text-sm font-semibold text-slate-900">Custom access</span>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">Save a dedicated permission set for this member.</span>
+                <span className="block text-sm font-semibold text-slate-900">{t('approval.customAccess')}</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">{t('Save a dedicated permission set for this member.')}</span>
               </button>
             </div>
 
             <section aria-labelledby="effective-access-preview" className="rounded-panel border border-accent/20 bg-accent-soft/50 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 id="effective-access-preview" className="text-sm font-semibold text-slate-900">Effective access preview</h3>
+                  <h3 id="effective-access-preview" className="text-sm font-semibold text-slate-900">{t('approval.effectivePreview')}</h3>
                   <p className="mt-1 text-xs leading-5 text-slate-600">
-                    Preview the permissions that will apply after this choice is saved. Baseline: {getEffectiveRoleName({ ...memberPermissionsUser, permissions: undefined }, rolePermissions)}.
+                    {t('Preview the permissions that will apply after this choice is saved. Baseline: {role}.', { role: getEffectiveRoleName({ ...memberPermissionsUser, permissions: undefined }, rolePermissions) })}
                   </p>
                 </div>
-                <Badge tone="indigo">{memberPermissionKeys.filter(key => memberPermissionsPreview[key]).length} enabled</Badge>
+                <Badge tone="indigo">{memberPermissionKeys.filter(key => memberPermissionsPreview[key]).length} {t('enabled')}</Badge>
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
-                  <p className="text-[11px] font-semibold tracking-wide text-emerald-700">Added</p>
+                  <p className="text-[11px] font-semibold tracking-wide text-emerald-700">{t('Added')}</p>
                   <p className="mt-1 text-xs leading-5 text-slate-600">
-                    {addedMemberPermissions.length > 0 ? addedMemberPermissions.map(key => permissionLabels[key]).join(', ') : 'No additions'}
+                    {addedMemberPermissions.length > 0 ? addedMemberPermissions.map(key => permissionLabels[key]).join(', ') : t('No additions')}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold tracking-wide text-red-700">Removed</p>
+                  <p className="text-[11px] font-semibold tracking-wide text-red-700">{t('Removed')}</p>
                   <p className="mt-1 text-xs leading-5 text-slate-600">
-                    {removedMemberPermissions.length > 0 ? removedMemberPermissions.map(key => permissionLabels[key]).join(', ') : 'No removals'}
+                    {removedMemberPermissions.length > 0 ? removedMemberPermissions.map(key => permissionLabels[key]).join(', ') : t('No removals')}
                   </p>
                 </div>
               </div>
             </section>
 
             <fieldset disabled={!memberPermissionsCustom} className="space-y-4 disabled:opacity-55">
-              <legend className="sr-only">Member permissions</legend>
+              <legend className="sr-only">{t('Member permissions')}</legend>
               {permissionGroups.map(group => (
                 <div key={group.title}>
                   <p className="mb-2 text-xs font-semibold tracking-wide text-slate-400">{group.title}</p>
@@ -2074,11 +2078,11 @@ const Approvals: React.FC = () => {
                   disabled={isActionSaving || backend.isSaving}
                   onClick={() => void handleRetryMemberMutation('permissions', memberPermissionsUser.id)}
                 >
-                  Retry saved change
+                  {t('Retry saved change')}
                 </Button>
               )}
-              <Button type="button" variant="secondary" disabled={isActionSaving} onClick={() => setMemberPermissionsId(null)}>Cancel</Button>
-              <Button type="submit" disabled={isActionSaving || backend.isSaving}>{isActionSaving ? 'Saving...' : memberPermissionsCustom ? 'Save custom access' : 'Reset to role defaults'}</Button>
+              <Button type="button" variant="secondary" disabled={isActionSaving} onClick={() => setMemberPermissionsId(null)}>{t('Cancel')}</Button>
+              <Button type="submit" disabled={isActionSaving || backend.isSaving}>{isActionSaving ? t('Saving...') : memberPermissionsCustom ? t('Save custom access') : t('Reset to role defaults')}</Button>
             </div>
           </form>
         </ModalShell>
@@ -2095,14 +2099,14 @@ const Approvals: React.FC = () => {
           panelClassName="max-w-lg "
         >
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
-              <h2 id={addMemberTitleId} className="text-lg font-semibold text-slate-950">Add new member</h2>
-              <p className="text-sm text-slate-500 mt-1">Invite a new account. Existing Staff signups should be approved below.</p>
+              <h2 id={addMemberTitleId} className="text-lg font-semibold text-slate-950">{t('Add new member')}</h2>
+              <p className="text-sm text-slate-500 mt-1">{t('Invite a new account. Existing Staff signups should be approved below.')}</p>
             </div>
 
             <form onSubmit={handleAddUser} className="p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Full Name')}</label>
                   <input
                     className={cn(inputBase, 'px-3 py-2.5')}
                     value={newUser.name}
@@ -2111,12 +2115,13 @@ const Approvals: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Email')}</label>
                   <input
                     type="email"
                     className={cn(inputBase, 'px-3 py-2.5')}
                     value={newUser.email}
                     onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                    data-i18n-skip
                     placeholder="member@email.com"
                   />
                 </div>
@@ -2124,9 +2129,9 @@ const Approvals: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">System Role</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('System Role')}</label>
                   <select
-                    aria-label="System Role"
+                    aria-label={t('System Role')}
                     className={cn(inputBase, 'px-3 py-2.5')}
                     value={newUser.role}
                     onChange={e => {
@@ -2143,14 +2148,14 @@ const Approvals: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Custom Role</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Custom Role')}</label>
                   <select
-                    aria-label="Custom Role"
+                    aria-label={t('Custom Role')}
                     className={cn(inputBase, 'px-3 py-2.5')}
                     value={newUser.customRoleId}
                     onChange={e => setNewUser({ ...newUser, customRoleId: e.target.value })}
                   >
-                    <option value="">Base role only</option>
+                    <option value="">{t('Base role only')}</option>
                     {getAssignableCustomRoles(newUser.role, rolePermissions).filter(customRole => !customRole.isBuiltin).map(customRole => <option key={customRole.id} data-i18n-skip value={customRole.id}>{customRole.name}</option>)}
                   </select>
                 </div>
@@ -2158,8 +2163,8 @@ const Approvals: React.FC = () => {
 
               {newUser.role === 'Client' ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-                  <p className="text-sm font-medium text-slate-700">Department</p>
-                  <p className="mt-0.5 text-sm text-slate-600">Client</p>
+                  <p className="text-sm font-medium text-slate-700">{t('Department')}</p>
+                  <p className="mt-0.5 text-sm text-slate-600">{t('Client')}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -2167,18 +2172,18 @@ const Approvals: React.FC = () => {
                     value={newUser.departments}
                     onChange={departments => setNewUser({ ...newUser, departments })}
                   />
-                  {['Staff', 'HOD'].includes(newUser.role) && <label className="block text-sm font-medium text-slate-700">Worker type<select className={cn(inputBase, 'mt-1 px-3 py-2.5')} value={newUser.workerType} onChange={event => setNewUser({ ...newUser, workerType: event.target.value as NonNullable<User['workerType']> })}><option value="employee">Employee</option><option value="supplier">Supplier</option><option value="freelancer">Freelancer</option></select></label>}
+                  {['Staff', 'HOD'].includes(newUser.role) && <label className="block text-sm font-medium text-slate-700">{t('Worker type')}<select className={cn(inputBase, 'mt-1 px-3 py-2.5')} value={newUser.workerType} onChange={event => setNewUser({ ...newUser, workerType: event.target.value as NonNullable<User['workerType']> })}><option value="employee">{t('Employee')}</option><option value="supplier">{t('Supplier')}</option><option value="freelancer">{t('Freelancer')}</option></select></label>}
                 </div>
               )}
 
               {newUser.role === 'Client' && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Client Company</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Client Company')}</label>
                   <input
                     className={cn(inputBase, 'px-3 py-2.5')}
                     value={newUser.companyName}
                     onChange={e => setNewUser({ ...newUser, companyName: e.target.value })}
-                    placeholder="e.g. UrbanEats"
+                    placeholder={t('e.g. UrbanEats')}
                     required
                   />
                 </div>
@@ -2194,13 +2199,13 @@ const Approvals: React.FC = () => {
                       onChange={event => setSendNewUserInvitation(event.target.checked)}
                     />
                     <span>
-                      <span className="block font-medium text-slate-900">Send email invitation</span>
-                      <span className="mt-0.5 block text-xs text-slate-500">Enable this after SMTP is configured.</span>
+                      <span className="block font-medium text-slate-900">{t('Send email invitation')}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{t('Enable this after SMTP is configured.')}</span>
                     </span>
                   </label>
                   {!sendNewUserInvitation && (
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Temporary Password</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">{t('Temporary Password')}</label>
                       <input
                         type="password"
                         autoComplete="new-password"
@@ -2210,13 +2215,13 @@ const Approvals: React.FC = () => {
                         onChange={event => setNewUser({ ...newUser, password: event.target.value })}
                         required
                       />
-                      <p className="mt-1 text-xs text-slate-500">At least 12 characters. The member must change it after login.</p>
+                      <p className="mt-1 text-xs text-slate-500">{t('At least 12 characters. The member must change it after login.')}</p>
                     </div>
                   )}
                 </div>
               ) : (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Default Password</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Default Password')}</label>
                   <input
                     type="text"
                     className={cn(inputBase, 'px-3 py-2.5')}
@@ -2224,7 +2229,7 @@ const Approvals: React.FC = () => {
                     onChange={e => setNewUser({ ...newUser, password: e.target.value })}
                     required
                   />
-                  <p className="text-xs text-slate-500 mt-1">The member signs in with this password first, then resets it in Settings.</p>
+                  <p className="text-xs text-slate-500 mt-1">{t('The member signs in with this password first, then resets it in Settings.')}</p>
                 </div>
               )}
 
@@ -2243,12 +2248,12 @@ const Approvals: React.FC = () => {
                     setIsAddUserOpen(false);
                   }}
                 >
-                  Cancel
+                  {t('Cancel')}
                 </Button>
                 <Button type="submit" disabled={isActionSaving || backend.isSaving}>
                   {isActionSaving
-                    ? sendNewUserInvitation ? 'Sending invitation...' : 'Creating account...'
-                    : 'Create member'}
+                    ? sendNewUserInvitation ? t('Sending invitation...') : t('Creating account...')
+                    : t('Create member')}
                 </Button>
               </div>
             </form>
@@ -2300,9 +2305,9 @@ const Approvals: React.FC = () => {
               <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <h2 id={deleteMemberTitleId} className="mb-2 text-lg font-semibold text-slate-950">Delete user account</h2>
+              <h2 id={deleteMemberTitleId} className="mb-2 text-lg font-semibold text-slate-950">{t('Delete user account')}</h2>
               <p className="text-sm text-slate-500">
-                Are you sure you want to permanently delete this user? They will immediately lose access to the system, and their assigned tasks will become unassigned. This action cannot be undone.
+                {t('Are you sure you want to permanently delete this user? They will immediately lose access to the system, and their assigned tasks will become unassigned. This action cannot be undone.')}
               </p>
               {deleteUserError && (
                 <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
@@ -2315,14 +2320,14 @@ const Approvals: React.FC = () => {
                 onClick={() => setUserToDelete(null)}
                 className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
               >
-                Cancel
+                {t('Cancel')}
               </button>
               <button 
                 onClick={() => void handleDeleteUser()}
                 disabled={isActionSaving}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
               >
-                Delete user
+                {t('Delete user')}
               </button>
             </div>
         </ModalShell>

@@ -116,12 +116,14 @@ interface CalendarMetricButtonProps {
   onSelect: (filter: CalendarFilter) => void;
 }
 
-const CalendarMetricButton: React.FC<CalendarMetricButtonProps> = ({ filter, label, value, icon: Icon, active, onSelect }) => (
+const CalendarMetricButton: React.FC<CalendarMetricButtonProps> = ({ filter, label, value, icon: Icon, active, onSelect }) => {
+  const { t } = useI18n();
+  return (
   <button
     type="button"
     data-calendar-filter={filter}
     aria-pressed={active}
-    aria-label={`${label}: ${value}`}
+    aria-label={t('calendar.metricCount', { label, count: value })}
     onClick={() => onSelect(filter)}
     className={clsx(
       'flex min-h-20 min-w-0 items-center gap-3 rounded-panel border px-3 py-3 text-left transition-[background-color,border-color,box-shadow,color] duration-160',
@@ -142,7 +144,8 @@ const CalendarMetricButton: React.FC<CalendarMetricButtonProps> = ({ filter, lab
       <span className="calm-number mt-1 block text-2xl font-semibold leading-7 text-ink">{value}</span>
     </span>
   </button>
-);
+  );
+};
 
 const Calendar: React.FC = () => {
   const { locale, t } = useI18n();
@@ -889,7 +892,7 @@ const Calendar: React.FC = () => {
                               dateButtonRefs.current[dateStr] = element;
                             }}
                             tabIndex={dateStr === focusDateKey ? 0 : -1}
-                            aria-label={`${t('Select date')} ${formatLocalizedWeekdayDate(day, locale, true)}`}
+                            aria-label={t('calendar.selectDate', { date: formatLocalizedWeekdayDate(day, locale, true) })}
                             aria-current={selected ? 'date' : undefined}
                             onClick={event => {
                               event.stopPropagation();
@@ -908,7 +911,7 @@ const Calendar: React.FC = () => {
                               <span
                                 role="img"
                                 title={dayHolidays.map(holiday => holiday.name).join(', ')}
-                                aria-label={`${t('Holiday')}: ${dayHolidays.map(holiday => holiday.name).join(', ')}`}
+                                aria-label={t('calendar.holiday', { names: dayHolidays.map(holiday => holiday.name).join(', ') })}
                               >
                                 <Flag className={clsx('h-3 w-3', HOLIDAY_COLORS[primaryHoliday.category].text)} aria-hidden="true" />
                               </span>
@@ -920,8 +923,8 @@ const Calendar: React.FC = () => {
                                   event.stopPropagation();
                                   handleAddTaskForDate(day);
                                 }}
-                                title={`${t('Assign task on')} ${formatLocalizedDate(day, locale)}`}
-                                aria-label={`${t('Assign task on')} ${formatLocalizedDate(day, locale)}`}
+                                title={t('calendar.assignTask', { date: formatLocalizedDate(day, locale) })}
+                                aria-label={t('calendar.assignTask', { date: formatLocalizedDate(day, locale) })}
                                 className={clsx(
                                   'hidden min-h-11 min-w-11 items-center justify-center rounded-control border border-line bg-surface/90 text-muted shadow-sm transition-opacity hover:border-accent/30 hover:bg-accent-soft hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 sm:flex',
                                   selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
@@ -955,7 +958,7 @@ const Calendar: React.FC = () => {
                           <div className="absolute bottom-1 right-1 md:hidden">
                             <span
                               className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-bold text-white"
-                              aria-label={`${dayTasks.length} ${t(dayTasks.length === 1 ? 'task' : 'tasks')} ${t('on')} ${formatLocalizedDate(day, locale)}`}
+                              aria-label={t('calendar.dayTasks', { count: dayTasks.length, tasksLabel: t(dayTasks.length === 1 ? 'task' : 'tasks'), date: formatLocalizedDate(day, locale) })}
                             >
                               {dayTasks.length}
                             </span>
@@ -970,7 +973,7 @@ const Calendar: React.FC = () => {
                               setSelectedDate(day);
                             }}
                             className="absolute bottom-1 left-1 hidden min-h-11 rounded-control px-1.5 py-0.5 text-[9px] font-semibold text-muted transition-colors hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 md:block"
-                            aria-label={`${t('Show')} ${hiddenCount} ${t(hiddenCount === 1 ? 'more task' : 'more tasks')} ${t('on')} ${formatLocalizedDate(day, locale)}`}
+                            aria-label={t('calendar.showMoreTasks', { count: hiddenCount, tasksLabel: t(hiddenCount === 1 ? 'more task' : 'more tasks'), date: formatLocalizedDate(day, locale) })}
                           >
                             +{hiddenCount} {t('more')}
                           </button>
@@ -1144,7 +1147,7 @@ const Calendar: React.FC = () => {
                     {selectedDaySummary.overdue > 0 && ` · ${selectedDaySummary.overdue} ${t('overdue')}`}
                   </p>
                 </div>
-                <span className="calm-number text-xl font-semibold text-ink" aria-label={`${selectedDaySummary.total} ${t('tasks')}`}>
+                <span className="calm-number text-xl font-semibold text-ink" aria-label={t('calendar.taskCount', { count: selectedDaySummary.total })}>
                   {selectedDaySummary.total}
                 </span>
               </div>
@@ -1272,7 +1275,7 @@ const Calendar: React.FC = () => {
                           )}
                         >
                           <Clock className="h-3 w-3" aria-hidden="true" />
-                          {t(getRelativeDueDateString(task.dueDate, task.isCompleted, task.status))}
+                          {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}
                         </p>
                       )}
                     </article>

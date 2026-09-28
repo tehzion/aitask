@@ -12,6 +12,7 @@ import { getTodayInputDate } from '../lib/utils';
 import { getMemberDepartments, isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
 import ModalShell from './ModalShell';
 import { modalFooter } from './uiTokens';
+import { useI18n } from './I18nProvider';
 
 interface Props {
   isOpen: boolean;
@@ -22,6 +23,7 @@ const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
+  const { t } = useI18n();
   const { users, clients, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, retryPendingSave, discardMutation } = useStore(useShallow(state => ({
     users: state.users,
     clients: state.clients,
@@ -411,13 +413,13 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
           <div>
-            <h2 id={titleId} className="text-xl font-semibold text-slate-950">Create task</h2>
-            <p id={descriptionId} className="mt-1 text-sm text-slate-600">Assign work to a specific department or position.</p>
+            <h2 id={titleId} className="text-xl font-semibold text-slate-950">{t('Create task')}</h2>
+            <p id={descriptionId} className="mt-1 text-sm text-slate-600">{t('Assign work to a specific department or position.')}</p>
           </div>
           <button 
             onClick={closeAndReset}
-            aria-label="Close create task modal"
-            title="Close"
+            aria-label={t('Close create task modal')}
+            title={t('common.close')}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
@@ -430,13 +432,13 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             
             {/* Task Basic Info */}
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-slate-900">Task details</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{t('Task details')}</h3>
               
               {showCompanyLink && (
               <div>
                 <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                   <label htmlFor={projectSelectId} className="block text-sm font-medium text-slate-700">
-                    Link to Company / Brand {isStaffTaskCreator ? <span className="text-red-500">*</span> : '(Optional)'}
+                    {t('Link to Company / Brand')} {isStaffTaskCreator ? <span className="text-red-500">*</span> : t('(Optional)')}
                   </label>
                   {canCreateProjects && !isStaffTaskCreator && (
                     <button
@@ -444,7 +446,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       onClick={() => setIsProjectModalOpen(true)}
                       className="flex items-center whitespace-nowrap text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
                     >
-                      <Plus className="mr-0.5 h-3 w-3" /> New project
+                      <Plus className="mr-0.5 h-3 w-3" /> {t('New project')}
                     </button>
                   )}
                 </div>
@@ -455,7 +457,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     onChange={e => selectProject(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                   >
-                    <option value="">{isStaffTaskCreator ? 'Choose a Project Manager-created company' : 'No Company Link / Independent Task'}</option>
+                    <option value="">{t(isStaffTaskCreator ? 'Choose a Project Manager-created company' : 'No Company Link / Independent Task')}</option>
                     {assignableProjects.map(p => (
                       <option key={p.id} data-i18n-skip value={p.id}>{p.projectName} ({p.clientName})</option>
                     ))}
@@ -466,35 +468,35 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               )}
 
               <div>
-                <label htmlFor={taskTitleId} className="block text-sm font-medium text-slate-700 mb-1">Task Title <span className="text-red-500">*</span></label>
+                <label htmlFor={taskTitleId} className="block text-sm font-medium text-slate-700 mb-1">{t('Task Title')} <span className="text-red-500">*</span></label>
                 <input 
                   id={taskTitleId}
                   type="text" required
                   value={title} onChange={e => setTitle(e.target.value)}
                   className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
-                  placeholder="e.g., Design Facebook Banners"
+                  placeholder={t('e.g., Design Facebook Banners')}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">{t('Description')}</label>
                 <textarea 
                   rows={3}
                   value={description} onChange={e => setDescription(e.target.value)}
                   className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm resize-none"
-                  placeholder="Describe the task requirements..."
+                  placeholder={t('Describe the task requirements...')}
                 />
               </div>
             </div>
 
             {/* Client & Customer Info */}
             <div className="space-y-4 border-t border-slate-200/80 pt-5">
-              <h3 className="text-sm font-semibold text-slate-900">Client and assets</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{t('Client and assets')}</h3>
               
               <div>
                 <div>
                   <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-                    <label htmlFor={clientSelectId} className="block text-sm font-medium text-slate-700">Client / Brand Name <span className="text-red-500">*</span></label>
+                    <label htmlFor={clientSelectId} className="block text-sm font-medium text-slate-700">{t('Client / Brand Name')} <span className="text-red-500">*</span></label>
                     {!isStaffTaskCreator && (
                       <button
                         type="button"
@@ -504,7 +506,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         }}
                         className="flex items-center whitespace-nowrap text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
                       >
-                        <Plus className="w-3 h-3 mr-0.5" /> Manage companies
+                        <Plus className="w-3 h-3 mr-0.5" /> {t('Manage companies')}
                       </button>
                     )}
                   </div>
@@ -515,12 +517,12 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     value={clientName} onChange={e => setClientName(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
                   >
-                    <option value="">Choose a company</option>
+                    <option value="">{t('Choose a company')}</option>
                     {clientOptions.map(option => <option key={option} value={option}>{option}</option>)}
                   </select>
                   {selectedProject && (
                     <p className="text-xs text-slate-500 mt-1">
-                      Company follows {selectedProject.projectName}.
+                      {t('Company follows')} <span data-i18n-skip>{selectedProject.projectName}</span>.
                     </p>
                   )}
                 </div>
@@ -528,7 +530,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Facebook Page</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Facebook Page')}</label>
                   <input 
                     type="url"
                     value={facebookPage} onChange={e => setFacebookPage(e.target.value)}
@@ -537,7 +539,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Company Website</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Company Website')}</label>
                   <input 
                     type="url"
                     value={website} onChange={e => setWebsite(e.target.value)}
@@ -550,11 +552,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
             {/* Assignment & Scheduling */}
             <div className="space-y-4 border-t border-slate-200/80 pt-5">
-              <h3 className="text-sm font-semibold text-slate-900">Assignment and timeline</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{t('Assignment and timeline')}</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor={departmentId} className="block text-sm font-medium text-slate-700 mb-1">Assign to Position/Department <span className="text-red-500">*</span></label>
+                  <label htmlFor={departmentId} className="block text-sm font-medium text-slate-700 mb-1">{t('Assign to Position/Department')} <span className="text-red-500">*</span></label>
                   <div className="relative">
                     <select
                       id={departmentId}
@@ -566,14 +568,14 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       }}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
-                      <option value="">Choose department</option>
+                      <option value="">{t('Choose department')}</option>
                       {departmentChoices.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                   </div>
                 </div>
                 <div>
-                  <label htmlFor={assigneeId} className="block text-sm font-medium text-slate-700 mb-1">Assignee</label>
+                  <label htmlFor={assigneeId} className="block text-sm font-medium text-slate-700 mb-1">{t('Assignee')}</label>
                   <div className="relative">
                     <select
                       id={assigneeId}
@@ -582,7 +584,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
                       <option value="">
-                        Unassigned
+                        {t('Unassigned')}
                       </option>
                       {filteredUsers.map(u => (
                         <option key={u.id} data-i18n-skip value={u.id}>{u.name}</option>
@@ -598,14 +600,14 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Service Type</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Service Type')}</label>
                   <div className="relative">
                     <select
                       value={serviceType} onChange={e => selectService(e.target.value)}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
                       {serviceChoices.map(s => <option key={s} value={s}>{s}</option>)}
-                      <option value={CUSTOM_SERVICE_VALUE}>+ Add custom service</option>
+                      <option value={CUSTOM_SERVICE_VALUE}>+ {t('Add custom service')}</option>
                     </select>
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                   </div>
@@ -619,7 +621,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         maxLength={40}
                         autoFocus
                         className="min-w-0 flex-1 bg-white border border-dashed border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block px-3 py-2 outline-none shadow-sm"
-                        placeholder="Custom service"
+                        placeholder={t('Custom service')}
                       />
                       <button
                         type="button"
@@ -627,7 +629,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         disabled={!customServiceInput.trim()}
                         className="inline-flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
                       >
-                        <Plus className="w-4 h-4" /> Add
+                        <Plus className="w-4 h-4" /> {t('Add')}
                       </button>
                     </div>
                   )}
@@ -636,7 +638,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Priority')}</label>
                   <div className="relative">
                     <select
                       value={priority} onChange={e => setPriority(e.target.value as Priority)}
@@ -648,14 +650,14 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Client visibility</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Client visibility')}</label>
                   <div className="relative">
                     <select
                       value={visibility} onChange={e => setVisibility(e.target.value as TaskVisibility)}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
-                      <option value="client-visible">Visible to client</option>
-                      <option value="internal">Internal only</option>
+                      <option value="client-visible">{t('Visible to client')}</option>
+                      <option value="internal">{t('Internal only')}</option>
                     </select>
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                   </div>
@@ -664,7 +666,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Start Date <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Start Date')} <span className="text-red-500">*</span></label>
                   <input 
                     type="date" required
                     value={startDate} onChange={e => setStartDate(e.target.value)}
@@ -672,7 +674,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Due Date')}</label>
                   <input 
                     type="date"
                     value={dueDate} onChange={e => setDueDate(e.target.value)}
@@ -685,11 +687,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
             {/* Links and notes */}
             <div className="space-y-4 border-t border-slate-200/80 pt-5">
-              <h3 className="text-sm font-semibold text-slate-900">Links and notes</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{t('Links and notes')}</h3>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor={attachmentLinkId} className="block text-sm font-medium text-slate-700 mb-1">Attachment URL</label>
+                  <label htmlFor={attachmentLinkId} className="block text-sm font-medium text-slate-700 mb-1">{t('Attachment URL')}</label>
                   <input
                     id={attachmentLinkId}
                     type="url"
@@ -700,27 +702,27 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   />
                 </div>
                 <div>
-                  <label htmlFor={attachmentNameId} className="block text-sm font-medium text-slate-700 mb-1">Attachment Label</label>
+                  <label htmlFor={attachmentNameId} className="block text-sm font-medium text-slate-700 mb-1">{t('Attachment Label')}</label>
                   <input
                     id={attachmentNameId}
                     type="text"
                     value={attachmentName}
                     onChange={e => setAttachmentName(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
-                    placeholder="Brief, artwork, source folder..."
+                    placeholder={t('Brief, artwork, source folder...')}
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor={notesId} className="block text-sm font-medium text-slate-700 mb-1">Internal Notes</label>
+                <label htmlFor={notesId} className="block text-sm font-medium text-slate-700 mb-1">{t('Internal Notes')}</label>
                 <input
                   id={notesId}
                   type="text"
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
-                  placeholder="Any context the team should keep visible"
+                  placeholder={t('Any context the team should keep visible')}
                 />
               </div>
             </div>
@@ -740,7 +742,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             onClick={closeAndReset}
             className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button 
             type="submit"
@@ -748,7 +750,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             disabled={isSubmitting}
             className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? 'Saving task...' : pendingTaskId ? 'Retry saving task' : 'Create & open task'}
+            {isSubmitting ? t('Saving task...') : pendingTaskId ? t('Retry saving task') : t('Create & open task')}
           </button>
         </div>
 

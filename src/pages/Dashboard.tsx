@@ -60,7 +60,7 @@ const Dashboard: React.FC = () => {
     serviceCycles: state.serviceCycles,
     clientProfiles: state.clients,
   })));
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [bossTab, setBossTab] = useState<BossTab>('overview');
   const [portfolioOwner, setPortfolioOwner] = useState('All');
   const [searchParams] = useSearchParams();
@@ -270,7 +270,7 @@ const Dashboard: React.FC = () => {
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
   }, [tasks]);
 
-  const monthlyData = useMemo(() => getTrackedMonthlyCompletions(tasks), [tasks]);
+  const monthlyData = useMemo(() => getTrackedMonthlyCompletions(tasks, new Date(), 6, locale), [locale, tasks]);
   const hasTrackedCompletionData = monthlyData.some(month => month.completed > 0);
 
   const recentTasks = useMemo(
@@ -383,8 +383,8 @@ const Dashboard: React.FC = () => {
     return (
       <div className={pageShell}>
         <PageHeader
-          title="Loading Dashboard..."
-          description="Fetching latest database state..."
+          title={t('Loading Dashboard...')}
+          description={t('Fetching latest database state...')}
         />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonMetricCard key={i} />)}
@@ -411,19 +411,19 @@ const Dashboard: React.FC = () => {
   if (currentUser?.role === 'Project Manager' && !isBossKoo(currentUser)) return (
     <div className={pageShell}>
       <PageHeader
-        title="Portfolio work"
-        description="Deadlines, review risk, active companies, and commercial records in your portfolio."
+        title={t('Portfolio work')}
+        description={t('Deadlines, review risk, active companies, and commercial records in your portfolio.')}
         action={(
           <div className="flex flex-wrap items-center justify-end gap-2.5">
             <BackendFreshness />
             <Link to="/tasks" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink transition hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-              Open work
+              {t('Open work')}
               <ArrowRight className="h-4 w-4" />
             </Link>
             {canCreateTask && (
               <Button onClick={() => setCreateTaskModalOpen(true)}>
                 <Plus className="h-4 w-4" />
-                Create task
+                {t('Create task')}
               </Button>
             )}
           </div>
@@ -453,7 +453,7 @@ const Dashboard: React.FC = () => {
             {canCreateTask && (
               <Button onClick={() => setCreateTaskModalOpen(true)}>
                 <Plus className="h-4 w-4" />
-                Create task
+                {t('Create task')}
               </Button>
             )}
           </div>
@@ -464,16 +464,16 @@ const Dashboard: React.FC = () => {
         <section className={cn(cardBase, 'mt-5 overflow-hidden')} aria-labelledby="local-service-demo-heading">
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="calm-eyebrow">Local sample workspace</p>
-              <h2 id="local-service-demo-heading" className="mt-1 text-lg font-semibold text-slate-950">Explore the service demo</h2>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">Open UrbanEats for a published cycle, deliverables, task-chain dependencies, comments, files, and add-ons. TechNova and EcoLife show the other plan-creation modes.</p>
+              <p className="calm-eyebrow">{t('Local sample workspace')}</p>
+              <h2 id="local-service-demo-heading" className="mt-1 text-lg font-semibold text-slate-950">{t('Explore the service demo')}</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{t('Open UrbanEats for a published cycle, deliverables, task-chain dependencies, comments, files, and add-ons. TechNova and EcoLife show the other plan-creation modes.')}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link to={`/clients/${LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-accent px-4 text-sm font-semibold text-white transition hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 dark:text-[rgb(var(--calm-accent-ink))]">
-                Open UrbanEats
+                {t('Open UrbanEats')}
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              {currentUser?.role !== 'Client' && <Link to="/clients" className="inline-flex min-h-11 items-center justify-center rounded-control px-4 text-sm font-semibold text-accent transition hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">Open delivery tracker</Link>}
+              {currentUser?.role !== 'Client' && <Link to="/clients" className="inline-flex min-h-11 items-center justify-center rounded-control px-4 text-sm font-semibold text-accent transition hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">{t('Open delivery tracker')}</Link>}
             </div>
           </div>
         </section>
@@ -489,17 +489,17 @@ const Dashboard: React.FC = () => {
               <div className="min-w-0">
                 <h2 className="text-lg font-bold text-slate-950">
                   {currentUser?.role === 'Client'
-                    ? 'No visible client tasks yet'
+                    ? t('No visible client tasks yet')
                     : currentUser?.role === 'Staff' || currentUser?.role === 'HOD'
-                      ? 'No assigned tasks yet'
-                      : 'Start the live workspace'}
+                      ? t('No assigned tasks yet')
+                      : t('Start the live workspace')}
                 </h2>
                 <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
                   {currentUser?.role === 'Client'
-                    ? 'Tasks for your company will appear here as soon as the team publishes or assigns them.'
+                    ? t('Tasks for your company will appear here as soon as the team publishes or assigns them.')
                     : currentUser?.role === 'Staff' || currentUser?.role === 'HOD'
-                      ? 'Work assigned to you and work in your permitted departments will appear here.'
-                      : 'Demo tasks are cleared. Create the first real task so dashboards, calendars, notifications, and reports begin filling with live data.'}
+                      ? t('Work assigned to you and work in your permitted departments will appear here.')
+                      : t('Demo tasks are cleared. Create the first real task so dashboards, calendars, notifications, and reports begin filling with live data.')}
                 </p>
               </div>
             </div>
@@ -507,14 +507,14 @@ const Dashboard: React.FC = () => {
               {canCreateTask && (
                 <Button onClick={() => setCreateTaskModalOpen(true)} className="shrink-0">
                   <Plus className="h-4 w-4" />
-                  {currentUser?.role === 'Staff' || currentUser?.role === 'HOD' ? 'Create task' : 'Create first task'}
+                  {currentUser?.role === 'Staff' || currentUser?.role === 'HOD' ? t('Create task') : t('Create first task')}
                 </Button>
               )}
               <Link
                 to="/projects"
                 className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
-                View companies
+                {t('View companies')}
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
@@ -653,7 +653,7 @@ const Dashboard: React.FC = () => {
                       </table>
                       <div className="flex flex-col gap-3 border-t border-line/60 px-5 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
                         <span>
-                          Showing {(safePortfolioPage - 1) * PORTFOLIO_PAGE_SIZE + 1}–{Math.min(safePortfolioPage * PORTFOLIO_PAGE_SIZE, filteredPortfolioRows.length)} of {filteredPortfolioRows.length}
+                          {t('Showing')} {(safePortfolioPage - 1) * PORTFOLIO_PAGE_SIZE + 1}–{Math.min(safePortfolioPage * PORTFOLIO_PAGE_SIZE, filteredPortfolioRows.length)} {t('of')} {filteredPortfolioRows.length}
                         </span>
                         <div className="flex items-center gap-2">
                           <button
@@ -662,16 +662,16 @@ const Dashboard: React.FC = () => {
                             onClick={() => setPortfolioPage(page => Math.max(1, page - 1))}
                             className="min-h-9 rounded-control border border-line bg-surface px-3 font-semibold text-ink transition-colors hover:bg-inset disabled:cursor-not-allowed disabled:opacity-45"
                           >
-                            Previous
+                            {t('Previous')}
                           </button>
-                          <span aria-live="polite">Page {safePortfolioPage} of {portfolioPageCount}</span>
+                          <span aria-live="polite">{t('Page')} {safePortfolioPage} {t('of')} {portfolioPageCount}</span>
                           <button
                             type="button"
                             disabled={safePortfolioPage >= portfolioPageCount}
                             onClick={() => setPortfolioPage(page => Math.min(portfolioPageCount, page + 1))}
                             className="min-h-9 rounded-control border border-line bg-surface px-3 font-semibold text-ink transition-colors hover:bg-inset disabled:cursor-not-allowed disabled:opacity-45"
                           >
-                            Next
+                            {t('Next')}
                           </button>
                         </div>
                       </div>
@@ -727,13 +727,13 @@ const Dashboard: React.FC = () => {
                 <OperationsGlance tasks={staffAssignedTasks} users={users} scope="staff" />
               </div>
             ) : (
-              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 order-1" aria-label="Workspace metrics">
-                <StatCard title="Active Companies" value={stats.activeProjects} to="/projects" />
-                <StatCard title="Pending Tasks" value={stats.pendingTasks} to="/clients?period=all" />
-                <StatCard title="Completed Tasks" value={stats.completedTasks} to="/clients?period=all" />
-                <StatCard title="Overdue Tasks" value={stats.overdueTasks} to="/clients?period=all" />
-                <StatCard title="Due Today" value={stats.dueTodayTasks} to="/calendar" />
-                <StatCard title="Due This Week" value={stats.dueThisWeekTasks} to="/calendar" />
+              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 order-1" aria-label={t('Workspace metrics')}>
+                <StatCard title={t('Active Companies')} value={stats.activeProjects} to="/projects" />
+                <StatCard title={t('Pending Tasks')} value={stats.pendingTasks} to="/clients?period=all" />
+                <StatCard title={t('Completed Tasks')} value={stats.completedTasks} to="/clients?period=all" />
+                <StatCard title={t('Overdue Tasks')} value={stats.overdueTasks} to="/clients?period=all" />
+                <StatCard title={t('Due Today')} value={stats.dueTodayTasks} to="/calendar" />
+                <StatCard title={t('Due This Week')} value={stats.dueThisWeekTasks} to="/calendar" />
               </section>
             )}
 
@@ -792,7 +792,7 @@ const Dashboard: React.FC = () => {
                             <span data-i18n-skip>{task.title}</span>
                             <span className="ml-2 text-xs text-muted">{task.clientName}</span>
                           </span>
-                          <span className="shrink-0 text-xs font-semibold text-muted">{getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}</span>
+                          <span className="shrink-0 text-xs font-semibold text-muted">{getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}</span>
                         </Link>
                       ))}
                     </div>
@@ -837,14 +837,14 @@ const Dashboard: React.FC = () => {
         <section className="space-y-6 order-2" aria-labelledby="workspace-analytics-title">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <h2 id="workspace-analytics-title" className="text-lg font-semibold text-slate-950">Workspace analytics</h2>
-              <p className="mt-1 text-sm text-slate-500">Current workload distribution and completion trend.</p>
+              <h2 id="workspace-analytics-title" className="text-lg font-semibold text-slate-950">{t('Workspace analytics')}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t('Current workload distribution and completion trend.')}</p>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <ChartCard title="Tasks by Department">
+            <ChartCard title={t('Tasks by Department')}>
               {tasksByTeamData.length === 0 ? (
-                <ChartEmptyState>No task data yet</ChartEmptyState>
+                <ChartEmptyState>{t('No task data yet')}</ChartEmptyState>
               ) : (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 256 }}>
                   <BarChart data={tasksByTeamData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
@@ -858,9 +858,9 @@ const Dashboard: React.FC = () => {
               )}
             </ChartCard>
 
-            <ChartCard title="Tasks by Status">
+            <ChartCard title={t('Tasks by Status')}>
               {tasksByStatusData.length === 0 ? (
-                <ChartEmptyState>No status data yet</ChartEmptyState>
+                <ChartEmptyState>{t('No status data yet')}</ChartEmptyState>
               ) : (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 256 }}>
                   <PieChart>
@@ -878,8 +878,8 @@ const Dashboard: React.FC = () => {
           </div>
 
           <ChartCard
-            title="Tracked Monthly Completions"
-            description="Uses the actual completion timestamp. Historical completed tasks without one remain in all-time totals."
+            title={t('Tracked Monthly Completions')}
+            description={t('Uses the actual completion timestamp. Historical completed tasks without one remain in all-time totals.')}
           >
             {hasTrackedCompletionData ? (
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 960, height: 256 }}>
@@ -892,7 +892,7 @@ const Dashboard: React.FC = () => {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <ChartEmptyState>No timestamped completions yet</ChartEmptyState>
+              <ChartEmptyState>{t('No timestamped completions yet')}</ChartEmptyState>
             )}
           </ChartCard>
         </section>
@@ -901,11 +901,11 @@ const Dashboard: React.FC = () => {
         <section className={cn(cardBase, 'order-3 p-4 sm:p-5')} aria-labelledby="recent-activity-title">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 id="recent-activity-title" className="text-base font-semibold text-slate-950">Recent workspace activity</h2>
-              <p className="mt-1 text-sm text-slate-500">Latest tasks across the work you can access.</p>
+              <h2 id="recent-activity-title" className="text-base font-semibold text-slate-950">{t('Recent workspace activity')}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t('Latest tasks across the work you can access.')}</p>
             </div>
             <Link to="/clients?period=all" className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
-              View tasks <ArrowRight className="ml-1 h-4 w-4" />
+              {t('View tasks')} <ArrowRight className="ml-1 h-4 w-4" />
             </Link>
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -919,7 +919,7 @@ const Dashboard: React.FC = () => {
                   <p data-i18n-skip className="mt-1 truncate text-xs text-slate-500">{task.clientName} - {task.projectName || 'Independent'}</p>
                   <div className="mt-3 flex items-center justify-between gap-2 text-[11px]">
                     <span className={cn('truncate text-slate-500', isOverdue && 'font-semibold text-red-600')}>
-                      {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status)}
+                      {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}
                     </span>
                     <span className={cn(
                       'shrink-0 rounded-md bg-slate-100 px-2 py-1 font-semibold text-slate-700',
@@ -936,12 +936,12 @@ const Dashboard: React.FC = () => {
             })}
             {recentTasks.length === 0 && (
               <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center md:col-span-2 xl:col-span-5">
-                <p className="text-sm font-semibold text-slate-600">No recent tasks yet</p>
-                <p className="mt-1 text-xs text-slate-500">Newly created work will appear here first.</p>
+                <p className="text-sm font-semibold text-slate-600">{t('No recent tasks yet')}</p>
+                <p className="mt-1 text-xs text-slate-500">{t('Newly created work will appear here first.')}</p>
                 {canCreateTask && (
                   <Button onClick={() => setCreateTaskModalOpen(true)} variant="secondary" className="mt-3 min-h-9 px-3 py-1.5 text-xs">
                     <Plus className="h-3.5 w-3.5" />
-                    Create task
+                    {t('Create task')}
                   </Button>
                 )}
               </div>

@@ -11,7 +11,7 @@ import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { STAFF_DEPARTMENTS } from '../lib/departments';
 import { useColorTheme } from '../hooks/useColorTheme';
 import { isLocalServiceDemoEnabled } from '../mock/localServiceDemo';
-import { LanguageSwitcher } from '../components/I18nProvider';
+import { LanguageSwitcher, useI18n } from '../components/I18nProvider';
 
 /** Max failed attempts before a short lockout is applied */
 const MAX_ATTEMPTS = 5;
@@ -35,6 +35,7 @@ const getLoginDestination = (mustResetPassword: boolean, userId: string, request
 );
 
 const Login: React.FC = () => {
+  const { t } = useI18n();
   const { resolvedTheme, toggleTheme } = useColorTheme();
   const { login, currentUser, registerUser, requestPasswordRecovery } = useStore();
   const navigate = useNavigate();
@@ -97,7 +98,7 @@ const Login: React.FC = () => {
     const result = await requestPasswordRecovery(recoveryIdentifier);
     setIsRequestingRecovery(false);
     if (!result.ok) {
-      setRecoveryError(result.error || 'Unable to request a recovery email.');
+      setRecoveryError(t(result.error || 'Unable to request a recovery email.'));
       return;
     }
     setRecoverySent(true);
@@ -109,12 +110,12 @@ const Login: React.FC = () => {
 
     if (lockedUntil && Date.now() < lockedUntil) {
       const remaining = Math.ceil((lockedUntil - Date.now()) / 1000);
-      setLoginError(`Too many attempts. Please wait ${remaining} seconds.`);
+      setLoginError(t('auth.tooManyAttempts', { seconds: remaining }));
       return;
     }
 
     if (!username.trim()) {
-      setLoginError(secureAccounts ? 'Please enter your email.' : 'Please enter your email or username.');
+      setLoginError(t(secureAccounts ? 'Please enter your email.' : 'Please enter your email or username.'));
       return;
     }
 
@@ -123,7 +124,7 @@ const Login: React.FC = () => {
     try {
       loginResult = await login(username, password);
     } catch {
-      setLoginError('This browser could not verify the account. Please try again.');
+      setLoginError(t('This browser could not verify the account. Please try again.'));
       return;
     } finally {
       setIsLoggingIn(false);
@@ -145,13 +146,13 @@ const Login: React.FC = () => {
         const until = Date.now() + LOCKOUT_SECONDS * 1000;
         setLockedUntil(until);
         attemptsRef.current = 0;
-        setLoginError(`Too many failed attempts. Please wait ${LOCKOUT_SECONDS} seconds.`);
+      setLoginError(t('auth.tooManyFailedAttempts', { seconds: LOCKOUT_SECONDS }));
         setTimeout(() => setLockedUntil(null), LOCKOUT_SECONDS * 1000);
       } else {
-        setLoginError(loginFailureResult.error);
+        setLoginError(t(loginFailureResult.error));
       }
     } else {
-      setLoginError(loginFailureResult.error);
+      setLoginError(t(loginFailureResult.error));
     }
   };
 
@@ -161,7 +162,7 @@ const Login: React.FC = () => {
     if (secureAccounts) {
       const passwordError = validateStaffSignupPassword(regPassword, regConfirmPassword);
       if (passwordError) {
-        setRegError(passwordError);
+        setRegError(t(passwordError));
         return;
       }
     }
@@ -173,7 +174,7 @@ const Login: React.FC = () => {
     });
     setIsSubmittingRegistration(false);
     if (!result.ok) {
-      setRegError(result.error || 'Unable to submit your registration.');
+      setRegError(t(result.error || 'Unable to submit your registration.'));
       return;
     }
     setRegSuccess(true);
@@ -189,7 +190,7 @@ const Login: React.FC = () => {
         <button
           type="button"
           onClick={toggleTheme}
-          aria-label={`Switch to ${resolvedTheme === 'dark' ? 'day' : 'night'} mode`}
+          aria-label={t('auth.switchTheme', { mode: t(resolvedTheme === 'dark' ? 'day' : 'night') })}
           aria-pressed={resolvedTheme === 'dark'}
           className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white"
         >
@@ -199,24 +200,24 @@ const Login: React.FC = () => {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <div className="flex items-center gap-3">
-            <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-blue-600 text-xl font-bold text-white shadow-sm">
+            <div data-i18n-skip className="flex h-14 w-14 items-center justify-center rounded-lg bg-blue-600 text-xl font-bold text-white shadow-sm">
               AT
             </div>
             <div>
-              <div className="text-2xl font-bold text-slate-950">AiTask</div>
-              <span className="mt-0.5 block text-xs font-medium text-slate-500">Marketing agency workspace</span>
+              <div data-i18n-skip className="text-2xl font-bold text-slate-950">AiTask</div>
+              <span className="mt-0.5 block text-xs font-medium text-slate-500">{t('Marketing agency workspace')}</span>
             </div>
           </div>
         </div>
         <h1 className="mt-8 text-center text-2xl font-semibold text-slate-950">
-          {isRecovering ? 'Reset your password' : isRegistering ? 'Register for Access' : 'Sign in to AiTask'}
+          {isRecovering ? t('Reset your password') : isRegistering ? t('Register for Access') : t('Sign in to AiTask')}
         </h1>
         <p className="mt-2 text-center text-sm text-slate-600">
           {isRecovering
-            ? 'Enter your account email to receive a secure recovery link.'
+            ? t('Enter your account email to receive a secure recovery link.')
             : isRegistering
-            ? 'Fill in your details. Boss Koo will review and approve your account.'
-            : secureAccounts ? 'Enter your account email and password to access the dashboard.' : 'Enter your username and password to access the dashboard.'}
+            ? t('Fill in your details. Boss Koo will review and approve your account.')
+            : secureAccounts ? t('Enter your account email and password to access the dashboard.') : t('Enter your username and password to access the dashboard.')}
         </p>
       </div>
 
@@ -228,9 +229,9 @@ const Login: React.FC = () => {
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
                   <Mail className="h-6 w-6 text-blue-600" />
                 </div>
-                <h2 className="mt-4 text-lg font-semibold text-slate-900">Check your email</h2>
+                <h2 className="mt-4 text-lg font-semibold text-slate-900">{t('Check your email')}</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  If the account can receive recovery email, a password link has been sent.
+                  {t('If the account can receive recovery email, a password link has been sent.')}
                 </p>
                 <Button
                   type="button"
@@ -241,13 +242,13 @@ const Login: React.FC = () => {
                     setRecoverySent(false);
                   }}
                 >
-                  Back to Login
+                  {t('Back to Login')}
                 </Button>
               </div>
             ) : (
               <form className="space-y-5" onSubmit={handleRecovery}>
                 <div>
-                  <label htmlFor="recovery-identifier" className="block text-sm font-medium text-slate-700">Email</label>
+                  <label htmlFor="recovery-identifier" className="block text-sm font-medium text-slate-700">{t('Email')}</label>
                   <input
                     id="recovery-identifier"
                     type="email"
@@ -261,14 +262,14 @@ const Login: React.FC = () => {
                 {recoveryError && <p className="text-sm text-red-600" role="alert" aria-live="assertive">{recoveryError}</p>}
                 <Button type="submit" className="w-full py-3" disabled={isRequestingRecovery}>
                   <Mail className="h-4 w-4" />
-                  {isRequestingRecovery ? 'Requesting email...' : 'Send recovery email'}
+                  {isRequestingRecovery ? t('Requesting email...') : t('Send recovery email')}
                 </Button>
                 <button
                   type="button"
                   onClick={() => setIsRecovering(false)}
                   className="w-full text-center text-sm font-medium text-blue-600 hover:text-blue-700"
                 >
-                  Back to Login
+                  {t('Back to Login')}
                 </button>
               </form>
             )
@@ -276,14 +277,14 @@ const Login: React.FC = () => {
             <>
               <form className="space-y-5" onSubmit={handleLogin}>
                 <div>
-                  <label htmlFor="username" className="block text-sm font-medium text-slate-700">{secureAccounts ? 'Email' : 'Email or username'}</label>
+                  <label htmlFor="username" className="block text-sm font-medium text-slate-700">{t(secureAccounts ? 'Email' : 'Email or username')}</label>
                   <input
                     id="username"
                     name="username"
                     type={secureAccounts ? 'email' : 'text'}
                     autoComplete={secureAccounts ? 'email' : 'username'}
                     required
-                    placeholder="Enter your account email"
+                    placeholder={t('Enter your account email')}
                     className={cn(inputBase, 'mt-2 py-3 px-4')}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -291,14 +292,14 @@ const Login: React.FC = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-slate-700">Password</label>
+                  <label htmlFor="password" className="block text-sm font-medium text-slate-700">{t('Password')}</label>
                   <input
                     id="password"
                     name="password"
                     type="password"
                     autoComplete="current-password"
                     required
-                    placeholder="Enter your password"
+                    placeholder={t('Enter your password')}
                     className={cn(inputBase, 'mt-2 py-3 px-4')}
                     value={password}
                     onChange={e => setPassword(e.target.value)}
@@ -314,7 +315,7 @@ const Login: React.FC = () => {
                       }}
                       className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
                     >
-                      Forgot password?
+                      {t('Forgot password?')}
                     </button>
                   )}
                   {loginError && <p className="mt-2 text-sm text-red-600" role="alert" aria-live="polite">{loginError}</p>}
@@ -322,7 +323,7 @@ const Login: React.FC = () => {
 
                 <Button type="submit" className="w-full py-3" disabled={isLoggingIn}>
                   <LayoutDashboard className="w-4 h-4" />
-                  {isLoggingIn ? 'Checking account...' : 'Access Dashboard'}
+                  {isLoggingIn ? t('Checking account...') : t('Access Dashboard')}
                 </Button>
               </form>
 
@@ -333,7 +334,7 @@ const Login: React.FC = () => {
                     onClick={() => setShowDemo(v => !v)}
                     className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100"
                   >
-                    <span>Demo accounts - select username</span>
+                    <span>{t('Demo accounts - select username')}</span>
                     {showDemo ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   </button>
 
@@ -342,8 +343,8 @@ const Login: React.FC = () => {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-200">
-                            <th className="text-left px-3 py-2 font-semibold text-slate-500">Username</th>
-                            <th className="text-left px-3 py-2 font-semibold text-slate-500">Role</th>
+                            <th className="text-left px-3 py-2 font-semibold text-slate-500">{t('Username')}</th>
+                            <th className="text-left px-3 py-2 font-semibold text-slate-500">{t('Role')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -360,7 +361,7 @@ const Login: React.FC = () => {
                                   type="button"
                                   onClick={() => fillDemo(account)}
                                   className="text-left font-medium text-slate-700 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                                  aria-label={`Use ${account.username}`}
+                                  aria-label={t('auth.useDemoAccount', { username: account.username })}
                                 >
                                   {account.username}
                                 </button>
@@ -386,7 +387,7 @@ const Login: React.FC = () => {
                     <div className="w-full border-t border-slate-200" />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white text-slate-500">Need an account?</span>
+                    <span className="px-2 bg-white text-slate-500">{t('Need an account?')}</span>
                   </div>
                 </div>
                 <Button
@@ -395,7 +396,7 @@ const Login: React.FC = () => {
                   className="mt-5 w-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
                 >
                   <UserPlus className="w-4 h-4" />
-                  Register as Staff
+                  {t('Register as Staff')}
                 </Button>
               </div>
             </>
@@ -408,61 +409,61 @@ const Login: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <h2 className="text-lg font-medium text-slate-900">Registration Submitted!</h2>
+                  <h2 className="text-lg font-medium text-slate-900">{t('Registration Submitted!')}</h2>
                   <p className="mt-2 text-sm text-slate-500">
                     {secureAccounts
-                      ? 'Your Staff registration is waiting for approval. After approval, sign in with the password you chose. Email setup is optional.'
-                      : 'Your Staff access request has been submitted for Super Admin approval.'}
+                      ? t('Your Staff registration is waiting for approval. After approval, sign in with the password you chose. Email setup is optional.')
+                      : t('Your Staff access request has been submitted for Super Admin approval.')}
                   </p>
                   <Button onClick={() => { setRegSuccess(false); setIsRegistering(false); }} className="mt-6 w-full">
-                    Back to Login
+                    {t('Back to Login')}
                   </Button>
                 </div>
               ) : (
                 <form className="space-y-4" onSubmit={handleRegister}>
                   <div>
-                    <label htmlFor="registration-name" className="block text-sm font-medium text-slate-700">Full Name</label>
+                    <label htmlFor="registration-name" className="block text-sm font-medium text-slate-700">{t('Full Name')}</label>
                     <input id="registration-name" type="text" required className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.name} onChange={e => setRegData({ ...regData, name: e.target.value })} />
                   </div>
                   <div>
-                    <label htmlFor="registration-email" className="block text-sm font-medium text-slate-700">Email</label>
+                    <label htmlFor="registration-email" className="block text-sm font-medium text-slate-700">{t('Email')}</label>
                     <input id="registration-email" type="email" required className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.email} onChange={e => setRegData({ ...regData, email: e.target.value })} />
                   </div>
                   <div>
-                    <label htmlFor="registration-phone" className="block text-sm font-medium text-slate-700">Phone Number</label>
+                    <label htmlFor="registration-phone" className="block text-sm font-medium text-slate-700">{t('Phone Number')}</label>
                     <input id="registration-phone" type="tel" required className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.phone} onChange={e => setRegData({ ...regData, phone: e.target.value })} />
                   </div>
                   <div>
-                    <label htmlFor="registration-position" className="block text-sm font-medium text-slate-700">Job Position / Department</label>
-                    <input id="registration-position" list="staff-position-options" type="text" required placeholder="e.g. Designer, Video Editor" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.jobPosition} onChange={e => setRegData({ ...regData, jobPosition: e.target.value })} />
+                    <label htmlFor="registration-position" className="block text-sm font-medium text-slate-700">{t('Job Position / Department')}</label>
+                    <input id="registration-position" list="staff-position-options" type="text" required placeholder={t('e.g. Designer, Video Editor')} className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regData.jobPosition} onChange={e => setRegData({ ...regData, jobPosition: e.target.value })} />
                     <datalist id="staff-position-options">
                       {STAFF_DEPARTMENTS.map(position => <option key={position} value={position} />)}
                     </datalist>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-                    <p className="text-xs font-semibold text-slate-500">Access role</p>
-                    <p className="mt-0.5 text-sm font-semibold text-slate-800">Staff</p>
+                    <p className="text-xs font-semibold text-slate-500">{t('Access role')}</p>
+                    <p className="mt-0.5 text-sm font-semibold text-slate-800">{t('Staff')}</p>
                   </div>
                   {secureAccounts && (
                     <>
                       <div>
-                        <label htmlFor="registration-password" className="block text-sm font-medium text-slate-700">Password</label>
+                        <label htmlFor="registration-password" className="block text-sm font-medium text-slate-700">{t('Password')}</label>
                         <input id="registration-password" type="password" required minLength={12} autoComplete="new-password" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regPassword} onChange={e => setRegPassword(e.target.value)} />
-                        <p className="mt-1 text-xs text-slate-500">Use at least 12 characters.</p>
+                        <p className="mt-1 text-xs text-slate-500">{t('Use at least 12 characters.')}</p>
                       </div>
                       <div>
-                        <label htmlFor="registration-password-confirmation" className="block text-sm font-medium text-slate-700">Confirm Password</label>
+                        <label htmlFor="registration-password-confirmation" className="block text-sm font-medium text-slate-700">{t('Confirm Password')}</label>
                         <input id="registration-password-confirmation" type="password" required minLength={12} autoComplete="new-password" className={cn(inputBase, 'mt-1 py-2.5 px-3')} value={regConfirmPassword} onChange={e => setRegConfirmPassword(e.target.value)} />
                       </div>
                     </>
                   )}
                   {regError && <p className="text-sm font-medium text-red-600" role="alert" aria-live="polite">{regError}</p>}
                   <Button type="submit" className="w-full py-3" disabled={isSubmittingRegistration}>
-                    {isSubmittingRegistration ? 'Submitting...' : 'Submit Staff Registration'}
+                    {isSubmittingRegistration ? t('Submitting...') : t('Submit Staff Registration')}
                   </Button>
                   <div className="text-center mt-4">
                     <button type="button" onClick={() => setIsRegistering(false)} className="text-sm font-medium text-blue-600 hover:text-blue-500">
-                      Already have an account? Sign in
+                      {t('Already have an account? Sign in')}
                     </button>
                   </div>
                 </form>

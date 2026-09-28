@@ -212,20 +212,20 @@ const Layout: React.FC = () => {
   const pendingResolution = !upgradeRequired && (backend.status === 'conflict' || backend.status === 'retry_required' || (backend.status === 'offline' && backend.hasLocalChanges));
   const syncNeedsAttention = hostedLocalBuild || missingSupabaseConfig || upgradeRequired || Boolean(backend.error) || backend.hasRemoteUpdate || pendingResolution;
   const syncBannerTitle = hostedLocalBuild
-    ? 'Sync is local on this deployed build'
+    ? t('Sync is local on this deployed build')
     : missingSupabaseConfig
-      ? 'Supabase sync is not configured'
+      ? t('Supabase sync is not configured')
       : upgradeRequired
-        ? 'System update in progress'
+        ? t('System update in progress')
         : backend.status === 'conflict'
-        ? 'Sync conflict needs review'
+        ? t('Sync conflict needs review')
         : backend.status === 'retry_required'
-          ? 'A change needs to be retried'
+          ? t('A change needs to be retried')
           : backend.status === 'offline'
-            ? 'AiTask is offline'
+            ? t('AiTask is offline')
       : backend.hasRemoteUpdate
-        ? 'Workspace update available'
-        : 'Supabase sync issue';
+        ? t('Workspace update available')
+        : t('Supabase sync issue');
   const syncBannerMessage = hostedLocalBuild
     ? 'This browser is using local storage only. Set the Supabase environment variables in Vercel and redeploy before clients use the app.'
     : missingSupabaseConfig
@@ -239,7 +239,7 @@ const Layout: React.FC = () => {
   return (
     <div className="relative flex h-[100dvh] overflow-hidden bg-canvas font-sans text-ink">
       <a href="#main-content" className="fixed left-3 top-3 z-[100] -translate-y-20 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-lg transition-transform focus:translate-y-0">
-        Skip to main content
+        {t('Skip to main content')}
       </a>
       <p className="sr-only" aria-live="polite" aria-atomic="true">{shortcutAnnouncement}</p>
       <Sidebar isOpen={isMobileMenuOpen} onClose={closeMobileMenu} isCollapsed={isSidebarCollapsed} onToggleCollapsed={toggleSidebar} />
@@ -275,7 +275,7 @@ const Layout: React.FC = () => {
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <RefreshCw className={cn('h-4 w-4', backend.isPulling && 'animate-spin')} />
-                    Refresh
+                    {t('Refresh')}
                   </button>
                 )}
                 {pendingResolution && (
@@ -287,7 +287,7 @@ const Layout: React.FC = () => {
                       className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <RotateCcw className="h-4 w-4" />
-                      Retry my changes
+                      {t('Retry my changes')}
                     </button>
                     <button
                       type="button"
@@ -296,7 +296,7 @@ const Layout: React.FC = () => {
                       className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <X className="h-4 w-4" />
-                      Use latest
+                      {t('Use latest')}
                     </button>
                   </>
                 )}
@@ -305,7 +305,7 @@ const Layout: React.FC = () => {
                     to="/settings"
                     className="inline-flex min-h-11 items-center justify-center rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700"
                   >
-                    Open Settings
+                    {t('Open Settings')}
                   </Link>
                 )}
               </div>
