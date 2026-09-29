@@ -84,7 +84,7 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
 
   return (
     <article
-      aria-label={t('New notification')}
+      aria-label={t('notifications.newWithTitle', { title: notification.title })}
       className="pointer-events-auto overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.14)] "
     >
       <div className="flex items-start gap-3 p-4">
@@ -104,7 +104,7 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
               type="button"
               onClick={() => onDismiss(notification.id)}
               className="-mr-1 -mt-1 shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-              aria-label={t('Dismiss notification')}
+              aria-label={t('notifications.dismissWithTitle', { title: notification.title })}
             >
               <X className="h-4 w-4" />
             </button>

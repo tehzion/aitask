@@ -117,7 +117,7 @@ const StaffMyWork: React.FC = () => {
         </div>
         <div className="mt-4">
           <SegmentedTabs<StaffWorkBucketKey>
-            items={bucketOrder.map(bucket => ({ id: bucket, label: getStaffBucketLabel(bucket), count: queue[bucket].length }))}
+            items={bucketOrder.map(bucket => ({ id: bucket, label: t(getStaffBucketLabel(bucket)), count: queue[bucket].length }))}
             value={activeBucket}
             onChange={bucket => {
               hasSelectedBucketRef.current = true;

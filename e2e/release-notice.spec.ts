@@ -78,7 +78,7 @@ test('the notice is Chinese, dark-mode readable, and usable on mobile', async ({
     localStorage.setItem('aitask-color-theme', 'dark');
   });
   await page.reload();
-  await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
+  await page.getByRole('button', { name: '使用 Project Manager Demo' }).click();
   await page.getByLabel('密码').fill('password123');
   await page.getByRole('button', { name: '进入仪表板' }).click();
   if (/\/settings$/.test(page.url())) {

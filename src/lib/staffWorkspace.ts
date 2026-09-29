@@ -1,4 +1,5 @@
 import type { Priority, Task, TaskStatus } from '../types';
+import type { MessageId } from './messages';
 
 export type StaffWorkBucketKey = 'needs_action' | 'up_next' | 'waiting' | 'done';
 
@@ -112,9 +113,11 @@ export const getStaffGuidedAction = (task: Task, taskStatuses: TaskStatus[]): St
   return { kind: 'picker', label: 'Update status', disabled: false };
 };
 
-export const getStaffBucketLabel = (bucket: StaffWorkBucketKey) => ({
-  needs_action: 'Needs action',
-  up_next: 'Up next',
-  waiting: 'Waiting',
-  done: 'Done',
-})[bucket];
+const staffBucketLabels: Record<StaffWorkBucketKey, MessageId> = {
+  needs_action: 'staff.bucketNeedsAction',
+  up_next: 'staff.bucketUpNext',
+  waiting: 'staff.bucketWaiting',
+  done: 'staff.bucketDone',
+};
+
+export const getStaffBucketLabel = (bucket: StaffWorkBucketKey): MessageId => staffBucketLabels[bucket];

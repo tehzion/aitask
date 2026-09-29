@@ -317,7 +317,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
                         type="button"
                         onClick={() => openMember(summary.member.id)}
                         className="w-full rounded-md text-left focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        aria-label={t('View workload for team member')}
+                        aria-label={t('dashboard.viewMemberWorkload', { name: summary.member.name })}
                       >
                         <MemberIdentity member={summary.member} locale={locale} />
                       </button>
@@ -353,7 +353,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
               type="button"
               onClick={() => openMember(summary.member.id)}
               className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 text-left transition-colors hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              aria-label={t('View workload for team member')}
+              aria-label={t('dashboard.viewMemberWorkload', { name: summary.member.name })}
             >
               <div className="flex items-start justify-between gap-3">
                 <MemberIdentity member={summary.member} locale={locale} />

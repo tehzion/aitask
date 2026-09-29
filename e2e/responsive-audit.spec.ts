@@ -186,7 +186,7 @@ test.describe('responsive role and route audit', () => {
         localStorage.setItem('aitask-color-theme', theme);
       }, scenario);
       await page.reload();
-      await page.getByRole('button', { name: 'Use Staff Demo' }).click();
+      await page.getByRole('button', { name: /(?:Use|使用) Staff Demo/ }).click();
       await page.locator('#password').fill('password123');
       await page.getByRole('button', { name: /Access Dashboard|进入仪表板/ }).click();
       await page.waitForURL(url => url.pathname === '/settings');

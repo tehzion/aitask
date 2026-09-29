@@ -39,8 +39,9 @@ test('first login reaches the app and critical responsive routes remain usable',
       expect(widths.content, `${route} should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(widths.viewport);
     }
   }
-  await expect(page.getByRole('heading', { name: 'Feedback reviewer login' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '反馈审阅者登录' })).toBeVisible();
 
+  await page.evaluate(() => localStorage.setItem('aitask:locale', 'en'));
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Sign in to AiTask' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Demo accounts - select username' })).toBeVisible();
@@ -362,7 +363,7 @@ test('first login reaches the app and critical responsive routes remain usable',
     const { useToastStore } = await import(toastPath);
     useToastStore.getState().addToast('Mobile overlay QA', 'info');
   });
-  const updateNotice = page.getByText('New version ready').locator('..').locator('..');
+  const updateNotice = page.getByText('Update available').locator('..').locator('..');
   const mobileToast = page.getByText('Mobile overlay QA').locator('..');
   await expect(updateNotice).toBeVisible();
   await expect(mobileToast).toBeVisible();

@@ -107,8 +107,8 @@ const WorkflowTemplateManager = () => {
                 type="button"
                 onClick={() => setTemplateToDelete(template)}
                 disabled={saving}
-                aria-label={t('Delete workflow')}
-                title={t('Delete workflow')}
+                aria-label={t('workflow.deleteNamed', { name: template.name })}
+                title={t('workflow.deleteNamed', { name: template.name })}
                 className="flex w-10 items-center justify-center rounded-control text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Trash2 className="h-4 w-4" />
@@ -130,7 +130,7 @@ const WorkflowTemplateManager = () => {
               <div key={step.id} className="rounded-panel border border-line bg-inset/55 p-3">
                 <div className="grid gap-3 lg:grid-cols-[44px_1fr_180px_160px_110px_auto] lg:items-center">
                   <span className="calm-number mx-auto flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface text-sm font-semibold text-accent">{index + 1}</span>
-                  <input aria-label={t('Step title')} data-i18n-skip className={cn(inputBase, 'px-3 py-2')} placeholder={t('Step title')} value={step.title} onChange={event => updateStep(step.id, { title: event.target.value })} />
+                  <input aria-label={t('workflow.stepTitle', { step: index + 1 })} data-i18n-skip className={cn(inputBase, 'px-3 py-2')} placeholder={t('Step title')} value={step.title} onChange={event => updateStep(step.id, { title: event.target.value })} />
                   <select aria-label={t('Step department')} className={cn(inputBase, 'px-3 py-2')} value={step.department} onChange={event => updateStep(step.id, { department: event.target.value as ServiceWorkflowStep['department'] })}>{STAFF_DEPARTMENTS.map(department => <option key={department} value={department}>{getLocalizedDepartment(department, locale)}</option>)}</select>
                   <select aria-label={t('Step kind')} className={cn(inputBase, 'px-3 py-2')} value={step.kind} onChange={event => updateStep(step.id, { kind: event.target.value as WorkflowStepKind })}>{stepKinds.map(kind => <option key={kind.value} value={kind.value}>{t(kind.label)}</option>)}</select>
                   <input aria-label={t('Step due offset')} type="number" min="0" max="365" className={cn(inputBase, 'px-3 py-2')} placeholder={t('Due +days')} value={step.dueOffsetDays ?? ''} onChange={event => updateStep(step.id, { dueOffsetDays: event.target.value === '' ? undefined : Number(event.target.value) })} />
