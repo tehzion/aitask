@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(36);
 
 select is(
   (select data -> 'permissions' ->> 'manageCreatedTasks'
@@ -50,7 +50,7 @@ values
   ('pgtap-hod-authorization', 'client', 'pgtap-hidden-client', '{"id":"pgtap-hidden-client","clientName":"Hidden Client"}'::jsonb),
   ('pgtap-hod-authorization', 'project', 'pgtap-hod-hidden-staff-project', '{"id":"pgtap-hod-hidden-staff-project","clientId":"pgtap-hod-client","clientName":"HOD Test Client","projectName":"Hidden Staff Project","createdBy":"pgtap-hod-staff","services":["Design"],"startDate":"2026-09-10"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-created', '{"id":"pgtap-hod-created","title":"HOD created task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod","status":"Pending","visibility":"internal"}'::jsonb),
-  ('pgtap-hod-authorization', 'task', 'pgtap-hod-assigned', '{"id":"pgtap-hod-assigned","title":"HOD assigned task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod","createdBy":"pgtap-hod-staff","status":"Pending","visibility":"internal"}'::jsonb),
+  ('pgtap-hod-authorization', 'task', 'pgtap-hod-assigned', '{"id":"pgtap-hod-assigned","title":"Project Manager assigned task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod","createdBy":"pgtap-hod-admin","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-unrelated', '{"id":"pgtap-hod-unrelated","title":"Unrelated task","clientName":"HOD Test Client","department":"Video Editor","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-staff","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-admin-created', '{"id":"pgtap-hod-admin-created","title":"Project Manager created task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-admin","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-staff-task', '{"id":"pgtap-hod-staff-task","title":"Staff task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-admin","status":"Pending","visibility":"internal"}'::jsonb);
@@ -128,6 +128,25 @@ select is(
   ) ->> 'ok')::boolean,
   true,
   'HOD can update a created task after it is assigned to another staff member'
+);
+
+select is(
+  (public.aitask_execute_command(
+    'pgtap-hod-authorization', gen_random_uuid(), 'task.update',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'update', 'entityType', 'task', 'entityId', 'pgtap-hod-assigned',
+      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'task' and entity_id = 'pgtap-hod-assigned'),
+      'data', (select data || jsonb_build_object('assignedTo', 'pgtap-hod-staff', 'updatedAt', now()) from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'task' and entity_id = 'pgtap-hod-assigned')
+    ))
+  ) ->> 'ok')::boolean,
+  true,
+  'HOD can delegate a Project Manager-created task assigned to them'
+);
+
+select is(
+  (select data ->> 'assignedTo' from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'task' and entity_id = 'pgtap-hod-assigned'),
+  'pgtap-hod-staff',
+  'HOD delegation persists the new staff assignee'
 );
 
 select is(

@@ -28,6 +28,14 @@ const staffTwo: User = {
   department: 'Designer',
 };
 
+const hod: User = {
+  id: 'hod-assign',
+  name: 'HOD Assign',
+  role: 'HOD',
+  departments: ['Designer'],
+  department: 'Designer',
+};
+
 const task: Task = {
   id: 'task-assign',
   clientName: 'Acme',
@@ -87,5 +95,21 @@ describe('task assignment attribution', () => {
     const afterEdit = findTask();
     expect(afterEdit.assignedBy).toBe(pm.id);
     expect(afterEdit.assignedAt).toBe(afterAssign.assignedAt);
+  });
+
+  it('allows a HOD to delegate a PM-created task assigned to them', () => {
+    useStore.setState({
+      currentUser: hod,
+      users: [pm, hod, staff, staffTwo],
+      tasks: [{ ...task, assignedTo: hod.id }],
+      rolePermissions: [],
+    });
+
+    const result = useStore.getState().updateTaskAssignee(task.id, staffTwo.id);
+
+    expect(result.ok).toBe(true);
+    const updated = findTask();
+    expect(updated.assignedTo).toBe(staffTwo.id);
+    expect(updated.assignedBy).toBe(hod.id);
   });
 });

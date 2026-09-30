@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
-import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save, ChevronDown, AlertTriangle } from 'lucide-react';
+import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save, ChevronDown, AlertTriangle, UsersRound } from 'lucide-react';
 import { Department, Priority, Task, TaskStatus } from '../types';
-import { getTaskAccess, canReviewTaskAsClient } from '../lib/access';
+import { getTaskAccess, canReviewTaskAsClient, isDepartmentScopedUser } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate, parseOptionalDate, cn } from '../lib/utils';
 import { isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
@@ -70,6 +70,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
     currentUser,
     updateTaskStatus,
     updateTask,
+    updateTaskAssignee,
     deleteTask,
     addComment,
     updateTaskAttachment,
@@ -90,6 +91,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
     currentUser: state.currentUser,
     updateTaskStatus: state.updateTaskStatus,
     updateTask: state.updateTask,
+    updateTaskAssignee: state.updateTaskAssignee,
     deleteTask: state.deleteTask,
     addComment: state.addComment,
     updateTaskAttachment: state.updateTaskAttachment,
@@ -113,6 +115,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
   const [mutationError, setMutationError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
+  const [delegationAssignee, setDelegationAssignee] = useState('');
   const titleId = React.useId();
   const descriptionId = React.useId();
   const confirmationTitleId = React.useId();
@@ -143,6 +146,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
     setIsEditingDetails(false);
     setCommentText('');
     setIsSubmitting(false);
+    setDelegationAssignee('');
     if (draftTask) {
       setEditForm({
         title: draftTask.title,
@@ -174,12 +178,22 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
   const canClientReview = !upgradeRequired && !pendingResolution && taskAccess.canView && canReviewTaskAsClient(currentUser, task, rolePermissions);
   const isClientTaskViewer = currentUser?.role === 'Client';
   const canAssignOthers = !upgradeRequired && !pendingResolution && taskAccess.canAssign;
+  const canDelegateAssignedTask = Boolean(
+    canAssignOthers
+    && isDepartmentScopedUser(currentUser, rolePermissions)
+    && task.assignedTo === currentUser?.id
+  );
   const incompletePredecessors = (task.predecessorTaskIds || [])
     .map(id => tasks.find(item => item.id === id))
     .filter((item): item is Task => Boolean(item && !item.isCompleted));
   const assigneeOptions = canAssignOthers
     ? users.filter(user => user.role !== 'Client' && isMemberInDepartment(user, editForm.department))
     : users.filter(user => user.id === editForm.assignedTo);
+  const delegationOptions = users.filter(user => (
+    user.role !== 'Client'
+    && user.id !== currentUser?.id
+    && isMemberInDepartment(user, task.department)
+  ));
 
   const confirmPendingMutation = async (commandType?: SecureCommandType) => {
     setIsSubmitting(true);
@@ -203,6 +217,25 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
       setMutationError('');
     }
     setIsSubmitting(false);
+  };
+
+  const handleTaskDelegation = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!delegationAssignee || isSubmitting || !canDelegateAssignedTask) return;
+    const delegate = delegationOptions.find(user => user.id === delegationAssignee);
+    if (!delegate) {
+      setMutationError(t('Choose a valid internal assignee.'));
+      return;
+    }
+
+    const localResult = updateTaskAssignee(task.id, delegationAssignee);
+    if (!localResult.ok) {
+      setMutationError(String(t(localResult.error || 'Unable to update the task assignee.')));
+      return;
+    }
+    if (await confirmPendingMutation('task.update')) {
+      setDelegationAssignee('');
+    }
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -699,6 +732,46 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   </div>
                 </div>
               </div>
+
+              {canDelegateAssignedTask && (
+                <form onSubmit={handleTaskDelegation} className="rounded-lg border border-accent/20 bg-accent-soft p-4 space-y-3" aria-labelledby={`${titleId}-delegation-heading`}>
+                  <div className="flex items-start gap-3">
+                    <UsersRound className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                    <div>
+                      <h3 id={`${titleId}-delegation-heading`} className="text-sm font-semibold text-ink">{t('Task Delegation')}</h3>
+                      <p className="mt-1 text-xs leading-5 text-muted">{t('Assign this task to another team member in your department.')}</p>
+                    </div>
+                  </div>
+                  {delegationOptions.length > 0 ? (
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <label className="relative block min-w-0 flex-1">
+                        <span className="sr-only">{t('Choose a team member')}</span>
+                        <select
+                          aria-label={t('Choose a team member')}
+                          value={delegationAssignee}
+                          onChange={event => setDelegationAssignee(event.target.value)}
+                          disabled={isSubmitting}
+                          className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}
+                        >
+                          <option value="">{t('Choose a team member')}</option>
+                          {delegationOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{user.name}</option>)}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={!delegationAssignee || isSubmitting}
+                        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Send className="h-4 w-4" />
+                        {isSubmitting ? t('Saving...') : t('Assign Task')}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="rounded-md bg-white/70 px-3 py-2 text-xs font-medium text-ink">{t('No eligible team members in this department.')}</p>
+                  )}
+                </form>
+              )}
 
               {(task.facebookPage || task.website || task.attachmentLink || canEditTask) && (
                 <div className="pt-4 border-t border-slate-100">

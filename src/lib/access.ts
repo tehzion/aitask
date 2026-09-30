@@ -472,6 +472,10 @@ export const canAssignTasksToOthers = (
   isBossKoo(user)
   || (user?.role !== 'HOD' && hasPermission(user, 'editTasks', customRoles))
   || (user?.role === 'Project Manager' && Boolean(task) && isTaskInOwnedPortfolio(user as User, task as Task, scope))
+  || (isDepartmentScopedUser(user, customRoles)
+    && Boolean(task)
+    && task?.assignedTo === user?.id
+    && hasPermission(user, 'manageCreatedTasks', customRoles))
   || (hasPermission(user, 'manageCreatedTasks', customRoles) && (!task || task.createdBy === user?.id))
 );
 

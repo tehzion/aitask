@@ -625,7 +625,8 @@ describe('staff permission matrix', () => {
     expect(canEditTask(hod, sameDepartment, [hodRole])).toBe(true);
     expect(canEditTask(hod, otherDepartment, [hodRole])).toBe(false);
     expect(canAssignTasksToOthers(hod, [hodRole], createdAndReassigned)).toBe(true);
-    expect(canAssignTasksToOthers(hod, [hodRole], assignedToHod)).toBe(false);
+    expect(canAssignTasksToOthers(hod, [hodRole], assignedToHod)).toBe(true);
+    expect(canAssignTasksToOthers(hod, [hodRole], sameDepartment)).toBe(false);
   });
 
   it('scopes Project Manager task visibility to owned and assigned work while keeping edits scoped', () => {
