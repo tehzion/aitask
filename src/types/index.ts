@@ -437,6 +437,7 @@ export interface Task {
   workflowStepRequired?: boolean;
   predecessorTaskIds?: string[];
   generatedFromDeliverable?: boolean;
+  workflowGeneratedAt?: string;
   clientName: string;
   customerDetails?: string;
   facebookPage?: string;

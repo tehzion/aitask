@@ -358,6 +358,7 @@ export const parseTask = (value: unknown): Task | null => {
     workflowStepRequired: value.workflowStepRequired === undefined ? undefined : Boolean(value.workflowStepRequired),
     predecessorTaskIds: safeStringArray(value.predecessorTaskIds, 50, 160),
     generatedFromDeliverable,
+    workflowGeneratedAt: typeof value.workflowGeneratedAt === 'string' ? value.workflowGeneratedAt.slice(0, 80) : undefined,
     clientName,
     customerDetails: optionalText(value.customerDetails, 5000),
     facebookPage: safeHttpsUrl(value.facebookPage) || undefined,

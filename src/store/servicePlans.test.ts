@@ -119,6 +119,7 @@ describe('client service plan store', () => {
     const deliverableId = useStore.getState().deliverables[0].id;
     const first = useStore.getState().generateDeliverableTaskChain(deliverableId);
     const second = useStore.getState().generateDeliverableTaskChain(deliverableId);
+    expect(useStore.getState().tasks.filter(task => task.deliverableId === deliverableId).every(task => task.startDate === '2026-08-15' && (!task.dueDate || task.startDate <= task.dueDate))).toBe(true);
     expect(first.ok).toBe(true);
     expect(second.taskIds).toEqual(first.taskIds);
     expect(useStore.getState().tasks).toHaveLength(10);

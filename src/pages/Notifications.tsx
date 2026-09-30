@@ -102,12 +102,15 @@ const Notifications: React.FC = () => {
   const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set());
   const [refreshToken, setRefreshToken] = React.useState(0);
   const queryKeyRef = React.useRef('');
+  const generationRef = React.useRef(0);
 
   const queryKey = `${currentUser?.id || ''}:${tab}:${category}:${search}`;
 
   React.useEffect(() => {
     if (!currentUser) return;
     let cancelled = false;
+    const generation = ++generationRef.current;
+    setIsLoadingMore(false);
     const queryChanged = queryKeyRef.current !== queryKey;
     queryKeyRef.current = queryKey;
     if (queryChanged) {
@@ -124,7 +127,7 @@ const Notifications: React.FC = () => {
       category: category || undefined,
       search,
     }).then(page => {
-      if (cancelled) return;
+      if (cancelled || generation !== generationRef.current) return;
       const resetList = queryChanged || tab === 'unread';
       setItems(current => resetList
         ? page.items
@@ -137,7 +140,7 @@ const Notifications: React.FC = () => {
       if (!cancelled) setIsLoading(false);
     });
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; generationRef.current += 1; };
   // Keep loaded history while polling refreshes the first page.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, queryKey, workspaceVersion, previewNotifications.length, refreshToken]);
@@ -150,6 +153,7 @@ const Notifications: React.FC = () => {
 
   const loadMore = async () => {
     if (!nextCursor || isLoadingMore) return;
+    const generation = generationRef.current;
     setIsLoadingMore(true);
     setError('');
     try {
@@ -160,21 +164,23 @@ const Notifications: React.FC = () => {
         category: category || undefined,
         search,
       });
+      if (generation !== generationRef.current) return;
       setItems(current => mergeNotificationPages(current, page.items));
       setNextCursor(page.nextCursor);
       useStore.setState({ notificationUnreadCount: page.unreadCount });
     } catch (loadError) {
-      setError(loadError instanceof Error ? t(loadError.message) : t('Unable to load more notifications.'));
+      if (generation === generationRef.current) setError(loadError instanceof Error ? t(loadError.message) : t('Unable to load more notifications.'));
     } finally {
-      setIsLoadingMore(false);
+      if (generation === generationRef.current) setIsLoadingMore(false);
     }
   };
 
   const applyRead = async (ids: string[], isRead: boolean) => {
+    const generation = generationRef.current;
     const saved = isRead
       ? await notificationReadActions.markRead(ids)
       : await notificationReadActions.markUnread(ids);
-    if (saved) {
+    if (saved && generation === generationRef.current) {
       setItems(current => {
         const updated = updateReadState(current, ids, currentUser.id, isRead);
         return tab === 'unread' && isRead
@@ -186,8 +192,9 @@ const Notifications: React.FC = () => {
   };
 
   const markAllRead = async () => {
+    const generation = generationRef.current;
     const saved = await notificationReadActions.markAllRead();
-    if (!saved) return;
+    if (!saved || generation !== generationRef.current) return;
     setItems(current => tab === 'unread'
       ? []
       : updateReadState(current, current.map(item => item.id), currentUser.id, true));

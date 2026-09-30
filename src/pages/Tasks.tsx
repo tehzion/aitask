@@ -195,6 +195,7 @@ const TasksWorkspace: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.isComposing || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('[data-aitask-modal-portal]')) return;
       const active = document.activeElement;
       if (active && (
         active.tagName === 'INPUT' ||

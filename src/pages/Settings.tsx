@@ -1,3 +1,7 @@
+import DiagnosticsPanel from '../components/DiagnosticsPanel';
+import UploadRecoveryPanel from '../components/UploadRecoveryPanel';
+import { clearWorkspaceSession } from '../store';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React from 'react';
 import { AlertTriangle, ArrowRight, Bell, CheckCircle2, Cloud, Database, Download, Lock, PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Trash2, Upload, UserCircle, Volume2, VolumeX, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -18,7 +22,7 @@ import { getSoundEnabled, setSoundEnabled, SOUND_PREF_EVENT } from '../lib/sound
 import { canUsePasswordResetBypass, enablePasswordResetBypass, hasPasswordResetBypass } from '../lib/auth';
 import { APP_BUILD_CHANNEL, APP_BUILD_LABEL, APP_BUILD_TIME, APP_COMMIT, APP_VERSION_LABEL } from '../lib/appVersion';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
-import { discardSecureWorkspaceCommand, getRetainedSecureCommand } from '../lib/secureWorkspace';
+import { getRetainedSecureCommand } from '../lib/secureWorkspace';
 import ServicePackageManager from '../components/ServicePackageManager';
 import WorkflowTemplateManager from '../components/WorkflowTemplateManager';
 import { isLocalServiceDemoEnabled } from '../mock/localServiceDemo';
@@ -252,6 +256,7 @@ const Settings: React.FC = () => {
   const profileEmailChanged = profileEmail.trim().toLowerCase() !== (currentUser?.email || '').trim().toLowerCase();
   const isUploadedAvatar = avatarUrl.startsWith('data:image/');
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
+  useUnsavedChanges(profileChanged || passwordChanged || Boolean(profileCurrentPassword) || isProfileSaving || isPreparingAvatar);
   const mustResetPassword = Boolean(currentUser?.mustResetPassword);
   const canBypassPasswordReset = mustResetPassword && canUsePasswordResetBypass();
   const bypassActive = currentUser ? hasPasswordResetBypass(currentUser.id) : false;
@@ -260,11 +265,10 @@ const Settings: React.FC = () => {
   const secureAccounts = shouldUseSecureSupabase();
   const defaultAccessiblePath = getDefaultAccessiblePath(currentUser, rolePermissions);
   const completeSignOut = async () => {
+    clearWorkspaceSession({ discardPending: true });
     if (secureAccounts) {
-      discardSecureWorkspaceCommand();
       await signOutSecureSession();
     }
-    useStore.setState({ currentUser: null });
     navigate('/login', { replace: true });
   };
   const handleSettingsSignOut = () => {
@@ -546,6 +550,8 @@ const Settings: React.FC = () => {
 
   return (
     <div className={pageShell}>
+      <UploadRecoveryPanel />
+      <DiagnosticsPanel />
       <PageHeader
         title={mustResetPassword ? t('Account Setup') : t('Settings')}
         description={mustResetPassword ? t('Set your own password to unlock the workspace.') : scopeDescription}

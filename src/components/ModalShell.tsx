@@ -10,6 +10,7 @@ interface ModalShellProps {
   panelClassName?: string;
   overlayClassName?: string;
   closeOnBackdrop?: boolean;
+  onEdit?: () => void;
 }
 
 // Backdrop clicks intentionally do NOT close modals by default: forms often hold
@@ -38,6 +39,7 @@ const ModalShell: React.FC<ModalShellProps> = ({
   panelClassName,
   overlayClassName,
   closeOnBackdrop = false,
+  onEdit,
 }) => {
   const panelRef = React.useRef<HTMLDivElement>(null);
   const tokenRef = React.useRef(Symbol('aitask-modal'));
@@ -142,6 +144,13 @@ const ModalShell: React.FC<ModalShellProps> = ({
     >
       <div
         ref={panelRef}
+        onChangeCapture={onEdit}
+        onClickCapture={event => {
+          // Button-driven field controls (packages, services, visibility) must
+          // protect the draft just like native input controls.
+          const button = event.target instanceof Element ? event.target.closest('button') : null;
+          if (button && !button.hasAttribute('data-draft-navigation') && button.type !== 'submit') onEdit?.();
+        }}
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}

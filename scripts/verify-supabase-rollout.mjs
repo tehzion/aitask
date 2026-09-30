@@ -68,6 +68,7 @@ const run = (command, args, options = {}) => {
     cwd: options.cwd || projectRoot,
     encoding: 'utf8',
     stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : 'inherit',
+    env: options.env || process.env,
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
@@ -124,7 +125,7 @@ const supabase = (...args) => run(supabaseCli, ['--workdir', validationRoot, ...
 
 try {
   console.log(`[rollout] Validating ${validatedMigrations.join(', ')} in ${validationRoot}`);
-  run(supabaseCli, ['--workdir', validationRoot, 'start'], {
+  run(supabaseCli, ['--workdir', validationRoot, 'start', '--exclude', 'realtime,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor'], {
     cwd: validationRoot,
   });
   console.log('[rollout] Disposable Supabase stack started.');
@@ -141,6 +142,12 @@ try {
     '-U', 'postgres', '-d', 'postgres', '-f', postflightTarget,
   ]);
 
+  const statusOutput = run(supabaseCli, ['--workdir', validationRoot, 'status', '-o', 'json'], { capture: true }).stdout;
+  const status = JSON.parse(statusOutput);
+  run(process.execPath, [join(projectRoot, 'scripts', 'verify-service-upload-storage.mjs')], { env: {
+    ...process.env, AITASK_LOCAL_TEST_URL: status.API_URL, AITASK_LOCAL_TEST_PUBLIC: status.PUBLISHABLE_KEY || status.ANON_KEY,
+    AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
+  } });
   console.log('[rollout] Local Supabase rollout validation passed.');
 } catch (error) {
   rolloutError = error instanceof Error ? error.message : 'Local Supabase rollout validation failed.';

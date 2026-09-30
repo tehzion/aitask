@@ -1,3 +1,4 @@
+import { assertWorkspaceSession, captureWorkspaceSession, isWorkspaceSessionCurrent } from './workspaceSession';
 import type { AttachmentRef } from '../types';
 import { shouldUseSecureSupabase, supabase } from './supabaseClient';
 import { getLocalServiceDemoFile } from '../mock/localServiceDemo';
@@ -26,7 +27,10 @@ const serviceFileMimeByExtension: Record<string, ServiceFileMimeType> = {
   '.gif': 'image/gif',
 };
 
-const PENDING_SERVICE_FILES_KEY = 'aitask:pending-service-files:v1';
+const PENDING_SERVICE_FILES_KEY = 'aitask:pending-service-files:v2';
+const DURABLE_FILE_PREFIX = 'aitask:pending-service-file:v3:';
+const durableKey = (attachment: Pick<AttachmentRef, 'bucket' | 'path'>) => `${DURABLE_FILE_PREFIX}${encodeURIComponent(attachment.bucket)}:${encodeURIComponent(attachment.path)}`;
+const submissions = new Map<string, string>();
 const pendingServiceFiles = new Map<string, AttachmentRef>();
 
 const pendingServiceFileKey = (attachment: Pick<AttachmentRef, 'bucket' | 'path'>) => `${attachment.bucket}:${attachment.path}`;
@@ -34,8 +38,12 @@ const pendingServiceFileKey = (attachment: Pick<AttachmentRef, 'bucket' | 'path'
 const hydratePendingServiceFiles = () => {
   if (pendingServiceFiles.size > 0 || typeof window === 'undefined') return;
   try {
-    const raw = window.sessionStorage.getItem(PENDING_SERVICE_FILES_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
+    const currentRaw = window.sessionStorage.getItem(PENDING_SERVICE_FILES_KEY);
+    const legacyRaw = currentRaw ? null : window.sessionStorage.getItem('aitask:pending-service-files:v1');
+    const raw = currentRaw || legacyRaw;
+    const legacyEntries = raw ? JSON.parse(raw) : [];
+    const durableEntries = Object.keys(window.localStorage).filter(key => key.startsWith(DURABLE_FILE_PREFIX)).flatMap(key => { try { return [JSON.parse(window.localStorage.getItem(key) || 'null')]; } catch { return []; } });
+    const parsed = [...(Array.isArray(legacyEntries) ? legacyEntries : []), ...durableEntries];
     if (!Array.isArray(parsed)) return;
     parsed.forEach((item) => {
       if (
@@ -44,9 +52,12 @@ const hydratePendingServiceFiles = () => {
         typeof item.id === 'string' &&
         typeof item.bucket === 'string' &&
         typeof item.path === 'string' &&
-        typeof item.fileName === 'string'
+        typeof item.fileName === 'string' &&
+        typeof item.uploadedBy === 'string'
       ) {
         pendingServiceFiles.set(pendingServiceFileKey(item), item as AttachmentRef);
+        if (typeof item.pendingCommandId === 'string') submissions.set(pendingServiceFileKey(item), item.pendingCommandId);
+        else if (legacyRaw) submissions.set(pendingServiceFileKey(item), 'legacy-unresolved');
       }
     });
   } catch {
@@ -62,7 +73,8 @@ const persistPendingServiceFiles = () => {
       window.sessionStorage.removeItem(PENDING_SERVICE_FILES_KEY);
       return;
     }
-    window.sessionStorage.setItem(PENDING_SERVICE_FILES_KEY, JSON.stringify(Array.from(pendingServiceFiles.values())));
+    pendingServiceFiles.forEach(attachment => window.localStorage.setItem(durableKey(attachment), JSON.stringify({ ...attachment, pendingCommandId: submissions.get(pendingServiceFileKey(attachment)) })));
+    window.sessionStorage.setItem(PENDING_SERVICE_FILES_KEY, JSON.stringify(Array.from(pendingServiceFiles.values()).map(attachment => ({ ...attachment, pendingCommandId: submissions.get(pendingServiceFileKey(attachment)) }))));
   } catch {
     // Storage can be unavailable or full; cleanup still works in-memory.
   }
@@ -76,14 +88,51 @@ export const trackPendingServiceFile = (attachment: AttachmentRef) => {
 
 export const forgetPendingServiceFile = (attachment: Pick<AttachmentRef, 'bucket' | 'path'>) => {
   hydratePendingServiceFiles();
+  if (typeof window !== 'undefined') { try { window.localStorage.removeItem(durableKey(attachment)); } catch { /* best effort */ } }
   pendingServiceFiles.delete(pendingServiceFileKey(attachment));
+  submissions.delete(pendingServiceFileKey(attachment));
   persistPendingServiceFiles();
 };
 
 export const clearPendingServiceFiles = () => {
   pendingServiceFiles.clear();
+  submissions.clear();
   if (typeof window === 'undefined') return;
   try { window.sessionStorage.removeItem(PENDING_SERVICE_FILES_KEY); } catch { /* best effort */ }
+};
+
+// Bind only attachments actually submitted by this command. An unrelated save
+// must never clear an upload belonging to another form or another member.
+const attachmentKeys = (value: unknown): Set<string> => {
+  const keys = new Set<string>();
+  const visit = (item: unknown) => {
+    if (!item || typeof item !== 'object') return;
+    if (Array.isArray(item)) { item.forEach(visit); return; }
+    const row = item as Record<string, unknown>;
+    if (typeof row.bucket === 'string' && typeof row.path === 'string') keys.add(`${row.bucket}:${row.path}`);
+    Object.values(row).forEach(visit);
+  };
+  visit(value);
+  return keys;
+};
+export const bindPendingServiceFiles = (commandId: string, operations: unknown) => {
+  hydratePendingServiceFiles();
+  const keys = attachmentKeys(operations);
+  pendingServiceFiles.forEach((attachment, key) => { if (keys.has(key)) submissions.set(key, commandId); });
+  persistPendingServiceFiles();
+};
+export const acknowledgePendingServiceFiles = (commandId: string) => {
+  hydratePendingServiceFiles();
+  Array.from(pendingServiceFiles.entries()).forEach(([key, attachment]) => {
+    if (submissions.get(key) === commandId) forgetPendingServiceFile(attachment);
+  });
+};
+export const reconcilePendingServiceFiles = (actorId: string, canonical: unknown) => {
+  hydratePendingServiceFiles();
+  const referenced = attachmentKeys(canonical);
+  Array.from(pendingServiceFiles.entries()).forEach(([key, attachment]) => {
+    if (attachment.uploadedBy === actorId && referenced.has(key)) forgetPendingServiceFile(attachment);
+  });
 };
 
 export const getServiceFileMimeType = (file: Pick<File, 'name' | 'type'>): ServiceFileMimeType | null => {
@@ -125,21 +174,9 @@ export const uploadServiceFile = async (input: {
   if (input.file.size > SERVICE_FILE_MAX_BYTES) return { ok: false, error: 'Files must be 100 MB or smaller.' };
   const contentType = getServiceFileMimeType(input.file);
   if (!contentType) return { ok: false, error: SERVICE_FILE_TYPE_ERROR };
+  const sessionToken = captureWorkspaceSession();
   const id = crypto.randomUUID();
   const path = `${input.workspaceId}/${input.clientId}/${input.cycleId}/${id}-${safeName(input.file.name)}`;
-  try {
-    const { error } = await supabase.storage.from(SERVICE_FILES_BUCKET).upload(path, input.file, {
-      cacheControl: '3600',
-      contentType,
-      upsert: false,
-    });
-    if (error) return { ok: false, error: error.message || 'The file could not be uploaded.' };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : 'The file could not be uploaded.',
-    };
-  }
   const attachment: AttachmentRef = {
     id,
     bucket: SERVICE_FILES_BUCKET,
@@ -150,65 +187,102 @@ export const uploadServiceFile = async (input: {
     uploadedBy: input.userId,
     uploadedAt: new Date().toISOString(),
   };
-  trackPendingServiceFile(attachment);
+  try {
+    const { error } = await supabase.storage.from(SERVICE_FILES_BUCKET).upload(path, input.file, {
+      cacheControl: '3600',
+      contentType,
+      upsert: false,
+    });
+    if (error) return { ok: false, error: error.message || 'The file could not be uploaded.' };
+    trackPendingServiceFile(attachment);
+    assertWorkspaceSession(sessionToken);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'The file could not be uploaded.',
+    };
+  }
   return {
     ok: true,
     attachment,
   };
 };
 
-export const removeServiceFile = async (attachment: AttachmentRef) => {
-  if (!shouldUseSecureSupabase()) {
-    return { ok: false as const, error: 'Private file cleanup requires the Supabase backend.' };
-  }
-  try {
-    const { error } = await supabase.storage.from(attachment.bucket).remove([attachment.path]);
-    if (error) return { ok: false as const, error: error.message || 'The uploaded file could not be removed.' };
-    forgetPendingServiceFile(attachment);
-    return { ok: true as const };
-  } catch (error) {
-    return {
-      ok: false as const,
-      error: error instanceof Error ? error.message : 'The uploaded file could not be removed.',
-    };
-  }
+export const listPendingServiceFiles = (actorId: string) => {
+  hydratePendingServiceFiles();
+  return Array.from(pendingServiceFiles.values()).filter(file => file.uploadedBy === actorId).map(file => ({ ...file, commandId: submissions.get(pendingServiceFileKey(file)) }));
 };
 
-export const cleanupPendingServiceFiles = async () => {
-  hydratePendingServiceFiles();
-  const attachments = Array.from(pendingServiceFiles.values());
-  if (attachments.length === 0) return { ok: true as const, removed: 0 };
-  if (!shouldUseSecureSupabase()) {
-    return { ok: false as const, removed: 0, error: 'Private file cleanup requires the Supabase backend.' };
-  }
+export const reconcileServiceUpload = async (attachment: AttachmentRef, abandon = false): Promise<{ ok: true; status: string; error?: undefined } | { ok: false; error: string; status?: undefined }> => {
+  const token = captureWorkspaceSession();
+  const commandId = submissions.get(pendingServiceFileKey(attachment));
+  // Legacy entries have no trustworthy command ID, so never abandon them.
+  if (commandId === 'legacy-unresolved') return { ok: false as const, error: 'Upload confirmation is unresolved. The file was retained to protect saved activity.' };
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  token.signal.addEventListener('abort', abort, { once: true });
+  try {
+    assertWorkspaceSession(token);
+    const request = supabase.rpc('aitask_reconcile_service_upload', {
+      p_workspace_id: attachment.path.split('/')[0], p_command_id: commandId || null,
+      p_path: attachment.path, p_abandon: abandon,
+    }).abortSignal(controller.signal);
+    const { data, error } = await Promise.race([
+      request,
+      new Promise<never>((_, reject) => { timeout = setTimeout(() => { controller.abort(); reject(new Error('Upload reconciliation timed out. The file was retained.')); }, 20000); }),
+    ]);
+    assertWorkspaceSession(token);
+    if (error || !data?.ok) return { ok: false as const, error: error?.message || data?.error || 'Upload reconciliation is unavailable. The file was retained.' };
+    if (!['referenced', 'missing', 'abandoned', 'unresolved', 'committed-unreferenced'].includes(data.status)) return { ok: false as const, error: 'Upload confirmation is unresolved. The file was retained to protect saved activity.' };
+    return { ok: true as const, status: data.status as string };
+  } catch (error) { return { ok: false as const, error: error instanceof Error ? error.message : 'Upload reconciliation is unavailable. The file was retained.' }; }
+  finally { if (timeout) clearTimeout(timeout); token.signal.removeEventListener('abort', abort); }
+};
 
+export const removeServiceFile = async (attachment: AttachmentRef, options: { abandonSubmitted?: boolean } = {}): Promise<{ ok: true; error?: undefined } | { ok: false; error: string }> => {
+  hydratePendingServiceFiles();
+  const token = captureWorkspaceSession();
+  const key = pendingServiceFileKey(attachment);
+  if (!pendingServiceFiles.has(key)) return { ok: false as const, error: 'This file is not an unsubmitted upload and cannot be removed here.' };
+  if (submissions.has(key) && !options.abandonSubmitted) return { ok: false as const, error: 'Upload confirmation is unresolved. The file was retained to protect saved activity.' };
+  if (!shouldUseSecureSupabase()) return { ok: false as const, error: 'Private file cleanup requires the Supabase backend.' };
+  const status = await reconcileServiceUpload(attachment, true);
+  if (!status.ok) return status;
+  if (!isWorkspaceSessionCurrent(token)) return { ok: false as const, error: 'Your session changed. Sign in again.' };
+  if (status.status === 'referenced' || status.status === 'missing') { forgetPendingServiceFile(attachment); return { ok: true as const }; }
+  if (status.status !== 'abandoned') return { ok: false as const, error: 'Upload confirmation is unresolved. The file was retained to protect saved activity.' };
+  try {
+    const { error } = await supabase.storage.from(attachment.bucket).remove([attachment.path]);
+    assertWorkspaceSession(token);
+    if (error) return { ok: false as const, error: error.message || 'The uploaded file could not be removed.' };
+    forgetPendingServiceFile(attachment); return { ok: true as const };
+  } catch (error) { return { ok: false as const, error: error instanceof Error ? error.message : 'The uploaded file could not be removed.' }; }
+};
+
+export const cleanupPendingServiceFiles = async (actorId?: string, options: { abandonSubmitted?: boolean; commandIds?: string[]; includeUnsubmitted?: boolean } = {}) => {
+  const token = captureWorkspaceSession();
+  const owned = (actorId ? listPendingServiceFiles(actorId) : []).filter(file => options.commandIds ? Boolean(file.commandId && options.commandIds.includes(file.commandId)) : options.includeUnsubmitted === false ? Boolean(file.commandId) : true);
   let removed = 0;
-  let firstError: string | undefined;
-  const byBucket = new Map<string, AttachmentRef[]>();
-  attachments.forEach((attachment) => {
-    const bucket = byBucket.get(attachment.bucket) || [];
-    bucket.push(attachment);
-    byBucket.set(attachment.bucket, bucket);
-  });
-  for (const [bucket, bucketAttachments] of byBucket) {
-    try {
-      const { error } = await supabase.storage.from(bucket).remove(bucketAttachments.map(attachment => attachment.path));
-      if (error) {
-        firstError ||= error.message || 'The uploaded files could not be removed.';
-        continue;
-      }
-      bucketAttachments.forEach(attachment => {
-        pendingServiceFiles.delete(pendingServiceFileKey(attachment));
-        removed += 1;
-      });
-    } catch (error) {
-      firstError ||= error instanceof Error ? error.message : 'The uploaded files could not be removed.';
-    }
+  let error: string | undefined;
+  for (const file of owned) {
+    if (!isWorkspaceSessionCurrent(token)) return { ok: false as const, removed, error: 'Your session changed. Sign in again.' };
+    const result = await removeServiceFile(file, options);
+    if (result.ok) removed += 1; else error ||= result.error;
   }
-  persistPendingServiceFiles();
-  return firstError
-    ? { ok: false as const, removed, error: firstError }
-    : { ok: true as const, removed };
+  return error ? { ok: false as const, removed, error } : { ok: true as const, removed };
+};
+
+export const refreshPendingServiceFiles = async (actorId: string) => {
+  const token = captureWorkspaceSession();
+  let error: string | undefined;
+  for (const file of listPendingServiceFiles(actorId)) {
+    if (!isWorkspaceSessionCurrent(token)) return { ok: false as const, error: 'Your session changed. Sign in again.' };
+    const result = await reconcileServiceUpload(file);
+    if (result.ok && (result.status === 'referenced' || result.status === 'missing')) forgetPendingServiceFile(file);
+    else if (!result.ok) error ||= result.error;
+  }
+  return error ? { ok: false as const, error } : { ok: true as const };
 };
 
 export const downloadServiceFile = async (attachment: AttachmentRef) => {

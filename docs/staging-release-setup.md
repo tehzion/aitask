@@ -61,3 +61,32 @@ repair or manually replay migrations: apply only the ordered entries in
 a release tag. Each release still runs the disposable local migration/pgTAP/
 advisor gate, the staging authenticated suite, and the anonymous production
 security verifier.
+
+## 6. Deep-audit migration and attachment gate
+
+The audit adds `20260930111033_service_upload_reconciliation` and
+`20260930154013_initialize_deadline_reminder_claim`. Verify the hosted migration
+history, including the existing delegation migration, before applying the ordered
+pending production tail. The checked-in manifest is release evidence, not a live
+query of the project's migration history.
+
+Deploy the reconciliation migration before releasing the new attachment-cleanup
+interface. Until its RPC exists, cleanup fails closed and retains unresolved
+uploads. The RPC is restricted to the authenticated uploader, workspace and
+client scope. It checks canonical references and fences discarded commands before
+allowing deletion. Do not remove its tombstones or replay discarded command IDs
+during an application rollback: those records prevent a delayed request from
+referencing an already-deleted object.
+
+Run `pnpm verify:supabase:rollout` in a disposable Docker stack. It now includes
+authenticated delegation pgTAP tests and real Auth/REST/Storage upload tests,
+including lost acknowledgement after commit, cross-account denial, late-command
+replay after discard and interrupted cleanup retry. The storage harness refuses
+non-local hosts and non-validation database containers. Repeat the relevant flows
+against isolated hosted staging through its established QA fixture before release;
+a passing local stack does not establish the deployed project's policy state.
+
+Export checks can be repeated with `pnpm verify:csv:libreoffice` when LibreOffice
+is installed. Startup profiling uses a production-mode local demo build and a
+localhost preview: set `AITASK_PROFILE_URL` to that preview and run
+`pnpm profile:startup`. Neither script targets production.

@@ -1,3 +1,5 @@
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { cyclePeriodEnd, nextBillingDate } from '../lib/serviceManagement';
 import React from 'react';
 import { X } from 'lucide-react';
 import ModalShell from './ModalShell';
@@ -30,6 +32,12 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
   const [contractEndDate, setContractEndDate] = React.useState(plan.contractEndDate || '');
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const dirty = startDate !== plan.startDate || Number(billingDay) !== plan.billingDay || contractEndDate !== (plan.contractEndDate || '');
+  useUnsavedChanges(saving || dirty);
+  const requestClose = () => { if (!saving && (!dirty || window.confirm(t('Discard unsaved changes?')))) onClose(); };
+  const transitionStart = plan.nextCycleStart || '';
+  const transitionEnd = transitionStart && Number(billingDay) >= 1 && Number(billingDay) <= 31 ? cyclePeriodEnd(transitionStart, Number(billingDay)) : '';
+  const followingStart = transitionStart && transitionEnd ? nextBillingDate(transitionStart, Number(billingDay)) : '';
   const pendingResolution = isPendingMutationResolution(backend);
 
   const save = async (event: React.FormEvent) => {
@@ -64,14 +72,14 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
   };
 
   return (
-    <ModalShell labelledBy={titleId} onClose={onClose} panelClassName="max-w-md">
+    <ModalShell labelledBy={titleId} onClose={requestClose} panelClassName="max-w-md">
       <header className="flex items-start justify-between gap-4 border-b border-line px-5 pb-5 pt-6 sm:px-6">
         <div>
           <p className="calm-eyebrow">{t('Service plan')}</p>
           <h2 id={titleId} className="mt-1 text-xl font-semibold tracking-[-0.03em] text-ink">{t('Edit plan dates')}</h2>
           <p className="mt-1 text-sm text-muted" data-i18n-skip>{plan.name}</p>
         </div>
-        <button type="button" aria-label={t('Close')} onClick={onClose} disabled={saving} className="flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink disabled:cursor-wait disabled:opacity-50"><X className="h-5 w-5" /></button>
+        <button type="button" aria-label={t('Close')} onClick={requestClose} disabled={saving} className="flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink disabled:cursor-wait disabled:opacity-50"><X className="h-5 w-5" /></button>
       </header>
       <form onSubmit={save} className="space-y-4 p-5 sm:p-6">
         <label className="block text-sm font-medium text-ink">{t('Start date')}
@@ -94,6 +102,11 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
             onChange={event => setBillingDay(event.target.value)}
           />
         </label>
+        {!isDraft && Number(billingDay) !== plan.billingDay && transitionEnd && <div className="rounded-control border border-line bg-inset p-3 text-sm text-muted" role="status">
+          <p>{t('Existing cycle boundaries remain unchanged.')}</p>
+          <p>{t('Transition cycle')}: <span data-i18n-skip>{transitionStart} – {transitionEnd}</span></p>
+          <p>{t('Following billing date')}: <span data-i18n-skip>{followingStart}</span></p>
+        </div>}
         <label className="block text-sm font-medium text-ink">{t('Contract end date (reminder only)')}
           <input
             type="date"
@@ -110,7 +123,7 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
           </div>
         )}
         <div className={modalFooter}>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>{t('Cancel')}</Button>
+          <Button type="button" variant="secondary" onClick={requestClose} disabled={saving}>{t('Cancel')}</Button>
           <Button type="submit" disabled={saving || pendingResolution || backend.isSaving || backend.isPulling}>{saving ? t('Saving…') : t('Save dates')}</Button>
         </div>
       </form>

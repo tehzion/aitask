@@ -1,3 +1,4 @@
+import { hasUnsavedChanges } from './unsavedChanges';
 import { registerSW } from 'virtual:pwa-register';
 
 export const PWA_UPDATE_READY_EVENT = 'aitask:pwa-update-ready';
@@ -8,6 +9,10 @@ const MIN_UPDATE_CHECK_GAP_MS = 60 * 1000;
 let updateReady = false;
 
 export const isPwaUpdateReady = () => updateReady;
+export const notifyPwaUpdateReady = () => {
+  updateReady = true;
+  window.dispatchEvent(new Event(PWA_UPDATE_READY_EVENT));
+};
 
 export const registerPwaUpdates = () => {
   const hadControllerAtStartup = 'serviceWorker' in navigator && Boolean(navigator.serviceWorker.controller);
@@ -18,7 +23,7 @@ export const registerPwaUpdates = () => {
       if (!hadControllerAtStartup || isReloading) return;
 
       updateReady = true;
-      if (window.location.pathname === '/login' || document.visibilityState === 'hidden') {
+      if (!hasUnsavedChanges() && (window.location.pathname === '/login' || document.visibilityState === 'hidden')) {
         isReloading = true;
         window.location.reload();
         return;
@@ -32,7 +37,7 @@ export const registerPwaUpdates = () => {
     immediate: true,
     onNeedReload() {
       updateReady = true;
-      if (window.location.pathname === '/login' || document.visibilityState === 'hidden') {
+      if (!hasUnsavedChanges() && (window.location.pathname === '/login' || document.visibilityState === 'hidden')) {
         isReloading = true;
         window.location.reload();
         return;

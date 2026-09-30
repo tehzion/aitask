@@ -1,3 +1,6 @@
+import { useRecoverableForm } from '../hooks/useRecoverableForm';
+import DraftRecoveryNotice from './DraftRecoveryNotice';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React from 'react';
 import { ArrowLeft, ArrowRight, Check, Copy, PackageCheck, Plus, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -25,6 +28,8 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
     retryPendingSave,
     backend,
   } = useStore();
+  const [dirty, setDirty] = React.useState(false);
+  const markPristine = useUnsavedChanges(dirty);
   const [step, setStep] = React.useState(1);
   const [mode, setMode] = React.useState<PlanOrigin>('standard');
   const [packageId, setPackageId] = React.useState(servicePackages.find(item => item.isActive)?.id || '');
@@ -38,6 +43,9 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
   const selectedPackage = servicePackages.find(item => item.id === packageId);
   const readOnlyItems = mode === 'standard';
   const appliedPackageKeyRef = React.useRef('');
+  const recovery = useRecoverableForm(`create-client-plan:${client?.id || 'new'}`, { step, mode, packageId, profile, plan, items }, dirty, !saving);
+  const restoreDraft = () => { const value = recovery.restore(); if (!value || !Array.isArray(value.items)) return; setStep(value.step); setMode(value.mode); setPackageId(value.packageId); setProfile(value.profile); setPlan(value.plan); setItems(value.items); setDirty(true); };
+  const requestClose = () => { if (!saving && (!dirty || window.confirm(t('Discard unsaved changes?')))) { recovery.clear(); markPristine(); onClose(); } };
   const pendingResolution = isPendingMutationResolution(backend);
 
   React.useEffect(() => {
@@ -187,7 +195,7 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
         setError(t('The client was saved without a valid workspace destination.'));
         return;
       }
-      onClose();
+      recovery.clear(); markPristine(); setDirty(false); onClose();
       navigate(`/clients/${encodeURIComponent(createdClientId)}`);
     } finally {
       setSaving(false);
@@ -203,10 +211,11 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
   ];
 
   return (
-    <ModalShell labelledBy={titleId} onClose={onClose} panelClassName="h-[min(54rem,calc(100dvh-2rem))] max-w-[88rem]">
+    <ModalShell labelledBy={titleId} onClose={requestClose} onEdit={() => setDirty(true)} panelClassName="h-[min(54rem,calc(100dvh-2rem))] max-w-[88rem]">
+      {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
       <header className="flex items-start justify-between gap-4 border-b border-line px-5 pb-5 pt-6 sm:px-6">
         <div><p className="calm-eyebrow">{t(client ? 'Service plan' : 'New client')} · {t('Step')} {step} {t('of')} 5</p><h2 id={titleId} className="mt-1 text-2xl font-semibold tracking-[-0.035em] text-ink">{t(client ? 'Create service plan' : 'Create client and service plan')}</h2><p className="mt-1 text-sm text-muted">{t(client ? 'Create a frozen Draft plan for this existing company.' : 'Save the client and a frozen Draft plan in one workflow.')}</p></div>
-        <button type="button" aria-label={t('common.close')} onClick={onClose} className="flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-5 w-5" /></button>
+        <button type="button" aria-label={t('common.close')} onClick={requestClose} className="flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-5 w-5" /></button>
       </header>
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[13rem_minmax(0,1fr)_17rem]">
@@ -236,7 +245,7 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
         <aside className="hidden border-l border-line bg-inset/45 p-5 lg:block" aria-label={t('Draft summary')}><p className="calm-eyebrow">{t('Draft summary')}</p><h3 className="mt-2 truncate font-semibold text-ink" data-i18n-skip>{profile.clientName || t('Unnamed client')}</h3><p className="mt-1 text-xs capitalize text-muted">{mode} {t('plan')} · {items.length} {t(items.length === 1 ? 'service' : 'services')}</p><dl className="mt-6 space-y-4 text-sm"><div><dt className="text-muted">{t('Start date')}</dt><dd className="calm-number mt-1 font-medium text-ink">{plan.startDate}</dd></div><div><dt className="text-muted">{t('Billing day')}</dt><dd className="calm-number mt-1 font-medium text-ink">{t('Day')} {plan.billingDay}</dd></div><div><dt className="text-muted">{t('Internal total')}</dt><dd className="calm-number mt-1 text-lg font-semibold text-ink">{formatMoney(totals.total, 'MYR', locale)}</dd></div></dl><div className="mt-6 border-t border-line pt-5"><p className="text-xs leading-5 text-muted">{t('Scope, workflow and price are frozen when this Draft is saved.')}</p></div></aside>
       </div>
 
-      <footer className="sticky bottom-0 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-t border-line bg-surface px-5 py-3 sm:px-6"><Button variant="secondary" onClick={() => step === 1 ? onClose() : setStep(value => value - 1)} disabled={saving && step > 1}><ArrowLeft className="h-4 w-4" />{t(step === 1 ? 'Cancel' : 'Back')}</Button><p className="min-w-0 text-center text-xs leading-5 text-muted"><span className="font-semibold text-ink">{t('Step')} {step}/5</span><span aria-hidden="true"> · </span>{serviceSlots} {t(serviceSlots === 1 ? 'service slot' : 'service slots')}<span className="hidden sm:inline"><span aria-hidden="true"> · </span>{t('Internal total')} <strong className="calm-number text-ink">{formatMoney(totals.total, 'MYR', locale)}</strong></span></p>{step < 5 ? <Button onClick={next} disabled={saving || pendingResolution}>{t('Continue')}<ArrowRight className="h-4 w-4" /></Button> : <Button onClick={save} disabled={saving || pendingResolution || (backend.upgradeRequired === true && !createdClientIdRef.current)}><Check className="h-4 w-4" />{saving ? t('Saving…') : createdClientIdRef.current ? t('Retry save') : t('Save draft plan')}</Button>}</footer>
+      <footer className="sticky bottom-0 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-t border-line bg-surface px-5 py-3 sm:px-6"><Button variant="secondary" onClick={() => step === 1 ? requestClose() : setStep(value => value - 1)} disabled={saving && step > 1}><ArrowLeft className="h-4 w-4" />{t(step === 1 ? 'Cancel' : 'Back')}</Button><p className="min-w-0 text-center text-xs leading-5 text-muted"><span className="font-semibold text-ink">{t('Step')} {step}/5</span><span aria-hidden="true"> · </span>{serviceSlots} {t(serviceSlots === 1 ? 'service slot' : 'service slots')}<span className="hidden sm:inline"><span aria-hidden="true"> · </span>{t('Internal total')} <strong className="calm-number text-ink">{formatMoney(totals.total, 'MYR', locale)}</strong></span></p>{step < 5 ? <Button onClick={next} disabled={saving || pendingResolution}>{t('Continue')}<ArrowRight className="h-4 w-4" /></Button> : <Button onClick={save} disabled={saving || pendingResolution || (backend.upgradeRequired === true && !createdClientIdRef.current)}><Check className="h-4 w-4" />{saving ? t('Saving…') : createdClientIdRef.current ? t('Retry save') : t('Save draft plan')}</Button>}</footer>
     </ModalShell>
   );
 };

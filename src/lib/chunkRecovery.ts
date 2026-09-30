@@ -1,3 +1,5 @@
+import { hasUnsavedChanges } from './unsavedChanges';
+import { notifyPwaUpdateReady } from './pwaUpdates';
 /**
  * Recovery for failed dynamic route imports.
  *
@@ -21,6 +23,7 @@ export const isChunkLoadError = (message: string | undefined | null): boolean =>
 
 export const recoverFromChunkLoadError = (): boolean => {
   if (typeof window === 'undefined' || isRecovering) return false;
+  if (hasUnsavedChanges()) { notifyPwaUpdateReady(); return false; }
 
   const now = Date.now();
   let lastAttempt = 0;
@@ -37,7 +40,10 @@ export const recoverFromChunkLoadError = (): boolean => {
   }
 
   isRecovering = true;
-  const reload = () => window.location.reload();
+  const reload = () => {
+    if (hasUnsavedChanges()) { isRecovering = false; notifyPwaUpdateReady(); return; }
+    window.location.reload();
+  };
 
   try {
     if ('serviceWorker' in navigator) {

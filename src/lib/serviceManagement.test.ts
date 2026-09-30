@@ -74,3 +74,17 @@ describe('service management calculations', () => {
     ]);
   });
 });
+
+describe('billing-day transition boundaries', () => {
+  it.each([
+    ['2026-01-31', 15, '2026-02-15', '2026-02-14'],
+    ['2028-02-29', 31, '2028-03-31', '2028-03-30'],
+    ['2026-02-28', 31, '2026-03-31', '2026-03-30'],
+    ['2026-12-31', 1, '2027-01-01', '2026-12-31'],
+    ['2028-02-28', 31, '2028-02-29', '2028-02-28'],
+  ])('previews %s changing to day %i without moving the preserved start', (start, day, following, end) => {
+    expect(nextBillingDate(start, Number(day))).toBe(following);
+    expect(cyclePeriodEnd(start, Number(day))).toBe(end);
+    expect(end >= start).toBe(true);
+  });
+});

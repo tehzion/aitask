@@ -1,3 +1,4 @@
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React, { useEffect, useState } from 'react';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
@@ -135,6 +136,17 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
     notes: '',
   });
 
+  const editBaseline = React.useRef(editForm);
+  const formDirty = Boolean(isOpen && requestedTask && (commentText.trim() || approvalNote.trim() || revisionNote.trim() || isSubmitting
+    || attachmentLink !== (requestedTask.attachmentLink || '') || attachmentName !== (requestedTask.attachmentName || '')
+    || (isEditingDetails && JSON.stringify(editForm) !== JSON.stringify(editBaseline.current))
+    || (delegationAssignee && delegationAssignee !== requestedTask.assignedTo)));
+  const markPristine = useUnsavedChanges(formDirty);
+  const requestClose = () => {
+    if (isSubmitting || (formDirty && !window.confirm(t('Discard unsaved changes?')))) return;
+    markPristine(); onClose();
+  };
+
   useEffect(() => {
     const draftTask = requestedTaskRef.current;
     setAttachmentLink(draftTask?.attachmentLink || '');
@@ -148,7 +160,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
     setIsSubmitting(false);
     setDelegationAssignee('');
     if (draftTask) {
-      setEditForm({
+      const initialEdit = {
         title: draftTask.title,
         description: draftTask.description || '',
         clientName: draftTask.clientName,
@@ -159,7 +171,8 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
         startDate: draftTask.startDate || getTodayInputDate(),
         dueDate: draftTask.dueDate,
         notes: draftTask.notes || '',
-      });
+      };
+      editBaseline.current = initialEdit; setEditForm(initialEdit);
     }
   }, [requestedTaskId]);
 
@@ -353,7 +366,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
     <ModalShell
       labelledBy={titleId}
       describedBy={descriptionId}
-      onClose={onClose}
+      onClose={requestClose}
       panelClassName="max-w-4xl max-sm:max-h-none max-sm:rounded-none"
     >
         <p id={descriptionId} className="sr-only">{t('Task details, status, dates, links and comments for')} <span data-i18n-skip>{task.title}</span>.</p>
@@ -384,7 +397,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                 </button>
               </>
             )}
-            <button onClick={onClose} aria-label={t('task.closeDetails', { title: task.title })} title={t('common.close')} className="inline-flex h-11 w-11 items-center justify-center rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
+            <button onClick={requestClose} aria-label={t('task.closeDetails', { title: task.title })} title={t('common.close')} className="inline-flex h-11 w-11 items-center justify-center rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -732,6 +745,8 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                   </div>
                 </div>
               </div>
+
+              {task.generatedFromDeliverable && task.startDate && task.dueDate && task.dueDate < (task.workflowGeneratedAt || '').slice(0, 10) && <p className="rounded-control border border-line bg-inset p-3 text-sm text-muted">{t('Generated late; original deadlines are preserved.')}</p>}
 
               {canDelegateAssignedTask && (
                 <form onSubmit={handleTaskDelegation} className="rounded-lg border border-accent/20 bg-accent-soft p-4 space-y-3" aria-labelledby={`${titleId}-delegation-heading`}>

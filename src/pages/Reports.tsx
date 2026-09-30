@@ -1,3 +1,4 @@
+import { reportAssigneeName, createCsvBlob } from '../lib/csv';
 import React, { useMemo } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Download, Users } from 'lucide-react';
 import { useStore } from '../store';
@@ -15,7 +16,7 @@ const ReportsTrendChart = React.lazy(() => import('../components/ReportsCharts')
 const ReportsDepartmentChart = React.lazy(() => import('../components/ReportsCharts').then(module => ({ default: module.ReportsDepartmentChart })));
 
 const Reports: React.FC = () => {
-  const { tasks: allTasks, currentUser, rolePermissions, clients, projects } = useStore();
+  const { tasks: allTasks, currentUser, rolePermissions, clients, projects, users } = useStore();
   const { locale, t } = useI18n();
   const tasks = useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects }),
@@ -87,7 +88,6 @@ const Reports: React.FC = () => {
   const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', []);
 
   const exportReport = () => {
-    const escapeCsv = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const outcomeLabels: Record<DueWorkOutcome, string> = {
       onTime: t('On time'),
       late: t('Late'),
@@ -101,12 +101,11 @@ const Reports: React.FC = () => {
       formatWeekLabel(week),
       task.title,
       task.clientName,
-      task.assignedTo || '',
+      reportAssigneeName(task.assignedTo, users, { unassigned: t('Unassigned'), unavailable: t('Unavailable member') }),
       task.department || t('Unassigned'),
       outcomeLabels[outcome],
     ]));
-    const csv = [headers, ...rows].map(row => row.map(escapeCsv).join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }));
+    const url = URL.createObjectURL(createCsvBlob([headers, ...rows]));
     const anchor = document.createElement('a');
     anchor.href = url;
     anchor.download = 'aitask-due-work-report.csv';

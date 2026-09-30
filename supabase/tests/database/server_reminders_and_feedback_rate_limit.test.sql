@@ -40,6 +40,9 @@ insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values (
   'pgtap-reminder-no-recipient', 'task', 'pgtap-reminder-late-recipient', jsonb_build_object(
     'id', 'pgtap-reminder-late-recipient', 'title', 'Late recipient deadline',
+    -- A staff member becomes eligible because this task is assigned to them;
+    -- unrelated staff must not receive another member's reminders.
+    'assignedTo', 'pgtap-reminder-late-staff', 'department', 'Designer',
     'clientName', 'Unstaffed Client', 'dueDate', '2026-09-28', 'status', 'Pending', 'isCompleted', false
   )
 );

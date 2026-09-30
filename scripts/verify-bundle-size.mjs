@@ -26,4 +26,25 @@ for (const budget of budgets) {
   }
 }
 
+const manifest = JSON.parse(await readFile(resolve('dist/.vite/manifest.json'), 'utf8'));
+const visited = new Set();
+const eagerFiles = new Set();
+const visit = key => {
+  if (visited.has(key)) return;
+  visited.add(key);
+  const chunk = manifest[key];
+  if (!chunk) throw new Error(`[bundle] Missing manifest dependency: ${key}`);
+  if (chunk.file.endsWith('.js')) eagerFiles.add(chunk.file);
+  (chunk.imports || []).forEach(visit);
+};
+Object.entries(manifest).filter(([, chunk]) => chunk.isEntry).forEach(([key]) => visit(key));
+let eagerRaw = 0;
+let eagerGzip = 0;
+for (const file of eagerFiles) {
+  const source = await readFile(resolve('dist', file));
+  eagerRaw += source.byteLength;
+  eagerGzip += gzipSync(source, { level: 9 }).byteLength;
+}
+console.log(`[bundle] Eager JS graph (${eagerFiles.size} chunks): ${(eagerRaw / 1024).toFixed(1)} KiB raw, ${(eagerGzip / 1024).toFixed(1)} KiB gzip (300 KiB gzip cap).`);
+if (eagerGzip > 300 * 1024) throw new Error('[bundle] Eager JavaScript dependency graph exceeds 300 KiB gzip.');
 console.log('[bundle] Bundle-size budgets passed.');

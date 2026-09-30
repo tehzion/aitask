@@ -1,3 +1,6 @@
+import { useRecoverableForm } from '../hooks/useRecoverableForm';
+import DraftRecoveryNotice from './DraftRecoveryNotice';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React, { useState } from 'react';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
@@ -70,6 +73,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [isAddingCustomService, setIsAddingCustomService] = useState(false);
   const [customServiceInput, setCustomServiceInput] = useState('');
   const [customServiceError, setCustomServiceError] = useState('');
+  const [formEdited, setFormEdited] = React.useState(false);
+  React.useEffect(() => { if (!isOpen) setFormEdited(false); }, [isOpen]);
   const [priority, setPriority] = useState<Priority>('Medium');
   const [visibility, setVisibility] = useState<TaskVisibility>(() => (
     ['Staff', 'HOD'].includes(currentUser?.role || '') ? 'internal' : 'client-visible'
@@ -82,6 +87,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [assignmentError, setAssignmentError] = useState('');
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const markPristine = useUnsavedChanges(isOpen && (formEdited || isSubmitting));
   const [pendingTaskId, setPendingTaskId] = useState('');
   const pendingResolution = isPendingMutationResolution(backend);
 
@@ -161,10 +167,16 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setPendingTaskId('');
   }, [currentUser?.role]);
 
-  const closeAndReset = React.useCallback(() => {
-    resetForm();
+  const recovery = useRecoverableForm('create-task', { projectId, title, description, clientName, customerDetails, facebookPage, website, department, assignedTo, serviceType, priority, visibility, startDate, dueDate, attachmentLink, attachmentName, notes, customServiceInput }, formEdited, isOpen && !pendingTaskId);
+  const restoreDraft = () => {
+    const value = recovery.restore(); if (!value || typeof value.title !== 'string') return;
+    setProjectId(value.projectId); setTitle(value.title); setDescription(value.description); setClientName(value.clientName); setCustomerDetails(value.customerDetails); setFacebookPage(value.facebookPage); setWebsite(value.website); setDepartment(value.department); setAssignedTo(value.assignedTo); setServiceType(value.serviceType); setPriority(value.priority); setVisibility(value.visibility); setStartDate(value.startDate); setDueDate(value.dueDate); setAttachmentLink(value.attachmentLink); setAttachmentName(value.attachmentName); setNotes(value.notes); setCustomServiceInput(value.customServiceInput); setFormEdited(true);
+  };
+  const closeAndReset = () => {
+    recovery.clear(); markPristine(); setFormEdited(false); resetForm();
     onClose();
-  }, [onClose, resetForm]);
+  };
+  const requestClose = () => { if (!isSubmitting && (!formEdited || window.confirm(t('Discard unsaved changes?')))) closeAndReset(); };
 
   React.useEffect(() => {
     if (isOpen) {
@@ -407,11 +419,13 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   return (
     <>
       <ModalShell
+        onEdit={() => setFormEdited(true)}
         labelledBy={titleId}
         describedBy={descriptionId}
-        onClose={closeAndReset}
+        onClose={requestClose}
         panelClassName="max-w-2xl"
       >
+      {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
         
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
@@ -420,7 +434,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             <p id={descriptionId} className="mt-1 text-sm text-slate-600">{t('Assign work to a specific department or position.')}</p>
           </div>
           <button 
-            onClick={closeAndReset}
+            onClick={requestClose}
             aria-label={t('Close create task modal')}
             title={t('common.close')}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -743,7 +757,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
         <div className={modalFooter}>
           <button 
             type="button"
-            onClick={closeAndReset}
+            onClick={requestClose}
             className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
           >
             {t('common.cancel')}

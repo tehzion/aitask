@@ -1,3 +1,5 @@
+import { hasUnsavedChanges } from '../lib/unsavedChanges';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React from "react";
 import {
   ArrowLeft,
@@ -110,6 +112,7 @@ const OperationsClientWorkspace = () => {
   const [activitySheetOpen, setActivitySheetOpen] = React.useState(false);
   const [addonSaving, setAddonSaving] = React.useState(false);
   const [activitySaving, setActivitySaving] = React.useState(false);
+  useUnsavedChanges(Boolean(comment.trim() || file || activitySaving));
   const [planAction, setPlanAction] = React.useState<"pause" | "end" | null>(null);
   const planConfirmationTitleId = React.useId();
   const [addonEndDates, setAddonEndDates] = React.useState<
@@ -124,6 +127,8 @@ const OperationsClientWorkspace = () => {
     effectiveFrom: new Date().toISOString().slice(0, 10),
     targetCycleId: "",
   });
+  useUnsavedChanges(addonSaving || Boolean(addon.name.trim() || addon.platforms.trim() || addon.quantity !== 1 || addon.unitPrice !== 0 || addon.billingMode !== 'one_off' || addon.targetCycleId || addon.effectiveFrom !== new Date().toISOString().slice(0, 10)));
+
   if (!client) return <Navigate to="/projects" replace />;
 
   const canManagePlans = canManageClientPlans(
@@ -429,7 +434,10 @@ const OperationsClientWorkspace = () => {
         }
       />
       <div className="sticky top-[4.5rem] z-20 border-b border-line/80 bg-canvas/95 py-3 backdrop-blur-md">
-        <SegmentedTabs<Tab> items={tabs} value={tab} onChange={setTab} label={t("Client workspace")} idPrefix={CLIENT_WORKSPACE_TABS_ID} />
+        <SegmentedTabs<Tab> items={tabs} value={tab} onChange={next => {
+          if (next !== tab && tab === 'plan' && hasUnsavedChanges() && !window.confirm(t('Discard unsaved changes?'))) return;
+          setTab(next);
+        }} label={t("Client workspace")} idPrefix={CLIENT_WORKSPACE_TABS_ID} />
       </div>
       {message && (
         <p

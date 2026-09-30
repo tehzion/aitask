@@ -73,6 +73,7 @@ test('shows a company added through project creation while a company search is a
   await clientDialog.getByLabel('Company name *').fill('Filtered Company E2E');
   await clientDialog.getByRole('button', { name: 'Save client' }).click();
   await expect(projectDialog.getByLabel('Company name *')).toHaveValue(/CL-/);
+  page.once('dialog', dialog => dialog.accept());
   await projectDialog.getByRole('button', { name: 'Cancel' }).click();
 
   await expect(page).not.toHaveURL(/search=/);

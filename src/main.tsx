@@ -1,3 +1,4 @@
+import { registerPerformanceDiagnostics } from './lib/diagnostics'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/geist'
@@ -10,6 +11,7 @@ import { registerChunkRecovery } from './lib/chunkRecovery'
 import { initializeTheme } from './lib/theme'
 import './index.css'
 
+registerPerformanceDiagnostics()
 initializeTheme()
 registerChunkRecovery()
 registerPwaUpdates()

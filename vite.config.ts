@@ -89,6 +89,7 @@ export default defineConfig(({ mode }) => {
     },
   },
   build: {
+    manifest: true,
     // Never emit source maps in production — they expose internal logic & file paths
     sourcemap: false,
     rollupOptions: {
@@ -96,8 +97,8 @@ export default defineConfig(({ mode }) => {
         manualChunks: {
           // Router — separate so navigation code doesn't bust the app chunk
           router: ['react-router-dom'],
-          // Icon library — large registry, isolate from business logic
-          icons: ['lucide-react'],
+          // Let Rollup split icons by actual route usage. A single forced
+          // registry chunk pulls every lazy route's icons into startup.
           // Auth/data client is loaded on demand and should not inflate the offline shell.
           supabase: ['@supabase/supabase-js'],
           // Keep the class-merging runtime out of the application entry chunk.

@@ -1,3 +1,4 @@
+import { createCsvBlob } from '../lib/csv';
 import React from 'react';
 import { Download, LockKeyhole, LogOut, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -25,12 +26,6 @@ type FeedbackRow = {
   recommendation: string;
   is_late: boolean;
   submitted_at: string;
-};
-
-const csvValue = (value: unknown) => {
-  let text = value == null ? '' : String(value);
-  if (/^[=+\-@]/.test(text)) text = `'${text}`;
-  return `"${text.replace(/"/g, '""')}"`;
 };
 
 const FeedbackResults: React.FC = () => {
@@ -100,8 +95,8 @@ const FeedbackResults: React.FC = () => {
       row.ratings.overall, row.ratings.usability, row.ratings.reliability, row.ratings.mobile ?? 'N/A',
       Object.entries(row.issue_details).map(([id, detail]) => `${id}: ${detail}`).join(' | '),
       row.most_useful, row.most_confusing, row.recommendation,
-    ].map(csvValue).join(','));
-    const blob = new Blob([[headers.map(csvValue).join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+    ]);
+    const blob = createCsvBlob([headers, ...lines]);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

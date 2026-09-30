@@ -1,3 +1,6 @@
+import { recordDiagnostic } from './diagnostics';
+import { bindPendingServiceFiles, acknowledgePendingServiceFiles } from './serviceFiles';
+import { assertWorkspaceSession, captureWorkspaceSession, isWorkspaceSessionCurrent, onWorkspaceSessionInvalidated } from './workspaceSession';
 import type { User } from '@supabase/supabase-js';
 import type {
   AppNotification,
@@ -520,17 +523,42 @@ class SyncRequestTimeoutError extends Error {
 }
 
 const withSyncTimeout = async <T>(request: PromiseLike<T>): Promise<T> => {
+  const started = performance.now();
+  const sessionToken = captureWorkspaceSession();
   let timeout: ReturnType<typeof setTimeout> | undefined;
+  let rejectAborted: (() => void) | undefined;
   try {
-    return await Promise.race([
+    assertWorkspaceSession(sessionToken);
+    const result = await Promise.race([
       Promise.resolve(request),
+      new Promise<never>((_, reject) => {
+        rejectAborted = () => reject(new DOMException('Workspace session changed.', 'AbortError'));
+        sessionToken.signal.addEventListener('abort', rejectAborted, { once: true });
+      }),
       new Promise<never>((_, reject) => {
         timeout = setTimeout(() => reject(new SyncRequestTimeoutError()), SYNC_REQUEST_TIMEOUT_MS);
       }),
     ]);
+    assertWorkspaceSession(sessionToken);
+    recordDiagnostic('sync.request', performance.now() - started);
+    return result;
+  } catch (error) {
+    recordDiagnostic('sync.request', performance.now() - started, error instanceof SyncRequestTimeoutError ? 'timeout' : error instanceof DOMException && error.name === 'AbortError' ? 'aborted' : 'failed');
+    throw error;
   } finally {
     if (timeout) clearTimeout(timeout);
+    if (rejectAborted) sessionToken.signal.removeEventListener('abort', rejectAborted);
   }
+};
+
+const bindSessionRequest = <T,>(request: () => Promise<T>) => {
+  const token = captureWorkspaceSession();
+  return async () => {
+    assertWorkspaceSession(token);
+    const result = await request();
+    assertWorkspaceSession(token);
+    return result;
+  };
 };
 
 const isAuthError = (error: { code?: string; message?: string; details?: string } | null) => {
@@ -1186,8 +1214,10 @@ const executeCommand = async (
     return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before retrying this change.' };
   }
 
+  const sessionToken = captureWorkspaceSession();
+  bindPendingServiceFiles(command.id, command.operations);
   const serviceCommand = serviceCommandTypes.has(command.type);
-  const invoke = () => command.type === 'deliverable.workflow.generate'
+  const invoke = bindSessionRequest(() => command.type === 'deliverable.workflow.generate'
     ? withSyncTimeout(supabase.rpc('aitask_generate_deliverable_task_chain', {
       p_workspace_id: SECURE_WORKSPACE_ID,
       p_command_id: command.id,
@@ -1200,7 +1230,7 @@ const executeCommand = async (
       p_command_type: command.type,
       p_operations: command.operations,
       p_expected_workspace_version: expectedWorkspaceVersion ?? null,
-    }));
+    })));
 
   let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
@@ -1209,6 +1239,7 @@ const executeCommand = async (
       rpcResult = await invoke();
     }
   } catch (error) {
+    try { assertWorkspaceSession(sessionToken); } catch { return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' }; }
     retainSecureWorkspaceCommand(command);
     const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
     return {
@@ -1222,6 +1253,7 @@ const executeCommand = async (
     };
   }
 
+  assertWorkspaceSession(sessionToken);
   const { data, error } = rpcResult;
 
   if (error) {
@@ -1261,6 +1293,7 @@ const executeCommand = async (
     };
   }
 
+  acknowledgePendingServiceFiles(command.id);
   applyCommandVersions(command, response);
   retryableCommand = null;
   clearPersistedRetryableCommand();
@@ -1274,9 +1307,9 @@ const executeCommand = async (
 };
 
 export const loadSecureBackendCapabilities = async (): Promise<SecureBackendCompatibility> => {
-  const invoke = () => withSyncTimeout(supabase.rpc('aitask_get_backend_capabilities', {
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_get_backend_capabilities', {
     p_workspace_id: SECURE_WORKSPACE_ID,
-  }));
+  })));
   let result: Awaited<ReturnType<typeof invoke>>;
   try {
     result = await invoke();
@@ -1313,15 +1346,17 @@ export const loadSecureBackendCapabilities = async (): Promise<SecureBackendComp
 };
 
 export const loadSecureWorkspaceRevision = async () => {
-  const load = () => withSyncTimeout(supabase
+  const sessionToken = captureWorkspaceSession();
+  const load = bindSessionRequest(() => withSyncTimeout(supabase
     .from('aitask_workspaces')
     .select('version,updated_at,sync_protocol_version')
     .eq('id', SECURE_WORKSPACE_ID)
-    .single());
+    .single()));
   let { data, error } = await load();
   if (isAuthError(error) && await refreshSecureSession()) {
     ({ data, error } = await load());
   }
+  assertWorkspaceSession(sessionToken);
   if (error) throw error;
   const syncProtocolVersion = Number(data.sync_protocol_version);
   if (syncProtocolVersion !== SECURE_SYNC_PROTOCOL_VERSION) {
@@ -1336,6 +1371,7 @@ export const saveSecureMemberDepartments = async (
   member: WorkspaceMember,
   requestedDepartments: Department[],
 ): Promise<MutationResult<MemberDepartmentsResponse>> => {
+  const sessionToken = captureWorkspaceSession();
   const departments = normalizeMemberDepartments(member.role, requestedDepartments);
   if (member.role === 'Client' || (member.role !== 'Project Manager' && departments.length === 0)) {
     return { ok: false, code: 'VALIDATION', error: 'Choose at least one valid internal department.' };
@@ -1362,13 +1398,13 @@ export const saveSecureMemberDepartments = async (
   retryableMemberDepartments = pending;
   persistRetryableMemberMutation();
 
-  const invoke = () => withSyncTimeout(supabase.rpc('aitask_update_member_departments', {
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_update_member_departments', {
     p_workspace_id: SECURE_WORKSPACE_ID,
     p_command_id: pending.id,
     p_member_id: pending.memberId,
     p_departments: pending.departments,
     p_expected_version: pending.expectedVersion,
-  }));
+  })));
 
   let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
@@ -1384,6 +1420,7 @@ export const saveSecureMemberDepartments = async (
     };
   }
 
+  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
   if (rpcResult.error) {
     const code = isAuthError(rpcResult.error) ? 'FORBIDDEN' : commandErrorCode(rpcResult.error);
     if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
@@ -1444,6 +1481,7 @@ export const saveSecureMemberPermissions = async (
   member: WorkspaceMember,
   permissions: RolePermissions | null,
 ): Promise<MutationResult<MemberPermissionsResponse>> => {
+  const sessionToken = captureWorkspaceSession();
   if (!['Staff', 'HOD'].includes(member.role) || member.isSuperAdmin) {
     return { ok: false, code: 'VALIDATION', error: 'Only Staff and HOD permissions can be customized.' };
   }
@@ -1469,13 +1507,13 @@ export const saveSecureMemberPermissions = async (
   retryableMemberPermissions = pending;
   persistRetryableMemberMutation();
 
-  const invoke = () => withSyncTimeout(supabase.rpc('aitask_update_member_permissions', {
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_update_member_permissions', {
     p_workspace_id: SECURE_WORKSPACE_ID,
     p_command_id: pending.id,
     p_member_id: pending.memberId,
     p_permissions: pending.permissions,
     p_expected_version: pending.expectedVersion,
-  }));
+  })));
 
   let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
@@ -1491,6 +1529,7 @@ export const saveSecureMemberPermissions = async (
     };
   }
 
+  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
   if (rpcResult.error) {
     const code = isAuthError(rpcResult.error) ? 'FORBIDDEN' : commandErrorCode(rpcResult.error);
     if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
@@ -1555,6 +1594,7 @@ export const saveSecureMemberRole = async (
   member: WorkspaceMember,
   assignment: MemberRoleAssignment,
 ): Promise<MutationResult<MemberRoleResponse>> => {
+  const sessionToken = captureWorkspaceSession();
   if (member.isSuperAdmin) {
     return { ok: false, code: 'VALIDATION', error: 'Boss Koo keeps permanent super admin permissions.' };
   }
@@ -1591,7 +1631,7 @@ export const saveSecureMemberRole = async (
   retryableMemberRole = pending;
   persistRetryableMemberMutation();
 
-  const invoke = () => withSyncTimeout(supabase.rpc('aitask_update_member_role', {
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_update_member_role', {
     p_workspace_id: SECURE_WORKSPACE_ID,
     p_command_id: pending.id,
     p_member_id: pending.memberId,
@@ -1600,7 +1640,7 @@ export const saveSecureMemberRole = async (
     p_client_name: pending.companyName,
     p_departments: pending.departments,
     p_expected_version: pending.expectedVersion,
-  }));
+  })));
 
   let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
@@ -1616,6 +1656,7 @@ export const saveSecureMemberRole = async (
     };
   }
 
+  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
   if (rpcResult.error) {
     const code = isAuthError(rpcResult.error) ? 'FORBIDDEN' : commandErrorCode(rpcResult.error);
     if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
@@ -1773,10 +1814,10 @@ export const getSecureReleaseNoticeAcknowledgement = async (
     return releaseNoticeFailure('OFFLINE', 'Reconnect before checking the release notice.');
   }
 
-  const invoke = () => withSyncTimeout(supabase.rpc('aitask_get_release_notice_acknowledgement', {
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_get_release_notice_acknowledgement', {
     p_workspace_id: SECURE_WORKSPACE_ID,
     p_notice_id: normalizedNoticeId,
-  }));
+  })));
 
   let result: Awaited<ReturnType<typeof invoke>>;
   try {
@@ -1808,10 +1849,10 @@ export const acknowledgeSecureReleaseNotice = async (
     return releaseNoticeFailure('OFFLINE', 'Reconnect before saving the release notice acknowledgement.');
   }
 
-  const invoke = () => withSyncTimeout(supabase.rpc('aitask_acknowledge_release_notice', {
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_acknowledge_release_notice', {
     p_workspace_id: SECURE_WORKSPACE_ID,
     p_notice_id: normalizedNoticeId,
-  }));
+  })));
 
   let result: Awaited<ReturnType<typeof invoke>>;
   try {
@@ -1852,7 +1893,7 @@ export const loadSecureNotificationPage = async (
   query: NotificationFeedQuery = {},
 ): Promise<NotificationFeedPage> => {
   const limit = Math.min(50, Math.max(1, Math.floor(query.limit || 50)));
-  const invoke = () => withSyncTimeout(supabase.rpc('aitask_read_notifications', {
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_read_notifications', {
     p_workspace_id: SECURE_WORKSPACE_ID,
     p_limit: limit,
     p_before_created_at: query.cursor?.createdAt || null,
@@ -1860,7 +1901,7 @@ export const loadSecureNotificationPage = async (
     p_unread_only: Boolean(query.unreadOnly),
     p_category: query.category || null,
     p_search: query.search?.trim().slice(0, 200) || null,
-  }));
+  })));
 
   let result = await invoke();
   if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
@@ -1918,6 +1959,7 @@ export const setSecureNotificationsRead = async (
   isRead: boolean,
   markAll = false,
 ): Promise<MutationResult<NotificationReadResponse>> => {
+  const sessionToken = captureWorkspaceSession();
   const ids = Array.from(new Set(notificationIds.map(id => id.trim()).filter(Boolean))).sort();
   if (!markAll && ids.length === 0) {
     return { ok: false, code: 'VALIDATION', error: 'Choose at least one notification.' };
@@ -1941,13 +1983,13 @@ export const setSecureNotificationsRead = async (
     : { id: commandId(), notificationIds: ids, isRead, markAll };
   retryableNotificationMutation = pending;
 
-  const invoke = () => withSyncTimeout(supabase.rpc('aitask_set_notifications_read', {
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_set_notifications_read', {
     p_workspace_id: SECURE_WORKSPACE_ID,
     p_command_id: pending.id,
     p_notification_ids: pending.notificationIds,
     p_is_read: pending.isRead,
     p_mark_all: pending.markAll,
-  }));
+  })));
 
   let result: Awaited<ReturnType<typeof invoke>>;
   try {
@@ -1963,6 +2005,7 @@ export const setSecureNotificationsRead = async (
     };
   }
 
+  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
   if (result.error) {
     if (isAuthError(result.error)) retryableNotificationMutation = null;
     return {
@@ -2006,9 +2049,9 @@ const parseClientContact = (value: unknown): ClientContact | null => {
 };
 
 const loadClientPortalPayload = async (expectedClientName?: string): Promise<ClientPortalPayload> => {
-  const invoke = () => withSyncTimeout(supabase.rpc('aitask_read_client_portal', {
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_read_client_portal', {
     p_workspace_id: SECURE_WORKSPACE_ID,
-  }));
+  })));
   let result = await invoke();
   if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
   if (result.error) throw result.error;
@@ -2090,7 +2133,23 @@ const projectionToEntityRow = (
   };
 };
 
-export const loadSecureWorkspace = async (authUser: User, options: { preserveRetainedCommand?: boolean } = {}) => {
+export const WORKSPACE_LOAD_TIMEOUT_MS = 90000;
+export const loadSecureWorkspace = async (authUser: User, options: { preserveRetainedCommand?: boolean; consistencyAttempt?: number } = {}) => {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      loadSecureWorkspaceInternal(authUser, { ...options, loadSignal: controller.signal }),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('Workspace loading timed out. Please retry.')); }, WORKSPACE_LOAD_TIMEOUT_MS); }),
+    ]);
+  } finally { if (timer) clearTimeout(timer); controller.abort(); }
+};
+
+const loadSecureWorkspaceInternal = async (authUser: User, options: { preserveRetainedCommand?: boolean; consistencyAttempt?: number; loadSignal: AbortSignal }) => {
+  const captured = captureWorkspaceSession();
+  const sessionToken = { ...captured, signal: AbortSignal.any([captured.signal, options.loadSignal]) };
+  const revisionBefore = await loadSecureWorkspaceRevision();
+  assertWorkspaceSession(sessionToken);
   const retainedBeforeLoad = options.preserveRetainedCommand
     ? restoreSecureWorkspaceCommand(authUser.id)
     : null;
@@ -2109,16 +2168,29 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
     activeSecureAuthUserId = authUser.id;
   }
   const loadPages = async <T,>(queryFactory: () => {
+    abortSignal?: (signal: AbortSignal) => unknown;
     range?: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown | null }>;
   }): Promise<T[]> => {
     const rows: T[] = [];
     for (let from = 0; ; from += WORKSPACE_PAGE_SIZE) {
       const query = queryFactory();
-      const { data, error } = await (query.range
-        ? query.range(from, from + WORKSPACE_PAGE_SIZE - 1)
-        : query as unknown as PromiseLike<{ data: unknown[] | null; error: unknown | null }>);
-      if (error) throw error;
-      const page = (data || []) as T[];
+      const pageController = new AbortController();
+      const abortPage = () => pageController.abort();
+      sessionToken.signal.addEventListener('abort', abortPage, { once: true });
+      query.abortSignal?.(pageController.signal);
+      const timer = setTimeout(abortPage, SYNC_REQUEST_TIMEOUT_MS);
+      let response: { data: unknown[] | null; error: unknown | null };
+      try {
+        response = await withSyncTimeout(query.range
+          ? query.range(from, from + WORKSPACE_PAGE_SIZE - 1)
+          : query as unknown as PromiseLike<{ data: unknown[] | null; error: unknown | null }>);
+      } finally {
+        clearTimeout(timer);
+        sessionToken.signal.removeEventListener('abort', abortPage);
+      }
+      assertWorkspaceSession(sessionToken);
+      if (response.error) throw response.error;
+      const page = (response.data || []) as T[];
       rows.push(...page);
       if (!query.range || page.length < WORKSPACE_PAGE_SIZE) return rows;
     }
@@ -2134,6 +2206,7 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
     loadSecureWorkspaceRevision(),
     loadSecureNotificationPage({ limit: 50 }),
   ]);
+  assertWorkspaceSession(sessionToken);
   const memberRows = members;
   const entityRows = entities;
   const authenticatedMemberRow = memberRows.find(member => member.auth_user_id === authUser.id);
@@ -2244,6 +2317,14 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
       : task
     );
   }
+  assertWorkspaceSession(sessionToken);
+  const revisionAfter = await loadSecureWorkspaceRevision();
+  assertWorkspaceSession(sessionToken);
+  if (revisionBefore.version !== revision.version || revisionAfter.version !== revision.version) {
+    const attempt = options.consistencyAttempt || 0;
+    if (attempt >= 2) throw new Error('Workspace changed during loading. Please retry.');
+    return loadSecureWorkspaceInternal(authUser, { ...options, consistencyAttempt: attempt + 1 });
+  }
   rowsToBaseline(
     currentUser.role === 'Client' && authenticatedMemberRow ? [authenticatedMemberRow] : memberRows,
     effectiveEntityRows,
@@ -2269,10 +2350,10 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
 
 export const completeSecurePasswordSetup = async (): Promise<MutationResult<CommandResponse>> => {
   const id = commandId();
-  const invoke = () => withSyncTimeout(supabase.rpc('aitask_complete_password_setup', {
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_complete_password_setup', {
     p_workspace_id: SECURE_WORKSPACE_ID,
     p_command_id: id,
-  }));
+  })));
 
   let result: Awaited<ReturnType<typeof invoke>>;
   try {
@@ -2458,3 +2539,13 @@ export const discardSecureWorkspaceCommand = () => {
 };
 
 export const getRetainedSecureCommand = (): SecureCommand | null => retryableCommand;
+
+onWorkspaceSessionInvalidated(() => {
+  baseline = new Map();
+  retryableCommand = null;
+  retryableMemberDepartments = null;
+  retryableMemberPermissions = null;
+  retryableMemberRole = null;
+  retryableNotificationMutation = null;
+  activeSecureAuthUserId = null;
+});

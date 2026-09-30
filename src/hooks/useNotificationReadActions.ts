@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getUnreadNotifications } from '../lib/access';
 import {
   captureNotificationReadState,
@@ -27,6 +28,8 @@ const toIds = (value: string | string[]) => Array.from(new Set(
 ));
 
 export const useNotificationReadActions = (): NotificationReadActions => {
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [isUpdating, setIsUpdating] = useState(false);
   const markNotificationRead = useStore(state => state.markNotificationRead);
   const markNotificationUnread = useStore(state => state.markNotificationUnread);
@@ -54,6 +57,7 @@ export const useNotificationReadActions = (): NotificationReadActions => {
       return false;
     }
 
+    const sessionToken = captureWorkspaceSession();
     const current = useStore.getState();
     const affectedIds = markAll && current.currentUser
       ? getUnreadNotifications(current.currentUser, current.notifications).map(notification => notification.id)
@@ -66,10 +70,11 @@ export const useNotificationReadActions = (): NotificationReadActions => {
     try {
       if (shouldUseSecureSupabase()) {
         const result = await setSecureNotificationsRead(notificationIds, isRead, markAll);
+        if (!isWorkspaceSessionCurrent(sessionToken) || !mounted.current) return false;
         if (result.ok === true) {
           const savedAt = new Date().toISOString();
           useStore.setState(state => ({
-            notificationUnreadCount: Math.max(0, Number(result.data.unreadCount) || 0),
+            notificationUnreadCount: result.workspaceVersion >= (state.backend.workspaceVersion || 0) ? Math.max(0, Number(result.data.unreadCount) || 0) : state.notificationUnreadCount,
             backend: {
               ...state.backend,
               workspaceVersion: Math.max(state.backend.workspaceVersion || 0, result.workspaceVersion),
@@ -100,7 +105,7 @@ export const useNotificationReadActions = (): NotificationReadActions => {
       return true;
     } finally {
       notificationMutationLock.release();
-      setIsUpdating(false);
+      if (mounted.current) setIsUpdating(false);
     }
   }, []);
 

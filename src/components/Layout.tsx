@@ -41,9 +41,10 @@ const Layout: React.FC = () => {
   const mainRef = useRef<HTMLElement>(null);
   const appContentRef = useRef<HTMLDivElement>(null);
   const mobileMenuTriggerRef = useRef<HTMLElement | null>(null);
-  const navigate = useNavigate();
+  const routerNavigate = useNavigate();
   const location = useLocation();
   const { t } = useI18n();
+  const navigate = routerNavigate;
   const toastCount = useToastStore(state => state.toasts.length);
   const { preference, resolvedTheme, setPreference, toggleTheme } = useColorTheme();
 
@@ -104,7 +105,13 @@ const Layout: React.FC = () => {
   // Global keyboard shortcuts are intentionally disabled while typing.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isEditableShortcutTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.isComposing || isEditableShortcutTarget(e.target)) return;
+      if (!e.altKey && !e.shiftKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && !document.querySelector('[data-aitask-modal-portal]')) {
+        e.preventDefault();
+        setIsCommandPaletteOpen(true);
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (document.querySelector('[data-aitask-modal-portal]')) return;
 
       if (e.key === 'Escape') {

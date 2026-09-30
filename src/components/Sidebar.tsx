@@ -2,12 +2,12 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, X } from 'lucide-react';
-import { useStore, stopBackendAutoSync } from '../store';
+import { clearWorkspaceSession, useStore } from '../store';
 import clsx from 'clsx';
 import { canCreateTasks } from '../lib/access';
 import { clearPasswordResetBypass } from '../lib/auth';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
-import { discardSecureWorkspaceCommand, getRetainedSecureCommand } from '../lib/secureWorkspace';
+import { getRetainedSecureCommand } from '../lib/secureWorkspace';
 import { getMobileNavigation, getNavigationSections, type NavigationItem } from '../lib/navigation';
 import { useI18n } from './I18nProvider';
 import ConfirmDialog from './ConfirmDialog';
@@ -60,13 +60,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
 
   const completeLogout = async () => {
     const signingOutUser = useStore.getState().currentUser;
+    clearWorkspaceSession({ discardPending: true });
     if (shouldUseSecureSupabase()) {
-      discardSecureWorkspaceCommand();
       await signOutSecureSession();
     }
     clearPasswordResetBypass(signingOutUser?.id);
-    stopBackendAutoSync();
-    useStore.setState({ currentUser: null });
     navigate('/login', { replace: true });
   };
   const handleLogout = () => {

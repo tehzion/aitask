@@ -78,10 +78,7 @@ const seedTasks = async (page: Page, tasks: ReturnType<typeof makeTask>[], owned
 const navigateToTask = async (page: Page, task: ReturnType<typeof makeTask>, ownedClientNames: string[] = []) => {
   await page.goto('/tasks');
   await seedTasks(page, [task], ownedClientNames);
-  await page.evaluate(taskId => {
-    window.history.pushState({}, '', `/tasks?taskId=${encodeURIComponent(taskId)}`);
-    window.dispatchEvent(new PopStateEvent('popstate'));
-  }, task.id);
+  await page.goto(`/tasks?taskId=${encodeURIComponent(task.id)}`);
 };
 
 const openTask = async (page: Page, task: ReturnType<typeof makeTask>, ownedClientNames: string[] = []) => {

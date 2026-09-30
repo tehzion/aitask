@@ -39,7 +39,9 @@
     "verify:release-provenance": "node scripts/verify-release-provenance.mjs",
     "release:patch": "pnpm version patch --no-git-tag-version",
     "release:minor": "pnpm version minor --no-git-tag-version",
-    "release:major": "pnpm version major --no-git-tag-version"
+    "release:major": "pnpm version major --no-git-tag-version",
+    "profile:startup": "node scripts/profile-startup.mjs",
+    "verify:csv:libreoffice": "node scripts/verify-csv-libreoffice.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

@@ -1,3 +1,6 @@
+import { useRecoverableForm } from '../hooks/useRecoverableForm';
+import DraftRecoveryNotice from './DraftRecoveryNotice';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React, { useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { isPendingMutationResolution, useStore } from '../store';
@@ -61,6 +64,9 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const [customError, setCustomError]       = useState('');
   const [formError, setFormError]           = useState('');
   const [isSubmitting, setIsSubmitting]     = useState(false);
+  const [formEdited, setFormEdited] = React.useState(false);
+  React.useEffect(() => { if (!isOpen) setFormEdited(false); }, [isOpen]);
+  const markPristine = useUnsavedChanges(isOpen && (formEdited || isSubmitting));
   const [pendingProjectId, setPendingProjectId] = useState('');
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const customInputRef = useRef<HTMLInputElement>(null);
@@ -125,6 +131,11 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     }
   }, [clientOptions, initialClientId, isOpen, project]);
 
+  const recovery = useRecoverableForm(`create-project:${initialClientId || 'all'}`, { clientId, projectName, startDate, deadline, selectedServices, customServices, customInput }, formEdited, isOpen && !project && !pendingProjectId);
+  const restoreDraft = () => {
+    const value = recovery.restore(); if (!value || typeof value.projectName !== 'string') return;
+    setClientId(value.clientId); setProjectName(value.projectName); setStartDate(value.startDate); setDeadline(value.deadline); setSelectedServices(value.selectedServices); setCustomServices(value.customServices); setCustomInput(value.customInput); setFormEdited(true);
+  };
   if (!isOpen) return null;
 
   const togglePreset = (service: ServiceType) => {
@@ -178,7 +189,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     setFormError('');
   };
 
-  const handleClose = () => { resetForm(); onClose(); };
+  const handleClose = () => { recovery.clear(); markPristine(); setFormEdited(false); resetForm(); onClose(); };
+  const requestClose = () => { if (!isSubmitting && (!formEdited || window.confirm(t('Discard unsaved changes?')))) handleClose(); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -289,11 +301,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   return (
     <>
     <ModalShell
+        onEdit={() => setFormEdited(true)}
       labelledBy={titleId}
       describedBy={descriptionId}
-      onClose={handleClose}
+      onClose={requestClose}
       panelClassName="max-w-md"
     >
+      {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
 
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
@@ -302,7 +316,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
             <p id={descriptionId} className="mt-0.5 text-xs text-slate-500">{t(isEditing ? 'Update the project name, company, dates, and services.' : 'Add a named project under an existing company.')}</p>
           </div>
           <button
-            onClick={handleClose}
+            onClick={requestClose}
             aria-label={t('Close create project modal')}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
           >
@@ -469,7 +483,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         {/* Footer */}
         <div className={modalFooter}>
           <button
-            type="button" onClick={handleClose}
+            type="button" onClick={requestClose}
             className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
           >
             {t('common.cancel')}

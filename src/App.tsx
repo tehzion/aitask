@@ -1,6 +1,9 @@
+import NavigationGuard from './components/NavigationGuard';
+import NotFound from './components/NotFound';
+import { configurePendingWork, hasUnsavedChanges, subscribeUnsavedChanges } from './lib/unsavedChanges';
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { startBackendAutoSync, useStore } from './store';
+import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { clearWorkspaceSession, startBackendAutoSync, stopBackendAutoSync, useStore } from './store';
 import Layout from './components/Layout';
 import { canAccessPath } from './lib/access';
 import { hasPasswordResetBypass } from './lib/auth';
@@ -65,10 +68,36 @@ const RoleRoute: React.FC<{ path: string; children: React.ReactNode }> = ({ path
   );
 };
 
-function App() {
+function AppContent() {
   const { t } = useI18n();
   const { isOnline, isUpdateReady } = useAppNoticeState();
+  const [hasDrafts, setHasDrafts] = React.useState(hasUnsavedChanges);
+  useEffect(() => {
+    configurePendingWork(() => {
+      const backend = useStore.getState().backend;
+      return backend.hasLocalChanges || backend.pendingMutations > 0 || backend.isSaving;
+    });
+    const update = () => setHasDrafts(hasUnsavedChanges());
+    const unsubscribe = subscribeUnsavedChanges(update);
+    const unsubscribeStore = useStore.subscribe(update);
+    const beforeUnload = (event: BeforeUnloadEvent) => { if (hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; } };
+    const beforeNavigate = (event: MouseEvent) => {
+      const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
+      if (!(anchor instanceof HTMLAnchorElement) || anchor.target === '_blank' || anchor.hasAttribute('download') || !hasUnsavedChanges()) return;
+      if (anchor.href === window.location.href || new URL(anchor.href).origin === window.location.origin) return;
+      if (!window.confirm(t('Discard unsaved changes and leave this page?'))) { event.preventDefault(); event.stopPropagation(); }
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    document.addEventListener('click', beforeNavigate, true);
+    update();
+    return () => { unsubscribe(); unsubscribeStore(); window.removeEventListener('beforeunload', beforeUnload); document.removeEventListener('click', beforeNavigate, true); };
+  }, [t]);
   const initializeBackend = useStore(state => state.initializeBackend);
+  const sessionMemberId = useStore(state => state.currentUser?.id);
+  useEffect(() => {
+    if (sessionMemberId) startBackendAutoSync(); else stopBackendAutoSync();
+    return stopBackendAutoSync;
+  }, [sessionMemberId]);
   const forceSyncMockData = useStore(state => state._forceSyncMockData);
   const sendDueDateReminders = useStore(state => state.sendDueDateReminders);
 
@@ -76,12 +105,13 @@ function App() {
     if (!shouldUseSecureSupabase()) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || !session?.user) {
-        useStore.setState({ currentUser: null });
+        clearWorkspaceSession();
         return;
       }
 
       const currentUser = useStore.getState().currentUser;
       if (currentUser && currentUser.authUserId !== session.user.id) {
+        clearWorkspaceSession();
         useStore.setState((state) => ({
           currentUser: null,
           backend: {
@@ -138,7 +168,7 @@ function App() {
 
   return (
     <>
-      <BrowserRouter>
+      <NavigationGuard />
         <React.Suspense fallback={<RouteLoading />}>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -164,10 +194,10 @@ function App() {
               <Route path="notifications" element={<Notifications />} />
               <Route path="settings" element={<RoleRoute path="/settings"><Settings /></RoleRoute>} />
             </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </React.Suspense>
-      </BrowserRouter>
+
 
       {!isOnline && (
         <div
@@ -194,11 +224,12 @@ function App() {
           <RefreshCw className="h-5 w-5 shrink-0 text-blue-600" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">{t('Update available')}</p>
-            <p className="mt-0.5 text-xs leading-5 text-slate-500">{t('Refresh to use the latest AiTask fixes.')}</p>
+            <p className="mt-0.5 text-xs leading-5 text-slate-500">{hasDrafts ? t('Save or discard your changes before updating.') : t('Refresh to use the latest AiTask fixes.')}</p>
           </div>
           <button
             type="button"
-            onClick={() => window.location.reload()}
+            disabled={hasDrafts}
+            onClick={() => { if (!hasUnsavedChanges()) window.location.reload(); }}
             className="shrink-0 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             {t('Refresh now')}
@@ -209,4 +240,6 @@ function App() {
   );
 }
 
+const router = createBrowserRouter([{ path: '*', element: <AppContent /> }]);
+function App() { return <RouterProvider router={router} />; }
 export default App;

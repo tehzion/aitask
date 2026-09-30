@@ -1,3 +1,6 @@
+import { recordDiagnostic } from '../lib/diagnostics';
+import { clearRecoveredDrafts } from '../lib/draftRecovery';
+import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { useToastStore } from './useToastStore';
@@ -143,7 +146,7 @@ import {
   resolveDeliverableStatus,
   SHORT_VIDEO_WORKFLOW_TEMPLATE,
 } from '../lib/serviceManagement';
-import { cleanupPendingServiceFiles, clearPendingServiceFiles } from '../lib/serviceFiles';
+import { cleanupPendingServiceFiles, reconcilePendingServiceFiles } from '../lib/serviceFiles';
 
 export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required' | 'upgrade_required';
 
@@ -1098,7 +1101,7 @@ const replaceLocalServiceDemoRecords = <T extends { id: string }>(current: T[], 
 
 const seedUserIdentity = new Map([
   ...mockUsers,
-  ...createLocalServiceDemoFixture().users,
+  ...((import.meta.env.DEV || import.meta.env.VITE_AITASK_BACKEND === 'local') ? createLocalServiceDemoFixture().users : []),
 ].map(user => [user.id, user]));
 
 const sanitizePersistedUsers = (users: User[]): User[] => (
@@ -1158,9 +1161,24 @@ const mergePersistedWorkspace = (persistedState: unknown, currentState: StoreSta
   };
 };
 
+const workspaceMutationFields: Array<keyof StoreState> = [
+  'users', 'clients', 'projects', 'tasks', 'notifications', 'registrations', 'rolePermissions', 'taskStatuses',
+  'deletedUserIds', 'deletedRoleIds', 'deletedTaskStatuses', 'deletedClientIds',
+  'servicePackages', 'clientPlans', 'serviceCycles', 'deliverables', 'cycleComments', 'addons',
+  'serviceWorkflowTemplates', 'servicePricingSnapshots',
+];
+
 export const useStore = create<StoreState>()(
   persist(
-    (set, get) => ({
+    (rawSet, get) => {
+      // Mutation bookkeeping must survive a stopped realtime/auto-sync listener.
+      const set: typeof rawSet = (patch) => rawSet(state => {
+        const next = typeof patch === 'function' ? patch(state) : patch;
+        const changed = workspaceMutationFields.some(key => key in next && next[key] !== state[key]);
+        if (!changed || !state.currentUser || isApplyingRemoteSnapshot || isApplyingNotificationRead || !shouldUseSupabase() || (next.backend && next.backend.hasLocalChanges === false)) return next;
+        return { ...next, backend: { ...(next.backend || state.backend), hasLocalChanges: true, pendingMutations: Math.max(1, (next.backend || state.backend).pendingMutations), status: 'saving' as const } };
+      });
+      return ({
       currentUser: null,
       users: mockUsers.map(user => normalizeUserAccount(user)),
       clients: [],
@@ -1212,8 +1230,11 @@ export const useStore = create<StoreState>()(
       backend: makeBackendRuntimeState(),
 
       initializeBackend: async () => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         const status = getBackendStatus();
-        set({
+        apply({
           backend: {
             mode: status.mode,
             status: status.mode === 'local' ? 'local' : 'loading',
@@ -1235,9 +1256,10 @@ export const useStore = create<StoreState>()(
         try {
           if (shouldUseSecureSupabase()) {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (!isWorkspaceSessionCurrent(sessionToken)) return;
             if (sessionError) throw sessionError;
             if (!session?.user) {
-              set((state) => ({
+              apply((state) => ({
                 currentUser: null,
                 backend: {
                   ...state.backend,
@@ -1250,6 +1272,7 @@ export const useStore = create<StoreState>()(
             }
 
             const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser();
+            if (!isWorkspaceSessionCurrent(sessionToken)) return;
             if (userError) throw userError;
             if (!verifiedUser) throw new Error('Your session has expired. Sign in again.');
 
@@ -1260,6 +1283,7 @@ export const useStore = create<StoreState>()(
               loadSecureWorkspace(verifiedUser, { preserveRetainedCommand: true }),
               loadSecureBackendCapabilities(),
             ]);
+            if (!isWorkspaceSessionCurrent(sessionToken)) return;
             const restoredWorkspace = retained
               ? overlayRetainedWorkspaceEntities(secure.state, secure.state, retained.operations)
               : secure.state;
@@ -1267,7 +1291,7 @@ export const useStore = create<StoreState>()(
               || secure.currentUser;
             const loadedAt = new Date().toISOString();
             isApplyingRemoteSnapshot = true;
-            set((state) => ({
+            apply((state) => ({
               ...makeWorkspacePatch(state, {
                 state: restoredWorkspace,
                 source: 'supabase',
@@ -1322,7 +1346,7 @@ export const useStore = create<StoreState>()(
             : result;
           const syncedAt = new Date().toISOString();
           isApplyingRemoteSnapshot = true;
-          set((state) => ({
+          apply((state) => ({
             ...makeWorkspacePatch(state, snapshotToApply),
             backend: {
               mode: 'supabase',
@@ -1346,7 +1370,7 @@ export const useStore = create<StoreState>()(
             useToastStore.getState().addToast(msg('errors.recoveredWorkspace'), 'info');
           }
         } catch (error) {
-          set({
+          apply({
             backend: {
               mode: 'supabase',
               status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
@@ -1365,6 +1389,9 @@ export const useStore = create<StoreState>()(
       },
 
       syncBackendNow: async (commandType) => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         if (!shouldUseSupabase()) return;
 
         const current = get();
@@ -1383,7 +1410,7 @@ export const useStore = create<StoreState>()(
           return;
         }
 
-        set((state) => ({
+        apply((state) => ({
           backend: {
             ...state.backend,
             status: 'saving',
@@ -1410,9 +1437,10 @@ export const useStore = create<StoreState>()(
                 excludedEntityTypes: excludedServiceMetadataEntityTypes(stateToSave.currentUser, stateToSave.rolePermissions),
               },
             );
+            if (!isWorkspaceSessionCurrent(sessionToken)) return;
             if (result.ok === false) {
               const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
-              set((state) => ({
+              apply((state) => ({
                 backend: {
                   ...state.backend,
                   status: upgradeRequired
@@ -1437,7 +1465,7 @@ export const useStore = create<StoreState>()(
             }
             const syncedAt = new Date().toISOString();
             const hasChangesAfterSave = !workspaceStatesEqual(savedWorkspace, selectPersistedWorkspaceState(get()));
-            set((state) => ({
+            apply((state) => ({
               backend: {
                 ...state.backend,
                 status: hasChangesAfterSave ? 'saving' : 'live',
@@ -1459,7 +1487,7 @@ export const useStore = create<StoreState>()(
             }));
             if (hasChangesAfterSave) queueMicrotask(() => void get().syncBackendNow(pendingCommandType));
             else {
-              clearPendingServiceFiles();
+
               if (hadRemoteUpdate) await get().pullBackendNow({ force: true, silent: true });
             }
             return;
@@ -1480,7 +1508,7 @@ export const useStore = create<StoreState>()(
               );
 
               isApplyingRemoteSnapshot = true;
-              set((state) => ({
+              apply((state) => ({
                 ...makeWorkspacePatch(state, { ...latest, state: merged }),
                 backend: {
                   ...state.backend,
@@ -1501,7 +1529,7 @@ export const useStore = create<StoreState>()(
               return;
             }
 
-            set((state) => ({
+            apply((state) => ({
               backend: {
                 ...state.backend,
                 isSaving: false,
@@ -1515,7 +1543,7 @@ export const useStore = create<StoreState>()(
           }
 
           const syncedAt = new Date().toISOString();
-          set((state) => ({
+          apply((state) => ({
             backend: {
               ...state.backend,
               status: 'live',
@@ -1533,9 +1561,9 @@ export const useStore = create<StoreState>()(
               message: result.message,
             }
           }));
-          clearPendingServiceFiles();
+
         } catch (error) {
-          set((state) => ({
+          apply((state) => ({
             backend: {
               ...state.backend,
               status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
@@ -1550,12 +1578,15 @@ export const useStore = create<StoreState>()(
       },
 
       pullBackendNow: async (options = {}) => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         if (!shouldUseSupabase()) return;
         if (get().backend.isPulling) return;
         if (get().backend.isSaving && !options.force) return;
         if (!options.force && isPullBlockedByPendingChange(get())) return;
 
-        set((state) => ({
+        apply((state) => ({
           backend: {
             ...state.backend,
             status: 'loading',
@@ -1568,13 +1599,15 @@ export const useStore = create<StoreState>()(
         try {
           if (shouldUseSecureSupabase()) {
             const { data: { user: capabilityUser }, error: capabilityUserError } = await supabase.auth.getUser();
+            if (!isWorkspaceSessionCurrent(sessionToken)) return;
             if (capabilityUserError) throw capabilityUserError;
             if (!capabilityUser) throw new Error('Your session has expired. Sign in again.');
             restoreSecureWorkspaceCommand(capabilityUser.id);
             restoreSecureMemberMutation(capabilityUser.id);
             const compatibility = await loadSecureBackendCapabilities();
+            if (!isWorkspaceSessionCurrent(sessionToken)) return;
             if (!compatibility.compatible) {
-              set((state) => ({
+              apply((state) => ({
                 backend: {
                   ...state.backend,
                   status: 'upgrade_required',
@@ -1587,13 +1620,14 @@ export const useStore = create<StoreState>()(
               return;
             }
             const revision = await loadSecureWorkspaceRevision();
+            if (!isWorkspaceSessionCurrent(sessionToken)) return;
             const pulledAt = new Date().toISOString();
             const current = get();
             const currentVersion = current.backend.workspaceVersion || 0;
             const remoteIsNewer = revision.version > currentVersion;
 
             if (!options.force && (current.backend.hasLocalChanges || current.backend.pendingMutations > 0 || current.backend.status === 'conflict')) {
-              set((state) => ({
+              apply((state) => ({
                 backend: {
                   ...state.backend,
                   status: state.backend.status === 'conflict'
@@ -1616,7 +1650,7 @@ export const useStore = create<StoreState>()(
             }
 
             if (!options.force && !remoteIsNewer && currentVersion > 0) {
-              set((state) => ({
+              apply((state) => ({
                 backend: {
                   ...state.backend,
                   status: 'live',
@@ -1633,9 +1667,10 @@ export const useStore = create<StoreState>()(
             }
 
             const secure = await loadSecureWorkspace(capabilityUser, { preserveRetainedCommand: true });
+            if (!isWorkspaceSessionCurrent(sessionToken)) return;
             const latest = get();
             if (!options.force && (latest.backend.hasLocalChanges || latest.backend.pendingMutations > 0)) {
-              set((state) => ({
+              apply((state) => ({
                 backend: {
                   ...state.backend,
                   status: 'conflict',
@@ -1650,7 +1685,7 @@ export const useStore = create<StoreState>()(
               return;
             }
             isApplyingRemoteSnapshot = true;
-            set((state) => ({
+            apply((state) => ({
               ...makeWorkspacePatch(state, {
                 state: secure.state,
                 source: 'supabase',
@@ -1698,7 +1733,7 @@ export const useStore = create<StoreState>()(
             );
 
             isApplyingRemoteSnapshot = true;
-            set((state) => ({
+            apply((state) => ({
               ...makeWorkspacePatch(state, { ...result, state: merged }),
               backend: {
                 ...state.backend,
@@ -1722,7 +1757,7 @@ export const useStore = create<StoreState>()(
           }
 
           if (hasUnsavedLocalChanges || hasPendingRemoteUpdate) {
-            set((state) => ({
+            apply((state) => ({
               backend: {
                 ...state.backend,
                 isPulling: false,
@@ -1740,7 +1775,7 @@ export const useStore = create<StoreState>()(
 
           if (remoteIsNewer || options.force || currentVersion === 0) {
             isApplyingRemoteSnapshot = true;
-            set((state) => ({
+            apply((state) => ({
               ...makeWorkspacePatch(state, result),
               backend: {
                 ...state.backend,
@@ -1757,7 +1792,7 @@ export const useStore = create<StoreState>()(
             return;
           }
 
-          set((state) => ({
+          apply((state) => ({
             backend: {
               ...state.backend,
               status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
@@ -1771,7 +1806,7 @@ export const useStore = create<StoreState>()(
           }));
         } catch (error) {
           isApplyingRemoteSnapshot = false;
-          set((state) => ({
+          apply((state) => ({
             backend: {
               ...state.backend,
               status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
@@ -1786,6 +1821,9 @@ export const useStore = create<StoreState>()(
       },
 
       reapplyMutationOnLatestWorkspace: async () => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         const current = get();
         const retained = getRetainedSecureCommand();
         if (!retained || !isWorkspaceConflict(current.backend.conflict)) {
@@ -1793,6 +1831,7 @@ export const useStore = create<StoreState>()(
         }
         const localSnapshot = selectPersistedWorkspaceState(current);
         await get().pullBackendNow({ force: true, silent: true });
+        if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         const fresh = get();
         if (fresh.backend.upgradeRequired === true || fresh.backend.status === 'upgrade_required') {
           return { ok: false, error: fresh.backend.error || BACKEND_UPGRADE_REQUIRED_MESSAGE };
@@ -1806,7 +1845,7 @@ export const useStore = create<StoreState>()(
           retained.operations,
         );
         isApplyingRemoteSnapshot = true;
-        set((state) => ({
+        apply((state) => ({
           ...makeWorkspacePatch(state, {
             state: merged,
             source: 'supabase',
@@ -1837,6 +1876,9 @@ export const useStore = create<StoreState>()(
       },
 
       retryMutation: async () => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         if (isSyncBusy(get())) {
           const idle = await waitForSyncIdle();
           if (!idle) return { ok: false, error: 'Another synchronization request is still running.' };
@@ -1849,7 +1891,7 @@ export const useStore = create<StoreState>()(
         if (retainedMemberMutation) {
           const targetUser = current.users.find(user => user.id === retainedMemberMutation.memberId);
           if (!targetUser) {
-            set((state) => ({
+            apply((state) => ({
               backend: {
                 ...state.backend,
                 status: 'retry_required',
@@ -1861,7 +1903,7 @@ export const useStore = create<StoreState>()(
             return { ok: false, error: 'The member change is waiting, but that member is no longer available. Refresh before retrying.' };
           }
 
-          set((state) => ({
+          apply((state) => ({
             backend: {
               ...state.backend,
               status: 'saving',
@@ -1873,7 +1915,7 @@ export const useStore = create<StoreState>()(
           const result = await retryRetainedSecureMemberMutation(targetUser);
           if (result.ok === false) {
             const terminal = isTerminalMemberMutationError(result.code);
-            set((state) => ({
+            apply((state) => ({
               backend: {
                 ...state.backend,
                 status: terminal
@@ -1902,7 +1944,7 @@ export const useStore = create<StoreState>()(
             && 'role' in result.data.member
             ? result.data.member
             : undefined;
-          set((state) => ({
+          apply((state) => ({
             users: state.users.map(user => user.id === targetUser.id
               ? retainedMemberMutation.kind === 'departments'
                 ? {
@@ -1944,13 +1986,13 @@ export const useStore = create<StoreState>()(
               message: 'Saved.',
             },
           }));
-          clearPendingServiceFiles();
+
           return { ok: true };
         }
         if (shouldUseSecureSupabase()) {
           const compatibility = await loadSecureBackendCapabilities();
           if (!compatibility.compatible) {
-            set((state) => ({
+            apply((state) => ({
               backend: {
                 ...state.backend,
                 status: 'upgrade_required',
@@ -1969,7 +2011,7 @@ export const useStore = create<StoreState>()(
         }
         if (conflict) rebaseRetryableCommand(conflict);
 
-        set((state) => ({
+        apply((state) => ({
           backend: {
             ...state.backend,
             status: 'saving',
@@ -1987,7 +2029,7 @@ export const useStore = create<StoreState>()(
         });
         if (result.ok === false) {
           const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
-          set((state) => ({
+          apply((state) => ({
             backend: {
               ...state.backend,
               status: upgradeRequired
@@ -2012,7 +2054,7 @@ export const useStore = create<StoreState>()(
         }
 
         const savedAt = new Date().toISOString();
-        set((state) => ({
+        apply((state) => ({
           backend: {
             ...state.backend,
             status: 'live',
@@ -2031,16 +2073,20 @@ export const useStore = create<StoreState>()(
             message: 'Saved.',
           },
         }));
-        clearPendingServiceFiles();
+
         await get().pullBackendNow({ force: true, silent: true });
         return { ok: true };
       },
 
       discardMutation: async (options = {}) => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
+        const discardedCommandId = getRetainedSecureCommand()?.id;
         discardSecureWorkspaceCommand();
         discardRetainedSecureMemberMutation();
-        await cleanupPendingServiceFiles();
-        set((state) => ({
+        const actorId = get().currentUser?.id;
+        apply((state) => ({
           backend: {
             ...state.backend,
             status: options.reload === false
@@ -2059,12 +2105,19 @@ export const useStore = create<StoreState>()(
         if (options.reload !== false || shouldUseSecureSupabase()) {
           await get().pullBackendNow({ force: true, silent: false });
         }
+        if (!isWorkspaceSessionCurrent(sessionToken) || !actorId) return;
+        if (shouldUseSecureSupabase() && get().backend.status !== 'live') return;
+        reconcilePendingServiceFiles(actorId, selectPersistedWorkspaceState(get()));
+        const cleanup = await cleanupPendingServiceFiles(actorId, { abandonSubmitted: true, commandIds: discardedCommandId ? [discardedCommandId] : [], includeUnsubmitted: false });
+        if (!cleanup.ok) apply(state => ({ backend: { ...state.backend, error: cleanup.error, message: cleanup.error } }));
       },
 
       retryPendingSave: async (commandType) => {
+        const sessionToken = captureWorkspaceSession();
         if (!shouldUseSupabase()) return { ok: true };
         if (isSyncBusy(get())) {
           const idle = await waitForSyncIdle();
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
           if (!idle) {
             return { ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' };
           }
@@ -2079,6 +2132,7 @@ export const useStore = create<StoreState>()(
             : { ok: false, code: before.errorCode, error: before.error || before.message || 'The change has not been saved yet.' };
         }
         await get().syncBackendNow(commandType || before.pendingCommandType);
+        if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         const after = get().backend;
         return !after.hasLocalChanges && after.status === 'live'
           ? { ok: true }
@@ -2086,6 +2140,7 @@ export const useStore = create<StoreState>()(
       },
 
       commitPendingMutation: async (commandType) => {
+        const sessionToken = captureWorkspaceSession();
         if (!shouldUseSupabase()) return { ok: true };
         const before = get().backend;
         if (before.status === 'upgrade_required') {
@@ -2104,6 +2159,7 @@ export const useStore = create<StoreState>()(
           };
         }
         await get().syncBackendNow(commandType);
+        if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         const backend = get().backend;
         if (!backend.hasLocalChanges && backend.status === 'live') return { ok: true };
         return {
@@ -2113,11 +2169,15 @@ export const useStore = create<StoreState>()(
       },
 
       login: async (name, password): Promise<LoginResult> => {
+        if (shouldUseSecureSupabase() && get().currentUser) clearWorkspaceSession();
+        invalidateWorkspaceSession();
+        const sessionToken = captureWorkspaceSession();
         if (shouldUseSecureSupabase()) {
           const { data, error } = await supabase.auth.signInWithPassword({
             email: resolveAuthEmail(name),
             password: password || '',
           });
+          if (!isWorkspaceSessionCurrent(sessionToken)) return loginFailure('workspace_load_failed');
           if (error || !data.user) {
             return loginFailure(classifyLoginFailure(error?.message || ''));
           }
@@ -2129,6 +2189,7 @@ export const useStore = create<StoreState>()(
               loadSecureWorkspace(data.user, { preserveRetainedCommand: true }),
               loadSecureBackendCapabilities(),
             ]);
+            if (!isWorkspaceSessionCurrent(sessionToken)) return loginFailure('workspace_load_failed');
             const restoredWorkspace = retainedBeforeLogin
               ? overlayRetainedWorkspaceEntities(secure.state, secure.state, retainedBeforeLogin.operations)
               : secure.state;
@@ -2167,8 +2228,10 @@ export const useStore = create<StoreState>()(
               },
             }));
             isApplyingRemoteSnapshot = false;
+            if (typeof window !== 'undefined') startBackendAutoSync();
             return { ok: true };
           } catch (loadError) {
+            if (!isWorkspaceSessionCurrent(sessionToken)) return loginFailure('workspace_load_failed');
             await supabase.auth.signOut({ scope: 'local' });
             const message = loadError instanceof Error ? loadError.message : String(loadError || '');
             return loginFailure(classifyLoginFailure(message, 'workspace'));
@@ -2189,6 +2252,7 @@ export const useStore = create<StoreState>()(
         } catch {
           return loginFailure('workspace_load_failed');
         }
+        if (!isWorkspaceSessionCurrent(sessionToken)) return loginFailure('workspace_load_failed');
         if (!isValid) {
           return loginFailure('invalid_credentials');
         }
@@ -2205,6 +2269,7 @@ export const useStore = create<StoreState>()(
             account.id === user.id ? nextUser : account
           )),
         }));
+        if (typeof window !== 'undefined') startBackendAutoSync();
         return { ok: true };
       },
 
@@ -2241,6 +2306,9 @@ export const useStore = create<StoreState>()(
       },
 
       completePasswordSetup: async (data) => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         if (!shouldUseSecureSupabase()) {
           return { ok: false, error: 'This password link is only valid for secure hosted accounts.' };
         }
@@ -2277,7 +2345,7 @@ export const useStore = create<StoreState>()(
             };
           }
           const now = new Date().toISOString();
-          set((state) => ({
+          apply((state) => ({
             currentUser: state.currentUser
               ? { ...state.currentUser, mustResetPassword: false, updatedAt: now }
               : null,
@@ -2402,6 +2470,9 @@ export const useStore = create<StoreState>()(
       },
 
       updateCurrentUserPassword: async (data) => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         const currentUser = get().currentUser;
         if (!currentUser) return { ok: false, error: 'You must be logged in to update your password.' };
         if (isWorkspaceMutationLocked(get())) return { ok: false, error: pendingMutationMessage };
@@ -2430,7 +2501,7 @@ export const useStore = create<StoreState>()(
             };
           }
           const now = new Date().toISOString();
-          set((state) => ({
+          apply((state) => ({
             currentUser: state.currentUser ? { ...state.currentUser, mustResetPassword: false, updatedAt: now } : null,
             users: state.users.map(member => member.id === currentUser.id
               ? { ...member, mustResetPassword: false, updatedAt: now }
@@ -2487,7 +2558,7 @@ export const useStore = create<StoreState>()(
         } catch {
           return { ok: false, error: 'This browser could not save the new password.' };
         }
-        set((state) => ({
+        apply((state) => ({
           currentUser: {
             ...currentUser,
             mustResetPassword: false,
@@ -4270,8 +4341,7 @@ export const useStore = create<StoreState>()(
         if (existing.length) return { ok: true, taskIds: existing.sort((a, b) => (a.workflowStepOrder || 0) - (b.workflowStepOrder || 0)).map(task => task.id) };
         const generationId = nowId('WFG');
         const now = new Date().toISOString();
-        const today = getTodayInputDate();
-        const startDate = today > cycle.periodStart ? today : cycle.periodStart;
+        const startDate = cycle.periodStart;
         const taskIds = workflow.steps.map(() => nowId('T'));
         const tasks: Task[] = workflow.steps.map((step, index) => ({
           id: taskIds[index],
@@ -4286,6 +4356,7 @@ export const useStore = create<StoreState>()(
           workflowStepRequired: step.required,
           predecessorTaskIds: index === 0 ? [] : [taskIds[index - 1]],
           generatedFromDeliverable: true,
+          workflowGeneratedAt: now,
           clientName: deliverable.clientName,
           projectName: `${deliverable.clientName} service cycle`,
           serviceType: serviceItem.name,
@@ -4507,6 +4578,9 @@ export const useStore = create<StoreState>()(
       }),
 
       registerUser: async (data) => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         const name = data.name.trim().slice(0, 160);
         const email = data.email.trim().toLowerCase().slice(0, 320);
         const phone = data.phone.trim().slice(0, 80);
@@ -4558,7 +4632,7 @@ export const useStore = create<StoreState>()(
           return { ok: true };
         }
 
-        set((current) => {
+        apply((current) => {
           const newReg: Registration = {
             name,
             email,
@@ -4596,6 +4670,9 @@ export const useStore = create<StoreState>()(
       },
 
       addUserBySuperAdmin: async (data) => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
@@ -4733,7 +4810,7 @@ export const useStore = create<StoreState>()(
           updatedAt: new Date().toISOString()
         };
 
-        set((state) => {
+        apply((state) => {
           const notification = makeNotification({
             targetRole: 'Project Manager',
             title: 'Member Added',
@@ -4910,6 +4987,9 @@ export const useStore = create<StoreState>()(
       },
 
       changeMemberRole: async (userId, role, options = {}) => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         if (!canCreateUsers(state.currentUser, state.rolePermissions)) {
@@ -4948,7 +5028,7 @@ export const useStore = create<StoreState>()(
 
         if (shouldUseSecureSupabase()) {
           const previousStatus = state.backend.status;
-          set(current => ({
+          apply(current => ({
             backend: {
               ...current.backend,
               status: 'saving',
@@ -4966,7 +5046,7 @@ export const useStore = create<StoreState>()(
           if (result.ok === false) {
             const terminal = isTerminalMemberMutationError(result.code);
             const hasRetainedMutation = Boolean(getRetainedSecureMemberMutation());
-            set(current => ({
+            apply(current => ({
               backend: {
                 ...current.backend,
                 status: terminal
@@ -4991,7 +5071,7 @@ export const useStore = create<StoreState>()(
           const updatedAt = result.data.member?.updated_at || new Date().toISOString();
           const version = Number(result.data.member?.version) || Math.max(1, Number(targetUser.version) || 1) + 1;
           isApplyingRemoteSnapshot = true;
-          set(current => ({
+          apply(current => ({
             users: current.users.map(user => user.id === userId
               ? {
                   ...user,
@@ -5027,7 +5107,7 @@ export const useStore = create<StoreState>()(
           return { ok: true };
         }
 
-        set(current => ({
+        apply(current => ({
           users: current.users.map(user => user.id === userId
             ? {
                 ...user,
@@ -5046,6 +5126,9 @@ export const useStore = create<StoreState>()(
       },
 
       updateMemberDepartments: async (userId, requestedDepartments) => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         if (!canCreateUsers(state.currentUser, state.rolePermissions)) {
@@ -5076,7 +5159,7 @@ export const useStore = create<StoreState>()(
 
         if (shouldUseSecureSupabase()) {
           const previousStatus = state.backend.status;
-          set(current => ({
+          apply(current => ({
             backend: {
               ...current.backend,
               status: 'saving',
@@ -5089,7 +5172,7 @@ export const useStore = create<StoreState>()(
           if (result.ok === false) {
             const terminal = isTerminalMemberMutationError(result.code);
             const hasRetainedMutation = Boolean(getRetainedSecureMemberMutation());
-            set(current => ({
+            apply(current => ({
               backend: {
                 ...current.backend,
                 status: terminal
@@ -5114,7 +5197,7 @@ export const useStore = create<StoreState>()(
           const updatedAt = result.data.member?.updated_at || new Date().toISOString();
           const version = Number(result.data.member?.version) || Math.max(1, Number(targetUser.version) || 1) + 1;
           isApplyingRemoteSnapshot = true;
-          set(current => ({
+          apply(current => ({
             users: current.users.map(user => user.id === userId
               ? {
                   ...user,
@@ -5145,7 +5228,7 @@ export const useStore = create<StoreState>()(
           return { ok: true };
         }
 
-        set(current => ({
+        apply(current => ({
           users: current.users.map(user => user.id === userId
             ? {
                 ...user,
@@ -5159,6 +5242,9 @@ export const useStore = create<StoreState>()(
       },
 
       updateMemberPermissions: async (userId, requestedPermissions) => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         if (!canCreateUsers(state.currentUser, state.rolePermissions)) {
@@ -5180,7 +5266,7 @@ export const useStore = create<StoreState>()(
 
         if (shouldUseSecureSupabase()) {
           const previousStatus = state.backend.status;
-          set(current => ({
+          apply(current => ({
             backend: {
               ...current.backend,
               status: 'saving',
@@ -5193,7 +5279,7 @@ export const useStore = create<StoreState>()(
           if (result.ok === false) {
             const terminal = isTerminalMemberMutationError(result.code);
             const hasRetainedMutation = Boolean(getRetainedSecureMemberMutation());
-            set(current => ({
+            apply(current => ({
               backend: {
                 ...current.backend,
                 status: terminal
@@ -5218,7 +5304,7 @@ export const useStore = create<StoreState>()(
           const updatedAt = result.data.member?.updated_at || new Date().toISOString();
           const version = Number(result.data.member?.version) || Math.max(1, Number(targetUser.version) || 1) + 1;
           isApplyingRemoteSnapshot = true;
-          set(current => ({
+          apply(current => ({
             users: current.users.map(user => user.id === userId
               ? { ...user, permissions, version, updatedAt }
               : user),
@@ -5243,7 +5329,7 @@ export const useStore = create<StoreState>()(
           return { ok: true };
         }
 
-        set(current => ({
+        apply(current => ({
           users: current.users.map(user => user.id === userId
             ? { ...user, permissions, updatedAt: new Date().toISOString() }
             : user),
@@ -5339,6 +5425,9 @@ export const useStore = create<StoreState>()(
       },
 
       deleteUser: async (userId) => {
+        const sessionToken = captureWorkspaceSession();
+        const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
+
         const state = get();
         const targetUser = state.users.find(user => user.id === userId);
 
@@ -5377,7 +5466,7 @@ export const useStore = create<StoreState>()(
           return { ok: true };
         }
 
-        set((current) => {
+        apply((current) => {
           const notification = makeNotification({
             targetRole: 'Project Manager',
             title: 'Member Removed',
@@ -5409,6 +5498,7 @@ export const useStore = create<StoreState>()(
       },
 
       _forceSyncMockData: () => {
+        if (!(import.meta.env.DEV || import.meta.env.VITE_AITASK_BACKEND === 'local')) return;
         if (!shouldShowDemoLogin() || get().backend.mode === 'supabase' || shouldUseSecureSupabase()) return;
 
         set((state) => {
@@ -5504,6 +5594,7 @@ export const useStore = create<StoreState>()(
       },
 
       resetLocalServiceDemo: () => {
+        if (!(import.meta.env.DEV || import.meta.env.VITE_AITASK_BACKEND === 'local')) return { ok: false, error: 'The sample workspace is available only in an explicit local browser session.' };
         const state = get();
         if (!isLocalServiceDemoEnabled() || state.backend.mode !== 'local' || shouldUseSecureSupabase()) {
           return { ok: false, error: 'The sample workspace is available only in an explicit local browser session.' };
@@ -5581,7 +5672,8 @@ export const useStore = create<StoreState>()(
         }));
         return { ok: true };
       }
-    }),
+    });
+    },
     {
       name: PERSIST_KEY,
       version: 4,
@@ -5631,7 +5723,7 @@ export const useStore = create<StoreState>()(
 let backendAutoSyncStarted = false;
 let backendAutoSyncCleanup: (() => void) | null = null;
 export const startBackendAutoSync = () => {
-  if (backendAutoSyncStarted) return;
+  if (backendAutoSyncStarted || !useStore.getState().currentUser || typeof window === 'undefined') return;
   backendAutoSyncStarted = true;
   let accessRealtimeCleanup: (() => void) | null = null;
   let accessRealtimeKey: string | null = null;
@@ -5879,3 +5971,39 @@ export const startBackendAutoSync = () => {
 export const stopBackendAutoSync = () => {
   backendAutoSyncCleanup?.();
 };
+
+useStore.subscribe((state, previous) => {
+  if (previous.currentUser && (state.currentUser?.id !== previous.currentUser.id || state.currentUser?.authUserId !== previous.currentUser.authUserId)) {
+    clearRecoveredDrafts(previous.currentUser.authUserId || previous.currentUser.id);
+    invalidateWorkspaceSession();
+  }
+});
+
+export const clearWorkspaceSession = (options: { discardPending?: boolean } = {}) => {
+  const actor = useStore.getState().currentUser;
+  if (actor) clearRecoveredDrafts(actor.authUserId || actor.id);
+  if (options.discardPending) { discardSecureWorkspaceCommand(); discardRetainedSecureMemberMutation(); }
+  invalidateWorkspaceSession();
+  stopBackendAutoSync();
+  useStore.setState(state => ({
+    currentUser: null,
+    ...(shouldUseSupabase() ? {
+      taskStatuses: [], users: [], clients: [], projects: [], tasks: [], notifications: [], registrations: [], rolePermissions: [],
+      clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], servicePackages: [],
+      serviceWorkflowTemplates: [], servicePricingSnapshots: [], notificationUnreadCount: 0,
+      deletedUserIds: [], deletedRoleIds: [], deletedTaskStatuses: [], deletedClientIds: [],
+    } : {}),
+    isCreateTaskModalOpen: false,
+    backend: { ...state.backend, isLoading: false, isSaving: false, isPulling: false, hasLocalChanges: false, hasRemoteUpdate: false, pendingMutations: 0, pendingCommandType: undefined, conflict: undefined, status: shouldUseSupabase() ? 'live' : 'local' },
+  }));
+};
+
+// A bounded, local report contains timings/outcomes only, never workspace data.
+let diagnosticSaveStart: number | null = null;
+useStore.subscribe((state, previous) => {
+  if (state.backend.isSaving && !previous.backend.isSaving) diagnosticSaveStart = performance.now();
+  if (!state.backend.isSaving && previous.backend.isSaving && diagnosticSaveStart !== null) {
+    recordDiagnostic('save', performance.now() - diagnosticSaveStart, state.backend.hasLocalChanges ? 'failed' : 'ok'); diagnosticSaveStart = null;
+  }
+  if (state.backend.status === 'conflict' && previous.backend.status !== 'conflict') recordDiagnostic('conflict', 0, 'failed');
+});
