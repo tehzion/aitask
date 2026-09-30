@@ -16,6 +16,7 @@ import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import type { ResolvedTheme, ThemePreference } from '../lib/theme';
 import { LanguageSwitcher, useI18n } from './I18nProvider';
 import { formatLocalizedDistanceToNow } from '../lib/i18n';
+import { useImeSafeInput } from '../hooks/useImeSafeInput';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -183,6 +184,7 @@ const Navbar: React.FC<NavbarProps> = ({
     else next.delete('search');
     setSearchParams(next, { replace: true });
   };
+  const globalSearchInput = useImeSafeInput(globalSearchValue, updateGlobalSearch, { commitDelayMs: 180 });
 
   const handleGlobalSearch = (event: React.FormEvent) => {
     event.preventDefault();
@@ -190,7 +192,7 @@ const Navbar: React.FC<NavbarProps> = ({
       setShowMobileSearch(false);
       return;
     }
-    const query = globalSearch.trim();
+    const query = globalSearchInput.value.trim();
     if (!query) return;
     navigate(`${searchDestination}?search=${encodeURIComponent(query)}`);
     setShowMobileSearch(false);
@@ -238,11 +240,10 @@ const Navbar: React.FC<NavbarProps> = ({
             data-global-search
             className={cn(inputBase, 'border-transparent bg-inset py-2.5 pl-10 pr-10 shadow-none focus:bg-surface')}
             placeholder={liveSearchPlaceholder ?? (isClient ? 'Search deliveries…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...')}
-            value={globalSearchValue}
-            onChange={(event) => updateGlobalSearch(event.target.value)}
+            {...globalSearchInput.inputProps}
           />
-          {globalSearchValue && (
-            <button type="button" aria-label={t('Clear search')} onClick={() => updateGlobalSearch('')} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink">
+          {globalSearchInput.value && (
+            <button type="button" aria-label={t('Clear search')} onClick={() => globalSearchInput.commit('')} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink">
               <X className="h-4 w-4" />
             </button>
           )}
@@ -394,11 +395,10 @@ const Navbar: React.FC<NavbarProps> = ({
               data-global-search
               className={cn(inputBase, 'py-2.5 pl-10 pr-10')}
               placeholder={liveSearchPlaceholder ?? (isClient ? 'Search deliveries…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...')}
-              value={globalSearchValue}
-              onChange={(event) => updateGlobalSearch(event.target.value)}
+              {...globalSearchInput.inputProps}
             />
-            {globalSearchValue && (
-              <button type="button" aria-label={t('Clear search')} onClick={() => updateGlobalSearch('')} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink">
+            {globalSearchInput.value && (
+              <button type="button" aria-label={t('Clear search')} onClick={() => globalSearchInput.commit('')} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink">
                 <X className="h-4 w-4" />
               </button>
             )}

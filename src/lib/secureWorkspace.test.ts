@@ -36,6 +36,7 @@ import {
   retryRetainedSecureMemberMutation,
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
+  saveSecureMemberRole,
   saveSecureWorkspace,
   serializeClientProjectedTask,
   setSecureNotificationsRead,
@@ -584,6 +585,31 @@ describe('secure command retry identity', () => {
     expect(rpc.mock.calls[1][1].p_command_id).toBe(commandId);
     expect(sessionStorage.length).toBe(0);
     discardRetainedSecureMemberMutation();
+  });
+
+  it('clears a retained member role retry when the workspace command is discarded', async () => {
+    const values = new Map<string, string>();
+    const sessionStorage: Storage = {
+      get length() { return values.size; },
+      clear: () => values.clear(),
+      getItem: key => values.get(key) ?? null,
+      key: index => [...values.keys()][index] ?? null,
+      removeItem: key => { values.delete(key); },
+      setItem: (key, value) => { values.set(key, value); },
+    };
+    vi.stubGlobal('window', { sessionStorage });
+    const member = stateWithUser('member-role-retry').users[0];
+    restoreSecureMemberMutation('auth-member-role-retry');
+    rpc.mockRejectedValueOnce(new Error('response lost'));
+
+    const first = await saveSecureMemberRole(member, { role: 'HOD', departments: ['Operation'] });
+    expect(first).toMatchObject({ ok: false, code: 'RETRY_REQUIRED' });
+    expect(getRetainedSecureMemberMutation()).toMatchObject({ kind: 'role', memberId: member.id, role: 'HOD' });
+    expect(sessionStorage.length).toBe(1);
+
+    discardSecureWorkspaceCommand();
+    expect(getRetainedSecureMemberMutation()).toBeNull();
+    expect(sessionStorage.length).toBe(0);
   });
 
   it('translates a missing command signature without exposing PostgREST internals', async () => {

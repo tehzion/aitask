@@ -19,6 +19,7 @@ import { useToastStore } from '../store/useToastStore';
 import ModalShell from '../components/ModalShell';
 import ConfirmDialog from '../components/ConfirmDialog';
 import DepartmentMultiSelect from '../components/DepartmentMultiSelect';
+import { useImeSafeInput } from '../hooks/useImeSafeInput';
 
 const ROLES: Role[] = ['Project Manager', 'HOD', 'Staff', 'Client'];
 
@@ -313,6 +314,8 @@ const Approvals: React.FC = () => {
   const registrationQueryId = searchParams.get('registrationId');
   const [registrationSearch, setRegistrationSearch] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
+  const registrationSearchInput = useImeSafeInput(registrationSearch, setRegistrationSearch);
+  const memberSearchInput = useImeSafeInput(memberSearch, setMemberSearch);
   const [memberRoleFilter, setMemberRoleFilter] = useState<'All' | Role>('All');
   
   const [role, setRole] = useState<Role>('Staff');
@@ -393,7 +396,7 @@ const Approvals: React.FC = () => {
     [registrations],
   );
   const filteredPendingRegs = useMemo(() => {
-    const query = registrationSearch.trim().toLowerCase();
+    const query = registrationSearchInput.value.trim().toLowerCase();
     if (!query) return pendingRegs;
     return pendingRegs.filter(registration => [
       registration.name,
@@ -403,7 +406,7 @@ const Approvals: React.FC = () => {
       registration.requestedRole,
       registration.onboardingMode,
     ].some(value => value?.toLowerCase().includes(query)));
-  }, [pendingRegs, registrationSearch]);
+  }, [pendingRegs, registrationSearchInput.value]);
   const agedRegistrationCount = pendingRegs.filter(registration => pendingDays(registration) >= 7).length;
   const activeMemberCount = users.length;
   const memberPermissionsUser = memberPermissionsId
@@ -458,7 +461,15 @@ const Approvals: React.FC = () => {
 
   const performBulkReject = async (registrationIds: string[]) => {
     const previousRegistrations = useStore.getState().registrations;
-    registrationIds.forEach(id => rejectRegistration(id));
+    for (const id of registrationIds) {
+      const localResult = rejectRegistration(id);
+      if (!localResult.ok) {
+        useStore.setState({ registrations: previousRegistrations });
+        setSelectedBulkRegIds(new Set());
+        setActionError(String(t(localResult.error || 'The registration could not be rejected.')));
+        return;
+      }
+    }
     setIsActionSaving(true);
     const saved = await commitPendingMutation();
     setIsActionSaving(false);
@@ -979,7 +990,12 @@ const Approvals: React.FC = () => {
 
   const performRejectRegistration = async (registrationId: string) => {
     const previousRegistrations = useStore.getState().registrations;
-    rejectRegistration(registrationId);
+    const localResult = rejectRegistration(registrationId);
+    if (!localResult.ok) {
+      useStore.setState({ registrations: previousRegistrations });
+      setActionError(String(t(localResult.error || 'The registration could not be rejected.')));
+      return;
+    }
     setIsActionSaving(true);
     const saved = await commitPendingMutation();
     setIsActionSaving(false);
@@ -1000,7 +1016,7 @@ const Approvals: React.FC = () => {
   };
 
   const visibleMembers = users.filter(user => {
-    const normalizedSearch = memberSearch.trim().toLowerCase();
+    const normalizedSearch = memberSearchInput.value.trim().toLowerCase();
     const matchesSearch = !normalizedSearch || user.name.toLowerCase().includes(normalizedSearch) || (user.email || '').toLowerCase().includes(normalizedSearch);
     const matchesRole = memberRoleFilter === 'All' || user.role === memberRoleFilter;
     return matchesSearch && matchesRole;
@@ -1164,16 +1180,15 @@ const Approvals: React.FC = () => {
             <input
               id="registration-search"
               type="search"
-              value={registrationSearch}
-              onChange={event => setRegistrationSearch(event.target.value)}
+              {...registrationSearchInput.inputProps}
               placeholder={t('Search name, email, phone, or position')}
               className={cn(inputBase, 'pl-9 pr-10')}
             />
-            {registrationSearch && (
+            {registrationSearchInput.value && (
               <IconButton
                 label={t('Clear registration search')}
                 className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2"
-                onClick={() => setRegistrationSearch('')}
+                onClick={() => registrationSearchInput.commit('')}
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </IconButton>
@@ -1677,8 +1692,7 @@ const Approvals: React.FC = () => {
         <div className="flex flex-col gap-2 border-b border-line/80 bg-inset/60 px-4 py-3 sm:flex-row sm:px-5">
           <input
             type="search"
-            value={memberSearch}
-            onChange={event => setMemberSearch(event.target.value)}
+            {...memberSearchInput.inputProps}
             placeholder={t('Search members...')}
             aria-label={t('Search members...')}
             className={cn(inputBase, 'px-3 py-2 text-sm')}

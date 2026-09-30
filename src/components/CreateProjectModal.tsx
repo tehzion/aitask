@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useStore } from '../store';
+import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { Check, X, Plus } from 'lucide-react';
 import { Project, ServiceType } from '../types';
 import { getServiceOptions, hasChoice, PRESET_SERVICES } from '../lib/choiceOptions';
 import ModalShell from './ModalShell';
+import BackendFreshness from './BackendFreshness';
 import { fieldLabel, modalFooter } from './uiTokens';
 import { canCreateClientProfiles, canViewAllClients, getVisibleClientNames } from '../lib/access';
 import CreateClientProfileModal from './CreateClientProfileModal';
@@ -22,7 +23,7 @@ interface Props {
 
 const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initialClientId, onProjectCreated, onProjectUpdated }) => {
   const { t } = useI18n();
-  const { addProject, updateProject, projects, clients, tasks, currentUser, rolePermissions, retryPendingSave } = useStore(useShallow(state => ({
+  const { addProject, updateProject, projects, clients, tasks, currentUser, rolePermissions, retryPendingSave, backend } = useStore(useShallow(state => ({
     addProject: state.addProject,
     updateProject: state.updateProject,
     projects: state.projects,
@@ -31,6 +32,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     currentUser: state.currentUser,
     rolePermissions: state.rolePermissions,
     retryPendingSave: state.retryPendingSave,
+    backend: state.backend,
   })));
   const [searchParams, setSearchParams] = useSearchParams();
   const titleId = React.useId();
@@ -38,6 +40,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const clientSelectId = React.useId();
   const projectNameId = React.useId();
   const isEditing = Boolean(project);
+  const pendingResolution = isPendingMutationResolution(backend);
 
   // A company search filter on the Companies page would hide the company this
   // project is linked to. Clear it whenever the project is created or updated.
@@ -453,9 +456,10 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
               )}
             </div>
 
-            {formError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
-                {formError}
+            {(formError || pendingResolution) && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
+                <p>{formError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+                {pendingResolution && <BackendFreshness compact className="mt-3" />}
               </div>
             )}
 
@@ -472,7 +476,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
           </button>
           <button
             type="submit" form="create-project-form"
-            disabled={isSubmitting}
+            disabled={isSubmitting || pendingResolution}
             className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
         {isSubmitting ? t('Saving...') : pendingProjectId ? t('Retry saving') : isEditing ? t('Save changes') : t('Create project')}

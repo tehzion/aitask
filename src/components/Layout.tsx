@@ -3,7 +3,7 @@ import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-do
 import { useShallow } from 'zustand/react/shallow';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
-import { useStore } from '../store';
+import { isPendingMutationResolution, useStore } from '../store';
 import { useNotificationReadActions } from '../hooks/useNotificationReadActions';
 import { canAccessPath, canCreateTasks, getUnreadNotifications } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
@@ -209,7 +209,7 @@ const Layout: React.FC = () => {
   const hostedLocalBuild = backendStatus.mode === 'local' && backendStatus.isHostedRuntime;
   const missingSupabaseConfig = backendStatus.mode === 'supabase' && !backendStatus.ready;
   const upgradeRequired = backend.upgradeRequired === true;
-  const pendingResolution = !upgradeRequired && (backend.status === 'conflict' || backend.status === 'retry_required' || (backend.status === 'offline' && backend.hasLocalChanges));
+  const pendingResolution = isPendingMutationResolution(backend);
   const syncNeedsAttention = hostedLocalBuild || missingSupabaseConfig || upgradeRequired || Boolean(backend.error) || backend.hasRemoteUpdate || pendingResolution;
   const syncBannerTitle = hostedLocalBuild
     ? t('Sync is local on this deployed build')

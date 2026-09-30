@@ -191,6 +191,84 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
   expect(axeResults.violations, `Client portal zh: ${axeResults.violations.map(item => `${item.id} (${item.nodes.length})`).join(', ')}`).toEqual([]);
 });
 
+test('client delivery search preserves Chinese IME composition without repeating Latin input', async ({ page }) => {
+  const runtimeErrors: string[] = [];
+  page.on('console', message => {
+    if (message.type() === 'error') runtimeErrors.push(`console: ${message.text()}`);
+  });
+  page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
+
+  await page.goto('/login');
+  await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
+  await page.getByLabel('Password').fill('password123');
+  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.waitForURL(/\/(?:settings)?$/);
+  const continueButton = page.getByRole('button', { name: 'Continue for now' });
+  if (/\/settings$/.test(page.url())) await continueButton.click();
+  await page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' })
+    .getByRole('button', { name: 'Happy working' }).click();
+
+  await page.evaluate(() => localStorage.setItem('aitask:release-notice:2026-08-service-operations:client-ime', 'acknowledged'));
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    useStore.setState({
+      currentUser: {
+        id: 'client-ime',
+        name: 'Client IME',
+        role: 'Client',
+        departments: ['Client'],
+        department: 'Client',
+        companyName: state.currentUser.companyName,
+        permissions: { viewDashboard: true, viewTasks: true },
+      },
+    });
+  });
+
+  await page.goto('/tasks');
+  await page.getByRole('button', { name: '切换为中文' }).click();
+  const globalSearch = page.locator('[data-global-search]').first();
+  await globalSearch.evaluate(element => element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })));
+  await globalSearch.fill('h');
+  await expect(globalSearch).toHaveValue('h');
+  await globalSearch.fill('hh');
+  await expect(globalSearch).toHaveValue('hh');
+  await globalSearch.evaluate(element => {
+    const input = element as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    setter?.call(input, '你好');
+    input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '你好' }));
+  });
+  await expect(globalSearch).toHaveValue('你好');
+  await page.getByRole('button', { name: '清除搜索' }).first().click();
+  await expect(globalSearch).toHaveValue('');
+
+  const search = page.getByPlaceholder('搜索交付内容');
+  await expect(search).toBeVisible();
+
+  await search.evaluate(element => element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })));
+  await search.fill('h');
+  await expect(search).toHaveValue('h');
+  await search.fill('hh');
+  await expect(search).toHaveValue('hh');
+  expect(new URL(page.url()).searchParams.has('search')).toBe(false);
+
+  await search.evaluate(element => {
+    const input = element as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    setter?.call(input, '你好');
+    input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '你好' }));
+  });
+
+  await expect(search).toHaveValue('你好');
+  await expect.poll(() => new URL(page.url()).searchParams.get('search')).toBe('你好');
+
+  await search.fill('客户');
+  await search.blur();
+  await expect.poll(() => new URL(page.url()).searchParams.get('search')).toBe('客户');
+  expect(runtimeErrors).toEqual([]);
+});
+
 test('public feedback keeps its language control touch-safe in Chinese', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/feedback?role=Client&lang=zh');

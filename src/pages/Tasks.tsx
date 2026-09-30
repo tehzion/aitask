@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useStore } from '../store';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { isPendingMutationResolution, useStore } from '../store';
 import { useI18n } from '../components/I18nProvider';
 import { useShallow } from 'zustand/react/shallow';
 import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone, Plus } from 'lucide-react';
@@ -20,6 +20,7 @@ import { getLocalizedDepartment, getLocalizedPriority, getLocalizedStatus } from
 import { formatLocalizedDate } from '../lib/i18n';
 import StaffAllWork from '../components/StaffAllWork';
 import ClientDeliveries from '../components/ClientDeliveries';
+import { useImeSafeInput } from '../hooks/useImeSafeInput';
 
 const CLIENT_BOARD_COLUMNS = [
   { value: 'active', label: 'In progress' },
@@ -71,8 +72,9 @@ const TasksWorkspace: React.FC = () => {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [activeQuickEdit, setActiveQuickEdit] = useState<{ taskId: string; x: number; y: number } | null>(null);
   const [quickSyncError, setQuickSyncError] = useState('');
+  const pendingResolution = isPendingMutationResolution(backend);
 
-  const persistQuickChange = async (previousTask: Task, changedField: 'status' | 'priority' | 'assignedTo') => {
+  const persistQuickChange = async (previousTask: Task) => {
     const result = await commitPendingMutation();
     if (result.ok) {
       setQuickSyncError('');
@@ -81,12 +83,7 @@ const TasksWorkspace: React.FC = () => {
     useStore.setState(state => ({
       tasks: state.tasks.map(task => {
         if (task.id !== previousTask.id) return task;
-        const patch = changedField === 'status'
-          ? { status: previousTask.status, isCompleted: previousTask.isCompleted, completionPercentage: previousTask.completionPercentage }
-          : changedField === 'priority'
-            ? { priority: previousTask.priority }
-            : { assignedTo: previousTask.assignedTo };
-        return { ...task, ...patch };
+        return { ...previousTask };
       }),
     }));
     setQuickSyncError(result.error || 'The quick change was rolled back. Use Retry required to confirm it safely.');
@@ -96,7 +93,7 @@ const TasksWorkspace: React.FC = () => {
   const handleQuickEditClick = (e: React.MouseEvent, task: Task) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects })) {
+    if (backend.upgradeRequired || pendingResolution || !canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects })) {
       return;
     }
     const rect = e.currentTarget.getBoundingClientRect();
@@ -108,7 +105,7 @@ const TasksWorkspace: React.FC = () => {
   };
 
   const handleRowContextMenu = (e: React.MouseEvent, task: Task) => {
-    if (!canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects })) return;
+    if (backend.upgradeRequired || pendingResolution || !canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects })) return;
     e.preventDefault();
     e.stopPropagation();
     setActiveQuickEdit({
@@ -143,8 +140,12 @@ const TasksWorkspace: React.FC = () => {
     if (!task) return;
     if (!canEditTask(task)) return;
 
-    updateTaskStatus(taskId, targetStatus);
-    await persistQuickChange(task, 'status');
+    const localResult = updateTaskStatus(taskId, targetStatus);
+    if (!localResult.ok) {
+      setQuickSyncError(String(t(localResult.error || 'Unable to update the task status.')));
+      return;
+    }
+    await persistQuickChange(task);
   };
 
   const getDeptBadge = (dept: string) => {
@@ -173,7 +174,14 @@ const TasksWorkspace: React.FC = () => {
     : '';
   const routeSearch = searchParams.get('search') || '';
 
-  const [searchTerm, setSearchTerm] = useState(routeSearch);
+  const updateSearch = useCallback((value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set('search', value);
+    else next.delete('search');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+  const searchInput = useImeSafeInput(routeSearch, updateSearch, { commitDelayMs: 180 });
+  const searchTerm = searchInput.value;
   const [filterDepartment, setFilterDepartment] = useState('All');
   const [filterAssignee, setFilterAssignee] = useState(assigneeRouteFilter || 'All');
   const [filterClient, setFilterClient] = useState('All');
@@ -205,19 +213,6 @@ const TasksWorkspace: React.FC = () => {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  useEffect(() => {
-    setSearchTerm(routeSearch);
-  }, [routeSearch]);
-
-  useEffect(() => {
-    const hasMatchingParam = searchParams.get('search') === searchTerm;
-    if (hasMatchingParam) return;
-    const next = new URLSearchParams(searchParams);
-    if (searchTerm) next.set('search', searchTerm);
-    else next.delete('search');
-    setSearchParams(next, { replace: true });
-  }, [searchParams, searchTerm, setSearchParams]);
 
   useEffect(() => {
     setFilterAssignee(assigneeRouteFilter || 'All');
@@ -368,7 +363,11 @@ const TasksWorkspace: React.FC = () => {
   }, [taskIdFilter, tasks]);
 
   const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
-  const canEditTask = (task: Task) => canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects });
+  const canEditTask = (task: Task) => (
+    !backend.upgradeRequired
+    && !pendingResolution
+    && canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects })
+  );
   const isClientReviewReady = (task: Task) => (
     task.clientApprovalStatus !== 'Approved'
     && (task.status === 'Waiting Approval' || task.status === 'Completed' || task.isCompleted)
@@ -413,7 +412,7 @@ const TasksWorkspace: React.FC = () => {
   };
 
   const clearAllFilters = () => {
-    setSearchTerm('');
+    searchInput.commit('');
     setFilterDepartment('All');
     setFilterAssignee('All');
     setFilterClient('All');
@@ -440,8 +439,12 @@ const TasksWorkspace: React.FC = () => {
           value={task.status}
           disabled={backend.isSaving}
           onChange={async (e) => {
-            updateTaskStatus(task.id, e.target.value as TaskStatus);
-            await persistQuickChange(task, 'status');
+            const localResult = updateTaskStatus(task.id, e.target.value as TaskStatus);
+            if (!localResult.ok) {
+              setQuickSyncError(String(t(localResult.error || 'Unable to update the task status.')));
+              return;
+            }
+            await persistQuickChange(task);
           }}
         >
         {taskStatuses.map(status => (
@@ -698,8 +701,7 @@ const TasksWorkspace: React.FC = () => {
                 aria-label={t('Filter tasks')}
                 className={cn(inputBase, 'block py-2 pl-10 pr-3')}
                 placeholder={isClientUser ? t('Search company tasks...') : t('Search tasks, clients, assignees...')}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                {...searchInput.inputProps}
               />
             </div>
 
@@ -1220,8 +1222,12 @@ const TasksWorkspace: React.FC = () => {
                     className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white appearance-none cursor-pointer")}
                     value={currentTask.status}
                     onChange={(e) => {
-                      updateTaskStatus(currentTask.id, e.target.value as TaskStatus);
-                      void persistQuickChange(currentTask, 'status');
+                      const localResult = updateTaskStatus(currentTask.id, e.target.value as TaskStatus);
+                      if (!localResult.ok) {
+                        setQuickSyncError(String(t(localResult.error || 'Unable to update the task status.')));
+                        return;
+                      }
+                      void persistQuickChange(currentTask);
                       setActiveQuickEdit(null);
                     }}
                   >
@@ -1241,8 +1247,12 @@ const TasksWorkspace: React.FC = () => {
                     className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white appearance-none cursor-pointer")}
                     value={currentTask.priority}
                     onChange={(e) => {
-                      updateTaskPriority(currentTask.id, e.target.value as Priority);
-                      void persistQuickChange(currentTask, 'priority');
+                      const localResult = updateTaskPriority(currentTask.id, e.target.value as Priority);
+                      if (!localResult.ok) {
+                        setQuickSyncError(String(t(localResult.error || 'Unable to update the task priority.')));
+                        return;
+                      }
+                      void persistQuickChange(currentTask);
                       setActiveQuickEdit(null);
                     }}
                   >
@@ -1263,8 +1273,12 @@ const TasksWorkspace: React.FC = () => {
                     value={currentTask.assignedTo}
                     disabled={!canAssignOthers}
                     onChange={(e) => {
-                      updateTaskAssignee(currentTask.id, e.target.value);
-                      void persistQuickChange(currentTask, 'assignedTo');
+                      const localResult = updateTaskAssignee(currentTask.id, e.target.value);
+                      if (!localResult.ok) {
+                        setQuickSyncError(String(t(localResult.error || 'Unable to update the task assignee.')));
+                        return;
+                      }
+                      void persistQuickChange(currentTask);
                       setActiveQuickEdit(null);
                     }}
                   >

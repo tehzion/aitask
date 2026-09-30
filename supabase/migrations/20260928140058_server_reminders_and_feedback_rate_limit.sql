@@ -190,12 +190,6 @@ begin
 
     if v_due_date not between v_today and v_today + 1 then continue; end if;
 
-    insert into public.aitask_task_deadline_reminders(workspace_id, task_id, due_date)
-    values (p_workspace_id, v_task.task_id, v_due_date)
-    on conflict (workspace_id, task_id, due_date, reminder_type) do nothing;
-    get diagnostics v_claimed = row_count;
-    if v_claimed = 0 then continue; end if;
-
     v_assignee := v_task.assigned_to;
     v_title := left(coalesce(v_task.data ->> 'title', 'Task'), 160);
     -- Keep the full canonical client name for ownership matching; truncate only
@@ -232,6 +226,17 @@ begin
           )
         )
     loop
+      -- Claim only after an eligible recipient exists. Claiming before this
+      -- loop would permanently suppress the reminder when a task had no
+      -- eligible internal recipient at the time the cron job ran.
+      if v_claimed = 0 then
+        insert into public.aitask_task_deadline_reminders(workspace_id, task_id, due_date)
+        values (p_workspace_id, v_task.task_id, v_due_date)
+        on conflict (workspace_id, task_id, due_date, reminder_type) do nothing;
+        get diagnostics v_claimed = row_count;
+        if v_claimed = 0 then exit; end if;
+      end if;
+
       v_notification_id := 'N-reminder-' || v_task.task_id || '-' || to_char(v_due_date, 'YYYYMMDD') || '-' || v_recipient.id;
       insert into public.aitask_entities(
         workspace_id,
@@ -264,6 +269,7 @@ begin
       on conflict (workspace_id, entity_type, entity_id) do nothing;
       v_generated := v_generated + 1;
     end loop;
+    v_claimed := 0;
   end loop;
 
   return v_generated;

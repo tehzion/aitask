@@ -1,9 +1,10 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import ModalShell from './ModalShell';
+import BackendFreshness from './BackendFreshness';
 import { Button } from './ui';
 import { inputBase, modalFooter } from './uiTokens';
-import { useStore } from '../store';
+import { isPendingMutationResolution, useStore } from '../store';
 import { useToastStore } from '../store/useToastStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useI18n } from './I18nProvider';
@@ -29,6 +30,7 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
   const [contractEndDate, setContractEndDate] = React.useState(plan.contractEndDate || '');
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const pendingResolution = isPendingMutationResolution(backend);
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -101,10 +103,15 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
             onChange={event => setContractEndDate(event.target.value)}
           />
         </label>
-        {error && <p className="rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert">{error}</p>}
+        {(error || pendingResolution) && (
+          <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
+            <p>{error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+            {pendingResolution && <BackendFreshness compact className="mt-3" />}
+          </div>
+        )}
         <div className={modalFooter}>
           <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>{t('Cancel')}</Button>
-          <Button type="submit" disabled={saving || backend.isSaving || backend.isPulling}>{saving ? t('Saving…') : t('Save dates')}</Button>
+          <Button type="submit" disabled={saving || pendingResolution || backend.isSaving || backend.isPulling}>{saving ? t('Saving…') : t('Save dates')}</Button>
         </div>
       </form>
     </ModalShell>

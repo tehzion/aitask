@@ -42,7 +42,7 @@ import {
   LOCAL_SERVICE_DEMO_VERSION_KEY,
 } from '../mock/localServiceDemo';
 import { canLoginWithSeedAccount, classifyLoginFailure, DEFAULT_USER_PASSWORD, loginFailure, shouldShowDemoLogin } from '../lib/auth';
-import { msg } from '../lib/messages';
+import { msg, type MessageDescriptor } from '../lib/messages';
 import { clearLocalUserPassword, getLocalUserPassword, setLocalUserPassword, verifyLocalUserPassword } from '../lib/localCredentials';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
 import {
@@ -143,6 +143,7 @@ import {
   resolveDeliverableStatus,
   SHORT_VIDEO_WORKFLOW_TEMPLATE,
 } from '../lib/serviceManagement';
+import { cleanupPendingServiceFiles, clearPendingServiceFiles } from '../lib/serviceFiles';
 
 export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required' | 'upgrade_required';
 
@@ -273,6 +274,8 @@ const ensureBuiltinRoleTemplate = (roles: CustomRole[] = []) => {
   return [...missing.map(makeBuiltinRole), ...normalized];
 };
 
+type MutationActionResult = { ok: boolean; error?: string | MessageDescriptor };
+
 interface StoreState {
   currentUser: User | null;
   users: User[];
@@ -322,15 +325,15 @@ interface StoreState {
   updateCurrentUserProfile: (data: Pick<User, 'name' | 'email' | 'avatar'>) => { ok: boolean; error?: string };
   updateCurrentUserEmail: (email: string, currentPassword: string) => Promise<{ ok: boolean; error?: string }>;
   updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
-  updateTaskStatus: (taskId: string, status: TaskStatus) => void;
-  updateTaskPriority: (taskId: string, priority: Priority) => void;
-  updateTaskAssignee: (taskId: string, assignedTo: string) => void;
-  updateTaskDueDate: (taskId: string, newDueDate: string) => void;
-  updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => void;
+  updateTaskStatus: (taskId: string, status: TaskStatus) => MutationActionResult;
+  updateTaskPriority: (taskId: string, priority: Priority) => MutationActionResult;
+  updateTaskAssignee: (taskId: string, assignedTo: string) => MutationActionResult;
+  updateTaskDueDate: (taskId: string, newDueDate: string) => MutationActionResult;
+  updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => MutationActionResult;
   updateTask: (taskId: string, data: TaskUpdateInput) => { ok: boolean; error?: string };
   deleteTask: (taskId: string) => { ok: boolean; error?: string };
-  reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => void;
-  requestRevision: (taskId: string, note?: string) => void;
+  reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => MutationActionResult;
+  requestRevision: (taskId: string, note?: string) => MutationActionResult;
   addTask: (task: Omit<Task, 'id' | 'isCompleted' | 'completedAt' | 'revisionCount' | 'clientApprovalStatus' | 'dueReminderSent' | 'approvalHistory'>) => string;
   addProject: (project: Omit<Project, 'id' | 'totalTasks' | 'completedTasks'>) => string;
   updateProject: (projectId: string, data: ProjectUpdateInput) => { ok: boolean; error?: string };
@@ -374,7 +377,7 @@ interface StoreState {
   assignCustomRoleToUser: (userId: string, customRoleId?: string) => { ok: boolean; error?: string };
   changeMemberRole: (userId: string, role: Role, options?: { customRoleId?: string; companyName?: string; departments?: Department[] }) => Promise<{ ok: boolean; error?: string }>;
   approveRegistration: (id: string, role: Role, departments: Department[], companyName?: string, customRoleId?: string) => { ok: boolean; error?: string };
-  rejectRegistration: (id: string) => void;
+  rejectRegistration: (id: string) => MutationActionResult;
   deleteUser: (userId: string) => Promise<{ ok: boolean; error?: string }>;
   _forceSyncMockData: () => void;
   resetLocalServiceDemo: () => { ok: boolean; error?: string };
@@ -384,15 +387,33 @@ interface StoreState {
 
 const nowId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const pendingMutationMessage = 'Changes are temporarily unavailable while AiTask resolves a pending save or completes a system update.';
+export const isPendingMutationResolution = (backend: {
+  status: SyncStatus;
+  upgradeRequired?: boolean;
+  hasLocalChanges: boolean;
+  pendingMutations: number;
+}) => (
+  !backend.upgradeRequired
+  && (
+    backend.status === 'conflict'
+    || backend.status === 'retry_required'
+    || (backend.status === 'offline' && (backend.hasLocalChanges || backend.pendingMutations > 0))
+  )
+);
+const hasRetainedSecureMutation = () => (
+  shouldUseSecureSupabase()
+  && Boolean(getRetainedSecureCommand() || getRetainedSecureMemberMutation())
+);
 const isWorkspaceMutationLocked = (state: StoreState) => (
   shouldUseSecureSupabase()
   && (
     state.backend.upgradeRequired === true
-    || (
-      state.backend.pendingMutations > 0
-      && ['offline', 'conflict', 'retry_required'].includes(state.backend.status)
-    )
+    || hasRetainedSecureMutation()
+    || isPendingMutationResolution(state.backend)
   )
+);
+const isTerminalMemberMutationError = (code?: MutationErrorCode) => (
+  code === 'VALIDATION' || code === 'FORBIDDEN' || code === 'NOT_FOUND'
 );
 const isSyncBusy = (state: StoreState) => state.backend.isSaving || state.backend.isPulling;
 const isPullBlockedByPendingChange = (state: StoreState) => (
@@ -1437,7 +1458,10 @@ export const useStore = create<StoreState>()(
               },
             }));
             if (hasChangesAfterSave) queueMicrotask(() => void get().syncBackendNow(pendingCommandType));
-            else if (hadRemoteUpdate) await get().pullBackendNow({ force: true, silent: true });
+            else {
+              clearPendingServiceFiles();
+              if (hadRemoteUpdate) await get().pullBackendNow({ force: true, silent: true });
+            }
             return;
           }
 
@@ -1509,6 +1533,7 @@ export const useStore = create<StoreState>()(
               message: result.message,
             }
           }));
+          clearPendingServiceFiles();
         } catch (error) {
           set((state) => ({
             backend: {
@@ -1847,11 +1872,21 @@ export const useStore = create<StoreState>()(
           }));
           const result = await retryRetainedSecureMemberMutation(targetUser);
           if (result.ok === false) {
+            const terminal = isTerminalMemberMutationError(result.code);
             set((state) => ({
               backend: {
                 ...state.backend,
-                status: result.code === 'CONFLICT' ? 'conflict' : result.code === 'OFFLINE' ? 'offline' : 'retry_required',
+                status: terminal
+                  ? 'live'
+                  : result.code === 'CONFLICT'
+                    ? 'conflict'
+                    : result.code === 'OFFLINE'
+                      ? 'offline'
+                      : 'retry_required',
                 isSaving: false,
+                hasLocalChanges: terminal ? false : state.backend.hasLocalChanges,
+                pendingMutations: terminal ? 0 : Math.max(1, state.backend.pendingMutations),
+                pendingCommandType: terminal ? undefined : state.backend.pendingCommandType,
                 conflict: result.conflict,
                 error: result.error,
                 message: result.error,
@@ -1862,6 +1897,11 @@ export const useStore = create<StoreState>()(
 
           const updatedAt = result.data.member?.updated_at || new Date().toISOString();
           const version = Number(result.data.member?.version) || Math.max(1, Number(targetUser.version) || 1) + 1;
+          const roleMember = retainedMemberMutation.kind === 'role'
+            && result.data.member
+            && 'role' in result.data.member
+            ? result.data.member
+            : undefined;
           set((state) => ({
             users: state.users.map(user => user.id === targetUser.id
               ? retainedMemberMutation.kind === 'departments'
@@ -1872,7 +1912,20 @@ export const useStore = create<StoreState>()(
                     version,
                     updatedAt,
                   }
-                : { ...user, permissions: retainedMemberMutation.permissions || undefined, version, updatedAt }
+                : retainedMemberMutation.kind === 'permissions'
+                  ? { ...user, permissions: retainedMemberMutation.permissions || undefined, version, updatedAt }
+                  : {
+                      ...user,
+                      role: roleMember?.role ?? retainedMemberMutation.role,
+                      customRoleId: roleMember?.customRoleId ?? retainedMemberMutation.customRoleId ?? undefined,
+                      customRoleName: roleMember?.customRoleName ?? user.customRoleName,
+                      companyName: roleMember?.clientName ?? retainedMemberMutation.companyName ?? undefined,
+                      departments: roleMember?.departments ?? retainedMemberMutation.departments,
+                      department: roleMember?.department ?? getLegacyDepartmentMirror(retainedMemberMutation.role, retainedMemberMutation.departments),
+                      permissions: undefined,
+                      version,
+                      updatedAt,
+                    }
               : user),
             backend: {
               ...state.backend,
@@ -1891,6 +1944,7 @@ export const useStore = create<StoreState>()(
               message: 'Saved.',
             },
           }));
+          clearPendingServiceFiles();
           return { ok: true };
         }
         if (shouldUseSecureSupabase()) {
@@ -1977,6 +2031,7 @@ export const useStore = create<StoreState>()(
             message: 'Saved.',
           },
         }));
+        clearPendingServiceFiles();
         await get().pullBackendNow({ force: true, silent: true });
         return { ok: true };
       },
@@ -1984,6 +2039,7 @@ export const useStore = create<StoreState>()(
       discardMutation: async (options = {}) => {
         discardSecureWorkspaceCommand();
         discardRetainedSecureMemberMutation();
+        await cleanupPendingServiceFiles();
         set((state) => ({
           backend: {
             ...state.backend,
@@ -2034,6 +2090,9 @@ export const useStore = create<StoreState>()(
         const before = get().backend;
         if (before.status === 'upgrade_required') {
           return { ok: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE };
+        }
+        if (hasRetainedSecureMutation()) {
+          return { ok: false, error: pendingMutationMessage };
         }
         if (
           before.hasLocalChanges &&
@@ -2518,15 +2577,25 @@ export const useStore = create<StoreState>()(
         isApplyingNotificationRead = false;
       },
 
-      updateTaskStatus: (taskId, status) => set((state) => {
-        if (isWorkspaceMutationLocked(state)) return state;
+      updateTaskStatus: (taskId, status) => {
+        let result: MutationActionResult = { ok: false, error: 'Unable to update the task status.' };
+        set((state) => {
+        if (isWorkspaceMutationLocked(state)) {
+          useToastStore.getState().addToast(pendingMutationMessage, 'warning');
+          result = { ok: false, error: pendingMutationMessage };
+          return state;
+        }
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
-        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
+        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+          result = { ok: false, error: 'You do not have permission to edit this task.' };
+          return state;
+        }
 
         const nextStatus = resolveTaskStatus(status, state.taskStatuses);
         if (!nextStatus) {
           useToastStore.getState().addToast(msg('task.statusRequired'), 'warning');
+          result = { ok: false, error: 'Choose a valid task status.' };
           return state;
         }
 
@@ -2601,20 +2670,33 @@ export const useStore = create<StoreState>()(
           }
         }
 
+        result = { ok: true };
         return {
           tasks: newTasks,
           notifications: [...newNotifs, ...(state.notifications || [])],
           ...deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles),
         };
-      }),
+        });
+        return result;
+      },
 
-      updateTaskPriority: (taskId, priority) => set((state) => {
-        if (isWorkspaceMutationLocked(state)) return state;
+      updateTaskPriority: (taskId, priority) => {
+        let result: MutationActionResult = { ok: false, error: 'Unable to update the task priority.' };
+        set((state) => {
+        if (isWorkspaceMutationLocked(state)) {
+          useToastStore.getState().addToast(pendingMutationMessage, 'warning');
+          result = { ok: false, error: pendingMutationMessage };
+          return state;
+        }
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
-        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
+        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+          result = { ok: false, error: 'You do not have permission to edit this task.' };
+          return state;
+        }
         if (!allowedPriorities.has(priority)) {
           useToastStore.getState().addToast(msg('task.priorityRequired'), 'warning');
+          result = { ok: false, error: 'Choose a valid priority.' };
           return state;
         }
 
@@ -2625,21 +2707,43 @@ export const useStore = create<StoreState>()(
 
         useToastStore.getState().addToast(msg('task.priorityUpdated', { priority }), 'success');
 
+        result = { ok: true };
         return { tasks: newTasks };
-      }),
+        });
+        return result;
+      },
 
-      updateTaskAssignee: (taskId, assignedTo) => set((state) => {
-        if (isWorkspaceMutationLocked(state)) return state;
+      updateTaskAssignee: (taskId, assignedTo) => {
+        let result: MutationActionResult = { ok: false, error: 'Unable to update the task assignee.' };
+        set((state) => {
+        if (isWorkspaceMutationLocked(state)) {
+          useToastStore.getState().addToast(pendingMutationMessage, 'warning');
+          result = { ok: false, error: pendingMutationMessage };
+          return state;
+        }
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
-        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
-        if (assignedTo === task.assignedTo) return state;
-        if (!canAssignTasksToOthers(currentUser, state.rolePermissions, task, { clients: state.clients, projects: state.projects })) return state;
+        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+          result = { ok: false, error: 'You do not have permission to edit this task.' };
+          return state;
+        }
+        if (assignedTo === task.assignedTo) {
+          result = { ok: true };
+          return state;
+        }
+        if (!canAssignTasksToOthers(currentUser, state.rolePermissions, task, { clients: state.clients, projects: state.projects })) {
+          result = { ok: false, error: 'You do not have permission to reassign this task.' };
+          return state;
+        }
 
         const assigneeUser = assignedTo ? state.users.find(u => u.id === assignedTo && u.role !== 'Client') : undefined;
-        if (assignedTo && !assigneeUser) return state;
+        if (assignedTo && !assigneeUser) {
+          result = { ok: false, error: 'Choose a valid internal assignee.' };
+          return state;
+        }
         if (assigneeUser && !isMemberInDepartment(assigneeUser, task.department)) {
           useToastStore.getState().addToast(msg('errors.assigneeDepartment', { name: assigneeUser.name, department: task.department }), 'warning');
+          result = { ok: false, error: `${assigneeUser.name} is not in the ${task.department} department.` };
           return state;
         }
 
@@ -2662,24 +2766,40 @@ export const useStore = create<StoreState>()(
 
         useToastStore.getState().addToast(assigneeUser ? msg('task.assignedTo', { name: assigneeUser.name }) : msg('task.unassigned'), 'success');
 
+        result = { ok: true };
         return {
           tasks: newTasks,
           notifications: [...newNotifs, ...(state.notifications || [])]
         };
-      }),
+        });
+        return result;
+      },
 
-      updateTaskAttachment: (taskId, attachmentLink, attachmentName) => set((state) => {
-        if (isWorkspaceMutationLocked(state)) return state;
+      updateTaskAttachment: (taskId, attachmentLink, attachmentName) => {
+        let result: MutationActionResult = { ok: false, error: 'Unable to update the task attachment.' };
+        set((state) => {
+        if (isWorkspaceMutationLocked(state)) {
+          useToastStore.getState().addToast(pendingMutationMessage, 'warning');
+          result = { ok: false, error: pendingMutationMessage };
+          return state;
+        }
         const task = state.tasks.find(t => t.id === taskId);
-        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
+        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+          result = { ok: false, error: 'You do not have permission to edit this task.' };
+          return state;
+        }
 
         // Validate that the attachment link is a safe http(s) URL
         const trimmedLink = attachmentLink.trim();
         const validatedLink = trimmedLink ? safeHttpsUrl(trimmedLink) : null;
-        if (trimmedLink && !validatedLink) return state;
+        if (trimmedLink && !validatedLink) {
+          result = { ok: false, error: 'Enter a valid https:// link for the attachment.' };
+          return state;
+        }
 
         useToastStore.getState().addToast(msg('task.attachmentUpdated'), 'success');
 
+        result = { ok: true };
         return {
           tasks: state.tasks.map(task =>
             task.id === taskId
@@ -2692,32 +2812,48 @@ export const useStore = create<StoreState>()(
               : task
           )
         };
-      }),
+        });
+        return result;
+      },
 
-      updateTaskDueDate: (taskId, newDueDate) => set((state) => {
-        if (isWorkspaceMutationLocked(state)) return state;
+      updateTaskDueDate: (taskId, newDueDate) => {
+        let result: MutationActionResult = { ok: false, error: 'Unable to update the due date.' };
+        set((state) => {
+        if (isWorkspaceMutationLocked(state)) {
+          useToastStore.getState().addToast(pendingMutationMessage, 'warning');
+          result = { ok: false, error: pendingMutationMessage };
+          return state;
+        }
         const task = state.tasks.find(t => t.id === taskId);
-        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
+        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+          result = { ok: false, error: 'You do not have permission to edit this task.' };
+          return state;
+        }
         const nextDueDate = normalizeOptionalIsoDate(newDueDate);
 
         if (nextDueDate && !isValidIsoDate(nextDueDate)) {
           useToastStore.getState().addToast(msg('task.dueDateRequired'), 'warning');
+          result = { ok: false, error: 'Enter a valid due date.' };
           return state;
         }
 
         if (nextDueDate && isValidIsoDate(task.startDate) && new Date(nextDueDate) < new Date(task.startDate)) {
           useToastStore.getState().addToast(msg('task.dueDateOrder'), 'warning');
+          result = { ok: false, error: 'The due date cannot be earlier than the start date.' };
           return state;
         }
 
         useToastStore.getState().addToast(nextDueDate ? `Due date updated to ${nextDueDate}` : 'Due date cleared', 'success');
 
+        result = { ok: true };
         return {
           tasks: state.tasks.map(t =>
             t.id === taskId ? { ...t, dueDate: nextDueDate, dueReminderSent: false, updatedAt: new Date().toISOString() } : t
           ),
         };
-      }),
+        });
+        return result;
+      },
 
       updateTask: (taskId, data) => {
         const state = get();
@@ -2935,12 +3071,24 @@ export const useStore = create<StoreState>()(
         return { ok: true };
       },
 
-      reviewClientApproval: (taskId, status, note) => set((state) => {
-        if (isWorkspaceMutationLocked(state)) return state;
-        if (status !== 'Approved' && status !== 'Rejected') return state;
+      reviewClientApproval: (taskId, status, note) => {
+        let result: MutationActionResult = { ok: false, error: 'Unable to review this task.' };
+        set((state) => {
+        if (isWorkspaceMutationLocked(state)) {
+          useToastStore.getState().addToast(pendingMutationMessage, 'warning');
+          result = { ok: false, error: pendingMutationMessage };
+          return state;
+        }
+        if (status !== 'Approved' && status !== 'Rejected') {
+          result = { ok: false, error: 'Choose an approval decision.' };
+          return state;
+        }
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canReviewTaskAsClient(currentUser, task, state.rolePermissions)) return state;
+        if (!currentUser || !task || !canReviewTaskAsClient(currentUser, task, state.rolePermissions)) {
+          result = { ok: false, error: 'You do not have permission to review this task.' };
+          return state;
+        }
 
         const now = new Date().toISOString();
         const event: TaskApprovalEvent = {
@@ -3004,18 +3152,30 @@ export const useStore = create<StoreState>()(
           status === 'Approved' ? 'success' : 'warning'
         );
 
+        result = { ok: true };
         return {
           tasks: newTasks,
           notifications: [...notifications, ...(state.notifications || [])],
           ...deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles),
         };
-      }),
+        });
+        return result;
+      },
 
-      requestRevision: (taskId, note) => set((state) => {
-        if (isWorkspaceMutationLocked(state)) return state;
+      requestRevision: (taskId, note) => {
+        let result: MutationActionResult = { ok: false, error: 'Unable to request a revision.' };
+        set((state) => {
+        if (isWorkspaceMutationLocked(state)) {
+          useToastStore.getState().addToast(pendingMutationMessage, 'warning');
+          result = { ok: false, error: pendingMutationMessage };
+          return state;
+        }
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return state;
+        if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+          result = { ok: false, error: 'You do not have permission to request a revision.' };
+          return state;
+        }
 
         const revisionComment: TaskComment | null = note?.trim()
           ? {
@@ -3052,6 +3212,7 @@ export const useStore = create<StoreState>()(
           iconType: 'alert'
         });
 
+        result = { ok: true };
         return {
           tasks: newTasks,
           notifications: [
@@ -3060,7 +3221,9 @@ export const useStore = create<StoreState>()(
           ],
           ...deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles),
         };
-      }),
+        });
+        return result;
+      },
 
       addTask: (taskData) => {
         const state = get();
@@ -4801,14 +4964,25 @@ export const useStore = create<StoreState>()(
             departments,
           });
           if (result.ok === false) {
+            const terminal = isTerminalMemberMutationError(result.code);
+            const hasRetainedMutation = Boolean(getRetainedSecureMemberMutation());
             set(current => ({
               backend: {
                 ...current.backend,
-                status: result.code === 'CONFLICT' ? 'conflict' : result.code === 'OFFLINE' ? 'offline' : result.code === 'VALIDATION' ? previousStatus : 'retry_required',
+                status: terminal
+                  ? previousStatus
+                  : result.code === 'CONFLICT'
+                    ? 'conflict'
+                    : result.code === 'OFFLINE'
+                      ? 'offline'
+                      : 'retry_required',
                 isSaving: false,
-                error: result.code === 'VALIDATION' ? undefined : result.error,
+                pendingMutations: hasRetainedMutation
+                  ? Math.max(1, current.backend.pendingMutations)
+                  : current.backend.pendingMutations,
+                error: terminal ? undefined : result.error,
                 conflict: result.conflict,
-                message: result.code === 'VALIDATION' ? current.backend.message : result.error,
+                message: terminal ? current.backend.message : result.error,
               },
             }));
             return { ok: false, error: result.error };
@@ -4901,6 +5075,7 @@ export const useStore = create<StoreState>()(
         }
 
         if (shouldUseSecureSupabase()) {
+          const previousStatus = state.backend.status;
           set(current => ({
             backend: {
               ...current.backend,
@@ -4912,18 +5087,25 @@ export const useStore = create<StoreState>()(
           }));
           const result = await saveSecureMemberDepartments(targetUser, departments);
           if (result.ok === false) {
+            const terminal = isTerminalMemberMutationError(result.code);
+            const hasRetainedMutation = Boolean(getRetainedSecureMemberMutation());
             set(current => ({
               backend: {
                 ...current.backend,
-                status: result.code === 'CONFLICT'
-                  ? 'conflict'
-                  : result.code === 'OFFLINE'
-                    ? 'offline'
-                    : 'retry_required',
+                status: terminal
+                  ? previousStatus
+                  : result.code === 'CONFLICT'
+                    ? 'conflict'
+                    : result.code === 'OFFLINE'
+                      ? 'offline'
+                      : 'retry_required',
                 isSaving: false,
-                error: result.error,
+                pendingMutations: hasRetainedMutation
+                  ? Math.max(1, current.backend.pendingMutations)
+                  : current.backend.pendingMutations,
+                error: terminal ? undefined : result.error,
                 conflict: result.conflict,
-                message: result.error,
+                message: terminal ? current.backend.message : result.error,
               },
             }));
             return { ok: false, error: result.error };
@@ -4997,6 +5179,7 @@ export const useStore = create<StoreState>()(
         }
 
         if (shouldUseSecureSupabase()) {
+          const previousStatus = state.backend.status;
           set(current => ({
             backend: {
               ...current.backend,
@@ -5008,16 +5191,23 @@ export const useStore = create<StoreState>()(
           }));
           const result = await saveSecureMemberPermissions(targetUser, permissions || null);
           if (result.ok === false) {
+            const terminal = isTerminalMemberMutationError(result.code);
+            const hasRetainedMutation = Boolean(getRetainedSecureMemberMutation());
             set(current => ({
               backend: {
                 ...current.backend,
-                status: result.code === 'CONFLICT'
-                  ? 'conflict'
-                  : result.code === 'OFFLINE'
-                    ? 'offline'
-                    : 'retry_required',
+                status: terminal
+                  ? previousStatus
+                  : result.code === 'CONFLICT'
+                    ? 'conflict'
+                    : result.code === 'OFFLINE'
+                      ? 'offline'
+                      : 'retry_required',
                 isSaving: false,
-                error: result.error,
+                pendingMutations: hasRetainedMutation
+                  ? Math.max(1, current.backend.pendingMutations)
+                  : current.backend.pendingMutations,
+                error: terminal ? undefined : result.error,
                 conflict: result.conflict,
                 message: result.error,
               },
@@ -5119,14 +5309,34 @@ export const useStore = create<StoreState>()(
         return { ok: true };
       },
 
-      rejectRegistration: (id) => set((state) => {
-        if (isWorkspaceMutationLocked(state)) return state;
+      rejectRegistration: (id) => {
+        let result: MutationActionResult = { ok: false, error: 'Unable to reject this registration.' };
+        set((state) => {
+        if (isWorkspaceMutationLocked(state)) {
+          useToastStore.getState().addToast(pendingMutationMessage, 'warning');
+          result = { ok: false, error: pendingMutationMessage };
+          return state;
+        }
+        if (!canApproveRegistrations(state.currentUser, state.rolePermissions)) {
+          result = { ok: false, error: 'Only Boss Koo can reject registrations.' };
+          return state;
+        }
+        const registration = state.registrations.find(item => item.id === id);
+        if (!registration) {
+          result = { ok: false, error: 'Registration not found.' };
+          return state;
+        }
+        if (registration.status !== 'Pending') {
+          result = { ok: false, error: 'This registration has already been reviewed.' };
+          return state;
+        }
+        result = { ok: true };
         return {
-          registrations: canApproveRegistrations(state.currentUser, state.rolePermissions)
-            ? state.registrations.map(r => r.id === id ? { ...r, status: 'Rejected' } : r)
-            : state.registrations
+          registrations: state.registrations.map(r => r.id === id ? { ...r, status: 'Rejected' } : r)
         };
-      }),
+        });
+        return result;
+      },
 
       deleteUser: async (userId) => {
         const state = get();

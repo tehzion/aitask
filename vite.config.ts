@@ -106,6 +106,11 @@ export default defineConfig(({ mode }) => {
           // Reports are lazy-loaded; keep the chart renderer isolated from the
           // authenticated shell and report tables.
           reportsCharts: ['recharts'],
+          // Keep the state and localization runtimes out of the entry chunk.
+          // They are shared by routes, but do not need to be duplicated into
+          // each page chunk.
+          workspaceStore: ['./src/store/index.ts'],
+          workspaceI18n: ['./src/lib/i18n.ts'],
         },
       },
     },

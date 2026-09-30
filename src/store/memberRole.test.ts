@@ -16,6 +16,7 @@ vi.mock('../lib/supabaseClient', () => ({
 
 import { useStore } from './index';
 import type { Department, User } from '../types';
+import { defaultRolePermissions, getEffectivePermissions } from '../lib/access';
 
 const initialState = useStore.getState();
 
@@ -115,5 +116,39 @@ describe('member role assignment', () => {
     expect(rpc).toHaveBeenCalledWith('aitask_update_member_role', expect.objectContaining({ p_role: 'HOD', p_custom_role_id: null }));
     expect(useStore.getState().users.find(user => user.id === 'u-target')?.role).toBe('HOD');
     expect(useStore.getState().users.find(user => user.id === 'u-target')?.customRoleId).toBeUndefined();
+  });
+
+  it('clears stale member overrides so effective permissions follow the new role', async () => {
+    const staffOverride = {
+      ...defaultRolePermissions.Staff,
+      viewAllTasks: true,
+      manageServiceCatalog: true,
+    };
+    useStore.setState({
+      users: [boss, { ...target, permissions: staffOverride }],
+    });
+    expect(getEffectivePermissions(useStore.getState().users[1], useStore.getState().rolePermissions).viewAllTasks).toBe(true);
+
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        commandId: 'cmd-permissions-reset',
+        workspaceVersion: 15,
+        member: {
+          id: 'u-target', role: 'HOD', customRoleId: null, customRoleName: null,
+          clientName: null, departments: ['Designer'], department: 'Designer', version: 7, updated_at: '2026-09-18T00:00:00Z',
+        },
+      },
+      error: null,
+    });
+
+    const result = await useStore.getState().changeMemberRole('u-target', 'HOD');
+    expect(result.ok).toBe(true);
+
+    const updated = useStore.getState().users.find(user => user.id === 'u-target');
+    expect(updated?.permissions).toBeUndefined();
+    expect(getEffectivePermissions(updated, useStore.getState().rolePermissions).viewAllTasks).toBe(false);
+    expect(getEffectivePermissions(updated, useStore.getState().rolePermissions).manageServiceCatalog).toBe(false);
+    expect(getEffectivePermissions(updated, useStore.getState().rolePermissions).createTasks).toBe(true);
   });
 });

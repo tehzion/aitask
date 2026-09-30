@@ -2,13 +2,14 @@ import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock3, ExternalLink, FileText, History, MessageSquare, Send, UsersRound } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task, TaskStatus } from '../types';
-import { useStore } from '../store';
+import { isPendingMutationResolution, useStore } from '../store';
 import { getStaffGuidedAction } from '../lib/staffWorkspace';
 import { safeHttpsUrl } from '../lib/security';
 import { getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { inputBase } from './uiTokens';
 import { Button, ProgressBar, StatusChip } from './ui';
 import SideSheet from './SideSheet';
+import BackendFreshness from './BackendFreshness';
 import { useI18n } from './I18nProvider';
 import { formatLocalizedDate, formatLocalizedDistanceToNow } from '../lib/i18n';
 import { getTaskAccess } from '../lib/access';
@@ -77,7 +78,8 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   const cycle = serviceCycles.find(item => item.id === liveTask.serviceCycleId);
   const dueDate = parseOptionalDate(liveTask.dueDate);
   const attachment = safeHttpsUrl(liveTask.attachmentLink);
-  const mutationLocked = backend.upgradeRequired === true || backend.isSaving || backend.isPulling;
+  const pendingResolution = isPendingMutationResolution(backend);
+  const mutationLocked = backend.upgradeRequired === true || pendingResolution || backend.isSaving || backend.isPulling;
   const taskAccess = getTaskAccess(currentUser, liveTask, rolePermissions, { clients, projects });
   if (!taskAccess.canView) return null;
   const canEdit = taskAccess.canEdit;
@@ -91,7 +93,12 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
     }
     setIsSaving(true);
     setError('');
-    updateTaskStatus(liveTask.id, status);
+    const localResult = updateTaskStatus(liveTask.id, status);
+    if (!localResult.ok) {
+      setIsSaving(false);
+      setError(String(t(localResult.error || 'Unable to update the task status.')));
+      return;
+    }
     const result = await commitPendingMutation('task.update');
     setIsSaving(false);
     if (!result.ok) setError(result.error || t('This update is waiting to sync. Use the workspace retry controls to continue.'));
@@ -172,7 +179,12 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
             </div>
           </section>
         )}
-        {error && <div role="alert" aria-live="assertive" className="rounded-control bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200">{error}</div>}
+        {(error || pendingResolution) && (
+          <div role="alert" aria-live="assertive" className="rounded-control bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200">
+            <p>{error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+            {pendingResolution && <BackendFreshness compact className="mt-3" />}
+          </div>
+        )}
 
         <section aria-labelledby="staff-task-state" className="calm-raised p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">

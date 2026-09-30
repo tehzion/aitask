@@ -2,9 +2,10 @@ import React from 'react';
 import { ArrowRight, Building2, Check, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import ModalShell from './ModalShell';
+import BackendFreshness from './BackendFreshness';
 import { Button } from './ui';
 import { inputBase, modalFooter } from './uiTokens';
-import { useStore } from '../store';
+import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { useI18n } from './I18nProvider';
 
@@ -32,6 +33,7 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
   const [createdClientId, setCreatedClientId] = React.useState('');
   const syncBusy = backend.isSaving || backend.isPulling;
   const busy = saving || syncBusy;
+  const pendingResolution = isPendingMutationResolution(backend);
 
   const update = (key: keyof typeof form, value: string) => {
     setForm(current => ({ ...current, [key]: value }));
@@ -139,7 +141,12 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
             <label className="text-sm font-medium text-ink">{t('Facebook page')}<input disabled={Boolean(pendingClientId)} type="url" placeholder="https://" className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.facebookPage} onChange={event => update('facebookPage', event.target.value)} /></label>
             <label className="text-sm font-medium text-ink md:col-span-2">{t('Notes')}<textarea disabled={Boolean(pendingClientId)} rows={4} className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.notes} onChange={event => update('notes', event.target.value)} /></label>
           </div>
-          {error && <p className="mt-5 rounded-control border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert">{error}</p>}
+          {(error || pendingResolution) && (
+            <div className="mt-5 rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
+              <p>{error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+              {pendingResolution && <BackendFreshness compact className="mt-3" />}
+            </div>
+          )}
           {pendingClientId && error && (
             <button
               type="button"
@@ -152,7 +159,7 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
           )}
           <div className={modalFooter}>
             <Button type="button" variant="secondary" onClick={onClose}>{t('Cancel')}</Button>
-            <Button type="submit" disabled={busy}>{saving ? t('Saving…') : syncBusy && pendingClientId ? t('Waiting for sync…') : pendingClientId ? t('Retry save') : t('Save client')}</Button>
+            <Button type="submit" disabled={busy || pendingResolution}>{saving ? t('Saving…') : syncBusy && pendingClientId ? t('Waiting for sync…') : pendingClientId ? t('Retry save') : t('Save client')}</Button>
           </div>
         </form>
       )}

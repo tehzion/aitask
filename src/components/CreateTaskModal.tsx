@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useStore } from '../store';
+import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { X, Plus, ChevronDown } from 'lucide-react';
 import { Department, Priority, ServiceType, TaskVisibility } from '../types';
@@ -11,6 +11,7 @@ import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
 import { getMemberDepartments, isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
 import ModalShell from './ModalShell';
+import BackendFreshness from './BackendFreshness';
 import { modalFooter } from './uiTokens';
 import { useI18n } from './I18nProvider';
 
@@ -24,7 +25,7 @@ const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const { t } = useI18n();
-  const { users, clients, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, retryPendingSave, discardMutation } = useStore(useShallow(state => ({
+  const { users, clients, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, retryPendingSave, discardMutation, backend } = useStore(useShallow(state => ({
     users: state.users,
     clients: state.clients,
     currentUser: state.currentUser,
@@ -41,6 +42,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     rolePermissions: state.rolePermissions,
     retryPendingSave: state.retryPendingSave,
     discardMutation: state.discardMutation,
+    backend: state.backend,
   })));
   const navigate = useNavigate();
   const titleId = React.useId();
@@ -81,6 +83,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingTaskId, setPendingTaskId] = useState('');
+  const pendingResolution = isPendingMutationResolution(backend);
 
   const canCreateProjects = canManageProjects(currentUser, rolePermissions);
   const isStaffTaskCreator = currentUser?.role === 'Staff' || currentUser?.role === 'HOD';
@@ -727,9 +730,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               </div>
             </div>
 
-            {formError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
-                {formError}
+            {(formError || pendingResolution) && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
+                <p>{formError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+                {pendingResolution && <BackendFreshness compact className="mt-3" />}
               </div>
             )}
           </form>
@@ -747,7 +751,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
           <button 
             type="submit"
             form="create-task-form"
-            disabled={isSubmitting}
+            disabled={isSubmitting || pendingResolution}
             className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? t('Saving task...') : pendingTaskId ? t('Retry saving task') : t('Create & open task')}

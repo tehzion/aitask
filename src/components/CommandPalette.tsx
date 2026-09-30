@@ -9,6 +9,7 @@ import { useColorTheme } from '../hooks/useColorTheme';
 import { useI18n } from './I18nProvider';
 import { cn } from '../lib/utils';
 import { getDeliveryWorkspaceLabel } from '../lib/navigation';
+import { useImeSafeInput } from '../hooks/useImeSafeInput';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -33,15 +34,17 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onOpen
   const { resolvedTheme, toggleTheme } = useColorTheme();
   const { t, toggleLocale } = useI18n();
   const [query, setQuery] = React.useState('');
+  const queryInput = useImeSafeInput(query, setQuery);
+  const resetQuery = queryInput.commit;
   const [activeIndex, setActiveIndex] = React.useState(0);
   const titleId = React.useId();
 
   React.useEffect(() => {
     if (isOpen) {
-      setQuery('');
+      resetQuery('');
       setActiveIndex(0);
     }
-  }, [isOpen]);
+  }, [isOpen, resetQuery]);
 
   const commands = React.useMemo<PaletteCommand[]>(() => {
     const navigation: Array<[string, string, React.ComponentType<{ className?: string }>]> = [
@@ -74,14 +77,14 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onOpen
   }, [currentUser, navigate, onClose, onOpenShortcuts, resolvedTheme, rolePermissions, setCreateTaskModalOpen, t, toggleLocale, toggleTheme]);
 
   const filtered = React.useMemo(() => {
-    const normalized = query.trim().toLowerCase();
+    const normalized = queryInput.value.trim().toLowerCase();
     if (!normalized) return commands;
     return commands.filter(command => command.label.toLowerCase().includes(normalized));
-  }, [commands, query]);
+  }, [commands, queryInput.value]);
 
   React.useEffect(() => {
     setActiveIndex(0);
-  }, [query]);
+  }, [queryInput.value]);
 
   const runActive = () => {
     const command = filtered[activeIndex];
@@ -97,8 +100,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onOpen
         <input
           data-autofocus
           type="text"
-          value={query}
-          onChange={event => setQuery(event.target.value)}
+          {...queryInput.inputProps}
           onKeyDown={event => {
             if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex(index => Math.min(filtered.length - 1, index + 1)); }
             else if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex(index => Math.max(0, index - 1)); }

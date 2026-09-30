@@ -7,10 +7,11 @@ import { getClientDeliveryStage, getClientDeliveryStageLabel } from '../lib/clie
 import { formatLocalizedDate, formatLocalizedDistanceToNow } from '../lib/i18n';
 import { safeHttpsUrl } from '../lib/security';
 import { cn, parseOptionalDate } from '../lib/utils';
-import { useStore } from '../store';
+import { isPendingMutationResolution, useStore } from '../store';
 import { Button, ProgressBar, StatusChip } from './ui';
 import { inputBase } from './uiTokens';
 import SideSheet from './SideSheet';
+import BackendFreshness from './BackendFreshness';
 import { useI18n } from './I18nProvider';
 
 interface ClientDeliveryFocusProps {
@@ -64,8 +65,9 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
   if (!task) return null;
 
   const contact = users.find(user => user.id === task.assignedTo);
-  const canReview = !backend.upgradeRequired && canReviewTaskAsClient(currentUser, task, rolePermissions);
-  const canComment = !backend.upgradeRequired && canCommentOnTask(currentUser, task, rolePermissions);
+  const pendingResolution = isPendingMutationResolution(backend);
+  const canReview = !backend.upgradeRequired && !pendingResolution && canReviewTaskAsClient(currentUser, task, rolePermissions);
+  const canComment = !backend.upgradeRequired && !pendingResolution && canCommentOnTask(currentUser, task, rolePermissions);
   const dueDate = parseOptionalDate(task.dueDate);
   const attachmentUrl = task.attachmentLink ? safeHttpsUrl(task.attachmentLink) : null;
   const stage = getClientDeliveryStage(task);
@@ -92,14 +94,22 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
       return;
     }
     setDecisionError('');
-    reviewClientApproval(task.id, status, decisionNote);
+    const localResult = reviewClientApproval(task.id, status, decisionNote);
+    if (!localResult.ok) {
+      setError(localResult.error ? t(localResult.error) : t('Unable to review this task.'));
+      return;
+    }
     if (await commit('approval.review')) setDecisionNote('');
   };
 
   const submitComment = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!commentText.trim() || isSaving || !canComment) return;
-    addComment(task.id, commentText);
+    const localResult = addComment(task.id, commentText);
+    if (!localResult.ok) {
+      setError(localResult.error ? t(localResult.error) : t('You do not have permission to comment on this task.'));
+      return;
+    }
     if (await commit('comment.add')) setCommentText('');
   };
 
@@ -176,7 +186,12 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
           </section>
         )}
 
-        {error && <p role="alert" className="rounded-control border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-100">{error}</p>}
+        {(error || pendingResolution) && (
+          <div role="alert" aria-live="assertive" className="rounded-control border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
+            <p>{error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+            {pendingResolution && <BackendFreshness compact className="mt-3" />}
+          </div>
+        )}
 
         <section aria-labelledby="delivery-conversation-title">
           <div className="flex items-center gap-2"><MessageSquareText className="h-4 w-4 text-accent" /><h3 id="delivery-conversation-title" className="font-semibold text-ink">{t('Feedback and updates')}</h3></div>

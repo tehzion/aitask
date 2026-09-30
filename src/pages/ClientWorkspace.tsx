@@ -54,8 +54,10 @@ import {
   SERVICE_FILE_ACCEPT,
   SERVICE_FILE_MAX_BYTES,
   SERVICE_FILE_TYPE_ERROR,
+  forgetPendingServiceFile,
   downloadServiceFile,
   getServiceFileMimeType,
+  removeServiceFile,
   uploadServiceFile,
 } from "../lib/serviceFiles";
 import DraftServicePlanEditor from "../components/DraftServicePlanEditor";
@@ -260,14 +262,26 @@ const OperationsClientWorkspace = () => {
     }
     setActivityStage("saving");
     setActivityFeedback({ tone: "status", text: t("Saving activity…") });
+    const previousCycleComments = useStore.getState().cycleComments;
     const result = store.addCycleComment(cycle.id, comment, visibility);
     if (!result.ok || !result.id) {
+      if (attachment) await removeServiceFile(attachment);
       setActivitySaving(false);
       setActivityStage("idle");
       return setActivityFeedback({ tone: "error", text: t(result.error || "Unable to add the comment.") });
     }
     if (attachment) {
-      store.addCycleCommentAttachment(result.id, attachment);
+      const attachmentResult = store.addCycleCommentAttachment(result.id, attachment);
+      if (!attachmentResult.ok) {
+        useStore.setState({ cycleComments: previousCycleComments });
+        const cleanup = await removeServiceFile(attachment);
+        setActivitySaving(false);
+        setActivityStage("idle");
+        return setActivityFeedback({
+          tone: "error",
+          text: t(cleanup.ok ? (attachmentResult.error || "Unable to attach the uploaded file.") : `${attachmentResult.error || "Unable to attach the uploaded file."} ${cleanup.error}`),
+        });
+      }
     }
     const saved = await store.commitPendingMutation("cycle_comment.manage");
     setActivitySaving(false);
@@ -276,6 +290,7 @@ const OperationsClientWorkspace = () => {
       setActivityFeedback({ tone: "error", text: t(saved.error || "The activity is waiting to be saved."), action: "save" });
       return;
     }
+    if (attachment) forgetPendingServiceFile(attachment);
     setMessage(t("Activity added."));
     setActivityFeedback(null);
     if (saved.ok) {

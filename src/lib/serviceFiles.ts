@@ -26,6 +26,66 @@ const serviceFileMimeByExtension: Record<string, ServiceFileMimeType> = {
   '.gif': 'image/gif',
 };
 
+const PENDING_SERVICE_FILES_KEY = 'aitask:pending-service-files:v1';
+const pendingServiceFiles = new Map<string, AttachmentRef>();
+
+const pendingServiceFileKey = (attachment: Pick<AttachmentRef, 'bucket' | 'path'>) => `${attachment.bucket}:${attachment.path}`;
+
+const hydratePendingServiceFiles = () => {
+  if (pendingServiceFiles.size > 0 || typeof window === 'undefined') return;
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_SERVICE_FILES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return;
+    parsed.forEach((item) => {
+      if (
+        item &&
+        typeof item === 'object' &&
+        typeof item.id === 'string' &&
+        typeof item.bucket === 'string' &&
+        typeof item.path === 'string' &&
+        typeof item.fileName === 'string'
+      ) {
+        pendingServiceFiles.set(pendingServiceFileKey(item), item as AttachmentRef);
+      }
+    });
+  } catch {
+    // Session storage is best-effort. The in-memory registry still protects
+    // uploads made during the current page session.
+  }
+};
+
+const persistPendingServiceFiles = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (pendingServiceFiles.size === 0) {
+      window.sessionStorage.removeItem(PENDING_SERVICE_FILES_KEY);
+      return;
+    }
+    window.sessionStorage.setItem(PENDING_SERVICE_FILES_KEY, JSON.stringify(Array.from(pendingServiceFiles.values())));
+  } catch {
+    // Storage can be unavailable or full; cleanup still works in-memory.
+  }
+};
+
+export const trackPendingServiceFile = (attachment: AttachmentRef) => {
+  hydratePendingServiceFiles();
+  pendingServiceFiles.set(pendingServiceFileKey(attachment), attachment);
+  persistPendingServiceFiles();
+};
+
+export const forgetPendingServiceFile = (attachment: Pick<AttachmentRef, 'bucket' | 'path'>) => {
+  hydratePendingServiceFiles();
+  pendingServiceFiles.delete(pendingServiceFileKey(attachment));
+  persistPendingServiceFiles();
+};
+
+export const clearPendingServiceFiles = () => {
+  pendingServiceFiles.clear();
+  if (typeof window === 'undefined') return;
+  try { window.sessionStorage.removeItem(PENDING_SERVICE_FILES_KEY); } catch { /* best effort */ }
+};
+
 export const getServiceFileMimeType = (file: Pick<File, 'name' | 'type'>): ServiceFileMimeType | null => {
   const mimeType = file.type.trim().toLowerCase().split(';', 1)[0] || '';
   if (serviceFileMimeTypes.has(mimeType)) return mimeType as ServiceFileMimeType;
@@ -80,19 +140,75 @@ export const uploadServiceFile = async (input: {
       error: error instanceof Error ? error.message : 'The file could not be uploaded.',
     };
   }
+  const attachment: AttachmentRef = {
+    id,
+    bucket: SERVICE_FILES_BUCKET,
+    path,
+    fileName: input.file.name.slice(0, 240),
+    mimeType: contentType,
+    sizeBytes: input.file.size,
+    uploadedBy: input.userId,
+    uploadedAt: new Date().toISOString(),
+  };
+  trackPendingServiceFile(attachment);
   return {
     ok: true,
-    attachment: {
-      id,
-      bucket: SERVICE_FILES_BUCKET,
-      path,
-      fileName: input.file.name.slice(0, 240),
-      mimeType: contentType,
-      sizeBytes: input.file.size,
-      uploadedBy: input.userId,
-      uploadedAt: new Date().toISOString(),
-    },
+    attachment,
   };
+};
+
+export const removeServiceFile = async (attachment: AttachmentRef) => {
+  if (!shouldUseSecureSupabase()) {
+    return { ok: false as const, error: 'Private file cleanup requires the Supabase backend.' };
+  }
+  try {
+    const { error } = await supabase.storage.from(attachment.bucket).remove([attachment.path]);
+    if (error) return { ok: false as const, error: error.message || 'The uploaded file could not be removed.' };
+    forgetPendingServiceFile(attachment);
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'The uploaded file could not be removed.',
+    };
+  }
+};
+
+export const cleanupPendingServiceFiles = async () => {
+  hydratePendingServiceFiles();
+  const attachments = Array.from(pendingServiceFiles.values());
+  if (attachments.length === 0) return { ok: true as const, removed: 0 };
+  if (!shouldUseSecureSupabase()) {
+    return { ok: false as const, removed: 0, error: 'Private file cleanup requires the Supabase backend.' };
+  }
+
+  let removed = 0;
+  let firstError: string | undefined;
+  const byBucket = new Map<string, AttachmentRef[]>();
+  attachments.forEach((attachment) => {
+    const bucket = byBucket.get(attachment.bucket) || [];
+    bucket.push(attachment);
+    byBucket.set(attachment.bucket, bucket);
+  });
+  for (const [bucket, bucketAttachments] of byBucket) {
+    try {
+      const { error } = await supabase.storage.from(bucket).remove(bucketAttachments.map(attachment => attachment.path));
+      if (error) {
+        firstError ||= error.message || 'The uploaded files could not be removed.';
+        continue;
+      }
+      bucketAttachments.forEach(attachment => {
+        pendingServiceFiles.delete(pendingServiceFileKey(attachment));
+        removed += 1;
+      });
+    } catch (error) {
+      firstError ||= error instanceof Error ? error.message : 'The uploaded files could not be removed.';
+    }
+  }
+  persistPendingServiceFiles();
+  return firstError
+    ? { ok: false as const, removed, error: firstError }
+    : { ok: true as const, removed };
 };
 
 export const downloadServiceFile = async (attachment: AttachmentRef) => {

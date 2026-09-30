@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertCircle, Cloud, CloudOff, RefreshCw, RotateCcw, X } from 'lucide-react';
-import { useStore } from '../store';
+import { isPendingMutationResolution, useStore } from '../store';
 import { getBackendStatus } from '../lib/backend';
 import { formatLocalizedSyncTime, type AppLocale } from '../lib/i18n';
 import { Badge, Button } from './ui';
@@ -50,7 +50,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
                     ? t('shell.updateAvailable')
                     : t('shell.live');
   const tone = isLocal ? 'slate' : getFreshnessTone(backend);
-  const needsResolution = !backend.upgradeRequired && (backend.status === 'conflict' || backend.status === 'retry_required' || (backend.status === 'offline' && backend.hasLocalChanges));
+  const needsResolution = isPendingMutationResolution(backend);
   const Icon = isLocal || backend.status === 'offline'
     ? CloudOff
     : needsResolution || backend.error

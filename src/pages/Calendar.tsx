@@ -35,6 +35,7 @@ import {
 import clsx from 'clsx';
 import { Link, useNavigate } from 'react-router-dom';
 import ModalShell from '../components/ModalShell';
+import BackendFreshness from '../components/BackendFreshness';
 import { Badge, Button } from '../components/ui';
 import { cardBase, fieldLabel, inputBase, modalFooter, pageShell, panelHeader } from '../components/uiTokens';
 import {
@@ -55,7 +56,7 @@ import {
   getCalendarTaskSummary,
   type CalendarFilter,
 } from '../lib/calendarMetrics';
-import { useStore } from '../store';
+import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
 import { useI18n } from '../components/I18nProvider';
@@ -215,8 +216,7 @@ const Calendar: React.FC = () => {
   const editingPendingAttempt = pendingDateAttempt?.taskId === editingTaskId
     ? pendingDateAttempt
     : null;
-  const hasBlockedMutation = backend.pendingMutations > 0
-    && ['offline', 'conflict', 'retry_required'].includes(backend.status);
+  const hasBlockedMutation = isPendingMutationResolution(backend);
   const savingTaskIdRef = useRef<string | null>(null);
   useEffect(() => {
     savingTaskIdRef.current = savingTaskId;
@@ -1394,7 +1394,8 @@ const Calendar: React.FC = () => {
                 </div>
               ) : hasBlockedMutation && (
                 <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800" role="alert">
-                  {t('Resolve the current sync issue with Retry or Discard before changing these dates.')}
+                  <p>{t('Resolve the current sync issue with Retry or Discard before changing these dates.')}</p>
+                  <BackendFreshness compact className="mt-3" />
                 </div>
               )}
             </div>

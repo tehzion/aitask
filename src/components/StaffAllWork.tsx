@@ -15,6 +15,7 @@ import StaffWorkItem from './StaffWorkItem';
 import TaskDetailsModal from './TaskDetailsModal';
 import { canEditTask } from '../lib/access';
 import { useI18n } from './I18nProvider';
+import { useImeSafeInput } from '../hooks/useImeSafeInput';
 
 type StaffAllWorkBucket = 'all' | StaffWorkBucketKey;
 const buckets: StaffAllWorkBucket[] = ['all', 'needs_action', 'up_next', 'waiting', 'done'];
@@ -45,6 +46,13 @@ const StaffAllWork: React.FC = () => {
   const [dueTo, setDueTo] = React.useState('');
   const [fullEditorOpen, setFullEditorOpen] = React.useState(false);
   const search = searchParams.get('search') || '';
+  const updateSearch = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set('search', value);
+    else next.delete('search');
+    setSearchParams(next, { replace: true });
+  };
+  const searchInput = useImeSafeInput(search, updateSearch, { commitDelayMs: 180 });
 
   const visibleTasks = React.useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
@@ -73,7 +81,7 @@ const StaffAllWork: React.FC = () => {
   const departments = React.useMemo(() => Array.from(new Set(tasks.map(task => task.department).filter(Boolean))).sort(), [tasks]);
   const assignees = React.useMemo(() => users.filter(user => tasks.some(task => task.assignedTo === user.id)), [tasks, users]);
   const creators = React.useMemo(() => users.filter(user => tasks.some(task => task.createdBy === user.id)), [tasks, users]);
-  const deferredSearch = React.useDeferredValue(search);
+  const deferredSearch = React.useDeferredValue(searchInput.value);
   const normalizedSearch = deferredSearch.trim().toLowerCase();
   const filteredTasks = React.useMemo(() => orderedTasks.filter(task => {
     const searchable = [task.title, task.description, task.clientName, task.projectName, task.serviceType, task.department].filter(Boolean).join(' ').toLowerCase();
@@ -90,7 +98,7 @@ const StaffAllWork: React.FC = () => {
   }), [assignee, client, creator, department, dueFrom, dueTo, normalizedSearch, orderedTasks, priority, project, status]);
   const taskId = searchParams.get('taskId');
   const selectedTask = taskId ? tasks.find(task => task.id === taskId) || null : null;
-  const activeFilterCount = [Boolean(search.trim()), client !== 'All', project !== 'All', assignee !== 'All', department !== 'All', creator !== 'All', status !== 'All', priority !== 'All', Boolean(dueFrom), Boolean(dueTo)].filter(Boolean).length;
+  const activeFilterCount = [Boolean(searchInput.value.trim()), client !== 'All', project !== 'All', assignee !== 'All', department !== 'All', creator !== 'All', status !== 'All', priority !== 'All', Boolean(dueFrom), Boolean(dueTo)].filter(Boolean).length;
 
   const setTaskId = (taskIdValue?: string) => {
     const next = new URLSearchParams(searchParams);
@@ -99,15 +107,8 @@ const StaffAllWork: React.FC = () => {
     setSearchParams(next, { replace: true });
   };
 
-  const updateSearch = (value: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set('search', value);
-    else next.delete('search');
-    setSearchParams(next, { replace: true });
-  };
-
   const clearFilters = () => {
-    updateSearch('');
+    searchInput.commit('');
     setClient('All');
     setProject('All');
     setAssignee('All');
@@ -137,15 +138,14 @@ const StaffAllWork: React.FC = () => {
             type="search"
             aria-label={t('Search visible work')}
             placeholder={t('Search visible work')}
-            value={search}
-            onChange={event => updateSearch(event.target.value)}
-            className={`${inputBase} min-h-11 w-full pl-10 ${search ? 'pr-10' : 'pr-3'}`}
+            {...searchInput.inputProps}
+            className={`${inputBase} min-h-11 w-full pl-10 ${searchInput.value ? 'pr-10' : 'pr-3'}`}
           />
-          {search && (
+          {searchInput.value && (
             <button
               type="button"
               aria-label={t('Clear search')}
-              onClick={() => updateSearch('')}
+              onClick={() => searchInput.commit('')}
               className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"
             >
               <X aria-hidden="true" className="h-4 w-4" />

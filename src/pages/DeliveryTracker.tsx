@@ -28,6 +28,7 @@ import { Badge, Button, EmptyState, PageHeader, ProgressBar, SegmentedTabs, Stat
 import { pageShell, tableShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { formatLocalizedDate } from '../lib/i18n';
+import { useImeSafeInput } from '../hooks/useImeSafeInput';
 
 const PERIOD_TABS = [
   { id: 'week' as const, label: 'Week' },
@@ -81,9 +82,18 @@ const DeliveryTracker: React.FC = () => {
   );
   const [anchor, setAnchor] = React.useState(() => new Date());
   const [statusFilter, setStatusFilter] = React.useState<DeliveryTrackerStatusFilter>('all');
-  const search = routeSearch;
   const [expandedClients, setExpandedClients] = React.useState<Set<string>>(() => new Set());
   const [selectedTaskId, setSelectedTaskId] = React.useState<string | null>(null);
+  const updateQuery = React.useCallback((updates: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams);
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    });
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+  const searchInput = useImeSafeInput(routeSearch, value => updateQuery({ search: value || null }), { commitDelayMs: 180 });
+  const search = searchInput.value;
   const deferredSearch = React.useDeferredValue(search);
 
   React.useEffect(() => {
@@ -137,15 +147,6 @@ const DeliveryTracker: React.FC = () => {
   const selectedTask = React.useMemo(() => (
     selectedTaskId ? visibleTasks.find(task => task.id === selectedTaskId) || null : null
   ), [selectedTaskId, visibleTasks]);
-
-  const updateQuery = React.useCallback((updates: Record<string, string | null>) => {
-    const next = new URLSearchParams(searchParams);
-    Object.entries(updates).forEach(([key, value]) => {
-      if (value) next.set(key, value);
-      else next.delete(key);
-    });
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
 
   React.useEffect(() => {
     const focusedTask = routeTaskId ? visibleTasks.find(task => task.id === routeTaskId) : undefined;
@@ -216,14 +217,13 @@ const DeliveryTracker: React.FC = () => {
               <input
                 id="delivery-tracker-search"
                 type="search"
-                value={search}
-                onChange={event => updateQuery({ search: event.target.value || null })}
+                {...searchInput.inputProps}
                 placeholder={t('Search delivery tracker')}
                 aria-label={t('Search delivery tracker')}
                 className="min-h-11 w-full rounded-control border border-line bg-surface px-10 pr-10 text-sm text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
               />
-              {search && (
-                <button type="button" onClick={() => updateQuery({ search: null })} aria-label={t('Clear delivery tracker search')} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink">
+              {searchInput.value && (
+                <button type="button" onClick={() => searchInput.commit('')} aria-label={t('Clear delivery tracker search')} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink">
                   <X aria-hidden="true" className="h-4 w-4" />
                 </button>
               )}

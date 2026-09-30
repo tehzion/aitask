@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(28);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -10,7 +10,8 @@ insert into auth.users (
   ('00000000-0000-0000-0000-000000009901', '00000000-0000-0000-0000-000000009901', 'authenticated', 'authenticated', 'pgtap-reminder-boss@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
   ('00000000-0000-0000-0000-000000009902', '00000000-0000-0000-0000-000000009902', 'authenticated', 'authenticated', 'pgtap-reminder-pm@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
   ('00000000-0000-0000-0000-000000009903', '00000000-0000-0000-0000-000000009903', 'authenticated', 'authenticated', 'pgtap-reminder-staff@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
-  ('00000000-0000-0000-0000-000000009904', '00000000-0000-0000-0000-000000009904', 'authenticated', 'authenticated', 'pgtap-reminder-client@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
+  ('00000000-0000-0000-0000-000000009904', '00000000-0000-0000-0000-000000009904', 'authenticated', 'authenticated', 'pgtap-reminder-client@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('00000000-0000-0000-0000-000000009905', '00000000-0000-0000-0000-000000009905', 'authenticated', 'authenticated', 'pgtap-reminder-late-staff@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
 
 insert into public.aitask_workspaces(id, name, reminder_timezone)
 values ('pgtap-server-reminders', 'Server reminder test workspace', 'America/Los_Angeles');
@@ -30,6 +31,52 @@ select is(
   (select reminder_timezone from public.aitask_workspaces where id = 'pgtap-default-timezone'),
   'Asia/Kuala_Lumpur',
   'new workspaces default to Asia/Kuala_Lumpur'
+);
+
+insert into public.aitask_workspaces(id, name, reminder_timezone)
+values ('pgtap-reminder-no-recipient', 'Reminder recipient race test workspace', 'America/Los_Angeles');
+
+insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
+values (
+  'pgtap-reminder-no-recipient', 'task', 'pgtap-reminder-late-recipient', jsonb_build_object(
+    'id', 'pgtap-reminder-late-recipient', 'title', 'Late recipient deadline',
+    'clientName', 'Unstaffed Client', 'dueDate', '2026-09-28', 'status', 'Pending', 'isCompleted', false
+  )
+);
+
+select is(
+  private.aitask_generate_due_task_reminders('pgtap-reminder-no-recipient', '2026-09-28T06:30:00Z'::timestamptz),
+  0,
+  'a task with no eligible internal recipient is not claimed'
+);
+select is(
+  (select count(*)::integer from public.aitask_task_deadline_reminders where workspace_id = 'pgtap-reminder-no-recipient'),
+  0,
+  'a task without recipients has no reminder ledger entry'
+);
+
+insert into public.aitask_members(
+  id, workspace_id, auth_user_id, name, email, role, department, departments,
+  is_super_admin, client_name, permissions
+) values (
+  'pgtap-reminder-late-staff', 'pgtap-reminder-no-recipient', '00000000-0000-0000-0000-000000009905',
+  'Late Reminder Staff', 'pgtap-reminder-late-staff@aitask.local', 'Staff', 'Designer', array['Designer'], false, null, '{}'::jsonb
+);
+
+select is(
+  private.aitask_generate_due_task_reminders('pgtap-reminder-no-recipient', '2026-09-28T06:30:00Z'::timestamptz),
+  1,
+  'adding an eligible recipient later allows the reminder to be generated'
+);
+select is(
+  (select count(*)::integer from public.aitask_task_deadline_reminders where workspace_id = 'pgtap-reminder-no-recipient'),
+  1,
+  'the reminder is claimed only when a recipient is available'
+);
+select is(
+  (select count(*)::integer from public.aitask_entities where workspace_id = 'pgtap-reminder-no-recipient' and entity_type = 'notification'),
+  1,
+  'the newly eligible recipient receives the previously unclaimed reminder'
 );
 
 insert into public.aitask_members(

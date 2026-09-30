@@ -18,6 +18,7 @@ import { inputBase, pageShell } from './uiTokens';
 import SideSheet from './SideSheet';
 import ClientDeliveryFocus from './ClientDeliveryFocus';
 import { useI18n } from './I18nProvider';
+import { useImeSafeInput } from '../hooks/useImeSafeInput';
 
 type DateFilter = 'any' | 'next_7' | 'this_month' | 'no_date';
 
@@ -65,9 +66,11 @@ const ClientDeliveries = () => {
     else next.delete(key);
     setSearchParams(next, { replace: true });
   };
+  const searchInput = useImeSafeInput(searchTerm, value => setParam('search', value), { commitDelayMs: 180 });
+  const searchValue = searchInput.value;
 
   const filteredTasks = React.useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const normalizedSearch = searchValue.trim().toLowerCase();
     const now = new Date();
     const today = dateKey(now);
     const nextWeek = new Date(now);
@@ -85,7 +88,7 @@ const ClientDeliveries = () => {
         || (dateFilter === 'this_month' && task.dueDate?.startsWith(monthKey));
       return matchesSearch && matchesService && matchesStage && matchesDate;
     });
-  }, [dateFilter, searchTerm, serviceFilter, stageFilter, tasks]);
+  }, [dateFilter, searchValue, serviceFilter, stageFilter, tasks]);
 
   const groups = React.useMemo(() => groupClientDeliveries(filteredTasks), [filteredTasks]);
   const visibleStages = CLIENT_DELIVERY_STAGE_ORDER.filter(stage => groups[stage].length > 0);
@@ -127,7 +130,7 @@ const ClientDeliveries = () => {
           <label className="relative min-w-0 flex-1">
             <span className="sr-only">{t('delivery.search')}</span>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <input value={searchTerm} onChange={event => setParam('search', event.target.value)} className={cn(inputBase, 'min-h-11 pl-10 pr-3')} placeholder={t('delivery.search')} />
+            <input {...searchInput.inputProps} className={cn(inputBase, 'min-h-11 pl-10 pr-3')} placeholder={t('delivery.search')} />
           </label>
           <Button variant="secondary" onClick={() => setFiltersOpen(true)} aria-label={activeFilterCount ? t('delivery.openFiltersCount', { count: activeFilterCount }) : t('delivery.openFilters')}>
             <Filter className="h-4 w-4" />{t('delivery.filters')}{activeFilterCount > 0 && <span className="calm-number rounded-tag bg-accent-soft px-1.5 py-0.5 text-xs text-accent">{activeFilterCount}</span>}

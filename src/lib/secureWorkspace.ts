@@ -261,9 +261,26 @@ type PendingCommandEnvelope = {
   command: SecureCommand;
 };
 
+export type MemberRoleAssignment = {
+  role: Role;
+  customRoleId?: string;
+  companyName?: string;
+  departments: Department[];
+};
+
 type RetainedSecureMemberMutationWithId =
   | { kind: 'departments'; id: string; memberId: string; departments: Department[]; expectedVersion: number }
-  | { kind: 'permissions'; id: string; memberId: string; permissions: RolePermissions | null; expectedVersion: number };
+  | { kind: 'permissions'; id: string; memberId: string; permissions: RolePermissions | null; expectedVersion: number }
+  | {
+      kind: 'role';
+      id: string;
+      memberId: string;
+      role: Role;
+      customRoleId: string | null;
+      companyName: string | null;
+      departments: Department[];
+      expectedVersion: number;
+    };
 
 type PendingMemberMutationEnvelope = {
   version: number;
@@ -277,6 +294,7 @@ let retryableCommand: SecureCommand | null = null;
 let activeSecureAuthUserId: string | null = null;
 let retryableMemberDepartments: Extract<RetainedSecureMemberMutationWithId, { kind: 'departments' }> | null = null;
 let retryableMemberPermissions: Extract<RetainedSecureMemberMutationWithId, { kind: 'permissions' }> | null = null;
+let retryableMemberRole: Extract<RetainedSecureMemberMutationWithId, { kind: 'role' }> | null = null;
 let retryableNotificationMutation: {
   id: string;
   notificationIds: string[];
@@ -339,11 +357,19 @@ const isRetainedSecureMemberMutation = (value: unknown): value is RetainedSecure
   if (!value || typeof value !== 'object') return false;
   const mutation = value as Partial<RetainedSecureMemberMutationWithId>;
   if (
-    (mutation.kind !== 'departments' && mutation.kind !== 'permissions')
+    (mutation.kind !== 'departments' && mutation.kind !== 'permissions' && mutation.kind !== 'role')
     || typeof mutation.id !== 'string' || mutation.id.length === 0 || mutation.id.length > 160
     || typeof mutation.memberId !== 'string' || mutation.memberId.length === 0 || mutation.memberId.length > 240
     || !Number.isInteger(mutation.expectedVersion) || mutation.expectedVersion! < 1
   ) return false;
+  if (mutation.kind === 'role') {
+    return ['Project Manager', 'HOD', 'Staff', 'Client'].includes(mutation.role as Role)
+      && (mutation.customRoleId === null || (typeof mutation.customRoleId === 'string' && mutation.customRoleId.length <= 240))
+      && (mutation.companyName === null || (typeof mutation.companyName === 'string' && mutation.companyName.length <= 240))
+      && Array.isArray(mutation.departments)
+      && mutation.departments.length <= 16
+      && mutation.departments.every(department => typeof department === 'string' && department.length > 0 && department.length <= 80);
+  }
   if (mutation.kind === 'departments') {
     return Array.isArray(mutation.departments)
       && mutation.departments.length > 0
@@ -387,7 +413,7 @@ const clearPersistedRetryableCommand = (authUserId = activeSecureAuthUserId) => 
 };
 
 const retainedMemberMutationWithId = (): RetainedSecureMemberMutationWithId | null => (
-  retryableMemberDepartments || retryableMemberPermissions
+  retryableMemberDepartments || retryableMemberPermissions || retryableMemberRole
 );
 
 const persistRetryableMemberMutation = () => {
@@ -423,6 +449,7 @@ export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand
     retryableCommand = null;
     retryableMemberDepartments = null;
     retryableMemberPermissions = null;
+    retryableMemberRole = null;
   }
   activeSecureAuthUserId = authUserId;
   if (retryableCommand) return retryableCommand;
@@ -455,6 +482,7 @@ export const restoreSecureMemberMutation = (authUserId: string): RetainedSecureM
     retryableCommand = null;
     retryableMemberDepartments = null;
     retryableMemberPermissions = null;
+    retryableMemberRole = null;
   }
   activeSecureAuthUserId = authUserId;
   const retained = getRetainedSecureMemberMutation();
@@ -475,7 +503,8 @@ export const restoreSecureMemberMutation = (authUserId: string): RetainedSecureM
       return null;
     }
     if (envelope.mutation.kind === 'departments') retryableMemberDepartments = envelope.mutation;
-    else retryableMemberPermissions = envelope.mutation;
+    else if (envelope.mutation.kind === 'permissions') retryableMemberPermissions = envelope.mutation;
+    else retryableMemberRole = envelope.mutation;
     return getRetainedSecureMemberMutation();
   } catch {
     storage.removeItem(pendingMemberMutationStorageKey(authUserId));
@@ -1320,7 +1349,7 @@ export const saveSecureMemberDepartments = async (
     && retryableMemberDepartments.memberId === member.id
     && retryableMemberDepartments.expectedVersion === expectedVersion
     && stable(retryableMemberDepartments.departments) === stable(departments);
-  if (retryableMemberPermissions || (retryableMemberDepartments && !matchesRetry)) {
+  if (retainedMemberMutationWithId() && !matchesRetry) {
     return {
       ok: false,
       code: 'RETRY_REQUIRED',
@@ -1356,22 +1385,28 @@ export const saveSecureMemberDepartments = async (
   }
 
   if (rpcResult.error) {
+    const code = isAuthError(rpcResult.error) ? 'FORBIDDEN' : commandErrorCode(rpcResult.error);
+    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
+      retryableMemberDepartments = null;
+      clearPersistedRetryableMemberMutation();
+    }
     return {
       ok: false,
-      code: isAuthError(rpcResult.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
+      code,
       error: rpcResult.error.message || 'Unable to update departments.',
     };
   }
 
   const response = rpcResult.data as MemberDepartmentsResponse;
   if (!response?.ok) {
-    if (response.code !== 'RETRY_REQUIRED') {
+    const code = response.code || 'RETRY_REQUIRED';
+    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
       retryableMemberDepartments = null;
       clearPersistedRetryableMemberMutation();
     }
     return {
       ok: false,
-      code: response.code || 'RETRY_REQUIRED',
+      code,
       error: response.error || 'The department change was rejected.',
       conflict: response.conflict,
     };
@@ -1421,7 +1456,7 @@ export const saveSecureMemberPermissions = async (
     && retryableMemberPermissions.memberId === member.id
     && retryableMemberPermissions.expectedVersion === expectedVersion
     && stable(retryableMemberPermissions.permissions) === stable(permissions);
-  if (retryableMemberDepartments || (retryableMemberPermissions && !matchesRetry)) {
+  if (retainedMemberMutationWithId() && !matchesRetry) {
     return {
       ok: false,
       code: 'RETRY_REQUIRED',
@@ -1457,22 +1492,28 @@ export const saveSecureMemberPermissions = async (
   }
 
   if (rpcResult.error) {
+    const code = isAuthError(rpcResult.error) ? 'FORBIDDEN' : commandErrorCode(rpcResult.error);
+    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
+      retryableMemberPermissions = null;
+      clearPersistedRetryableMemberMutation();
+    }
     return {
       ok: false,
-      code: isAuthError(rpcResult.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
+      code,
       error: rpcResult.error.message || 'Unable to update permissions.',
     };
   }
 
   const response = rpcResult.data as MemberPermissionsResponse;
   if (!response?.ok) {
-    if (response.code !== 'RETRY_REQUIRED') {
+    const code = response.code || 'RETRY_REQUIRED';
+    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
       retryableMemberPermissions = null;
       clearPersistedRetryableMemberMutation();
     }
     return {
       ok: false,
-      code: response.code || 'RETRY_REQUIRED',
+      code,
       error: response.error || 'The permission change was rejected.',
       conflict: response.conflict,
     };
@@ -1507,14 +1548,8 @@ export const saveSecureMemberPermissions = async (
 
 export type RetainedSecureMemberMutation =
   | { kind: 'departments'; memberId: string; departments: Department[]; expectedVersion: number }
-  | { kind: 'permissions'; memberId: string; permissions: RolePermissions | null; expectedVersion: number };
-
-export type MemberRoleAssignment = {
-  role: Role;
-  customRoleId?: string;
-  companyName?: string;
-  departments: Department[];
-};
+  | { kind: 'permissions'; memberId: string; permissions: RolePermissions | null; expectedVersion: number }
+  | { kind: 'role'; memberId: string; role: Role; customRoleId: string | null; companyName: string | null; departments: Department[]; expectedVersion: number };
 
 export const saveSecureMemberRole = async (
   member: WorkspaceMember,
@@ -1528,15 +1563,43 @@ export const saveSecureMemberRole = async (
   }
 
   const expectedVersion = Math.max(1, Number(member.version) || 1);
+  const nextAssignment = {
+    role: assignment.role,
+    customRoleId: assignment.customRoleId || null,
+    companyName: assignment.companyName || null,
+    departments: assignment.departments,
+  };
+  const matchesRetry = retryableMemberRole
+    && retryableMemberRole.memberId === member.id
+    && retryableMemberRole.expectedVersion === expectedVersion
+    && stable({
+      role: retryableMemberRole.role,
+      customRoleId: retryableMemberRole.customRoleId,
+      companyName: retryableMemberRole.companyName,
+      departments: retryableMemberRole.departments,
+    }) === stable(nextAssignment);
+  if (retainedMemberMutationWithId() && !matchesRetry) {
+    return {
+      ok: false,
+      code: 'RETRY_REQUIRED',
+      error: 'Retry or discard the previous member change before submitting a different one.',
+    };
+  }
+  const pending = matchesRetry
+    ? retryableMemberRole
+    : { kind: 'role' as const, id: commandId(), memberId: member.id, ...nextAssignment, expectedVersion };
+  retryableMemberRole = pending;
+  persistRetryableMemberMutation();
+
   const invoke = () => withSyncTimeout(supabase.rpc('aitask_update_member_role', {
     p_workspace_id: SECURE_WORKSPACE_ID,
-    p_command_id: commandId(),
-    p_member_id: member.id,
-    p_role: assignment.role,
-    p_custom_role_id: assignment.customRoleId || null,
-    p_client_name: assignment.companyName || null,
-    p_departments: assignment.departments,
-    p_expected_version: expectedVersion,
+    p_command_id: pending.id,
+    p_member_id: pending.memberId,
+    p_role: pending.role,
+    p_custom_role_id: pending.customRoleId,
+    p_client_name: pending.companyName,
+    p_departments: pending.departments,
+    p_expected_version: pending.expectedVersion,
   }));
 
   let rpcResult: Awaited<ReturnType<typeof invoke>>;
@@ -1554,23 +1617,35 @@ export const saveSecureMemberRole = async (
   }
 
   if (rpcResult.error) {
+    const code = isAuthError(rpcResult.error) ? 'FORBIDDEN' : commandErrorCode(rpcResult.error);
+    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
+      retryableMemberRole = null;
+      clearPersistedRetryableMemberMutation();
+    }
     return {
       ok: false,
-      code: isAuthError(rpcResult.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
+      code,
       error: rpcResult.error.message || 'Unable to change the role.',
     };
   }
 
   const response = rpcResult.data as MemberRoleResponse;
   if (!response?.ok) {
+    const code = response.code || 'RETRY_REQUIRED';
+    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
+      retryableMemberRole = null;
+      clearPersistedRetryableMemberMutation();
+    }
     return {
       ok: false,
-      code: response.code || 'RETRY_REQUIRED',
+      code,
       error: response.error || 'The role change was rejected.',
       conflict: response.conflict,
     };
   }
 
+  retryableMemberRole = null;
+  clearPersistedRetryableMemberMutation();
   const key = entityKey('member', member.id);
   const previous = baseline.get(key);
   const nextData = {
@@ -1618,24 +1693,41 @@ export const getRetainedSecureMemberMutation = (): RetainedSecureMemberMutation 
       expectedVersion: retryableMemberPermissions.expectedVersion,
     };
   }
+  if (retryableMemberRole) {
+    return {
+      kind: 'role',
+      memberId: retryableMemberRole.memberId,
+      role: retryableMemberRole.role,
+      customRoleId: retryableMemberRole.customRoleId,
+      companyName: retryableMemberRole.companyName,
+      departments: retryableMemberRole.departments,
+      expectedVersion: retryableMemberRole.expectedVersion,
+    };
+  }
   return null;
 };
 
 export const retryRetainedSecureMemberMutation = async (
   member: WorkspaceMember,
-): Promise<MutationResult<MemberDepartmentsResponse | MemberPermissionsResponse>> => {
+): Promise<MutationResult<MemberDepartmentsResponse | MemberPermissionsResponse | MemberRoleResponse>> => {
   const pending = getRetainedSecureMemberMutation();
   if (!pending || pending.memberId !== member.id) {
     return { ok: false, code: 'NOT_FOUND', error: 'There is no member change waiting to retry.' };
   }
-  return pending.kind === 'departments'
-    ? saveSecureMemberDepartments(member, pending.departments)
-    : saveSecureMemberPermissions(member, pending.permissions);
+  if (pending.kind === 'departments') return saveSecureMemberDepartments(member, pending.departments);
+  if (pending.kind === 'permissions') return saveSecureMemberPermissions(member, pending.permissions);
+  return saveSecureMemberRole(member, {
+    role: pending.role,
+    customRoleId: pending.customRoleId || undefined,
+    companyName: pending.companyName || undefined,
+    departments: pending.departments,
+  });
 };
 
 export const discardRetainedSecureMemberMutation = () => {
   retryableMemberDepartments = null;
   retryableMemberPermissions = null;
+  retryableMemberRole = null;
   clearPersistedRetryableMemberMutation();
 };
 
@@ -2012,6 +2104,7 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
       retryableCommand = null;
       retryableMemberDepartments = null;
       retryableMemberPermissions = null;
+      retryableMemberRole = null;
     }
     activeSecureAuthUserId = authUser.id;
   }
@@ -2166,6 +2259,7 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
   if (!options.preserveRetainedCommand) {
     retryableMemberDepartments = null;
     retryableMemberPermissions = null;
+    retryableMemberRole = null;
     clearPersistedRetryableMemberMutation();
   } else if (retainedMemberBeforeLoad) {
     persistRetryableMemberMutation();
@@ -2358,6 +2452,7 @@ export const discardSecureWorkspaceCommand = () => {
   clearPersistedRetryableCommand();
   retryableMemberDepartments = null;
   retryableMemberPermissions = null;
+  retryableMemberRole = null;
   clearPersistedRetryableMemberMutation();
   activeSecureAuthUserId = null;
 };

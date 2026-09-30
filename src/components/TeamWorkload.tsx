@@ -28,6 +28,7 @@ import { cardBase, inputBase, modalFooter } from './uiTokens';
 import { useI18n } from './I18nProvider';
 import { formatLocalizedDate } from '../lib/i18n';
 import { getLocalizedDepartment, getLocalizedPriority, getLocalizedRole, getLocalizedStatus } from '../lib/localeLabels';
+import { useImeSafeInput } from '../hooks/useImeSafeInput';
 
 interface TeamWorkloadProps {
   tasks: Task[];
@@ -152,6 +153,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
   const { locale, t } = useI18n();
   const [period] = useState<TeamWorkloadPeriod>('week');
   const [query, setQuery] = useState('');
+  const queryInput = useImeSafeInput(query, setQuery);
   const [department, setDepartment] = useState<Department | 'All'>('All');
   const [sort, setSort] = useState<TeamSort>('attention');
   const [view, setView] = useState<'person' | 'department'>('person');
@@ -170,7 +172,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
     [period, tasks, users],
   );
   const summaries = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = queryInput.value.trim().toLowerCase();
     const filtered = rawSummaries.filter(summary => (
       (!normalizedQuery || summary.member.name.toLowerCase().includes(normalizedQuery))
       && (department === 'All' || getMemberDepartments(summary.member)[0] === department)
@@ -184,7 +186,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
         || right.periodOpen - left.periodOpen
         || left.member.name.localeCompare(right.member.name);
     });
-  }, [department, query, rawSummaries, sort]);
+  }, [department, queryInput.value, rawSummaries, sort]);
 
   const departmentSummaries = useMemo(() => {
     if (view !== 'department') return [];
@@ -267,8 +269,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
             <input
               type="search"
-              value={query}
-              onChange={event => setQuery(event.target.value)}
+              {...queryInput.inputProps}
               className={cn(inputBase, 'py-2 pl-9 pr-3')}
               placeholder={t('Search team members')}
             />

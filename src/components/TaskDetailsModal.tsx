@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useStore } from '../store';
+import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save, ChevronDown, AlertTriangle } from 'lucide-react';
 import { Department, Priority, Task, TaskStatus } from '../types';
@@ -76,8 +76,11 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
     reviewClientApproval,
     requestRevision,
     commitPendingMutation,
+    retryPendingSave,
+    discardMutation,
     rolePermissions,
     taskStatuses,
+    backend,
     upgradeRequired,
   } = useStore(useShallow(state => ({
     users: state.users,
@@ -93,8 +96,11 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
     reviewClientApproval: state.reviewClientApproval,
     requestRevision: state.requestRevision,
     commitPendingMutation: state.commitPendingMutation,
+    retryPendingSave: state.retryPendingSave,
+    discardMutation: state.discardMutation,
     rolePermissions: state.rolePermissions,
     taskStatuses: state.taskStatuses,
+    backend: state.backend,
     upgradeRequired: state.backend.upgradeRequired === true,
   })));
   const [commentText, setCommentText] = useState('');
@@ -162,11 +168,12 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
   const assignedByMember = users.find(u => u.id === task.assignedBy);
   const taskAccess = getTaskAccess(currentUser, task, rolePermissions, { clients, projects });
   if (!taskAccess.canView) return null;
-  const canEditTask = !upgradeRequired && taskAccess.canEdit;
-  const canAddComment = !upgradeRequired && taskAccess.canComment;
-  const canClientReview = !upgradeRequired && taskAccess.canView && canReviewTaskAsClient(currentUser, task, rolePermissions);
+  const pendingResolution = isPendingMutationResolution(backend);
+  const canEditTask = !upgradeRequired && !pendingResolution && taskAccess.canEdit;
+  const canAddComment = !upgradeRequired && !pendingResolution && taskAccess.canComment;
+  const canClientReview = !upgradeRequired && !pendingResolution && taskAccess.canView && canReviewTaskAsClient(currentUser, task, rolePermissions);
   const isClientTaskViewer = currentUser?.role === 'Client';
-  const canAssignOthers = !upgradeRequired && taskAccess.canAssign;
+  const canAssignOthers = !upgradeRequired && !pendingResolution && taskAccess.canAssign;
   const incompletePredecessors = (task.predecessorTaskIds || [])
     .map(id => tasks.find(item => item.id === id))
     .filter((item): item is Task => Boolean(item && !item.isCompleted));
@@ -184,6 +191,18 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
     }
     setMutationError('');
     return true;
+  };
+
+  const resolvePendingMutation = async (action: 'retry' | 'latest') => {
+    setIsSubmitting(true);
+    if (action === 'retry') {
+      const result = await retryPendingSave();
+      setMutationError(result.ok ? '' : result.error || 'The pending change could not be saved yet.');
+    } else {
+      await discardMutation();
+      setMutationError('');
+    }
+    setIsSubmitting(false);
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -205,20 +224,32 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
       return;
     }
     setEditError('');
-    updateTaskAttachment(task.id, attachmentLink, attachmentName);
+    const localResult = updateTaskAttachment(task.id, attachmentLink, attachmentName);
+    if (!localResult.ok) {
+      setEditError(String(t(localResult.error || 'Unable to update the task attachment.')));
+      return;
+    }
     await confirmPendingMutation();
   };
 
   const handleClientReview = async (status: 'Approved' | 'Rejected') => {
     if (isSubmitting) return;
-    reviewClientApproval(task.id, status, approvalNote);
+    const localResult = reviewClientApproval(task.id, status, approvalNote);
+    if (!localResult.ok) {
+      setMutationError(String(t(localResult.error || 'Unable to review this task.')));
+      return;
+    }
     if (await confirmPendingMutation('approval.review')) setApprovalNote('');
   };
 
   const handleRevisionRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
-    requestRevision(task.id, revisionNote);
+    const localResult = requestRevision(task.id, revisionNote);
+    if (!localResult.ok) {
+      setMutationError(String(t(localResult.error || 'Unable to request a revision.')));
+      return;
+    }
     if (await confirmPendingMutation('approval.revision')) setRevisionNote('');
   };
 
@@ -326,9 +357,31 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
           </div>
         </div>
 
-        {mutationError && (
+        {(mutationError || pendingResolution) && (
           <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm font-medium text-amber-800" role="alert" aria-live="assertive">
-            {mutationError}
+            <p>{mutationError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+            {pendingResolution && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void resolvePendingMutation('retry')}
+                  disabled={isSubmitting || backend.isPulling || backend.isSaving || backend.status === 'offline'}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  {t('Retry my changes')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void resolvePendingMutation('latest')}
+                  disabled={isSubmitting || backend.isPulling || backend.isSaving || backend.status === 'offline'}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  {t('Use latest')}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -359,13 +412,21 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                               confirmLabel: t('Continue'),
                               tone: 'primary',
                               action: async () => {
-                                updateTaskStatus(task.id, nextStatus);
+                                const localResult = updateTaskStatus(task.id, nextStatus);
+                                if (!localResult.ok) {
+                                  setMutationError(String(t(localResult.error || 'Unable to update the task status.')));
+                                  return;
+                                }
                                 await confirmPendingMutation();
                               },
                             });
                             return;
                           }
-                          updateTaskStatus(task.id, nextStatus);
+                          const localResult = updateTaskStatus(task.id, nextStatus);
+                          if (!localResult.ok) {
+                            setMutationError(String(t(localResult.error || 'Unable to update the task status.')));
+                            return;
+                          }
                           await confirmPendingMutation();
                         }}
                       >

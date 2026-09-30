@@ -18,7 +18,7 @@ vi.mock('../lib/supabaseClient', () => ({
   resolveAuthEmail: (value: string) => value,
 }));
 
-import { pendingMutationMessage, useStore } from './index';
+import { isPendingMutationResolution, pendingMutationMessage, useStore } from './index';
 import type { User } from '../types';
 
 const initialState = useStore.getState();
@@ -80,12 +80,12 @@ describe('plan wizard degraded-sync recovery', () => {
       backend: {
         ...initialState.backend,
         mode: 'supabase',
-        status: 'retry_required',
+        status: 'live',
         isConfigured: true,
         isLoading: false,
         isSaving: false,
         isPulling: false,
-        hasLocalChanges: true,
+        hasLocalChanges: false,
         pendingMutations: 0,
         hasRemoteUpdate: false,
         upgradeRequired: false,
@@ -97,39 +97,19 @@ describe('plan wizard degraded-sync recovery', () => {
     });
   });
 
-  it('creates the draft while degraded, reports the guard, and recovers through a direct sync', async () => {
-    const created = useStore.getState().createClientWithPlan(planInput);
-    expect(created.ok).toBe(true);
-    expect(useStore.getState().clients.map(client => client.clientName)).toEqual(['Recovery Co']);
-
-    const guarded = await useStore.getState().commitPendingMutation('client_plan.manage');
-    expect(guarded).toMatchObject({ ok: false, error: pendingMutationMessage });
-    expect(useStore.getState().backend.status).toBe('retry_required');
-
-    rpc.mockResolvedValueOnce({
-      data: {
-        ok: true,
-        commandId: '00000000-0000-4000-8000-000000000201',
-        workspaceVersion: 6,
-        changed: [],
-      },
-      error: null,
-    });
-    await useStore.getState().syncBackendNow('client_plan.manage');
-
-    const after = useStore.getState().backend;
-    expect(after.status).toBe('live');
-    expect(after.hasLocalChanges).toBe(false);
-    expect(after.workspaceVersion).toBe(6);
-    expect(rpc).toHaveBeenCalledWith('aitask_execute_service_command', expect.objectContaining({
-      p_command_type: 'client_plan.manage',
-      p_expected_workspace_version: 5,
+  it('blocks a new draft while degraded until the pending state is resolved', async () => {
+    useStore.setState(state => ({
+      backend: { ...state.backend, status: 'retry_required', hasLocalChanges: false, pendingMutations: 0 },
     }));
+    const created = useStore.getState().createClientWithPlan(planInput);
+    expect(created).toMatchObject({ ok: false, error: pendingMutationMessage });
+    expect(useStore.getState().clients).toEqual([]);
+    expect(isPendingMutationResolution(useStore.getState().backend)).toBe(true);
   });
 
   it('blocks plan creation while a retained command awaits retry and reports the guard', () => {
     useStore.setState(state => ({
-      backend: { ...state.backend, pendingMutations: 1 },
+      backend: { ...state.backend, status: 'retry_required', pendingMutations: 1 },
     }));
 
     const created = useStore.getState().createClientWithPlan(planInput);
@@ -166,12 +146,12 @@ describe('retryPendingSave', () => {
       backend: {
         ...initialState.backend,
         mode: 'supabase',
-        status: 'retry_required',
+        status: 'live',
         isConfigured: true,
         isLoading: false,
         isSaving: false,
         isPulling: false,
-        hasLocalChanges: true,
+        hasLocalChanges: false,
         pendingMutations: 0,
         hasRemoteUpdate: false,
         upgradeRequired: false,
@@ -186,6 +166,9 @@ describe('retryPendingSave', () => {
   it('syncs the local diff directly when no command is retained', async () => {
     const created = useStore.getState().createClientWithPlan(planInput);
     expect(created.ok).toBe(true);
+    useStore.setState(state => ({
+      backend: { ...state.backend, status: 'retry_required', hasLocalChanges: true, pendingMutations: 0 },
+    }));
 
     rpc.mockResolvedValueOnce({
       data: { ok: true, commandId: '00000000-0000-4000-8000-000000000211', workspaceVersion: 6, changed: [] },
@@ -204,6 +187,9 @@ describe('retryPendingSave', () => {
 
   it('retries the retained command when one exists', async () => {
     useStore.getState().createClientWithPlan(planInput);
+    useStore.setState(state => ({
+      backend: { ...state.backend, status: 'retry_required', hasLocalChanges: true, pendingMutations: 1 },
+    }));
     rpc.mockRejectedValueOnce(new Error('fetch failed'));
     await useStore.getState().syncBackendNow('client_plan.manage');
     expect(useStore.getState().backend.status).toBe('retry_required');
@@ -324,9 +310,109 @@ describe('retryPendingSave', () => {
     expect(useStore.getState().backend.pendingMutations).toBe(0);
   });
 
+  it('retries a timed-out member role update with the same command ID', async () => {
+    useStore.setState(state => ({ users: [...state.users, staff] }));
+
+    rpc.mockRejectedValueOnce(new Error('response lost'));
+    const first = await useStore.getState().changeMemberRole(staff.id, 'HOD', { departments: ['Operation'] });
+    expect(first.ok).toBe(false);
+    expect(useStore.getState().backend.status).toBe('retry_required');
+    expect(useStore.getState().backend.pendingMutations).toBe(1);
+    expect(useStore.getState().createClientWithPlan(planInput)).toMatchObject({ ok: false, error: pendingMutationMessage });
+    const firstCommandId = rpc.mock.calls[0][1].p_command_id;
+
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        commandId: firstCommandId,
+        workspaceVersion: 6,
+        replayed: true,
+        member: {
+          id: staff.id,
+          role: 'HOD',
+          customRoleId: null,
+          customRoleName: null,
+          clientName: null,
+          departments: ['Operation'],
+          department: 'Operation',
+          version: 4,
+          updated_at: '2026-09-10T00:00:00.000Z',
+        },
+      },
+      error: null,
+    });
+    const retried = await useStore.getState().retryPendingSave();
+
+    expect(retried).toMatchObject({ ok: true });
+    expect(rpc).toHaveBeenLastCalledWith('aitask_update_member_role', expect.objectContaining({
+      p_command_id: firstCommandId,
+      p_member_id: staff.id,
+      p_role: 'HOD',
+      p_departments: ['Operation'],
+    }));
+    expect(useStore.getState().backend.status).toBe('live');
+    expect(useStore.getState().users.find(user => user.id === staff.id)).toMatchObject({
+      role: 'HOD',
+      departments: ['Operation'],
+      department: 'Operation',
+    });
+  });
+
+  it('keeps a conflicting member department change available for retry', async () => {
+    useStore.setState(state => ({ users: [...state.users, staff] }));
+
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: false,
+        code: 'CONFLICT',
+        error: 'The member changed remotely.',
+        conflict: {
+          entityType: 'member',
+          entityId: staff.id,
+          expectedVersion: 3,
+          actualVersion: 4,
+        },
+      },
+      error: null,
+    });
+    const first = await useStore.getState().updateMemberDepartments(staff.id, ['Video Editor']);
+    expect(first.ok).toBe(false);
+    expect(useStore.getState().backend.status).toBe('conflict');
+    const firstCommandId = rpc.mock.calls[0][1].p_command_id;
+
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        commandId: firstCommandId,
+        workspaceVersion: 6,
+        member: {
+          id: staff.id,
+          departments: ['Video Editor'],
+          department: 'Video Editor',
+          version: 4,
+          updated_at: '2026-09-10T00:00:00.000Z',
+        },
+      },
+      error: null,
+    });
+    const retried = await useStore.getState().retryPendingSave();
+
+    expect(retried).toMatchObject({ ok: true });
+    expect(rpc).toHaveBeenLastCalledWith('aitask_update_member_departments', expect.objectContaining({
+      p_command_id: firstCommandId,
+      p_member_id: staff.id,
+      p_departments: ['Video Editor'],
+    }));
+    expect(useStore.getState().backend.status).toBe('live');
+    expect(useStore.getState().users.find(user => user.id === staff.id)?.departments).toEqual(['Video Editor']);
+  });
+
   it('rebuilds the same typed save instead of replacing a rejected error with no retained change', async () => {
     const created = useStore.getState().createClientWithPlan(planInput);
     expect(created.ok).toBe(true);
+    useStore.setState(state => ({
+      backend: { ...state.backend, status: 'retry_required', hasLocalChanges: true, pendingMutations: 0 },
+    }));
 
     rpc.mockResolvedValueOnce({
       data: { ok: false, code: 'VALIDATION', error: 'The service plan could not be validated.' },
@@ -353,7 +439,7 @@ describe('retryPendingSave', () => {
   it('waits for an in-flight synchronization instead of failing the retry', async () => {
     const created = useStore.getState().createClientWithPlan(planInput);
     expect(created.ok).toBe(true);
-    useStore.setState(state => ({ backend: { ...state.backend, isPulling: true } }));
+    useStore.setState(state => ({ backend: { ...state.backend, status: 'retry_required', hasLocalChanges: true, isPulling: true } }));
 
     rpc.mockResolvedValueOnce({
       data: { ok: true, commandId: '00000000-0000-4000-8000-000000000221', workspaceVersion: 6, changed: [] },
