@@ -536,6 +536,15 @@ const makeBackendRuntimeState = (): BackendRuntimeState => {
 
 type NotificationDraft = Omit<AppNotification, 'id' | 'isRead' | 'createdAt'>;
 
+export const shouldNotifyClientForTask = (
+  task: Pick<Task, 'visibility' | 'clientName'>,
+  nextStatus: string,
+) => (
+  (nextStatus === 'Completed' || nextStatus === 'Waiting Approval')
+  && task.visibility === 'client-visible'
+  && normalizeClientKey(task.clientName).length > 0
+);
+
 const makeNotification = (data: NotificationDraft): AppNotification | null => {
   const targetUserId = data.targetUserId?.trim() || undefined;
   const targetClient = data.targetClient?.trim() || undefined;
@@ -2705,7 +2714,7 @@ export const useStore = create<StoreState>()(
           currentUser?.id,
         );
 
-        if (isReadyForClientReview && task.visibility !== 'internal') {
+        if (shouldNotifyClientForTask(task, nextStatus)) {
           appendNotification(newNotifs, {
             targetClient: task.clientName,
             title: isCompleted ? 'Task Completed' : 'Task Ready for Approval',
@@ -3080,6 +3089,15 @@ export const useStore = create<StoreState>()(
             message: `"${updatedTask.title}" has been assigned to you by ${currentUser.name}.`,
             route: { page: 'tasks', entityId: taskId },
             iconType: 'task'
+          });
+        }
+        if (statusChanged && shouldNotifyClientForTask(updatedTask, status)) {
+          appendNotification(notifications, {
+            targetClient: updatedTask.clientName,
+            title: status === 'Completed' ? 'Task Completed' : 'Task Ready for Approval',
+            message: `"${updatedTask.title}" is ready for client review.`,
+            route: { page: 'tasks', entityId: taskId },
+            iconType: 'success',
           });
         }
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Task, User } from '../types';
-import { useStore } from './index';
+import { shouldNotifyClientForTask, useStore } from './index';
 
 const initialState = useStore.getState();
 
@@ -57,5 +57,21 @@ describe('task update notification recipients', () => {
     expect(recipients).toEqual([boss.id, pmA.id].sort());
     expect(recipients).not.toContain(pmB.id);
     expect(statusNotices.every(notification => !notification.targetRole)).toBe(true);
+  });
+
+  it('suppresses client notices for internal or malformed tasks', () => {
+    useStore.getState().updateTaskStatus(task.id, 'Completed');
+    expect(useStore.getState().notifications.some(notification => notification.targetClient === 'Acme')).toBe(false);
+    expect(shouldNotifyClientForTask(task, 'Completed')).toBe(false);
+    expect(shouldNotifyClientForTask({ ...task, visibility: 'client-visible', clientName: '   ' }, 'Completed')).toBe(false);
+  });
+
+  it('creates client notices consistently for status and full-edit paths only when visible', () => {
+    useStore.setState({ tasks: [{ ...task, visibility: 'client-visible' }] });
+    useStore.getState().updateTaskStatus(task.id, 'Waiting Approval');
+    expect(useStore.getState().notifications.filter(notification => notification.targetClient === 'Acme')).toHaveLength(1);
+    useStore.setState({ notifications: [], tasks: [{ ...task, visibility: 'client-visible' }] });
+    expect(useStore.getState().updateTask(task.id, { status: 'Completed' })).toMatchObject({ ok: true });
+    expect(useStore.getState().notifications.filter(notification => notification.targetClient === 'Acme')).toHaveLength(1);
   });
 });
