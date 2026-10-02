@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Task } from '../types';
+import type { ClientServicePlan, ServiceCycle, Task } from '../types';
 import {
+  getClientCurrentCycle,
+  getClientApprovalDate,
+  getClientServicePlan,
   getClientDeliveryStage,
   getClientDeliveryStageLabel,
   getClientFocusTask,
@@ -117,5 +120,81 @@ describe('Client portal reporting', () => {
     expect(groups.timing_changed.map(task => task.id)).toEqual(['late']);
     expect(groups.in_delivery.map(task => task.id)).toEqual(['active']);
     expect(groups.scheduled.map(task => task.id)).toEqual(['scheduled']);
+  });
+});
+
+const makeCycle = (overrides: Partial<ServiceCycle> = {}): ServiceCycle => ({
+  id: 'current', clientId: 'acme', clientName: 'Acme', planId: 'plan',
+  planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31',
+  status: 'Published', currency: 'MYR', serviceItems: [], addonSnapshots: [],
+  discountType: 'none', discountValue: 0, taxRateBps: 0,
+  createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z',
+  ...overrides,
+});
+
+describe('Client current delivery period', () => {
+  const now = new Date(2026, 9, 2, 12);
+  const current = makeCycle();
+  const past = makeCycle({ id: 'past', periodStart: '2026-09-01', periodEnd: '2026-09-30', status: 'Completed' });
+  const next = makeCycle({ id: 'next', periodStart: '2026-11-01', periodEnd: '2026-11-30' });
+  const later = makeCycle({ id: 'later', periodStart: '2026-12-01', periodEnd: '2026-12-31' });
+
+  it('keeps the current period visible when future periods are published', () => {
+    expect(getClientCurrentCycle([next, past, current, later], 'acme', now)?.id).toBe('current');
+    expect(getClientCurrentCycle([current, next], 'acme', new Date(2026, 9, 31, 23))?.id).toBe('current');
+  });
+
+  it('falls back to the latest past period or earliest upcoming period', () => {
+    expect(getClientCurrentCycle([next, past, later], 'acme', now)?.id).toBe('past');
+    expect(getClientCurrentCycle([later, next], 'acme', now)?.id).toBe('next');
+  });
+
+  it('excludes foreign, unpublished, cancelled, and malformed periods', () => {
+    const hidden = [
+      makeCycle({ clientId: 'foreign' }),
+      makeCycle({ status: 'Draft' }),
+      makeCycle({ status: 'Cancelled' }),
+      makeCycle({ periodStart: 'invalid' }),
+      makeCycle({ periodEnd: 'invalid' }),
+      makeCycle({ periodEnd: '2026-09-30' }),
+    ];
+    expect(getClientCurrentCycle(hidden, 'acme', now)).toBeUndefined();
+    expect(getClientCurrentCycle([current], undefined, now)).toBeUndefined();
+  });
+});
+
+describe('Client service scope updates', () => {
+  const plan: ClientServicePlan = {
+    id: 'old', clientId: 'acme', clientName: 'Acme', name: 'Scope', origin: 'custom',
+    revision: 1, status: 'Active', currency: 'MYR', serviceItems: [],
+    discountType: 'none', discountValue: 0, taxRateBps: 0, startDate: '2026-10-01',
+    billingDay: 1, createdBy: 'pm', createdAt: '2026-10-01', updatedAt: '2026-10-01',
+  };
+  it('shows the latest published plan revision regardless of record order', () => {
+    const latest = { ...plan, id: 'latest', revision: 2, status: 'Paused' as const };
+    expect(getClientServicePlan([plan, latest, { ...plan, id: 'draft', revision: 3, status: 'Draft' }], 'acme')?.id).toBe('latest');
+    expect(getClientServicePlan([latest, plan], 'acme')?.id).toBe('latest');
+  });
+  it('excludes other companies and ended plans', () => {
+    expect(getClientServicePlan([{ ...plan, clientId: 'other' }, { ...plan, status: 'Ended' }], 'acme')).toBeUndefined();
+    expect(getClientServicePlan([plan], undefined)).toBeUndefined();
+  });
+});
+
+describe('recorded client approval timing', () => {
+  it('uses the newest valid approval event rather than task update or completion time', () => {
+    const approved = makeTask({ clientApprovalStatus: 'Approved', completedAt: '2026-10-01', updatedAt: '2026-10-05',
+      approvalHistory: [
+        { id: 'new', userId: 'client', status: 'Approved', createdAt: '2026-10-03T12:00:00Z' },
+        { id: 'old', userId: 'client', status: 'Approved', createdAt: '2026-10-02T12:00:00Z' },
+        { id: 'invalid', userId: 'client', status: 'Approved', createdAt: 'invalid' },
+      ] });
+    expect(getClientApprovalDate(approved)?.toISOString()).toBe('2026-10-03T12:00:00.000Z');
+  });
+  it('keeps missing history unknown and does not reuse approval from a reopened delivery', () => {
+    expect(getClientApprovalDate(makeTask({ clientApprovalStatus: 'Approved' }))).toBeNull();
+    expect(getClientApprovalDate(makeTask({ clientApprovalStatus: 'Rejected', approvalHistory: [
+      { id: 'old', userId: 'client', status: 'Approved', createdAt: '2026-10-02T12:00:00Z' },
+    ] }))).toBeNull();
   });
 });

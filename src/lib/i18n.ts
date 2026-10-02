@@ -1535,6 +1535,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Outcome': '结果',
   'Untracked': '未追踪',
   'On-time rate': '准时率',
+  'On-time completion rate': '按时完成率',
   'Tracked completion rate': '已追踪完成率',
   'Due work by week': '按周统计的到期工作',
   'View weekly data table': '查看每周数据表',

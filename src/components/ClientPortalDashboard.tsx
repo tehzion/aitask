@@ -2,6 +2,8 @@ import { ArrowRight, CalendarDays, CheckCircle2, Clock3, FileCheck2, MessageSqua
 import { Link } from 'react-router-dom';
 import type { Task, WorkspaceMember } from '../types';
 import {
+  getClientCurrentCycle,
+  getClientServicePlan,
   getClientDeliveryStage,
   getClientDeliveryStageLabel,
   getClientFocusTask,
@@ -44,10 +46,8 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
   const deliverables = useStore(state => state.deliverables);
   const clientKey = currentUser?.companyName?.trim().toLowerCase();
   const client = clients.find(item => item.clientName.trim().toLowerCase() === clientKey);
-  const activePlan = clientPlans.find(item => item.clientId === client?.id && item.status === 'Active');
-  const currentCycle = [...serviceCycles]
-    .filter(item => item.clientId === client?.id && ['Published', 'Completed'].includes(item.status))
-    .sort((left, right) => right.periodStart.localeCompare(left.periodStart))[0];
+  const activePlan = getClientServicePlan(clientPlans, client?.id);
+  const currentCycle = getClientCurrentCycle(serviceCycles, client?.id);
   const cycleDeliverables = currentCycle ? deliverables.filter(item => item.cycleId === currentCycle.id) : [];
   const deliveredCount = cycleDeliverables.filter(item => item.status === 'Delivered').length;
   const cycleCompletion = cycleDeliverables.length ? Math.round((deliveredCount / cycleDeliverables.length) * 100) : 0;
@@ -143,8 +143,8 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
 
       <section className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80" aria-labelledby="needs-review-title">
         <header className="flex flex-wrap items-end justify-between gap-3 border-b border-line/70 px-4 py-4 sm:px-5">
-          <div><h2 id="needs-review-title" className="font-semibold text-ink">{t('clientPortal.needsReview')}</h2><p className="mt-1 text-sm text-muted">{t('clientPortal.approveOrRequestChange')}</p></div>
-          <Link to="/tasks?stage=needs_review" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent">{t('clientPortal.viewAll')}<ArrowRight className="h-4 w-4" /></Link>
+          <div><h2 id="needs-review-title" className="font-semibold text-ink">{t('clientPortal.needsReview')}</h2><p className="mt-1 text-sm text-muted">{t('clientPortal.reviewCount', { count: groups.needs_review.length })}</p></div>
+          <Link to="/tasks?stage=needs_review" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent">{t('clientPortal.viewAllReviews', { count: groups.needs_review.length })}<ArrowRight className="h-4 w-4" /></Link>
         </header>
         <div className="divide-y divide-line/70">
           {reviewQueue.map(task => deliveryRow(task, t('Review deliverable')))}

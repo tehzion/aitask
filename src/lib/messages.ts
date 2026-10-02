@@ -8,6 +8,16 @@ export type MessageValues = Record<string, MessageValue>;
  * identifiers instead of passing English prose through the DOM translator.
  */
 export const enMessages = {
+  'clientPortal.reviewCount': '{count} deliveries need your review',
+  'clientPortal.viewAllReviews': 'View all {count} review requests',
+  'clientReport.timingTitle': 'Agency completion and your approval',
+  'clientReport.timingDescription': 'On-time and late results use the agency completion date against the deadline. Your approval date is recorded separately and does not change the agency timing result. Missing dates are never estimated.',
+  'clientReport.agencyDate': 'Agency completion date',
+  'clientReport.approvalDate': 'Client approval date',
+  'clientReport.noDate': 'No recorded date',
+  'clientReport.notApproved': 'Not yet approved',
+  'clientReport.stage': 'Client review stage',
+
   'common.close': 'Close',
   'common.closePanel': 'Close panel',
   'common.closeNamed': 'Close {name}',
@@ -314,6 +324,16 @@ export const enMessages = {
 } as const;
 
 export const zhMessages: Record<keyof typeof enMessages, string> = {
+  'clientPortal.reviewCount': '{count} 项交付需要您审阅',
+  'clientPortal.viewAllReviews': '查看全部 {count} 项审阅请求',
+  'clientReport.timingTitle': '团队完成时间与您的批准时间',
+  'clientReport.timingDescription': '按时与延迟结果根据团队完成日期和截止日期计算。您的批准日期单独记录，不影响团队交付时间结果。缺失日期不会被估算。',
+  'clientReport.agencyDate': '团队完成日期',
+  'clientReport.approvalDate': '客户批准日期',
+  'clientReport.noDate': '未记录日期',
+  'clientReport.notApproved': '尚未批准',
+  'clientReport.stage': '客户审阅阶段',
+
   'common.close': '关闭',
   'common.closePanel': '关闭面板',
   'common.closeNamed': '关闭“{name}”',

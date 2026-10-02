@@ -10,6 +10,7 @@ import {
   startOfMonth,
 } from 'date-fns';
 import type { Deliverable, ServiceCycle, Task, User } from '../types';
+import { getClientTaskStage } from './clientPortal';
 import { getWorkWeekRange } from './workWeek';
 import { formatLocalizedDate, formatLocalizedMonth, type AppLocale } from './i18n';
 
@@ -85,7 +86,9 @@ export const taskAppearsInDeliveryPeriod = (
   task: Task,
   range: DeliveryPeriodRange,
   today = new Date(),
+  clientView = false,
 ) => {
+  const taskCompleted = clientView ? getClientTaskStage(task) === 'approved' : isTaskCompleted(task);
   const due = dateValue(task.dueDate);
   const completed = dateValue(task.completedAt);
   if (isWithin(due, range) || isWithin(completed, range)) return true;
@@ -93,7 +96,7 @@ export const taskAppearsInDeliveryPeriod = (
   // Open overdue work carries forward so it cannot disappear from the tracker.
   const end = atStartOfDay(range.end);
   const start = dateValue(task.startDate);
-  const openAndStarted = !isTaskCompleted(task) && (!start || !isAfter(start, end));
+  const openAndStarted = !taskCompleted && (!start || !isAfter(start, end));
   const overdueByPeriodEnd = due && isBefore(atStartOfDay(due), end);
   const selectedPeriodHasStarted = !isAfter(atStartOfDay(range.start), atStartOfDay(today));
   if (openAndStarted && overdueByPeriodEnd && selectedPeriodHasStarted) return true;
@@ -104,7 +107,7 @@ export const taskAppearsInDeliveryPeriod = (
   const todayStart = atStartOfDay(today);
   const startedByToday = !start || !isAfter(atStartOfDay(start), todayStart);
   const activePeriod = isWithin(todayStart, range);
-  return Boolean(!due && !isTaskCompleted(task) && startedByToday && (
+  return Boolean(!due && !taskCompleted && startedByToday && (
     isWithin(start, range) || activePeriod
   ));
 };
@@ -126,6 +129,8 @@ export const buildClientDeliverySummaries = ({
   period,
   range,
   today = new Date(),
+  clientView = false,
+  searchQuery = '',
 }: {
   clientNames: string[];
   tasks: Task[];
@@ -135,21 +140,32 @@ export const buildClientDeliverySummaries = ({
   period: DeliveryTrackerPeriod;
   range: DeliveryPeriodRange;
   today?: Date;
+  clientView?: boolean;
+  searchQuery?: string;
 }): ClientDeliverySummary[] => {
+  const query = searchQuery.trim().toLowerCase();
+  const matches = (values: (string | undefined)[]) => !query || values.some(value => value?.toLowerCase().includes(query));
+  tasks = tasks.filter(task => matches([task.clientName, task.title, task.serviceType]));
+  const matchingTaskIds = new Set(tasks.map(task => task.id));
+  deliverables = deliverables.filter(item => matches([item.clientName, item.title])
+    || Boolean(item.primaryTaskId && matchingTaskIds.has(item.primaryTaskId))
+    || (item.taskIds || []).some(id => matchingTaskIds.has(id)));
+  const completedForView = (item: Task) => clientView ? getClientTaskStage(item) === 'approved' : isTaskCompleted(item);
   const userIds = new Set(users.filter(user => user.role !== 'Client').map(user => user.id));
 
   return clientNames.map(clientName => {
     const key = normalize(clientName);
     const clientTasks = tasks.filter(task => (
-      normalize(task.clientName) === key && (period === 'all' || taskAppearsInDeliveryPeriod(task, range, today))
+      normalize(task.clientName) === key && (period === 'all' || taskAppearsInDeliveryPeriod(task, range, today, clientView))
     ));
     const clientTaskIds = new Set(clientTasks.map(task => task.id));
     const clientCycles = cycles
-      .filter(cycle => normalize(cycle.clientName) === key && (period === 'all' || cycleOverlaps(cycle, range)))
+      .filter(cycle => normalize(cycle.clientName) === key && (!clientView || ['Published', 'Completed'].includes(cycle.status)) && (period === 'all' || cycleOverlaps(cycle, range)))
       .sort((left, right) => right.periodStart.localeCompare(left.periodStart));
     const cycleIds = new Set(clientCycles.map(cycle => cycle.id));
     const clientDeliverables = deliverables.filter(deliverable => {
       if (normalize(deliverable.clientName) !== key) return false;
+      if (clientView && !cycles.some(cycle => cycle.id === deliverable.cycleId && normalize(cycle.clientName) === key && ['Published', 'Completed'].includes(cycle.status))) return false;
       if (period === 'all') return true;
       const deliveredInPeriod = isWithin(
         dateValue(deliverable.deliveredAt || (deliverable.status === 'Delivered' ? deliverable.updatedAt : undefined)),
@@ -162,18 +178,18 @@ export const buildClientDeliverySummaries = ({
       return deliveredInPeriod || linkedToTrackedTask;
     });
 
-    const openTasks = clientTasks.filter(task => !isTaskCompleted(task) && !isTaskCancelled(task));
-    const completed = clientTasks.filter(task => isTaskCompleted(task) && !isTaskCancelled(task)).length;
-    const inProgress = openTasks.filter(task => task.status === 'In Progress').length;
-    const review = openTasks.filter(task => task.status === 'Waiting Approval').length;
+    const openTasks = clientTasks.filter(task => !completedForView(task) && !isTaskCancelled(task));
+    const completed = clientTasks.filter(task => completedForView(task) && !isTaskCancelled(task)).length;
+    const inProgress = openTasks.filter(task => task.status === 'In Progress' && (!clientView || getClientTaskStage(task) === 'active')).length;
+    const review = openTasks.filter(task => clientView ? getClientTaskStage(task) === 'awaiting_review' : task.status === 'Waiting Approval').length;
     const todayStart = atStartOfDay(today);
     const overdue = openTasks.filter(task => {
       const due = dateValue(task.dueDate);
-      return Boolean(due && isBefore(atStartOfDay(due), todayStart));
+      return Boolean(due && (!clientView || getClientTaskStage(task) === 'active') && isBefore(atStartOfDay(due), todayStart));
     }).length;
     const delivered = clientDeliverables.filter(item => item.status === 'Delivered').length;
     const included = clientDeliverables.length;
-    const totalForProgress = included || clientTasks.length;
+    const totalForProgress = included || clientTasks.filter(task => !isTaskCancelled(task)).length;
     const completeForProgress = included ? delivered : completed;
     const nextDeadline = openTasks
       .map(task => ({ raw: task.dueDate, parsed: dateValue(task.dueDate) }))

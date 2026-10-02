@@ -4,11 +4,12 @@ import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save, ChevronDown, AlertTriangle, UsersRound } from 'lucide-react';
 import { Department, Priority, Task, TaskStatus } from '../types';
-import { getTaskAccess, canReviewTaskAsClient, isDepartmentScopedUser } from '../lib/access';
+import { canViewTask, getTaskAccess, canReviewTaskAsClient, isDepartmentScopedUser } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate, parseOptionalDate, cn } from '../lib/utils';
 import { isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
 import type { SecureCommandType } from '../lib/secureWorkspace';
+import ClientDeliveryFocus from './ClientDeliveryFocus';
 import ModalShell from './ModalShell';
 import ConfirmDialog from './ConfirmDialog';
 import { useI18n } from './I18nProvider';
@@ -61,7 +62,7 @@ const ExternalTaskLink: React.FC<{ value: string; label: string; invalidLabel: s
   );
 };
 
-const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTask }) => {
+const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTask }) => {
   const { locale, t } = useI18n();
   const {
     users,
@@ -977,6 +978,17 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
         )}
     </ModalShell>
   );
+};
+
+const TaskDetailsModal: React.FC<Props> = props => {
+  const { currentUser, tasks, rolePermissions } = useStore(useShallow(state => ({
+    currentUser: state.currentUser, tasks: state.tasks, rolePermissions: state.rolePermissions,
+  })));
+  if (currentUser?.role === 'Client') {
+    const task = tasks.find(item => item.id === props.task?.id);
+    return <ClientDeliveryFocus task={props.isOpen && task && canViewTask(currentUser, task, rolePermissions) ? task : null} onClose={props.onClose} />;
+  }
+  return <InternalTaskDetailsModal {...props} />;
 };
 
 export default TaskDetailsModal;

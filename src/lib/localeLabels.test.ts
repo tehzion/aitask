@@ -10,6 +10,7 @@ import {
 describe('locale-aware enum labels', () => {
   it('localizes built-in values', () => {
     expect(getLocalizedStatus('In Progress', 'zh')).toBe('进行中');
+    expect(getLocalizedStatus('Published', 'zh')).toBe('已发布');
     expect(getLocalizedRole('Project Manager', 'zh')).toBe('项目经理');
     expect(getLocalizedDepartment('Designer', 'zh')).toBe('设计');
     expect(getLocalizedPriority('Urgent', 'zh')).toBe('紧急');

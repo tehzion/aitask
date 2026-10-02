@@ -5,6 +5,9 @@ import { useStore } from '../store';
 import { Button, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { useI18n } from '../components/I18nProvider';
 import { cardBase, pageShell } from '../components/uiTokens';
+import { getClientApprovalDate, getClientDeliveryStageLabel, getClientTaskStage } from '../lib/clientPortal';
+import { isTaskCompleted } from '../lib/taskCompletion';
+import { parseOptionalDate } from '../lib/utils';
 import { getVisibleTasks } from '../lib/access';
 import { getDueWorkDepartmentPerformance, getDueWorkPerformance, type DueWorkOutcome } from '../lib/taskReporting';
 import type { ReportChartColors } from '../components/ReportsCharts';
@@ -96,7 +99,7 @@ const Reports: React.FC = () => {
       overdue: t('Overdue'),
       untracked: t('Untracked'),
     };
-    const headers = [t('Week'), t('Task'), t('Client'), t('Assignee'), t('Department'), t('Outcome')];
+    const headers = [t('Week'), t('Task'), t('Client'), t('Assignee'), t('Department'), t('Outcome'), ...(isClientUser ? [t('clientReport.agencyDate'), t('clientReport.approvalDate'), t('clientReport.stage')] : [])];
     const rows = performance.flatMap(week => week.outcomes.map(({ task, outcome }) => [
       formatWeekLabel(week),
       task.title,
@@ -104,6 +107,7 @@ const Reports: React.FC = () => {
       reportAssigneeName(task.assignedTo, users, { unassigned: t('Unassigned'), unavailable: t('Unavailable member') }),
       task.department || t('Unassigned'),
       outcomeLabels[outcome],
+      ...(isClientUser ? [isTaskCompleted(task) ? parseOptionalDate(task.completedAt)?.toISOString() || '' : '', getClientApprovalDate(task)?.toISOString() || '', t(getClientDeliveryStageLabel(task))] : []),
     ]));
     const url = URL.createObjectURL(createCsvBlob([headers, ...rows]));
     const anchor = document.createElement('a');
@@ -145,6 +149,26 @@ const Reports: React.FC = () => {
         )}
       />
 
+      {isClientUser && <section className="rounded-panel bg-surface p-4 ring-1 ring-line/80 sm:p-5" aria-labelledby="client-report-timing-title">
+        <h2 id="client-report-timing-title" className="font-semibold text-ink">{t('clientReport.timingTitle')}</h2>
+        <p className="mt-2 text-sm leading-6 text-muted">{t('clientReport.timingDescription')}</p>
+        {dueTasks.length > 0 && <div className="mt-4 overflow-x-auto" tabIndex={0} role="region" aria-label={t('clientReport.timingTitle')}>
+          <table className="w-full min-w-[600px] text-left text-sm">
+            <thead><tr>{[t('Task'), t('clientReport.agencyDate'), t('clientReport.approvalDate'), t('clientReport.stage')].map(label => <th key={label} scope="col" className="px-3 py-2 font-semibold">{label}</th>)}</tr></thead>
+            <tbody className="divide-y divide-line/70">{dueTasks.map(task => {
+              const completed = isTaskCompleted(task) ? parseOptionalDate(task.completedAt) : null;
+              const approved = getClientApprovalDate(task);
+              return <tr key={task.id}>
+                <th scope="row" data-i18n-skip className="px-3 py-3 font-medium">{task.title}</th>
+                <td className="px-3 py-3">{completed ? formatLocalizedDate(completed, locale) : t('clientReport.noDate')}</td>
+                <td className="px-3 py-3">{approved ? formatLocalizedDate(approved, locale) : t(getClientTaskStage(task) === 'approved' ? 'clientReport.noDate' : 'clientReport.notApproved')}</td>
+                <td className="px-3 py-3">{t(getClientDeliveryStageLabel(task))}</td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>}
+      </section>}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
         <MetricCard title={t('Due tasks')} value={overview.due} icon={Clock} tone="indigo" />
         <MetricCard title={t('On time')} value={overview.onTime} icon={CheckCircle2} tone="emerald" />
@@ -152,7 +176,7 @@ const Reports: React.FC = () => {
         <MetricCard title={t('Overdue')} value={overview.overdue} icon={AlertCircle} tone="red" />
         <MetricCard title={t('Upcoming')} value={overview.upcoming} icon={Clock} tone="indigo" />
         <MetricCard title={t('Open today')} value={overview.open} icon={Clock} tone="amber" />
-        <MetricCard title={t('Tracked completion rate')} value={`${overview.completionRate}%`} icon={CheckCircle2} tone="emerald" footer={`${overview.tracked} ${t('Tracked').toLowerCase()}`} />
+        <MetricCard title={t('On-time completion rate')} value={`${overview.completionRate}%`} icon={CheckCircle2} tone="emerald" footer={`${overview.tracked} ${t('Tracked').toLowerCase()}`} />
         {!isClientUser && <MetricCard title={t('Assignees in period')} value={overview.assigneesInPeriod} icon={Users} tone="indigo" />}
       </div>
 
@@ -179,7 +203,7 @@ const Reports: React.FC = () => {
                       <th scope="col" className="px-3 py-2 text-right font-semibold">{t('Open today')}</th>
                       <th scope="col" className="px-3 py-2 text-right font-semibold">{t('Overdue')}</th>
                       <th scope="col" className="px-3 py-2 text-right font-semibold">{t('Untracked')}</th>
-                      <th scope="col" className="px-3 py-2 text-right font-semibold">{t('Tracked completion rate')}</th>
+                      <th scope="col" className="px-3 py-2 text-right font-semibold">{t('On-time completion rate')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line/70">
@@ -225,7 +249,7 @@ const Reports: React.FC = () => {
                         <th scope="col" className="px-3 py-2 text-right font-semibold">{t('Upcoming')}</th>
                         <th scope="col" className="px-3 py-2 text-right font-semibold">{t('Open today')}</th>
                         <th scope="col" className="px-3 py-2 text-right font-semibold">{t('Overdue')}</th>
-                        <th scope="col" className="px-3 py-2 text-right font-semibold">{t('Tracked completion rate')}</th>
+                        <th scope="col" className="px-3 py-2 text-right font-semibold">{t('On-time completion rate')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line/70">
@@ -270,7 +294,7 @@ const Reports: React.FC = () => {
                   <th scope="col" className="border-b border-line px-6 py-4 text-center font-semibold">{t('Open today')}</th>
                   <th scope="col" className="border-b border-line px-6 py-4 text-center font-semibold">{t('Overdue')}</th>
                   <th scope="col" className="border-b border-line px-6 py-4 text-center font-semibold">{t('Untracked')}</th>
-                  <th scope="col" className="border-b border-line px-6 py-4 text-right font-semibold">{t('Tracked completion rate')}</th>
+                  <th scope="col" className="border-b border-line px-6 py-4 text-right font-semibold">{t('On-time completion rate')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/70">
@@ -317,7 +341,7 @@ const Reports: React.FC = () => {
                   </div>
                   <span className="shrink-0 text-sm font-bold text-ink">{dept.completionRate}%</span>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-line/60" aria-label={t('Tracked completion rate')} role="img">
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-line/60" aria-label={t('On-time completion rate')} role="img">
                   <div
                     className={`h-full rounded-full ${dept.completionRate >= 80 ? 'bg-emerald-500' : dept.completionRate >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
                     style={{ width: `${dept.completionRate}%` }}

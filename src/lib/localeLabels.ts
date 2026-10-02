@@ -3,7 +3,7 @@ import { translateUiText, type AppLocale } from './i18n';
 // These sets are deliberately closed. Values outside them are user-authored
 // content (custom roles, departments, services, and device names) and must be
 // rendered exactly as entered.
-const statuses = new Set(['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled', 'Planned', 'Ready', 'Delivered', 'Draft', 'Active', 'Paused', 'Ended']);
+const statuses = new Set(['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled', 'Planned', 'Ready', 'Delivered', 'Draft', 'Published', 'Active', 'Paused', 'Ended']);
 const roles = new Set(['Boss Koo', 'Super Admin', 'Project Manager', 'HOD', 'Staff', 'Client', 'Operation', 'Account', 'Finance', 'Designer', 'Video Shooting', 'Video Editor']);
 const departments = new Set(['Operation', 'Management', 'Designer', 'Video Shooting', 'Video Editor', 'Account', 'Finance', 'Client']);
 const priorities = new Set(['Urgent', 'High', 'Medium', 'Low']);

@@ -8,6 +8,13 @@ number remain uniquely identifiable.
 
 ### Added
 
+- Client Reports distinguish recorded agency completion dates from client approval
+  dates, explain the on-time metric, and export both dates with the review stage.
+- Client Home shows the full pending-review count and a counted link to all reviews.
+
+- Client delivery approval notes and feedback now use account- and delivery-scoped
+  draft recovery, unsaved-work warnings, and protection for edits made during saves.
+
 - Boss Koo can now edit the permission template for every default role
   (Project Manager, HOD, Staff, Client) from Approvals, not just HOD. Members
   on a base role inherit the edited template unless they hold a custom role or
@@ -21,6 +28,26 @@ number remain uniquely identifiable.
   tracker, and Client workspace.
 
 ### Fixed
+
+- Tracker search narrows the actual task and delivery rows and recalculates their
+  statistics; matching task context retains linked deliverables.
+
+- Client tracker counts and labels now follow client approval stages, retain
+  unfinished reviews across periods, exclude unpublished cycle totals, and omit
+  cancelled tasks from completion-rate denominators. Tracker totals follow filters.
+- Reports label the on-time share of tracked completions as an on-time completion
+  rate, matching the calculation.
+
+- Client Home and Services consistently show the latest active or paused plan
+  revision after PM service-scope changes.
+
+- Client task details opened from the delivery tracker now use the same client
+  review panel as Deliveries, including feedback, approval history, and recovery.
+
+- Client Home and company Overview now keep the current delivery period visible
+  when future cycles are published, with consistent past/upcoming fallbacks.
+- Client company workspaces translate delivery stages and progress counts in
+  Chinese; published cycle badges are localized on Home.
 
 - Chinese coverage guardrails in `i18n.test.ts` now also fail on untranslated
   raw JSX text, template-literal `t()` copy without a pattern, unwrapped

@@ -162,3 +162,74 @@ describe('delivery tracker periods', () => {
     expect(summaries[0]).toMatchObject({ included: 1, delivered: 1, remaining: 0, progress: 100 });
   });
 });
+
+describe('client-facing statistic reconciliation', () => {
+  const today = new Date(2026, 8, 10, 12);
+  const input = { clientNames: ['Acme'], users, period: 'all' as const,
+    range: getDeliveryPeriodRange('all', today), today, cycles: [], deliverables: [] };
+
+  it('counts pending review as open, and only approved tasks as completed for clients', () => {
+    const tasks = [
+      task({ id: 'ready', clientName: 'Acme', status: 'Completed', isCompleted: true }),
+      task({ id: 'waiting', clientName: 'Acme', status: 'Waiting Approval', isCompleted: true }),
+      task({ id: 'approved', clientName: 'Acme', clientApprovalStatus: 'Approved' }),
+      task({ id: 'active', clientName: 'Acme', status: 'In Progress' }),
+      task({ id: 'cancelled', clientName: 'Acme', status: 'Cancelled', isCompleted: true }),
+    ];
+    const [summary] = buildClientDeliverySummaries({ ...input, tasks, clientView: true });
+    expect(summary).toMatchObject({ open: 3, review: 2, completed: 1, overdue: 1, inProgress: 1, progress: 25 });
+    expect(summary.open + summary.completed).toBe(tasks.filter(item => item.status !== 'Cancelled').length);
+    expect(buildClientDeliverySummaries({ ...input, tasks })[0].completed).toBe(2);
+  });
+
+  it('does not lower task progress because cancelled work remains in history', () => {
+    const [summary] = buildClientDeliverySummaries({ ...input, tasks: [
+      task({ id: 'done', clientName: 'Acme', status: 'Completed', isCompleted: true }),
+      task({ id: 'cancelled', clientName: 'Acme', status: 'Cancelled' }),
+    ] });
+    expect(summary.progress).toBe(100);
+  });
+
+  it('counts only published cycle deliverables in client statistics', () => {
+    const [summary] = buildClientDeliverySummaries({ ...input, tasks: [], clientView: true,
+      cycles: [cycle, { ...cycle, id: 'draft', status: 'Draft' }, { ...cycle, id: 'cancelled', status: 'Cancelled' }],
+      deliverables: [
+        deliverable({ id: 'done', status: 'Delivered' }), deliverable({ id: 'remaining' }),
+        deliverable({ id: 'draft-delivery', cycleId: 'draft', status: 'Delivered' }),
+        deliverable({ id: 'cancelled-delivery', cycleId: 'cancelled' }),
+        deliverable({ id: 'orphan', cycleId: 'missing' }),
+      ],
+    });
+    expect(summary).toMatchObject({ included: 2, delivered: 1, remaining: 1, progress: 50 });
+    expect(summary.delivered + summary.remaining).toBe(summary.included);
+  });
+
+  it('carries unfinished client review into the current period even after internal completion', () => {
+    const review = task({ id: 'ready', clientName: 'Acme', status: 'Completed', isCompleted: true,
+      dueDate: '2026-08-20', completedAt: '2026-08-20', startDate: '2026-08-01' });
+    const range = getDeliveryPeriodRange('month', today);
+    expect(taskAppearsInDeliveryPeriod(review, range, today, true)).toBe(true);
+    expect(taskAppearsInDeliveryPeriod(review, range, today)).toBe(false);
+  });
+});
+
+describe('matching tracker records', () => {
+  it('recomputes task statistics and hides unrelated rows for a task search', () => {
+    const [summary] = buildClientDeliverySummaries({ clientNames: ['Acme'], users, cycles: [], deliverables: [],
+      period: 'all', range: getDeliveryPeriodRange('all', new Date()), searchQuery: 'campaign',
+      tasks: [task({ id: 'Campaign design', clientName: 'Acme', status: 'Completed', isCompleted: true }),
+        task({ id: 'Unrelated video', clientName: 'Acme' })] });
+    expect(summary.tasks.map(item => item.id)).toEqual(['Campaign design']);
+    expect(summary).toMatchObject({ open: 0, completed: 1, progress: 100 });
+  });
+  it('retains linked deliverable context and searches company names case-insensitively', () => {
+    const input = { clientNames: ['Acme'], users, cycles: [cycle],
+      period: 'all' as const, range: getDeliveryPeriodRange('all', new Date()),
+      tasks: [task({ id: 'Campaign design', clientName: 'Acme' }), task({ id: 'Other task', clientName: 'Acme' })],
+      deliverables: [deliverable({ id: 'Linked delivery', taskIds: ['Campaign design'] }), deliverable({ id: 'Other delivery' })] };
+    expect(buildClientDeliverySummaries({ ...input, searchQuery: 'campaign' })[0].deliverables.map(item => item.id)).toEqual(['Linked delivery']);
+    expect(buildClientDeliverySummaries({ ...input, searchQuery: ' ACME ' })[0].tasks).toHaveLength(2);
+    expect(buildClientDeliverySummaries({ ...input, searchQuery: 'Other delivery' })[0].tasks).toHaveLength(0);
+    expect(buildClientDeliverySummaries({ ...input, searchQuery: 'Other delivery' })[0].included).toBe(1);
+  });
+});

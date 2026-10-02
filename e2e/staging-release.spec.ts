@@ -247,20 +247,20 @@ test('client workspace, review actions, isolation, and notification read state w
   await page.goto(`/tasks?taskId=${encodeURIComponent(fixture.productionTaskId)}`);
   const delivery = page.getByRole('dialog', { name: 'Delivery details' });
   await expect(delivery).toBeVisible();
-  await delivery.getByPlaceholder('Optional approval or revision note...').fill('Please adjust the release QA delivery.');
+  await delivery.getByLabel('Decision note').fill('Please adjust the release QA delivery.');
   await delivery.getByRole('button', { name: 'Request changes' }).click();
-  await expect(delivery.getByText('Changes requested', { exact: true })).toBeVisible();
+  await expect(delivery.getByText('requested changes', { exact: false })).toBeVisible();
 
   await page.goto(`/tasks?taskId=${encodeURIComponent(fixture.approvalTaskId)}`);
   const approval = page.getByRole('dialog', { name: 'Delivery details' });
   await expect(approval).toBeVisible();
-  await approval.getByRole('button', { name: 'Approve' }).click();
-  await expect(approval.getByText('Approved', { exact: true })).toBeVisible();
+  await approval.getByRole('button', { name: 'Approve delivery', exact: true }).click();
+  await expect(approval.getByText('This delivery is approved.', { exact: true })).toBeVisible();
   await page.reload();
   const persistedApproval = page.getByRole('dialog', { name: 'Delivery details' });
   await expect(persistedApproval).toBeVisible();
-  await expect(persistedApproval.getByText('Approved', { exact: true })).toBeVisible();
-  await expect(persistedApproval.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+  await expect(persistedApproval.getByText('This delivery is approved.', { exact: true })).toBeVisible();
+  await expect(persistedApproval.getByRole('button', { name: 'Approve delivery', exact: true })).toHaveCount(0);
 
   await page.goto('/notifications');
   const notificationTitle = page.getByRole('heading', { name: 'Release QA delivery ready' });

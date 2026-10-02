@@ -1,4 +1,7 @@
 import React from 'react';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useRecoverableForm } from '../hooks/useRecoverableForm';
+import DraftRecoveryNotice from './DraftRecoveryNotice';
 import { CalendarDays, CheckCircle2, Clock3, ExternalLink, FileText, History, MessageSquareText, Send, UserRound, XCircle } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
@@ -27,7 +30,7 @@ const stageTone = (task: Task): 'amber' | 'emerald' | 'blue' | 'slate' => {
   return 'slate';
 };
 
-const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
+const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) => {
   const { locale, t } = useI18n();
   const {
     users,
@@ -54,13 +57,25 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
   const decisionNoteRef = React.useRef<HTMLTextAreaElement>(null);
   const decisionErrorId = React.useId();
 
-  React.useEffect(() => {
-    setDecisionNote('');
-    setCommentText('');
-    setError('');
-    setDecisionError('');
-    setIsSubmitting(false);
-  }, [task?.id]);
+  const draftValue = React.useRef({ decisionNote, commentText });
+  draftValue.current = { decisionNote, commentText };
+  const dirty = Boolean(decisionNote.trim() || commentText.trim());
+  const markPristine = useUnsavedChanges(Boolean(task) && (dirty || isSubmitting));
+  const recovery = useRecoverableForm(`client-delivery:${task?.id || ''}`,
+    { decisionNote, commentText }, dirty, Boolean(task));
+  const requestClose = () => {
+    if (isSubmitting) return;
+    if (dirty && !window.confirm(t('Discard unsaved changes?'))) return;
+    recovery.clear();
+    markPristine();
+    onClose();
+  };
+  const restoreDraft = () => {
+    const draft = recovery.restore();
+    if (!draft) return;
+    if (typeof draft.decisionNote === 'string') setDecisionNote(draft.decisionNote);
+    if (typeof draft.commentText === 'string') setCommentText(draft.commentText);
+  };
 
   if (!task) return null;
 
@@ -99,7 +114,11 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
       setError(localResult.error ? t(localResult.error) : t('Unable to review this task.'));
       return;
     }
-    if (await commit('approval.review')) setDecisionNote('');
+    const submittedNote = decisionNote;
+    if (await commit('approval.review')) {
+      if (draftValue.current.decisionNote === submittedNote && !draftValue.current.commentText.trim()) recovery.clear();
+      setDecisionNote(current => current === submittedNote ? '' : current);
+    }
   };
 
   const submitComment = async (event: React.FormEvent) => {
@@ -110,7 +129,11 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
       setError(localResult.error ? t(localResult.error) : t('You do not have permission to comment on this task.'));
       return;
     }
-    if (await commit('comment.add')) setCommentText('');
+    const submittedComment = commentText;
+    if (await commit('comment.add')) {
+      if (draftValue.current.commentText === submittedComment && !draftValue.current.decisionNote.trim()) recovery.clear();
+      setCommentText(current => current === submittedComment ? '' : current);
+    }
   };
 
   const footer = canReview ? (
@@ -125,20 +148,21 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
   ) : (
     <div className="flex items-center justify-between gap-4">
       <p className="text-sm text-muted">{stage === 'delivered' ? t('This delivery is approved.') : stage === 'cancelled' ? t('This delivery was cancelled.') : t('Review actions will appear when the delivery is ready.')}</p>
-      <Button variant="secondary" onClick={onClose}>{t('Close')}</Button>
+      <Button variant="secondary" onClick={requestClose}>{t('Close')}</Button>
     </div>
   );
 
   return (
     <SideSheet
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title={t('Delivery details')}
       description={t('Review the outcome, timing, files, and conversation in one place.')}
       className="max-w-2xl"
       footer={footer}
     >
       <div className="space-y-7">
+        {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
         <section aria-labelledby="delivery-outcome-title">
           <div className="flex flex-wrap items-center gap-2">
             <StatusChip tone={stageTone(task)}>{t(getClientDeliveryStageLabel(task))}</StatusChip>
@@ -216,6 +240,13 @@ const ClientDeliveryFocus = ({ task, onClose }: ClientDeliveryFocusProps) => {
       </div>
     </SideSheet>
   );
+};
+
+// Remount form state when the delivery or account changes so drafts and
+// in-flight save callbacks cannot cross delivery/account boundaries.
+const ClientDeliveryFocus = (props: ClientDeliveryFocusProps) => {
+  const account = useStore(state => state.currentUser?.authUserId || state.currentUser?.id || '');
+  return props.task ? <ClientDeliveryFocusForm key={`${account}:${props.task.id}`} {...props} /> : null;
 };
 
 export default ClientDeliveryFocus;

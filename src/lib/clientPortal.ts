@@ -1,4 +1,4 @@
-import type { Task } from '../types';
+import type { ClientServicePlan, ServiceCycle, Task } from '../types';
 import { parseOptionalDate } from './utils';
 
 export type ClientTaskStage = 'active' | 'awaiting_review' | 'approved' | 'cancelled';
@@ -107,3 +107,44 @@ export const getClientUpcomingDeliveries = (tasks: Task[]) => [...tasks]
 export const getClientLatestUpdates = (tasks: Task[]) => [...tasks]
   .filter(task => dateTime(task.updatedAt) > 0)
   .sort((left, right) => dateTime(right.updatedAt) - dateTime(left.updatedAt));
+
+// Keep advance-published work in delivery history without replacing the
+// current period's progress. Fall back to the latest past or earliest future
+// published cycle when there is no period covering today.
+export const getClientCurrentCycle = (
+  cycles: ServiceCycle[],
+  clientId: string | undefined,
+  now = new Date(),
+): ServiceCycle | undefined => {
+  if (!clientId) return undefined;
+  const today = localDateKey(now);
+  const published = cycles
+    .filter(cycle => cycle.clientId === clientId
+      && ['Published', 'Completed'].includes(cycle.status)
+      && Boolean(parseOptionalDate(cycle.periodStart))
+      && Boolean(parseOptionalDate(cycle.periodEnd))
+      && cycle.periodStart <= cycle.periodEnd)
+    .sort((left, right) => right.periodStart.localeCompare(left.periodStart)
+      || right.updatedAt.localeCompare(left.updatedAt)
+      || left.id.localeCompare(right.id));
+  return published.find(cycle => cycle.periodStart <= today && cycle.periodEnd >= today)
+    || published.find(cycle => cycle.periodStart <= today)
+    || published[published.length - 1];
+};
+
+export const getClientServicePlan = (plans: ClientServicePlan[], clientId: string | undefined) => {
+  if (!clientId) return undefined;
+  return plans.filter(plan => plan.clientId === clientId && ['Active', 'Paused'].includes(plan.status))
+    .sort((left, right) => right.revision - left.revision
+      || right.updatedAt.localeCompare(left.updatedAt)
+      || left.id.localeCompare(right.id))[0];
+};
+
+export const getClientApprovalDate = (task: Task): Date | null => {
+  if (getClientTaskStage(task) !== 'approved') return null;
+  const dates = (task.approvalHistory || [])
+    .filter(event => event.status === 'Approved')
+    .map(event => parseOptionalDate(event.createdAt))
+    .filter((date): date is Date => Boolean(date));
+  return dates.sort((left, right) => right.getTime() - left.getTime())[0] || null;
+};
