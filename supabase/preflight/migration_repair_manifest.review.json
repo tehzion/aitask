@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "task_attribution_and_assignment_hardening_20260926120000",
+  "status": "production_verified_through_20261002065644",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
-    "verifiedAt": "2026-09-23",
-    "historyThrough": "pm_assignee_department_optional (production 20260926120000; repository 20260926120000)",
+    "verifiedAt": "2026-10-02",
+    "historyThrough": "hod_permission_parity_followups (production 20261002070755; repository 20261002065644); additional pending migrations applied through production 20261002100723",
     "historyAligned": false,
     "historyAlignmentNote": "The connector stored deployment IDs 20260919065513, 20260919065609, 20260919065620, 20260919065648, and 20260919072524 for the five matching repository migrations. Names and live SQL are verified; timestamp repair is intentionally prohibited.",
     "clientOwnershipRollout": {
@@ -134,6 +134,26 @@
         {
           "repository": "20260926120000_pm_assignee_department_optional",
           "production": "20260926120000_pm_assignee_department_optional"
+        },
+        {
+          "repository": "20260928140058_server_reminders_and_feedback_rate_limit",
+          "production": "20261002100701_server_reminders_and_feedback_rate_limit"
+        },
+        {
+          "repository": "20260930110000_hod_assigned_task_delegation",
+          "production": "20261002064719_hod_assigned_task_delegation"
+        },
+        {
+          "repository": "20260930111033_service_upload_reconciliation",
+          "production": "20261002100717_service_upload_reconciliation"
+        },
+        {
+          "repository": "20260930154013_initialize_deadline_reminder_claim",
+          "production": "20261002100723_initialize_deadline_reminder_claim"
+        },
+        {
+          "repository": "20261002065644_hod_permission_parity_followups",
+          "production": "20261002070755_hod_permission_parity_followups"
         }
       ]
     },
@@ -348,6 +368,23 @@
       "companyRecords": 81,
       "projectRecords": 69,
       "verification": "Read-only HOD access comparison, legacy Editor task visibility/edit checks and HOD/PM notification mutation predicate checks. No business records changed. Local full database gate: 38 files, 541 checks plus real Storage passed. Frontend changes remain local."
+    },
+    "directProductionRelease": {
+      "date": "2026-10-02",
+      "userInstruction": "just to the live",
+      "stagingQa": "Skipped at the release owner\u2019s explicit request; staging connector remains inaccessible.",
+      "appVersion": "2.6.1",
+      "appCommit": "7a269d852eb304b453e8885e6aa16f21a29fccfa",
+      "deploymentId": "dpl_FvR7U5FX86Tgn8GtjG2DX7DhtCwN",
+      "productionUrl": "https://aitask-tehzions-projects.vercel.app",
+      "migrationsApplied": [
+        "20261002100701_server_reminders_and_feedback_rate_limit",
+        "20261002100717_service_upload_reconciliation",
+        "20261002100723_initialize_deadline_reminder_claim"
+      ],
+      "verification": "Business entity counts and hashes unchanged. RLS enabled on all three new tables. Upload RPC denies unauthenticated calls, invalid feedback parameters rejected, missing-workspace reminder probe returns zero. New cron jobs active, attachment guard and restricted delete policy present. Deployed build provenance verified through authenticated Vercel access.",
+      "securityAdvisors": "No ERROR findings. Authenticated SECURITY DEFINER RPC warnings are intentional command endpoints; internal tables intentionally deny direct client access. Existing leaked-password protection warning persists.",
+      "access": "Existing Vercel login protection retained."
     }
   },
   "schemaEquivalence": {
@@ -564,9 +601,5 @@
     "20260930154013_initialize_deadline_reminder_claim",
     "20261002065644_hod_permission_parity_followups"
   ],
-  "pendingProductionMigrations": [
-    "20260928140058_server_reminders_and_feedback_rate_limit",
-    "20260930111033_service_upload_reconciliation",
-    "20260930154013_initialize_deadline_reminder_claim"
-  ]
+  "pendingProductionMigrations": []
 }
