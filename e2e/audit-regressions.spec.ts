@@ -71,6 +71,34 @@ test('typing during an in-flight save remains dirty and blocks PWA reload', asyn
   await expect(page.getByRole('button', { name: 'Refresh now' })).toBeDisabled();
 });
 
+test('a remote revision arriving during save still reconciles edits typed while saving', async ({ page }) => {
+  const { draftId } = await seedPlan(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ commitPendingMutation: () => new Promise(resolve => {
+      (window as unknown as { finishAuditSave: () => void }).finishAuditSave = () => resolve({ ok: true });
+    }) });
+  });
+  const name = page.getByLabel('Plan name', { exact: true });
+  await name.fill('Submitted');
+  await page.getByRole('button', { name: 'Save revision' }).click();
+  await expect(page.getByRole('button', { name: 'Saving…', exact: true })).toBeVisible();
+  await name.fill('Typed during save');
+  await page.evaluate(async id => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id
+      ? { ...plan, name: 'Remote after submission', taxRateBps: 900, version: (plan.version || 0) + 1 }
+      : plan) }));
+    (window as unknown as { finishAuditSave: () => void }).finishAuditSave();
+  }, draftId);
+  await expect(name).toHaveValue('Typed during save');
+  await expect(page.getByRole('button', { name: 'Save revision' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Keep my draft' }).click();
+  await page.getByRole('button', { name: 'Use my value' }).click();
+  await expect(page.getByLabel('Tax rate (%)', { exact: true })).toHaveValue('9');
+  await expect(page.getByRole('button', { name: 'Save revision' })).toBeEnabled();
+});
+
 test('modified shortcuts open the palette without hijacking browser commands', async ({ page }) => {
   await seedPlan(page);
   await page.keyboard.press('Meta+k');
@@ -222,5 +250,25 @@ test('two tabs retain independent recovery copies and account changes clear owne
   expect(values).toEqual(['Tab A', 'Tab B']);
   await page.evaluate(async () => { const { clearWorkspaceSession } = await import('/src/store/index.ts'); clearWorkspaceSession({ discardPending: true }); });
   expect(await second.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('aitask:draft-recovery:v1:')).length)).toBe(0);
+  await second.close();
+});
+
+test('upload recovery observes command ownership and acknowledgements from another tab', async ({ page, context }) => {
+  await seedPlan(page);
+  const file = { id: 'cross-tab-upload', bucket: 'client-service-files', path: 'workspace/client/cycle/cross-tab.pdf', uploadedBy: 'audit-actor', fileName: 'cross-tab.pdf', mimeType: 'application/pdf', sizeBytes: 10, uploadedAt: '2026-10-02T00:00:00Z' };
+  await page.evaluate(async attachment => {
+    const files = await import('/src/lib/serviceFiles.ts');
+    files.trackPendingServiceFile(attachment);
+  }, file);
+  const second = await context.newPage();
+  await second.goto('/login');
+  await second.evaluate(async attachment => {
+    const files = await import('/src/lib/serviceFiles.ts');
+    files.bindPendingServiceFiles('cross-tab-command', [{ attachments: [attachment] }]);
+  }, file);
+  const pending = await page.evaluate(async () => (await import('/src/lib/serviceFiles.ts')).listPendingServiceFiles('audit-actor'));
+  expect(pending).toEqual([expect.objectContaining({ commandId: 'cross-tab-command' })]);
+  await second.evaluate(async () => (await import('/src/lib/serviceFiles.ts')).acknowledgePendingServiceFiles('cross-tab-command'));
+  expect(await page.evaluate(async () => (await import('/src/lib/serviceFiles.ts')).listPendingServiceFiles('audit-actor'))).toEqual([]);
   await second.close();
 });

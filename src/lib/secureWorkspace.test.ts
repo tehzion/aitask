@@ -426,6 +426,20 @@ describe('secure command retry identity', () => {
     expect(rpc.mock.calls[1][1].p_command_id).toBe(rpc.mock.calls[0][1].p_command_id);
   });
 
+  it('bounds a stalled session refresh and retains the original command for retry', async () => {
+    vi.useFakeTimers();
+    try {
+      rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST301', message: 'JWT expired' } });
+      refreshSession.mockImplementationOnce(() => new Promise(() => undefined));
+      let outcome: unknown;
+      const request = saveSecureWorkspace(stateWithUser('refresh-stalled')).then(result => { outcome = result; });
+      await vi.advanceTimersByTimeAsync(20_001);
+      expect(outcome).toMatchObject({ ok: false, code: 'RETRY_REQUIRED' });
+      expect(getRetainedSecureCommand()?.id).toBe(rpc.mock.calls[0][1].p_command_id);
+      await request;
+    } finally { vi.useRealTimers(); }
+  });
+
   it('retains a command after a thrown network error', async () => {
     rpc
       .mockRejectedValueOnce(new Error('fetch failed'))

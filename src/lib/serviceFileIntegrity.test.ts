@@ -1,11 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AttachmentRef } from '../types';
-const { remove, rpc } = vi.hoisted(() => ({ remove: vi.fn(), rpc: vi.fn() }));
-vi.mock('./supabaseClient', () => ({ shouldUseSecureSupabase: () => true, supabase: { rpc: (...args: unknown[]) => ({ abortSignal: () => rpc(...args) }), storage: { from: () => ({ remove }) } } }));
-import { acknowledgePendingServiceFiles, bindPendingServiceFiles, cleanupPendingServiceFiles, clearPendingServiceFiles, reconcilePendingServiceFiles, removeServiceFile, trackPendingServiceFile } from './serviceFiles';
+const { remove, rpc, download } = vi.hoisted(() => ({ remove: vi.fn(), rpc: vi.fn(), download: vi.fn() }));
+vi.mock('./supabaseClient', () => ({ shouldUseSecureSupabase: () => true, supabase: { rpc: (...args: unknown[]) => ({ abortSignal: () => rpc(...args) }), storage: { from: () => ({ remove, download }) } } }));
+import { acknowledgePendingServiceFiles, bindPendingServiceFiles, cleanupPendingServiceFiles, clearPendingServiceFiles, downloadServiceFile, reconcilePendingServiceFiles, removeServiceFile, trackPendingServiceFile } from './serviceFiles';
+import { invalidateWorkspaceSession } from './workspaceSession';
 const attachment = (id: string, actor = 'actor-a'): AttachmentRef => ({ id, bucket: 'client-service-files', path: `workspace/client/cycle/${id}.pdf`, uploadedBy: actor, fileName: `${id}.pdf`, mimeType: 'application/pdf', sizeBytes: 10, uploadedAt: '2026-09-30T00:00:00Z' });
-beforeEach(() => { clearPendingServiceFiles(); remove.mockReset(); remove.mockResolvedValue({ error: null }); rpc.mockReset(); rpc.mockResolvedValue({ data: { ok: true, status: 'abandoned' }, error: null }); });
+beforeEach(() => { clearPendingServiceFiles(); remove.mockReset(); remove.mockResolvedValue({ error: null }); download.mockReset(); rpc.mockReset(); rpc.mockResolvedValue({ data: { ok: true, status: 'abandoned' }, error: null }); });
+afterEach(() => { vi.unstubAllGlobals(); });
 describe('upload ownership and uncertain saves', () => {
+  it('does not deliver a former account download after its session changes', async () => {
+    const createElement = vi.fn(() => { throw new Error('Download triggered after sign-out'); });
+    vi.stubGlobal('document', { createElement });
+    let finish!: (value: unknown) => void;
+    download.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const request = downloadServiceFile(attachment('old-account-download'));
+    invalidateWorkspaceSession();
+    finish({ data: new Blob(['private content']), error: null });
+    expect(await request).toEqual({ ok: false, error: 'Workspace session changed.' });
+    expect(createElement).not.toHaveBeenCalled();
+  });
   it('an unrelated command acknowledgement never loses an unsubmitted upload', async () => {
     const first = attachment('first'); const other = attachment('other');
     trackPendingServiceFile(first); trackPendingServiceFile(other);

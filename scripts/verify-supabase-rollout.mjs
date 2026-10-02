@@ -148,6 +148,10 @@ try {
     ...process.env, AITASK_LOCAL_TEST_URL: status.API_URL, AITASK_LOCAL_TEST_PUBLIC: status.PUBLISHABLE_KEY || status.ANON_KEY,
     AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
   } });
+  run(process.execPath, [join(projectRoot, 'scripts', 'verify-staff-action-saves.mjs')], { env: {
+    ...process.env, AITASK_LOCAL_TEST_URL: status.API_URL, AITASK_LOCAL_TEST_PUBLIC: status.PUBLISHABLE_KEY || status.ANON_KEY,
+    AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
+  } });
   console.log('[rollout] Local Supabase rollout validation passed.');
 } catch (error) {
   rolloutError = error instanceof Error ? error.message : 'Local Supabase rollout validation failed.';

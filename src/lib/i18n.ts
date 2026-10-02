@@ -1847,6 +1847,8 @@ const zhSystemCopy: Record<string, string> = {
   'Ended plans cannot be reopened.': '已结束的方案不能重新打开。',
   'Cycle not found.': '未找到周期。',
   'You do not have access to this cycle.': '您无权访问此周期。',
+  'You do not have permission to manage service cycles.': '您没有管理服务周期的权限。',
+  'Deliverable status must match the progress of its required tasks.': '交付项状态必须与必需任务的进度一致。',
   'Deliverable not found.': '未找到交付物。',
   'You do not have access to this deliverable.': '您无权访问此交付物。',
   'You cannot edit this task.': '您无法编辑此任务。',

@@ -32,58 +32,89 @@ const DURABLE_FILE_PREFIX = 'aitask:pending-service-file:v3:';
 const durableKey = (attachment: Pick<AttachmentRef, 'bucket' | 'path'>) => `${DURABLE_FILE_PREFIX}${encodeURIComponent(attachment.bucket)}:${encodeURIComponent(attachment.path)}`;
 const submissions = new Map<string, string>();
 const pendingServiceFiles = new Map<string, AttachmentRef>();
+const durableFiles = new Set<string>();
+let legacyHydrated = false;
 
 const pendingServiceFileKey = (attachment: Pick<AttachmentRef, 'bucket' | 'path'>) => `${attachment.bucket}:${attachment.path}`;
 
 const hydratePendingServiceFiles = () => {
-  if (pendingServiceFiles.size > 0 || typeof window === 'undefined') return;
+  if (typeof window === 'undefined') return;
   try {
-    const currentRaw = window.sessionStorage.getItem(PENDING_SERVICE_FILES_KEY);
-    const legacyRaw = currentRaw ? null : window.sessionStorage.getItem('aitask:pending-service-files:v1');
-    const raw = currentRaw || legacyRaw;
-    const legacyEntries = raw ? JSON.parse(raw) : [];
-    const durableEntries = Object.keys(window.localStorage).filter(key => key.startsWith(DURABLE_FILE_PREFIX)).flatMap(key => { try { return [JSON.parse(window.localStorage.getItem(key) || 'null')]; } catch { return []; } });
-    const parsed = [...(Array.isArray(legacyEntries) ? legacyEntries : []), ...durableEntries];
-    if (!Array.isArray(parsed)) return;
-    parsed.forEach((item) => {
+    const restore = (item: unknown, legacy = false, storageKey?: string) => {
       if (
         item &&
         typeof item === 'object' &&
-        typeof item.id === 'string' &&
-        typeof item.bucket === 'string' &&
-        typeof item.path === 'string' &&
-        typeof item.fileName === 'string' &&
-        typeof item.uploadedBy === 'string'
+        'id' in item && typeof item.id === 'string' &&
+        'bucket' in item && typeof item.bucket === 'string' &&
+        'path' in item && typeof item.path === 'string' &&
+        'fileName' in item && typeof item.fileName === 'string' &&
+        'uploadedBy' in item && typeof item.uploadedBy === 'string'
       ) {
-        pendingServiceFiles.set(pendingServiceFileKey(item), item as AttachmentRef);
-        if (typeof item.pendingCommandId === 'string') submissions.set(pendingServiceFileKey(item), item.pendingCommandId);
-        else if (legacyRaw) submissions.set(pendingServiceFileKey(item), 'legacy-unresolved');
+        const attachment = item as AttachmentRef;
+        if (storageKey && durableKey(attachment) !== storageKey) return null;
+        const key = pendingServiceFileKey(attachment);
+        pendingServiceFiles.set(key, attachment);
+        if ('pendingCommandId' in item && typeof item.pendingCommandId === 'string') submissions.set(key, item.pendingCommandId);
+        else if (legacy) submissions.set(key, 'legacy-unresolved');
+        else submissions.delete(key);
+        return attachment;
       }
+      return null;
+    };
+    // Migrate the old tab cache once. New writes use individual durable records,
+    // so a stale tab cannot rewrite another tab's command ownership or uploads.
+    if (!legacyHydrated) {
+      legacyHydrated = true;
+      try {
+        const currentRaw = window.sessionStorage.getItem(PENDING_SERVICE_FILES_KEY);
+        const legacyRaw = currentRaw ? null : window.sessionStorage.getItem('aitask:pending-service-files:v1');
+        const parsed = JSON.parse(currentRaw || legacyRaw || '[]');
+        if (Array.isArray(parsed)) parsed.forEach(item => {
+          const attachment = restore(item, Boolean(legacyRaw));
+          if (attachment && !window.localStorage.getItem(durableKey(attachment))) {
+            window.localStorage.setItem(durableKey(attachment), JSON.stringify({ ...attachment, pendingCommandId: submissions.get(pendingServiceFileKey(attachment)) }));
+          }
+        });
+        window.sessionStorage.removeItem(PENDING_SERVICE_FILES_KEY);
+        window.sessionStorage.removeItem('aitask:pending-service-files:v1');
+      } catch { /* An unavailable or malformed tab cache must not hide durable recovery. */ }
+    }
+    const present = new Set<string>();
+    Object.keys(window.localStorage).filter(key => key.startsWith(DURABLE_FILE_PREFIX)).forEach(storageKey => {
+      try {
+        const attachment = restore(JSON.parse(window.localStorage.getItem(storageKey) || 'null'), false, storageKey);
+        if (attachment) present.add(pendingServiceFileKey(attachment));
+      } catch { /* Ignore malformed recovery records. */ }
     });
+    durableFiles.forEach(key => {
+      if (!present.has(key)) { pendingServiceFiles.delete(key); submissions.delete(key); }
+    });
+    durableFiles.clear();
+    present.forEach(key => durableFiles.add(key));
   } catch {
     // Session storage is best-effort. The in-memory registry still protects
     // uploads made during the current page session.
   }
 };
 
-const persistPendingServiceFiles = () => {
+const persistPendingServiceFiles = (changed: AttachmentRef[]) => {
   if (typeof window === 'undefined') return;
   try {
-    if (pendingServiceFiles.size === 0) {
-      window.sessionStorage.removeItem(PENDING_SERVICE_FILES_KEY);
-      return;
-    }
-    pendingServiceFiles.forEach(attachment => window.localStorage.setItem(durableKey(attachment), JSON.stringify({ ...attachment, pendingCommandId: submissions.get(pendingServiceFileKey(attachment)) })));
-    window.sessionStorage.setItem(PENDING_SERVICE_FILES_KEY, JSON.stringify(Array.from(pendingServiceFiles.values()).map(attachment => ({ ...attachment, pendingCommandId: submissions.get(pendingServiceFileKey(attachment)) }))));
+    changed.forEach(attachment => {
+      window.localStorage.setItem(durableKey(attachment), JSON.stringify({ ...attachment, pendingCommandId: submissions.get(pendingServiceFileKey(attachment)) }));
+      durableFiles.add(pendingServiceFileKey(attachment));
+    });
+    window.sessionStorage.removeItem(PENDING_SERVICE_FILES_KEY);
   } catch {
-    // Storage can be unavailable or full; cleanup still works in-memory.
+    // Fall back to this tab's cache if durable storage is unavailable.
+    try { window.sessionStorage.setItem(PENDING_SERVICE_FILES_KEY, JSON.stringify(Array.from(pendingServiceFiles.values()).map(attachment => ({ ...attachment, pendingCommandId: submissions.get(pendingServiceFileKey(attachment)) })))); } catch { /* In-memory recovery remains available. */ }
   }
 };
 
 export const trackPendingServiceFile = (attachment: AttachmentRef) => {
   hydratePendingServiceFiles();
   pendingServiceFiles.set(pendingServiceFileKey(attachment), attachment);
-  persistPendingServiceFiles();
+  persistPendingServiceFiles([attachment]);
 };
 
 export const forgetPendingServiceFile = (attachment: Pick<AttachmentRef, 'bucket' | 'path'>) => {
@@ -91,12 +122,15 @@ export const forgetPendingServiceFile = (attachment: Pick<AttachmentRef, 'bucket
   if (typeof window !== 'undefined') { try { window.localStorage.removeItem(durableKey(attachment)); } catch { /* best effort */ } }
   pendingServiceFiles.delete(pendingServiceFileKey(attachment));
   submissions.delete(pendingServiceFileKey(attachment));
-  persistPendingServiceFiles();
+  durableFiles.delete(pendingServiceFileKey(attachment));
+  persistPendingServiceFiles([]);
 };
 
 export const clearPendingServiceFiles = () => {
   pendingServiceFiles.clear();
   submissions.clear();
+  durableFiles.clear();
+  legacyHydrated = false;
   if (typeof window === 'undefined') return;
   try { window.sessionStorage.removeItem(PENDING_SERVICE_FILES_KEY); } catch { /* best effort */ }
 };
@@ -118,8 +152,9 @@ const attachmentKeys = (value: unknown): Set<string> => {
 export const bindPendingServiceFiles = (commandId: string, operations: unknown) => {
   hydratePendingServiceFiles();
   const keys = attachmentKeys(operations);
-  pendingServiceFiles.forEach((attachment, key) => { if (keys.has(key)) submissions.set(key, commandId); });
-  persistPendingServiceFiles();
+  const changed: AttachmentRef[] = [];
+  pendingServiceFiles.forEach((attachment, key) => { if (keys.has(key)) { submissions.set(key, commandId); changed.push(attachment); } });
+  persistPendingServiceFiles(changed);
 };
 export const acknowledgePendingServiceFiles = (commandId: string) => {
   hydratePendingServiceFiles();
@@ -286,6 +321,7 @@ export const refreshPendingServiceFiles = async (actorId: string) => {
 };
 
 export const downloadServiceFile = async (attachment: AttachmentRef) => {
+  const token = captureWorkspaceSession();
   try {
     if (!shouldUseSecureSupabase()) {
       const localDemoFile = getLocalServiceDemoFile(attachment);
@@ -294,6 +330,7 @@ export const downloadServiceFile = async (attachment: AttachmentRef) => {
       return { ok: true as const };
     }
     const { data, error } = await supabase.storage.from(attachment.bucket).download(attachment.path);
+    assertWorkspaceSession(token);
     if (error || !data) return { ok: false as const, error: error?.message || 'The file could not be downloaded.' };
     triggerBrowserDownload(data, attachment.fileName);
     return { ok: true as const };

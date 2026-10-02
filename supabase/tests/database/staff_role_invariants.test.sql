@@ -108,9 +108,11 @@ select is(
 reset role;
 
 -- An assignment must not override an explicit revocation of service access.
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000951', true);
 update public.aitask_members
 set permissions = '{"viewAssignedServiceClients":false}'::jsonb
 where workspace_id = 'pgtap-staff-invariants' and id = 'pgtap-staff-one';
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000953', true);
 
 select ok(
   not private.aitask_can_access_service_client('pgtap-staff-invariants', 'staff-client'),

@@ -81,7 +81,7 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
     const actor = useStore.getState().currentUser;
     if ((actor?.authUserId || actor?.id) !== account) return;
     writeRecoveredDraft(account, recoveryKey, baseline.current, { name, contractEndDate, serviceItems, discountType, discountValue, taxRateBps });
-  }, [account, recoveryKey, dirty, name, contractEndDate, serviceItems, discountType, discountValue, taxRateBps]);
+  }, [account, recoveryKey, dirty, saving, name, contractEndDate, serviceItems, discountType, discountValue, taxRateBps]);
 
 
   React.useEffect(() => {
@@ -131,6 +131,9 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
     const result = updateDraftClientPlan(plan.id, { name: trimmedName, contractEndDate, serviceItems, discountType, discountValue, taxRateBps });
     if (!result.ok) { savingRef.current = false; return setMessage(result.error || t('Unable to update this revision.')); }
     optimisticFingerprint.current = JSON.stringify(useStore.getState().clientPlans.find(value => value.id === plan.id));
+    const submittedPlan = useStore.getState().clientPlans.find(value => value.id === plan.id)!;
+    const submittedDraft = draftOf(submittedPlan);
+    const submittedFingerprint = optimisticFingerprint.current;
     setSaving(true);
     let committed: { ok: boolean; error?: string };
     try { committed = await commitPendingMutation('client_plan.manage'); }
@@ -139,12 +142,19 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
     if (committed.ok) {
       optimisticFingerprint.current = null;
       const canonical = useStore.getState().clientPlans.find(value => value.id === plan.id);
-      if (canonical) { baseline.current = draftOf(canonical); baselineFingerprint.current = JSON.stringify(canonical); }
       if (editSequence.current === submittedSequence) {
+        if (canonical) { baseline.current = draftOf(canonical); baselineFingerprint.current = JSON.stringify(canonical); }
         isDirtyRef.current = false; setDirty(false); removeRecoveredDraft(account, recoveryKey, recovery?.storageKey); setRecovery(null);
         if (canonical) applyDraft(draftOf(canonical));
+        setConflict(false);
+      } else {
+        // New typing is based on the submitted draft, not on a remote revision
+        // that may have arrived while its acknowledgement was pending.
+        baseline.current = submittedDraft;
+        const changedRemotely = !canonical || JSON.stringify(draftOf(canonical)) !== JSON.stringify(submittedDraft);
+        baselineFingerprint.current = changedRemotely ? submittedFingerprint : JSON.stringify(canonical);
+        setConflict(changedRemotely);
       }
-      setConflict(false);
     }
     setSaving(false);
     setMessage(committed.ok ? t('Draft revision saved.') : committed.error || t('The revision is waiting to be saved.'));

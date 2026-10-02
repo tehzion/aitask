@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Deliverable, ServiceCycle, Task, User } from '../types';
+import type { AttachmentRef, Deliverable, ServiceCycle, Task, User } from '../types';
 import { defaultRolePermissions } from '../lib/access';
 import { useStore } from './index';
 
@@ -19,9 +19,36 @@ describe.each(['Staff', 'HOD'] as const)('%s assigned-service access', role => {
   afterEach(() => useStore.setState(initialState, true));
 
   it('allows assigned execution and comments with service access', () => {
-    expect(useStore.getState().setServiceCycleStatus(cycle.id, 'Published').ok).toBe(true);
+    useStore.setState({ tasks: [{ ...useStore.getState().tasks[0], status: 'Completed', isCompleted: true }] });
     expect(useStore.getState().updateDeliverableStatus(deliverable.id, 'Delivered').ok).toBe(true);
     expect(useStore.getState().addCycleComment(cycle.id, 'Ready for review', 'internal').ok).toBe(true);
+  });
+
+  it('rejects manual cycle changes while deriving cycle completion from delivery', () => {
+    expect(useStore.getState().setServiceCycleStatus(cycle.id, 'Published').ok).toBe(false);
+    expect(useStore.getState().setServiceCycleStatus(cycle.id, 'Completed').ok).toBe(false);
+    expect(useStore.getState().serviceCycles).toEqual([cycle]);
+    useStore.setState({ tasks: [{ ...useStore.getState().tasks[0], status: 'Completed', isCompleted: true }] });
+    expect(useStore.getState().updateDeliverableStatus(deliverable.id, 'Delivered').ok).toBe(true);
+    expect(useStore.getState().serviceCycles[0].status).toBe('Completed');
+  });
+
+  it('rechecks service access before attaching a file to an owned comment', () => {
+    const result = useStore.getState().addCycleComment(cycle.id, 'Delivery update', 'internal');
+    const attachment = { id: 'file', fileName: 'proof.pdf' } as AttachmentRef;
+    expect(useStore.getState().addCycleCommentAttachment(result.id!, attachment).ok).toBe(true);
+    useStore.setState({ currentUser: { ...actor, permissions: { ...defaultRolePermissions[role], viewAssignedServiceClients: false } } });
+    const comments = structuredClone(useStore.getState().cycleComments);
+    expect(useStore.getState().addCycleCommentAttachment(result.id!, { ...attachment, id: 'blocked-file' }).ok).toBe(false);
+    expect(useStore.getState().cycleComments).toEqual(comments);
+  });
+
+  it('rejects a delivery status that would otherwise be silently reset by task progress', () => {
+    useStore.setState({ tasks: [{ ...useStore.getState().tasks[0], status: 'Pending', isCompleted: false, completionPercentage: 0, revisionCount: 0 }] });
+    const result = useStore.getState().updateDeliverableStatus(deliverable.id, 'Delivered');
+    expect(result).toMatchObject({ ok: false, error: expect.stringContaining('required tasks') });
+    expect(useStore.getState().deliverables).toEqual([deliverable]);
+    expect(useStore.getState().serviceCycles).toEqual([cycle]);
   });
 
   it('rejects all three actions immediately after service access is revoked', () => {

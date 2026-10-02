@@ -317,7 +317,7 @@ interface StoreState {
   initializeBackend: () => Promise<void>;
   syncBackendNow: (commandType?: SecureCommandType) => Promise<void>;
   pullBackendNow: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
-  retryMutation: () => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode }>;
+  retryMutation: (options?: { reapplyWorkspaceConflict?: boolean }) => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode }>;
   reapplyMutationOnLatestWorkspace: () => Promise<{ ok: boolean; error?: string }>;
   retryPendingSave: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode }>;
   discardMutation: (options?: { reload?: boolean; confirm?: boolean }) => Promise<void>;
@@ -1485,7 +1485,7 @@ export const useStore = create<StoreState>()(
                 message: hasChangesAfterSave ? 'Saving newer changes.' : 'Saved.',
               },
             }));
-            if (hasChangesAfterSave) queueMicrotask(() => void get().syncBackendNow(pendingCommandType));
+            if (hasChangesAfterSave) queueMicrotask(() => { if (isWorkspaceSessionCurrent(sessionToken)) void get().syncBackendNow(pendingCommandType); });
             else {
 
               if (hadRemoteUpdate) await get().pullBackendNow({ force: true, silent: true });
@@ -1829,35 +1829,24 @@ export const useStore = create<StoreState>()(
         if (!retained || !isWorkspaceConflict(current.backend.conflict)) {
           return { ok: false, error: 'There is no workspace conflict to reapply.' };
         }
-        const localSnapshot = selectPersistedWorkspaceState(current);
-        await get().pullBackendNow({ force: true, silent: true });
+        // Refresh only the workspace envelope. Loading and overlaying whole rows
+        // would replace the original row versions and silently bypass conflicts.
+        let revision: Awaited<ReturnType<typeof loadSecureWorkspaceRevision>>;
+        try { revision = await loadSecureWorkspaceRevision(); }
+        catch (error) {
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
+          const message = error instanceof Error ? error.message : 'Unable to load the latest workspace right now. Try again shortly.';
+          apply(state => ({ backend: { ...state.backend, isSaving: false, error: message, message } }));
+          return { ok: false, error: message };
+        }
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
-        const fresh = get();
-        if (fresh.backend.upgradeRequired === true || fresh.backend.status === 'upgrade_required') {
-          return { ok: false, error: fresh.backend.error || BACKEND_UPGRADE_REQUIRED_MESSAGE };
-        }
-        if (fresh.backend.isPulling) {
-          return { ok: false, error: fresh.backend.error || 'Unable to load the latest workspace right now. Try again shortly.' };
-        }
-        const merged = overlayRetainedWorkspaceEntities(
-          selectPersistedWorkspaceState(fresh),
-          localSnapshot,
-          retained.operations,
-        );
-        isApplyingRemoteSnapshot = true;
         apply((state) => ({
-          ...makeWorkspacePatch(state, {
-            state: merged,
-            source: 'supabase',
-            version: 1,
-            message: 'Latest workspace loaded.',
-            updatedAt: new Date().toISOString(),
-          }),
           backend: {
             ...state.backend,
-            status: 'saving',
+            status: 'retry_required',
             isSaving: false,
-            isPulling: false,
+            workspaceVersion: revision.version,
+            remoteVersion: revision.version,
             hasLocalChanges: true,
             pendingMutations: 1,
             conflict: undefined,
@@ -1865,22 +1854,21 @@ export const useStore = create<StoreState>()(
             message: 'Reapplying your change on the latest workspace.',
           },
         }));
-        isApplyingRemoteSnapshot = false;
-        await get().syncBackendNow();
-        const after = get().backend;
-        if (!after.hasLocalChanges && after.status === 'live') {
+        const result = await get().retryMutation({ reapplyWorkspaceConflict: false });
+        if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
+        if (result.ok) {
           useToastStore.getState().addToast(msg('task.reapplied'), 'success');
-          return { ok: true };
         }
-        return { ok: false, error: after.error || 'Your change could not be reapplied.' };
+        return result;
       },
 
-      retryMutation: async () => {
+      retryMutation: async (options = {}) => {
         const sessionToken = captureWorkspaceSession();
         const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
 
         if (isSyncBusy(get())) {
           const idle = await waitForSyncIdle();
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
           if (!idle) return { ok: false, error: 'Another synchronization request is still running.' };
         }
         const current = get();
@@ -1913,6 +1901,7 @@ export const useStore = create<StoreState>()(
             },
           }));
           const result = await retryRetainedSecureMemberMutation(targetUser);
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
           if (result.ok === false) {
             const terminal = isTerminalMemberMutationError(result.code);
             apply((state) => ({
@@ -1991,6 +1980,7 @@ export const useStore = create<StoreState>()(
         }
         if (shouldUseSecureSupabase()) {
           const compatibility = await loadSecureBackendCapabilities();
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
           if (!compatibility.compatible) {
             apply((state) => ({
               backend: {
@@ -2006,7 +1996,7 @@ export const useStore = create<StoreState>()(
           }
         }
         const conflict = current.backend.conflict;
-        if (conflict && isWorkspaceConflict(conflict) && getRetainedSecureCommand()) {
+        if (options.reapplyWorkspaceConflict !== false && conflict && isWorkspaceConflict(conflict) && getRetainedSecureCommand()) {
           return get().reapplyMutationOnLatestWorkspace();
         }
         if (conflict) rebaseRetryableCommand(conflict);
@@ -2027,6 +2017,7 @@ export const useStore = create<StoreState>()(
           excludeSuperAdminEntities: !get().currentUser?.isSuperAdmin,
           actorMemberId: get().currentUser?.id,
         });
+        if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         if (result.ok === false) {
           const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
           apply((state) => ({
@@ -2046,7 +2037,7 @@ export const useStore = create<StoreState>()(
               message: result.error,
             },
           }));
-          if (result.code === 'CONFLICT' && isWorkspaceConflict(result.conflict)) {
+          if (options.reapplyWorkspaceConflict !== false && result.code === 'CONFLICT' && isWorkspaceConflict(result.conflict)) {
             const reapplied = await get().reapplyMutationOnLatestWorkspace();
             if (reapplied.ok) return reapplied;
           }
@@ -2075,6 +2066,7 @@ export const useStore = create<StoreState>()(
         }));
 
         await get().pullBackendNow({ force: true, silent: true });
+        if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         return { ok: true };
       },
 
@@ -4275,8 +4267,7 @@ export const useStore = create<StoreState>()(
         const cycle = state.serviceCycles.find(item => item.id === cycleId);
         const actor = state.currentUser;
         if (!cycle || !actor) return { ok: false, error: 'Cycle not found.' };
-        const authorized = canManageServiceCycles(actor, state.rolePermissions) || (['Staff', 'HOD'].includes(actor.role) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
-        if (!authorized || (!canManageServiceCycles(actor, state.rolePermissions) && !canOpenServiceClient(actor, cycle.clientName, state.tasks, state.rolePermissions, state.clients))) return { ok: false, error: 'You do not have access to this cycle.' };
+        if (!canManageServiceCycles(actor, state.rolePermissions)) return { ok: false, error: 'You do not have permission to manage service cycles.' };
         const now = new Date().toISOString();
         set(current => ({ serviceCycles: current.serviceCycles.map(item => item.id === cycleId ? { ...item, status, publishedAt: status === 'Published' ? item.publishedAt || now : item.publishedAt, updatedAt: now } : item) }));
         return { ok: true };
@@ -4290,6 +4281,7 @@ export const useStore = create<StoreState>()(
         if (!deliverable || !actor) return { ok: false, error: 'Deliverable not found.' };
         const authorized = canManageServiceCycles(actor, state.rolePermissions) || (['Staff', 'HOD'].includes(actor.role) && state.tasks.some(task => task.deliverableId === deliverable.id && task.assignedTo === actor.id));
         if (!authorized || (!canManageServiceCycles(actor, state.rolePermissions) && !canOpenServiceClient(actor, deliverable.clientName, state.tasks, state.rolePermissions, state.clients))) return { ok: false, error: 'You do not have access to this deliverable.' };
+        if (resolveDeliverableStatus({ ...deliverable, status }, state.tasks) !== status) return { ok: false, error: 'Deliverable status must match the progress of its required tasks.' };
         set(current => {
           const now = new Date().toISOString();
           const deliverables = current.deliverables.map(item => item.id === deliverableId ? {
@@ -4410,6 +4402,8 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const comment = state.cycleComments.find(item => item.id === commentId);
         if (!comment || comment.userId !== state.currentUser?.id) return { ok: false, error: 'You cannot attach a file to this comment.' };
+        if (!canManageServiceCycles(state.currentUser, state.rolePermissions)
+          && !canOpenServiceClient(state.currentUser, comment.clientName, state.tasks, state.rolePermissions, state.clients)) return { ok: false, error: 'You do not have access to this cycle.' };
         set(current => ({ cycleComments: current.cycleComments.map(item => item.id === commentId ? { ...item, attachments: [...item.attachments, attachment], updatedAt: new Date().toISOString() } : item) }));
         return { ok: true };
       },

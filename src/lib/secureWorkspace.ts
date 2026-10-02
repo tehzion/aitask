@@ -568,7 +568,7 @@ const isAuthError = (error: { code?: string; message?: string; details?: string 
 };
 
 const refreshSecureSession = async () => {
-  const { data, error } = await supabase.auth.refreshSession();
+  const { data, error } = await withSyncTimeout(supabase.auth.refreshSession());
   return !error && Boolean(data.session);
 };
 
@@ -896,7 +896,11 @@ export const buildOperations = (
     }
   });
 
-  return operations;
+  // Deliverable execution triggers cycle completion. Persist the child first
+  // so a derived cycle update is validated against its completed deliveries.
+  return operations.sort((left, right) =>
+    Number(left.entityType === 'service_cycle' && left.action === 'update')
+    - Number(right.entityType === 'service_cycle' && right.action === 'update'));
 };
 
 const changedFieldsForConflict = (operation: WorkspaceOperation, current?: Record<string, unknown>) => {
@@ -2407,6 +2411,7 @@ export const saveSecureWorkspace = async (
   expectedWorkspaceVersion?: number,
   options: BuildOperationsOptions = {},
 ): Promise<MutationResult<CommandResponse>> => {
+  const saveSession = captureWorkspaceSession();
   if (type !== undefined && !isSecureCommandType(type)) {
     return {
       ok: false,
@@ -2430,11 +2435,84 @@ export const saveSecureWorkspace = async (
     ? partitionOperationsWithExplicitType(operations, type, options.actorMemberId)
     : partitionOperationsForRpc(operations, options.actorMemberId);
 
+  // Task triggers already persist derived delivery progress. A later service
+  // group must compare that result before sending the old row version again.
+  const touchedDeliverables = new Set<string>();
+  const touchedCycles = new Set<string>();
+  operations.filter(operation => operation.entityType === 'task').forEach(operation => {
+    const previous = baseline.get(entityKey('task', operation.entityId))?.data;
+    for (const task of [previous, operation.data]) {
+      if (typeof task?.deliverableId === 'string') touchedDeliverables.add(task.deliverableId);
+      if (typeof task?.serviceCycleId === 'string') touchedCycles.add(task.serviceCycleId);
+    }
+  });
+  touchedDeliverables.forEach(id => {
+    const cycleId = baseline.get(entityKey('deliverable', id))?.data.cycleId;
+    if (typeof cycleId === 'string') touchedCycles.add(cycleId);
+  });
+
   let lastResult: MutationResult<CommandResponse> | null = null;
   let version = expectedWorkspaceVersion;
   for (const group of groups) {
-    const command: SecureCommand = { id: commandId(), type: group.type, operations: group.operations };
+    if (!isWorkspaceSessionCurrent(saveSession)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    let pendingOperations = group.operations;
+    if (lastResult && !serviceCommandTypes.has(groups[0].type)) {
+      const reconciled: WorkspaceOperation[] = [];
+      for (const operation of pendingOperations) {
+        const touched = operation.entityType === 'deliverable'
+          ? touchedDeliverables.has(operation.entityId)
+          : operation.entityType === 'service_cycle' && touchedCycles.has(operation.entityId);
+        const previous = baseline.get(entityKey(operation.entityType, operation.entityId));
+        const fields = operation.entityType === 'deliverable'
+          ? new Set(['status', 'deliveredAt', 'updatedAt'])
+          : new Set(['status', 'updatedAt']);
+        const localFields = previous ? changedFieldsForConflict(operation, previous.data) : [];
+        if (!touched || operation.action !== 'update' || !previous || !operation.data
+          || !localFields.every(field => fields.has(field))) {
+          reconciled.push(operation);
+          continue;
+        }
+        const query = await withSyncTimeout(supabase.from('aitask_entities')
+          .select('entity_type,entity_id,parent_id,data,version,updated_at')
+          .eq('workspace_id', SECURE_WORKSPACE_ID).eq('entity_type', operation.entityType)
+          .eq('entity_id', operation.entityId).single());
+        assertWorkspaceSession(saveSession);
+        if (query.error || !query.data) {
+          reconciled.push(operation);
+          continue;
+        }
+        const row = query.data as EntityRow;
+        const collection = operation.entityType === 'deliverable' ? 'deliverables' : 'serviceCycles';
+        const canonical = stateToRows(parseWorkspaceSnapshot({
+          [collection]: [{ ...row.data, version: row.version, updatedAt: row.updated_at }],
+        })).find(item => item.entityType === operation.entityType && item.entityId === operation.entityId);
+        if (!canonical || canonical.data.status !== operation.data.status
+          || !changedFieldsForConflict({ ...operation, data: canonical.data }, previous.data)
+          .every(field => fields.has(field))) {
+          // Another member changed more than derived progress: keep the old
+          // version so the ordinary conflict review protects their changes.
+          reconciled.push(operation);
+          continue;
+        }
+        const remainingFields = changedFieldsForConflict(operation, canonical.data).filter(field => field !== 'updatedAt');
+        if (remainingFields.length === 0) {
+          baseline.set(entityKey(operation.entityType, operation.entityId), {
+            ...canonical, data: operation.data,
+            serialized: stable({ parentId: operation.parentId || null, data: operation.data }),
+          });
+        } else if (remainingFields.every(field => field === 'deliveredAt')
+          && stable(canonical.data.deliveredAt) === stable(previous.data.deliveredAt)) {
+          reconciled.push({ ...operation, expectedVersion: Number(row.version) });
+        } else {
+          reconciled.push(operation);
+        }
+      }
+      pendingOperations = reconciled;
+    }
+    if (pendingOperations.length === 0) continue;
+    const command: SecureCommand = { id: commandId(), type: group.type, operations: pendingOperations };
     const result = await executeCommand(command, version);
+    if (!isWorkspaceSessionCurrent(saveSession)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     if (result.ok === false) return result;
     lastResult = result;
     version = result.workspaceVersion ?? version;
