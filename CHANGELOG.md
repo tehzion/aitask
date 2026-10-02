@@ -35,6 +35,8 @@ number remain uniquely identifiable.
 - Client tracker counts and labels now follow client approval stages, retain
   unfinished reviews across periods, exclude unpublished cycle totals, and omit
   cancelled tasks from completion-rate denominators. Tracker totals follow filters.
+- Client tracker badges now use client-facing delivery stages, and client report
+  CSV exports omit internal assignee and department metadata.
 - Reports label the on-time share of tracked completions as an on-time completion
   rate, matching the calculation.
 

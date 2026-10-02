@@ -262,6 +262,9 @@ test('Client Home counts the entire review queue and Reports separate completion
   expect(csv).toContain('Client approval date');
   expect(csv).toContain(timingDates.completion);
   expect(csv).toContain(timingDates.approval);
+  const csvHeader = csv.split(/\r?\n/u)[0];
+  expect(csvHeader).not.toContain('Assignee');
+  expect(csvHeader).not.toContain('Department');
   await page.getByRole('button', { name: '切换为中文' }).click();
   await expect(page.getByRole('heading', { name: '团队完成时间与您的批准时间' })).toBeVisible();
 });

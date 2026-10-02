@@ -16,7 +16,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { useI18n } from '../components/I18nProvider';
 import { canCreateTasks, canViewAllClients, getClientKey, getVisibleClientNames, getVisibleTasks } from '../lib/access';
-import { getClientDeliveryStageLabel } from '../lib/clientPortal';
+import { getClientDeliveryStageLabel, getClientDeliveryStageTone } from '../lib/clientPortal';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import {
   buildClientDeliverySummaries,
@@ -269,7 +269,7 @@ const DeliveryTracker: React.FC = () => {
                       <section aria-labelledby={`${summary.clientName}-tasks`}>
                         <h4 id={`${summary.clientName}-tasks`} className="text-sm font-semibold text-ink">{t('Tasks')}</h4>
                         <div className="mt-3 space-y-2">
-                          {summary.tasks.map(task => <button key={task.id} type="button" onClick={() => setSelectedTaskId(task.id)} className="grid w-full gap-2 rounded-control bg-surface px-3 py-3 text-left ring-1 ring-line/70 transition-colors hover:bg-accent-soft/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{task.title}</p><p className="mt-1 text-xs text-muted">{task.serviceType} · {t('due')} {readableDate(task.dueDate, locale)}</p></div><Badge tone={task.isCompleted || task.status === 'Completed' ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{t(isClientView ? getClientDeliveryStageLabel(task) : task.status)}</Badge></button>)}
+                          {summary.tasks.map(task => <button key={task.id} type="button" onClick={() => setSelectedTaskId(task.id)} className="grid w-full gap-2 rounded-control bg-surface px-3 py-3 text-left ring-1 ring-line/70 transition-colors hover:bg-accent-soft/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{task.title}</p><p className="mt-1 text-xs text-muted">{task.serviceType} · {t('due')} {readableDate(task.dueDate, locale)}</p></div><Badge tone={isClientView ? getClientDeliveryStageTone(task) : task.isCompleted || task.status === 'Completed' ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{t(isClientView ? getClientDeliveryStageLabel(task) : task.status)}</Badge></button>)}
                           {summary.tasks.length === 0 && <p className="rounded-control bg-surface px-3 py-4 text-sm text-muted ring-1 ring-line/70">{t('No tasks in this period.')}</p>}
                         </div>
                       </section>

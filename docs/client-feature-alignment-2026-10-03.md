@@ -1,6 +1,6 @@
 # Client feature alignment
 
-Client-facing parity review against source commit `924da1f` and the local changes on 3 October 2026. These changes are local and have not been deployed.
+Client-facing parity review against source commit `924da1f` and the local changes on 3 October 2026. The reviewed batch includes client-safe report exports and stage-consistent tracker badges.
 
 | Recent internal feature/change | Client behavior | Implementation |
 | --- | --- | --- |
@@ -26,7 +26,8 @@ PM editing, assignment, company administration, internal prices and private reco
 
 - Reports show agency completion and recorded client approval separately for the
   same four-week due-work cohort. The timing metric uses agency completion;
-  missing dates remain unknown, and CSV includes both timestamps and review stage.
+  missing dates remain unknown, and client CSV includes both timestamps and review
+  stage without internal assignee or department metadata.
 - Tracker search filters actual records before recalculating progress. Searching
   a company shows that company's work; task matches retain linked delivery context.
 - Home displays the complete review count, including the highlighted delivery,

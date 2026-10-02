@@ -6,6 +6,7 @@ import {
   getClientServicePlan,
   getClientDeliveryStage,
   getClientDeliveryStageLabel,
+  getClientDeliveryStageTone,
   getClientFocusTask,
   getClientLatestUpdates,
   getClientProgress,
@@ -97,6 +98,13 @@ describe('Client portal reporting', () => {
     expect(getClientDeliveryStage(makeTask({ clientApprovalStatus: 'Approved' }), now)).toBe('delivered');
     expect(getClientDeliveryStage(makeTask({ status: 'Cancelled' }), now)).toBe('cancelled');
     expect(getClientDeliveryStageLabel(makeTask({ status: 'Custom production', dueDate: '2026-08-12' }), now)).toBe('In delivery');
+  });
+
+  it('uses client-stage colors for tracker badges', () => {
+    const now = new Date(2026, 7, 10, 12);
+    expect(getClientDeliveryStageTone(makeTask({ status: 'Completed', isCompleted: true }), now)).toBe('amber');
+    expect(getClientDeliveryStageTone(makeTask({ clientApprovalStatus: 'Approved' }), now)).toBe('emerald');
+    expect(getClientDeliveryStageTone(makeTask({ status: 'Pending', dueDate: '2026-08-12' }), now)).toBe('slate');
   });
 
   it('selects review work before the earliest expected delivery and breaks ties by update time', () => {

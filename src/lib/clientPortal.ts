@@ -75,6 +75,16 @@ export const getClientDeliveryStage = (task: Task, now = new Date()): ClientDeli
   return 'in_delivery';
 };
 
+export type ClientDeliveryStageTone = 'amber' | 'emerald' | 'blue' | 'slate';
+
+export const getClientDeliveryStageTone = (task: Task, now = new Date()): ClientDeliveryStageTone => {
+  const stage = getClientDeliveryStage(task, now);
+  if (stage === 'needs_review' || stage === 'timing_changed') return 'amber';
+  if (stage === 'delivered') return 'emerald';
+  if (stage === 'in_delivery') return 'blue';
+  return 'slate';
+};
+
 export const getClientDeliveryStageLabel = (task: Task, now = new Date()) => (
   CLIENT_DELIVERY_STAGE_LABELS[getClientDeliveryStage(task, now)]
 );

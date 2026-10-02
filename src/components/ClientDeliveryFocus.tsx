@@ -6,7 +6,7 @@ import { CalendarDays, CheckCircle2, Clock3, ExternalLink, FileText, History, Me
 import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
 import { canCommentOnTask, canReviewTaskAsClient } from '../lib/access';
-import { getClientDeliveryStage, getClientDeliveryStageLabel } from '../lib/clientPortal';
+import { getClientDeliveryStage, getClientDeliveryStageLabel, getClientDeliveryStageTone } from '../lib/clientPortal';
 import { formatLocalizedDate, formatLocalizedDistanceToNow } from '../lib/i18n';
 import { safeHttpsUrl } from '../lib/security';
 import { cn, parseOptionalDate } from '../lib/utils';
@@ -21,14 +21,6 @@ interface ClientDeliveryFocusProps {
   task: Task | null;
   onClose: () => void;
 }
-
-const stageTone = (task: Task): 'amber' | 'emerald' | 'blue' | 'slate' => {
-  const stage = getClientDeliveryStage(task);
-  if (stage === 'needs_review' || stage === 'timing_changed') return 'amber';
-  if (stage === 'delivered') return 'emerald';
-  if (stage === 'in_delivery') return 'blue';
-  return 'slate';
-};
 
 const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) => {
   const { locale, t } = useI18n();
@@ -165,7 +157,7 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
         {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
         <section aria-labelledby="delivery-outcome-title">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusChip tone={stageTone(task)}>{t(getClientDeliveryStageLabel(task))}</StatusChip>
+            <StatusChip tone={getClientDeliveryStageTone(task)}>{t(getClientDeliveryStageLabel(task))}</StatusChip>
             <span data-i18n-skip className="text-xs font-medium text-muted">{task.serviceType}</span>
           </div>
           <h3 id="delivery-outcome-title" data-i18n-skip className="mt-4 text-2xl font-semibold tracking-[-0.035em] text-ink text-pretty">{task.title}</h3>

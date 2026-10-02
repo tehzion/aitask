@@ -99,16 +99,19 @@ const Reports: React.FC = () => {
       overdue: t('Overdue'),
       untracked: t('Untracked'),
     };
-    const headers = [t('Week'), t('Task'), t('Client'), t('Assignee'), t('Department'), t('Outcome'), ...(isClientUser ? [t('clientReport.agencyDate'), t('clientReport.approvalDate'), t('clientReport.stage')] : [])];
-    const rows = performance.flatMap(week => week.outcomes.map(({ task, outcome }) => [
-      formatWeekLabel(week),
-      task.title,
-      task.clientName,
-      reportAssigneeName(task.assignedTo, users, { unassigned: t('Unassigned'), unavailable: t('Unavailable member') }),
-      task.department || t('Unassigned'),
-      outcomeLabels[outcome],
-      ...(isClientUser ? [isTaskCompleted(task) ? parseOptionalDate(task.completedAt)?.toISOString() || '' : '', getClientApprovalDate(task)?.toISOString() || '', t(getClientDeliveryStageLabel(task))] : []),
-    ]));
+    const headers = isClientUser
+      ? [t('Week'), t('Task'), t('Outcome'), t('clientReport.agencyDate'), t('clientReport.approvalDate'), t('clientReport.stage')]
+      : [t('Week'), t('Task'), t('Client'), t('Assignee'), t('Department'), t('Outcome')];
+    const rows = performance.flatMap(week => week.outcomes.map(({ task, outcome }) => {
+      const clientFields = [
+        isTaskCompleted(task) ? parseOptionalDate(task.completedAt)?.toISOString() || '' : '',
+        getClientApprovalDate(task)?.toISOString() || '',
+        t(getClientDeliveryStageLabel(task)),
+      ];
+      return isClientUser
+        ? [formatWeekLabel(week), task.title, outcomeLabels[outcome], ...clientFields]
+        : [formatWeekLabel(week), task.title, task.clientName, reportAssigneeName(task.assignedTo, users, { unassigned: t('Unassigned'), unavailable: t('Unavailable member') }), task.department || t('Unassigned'), outcomeLabels[outcome]];
+    }));
     const url = URL.createObjectURL(createCsvBlob([headers, ...rows]));
     const anchor = document.createElement('a');
     anchor.href = url;
