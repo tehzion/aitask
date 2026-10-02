@@ -112,4 +112,11 @@ describe('task assignment attribution', () => {
     expect(updated.assignedTo).toBe(staffTwo.id);
     expect(updated.assignedBy).toBe(hod.id);
   });
+  it('rejects HOD delegation outside their departments before changing local assignments', () => {
+    const videoHod: User = { ...hod, departments: ['Video Editor'], department: 'Video Editor' };
+    useStore.setState({ currentUser: videoHod, users: [pm, staff, staffTwo, videoHod], tasks: [{ ...task, assignedTo: videoHod.id, createdBy: pm.id }] });
+    expect(useStore.getState().updateTaskAssignee(task.id, staffTwo.id).ok).toBe(false);
+    expect(findTask().assignedTo).toBe(videoHod.id);
+  });
+
 });

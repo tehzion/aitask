@@ -783,7 +783,7 @@ const TaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTas
                       </button>
                     </div>
                   ) : (
-                    <p className="rounded-md bg-white/70 px-3 py-2 text-xs font-medium text-ink">{t('No eligible team members in this department.')}</p>
+                    <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{t('No eligible team members in this department.')}</p>
                   )}
                 </form>
               )}

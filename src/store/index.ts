@@ -3805,7 +3805,7 @@ export const useStore = create<StoreState>()(
         const currentUser = state.currentUser;
         const client = state.clients.find(c => c.id === clientId);
         if (!client) return { ok: false, error: 'Company not found.' };
-        if (!canDeleteClientProfile(currentUser, client.clientName, state.clients, state.rolePermissions)) {
+        if (!canDeleteClientProfile(currentUser, client.clientName, state.clients, state.rolePermissions, state.tasks)) {
           return { ok: false, error: 'You need permission to delete this company.' };
         }
 
@@ -4276,7 +4276,7 @@ export const useStore = create<StoreState>()(
         const actor = state.currentUser;
         if (!cycle || !actor) return { ok: false, error: 'Cycle not found.' };
         const authorized = canManageServiceCycles(actor, state.rolePermissions) || (['Staff', 'HOD'].includes(actor.role) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
-        if (!authorized) return { ok: false, error: 'You do not have access to this cycle.' };
+        if (!authorized || (!canManageServiceCycles(actor, state.rolePermissions) && !canOpenServiceClient(actor, cycle.clientName, state.tasks, state.rolePermissions, state.clients))) return { ok: false, error: 'You do not have access to this cycle.' };
         const now = new Date().toISOString();
         set(current => ({ serviceCycles: current.serviceCycles.map(item => item.id === cycleId ? { ...item, status, publishedAt: status === 'Published' ? item.publishedAt || now : item.publishedAt, updatedAt: now } : item) }));
         return { ok: true };
@@ -4289,7 +4289,7 @@ export const useStore = create<StoreState>()(
         const actor = state.currentUser;
         if (!deliverable || !actor) return { ok: false, error: 'Deliverable not found.' };
         const authorized = canManageServiceCycles(actor, state.rolePermissions) || (['Staff', 'HOD'].includes(actor.role) && state.tasks.some(task => task.deliverableId === deliverable.id && task.assignedTo === actor.id));
-        if (!authorized) return { ok: false, error: 'You do not have access to this deliverable.' };
+        if (!authorized || (!canManageServiceCycles(actor, state.rolePermissions) && !canOpenServiceClient(actor, deliverable.clientName, state.tasks, state.rolePermissions, state.clients))) return { ok: false, error: 'You do not have access to this deliverable.' };
         set(current => {
           const now = new Date().toISOString();
           const deliverables = current.deliverables.map(item => item.id === deliverableId ? {
@@ -4395,7 +4395,8 @@ export const useStore = create<StoreState>()(
         const cycle = state.serviceCycles.find(item => item.id === cycleId);
         const actor = state.currentUser;
         if (!cycle || !actor || actor.role === 'Client') return { ok: false, error: 'You cannot comment on this cycle.' };
-        const authorized = canManageServiceCycles(actor, state.rolePermissions) || state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id);
+        const authorized = canManageServiceCycles(actor, state.rolePermissions)
+          || (canOpenServiceClient(actor, cycle.clientName, state.tasks, state.rolePermissions, state.clients) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
         const clean = text.trim().slice(0, 10_000);
         if (!authorized || !clean) return { ok: false, error: authorized ? 'Comment cannot be empty.' : 'You do not have access to this cycle.' };
         const now = new Date().toISOString();

@@ -326,6 +326,28 @@
       ],
       "migrationHistoryAligned": true,
       "authenticatedStagingQa": "Not run: Vercel credential/project access preflight failed and this gate was explicitly skipped by the release owner."
+    },
+    "hodAssignedTaskDelegation": {
+      "verifiedAt": "2026-10-02",
+      "repositoryMigration": "20260930110000_hod_assigned_task_delegation",
+      "productionVersion": "20261002064719",
+      "method": "Supabase connector apply_migration; generated timestamp retained",
+      "beforeFunctionMd5": "f745e46adce0f0769c8bba3884e8372c",
+      "afterFunctionMd5": "38d55724bbaca7ffe2ab1e00e79d48d0",
+      "verification": "Read-only validator assertions under Mabel auth context: assigned and created task delegation allowed; unrelated task, wrong department, missing target and creator transfer denied. Private function execute remains postgres-only. No live task assignments changed.",
+      "videoShootingStaffRecipients": 0
+    },
+    "hodPermissionParity": {
+      "verifiedAt": "2026-10-02",
+      "repositoryMigration": "20261002065644_hod_permission_parity_followups",
+      "productionVersion": "20261002070755",
+      "method": "Supabase connector apply_migration; generated timestamp retained",
+      "liveParityRecords": 336,
+      "liveParityMismatches": 0,
+      "taskRecords": 186,
+      "companyRecords": 81,
+      "projectRecords": 69,
+      "verification": "Read-only HOD access comparison, legacy Editor task visibility/edit checks and HOD/PM notification mutation predicate checks. No business records changed. Local full database gate: 38 files, 541 checks plus real Storage passed. Frontend changes remain local."
     }
   },
   "schemaEquivalence": {
@@ -539,7 +561,8 @@
     "20260928140058_server_reminders_and_feedback_rate_limit",
     "20260930110000_hod_assigned_task_delegation",
     "20260930111033_service_upload_reconciliation",
-    "20260930154013_initialize_deadline_reminder_claim"
+    "20260930154013_initialize_deadline_reminder_claim",
+    "20261002065644_hod_permission_parity_followups"
   ],
   "pendingProductionMigrations": [
     "20260928140058_server_reminders_and_feedback_rate_limit",

@@ -383,14 +383,19 @@ export const canDeleteClientProfile = (
   user: User | null | undefined,
   clientName: string,
   profiles: ClientProfile[] = [],
-  customRoles: CustomRole[] = []
+  customRoles: CustomRole[] = [],
+  tasks: Task[] = [],
 ) => {
   if (isBossKoo(user)) return true;
   if (user?.role === 'Project Manager') {
     const profile = profiles.find(item => getClientKey(item.clientName) === getClientKey(clientName));
     return profile?.createdBy === user.id;
   }
-  return canDeleteClientProfiles(user, customRoles);
+  if (!user || !canDeleteClientProfiles(user, customRoles)) return false;
+  const key = getClientKey(clientName);
+  return profiles.some(profile => profile.createdBy === user.id && getClientKey(profile.clientName) === key)
+    || getVisibleTasks(user, tasks, customRoles).some(task => getClientKey(task.clientName) === key)
+    || canViewAllClients(user, customRoles);
 };
 export const getClientKey = (value: string | null | undefined) => value?.trim().toLowerCase() || '';
 export const canEditClientProfile = (
@@ -468,7 +473,10 @@ export const canAssignTasksToOthers = (
   customRoles: CustomRole[] = [],
   task?: Task,
   scope: VisibilityScope = {},
-) => (
+) => {
+  if (task && user && ['Staff', 'HOD'].includes(user.role)
+    && !isBossKoo(user) && !isMemberInDepartment(user, task.department)) return false;
+  return (
   isBossKoo(user)
   || (user?.role !== 'HOD' && hasPermission(user, 'editTasks', customRoles))
   || (user?.role === 'Project Manager' && Boolean(task) && isTaskInOwnedPortfolio(user as User, task as Task, scope))
@@ -477,7 +485,8 @@ export const canAssignTasksToOthers = (
     && task?.assignedTo === user?.id
     && hasPermission(user, 'manageCreatedTasks', customRoles))
   || (hasPermission(user, 'manageCreatedTasks', customRoles) && (!task || task.createdBy === user?.id))
-);
+  );
+};
 
 export const canViewTask = (
   user: User | null | undefined,
@@ -686,9 +695,8 @@ export const canLinkTaskToProject = (
   const hasVisibleProjectTask = getVisibleTasks(user, linkedTasks, customRoles).length > 0;
   if (hasVisibleProjectTask) return true;
 
-  if (linkedTasks.length > 0) {
-    return linkedTasks.some(task => isMemberInDepartment(user, task.department));
-  }
+  // Curated project availability is independent of whether it already has
+  // work. Department membership alone never grants a plain Staff member access.
   if (!canCreateTasks(user, customRoles)) return false;
 
   if (!project.createdBy) return true;

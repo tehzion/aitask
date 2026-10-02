@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(5);
+select plan(8);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -103,6 +103,43 @@ select is(
   ) ->> 'ok')::boolean,
   true,
   'Staff can mark a deliverable delivered with deliveredAt'
+);
+
+reset role;
+
+-- An assignment must not override an explicit revocation of service access.
+update public.aitask_members
+set permissions = '{"viewAssignedServiceClients":false}'::jsonb
+where workspace_id = 'pgtap-staff-invariants' and id = 'pgtap-staff-one';
+
+select ok(
+  not private.aitask_can_access_service_client('pgtap-staff-invariants', 'staff-client'),
+  'revoking assigned-service access takes effect even while a task remains assigned'
+);
+set local role authenticated;
+select is(
+  (public.aitask_execute_service_command(
+    'pgtap-staff-invariants', gen_random_uuid(), 'deliverable.manage',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'update', 'entityType', 'deliverable', 'entityId', 'staff-deliverable',
+      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-staff-invariants' and entity_type = 'deliverable' and entity_id = 'staff-deliverable'),
+      'data', (select data || '{"status":"In Progress"}'::jsonb from public.aitask_entities where workspace_id = 'pgtap-staff-invariants' and entity_type = 'deliverable' and entity_id = 'staff-deliverable')
+    )), null
+  ) ->> 'ok')::boolean,
+  false,
+  'Staff cannot update deliverable execution after service access is revoked'
+);
+select is(
+  (public.aitask_execute_service_command(
+    'pgtap-staff-invariants', gen_random_uuid(), 'cycle_comment.manage',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'cycle_comment', 'entityId', 'revoked-comment',
+      'expectedVersion', 0, 'parentId', 'staff-cycle',
+      'data', jsonb_build_object('id', 'revoked-comment', 'clientId', 'staff-client', 'clientName', 'Staff Co', 'cycleId', 'staff-cycle', 'userId', 'pgtap-staff-one', 'text', 'Blocked', 'visibility', 'internal', 'attachments', '[]'::jsonb)
+    )), null
+  ) ->> 'ok')::boolean,
+  false,
+  'Staff cannot add a cycle comment after service access is revoked'
 );
 
 reset role;

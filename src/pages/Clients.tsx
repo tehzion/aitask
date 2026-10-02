@@ -426,7 +426,7 @@ const Clients: React.FC = () => {
     ? !upgradeRequired && canEditClientProfile(currentUser, selectedClient.name, allTasks, rolePermissions, clientProfiles)
     : false;
   const selectedClientCanDelete = Boolean(
-    selectedClient?.profile && !upgradeRequired && canDeleteClientProfile(currentUser, selectedClient.profile.clientName, clientProfiles, rolePermissions),
+    selectedClient?.profile && !upgradeRequired && canDeleteClientProfile(currentUser, selectedClient.profile.clientName, clientProfiles, rolePermissions, allTasks),
   );
 
   const openClientPanel = (client: ClientSummary, edit = false) => {
