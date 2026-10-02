@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(16);
 
 select has_function('private', 'aitask_guard_notification_audience', array[]::text[], 'universal notification audience guard exists');
 select has_trigger('public', 'aitask_entities', 'aitask_0_guard_notification_audience', 'universal notification trigger exists');
@@ -37,6 +37,30 @@ select is((public.aitask_execute_command('pgtap-notification-guard',gen_random_u
   'kind','entity','action','insert','entityType','notification','entityId','missing-notice','expectedVersion',0,
   'data',jsonb_build_object('id','missing-notice','targetClient','Guard Client','title','Task Completed','route',jsonb_build_object('page','tasks','entityId','missing-task'))
 )))) ->> 'code','VALIDATION','missing task audience is rejected');
+select is((public.aitask_execute_command('pgtap-notification-guard',gen_random_uuid(),'workspace.patch',jsonb_build_array(jsonb_build_object(
+  'kind','entity','action','insert','entityType','notification','entityId','no-audience','expectedVersion',0,
+  'data',jsonb_build_object('id','no-audience','title','Probe','route',jsonb_build_object('page','tasks','entityId','visible-task'))
+)))) ->> 'code','VALIDATION','notifications without an audience are rejected');
+select is((public.aitask_execute_command('pgtap-notification-guard',gen_random_uuid(),'workspace.patch',jsonb_build_array(jsonb_build_object(
+  'kind','entity','action','insert','entityType','notification','entityId','blank-audience','expectedVersion',0,
+  'data',jsonb_build_object('id','blank-audience','targetClient','   ','title','Probe','route',jsonb_build_object('page','tasks','entityId','visible-task'))
+)))) ->> 'code','VALIDATION','blank audiences are rejected');
+reset role;
+select throws_ok($$
+  update public.aitask_entities
+  set data = jsonb_set(data, '{targetClient}', '"Other Client"'::jsonb, true)
+  where workspace_id = 'pgtap-notification-guard'
+    and entity_type = 'notification'
+    and entity_id = 'visible-notice'
+$$, '23514', 'Client notification audience must match the task client.', 'notification audience changes are revalidated on update');
+select lives_ok($$
+  update public.aitask_entities
+  set data = data || '{"readByUserIds":["notification-boss"]}'::jsonb
+  where workspace_id = 'pgtap-notification-guard'
+    and entity_type = 'notification'
+    and entity_id = 'visible-notice'
+$$, 'read-state updates preserve a valid notification');
+set local role authenticated;
 select is((public.aitask_execute_command(
   'pgtap-notification-guard', gen_random_uuid(), 'workspace.patch',
   jsonb_build_array(

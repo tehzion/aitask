@@ -12,17 +12,32 @@ declare
   v_task jsonb;
   v_target_user text := nullif(btrim(new.data ->> 'targetUserId'), '');
   v_target_role text := nullif(btrim(new.data ->> 'targetRole'), '');
-  v_target_client text := lower(btrim(coalesce(new.data ->> 'targetClient', '')));
+  v_target_client text := nullif(lower(btrim(coalesce(new.data ->> 'targetClient', ''))), '');
   v_task_client text;
 begin
-  if new.entity_type <> 'notification' or v_target_client = '' then
+  if new.entity_type <> 'notification' then
+    return new;
+  end if;
+
+  -- Notification read-state and message updates must keep working for legacy
+  -- rows, including rows whose task client was renamed later. Re-validate only
+  -- when the audience or route itself changes.
+  if tg_op = 'UPDATE'
+    and new.data ->> 'targetUserId' is not distinct from old.data ->> 'targetUserId'
+    and new.data ->> 'targetRole' is not distinct from old.data ->> 'targetRole'
+    and new.data ->> 'targetClient' is not distinct from old.data ->> 'targetClient'
+    and new.data -> 'route' is not distinct from old.data -> 'route' then
     return new;
   end if;
 
   if ((v_target_user is not null)::integer
       + (v_target_role is not null)::integer
-      + (v_target_client <> '')::integer) <> 1 then
+      + (v_target_client is not null)::integer) <> 1 then
     raise check_violation using message = 'Notifications require one approved audience.';
+  end if;
+
+  if v_target_client is null then
+    return new;
   end if;
 
   if v_task_id is null or (new.data -> 'route' ->> 'page') is distinct from 'tasks' then
@@ -56,7 +71,7 @@ revoke all on function private.aitask_guard_notification_audience() from public,
 
 drop trigger if exists aitask_0_guard_notification_audience on public.aitask_entities;
 create trigger aitask_0_guard_notification_audience
-before insert on public.aitask_entities
+before insert or update on public.aitask_entities
 for each row
 when (new.entity_type = 'notification')
 execute function private.aitask_guard_notification_audience();
