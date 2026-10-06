@@ -105,11 +105,11 @@ const FeedbackResults: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  if (isLoading) return <main className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-500" role="status">{t('feedback.checkingReviewerAccess')}</main>;
+  if (isLoading) return <main className="feedback-page flex min-h-screen items-center justify-center bg-slate-50 text-sm font-medium text-slate-500" role="status">{t('feedback.checkingReviewerAccess')}</main>;
 
   if (!rows.length && (!hasSession || error)) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
+      <main className="feedback-page flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
         <section className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <LockKeyhole className="h-8 w-8 text-blue-600" />
           <h1 className="mt-4 text-2xl font-semibold text-slate-950">{t('feedback.reviewerLogin')}</h1>
@@ -125,8 +125,8 @@ const FeedbackResults: React.FC = () => {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-10">
-      <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6"><div className="flex items-center gap-3"><div data-i18n-skip className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">AT</div><div><p className="font-semibold text-slate-950">{t('feedback.results')}</p><p className="text-xs text-slate-500">{reviewer === 'developer' ? t('Developer read-only access') : t('Super Admin access')}</p></div></div><Button variant="secondary" onClick={async () => { await supabase.auth.signOut({ scope: 'local' }); window.location.reload(); }}><LogOut className="h-4 w-4" />{t('feedback.signOut')}</Button></div></header>
+    <main className="feedback-page min-h-screen bg-slate-50 pb-10">
+      <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6"><div className="flex items-center gap-3"><div data-i18n-skip className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-sm font-bold text-white">AT</div><div><p className="font-semibold text-slate-950">{t('feedback.results')}</p><p className="text-xs text-slate-500">{reviewer === 'developer' ? t('Developer read-only access') : t('Super Admin access')}</p></div></div><Button variant="secondary" onClick={async () => { await supabase.auth.signOut({ scope: 'local' }); window.location.reload(); }}><LogOut className="h-4 w-4" />{t('feedback.signOut')}</Button></div></header>
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 sm:px-6">
         <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><div className="flex items-center gap-2 text-emerald-700"><ShieldCheck className="h-5 w-5" /><span className="text-sm font-semibold">{t('feedback.readOnlyReport')}</span></div><h1 className="mt-2 text-2xl font-semibold text-slate-950">{t('feedback.launchWeekResponses')}</h1></div><Button onClick={exportCsv} disabled={!filtered.length}><Download className="h-4 w-4" />{t('feedback.exportCsv')}</Button></section>
         <section className="grid gap-3 sm:grid-cols-3"><div className="rounded-lg border border-slate-200 bg-white p-4"><p className="text-sm text-slate-500">{t('feedback.responses')}</p><p className="mt-1 text-2xl font-bold text-slate-950">{rows.length}</p></div><div className="rounded-lg border border-slate-200 bg-white p-4"><p className="text-sm text-slate-500">{t('feedback.reportedIssues')}</p><p className="mt-1 text-2xl font-bold text-red-700">{issueCount}</p></div><div className="rounded-lg border border-slate-200 bg-white p-4"><p className="text-sm text-slate-500">{t('feedback.averageExperience')}</p><p className="mt-1 text-2xl font-bold text-slate-950">{average}/5</p></div></section>

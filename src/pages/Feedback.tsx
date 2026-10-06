@@ -135,7 +135,7 @@ const Feedback: React.FC = () => {
 
   if (receipt) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
+      <main className="feedback-page flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
         <section className="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-10" role="status" aria-live="polite">
           <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
           <h1 className="mt-5 text-2xl font-semibold text-slate-950">{t.success}</h1>
@@ -147,11 +147,11 @@ const Feedback: React.FC = () => {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-[calc(2rem+env(safe-area-inset-bottom))]">
+    <main className="feedback-page min-h-screen bg-slate-50 pb-[calc(2rem+env(safe-area-inset-bottom))]">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <div data-i18n-skip className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">AT</div>
+            <div data-i18n-skip className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-sm font-bold text-white">AT</div>
             <div><p data-i18n-skip className="font-semibold text-slate-950">AiTask</p><p className="text-xs text-slate-500">{formT('feedback.formLaunch')}</p></div>
           </div>
           <button type="button" data-i18n-skip onClick={() => { const next = language === 'en' ? 'zh' : 'en'; setLanguage(next); setLocale(next); }} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">

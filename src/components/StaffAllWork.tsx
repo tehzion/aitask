@@ -5,7 +5,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Priority, TaskStatus } from '../types';
 import { useStore } from '../store';
 import { getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../lib/access';
-import { buildStaffWorkQueue, getStaffBucketLabel, type StaffWorkBucketKey } from '../lib/staffWorkspace';
+import { buildStaffWorkQueue, getHodScopeTasks, getStaffBucketLabel, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getTodayInputDate } from '../lib/utils';
 import { Button, PageHeader, SegmentedTabs, Surface } from './ui';
 import { inputBase, pageShell } from './uiTokens';
@@ -33,25 +33,38 @@ const StaffAllWork: React.FC = () => {
     projects: state.projects,
     users: state.users,
   })));
-  const [bucket, setBucket] = React.useState<StaffAllWorkBucket>('all');
+  const bucket: StaffAllWorkBucket = buckets.includes(searchParams.get('queue') as StaffAllWorkBucket) ? searchParams.get('queue') as StaffAllWorkBucket : 'all';
+  const setParam = (key: string, value: string, defaultValue = 'All') => {
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      if (value && value !== defaultValue) next.set(key, value);
+      else next.delete(key);
+      return next;
+    }, { replace: true });
+  };
+  const setBucket = (value: StaffAllWorkBucket) => setParam('queue', value, 'all');
   const [filtersOpen, setFiltersOpen] = React.useState(false);
-  const [client, setClient] = React.useState('All');
-  const [project, setProject] = React.useState('All');
-  const [assignee, setAssignee] = React.useState('All');
-  const [department, setDepartment] = React.useState('All');
-  const [creator, setCreator] = React.useState('All');
-  const [status, setStatus] = React.useState<TaskStatus>('All');
-  const [priority, setPriority] = React.useState<Priority | 'All'>('All');
-  const [dueFrom, setDueFrom] = React.useState('');
-  const [dueTo, setDueTo] = React.useState('');
+  const client = (searchParams.get('client') || 'All');
+  const setClient = (value: string) => setParam('client', value);
+  const project = (searchParams.get('project') || 'All');
+  const setProject = (value: string) => setParam('project', value);
+  const assignee = (searchParams.get('assignee') || 'All');
+  const setAssignee = (value: string) => setParam('assignee', value);
+  const department = (searchParams.get('department') || 'All');
+  const setDepartment = (value: string) => setParam('department', value);
+  const creator = (searchParams.get('creator') || 'All');
+  const setCreator = (value: string) => setParam('creator', value);
+  const status = (searchParams.get('status') || 'All') as TaskStatus;
+  const setStatus = (value: TaskStatus) => setParam('status', value);
+  const priority = (searchParams.get('priority') || 'All') as Priority | 'All';
+  const setPriority = (value: Priority | 'All') => setParam('priority', value);
+  const dueFrom = (searchParams.get('dueFrom') || '');
+  const setDueFrom = (value: string) => setParam('dueFrom', value);
+  const dueTo = (searchParams.get('dueTo') || '');
+  const setDueTo = (value: string) => setParam('dueTo', value);
   const [fullEditorOpen, setFullEditorOpen] = React.useState(false);
   const search = searchParams.get('search') || '';
-  const updateSearch = (value: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set('search', value);
-    else next.delete('search');
-    setSearchParams(next, { replace: true });
-  };
+  const updateSearch = (value: string) => setParam('search', value, '');
   const searchInput = useImeSafeInput(search, updateSearch, { commitDelayMs: 180 });
 
   const visibleTasks = React.useMemo(
@@ -60,11 +73,10 @@ const StaffAllWork: React.FC = () => {
   );
   const isHod = isHodUser(currentUser, rolePermissions);
   const isProjectManager = currentUser?.role === 'Project Manager';
-  const [scopeView, setScopeView] = React.useState<'mine' | 'department'>('department');
+  const scopeView = searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'delegated' ? 'delegated' : 'department';
+  const setScopeView = (value: 'mine' | 'delegated' | 'department') => setParam('scope', value, 'department');
   const tasks = React.useMemo(() => {
-    if (isHod && scopeView === 'mine') {
-      return visibleTasks.filter(task => task.assignedTo === currentUser?.id || task.createdBy === currentUser?.id);
-    }
+    if (isHod) return getHodScopeTasks(visibleTasks, currentUser?.id, scopeView);
     if (currentUser?.role === 'Staff' && !isDepartmentScopedUser(currentUser, rolePermissions)) {
       return visibleTasks.filter(task => task.assignedTo === currentUser.id || task.createdBy === currentUser.id);
     }
@@ -109,15 +121,11 @@ const StaffAllWork: React.FC = () => {
 
   const clearFilters = () => {
     searchInput.commit('');
-    setClient('All');
-    setProject('All');
-    setAssignee('All');
-    setDepartment('All');
-    setCreator('All');
-    setStatus('All');
-    setPriority('All');
-    setDueFrom('');
-    setDueTo('');
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      ['search', 'client', 'project', 'assignee', 'department', 'creator', 'status', 'priority', 'dueFrom', 'dueTo'].forEach(key => next.delete(key));
+      return next;
+    }, { replace: true });
   };
 
   return (
@@ -158,8 +166,8 @@ const StaffAllWork: React.FC = () => {
         <h2 id="staff-all-work-list" className="sr-only">{t('Visible task list')}</h2>
 
         {isHod && (
-          <SegmentedTabs<'mine' | 'department'>
-            items={[{ id: 'mine', label: t('My work'), count: visibleTasks.filter(task => task.assignedTo === currentUser?.id || task.createdBy === currentUser?.id).length }, { id: 'department', label: t('Department work'), count: visibleTasks.length }]}
+          <SegmentedTabs<'mine' | 'delegated' | 'department'>
+            items={[{ id: 'mine', label: t('My assignments'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'mine').length }, { id: 'delegated', label: t('Delegated by me'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'delegated').length }, { id: 'department', label: t('Department work'), count: visibleTasks.length }]}
             value={scopeView}
             onChange={setScopeView}
             label={t('HOD work scope')}
@@ -187,7 +195,7 @@ const StaffAllWork: React.FC = () => {
         )}
 
         <Surface id="all-work-panel" role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={tasks} users={users} onOpen={item => setTaskId(item.id)} />)}
+          {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={visibleTasks} users={users} onOpen={item => setTaskId(item.id)} />)}
           {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">{t('No visible work matches this view')}</p><p className="mt-1 text-sm text-muted">{t('Clear a filter or choose another queue.')}</p></div>}
         </Surface>
       </section>

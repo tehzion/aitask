@@ -37,9 +37,9 @@ interface StatCardProps {
 }
 
 const StatCard = ({ title, value, to }: StatCardProps) => (
-  <Link to={to} className="flex items-baseline justify-between gap-4 border-b border-line/70 py-3 transition-colors hover:bg-inset/70 focus:outline-none focus:ring-2 focus:ring-accent/35">
-    <span className="text-sm text-muted">{title}</span>
-    <span className="calm-number text-xl font-semibold text-ink">{value}</span>
+  <Link to={to} className="app-stat-row flex min-h-20 items-center justify-between gap-4 rounded-panel px-4 py-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+    <span className="text-sm font-medium text-muted">{title}</span>
+    <span className="calm-number text-2xl font-semibold tracking-[-0.04em] text-ink">{value}</span>
   </Link>
 );
 

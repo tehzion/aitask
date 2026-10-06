@@ -1,3 +1,4 @@
+import { getTaskBlockers } from '../lib/staffWorkspace';
 import React from 'react';
 import { AlertTriangle, ArrowRight, Paperclip, RotateCcw } from 'lucide-react';
 import type { Task, User } from '../types';
@@ -23,9 +24,7 @@ interface StaffWorkItemProps {
 
 const StaffWorkItem: React.FC<StaffWorkItemProps> = ({ task, allTasks, users = [], onOpen, emphasized = false }) => {
   const { locale, t } = useI18n();
-  const incompletePredecessors = (task.predecessorTaskIds || []).filter(id => (
-    allTasks.some(item => item.id === id && !item.isCompleted && item.status !== 'Completed')
-  ));
+  const incompletePredecessors = getTaskBlockers(task, allTasks);
   const isRevision = task.revisionCount > 0 && !task.isCompleted;
   const assignee = users.find(user => user.id === task.assignedTo)?.name;
   const creator = users.find(user => user.id === task.createdBy)?.name;

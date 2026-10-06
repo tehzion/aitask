@@ -14,10 +14,10 @@ interface PageHeaderProps {
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({ title, description, action, breadcrumb, meta, compact = false }) => (
-  <header className={cn('flex flex-col gap-5 border-b border-line/70', compact ? 'pb-4' : 'pb-6', 'sm:flex-row sm:items-end sm:justify-between')}>
+  <header className={cn('app-page-header flex flex-col gap-5 border-b border-line/70', compact ? 'pb-4' : 'pb-6', 'sm:flex-row sm:items-end sm:justify-between')}>
     <div className="min-w-0">
       {breadcrumb && <div className="mb-2 text-xs font-medium text-muted">{breadcrumb}</div>}
-      <h1 className={cn('text-balance font-semibold tracking-[-0.035em] text-ink', compact ? 'text-2xl leading-8' : 'text-[1.75rem] leading-9 sm:text-[2rem] sm:leading-10')}>{title}</h1>
+      <h1 className={cn('app-page-title text-balance font-semibold text-ink', compact ? 'text-2xl leading-8' : 'text-[1.75rem] leading-9 sm:text-[2rem] sm:leading-10')}>{title}</h1>
       {description && <p className="mt-1.5 max-w-[65ch] text-pretty text-sm leading-6 text-muted">{description}</p>}
       {meta && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">{meta}</div>}
     </div>
@@ -90,7 +90,7 @@ const toneClasses: Record<string, string> = {
 };
 
 export const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon: Icon, tone = 'blue', footer, className }) => (
-  <div className={cn(cardBase, 'p-4 sm:p-5', className)}>
+  <div className={cn(cardBase, 'app-metric-card p-4 sm:p-5', className)}>
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <p className="text-sm font-medium leading-5 text-muted">{title}</p>
@@ -114,7 +114,7 @@ interface ChartCardProps {
 }
 
 export const ChartCard: React.FC<ChartCardProps> = ({ title, description, children, className, heightClassName = 'h-64' }) => (
-  <section className={cn(cardBase, 'flex flex-col p-4 sm:p-5', className)}>
+  <section className={cn(cardBase, 'app-chart-card flex flex-col p-4 sm:p-5', className)}>
     <div className="mb-4">
       <h2 className="text-base font-semibold text-ink">{title}</h2>
       {description && <p className="mt-1 text-sm leading-5 text-muted">{description}</p>}
@@ -253,6 +253,8 @@ export const SegmentedTabs = <T extends string,>({ items, value, onChange, label
   const isBoss = variant === 'boss';
   return (
     <div role="tablist" aria-label={label} className={cn(
+      'app-tablist',
+      isUnderline && 'app-tablist--underline',
       isUnderline
         ? 'no-scrollbar flex min-w-0 gap-1 overflow-x-auto border-b border-line'
         : isBoss
@@ -273,6 +275,8 @@ export const SegmentedTabs = <T extends string,>({ items, value, onChange, label
           onClick={() => onChange(item.id)}
           onKeyDown={event => handleKeyDown(event, index)}
           className={cn(
+            'app-tab',
+            isUnderline && 'app-tab--underline',
             isUnderline
               ? 'relative min-h-11 shrink-0 px-3 text-sm font-semibold transition-colors duration-160'
               : isBoss
@@ -298,7 +302,7 @@ export const ProgressBar: React.FC<{ value: number; max?: number; label: string;
   const percent = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
   return <div className={className}>
     <div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="font-medium text-muted">{label}</span><span className="calm-number font-semibold text-ink">{Math.round(percent)}%</span></div>
-    <div className="h-2 overflow-hidden rounded-full bg-inset ring-1 ring-line/60" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value}>
+    <div className="app-progress h-2 overflow-hidden rounded-full bg-inset ring-1 ring-line/60" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value}>
       <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${percent}%` }} />
     </div>
   </div>;
@@ -312,7 +316,7 @@ export const DataRow: React.FC<Omit<React.HTMLAttributes<HTMLElement>, 'title'> 
 );
 
 export const EmptyState: React.FC<{ title: string; description: string; action?: React.ReactNode; icon?: LucideIcon; className?: string }> = ({ title, description, action, icon: Icon = ArrowUpRight, className }) => (
-  <div className={cn('rounded-panel bg-inset px-5 py-12 text-center', className)}>
+  <div className={cn('app-empty-state rounded-panel bg-inset px-5 py-12 text-center', className)}>
     <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-control bg-accent-soft text-accent"><Icon className="h-5 w-5" aria-hidden="true" /></div>
     <h3 className="mt-4 font-semibold text-ink">{title}</h3><p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">{description}</p>{action && <div className="mt-5">{action}</div>}
   </div>

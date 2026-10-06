@@ -37,6 +37,7 @@ test('HOD delegates assigned work only to an eligible staff member and preserves
   const dialog = await openDetails(page, 'hod-assigned', 'Assigned delegation work');
   const choices = dialog.getByRole('combobox', { name: 'Choose a team member' });
   await expect(choices.locator('option[value="audit-editor"]')).toHaveCount(1);
+  await expect(choices.locator('option[value="audit-editor"]')).toContainText('1 Active tasks');
   await expect(choices.locator('option[value="audit-designer"]')).toHaveCount(0);
   await choices.selectOption('audit-editor');
   await dialog.getByRole('button', { name: 'Assign Task', exact: true }).click();
@@ -59,7 +60,7 @@ test('department oversight permits edits but does not grant reassignment or fore
 });
 
 test('revoked delegation permissions and empty recipient lists have usable mobile feedback', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 375, height: 812 });
   await seedHod(page, { recipients: false });
   await page.evaluate(() => localStorage.setItem('aitask-color-theme', 'dark'));
   const dialog = await openDetails(page, 'hod-assigned', 'Assigned delegation work');
@@ -104,4 +105,58 @@ test('HOD can edit foreign-department assigned work without exposing delegation'
   const dialog = await openDetails(page, 'hod-foreign', 'Foreign department work');
   await expect(dialog.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
   await expect(dialog.getByRole('heading', { name: 'Task Delegation' })).toHaveCount(0);
+});
+
+
+test('HOD workload links preserve filters and separate personal and delegated work', async ({ page }) => {
+  await seedHod(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    const oversight = state.tasks.find(task => task.id === 'hod-oversight');
+    useStore.setState({ tasks: [
+      ...state.tasks.map(task => task.id === 'hod-oversight' ? { ...task, dueDate: '2020-01-01', assignedBy: 'audit-hod' } : task),
+      { ...oversight, id: 'cancelled-predecessor', title: 'Cancelled predecessor', status: 'Cancelled', assignedTo: 'audit-editor', dueDate: '2020-01-01' },
+      { ...oversight, id: 'completed-successor', title: 'Completed successor', isCompleted: true, predecessorTaskIds: ['hod-oversight'] },
+    ] });
+  });
+  await page.goto('/');
+  const workload = page.getByRole('region', { name: 'Department workload' });
+  await expect(workload).toBeVisible();
+  await expect(workload.getByRole('link', { name: /Audit Editor/ })).toContainText('Active tasks1');
+  await expect(workload.getByRole('link', { name: /Audit Editor/ })).toContainText('Overdue1');
+  await expect(workload.getByText('Audit Designer')).toHaveCount(0);
+  await page.getByRole('tab', { name: /My assignments/ }).click();
+  await expect(page.getByRole('heading', { name: 'Assigned delegation work' })).toBeVisible();
+  await page.getByRole('tab', { name: /Delegated by me/ }).click();
+  await expect(page.getByRole('heading', { name: 'Legacy Editor oversight' })).toBeVisible();
+  await workload.getByRole('link', { name: /Audit Editor/ }).click();
+  await expect(page).toHaveURL(/assignee=audit-editor/);
+  await expect(page.getByRole('button', { name: /Assigned delegation work/ })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button', { name: /Legacy Editor oversight/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Assigned delegation work/ })).toHaveCount(0);
+  await page.getByRole('button', { name: /Filters/ }).click();
+  await expect(page.getByRole('combobox', { name: 'Filter by assignee' })).toHaveValue('audit-editor');
+  await page.getByRole('combobox', { name: 'Filter by priority' }).selectOption('Medium');
+  await page.getByRole('button', { name: /^Show/ }).click();
+  await page.reload();
+  await expect(page).toHaveURL(/priority=Medium/);
+  await page.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(page).not.toHaveURL(/assignee=|priority=/);
+  await expect(page.getByRole('button', { name: /Assigned delegation work/ })).toBeVisible();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/');
+  await expect(page.getByRole('region', { name: 'Department workload' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const mobileWorkload = page.getByRole('region', { name: 'Department workload' });
+  await mobileWorkload.scrollIntoViewIfNeeded();
+  await mobileWorkload.screenshot({ path: '/tmp/hod-workload-mobile.png' });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.evaluate(() => { document.documentElement.classList.add('dark'); document.documentElement.style.fontSize = '20px'; });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await mobileWorkload.screenshot({ path: '/tmp/hod-workload-dark.png' });
+  await page.setViewportSize({ width: 812, height: 375 });
+  await expect(mobileWorkload).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

@@ -1,11 +1,11 @@
-export const pageShell = 'mx-auto w-full max-w-workspace space-y-7';
-export const cardBase = 'calm-surface';
-export const raisedCard = 'calm-raised';
+export const pageShell = 'app-page mx-auto w-full max-w-workspace space-y-7';
+export const cardBase = 'calm-surface app-card';
+export const raisedCard = 'calm-raised app-card-raised';
 export const mutedPanel = 'calm-inset';
 export const sectionDivider = 'border-t border-line/80 pt-6';
-export const tableShell = 'overflow-hidden rounded-panel bg-surface ring-1 ring-line/80';
+export const tableShell = 'app-table-shell overflow-hidden rounded-panel bg-surface ring-1 ring-line/80';
 export const tableHeader = 'bg-inset/80 text-xs font-semibold text-muted';
-export const filterBar = 'rounded-panel bg-inset/80 p-3 ring-1 ring-line/70 sm:p-4';
+export const filterBar = 'app-filter-bar rounded-panel bg-inset/80 p-3 ring-1 ring-line/70 sm:p-4';
 export const inputBase = [
   'min-h-11 w-full rounded-control border border-line bg-surface text-sm text-ink shadow-none',
   'outline-none transition-[border-color,box-shadow,background-color] duration-160',

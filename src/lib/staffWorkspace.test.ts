@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../types';
-import { buildStaffWorkQueue, getStaffFocusTask, getStaffGuidedAction } from './staffWorkspace';
+import { buildStaffWorkQueue, getStaffFocusTask, getStaffGuidedAction, getTaskBlockers, getHodScopeTasks } from './staffWorkspace';
 
 const task = (overrides: Partial<Task>): Task => ({
   id: overrides.id || crypto.randomUUID(),
@@ -54,13 +54,13 @@ describe('staff workspace queue', () => {
     expect(queue.needs_action.map(item => item.id)).toEqual(['urgent', 'medium-new', 'medium-old']);
   });
 
-  it('uses the latest update—not the exact future date—after priority', () => {
+  it('orders future work by due date before priority and update time', () => {
     const queue = buildStaffWorkQueue([
       task({ id: 'due-sooner', dueDate: '2026-08-28', priority: 'High', updatedAt: '2026-08-20T00:00:00Z' }),
       task({ id: 'updated-later', dueDate: '2026-09-08', priority: 'High', updatedAt: '2026-08-25T00:00:00Z' }),
     ], '2026-08-26');
 
-    expect(queue.up_next.map(item => item.id)).toEqual(['updated-later', 'due-sooner']);
+    expect(queue.up_next.map(item => item.id)).toEqual(['due-sooner', 'updated-later']);
   });
 });
 
@@ -82,5 +82,42 @@ describe('staff guided task actions', () => {
   it('renders completed and cancelled work as terminal states', () => {
     expect(getStaffGuidedAction(task({ status: 'Completed', isCompleted: true }), statuses)).toEqual({ kind: 'terminal', label: 'Completed', disabled: true });
     expect(getStaffGuidedAction(task({ status: 'Cancelled' }), statuses)).toEqual({ kind: 'terminal', label: 'Cancelled', disabled: true });
+  });
+});
+
+
+describe('HOD oversight', () => {
+  it('keeps older overdue deadlines ahead of newer urgent work', () => {
+    const queue = buildStaffWorkQueue([
+      task({ id: 'oldest', dueDate: '2026-08-01', priority: 'Low' }),
+      task({ id: 'urgent', dueDate: '2026-08-25', priority: 'Urgent', updatedAt: '2026-08-26' }),
+    ], '2026-08-26');
+    expect(getStaffFocusTask(queue)?.id).toBe('oldest');
+  });
+
+  it('counts only open, visible predecessors of open tasks', () => {
+    const work = task({ predecessorTaskIds: ['open', 'completed', 'cancelled', 'hidden'] });
+    const visible = [
+      task({ id: 'open' }),
+      task({ id: 'completed', status: 'Completed', isCompleted: false }),
+      task({ id: 'cancelled', status: 'Cancelled', isCompleted: false }),
+    ];
+    expect(getTaskBlockers(work, visible).map(item => item.id)).toEqual(['open']);
+    expect(getTaskBlockers({ ...work, isCompleted: true }, visible)).toEqual([]);
+    expect(getTaskBlockers({ ...work, status: 'Cancelled' }, visible)).toEqual([]);
+  });
+
+  it('separates personal assignments from created or reassigned delegation', () => {
+    const visible = [
+      task({ id: 'mine', assignedTo: 'hod', createdBy: 'pm' }),
+      task({ id: 'created', assignedTo: 'staff', createdBy: 'hod' }),
+      task({ id: 'reassigned', assignedTo: 'staff', assignedBy: 'hod', createdBy: 'pm' }),
+      task({ id: 'unassigned', assignedTo: '', createdBy: 'hod' }),
+      task({ id: 'oversight', assignedTo: 'staff', createdBy: 'pm' }),
+    ];
+    expect(getHodScopeTasks(visible, 'hod', 'mine').map(item => item.id)).toEqual(['mine']);
+    expect(getHodScopeTasks(visible, 'hod', 'delegated').map(item => item.id)).toEqual(['created', 'reassigned']);
+    expect(getHodScopeTasks(visible, 'hod', 'department')).toEqual(visible);
+    expect(getHodScopeTasks(visible, undefined, 'delegated')).toEqual([]);
   });
 });

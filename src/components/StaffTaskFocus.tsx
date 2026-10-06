@@ -3,7 +3,7 @@ import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock3, Externa
 import { useShallow } from 'zustand/react/shallow';
 import type { Task, TaskStatus } from '../types';
 import { isPendingMutationResolution, useStore } from '../store';
-import { getStaffGuidedAction } from '../lib/staffWorkspace';
+import { getStaffGuidedAction, getTaskBlockers } from '../lib/staffWorkspace';
 import { safeHttpsUrl } from '../lib/security';
 import { getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { inputBase } from './uiTokens';
@@ -12,7 +12,7 @@ import SideSheet from './SideSheet';
 import BackendFreshness from './BackendFreshness';
 import { useI18n } from './I18nProvider';
 import { formatLocalizedDate, formatLocalizedDistanceToNow } from '../lib/i18n';
-import { getTaskAccess } from '../lib/access';
+import { getVisibleTasks, getTaskAccess } from '../lib/access';
 
 interface StaffTaskFocusProps {
   isOpen: boolean;
@@ -68,9 +68,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
 
   if (!liveTask) return null;
 
-  const incompletePredecessors = (liveTask.predecessorTaskIds || [])
-    .map(id => tasks.find(item => item.id === id))
-    .filter((item): item is Task => Boolean(item && !item.isCompleted && item.status !== 'Completed'));
+  const incompletePredecessors = getTaskBlockers(liveTask, getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects }));
   const unavailablePredecessorCount = (liveTask.predecessorTaskIds || [])
     .filter(id => !tasks.some(item => item.id === id)).length;
   const guidedAction = getStaffGuidedAction(liveTask, taskStatuses);

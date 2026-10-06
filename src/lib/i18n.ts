@@ -11,6 +11,12 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  'Visible department work only.': '仅统计可见的部门工作。',
+  'No department members available.': '暂无部门成员。',
+  'Department workload': '部门工作量',
+  'Active tasks': '进行中的任务',
+  'Delegated by me': '由我分派',
+  'My assignments': '我的任务',
   'Loading…': '加载中…',
   'Performance and save diagnostics': '性能与保存诊断',
   'This session only. No account IDs, form values or attachment paths are included.': '仅限此会话。不包含账号标识、表单值或附件路径。',

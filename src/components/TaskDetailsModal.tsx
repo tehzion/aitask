@@ -1,10 +1,12 @@
+import { getTaskBlockers } from '../lib/staffWorkspace';
+import { getTeamWorkloadSummaries } from '../lib/taskReporting';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React, { useEffect, useState } from 'react';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save, ChevronDown, AlertTriangle, UsersRound } from 'lucide-react';
 import { Department, Priority, Task, TaskStatus } from '../types';
-import { canViewTask, getTaskAccess, canReviewTaskAsClient, isDepartmentScopedUser } from '../lib/access';
+import { canViewTask, getVisibleTasks, getTaskAccess, canReviewTaskAsClient, isDepartmentScopedUser } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate, parseOptionalDate, cn } from '../lib/utils';
 import { isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
@@ -197,9 +199,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
     && isDepartmentScopedUser(currentUser, rolePermissions)
     && task.assignedTo === currentUser?.id
   );
-  const incompletePredecessors = (task.predecessorTaskIds || [])
-    .map(id => tasks.find(item => item.id === id))
-    .filter((item): item is Task => Boolean(item && !item.isCompleted));
+  const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects });
+  const incompletePredecessors = getTaskBlockers(task, visibleTasks);
   const assigneeOptions = canAssignOthers
     ? users.filter(user => user.role !== 'Client' && isMemberInDepartment(user, editForm.department))
     : users.filter(user => user.id === editForm.assignedTo);
@@ -208,6 +209,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
     && user.id !== currentUser?.id
     && isMemberInDepartment(user, task.department)
   ));
+
+  const delegationWorkloads = getTeamWorkloadSummaries(visibleTasks, delegationOptions, 'overall');
 
   const confirmPendingMutation = async (commandType?: SecureCommandType) => {
     setIsSubmitting(true);
@@ -770,7 +773,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
                           className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}
                         >
                           <option value="">{t('Choose a team member')}</option>
-                          {delegationOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{user.name}</option>)}
+                          {delegationWorkloads.map(({ member, open, overdue }) => <option key={member.id} data-i18n-skip value={member.id}>{member.name} · {open} {t('Active tasks')} · {overdue} {t('Overdue')}</option>)}
                         </select>
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
                       </label>

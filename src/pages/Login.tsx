@@ -184,7 +184,7 @@ const Login: React.FC = () => {
   };
 
   return (
-    <main className="relative min-h-screen bg-slate-50 flex flex-col justify-center px-4 py-10 dark:bg-slate-950 sm:px-6 lg:px-8">
+    <main className="auth-page relative min-h-screen bg-slate-50 flex flex-col justify-center px-4 py-10 dark:bg-slate-950 sm:px-6 lg:px-8">
       <div className="fixed right-4 top-4 z-10 flex items-center gap-2">
         <LanguageSwitcher compact className="rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm hover:bg-slate-100 hover:text-slate-950 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white" />
         <button
@@ -197,10 +197,29 @@ const Login: React.FC = () => {
           {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
         </button>
       </div>
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
+      <div className="auth-layout px-4 py-16 sm:px-6 lg:px-10">
+        <aside className="auth-brand-panel" aria-label={t('Marketing agency workspace')}>
           <div className="flex items-center gap-3">
-            <div data-i18n-skip className="flex h-14 w-14 items-center justify-center rounded-lg bg-blue-600 text-xl font-bold text-white shadow-sm">
+            <div data-i18n-skip className="flex h-12 w-12 items-center justify-center rounded-control bg-accent text-base font-bold text-white shadow-lg shadow-accent/15">AT</div>
+            <div>
+              <div data-i18n-skip className="text-2xl font-semibold tracking-[-0.05em] text-slate-950">AiTask</div>
+              <p className="mt-0.5 text-sm text-slate-600">{t('Marketing agency workspace')}</p>
+            </div>
+          </div>
+          <div className="auth-artwork mt-12" aria-hidden="true">
+            <div className="auth-workboard">
+              <div className="auth-workboard__top"><span className="auth-workboard__dot" /><span className="auth-workboard__bar auth-workboard__bar--wide" /><span className="auth-workboard__tag" /></div>
+              <div className="auth-workboard__row"><span className="auth-workboard__dot auth-workboard__dot--muted" /><span className="auth-workboard__bar auth-workboard__bar--medium" /><span className="auth-workboard__tag" /></div>
+              <div className="auth-workboard__row"><span className="auth-workboard__dot" /><span className="auth-workboard__bar auth-workboard__bar--wide" /><span className="auth-workboard__tag" /></div>
+              <div className="auth-workboard__row"><span className="auth-workboard__dot auth-workboard__dot--muted" /><span className="auth-workboard__bar auth-workboard__bar--short" /></div>
+            </div>
+          </div>
+        </aside>
+        <section className="auth-form-area" aria-labelledby="login-title">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="auth-inline-brand flex justify-center">
+          <div className="flex items-center gap-3">
+            <div data-i18n-skip className="flex h-14 w-14 items-center justify-center rounded-lg bg-accent text-xl font-bold text-white shadow-sm">
               AT
             </div>
             <div>
@@ -209,7 +228,7 @@ const Login: React.FC = () => {
             </div>
           </div>
         </div>
-        <h1 className="mt-8 text-center text-2xl font-semibold text-slate-950">
+        <h1 id="login-title" className="mt-8 text-center text-2xl font-semibold text-slate-950">
           {isRecovering ? t('Reset your password') : isRegistering ? t('Register for Access') : t('Sign in to AiTask')}
         </h1>
         <p className="mt-2 text-center text-sm text-slate-600">
@@ -222,7 +241,7 @@ const Login: React.FC = () => {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="border border-slate-200 bg-white px-4 py-8 shadow-[0_10px_24px_rgba(15,23,42,0.07)] sm:rounded-lg sm:px-10">
+        <div className="auth-card px-4 py-8 sm:px-10">
           {isRecovering ? (
             recoverySent ? (
               <div className="py-4 text-center" role="status" aria-live="polite">
@@ -471,9 +490,11 @@ const Login: React.FC = () => {
             </>
           )}
         </div>
-        <p className="mt-4 text-center font-mono text-[11px] text-slate-400">
+      <p className="mt-4 text-center font-mono text-[11px] text-slate-400">
           {APP_BUILD_LABEL}
         </p>
+      </div>
+        </section>
       </div>
     </main>
   );

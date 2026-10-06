@@ -214,7 +214,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
         aria-label={t('Primary navigation')}
         aria-hidden={!isDesktop && !isOpen}
         className={clsx(
-          'fixed inset-y-0 left-0 z-30 flex w-[17rem] flex-col border-r border-line/80 bg-surface text-ink shadow-float transition-transform duration-160 ease-out md:static md:translate-x-0 md:shadow-none',
+          'app-sidebar fixed inset-y-0 left-0 z-30 flex w-[17rem] flex-col border-r border-line/80 bg-surface text-ink shadow-float transition-transform duration-160 ease-out md:static md:translate-x-0 md:shadow-none',
           isCollapsed && 'md:w-20',
           isOpen ? 'translate-x-0' : '-translate-x-full',
         )}

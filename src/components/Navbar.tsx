@@ -217,7 +217,7 @@ const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-10 flex h-[4.5rem] shrink-0 items-center justify-between border-b border-line/80 bg-surface/95 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+    <header className="app-toolbar sticky top-0 z-10 flex h-[4.5rem] shrink-0 items-center justify-between border-b border-line/80 bg-surface/95 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
       <div className="flex items-center flex-1">
         <button
           type="button"

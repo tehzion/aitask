@@ -187,7 +187,12 @@ const Layout: React.FC = () => {
   }, [closeMobileMenu, currentUser, navigate, resolvedTheme, rolePermissions, setCreateTaskModalOpen, toggleTheme, userCanCreateTasks]);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => mainRef.current?.focus({ preventScroll: true }));
+    const frame = window.requestAnimationFrame(() => {
+      const main = mainRef.current;
+      if (!main) return;
+      main.scrollTop = 0;
+      main.focus({ preventScroll: true });
+    });
     return () => window.cancelAnimationFrame(frame);
   }, [location.pathname]);
 
@@ -244,7 +249,7 @@ const Layout: React.FC = () => {
   const syncBannerDetail = conflictEntityLabel ? `${syncBannerMessage || ''}${conflictEntityLabel}`.trim() : syncBannerMessage;
 
   return (
-    <div className="relative flex h-[100dvh] overflow-hidden bg-canvas font-sans text-ink">
+    <div className="app-frame relative flex h-[100dvh] overflow-hidden bg-canvas font-sans text-ink">
       <a href="#main-content" className="fixed left-3 top-3 z-[100] -translate-y-20 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-lg transition-transform focus:translate-y-0">
         {t('Skip to main content')}
       </a>
@@ -323,13 +328,13 @@ const Layout: React.FC = () => {
           ref={mainRef}
           id="main-content"
           tabIndex={-1}
-          className="min-w-0 flex-1 scroll-mt-20 scroll-pb-[calc(5rem+env(safe-area-inset-bottom))] overflow-x-hidden overflow-y-auto bg-canvas p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none sm:p-6 md:pb-6 lg:p-8"
+          className="app-main min-w-0 flex-1 scroll-mt-20 scroll-pb-[calc(5rem+env(safe-area-inset-bottom))] overflow-x-hidden overflow-y-auto bg-canvas p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] outline-none sm:p-6 md:pb-6 lg:p-8"
         >
           <Outlet context={{ notificationReadActions }} />
         </main>
 
         {/* Mobile Bottom Navigation Bar */}
-        <nav aria-label={t('Mobile navigation')} className="fixed bottom-0 left-0 right-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-start justify-around border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_14px_rgb(7_22_18/0.10)] md:hidden">
+        <nav aria-label={t('Mobile navigation')} className="app-bottom-nav fixed bottom-0 left-0 right-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-start justify-around border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
           {mobileNavItems.map(item => {
             const Icon = item.icon;
             const renderContent = (isActive: boolean) => (

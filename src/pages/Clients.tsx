@@ -786,7 +786,7 @@ const Clients: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-px bg-line md:grid-cols-2 2xl:hidden">
-          {filteredClients.map(client => {
+          {filteredClients.map((client, index) => {
             const contact = getClientContact(client);
             const website = safeHttpsUrl(contact.website);
             const facebookPage = safeHttpsUrl(contact.facebookPage);
@@ -798,7 +798,7 @@ const Clients: React.FC = () => {
               .filter(Boolean);
 
             return (
-              <div key={client.name} className="bg-surface p-5">
+              <div key={client.name} className={cn('bg-surface p-5', filteredClients.length % 2 === 1 && index === filteredClients.length - 1 && 'md:col-span-2')}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h2 data-i18n-skip className="truncate font-semibold text-slate-950">{client.name}</h2>
@@ -809,38 +809,44 @@ const Clients: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="mt-4">{renderContactSummary(client)}</div>
-                {assignedByTeam.length > 0 && <p className="mt-3 text-xs text-slate-500">{t('Assigned by')}: {assignedByTeam.join(', ')}</p>}
-                {assignedTeam.length > 0 && <p className={assignedByTeam.length > 0 ? 'mt-1 text-xs text-slate-500' : 'mt-3 text-xs text-slate-500'}>{t('Assigned staff')}: {assignedTeam.join(', ')}</p>}
-                {client.projectNames.size > 0 && <p className="mt-1 text-xs text-slate-500">{t('Projects')}: {Array.from(client.projectNames).join(', ')}</p>}
+                <div className="mt-5 grid gap-5 border-t border-line/70 pt-4 lg:grid-cols-[minmax(0,1fr)_minmax(19rem,1fr)]">
+                  <div className="min-w-0 space-y-2">
+                    {renderContactSummary(client)}
+                    {assignedByTeam.length > 0 && <p className="text-xs text-muted">{t('Assigned by')}: {assignedByTeam.join(', ')}</p>}
+                    {assignedTeam.length > 0 && <p className="text-xs text-muted">{t('Assigned staff')}: {assignedTeam.join(', ')}</p>}
+                    {client.projectNames.size > 0 && <p className="text-xs text-muted">{t('Projects')}: {Array.from(client.projectNames).join(', ')}</p>}
+                  </div>
 
-                <div className="mt-4 flex flex-wrap gap-1.5">
-                  {Array.from(client.services).slice(0, 3).map(service => (
-                    <Badge key={service} tone="slate" className="text-[10px]">
-                      {service}
-                    </Badge>
-                  ))}
-                  {client.services.size > 3 && <Badge tone="slate">+{client.services.size - 3}</Badge>}
-                </div>
-
-                <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                  {client.profile && canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles) && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>{t('Workspace')} <ArrowRight className="h-4 w-4" /></Link>}
-                  <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white shadow-sm')}>
-                    {t('View tasks')} <ArrowRight className="h-4 w-4" />
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => openClientPanel(client)}
-                    className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm')}
-                  >
-                    {t('Details')}
-                  </button>
-                  {(website || facebookPage) && (
-                    <div className="flex items-center gap-3 text-sm">
-                      {website && <a href={website} target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-600">{t('Website')}</a>}
-                      {facebookPage && <a href={facebookPage} target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-600"><span data-i18n-skip>Facebook</span></a>}
+                  <div className="flex min-w-0 flex-col gap-4 lg:items-end">
+                    <div className="flex flex-wrap gap-1.5 lg:justify-end">
+                      {Array.from(client.services).slice(0, 3).map(service => (
+                        <Badge key={service} tone="slate" className="text-[10px]">
+                          {service}
+                        </Badge>
+                      ))}
+                      {client.services.size > 3 && <Badge tone="slate">+{client.services.size - 3}</Badge>}
                     </div>
-                  )}
+
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
+                      {client.profile && canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles) && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>{t('Workspace')} <ArrowRight className="h-4 w-4" /></Link>}
+                      <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>
+                        {t('View tasks')} <ArrowRight className="h-4 w-4" />
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => openClientPanel(client)}
+                        className={cn(buttonBase, 'min-h-10 border border-line bg-surface px-3 py-2 text-sm text-ink shadow-sm')}
+                      >
+                        {t('Details')}
+                      </button>
+                      {(website || facebookPage) && (
+                        <div className="flex min-h-10 items-center gap-3 text-sm">
+                          {website && <a href={website} target="_blank" rel="noopener noreferrer" className="font-semibold text-muted">{t('Website')}</a>}
+                          {facebookPage && <a href={facebookPage} target="_blank" rel="noopener noreferrer" className="font-semibold text-muted"><span data-i18n-skip>Facebook</span></a>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             );

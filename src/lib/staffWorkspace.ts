@@ -1,5 +1,15 @@
 import type { Priority, Task, TaskStatus } from '../types';
+import { isTaskOpen } from './taskReporting';
 import type { MessageId } from './messages';
+
+export type HodWorkScope = 'mine' | 'delegated' | 'department';
+
+export const getHodScopeTasks = (tasks: Task[], actorId: string | undefined, scope: HodWorkScope) => {
+  if (!actorId) return [];
+  if (scope === 'mine') return tasks.filter(task => task.assignedTo === actorId);
+  if (scope === 'delegated') return tasks.filter(task => Boolean(task.assignedTo) && task.assignedTo !== actorId && (task.assignedBy === actorId || task.createdBy === actorId));
+  return tasks;
+};
 
 export type StaffWorkBucketKey = 'needs_action' | 'up_next' | 'waiting' | 'done';
 
@@ -24,7 +34,14 @@ const priorityRank: Record<Priority, number> = {
   Low: 3,
 };
 
-const isTerminal = (task: Task) => task.isCompleted || task.status === 'Completed' || task.status === 'Cancelled';
+const isTerminal = (task: Task) => !isTaskOpen(task);
+
+/** Resolve only visible predecessors; unavailable work must not expose hidden data. */
+export const getTaskBlockers = (task: Task, visibleTasks: Task[]): Task[] => {
+  if (!isTaskOpen(task)) return [];
+  const predecessorIds = new Set(task.predecessorTaskIds || []);
+  return visibleTasks.filter(item => predecessorIds.has(item.id) && isTaskOpen(item));
+};
 const isWaiting = (task: Task) => !isTerminal(task) && task.status === 'Waiting Approval';
 
 const urgencyRank = (task: Task, today: string) => {
@@ -39,6 +56,9 @@ const urgencyRank = (task: Task, today: string) => {
 export const compareStaffTasks = (today: string) => (left: Task, right: Task) => {
   const urgencyDifference = urgencyRank(left, today) - urgencyRank(right, today);
   if (urgencyDifference !== 0) return urgencyDifference;
+
+  const dueDifference = (left.dueDate || '9999-12-31').localeCompare(right.dueDate || '9999-12-31');
+  if (dueDifference !== 0) return dueDifference;
 
   const priorityDifference = priorityRank[left.priority] - priorityRank[right.priority];
   if (priorityDifference !== 0) return priorityDifference;
