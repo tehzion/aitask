@@ -410,7 +410,8 @@ export const canEditClientProfile = (
   if (user?.role === 'Project Manager') {
     const profile = profiles.find(item => getClientKey(item.clientName) === clientKey);
     if (profile?.createdBy === user.id) return true;
-    if (profile) return false;
+    // Match the backend edit policy: a Project Manager may edit an existing
+    // company when they created or are assigned to one of its tasks.
     return Boolean(clientKey) && tasks.some(task => (
       getClientKey(task.clientName) === clientKey && (task.createdBy === user.id || task.assignedTo === user.id)
     ));

@@ -803,4 +803,15 @@ describe('project manager ownership follow-ups', () => {
     expect(canEditClientProfile(admin, 'Gamma', [ownTask], [], [])).toBe(true);
     expect(canEditClientProfile(admin, 'Gamma', [otherTask], [], [])).toBe(false);
   });
+
+  it('lets a Project Manager edit an existing company profile through their own task', () => {
+    const bossProfile = { id: 'c-boss', clientName: 'AirCare', createdBy: superAdmin.id, createdAt: '', updatedAt: '' };
+    const ownTask = makeTask({ id: 'admin-aircare-edit', clientName: 'AirCare', createdBy: admin.id, assignedTo: otherStaff.id });
+    const assignedTask = makeTask({ id: 'admin-aircare-assigned', clientName: 'AirCare', createdBy: otherStaff.id, assignedTo: admin.id });
+    const unrelatedTask = makeTask({ id: 'other-aircare', clientName: 'AirCare', createdBy: otherStaff.id, assignedTo: otherStaff.id });
+
+    expect(canEditClientProfile(admin, 'AirCare', [ownTask], [], [bossProfile])).toBe(true);
+    expect(canEditClientProfile(admin, 'AirCare', [assignedTask], [], [bossProfile])).toBe(true);
+    expect(canEditClientProfile(admin, 'AirCare', [unrelatedTask], [], [bossProfile])).toBe(false);
+  });
 });
