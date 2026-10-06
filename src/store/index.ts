@@ -90,7 +90,6 @@ import {
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
-import { getWorkWeekRange } from '../lib/workWeek';
 import { createAccessRefreshCoordinator } from '../lib/accessRefresh';
 import {
   BACKEND_UPGRADE_REQUIRED_MESSAGE,
@@ -2723,24 +2722,6 @@ export const useStore = create<StoreState>()(
             route: { page: 'tasks', entityId: taskId },
             iconType: 'success'
           });
-        }
-
-        useToastStore.getState().addToast(msg('task.statusUpdated', { status: nextStatus }), 'success');
-
-        if (isCompleted && !wasCompleted && currentUser) {
-          const celebrateKey = `aitask:completion-celebrated:${currentUser.id}`;
-          let celebrated = false;
-          try { celebrated = window.sessionStorage.getItem(celebrateKey) === '1'; } catch { /* session storage unavailable */ }
-          if (!celebrated) {
-            try { window.sessionStorage.setItem(celebrateKey, '1'); } catch { /* keep going without persistence */ }
-            const { start: weekStart, end: weekEnd } = getWorkWeekRange(new Date());
-            const weekCompletions = newTasks.filter(item => {
-              if (item.assignedTo !== currentUser.id || !isTaskCompleted(item) || !item.completedAt) return false;
-              const completedAt = new Date(item.completedAt);
-              return completedAt >= weekStart && completedAt <= weekEnd;
-            }).length;
-            useToastStore.getState().addToast(msg('task.completedThisWeek', { count: weekCompletions }), 'success');
-          }
         }
 
         result = { ok: true };

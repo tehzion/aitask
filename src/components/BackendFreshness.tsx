@@ -10,6 +10,8 @@ import { useI18n } from './I18nProvider';
 interface BackendFreshnessProps {
   compact?: boolean;
   className?: string;
+  onRetry?: () => Promise<void>;
+  onDiscard?: () => void;
 }
 
 const formatSyncTime = (value: string | undefined, locale: AppLocale) => {
@@ -25,7 +27,7 @@ const getFreshnessTone = (backend: ReturnType<typeof useStore.getState>['backend
   return 'emerald';
 };
 
-const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, className }) => {
+const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, className, onRetry, onDiscard }) => {
   const { locale, t } = useI18n();
   const { backend, pullBackendNow, retryPendingSave, discardMutation } = useStore();
   const backendStatus = getBackendStatus();
@@ -94,7 +96,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
         <div className="flex flex-wrap items-center gap-1.5">
           <Button
             variant="secondary"
-            onClick={() => void retryPendingSave()}
+            onClick={() => void (onRetry ? onRetry() : retryPendingSave())}
             disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
             className="min-h-11 px-3 py-2 text-xs"
             title={t('shell.retryPendingChanges')}
@@ -104,7 +106,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           </Button>
           <Button
             variant="secondary"
-            onClick={() => void discardMutation()}
+            onClick={() => { if (onDiscard) onDiscard(); else void discardMutation(); }}
             disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
             className="min-h-11 px-3 py-2 text-xs"
             title={t('shell.discardPendingChanges')}

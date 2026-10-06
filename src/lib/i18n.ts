@@ -14,6 +14,8 @@ const zhCopy: Record<string, string> = {
   'Deletion impact': '删除影响',
   'Plans': '方案',
   'Keep editing': '继续编辑',
+  'Your work update has not been sent.': '工作更新尚未发送。',
+  'The pending activity is no longer available. Review your draft before saving again.': '待保存的活动已不存在，请检查草稿后再保存。',
   'Your company changes have not been saved.': '公司资料的更改尚未保存。',
   'Discard pending changes and reload the latest saved workspace?': '放弃待保存的更改并重新载入最新已保存的工作区？',
   'Unable to reload saved company data. Try again.': '无法重新载入已保存的公司资料，请重试。',

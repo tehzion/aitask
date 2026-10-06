@@ -1,3 +1,5 @@
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
+import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
 import { getTaskBlockers } from '../lib/staffWorkspace';
 import { getTeamWorkloadSummaries } from '../lib/taskReporting';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -110,6 +112,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
     upgradeRequired: state.backend.upgradeRequired === true,
   })));
   const [commentText, setCommentText] = useState('');
+  const pendingComment = React.useRef<{ taskId: string; id: string; text: string } | null>(null);
   const [attachmentLink, setAttachmentLink] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
   const [approvalNote, setApprovalNote] = useState('');
@@ -160,6 +163,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
     setMutationError('');
     setIsEditingDetails(false);
     setCommentText('');
+    pendingComment.current = null;
     setIsSubmitting(false);
     setDelegationAssignee('');
     if (draftTask) {
@@ -212,28 +216,56 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
 
   const delegationWorkloads = getTeamWorkloadSummaries(visibleTasks, delegationOptions, 'overall');
 
-  const confirmPendingMutation = async (commandType?: SecureCommandType) => {
-    setIsSubmitting(true);
-    const result = await commitPendingMutation(commandType);
-    setIsSubmitting(false);
-    if (!result.ok) {
-      setMutationError(result.error || 'The change is waiting to be saved.');
-      return false;
+  const acknowledgeComment = () => {
+    const submitted = pendingComment.current;
+    if (!submitted || submitted.taskId !== requestedTaskRef.current?.id) return;
+    if (useStore.getState().tasks.find(item => item.id === submitted.taskId)?.comments?.some(item => item.id === submitted.id)) {
+      setCommentText(current => current === submitted.text ? '' : current);
     }
-    setMutationError('');
-    return true;
+    pendingComment.current = null;
+  };
+
+  const confirmPendingMutation = async (commandType?: SecureCommandType) => {
+    const session = captureWorkspaceSession();
+    const taskId = task.id;
+    const isCurrent = () => isWorkspaceSessionCurrent(session) && requestedTaskRef.current?.id === taskId;
+    setIsSubmitting(true);
+    try {
+      const result = await commitPendingMutation(commandType);
+      if (!isCurrent()) return false;
+      if (!result.ok) { setMutationError(result.error || 'The change is waiting to be saved.'); return false; }
+      setMutationError('');
+      return true;
+    } catch (failure) {
+      if (isCurrent()) setMutationError(failure instanceof Error ? failure.message : 'The change is waiting to be saved.');
+      return false;
+    } finally {
+      if (isCurrent()) setIsSubmitting(false);
+    }
   };
 
   const resolvePendingMutation = async (action: 'retry' | 'latest') => {
+    const session = captureWorkspaceSession();
+    const taskId = task.id;
+    const isCurrent = () => isWorkspaceSessionCurrent(session) && requestedTaskRef.current?.id === taskId;
     setIsSubmitting(true);
-    if (action === 'retry') {
-      const result = await retryPendingSave();
-      setMutationError(result.ok ? '' : result.error || 'The pending change could not be saved yet.');
-    } else {
-      await discardMutation();
-      setMutationError('');
+    try {
+      if (action === 'retry') {
+        const result = await retryPendingSave();
+        if (!isCurrent()) return;
+        setMutationError(result.ok ? '' : result.error || 'The pending change could not be saved yet.');
+        if (result.ok) acknowledgeComment();
+      } else {
+        await discardMutation();
+        if (!isCurrent()) return;
+        pendingComment.current = null;
+        setMutationError('');
+      }
+    } catch (failure) {
+      if (isCurrent()) setMutationError(failure instanceof Error ? failure.message : 'The change is waiting to be saved.');
+    } finally {
+      if (isCurrent()) setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   const handleTaskDelegation = async (event: React.FormEvent) => {
@@ -258,12 +290,16 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim() || isSubmitting || !canAddComment) return;
-    const localResult = addComment(task.id, commentText);
+    if (pendingComment.current) { await resolvePendingMutation('retry'); return; }
+    const submittedText = commentText;
+    const localResult = addComment(task.id, submittedText);
     if (!localResult.ok) {
       setMutationError(localResult.error || 'You do not have permission to comment on this task.');
       return;
     }
-    if (await confirmPendingMutation('comment.add')) setCommentText('');
+    if (!localResult.id) return;
+    pendingComment.current = { taskId: task.id, id: localResult.id, text: submittedText };
+    if (await confirmPendingMutation('comment.add')) acknowledgeComment();
   };
 
   const handleAttachmentSave = async (e: React.FormEvent) => {
@@ -467,7 +503,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
                                   setMutationError(String(t(localResult.error || 'Unable to update the task status.')));
                                   return;
                                 }
-                                await confirmPendingMutation();
+                                if (await confirmPendingMutation()) announceTaskStatusSaved(nextStatus);
                               },
                             });
                             return;
@@ -477,7 +513,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
                             setMutationError(String(t(localResult.error || 'Unable to update the task status.')));
                             return;
                           }
-                          await confirmPendingMutation();
+                          if (await confirmPendingMutation()) announceTaskStatusSaved(nextStatus);
                         }}
                       >
                         {taskStatuses.map(status => (

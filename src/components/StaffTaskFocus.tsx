@@ -13,6 +13,10 @@ import BackendFreshness from './BackendFreshness';
 import { useI18n } from './I18nProvider';
 import { formatLocalizedDate, formatLocalizedDistanceToNow } from '../lib/i18n';
 import { getVisibleTasks, getTaskAccess } from '../lib/access';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from './ConfirmDialog';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
+import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
 
 interface StaffTaskFocusProps {
   isOpen: boolean;
@@ -56,6 +60,17 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   const [isSaving, setIsSaving] = React.useState(false);
   const [error, setError] = React.useState('');
   const [pendingStatus, setPendingStatus] = React.useState<TaskStatus | null>(null);
+  const [pendingSave, setPendingSave] = React.useState<{ taskId: string; commentId?: string; text?: string; status?: TaskStatus; failed?: boolean } | null>(null);
+  const [exitAction, setExitAction] = React.useState<(() => void) | null>(null);
+  const [isDiscarding, setIsDiscarding] = React.useState(false);
+  const discardTitleId = React.useId();
+  const currentTaskId = React.useRef(task?.id);
+  currentTaskId.current = task?.id;
+  const pendingSaveRef = React.useRef(pendingSave);
+  pendingSaveRef.current = pendingSave;
+  const observedResolution = React.useRef(false);
+  const operationGeneration = React.useRef(0);
+  const clearUnsaved = useUnsavedChanges(isOpen && Boolean(comment.trim() || isSaving || pendingSave));
   const statusPickerRef = React.useRef<HTMLSelectElement>(null);
   const liveTask = task ? tasks.find(item => item.id === task.id) || null : null;
 
@@ -64,7 +79,32 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
     setError('');
     setIsSaving(false);
     setPendingStatus(null);
+    setPendingSave(null);
+    setExitAction(null);
+    setIsDiscarding(false);
+    operationGeneration.current++;
   }, [task?.id]);
+
+  const finishSave = React.useCallback((submitted: NonNullable<typeof pendingSave>) => {
+    if (currentTaskId.current !== submitted.taskId) return;
+    if (submitted.text !== undefined) setComment(current => current === submitted.text ? '' : current);
+    if (submitted.status) announceTaskStatusSaved(submitted.status);
+    setPendingSave(null);
+    setError('');
+    observedResolution.current = false;
+  }, []);
+
+  React.useEffect(() => {
+    if (!pendingSave?.failed || isSaving) return;
+    if (isPendingMutationResolution(backend)) { observedResolution.current = true; return; }
+    if (!observedResolution.current || backend.status !== 'live' || backend.hasLocalChanges || backend.pendingMutations || backend.isSaving || backend.isPulling) return;
+    const savedTask = tasks.find(item => item.id === pendingSave.taskId);
+    const acknowledged = pendingSave.commentId
+      ? savedTask?.comments?.some(item => item.id === pendingSave.commentId)
+      : savedTask?.status === pendingSave.status;
+    if (acknowledged) finishSave(pendingSave);
+    else { setPendingSave(null); setError(''); observedResolution.current = false; }
+  }, [backend, finishSave, isSaving, pendingSave, tasks]);
 
   if (!liveTask) return null;
 
@@ -83,52 +123,91 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   const canEdit = taskAccess.canEdit;
   const canComment = taskAccess.canComment;
 
-  const persistStatus = async (status: TaskStatus, skipDependencyPrompt = false) => {
-    if (mutationLocked || !canEdit || status === liveTask.status) return;
-    if (!skipDependencyPrompt && incompletePredecessors.length > 0 && !['Pending', 'Cancelled'].includes(status)) {
-      setPendingStatus(status);
-      return;
-    }
+  const performSave = async (submitted: NonNullable<typeof pendingSave>, retry = false) => {
+    const session = captureWorkspaceSession();
+    const generation = ++operationGeneration.current;
+    const isCurrent = () => isWorkspaceSessionCurrent(session) && generation === operationGeneration.current && currentTaskId.current === submitted.taskId;
     setIsSaving(true);
     setError('');
-    const localResult = updateTaskStatus(liveTask.id, status);
-    if (!localResult.ok) {
-      setIsSaving(false);
-      setError(String(t(localResult.error || 'Unable to update the task status.')));
-      return;
+    setPendingSave(submitted);
+    try {
+      const result = retry ? await useStore.getState().retryPendingSave() : await commitPendingMutation(submitted.commentId ? 'comment.add' : 'task.update');
+      if (!isCurrent()) return;
+      if (result.ok) finishSave(submitted);
+      else {
+        setPendingSave({ ...submitted, failed: true });
+        observedResolution.current = isPendingMutationResolution(useStore.getState().backend);
+        setError(result.error || t('This update is waiting to sync. Use the workspace retry controls to continue.'));
+      }
+    } catch (failure) {
+      if (isCurrent()) {
+        setPendingSave({ ...submitted, failed: true });
+        setError(failure instanceof Error ? failure.message : t('The change is waiting to be saved.'));
+      }
+    } finally {
+      if (isCurrent()) setIsSaving(false);
     }
-    const result = await commitPendingMutation('task.update');
-    setIsSaving(false);
-    if (!result.ok) setError(result.error || t('This update is waiting to sync. Use the workspace retry controls to continue.'));
+  };
+
+  const requestExit = (action: () => void) => {
+    if (isSaving) return;
+    if (comment.trim() || pendingSave) setExitAction(() => action);
+    else { clearUnsaved(); action(); }
+  };
+
+  const confirmExit = async () => {
+    if (!exitAction || isDiscarding) return;
+    const session = captureWorkspaceSession();
+    const taskId = liveTask.id;
+    setIsDiscarding(true);
+    try {
+      if (pendingSave) {
+        await useStore.getState().discardMutation();
+        const current = useStore.getState().backend;
+        if (current.mode === 'supabase' && current.status !== 'live') throw new Error(current.error || t('The change is waiting to be saved.'));
+      }
+      if (!isWorkspaceSessionCurrent(session) || currentTaskId.current !== taskId) return;
+      operationGeneration.current++;
+      setComment(''); setPendingSave(null); setError('');
+      observedResolution.current = false;
+      clearUnsaved();
+      exitAction();
+      setExitAction(null);
+    } catch (failure) {
+      if (currentTaskId.current === taskId) { setError(failure instanceof Error ? failure.message : t('The change is waiting to be saved.')); setExitAction(null); }
+    } finally {
+      if (currentTaskId.current === taskId) setIsDiscarding(false);
+    }
+  };
+
+  const persistStatus = async (status: TaskStatus, skipDependencyPrompt = false) => {
+    if (isSaving || pendingSave || mutationLocked || !canEdit || status === liveTask.status) return;
+    if (!skipDependencyPrompt && incompletePredecessors.length > 0 && !['Pending', 'Cancelled'].includes(status)) { setPendingStatus(status); return; }
+    const localResult = updateTaskStatus(liveTask.id, status);
+    if (!localResult.ok) { setError(String(t(localResult.error || 'Unable to update the task status.'))); return; }
+    await performSave({ taskId: liveTask.id, status });
   };
 
   const submitComment = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!comment.trim() || mutationLocked || !canComment || isSaving) return;
-    setIsSaving(true);
-    setError('');
-    const localResult = addComment(liveTask.id, comment);
-    if (!localResult.ok) {
-      setError(localResult.error || t('You do not have permission to comment on this task.'));
-      setIsSaving(false);
-      return;
-    }
-    const result = await commitPendingMutation('comment.add');
-    setIsSaving(false);
-    if (result.ok) setComment('');
-    else setError(result.error || t('This update is waiting to sync. Use the workspace retry controls to continue.'));
+    if (pendingSave?.failed) { await performSave(pendingSave, true); return; }
+    if (!comment.trim() || mutationLocked || !canComment || isSaving || pendingSave) return;
+    const text = comment;
+    const localResult = addComment(liveTask.id, text);
+    if (!localResult.ok || !localResult.id) { setError(localResult.error || t('You do not have permission to comment on this task.')); return; }
+    await performSave({ taskId: liveTask.id, commentId: localResult.id, text });
   };
 
   const footer = canEdit ? (
     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
-      {canEdit && onOpenFullEditor && <Button variant="secondary" onClick={onOpenFullEditor}>{t('Full edit')}</Button>}
+      {canEdit && onOpenFullEditor && <Button variant="secondary" disabled={isSaving || Boolean(pendingSave)} onClick={() => requestExit(onOpenFullEditor)}>{t('Full edit')}</Button>}
       <label className="relative min-w-0 flex-1">
         <span className="sr-only">{t('All task statuses')}</span>
         <select
           ref={statusPickerRef}
           aria-label={t('All task statuses')}
           value={liveTask.status}
-          disabled={mutationLocked || !canEdit || isSaving || pendingStatus !== null}
+          disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || pendingStatus !== null}
           onChange={event => void persistStatus(event.target.value)}
           className={`${inputBase} min-h-11 appearance-none px-3 pr-9`}
         >
@@ -138,7 +217,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
       </label>
       <Button
         className="sm:min-w-44"
-        disabled={mutationLocked || !canEdit || isSaving || guidedAction.disabled || pendingStatus !== null}
+        disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || guidedAction.disabled || pendingStatus !== null}
         onClick={() => {
           if (guidedAction.kind === 'advance' && guidedAction.targetStatus) void persistStatus(guidedAction.targetStatus);
           else statusPickerRef.current?.focus();
@@ -151,9 +230,11 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   ) : null;
 
   return (
+    <>
     <SideSheet
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={() => requestExit(onClose)}
+      closeDisabled={isSaving || isDiscarding}
       title={liveTask.title}
       description={`${liveTask.clientName} · ${liveTask.serviceType}`}
       titleIsUserContent
@@ -180,7 +261,8 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
         {(error || pendingResolution) && (
           <div role="alert" aria-live="assertive" className="rounded-control bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200">
             <p>{error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
-            {pendingResolution && <BackendFreshness compact className="mt-3" />}
+            {pendingResolution && <BackendFreshness compact className="mt-3" onRetry={async () => { const submitted = pendingSaveRef.current; if (submitted && !isSaving) await performSave(submitted, true); else await useStore.getState().retryPendingSave(); }} onDiscard={pendingSave ? () => requestExit(() => undefined) : undefined} />}
+            {pendingSave?.failed && !pendingResolution && <Button variant="secondary" className="mt-3" disabled={isSaving} onClick={() => void performSave(pendingSave, true)}>{t('Retry save')}</Button>}
           </div>
         )}
 
@@ -258,7 +340,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
           {canComment ? (
             <form onSubmit={submitComment} className="mt-3 flex items-end gap-2">
               <label className="min-w-0 flex-1"><span className="sr-only">{t('Add work update')}</span><textarea value={comment} onChange={event => setComment(event.target.value)} rows={2} placeholder={t('Add a work update…')} className={`${inputBase} resize-none px-3 py-2.5`} /></label>
-              <Button type="submit" aria-label={t('Send work update')} disabled={!comment.trim() || mutationLocked || isSaving} className="h-11 w-11 shrink-0 px-0"><Send className="h-4 w-4" /></Button>
+              <Button type="submit" aria-label={t('Send work update')} disabled={!comment.trim() || mutationLocked || isSaving || Boolean(pendingSave)} className="h-11 w-11 shrink-0 px-0"><Send className="h-4 w-4" /></Button>
             </form>
           ) : null}
         </section>
@@ -289,6 +371,13 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
         </section>
       </div>
     </SideSheet>
+    {exitAction && <ConfirmDialog
+      title={t('Discard unsaved changes?')}
+      description={pendingSave ? t('Discard pending changes and reload the latest saved workspace?') : t('Your work update has not been sent.')}
+      confirmLabel={t('Discard changes')} cancelLabel={t('Keep editing')}
+      labelledBy={discardTitleId} onConfirm={confirmExit} onClose={() => setExitAction(null)} busy={isDiscarding}
+    />}
+    </>
   );
 };
 

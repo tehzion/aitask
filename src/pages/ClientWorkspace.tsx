@@ -1,3 +1,4 @@
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { hasUnsavedChanges } from '../lib/unsavedChanges';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React from "react";
@@ -112,7 +113,33 @@ const OperationsClientWorkspace = () => {
   const [activitySheetOpen, setActivitySheetOpen] = React.useState(false);
   const [addonSaving, setAddonSaving] = React.useState(false);
   const [activitySaving, setActivitySaving] = React.useState(false);
+  const activityContext = React.useRef({ clientId, actorId: store.currentUser?.id });
+  activityContext.current = { clientId, actorId: store.currentUser?.id };
+  const activityDraft = React.useRef({ comment, file, visibility });
+  activityDraft.current = { comment, file, visibility };
+  const pendingActivity = React.useRef<{ comment: string; commentId: string; file?: File; visibility: CommentVisibility; attachment?: AttachmentRef } | null>(null);
   useUnsavedChanges(Boolean(comment.trim() || file || activitySaving));
+  React.useEffect(() => {
+    setComment(''); setFile(undefined); setActivitySaving(false); setActivityStage('idle');
+    setActivityFeedback(null); setActivitySheetOpen(false); pendingActivity.current = null;
+    if (activityFileInputRef.current) activityFileInputRef.current.value = '';
+  }, [clientId, store.currentUser?.id]);
+  const acknowledgeActivity = (submitted: NonNullable<typeof pendingActivity.current>) => {
+    const current = activityDraft.current;
+    const sameText = current.comment === submitted.comment;
+    const sameFile = current.file === submitted.file;
+    const sameVisibility = current.visibility === submitted.visibility;
+    if (sameText) setComment('');
+    if (sameFile) {
+      setFile(undefined);
+      if (activityFileInputRef.current) activityFileInputRef.current.value = '';
+    }
+    if (submitted.attachment) forgetPendingServiceFile(submitted.attachment);
+    pendingActivity.current = null;
+    setActivityFeedback(null);
+    setMessage(t('Activity added.'));
+    if (sameText && sameFile && sameVisibility) setActivitySheetOpen(false);
+  };
   const [planAction, setPlanAction] = React.useState<"pause" | "end" | null>(null);
   const planConfirmationTitleId = React.useId();
   const [addonEndDates, setAddonEndDates] = React.useState<
@@ -235,13 +262,19 @@ const OperationsClientWorkspace = () => {
   const submitComment = async (event: React.FormEvent) => {
     event.preventDefault();
     if (activitySaving) return;
+    if (pendingActivity.current) { await retryActivitySave(); return; }
     const cycle = cycles[0];
     if (!cycle)
       return setActivityFeedback({ tone: "error", text: t("Create a service cycle before adding activity.") });
     if (file && file.size > SERVICE_FILE_MAX_BYTES) {
-      setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller.") });
+      setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller."), action: pendingActivity.current ? "save" : undefined });
       return;
     }
+    const submitted = { comment, file, visibility };
+    const session = captureWorkspaceSession();
+    const actorId = store.currentUser?.id;
+    const requestClientId = clientId;
+    const isCurrent = () => isWorkspaceSessionCurrent(session) && activityContext.current.clientId === requestClientId && activityContext.current.actorId === actorId;
     setActivitySaving(true);
     setActivityStage(file ? "uploading" : "saving");
     let attachment: AttachmentRef | undefined;
@@ -254,6 +287,7 @@ const OperationsClientWorkspace = () => {
         cycleId: cycle.id,
         userId: store.currentUser.id,
       });
+      if (!isCurrent()) return;
       if (uploaded.ok === false) {
         setActivitySaving(false);
         setActivityStage("idle");
@@ -288,43 +322,50 @@ const OperationsClientWorkspace = () => {
         });
       }
     }
-    const saved = await store.commitPendingMutation("cycle_comment.manage");
-    setActivitySaving(false);
-    setActivityStage("idle");
-    if (!saved.ok) {
-      setActivityFeedback({ tone: "error", text: t(saved.error || "The activity is waiting to be saved."), action: "save" });
-      return;
-    }
-    if (attachment) forgetPendingServiceFile(attachment);
-    setMessage(t("Activity added."));
-    setActivityFeedback(null);
-    if (saved.ok) {
-      setComment("");
-      setFile(undefined);
-      if (activityFileInputRef.current) activityFileInputRef.current.value = "";
-      setActivitySheetOpen(false);
+    const pending = { ...submitted, attachment, commentId: result.id };
+    pendingActivity.current = pending;
+    try {
+      const saved = await store.commitPendingMutation("cycle_comment.manage");
+      if (!isCurrent()) return;
+      if (!saved.ok) {
+        setActivityFeedback({ tone: "error", text: t(saved.error || "The activity is waiting to be saved."), action: "save" });
+        return;
+      }
+      acknowledgeActivity(pending);
+    } catch (failure) {
+      if (isCurrent()) setActivityFeedback({ tone: "error", text: failure instanceof Error ? failure.message : t("The activity is waiting to be saved."), action: "save" });
+    } finally {
+      if (isCurrent()) { setActivitySaving(false); setActivityStage("idle"); }
     }
   };
 
   const retryActivitySave = async () => {
-    if (activitySaving) return;
+    const submitted = pendingActivity.current;
+    if (activitySaving || !submitted) return;
+    const session = captureWorkspaceSession();
+    const actorId = store.currentUser?.id;
+    const requestClientId = clientId;
+    const isCurrent = () => isWorkspaceSessionCurrent(session) && activityContext.current.clientId === requestClientId && activityContext.current.actorId === actorId;
     setActivitySaving(true);
     setActivityStage("saving");
     setActivityFeedback({ tone: "status", text: t("Saving activity…") });
-    const saved = await store.retryPendingSave("cycle_comment.manage");
-    setActivitySaving(false);
-    setActivityStage("idle");
-    if (!saved.ok) {
-      setActivityFeedback({ tone: "error", text: t(saved.error || "The activity is waiting to be saved."), action: "save" });
-      return;
+    try {
+      const saved = await store.retryPendingSave("cycle_comment.manage");
+      if (!isCurrent()) return;
+      if (!saved.ok) { setActivityFeedback({ tone: "error", text: t(saved.error || "The activity is waiting to be saved."), action: "save" }); return; }
+      if (!useStore.getState().cycleComments.some(item => item.id === submitted.commentId)) {
+        pendingActivity.current = null;
+        setActivityFeedback({ tone: "error", text: t("The pending activity is no longer available. Review your draft before saving again.") });
+        return;
+      }
+      acknowledgeActivity(submitted);
+    } catch (failure) {
+      if (isCurrent()) setActivityFeedback({ tone: "error", text: failure instanceof Error ? failure.message : t("The activity is waiting to be saved."), action: "save" });
+    } finally {
+      if (isCurrent()) { setActivitySaving(false); setActivityStage("idle"); }
     }
-    setMessage(t("Activity added."));
-    setActivityFeedback(null);
-    setComment("");
-    setFile(undefined);
-    if (activityFileInputRef.current) activityFileInputRef.current.value = "";
-    setActivitySheetOpen(false);
   };
+
   const addAddon = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!activePlan || addonSaving) return;
@@ -923,7 +964,7 @@ const OperationsClientWorkspace = () => {
 
       {tab === "activity" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-activity`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-activity`} tabIndex={0} className="scroll-mt-36 space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {!isClient && <div className="flex justify-end"><Button onClick={() => { setActivityFeedback(null); setActivitySheetOpen(true); }}><MessageSquareText className="h-4 w-4" />{t("Add activity")}</Button></div>}
+          {!isClient && <div className="flex justify-end"><Button onClick={() => { if (!pendingActivity.current) setActivityFeedback(null); setActivitySheetOpen(true); }}><MessageSquareText className="h-4 w-4" />{t("Add activity")}</Button></div>}
           <section className={cn(cardBase, "divide-y divide-line/70")}>
             {comments.map((item) => (
               <article key={item.id} className="p-5">
@@ -989,12 +1030,13 @@ const OperationsClientWorkspace = () => {
 
         <SideSheet
         isOpen={activitySheetOpen && !isClient}
+        closeDisabled={activitySaving}
         onClose={() => { if (!activitySaving) setActivitySheetOpen(false); }}
         title={t("Add activity")}
         description={t("Share an internal note or a client-visible update with an optional private file.")}
         footer={<div className="flex flex-col-reverse justify-end gap-2 sm:flex-row"><Button variant="secondary" onClick={() => setActivitySheetOpen(false)} disabled={activitySaving}>{t("Cancel")}</Button><Button type="submit" form="add-activity-form" disabled={activitySaving} aria-busy={activitySaving}><CheckCircle2 className="h-4 w-4" aria-hidden="true" />{activityStage === "uploading" ? t("Uploading…") : activityStage === "saving" ? t("Saving…") : activityFeedback?.action === "save" ? t("Retry save") : t("Add activity")}</Button></div>}
       >
-        <form ref={activityFormRef} id="add-activity-form" onSubmit={activityFeedback?.action === "save" ? (event) => { event.preventDefault(); void retryActivitySave(); } : submitComment} className="space-y-5" aria-busy={activitySaving}>
+        <form ref={activityFormRef} id="add-activity-form" noValidate={Boolean(pendingActivity.current)} onSubmit={activityFeedback?.action === "save" ? (event) => { event.preventDefault(); void retryActivitySave(); } : submitComment} className="space-y-5" aria-busy={activitySaving}>
           {activityFeedback && (
             <div
               id="activity-feedback"
@@ -1058,17 +1100,17 @@ const OperationsClientWorkspace = () => {
                 if (selected && selected.size > SERVICE_FILE_MAX_BYTES) {
                   e.target.value = "";
                   setFile(undefined);
-                  setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller.") });
+                  setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller."), action: pendingActivity.current ? "save" : undefined });
                   return;
                 }
                 if (selected && !getServiceFileMimeType(selected)) {
                   e.target.value = "";
                   setFile(undefined);
-                  setActivityFeedback({ tone: "error", text: t(SERVICE_FILE_TYPE_ERROR) });
+                  setActivityFeedback({ tone: "error", text: t(SERVICE_FILE_TYPE_ERROR), action: pendingActivity.current ? "save" : undefined });
                   return;
                 }
                 setFile(selected);
-                setActivityFeedback(null);
+                if (!pendingActivity.current) setActivityFeedback(null);
               }}
               className="mt-2 block min-h-11 w-full rounded-control border border-line bg-surface px-3 py-2 text-sm text-muted file:mr-3 file:rounded-control file:border-0 file:bg-accent-soft file:px-3 file:py-1.5 file:font-semibold file:text-accent focus:outline-none focus:ring-2 focus:ring-accent/35"
             />
@@ -1079,7 +1121,7 @@ const OperationsClientWorkspace = () => {
                   <p className="truncate font-semibold text-ink" data-i18n-skip>{file.name}</p>
                   <p className="text-xs text-muted">{formatFileSize(file.size)}</p>
                 </div>
-                <button type="button" onClick={() => { setFile(undefined); setActivityFeedback(null); if (activityFileInputRef.current) activityFileInputRef.current.value = ""; }} disabled={activitySaving} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent/35 disabled:cursor-not-allowed disabled:opacity-50" aria-label={t("Remove selected file")} title={t("Remove selected file")}>
+                <button type="button" onClick={() => { setFile(undefined); if (!pendingActivity.current) setActivityFeedback(null); if (activityFileInputRef.current) activityFileInputRef.current.value = ""; }} disabled={activitySaving} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent/35 disabled:cursor-not-allowed disabled:opacity-50" aria-label={t("Remove selected file")} title={t("Remove selected file")}>
                   <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>

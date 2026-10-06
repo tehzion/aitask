@@ -19,6 +19,7 @@ import { getClientTaskStage } from '../lib/clientPortal';
 import { getLocalizedDepartment, getLocalizedPriority, getLocalizedStatus } from '../lib/localeLabels';
 import { formatLocalizedDate } from '../lib/i18n';
 import StaffAllWork from '../components/StaffAllWork';
+import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
 import ClientDeliveries from '../components/ClientDeliveries';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 
@@ -77,6 +78,8 @@ const TasksWorkspace: React.FC = () => {
   const persistQuickChange = async (previousTask: Task) => {
     const result = await commitPendingMutation();
     if (result.ok) {
+      const saved = useStore.getState().tasks.find(task => task.id === previousTask.id);
+      if (saved && saved.status !== previousTask.status) announceTaskStatusSaved(saved.status);
       setQuickSyncError('');
       return true;
     }
