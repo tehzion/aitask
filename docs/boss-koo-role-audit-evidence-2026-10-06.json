@@ -1,0 +1,49 @@
+[
+  {
+    "scenario": "delete rejected by server",
+    "visibleDialogs": 0,
+    "visibleError": 0,
+    "localState": []
+  },
+  {
+    "scenario": "rename rejected by server",
+    "visibleDialogs": 0,
+    "visibleError": 0,
+    "localState": [
+      "Boss audit renamed company"
+    ]
+  },
+  {
+    "scenario": "contact typed while save is in flight",
+    "acceptsTypingDuringSave": true,
+    "valueAfterSave": "Submitted contact",
+    "laterEditLost": true
+  },
+  {
+    "scenario": "company edit form accessibility",
+    "violations": [
+      {
+        "id": "label",
+        "impact": "critical",
+        "nodes": [
+          [
+            "input[trae-inspector-start-line=\"927\"]"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "scenario": "contact save rejection feedback",
+    "visibleError": 1,
+    "successFeedback": [
+      "Client details saved for \"Boss audit company\"."
+    ]
+  },
+  {
+    "scenario": "Escape with unsaved company details",
+    "discardedWithoutPrompt": true,
+    "restoredValue": "",
+    "associatedContactLabel": 0
+  }
+]

@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
   Building2,
@@ -22,7 +22,11 @@ import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEdi
 import { safeHttpsUrl } from '../lib/security';
 import { resolveClientAddedDate } from '../lib/clientDates';
 import { cn } from '../lib/utils';
-import { useStore } from '../store';
+import { isPendingMutationResolution, useStore } from '../store';
+import { useToastStore } from '../store/useToastStore';
+import { msg } from '../lib/messages';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { useShallow } from 'zustand/react/shallow';
 import { ClientProfile, ClientServicePlan, Project, ServiceCycle } from '../types';
 import ModalShell from '../components/ModalShell';
@@ -127,6 +131,7 @@ const getProfileForm = (client: ClientSummary): ClientProfileForm => {
 
 const Clients: React.FC = () => {
   const { locale, t } = useI18n();
+  const navigate = useNavigate();
   const {
     clients: clientProfiles,
     tasks: allTasks,
@@ -172,6 +177,15 @@ const Clients: React.FC = () => {
     setSearchParams(next, { replace: true });
   };
   const [selectedClientName, setSelectedClientName] = React.useState('');
+  const [selectedClientSnapshot, setSelectedClientSnapshot] = React.useState<ClientSummary | null>(null);
+  const [profileBaseline, setProfileBaseline] = React.useState<ClientProfileForm>(emptyProfileForm);
+  const [renameBaseline, setRenameBaseline] = React.useState('');
+  const [pendingClientChange, setPendingClientChange] = React.useState<
+    { kind: 'profile'; form: ClientProfileForm; name: string } | { kind: 'rename'; name: string } | { kind: 'delete'; name: string } | null
+  >(null);
+  const [discardAction, setDiscardAction] = React.useState<(() => void) | null>(null);
+  const [isDiscarding, setIsDiscarding] = React.useState(false);
+  const [deleteImpact, setDeleteImpact] = React.useState<{ tasks: number; projects: number; plans: number; cycles: number; deliverables: number } | null>(null);
   const [isEditingProfile, setIsEditingProfile] = React.useState(false);
   const [isRenamingClient, setIsRenamingClient] = React.useState(false);
   const [profileForm, setProfileForm] = React.useState<ClientProfileForm>(emptyProfileForm);
@@ -189,8 +203,18 @@ const Clients: React.FC = () => {
   const [clientMenuAnchor, setClientMenuAnchor] = React.useState<HTMLButtonElement | null>(null);
   const [clientMenuPosition, setClientMenuPosition] = React.useState<{ top: number; left: number; maxHeight: number } | null>(null);
   const clientMenuRef = React.useRef<HTMLDivElement>(null);
+  const clientMenuAnchorRect = React.useRef<DOMRect | null>(null);
   const clientMenuId = React.useId();
   const clientDialogTitleId = React.useId();
+  const discardDialogTitleId = React.useId();
+  const contactFieldId = React.useId();
+  const profileFormRef = React.useRef(profileForm);
+  profileFormRef.current = profileForm;
+  const renameValueRef = React.useRef(renameValue);
+  renameValueRef.current = renameValue;
+  const isProfileDirty = isEditingProfile && JSON.stringify(profileForm) !== JSON.stringify(profileBaseline);
+  const isRenameDirty = isRenamingClient && renameValue !== renameBaseline;
+  const clearUnsaved = useUnsavedChanges(isProfileDirty || isRenameDirty || isSavingClient || Boolean(pendingClientChange));
 
   React.useLayoutEffect(() => {
     if (!openMenuClientKey || !clientMenuAnchor || !clientMenuRef.current) {
@@ -198,6 +222,7 @@ const Clients: React.FC = () => {
       return;
     }
     const anchor = clientMenuAnchor.getBoundingClientRect();
+    clientMenuAnchorRect.current = anchor;
     const menu = clientMenuRef.current;
     const spaceBelow = window.innerHeight - anchor.bottom - 12;
     const spaceAbove = anchor.top - 12;
@@ -235,7 +260,12 @@ const Clients: React.FC = () => {
     };
     const onScroll = (event: Event) => {
       const target = event.target instanceof Element ? event.target : null;
-      if (!target?.closest('[role="menu"]')) closeMenu();
+      if (target?.closest('[role="menu"]')) return;
+      const previous = clientMenuAnchorRect.current;
+      const current = clientMenuAnchor?.getBoundingClientRect();
+      // A scroll initiated before the click can be delivered after opening.
+      // It only invalidates the menu when the anchor has actually moved.
+      if (!previous || !current || previous.top !== current.top || previous.right !== current.right) closeMenu();
     };
     document.addEventListener('mousedown', onMouseDown);
     document.addEventListener('keydown', onKeyDown);
@@ -422,9 +452,11 @@ const Clients: React.FC = () => {
 
   const selectedClient = React.useMemo(() => (
     selectedClientName
-      ? clients.find(client => getClientKey(client.name) === getClientKey(selectedClientName)) || null
+      ? clients.find(client => selectedClientSnapshot?.profile
+        ? client.profile?.id === selectedClientSnapshot.profile.id
+        : getClientKey(client.name) === getClientKey(selectedClientName)) || (pendingClientChange ? selectedClientSnapshot : null)
       : null
-  ), [clients, selectedClientName]);
+  ), [clients, selectedClientName, selectedClientSnapshot, pendingClientChange]);
 
   const selectedClientProjects = React.useMemo(() => {
     if (!selectedClient) return [];
@@ -472,7 +504,13 @@ const Clients: React.FC = () => {
   const openClientPanel = (client: ClientSummary, edit = false) => {
     setOpenMenuClientKey(null);
     setSelectedClientName(client.name);
-    setProfileForm(getProfileForm(client));
+    setSelectedClientSnapshot(client);
+    const form = getProfileForm(client);
+    setProfileForm(form);
+    setProfileBaseline(form);
+    setRenameBaseline(client.name);
+    setPendingClientChange(null);
+    setDeleteImpact(null);
     setProfileError('');
     setRenameValue(client.name);
     setRenameError('');
@@ -484,17 +522,70 @@ const Clients: React.FC = () => {
   const openClientDeleteConfirmation = (client: ClientSummary) => {
     setOpenMenuClientKey(null);
     openClientPanel(client);
+    prepareClientDeletion(client);
+  };
+
+  const prepareClientDeletion = (client: ClientSummary) => {
+    const key = getClientKey(client.name);
+    const belongs = (item: { clientId?: string; clientName?: string }) => (
+      Boolean(client.profile && item.clientId === client.profile.id) || Boolean(item.clientName && getClientKey(item.clientName) === key)
+    );
+    setDeleteImpact({
+      tasks: allTasks.filter(belongs).length,
+      projects: allProjects.filter(belongs).length,
+      plans: clientPlans.filter(belongs).length,
+      cycles: serviceCycles.filter(belongs).length,
+      deliverables: deliverables.filter(belongs).length,
+    });
     setIsDeleteConfirming(true);
   };
 
   const closeClientPanel = () => {
+    clearUnsaved();
     setSelectedClientName('');
+    setSelectedClientSnapshot(null);
+    setPendingClientChange(null);
+    setDeleteImpact(null);
     setIsEditingProfile(false);
     setIsRenamingClient(false);
     setIsDeleteConfirming(false);
     setProfileError('');
     setRenameError('');
   };
+
+  const requestDiscard = (action: () => void) => {
+    if (isSavingClient) return;
+    if (isProfileDirty || isRenameDirty || pendingClientChange) setDiscardAction(() => action);
+    else action();
+  };
+
+  const confirmDiscard = async () => {
+    if (!discardAction) return;
+    setIsDiscarding(true);
+    try {
+      if (pendingClientChange) {
+        await useStore.getState().discardMutation();
+        const backend = useStore.getState().backend;
+        if (backend.mode === 'supabase' && backend.status !== 'live') {
+          setProfileError(backend.error || 'Unable to reload saved company data. Try again.');
+          setDiscardAction(null);
+          return;
+        }
+        setPendingClientChange(null);
+      }
+      discardAction();
+      setDiscardAction(null);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Unable to reload saved company data. Try again.');
+      setDiscardAction(null);
+    } finally {
+      setIsDiscarding(false);
+    }
+  };
+
+  const commitClientChange = () => isPendingMutationResolution(useStore.getState().backend)
+    ? useStore.getState().retryPendingSave()
+    : commitPendingMutation();
 
   const openProjectEditor = (project: Project | null, clientId = '') => {
     setEditingProject(project);
@@ -509,68 +600,80 @@ const Clients: React.FC = () => {
   };
 
   const handleProfileSave = async () => {
-    if (!selectedClient) return;
-
-    const result = upsertClientProfile(selectedClient.name, profileForm);
-    if (!result.ok) {
-      setProfileError(result.error || 'Unable to save client details.');
-      return;
+    if (!selectedClient || isSavingClient || (pendingClientChange && pendingClientChange.kind !== 'profile')) return;
+    const submitted = pendingClientChange?.kind === 'profile'
+      ? pendingClientChange
+      : { kind: 'profile' as const, form: { ...profileForm }, name: selectedClient.name };
+    if (!pendingClientChange) {
+      const result = upsertClientProfile(submitted.name, submitted.form);
+      if (!result.ok) { setProfileError(result.error || 'Unable to save client details.'); return; }
     }
-
+    setPendingClientChange(submitted);
     setIsSavingClient(true);
-    const saveResult = await commitPendingMutation();
-    setIsSavingClient(false);
-    if (!saveResult.ok) {
-      setProfileError(saveResult.error || 'The client details are waiting to be saved.');
-      return;
-    }
-
-    setIsEditingProfile(false);
     setProfileError('');
+    try {
+      const saved = await commitClientChange();
+      if (!saved.ok) { setProfileError(saved.error || 'The client details are waiting to be saved.'); return; }
+      setPendingClientChange(null);
+      setProfileBaseline(submitted.form);
+      setIsEditingProfile(JSON.stringify(profileFormRef.current) !== JSON.stringify(submitted.form));
+      useToastStore.getState().addToast(msg('client.detailsSaved', { name: submitted.name }), 'success');
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Unable to save client details.');
+    } finally {
+      setIsSavingClient(false);
+    }
   };
 
   const handleRenameSave = async () => {
-    if (!selectedClient) return;
-
-    const result = renameClient(selectedClient.name, renameValue);
-    if (!result.ok) {
-      setRenameError(result.error || 'Unable to rename this client.');
-      return;
+    if (!selectedClient || isSavingClient || (pendingClientChange && pendingClientChange.kind !== 'rename')) return;
+    const submitted = pendingClientChange?.kind === 'rename'
+      ? pendingClientChange
+      : { kind: 'rename' as const, name: renameValue.trim() };
+    if (!pendingClientChange) {
+      const result = renameClient(selectedClient.name, submitted.name);
+      if (!result.ok) { setRenameError(result.error || 'Unable to rename this client.'); return; }
     }
-
-
+    setPendingClientChange(submitted);
     setIsSavingClient(true);
-    const saveResult = await commitPendingMutation();
-    setIsSavingClient(false);
-    if (!saveResult.ok) {
-      setRenameError(saveResult.error || 'The client rename is waiting to be saved.');
-      return;
-    }
-
-    setSelectedClientName(renameValue.trim());
-    setIsRenamingClient(false);
     setRenameError('');
+    try {
+      const saved = await commitClientChange();
+      if (!saved.ok) { setRenameError(saved.error || 'The client rename is waiting to be saved.'); return; }
+      setPendingClientChange(null);
+      setSelectedClientName(submitted.name);
+      setRenameBaseline(submitted.name);
+      setIsRenamingClient(renameValueRef.current.trim() !== submitted.name);
+      useToastStore.getState().addToast(msg('client.renamed', { name: submitted.name }), 'success');
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : 'Unable to rename this client.');
+    } finally {
+      setIsSavingClient(false);
+    }
   };
 
   const handleDeleteClient = async () => {
-    if (!selectedClient?.profile) return;
-
-    const result = deleteClientProfile(selectedClient.profile.id);
-    if (!result.ok) {
-      setProfileError(result.error || 'Unable to delete this company.');
-      setIsDeleteConfirming(false);
-      return;
+    if (!selectedClient?.profile || isSavingClient || (pendingClientChange && pendingClientChange.kind !== 'delete')) return;
+    const submitted = pendingClientChange?.kind === 'delete'
+      ? pendingClientChange
+      : { kind: 'delete' as const, name: selectedClient.name };
+    if (!pendingClientChange) {
+      const result = deleteClientProfile(selectedClient.profile.id);
+      if (!result.ok) { setProfileError(result.error || 'Unable to delete this company.'); return; }
     }
-
+    setPendingClientChange(submitted);
     setIsSavingClient(true);
-    const saveResult = await commitPendingMutation();
-    setIsSavingClient(false);
-    if (!saveResult.ok) {
-      setProfileError(saveResult.error || 'The company deletion is waiting to be saved.');
-      return;
+    setProfileError('');
+    try {
+      const saved = await commitClientChange();
+      if (!saved.ok) { setProfileError(saved.error || 'The company deletion is waiting to be saved.'); return; }
+      useToastStore.getState().addToast(msg('client.companyDeletedNamed', { name: submitted.name }), 'success');
+      closeClientPanel();
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Unable to delete this company.');
+    } finally {
+      setIsSavingClient(false);
     }
-
-    closeClientPanel();
   };
 
   const renderContactSummary = (client: ClientSummary) => {
@@ -866,7 +969,7 @@ const Clients: React.FC = () => {
       {selectedClient && (
         <ModalShell
           labelledBy={clientDialogTitleId}
-          onClose={closeClientPanel}
+          onClose={() => requestDiscard(closeClientPanel)}
           panelClassName="max-w-3xl"
         >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50/80 px-6 py-4">
@@ -879,7 +982,8 @@ const Clients: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={closeClientPanel}
+                onClick={() => requestDiscard(closeClientPanel)}
+                disabled={isSavingClient}
                 className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                 aria-label={t('Close client details')}
                 title={t('Close')}
@@ -889,6 +993,16 @@ const Clients: React.FC = () => {
             </div>
 
             <div className="custom-scrollbar flex-1 overflow-y-auto p-6">
+              {isDeleteConfirming && deleteImpact && (
+                <section className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4" aria-label={t('Deletion impact')}>
+                  <h3 className="font-semibold text-red-800">{t('Deletion impact')}: <span data-i18n-skip>{selectedClientSnapshot?.name}</span></h3>
+                  <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                    {[[t('Tasks'), deleteImpact.tasks], [t('Projects'), deleteImpact.projects], [t('Plans'), deleteImpact.plans], [t('Service cycles'), deleteImpact.cycles], [t('Deliverables'), deleteImpact.deliverables]].map(([label, count]) => (
+                      <div key={label}><dt>{label}</dt><dd className="font-semibold">{count}</dd></div>
+                    ))}
+                  </dl>
+                </section>
+              )}
               {profileError && (
                 <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert" aria-live="polite">
                   {profileError}
@@ -923,19 +1037,21 @@ const Clients: React.FC = () => {
                     {isEditingProfile ? (
                       <div className="space-y-3">
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">{t('Client since')}</label>
+                          <label htmlFor={`${contactFieldId}-clientSince`} className="mb-1 block text-xs font-medium text-slate-600">{t('Client since')}</label>
                           <input
                             type="date"
                             className={cn(inputBase, 'p-2 text-xs')}
+                            id={`${contactFieldId}-clientSince`}
                             value={profileForm.clientSince}
                             onChange={e => setProfileForm({ ...profileForm, clientSince: e.target.value })}
                           />
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">{t('Contact Person')}</label>
+                          <label htmlFor={`${contactFieldId}-contactPerson`} className="mb-1 block text-xs font-medium text-slate-600">{t('Contact Person')}</label>
                           <input
                             type="text"
                             className={cn(inputBase, 'p-2 text-xs')}
+                            id={`${contactFieldId}-contactPerson`}
                             value={profileForm.contactPerson}
                             onChange={e => setProfileForm({ ...profileForm, contactPerson: e.target.value })}
                             placeholder={t('e.g. John Doe')}
@@ -943,10 +1059,11 @@ const Clients: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="mb-1 block text-xs font-medium text-slate-600">{t('Email')}</label>
+                            <label htmlFor={`${contactFieldId}-email`} className="mb-1 block text-xs font-medium text-slate-600">{t('Email')}</label>
                             <input
                               type="email"
                               className={cn(inputBase, 'p-2 text-xs')}
+                              id={`${contactFieldId}-email`}
                               value={profileForm.email}
                               onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
                               data-i18n-skip
@@ -954,10 +1071,11 @@ const Clients: React.FC = () => {
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs font-medium text-slate-600">{t('Phone')}</label>
+                            <label htmlFor={`${contactFieldId}-phone`} className="mb-1 block text-xs font-medium text-slate-600">{t('Phone')}</label>
                             <input
                               type="text"
                               className={cn(inputBase, 'p-2 text-xs')}
+                              id={`${contactFieldId}-phone`}
                               value={profileForm.phone}
                               onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
                               placeholder={t('Phone number')}
@@ -966,20 +1084,22 @@ const Clients: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="mb-1 block text-xs font-medium text-slate-600">{t('Website')}</label>
+                            <label htmlFor={`${contactFieldId}-website`} className="mb-1 block text-xs font-medium text-slate-600">{t('Website')}</label>
                             <input
                               type="url"
                               className={cn(inputBase, 'p-2 text-xs')}
+                              id={`${contactFieldId}-website`}
                               value={profileForm.website}
                               onChange={e => setProfileForm({ ...profileForm, website: e.target.value })}
                               placeholder="https://..."
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs font-medium text-slate-600">{t('Facebook Page')}</label>
+                            <label htmlFor={`${contactFieldId}-facebookPage`} className="mb-1 block text-xs font-medium text-slate-600">{t('Facebook Page')}</label>
                             <input
                               type="url"
                               className={cn(inputBase, 'p-2 text-xs')}
+                              id={`${contactFieldId}-facebookPage`}
                               value={profileForm.facebookPage}
                               onChange={e => setProfileForm({ ...profileForm, facebookPage: e.target.value })}
                               placeholder={t('Facebook URL')}
@@ -987,20 +1107,22 @@ const Clients: React.FC = () => {
                           </div>
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">{t('Address')}</label>
+                          <label htmlFor={`${contactFieldId}-address`} className="mb-1 block text-xs font-medium text-slate-600">{t('Address')}</label>
                           <textarea
                             rows={2}
                             className={cn(inputBase, 'resize-none p-2 text-xs')}
+                            id={`${contactFieldId}-address`}
                             value={profileForm.address}
                             onChange={e => setProfileForm({ ...profileForm, address: e.target.value })}
                             placeholder={t('Business address...')}
                           />
                         </div>
                         <div>
-                          <label className="mb-1 block text-xs font-medium text-slate-600">{t('Note / Details')}</label>
+                          <label htmlFor={`${contactFieldId}-notes`} className="mb-1 block text-xs font-medium text-slate-600">{t('Note / Details')}</label>
                           <textarea
                             rows={3}
                             className={cn(inputBase, 'resize-none p-2 text-xs')}
+                            id={`${contactFieldId}-notes`}
                             value={profileForm.notes}
                             onChange={e => setProfileForm({ ...profileForm, notes: e.target.value })}
                             placeholder={t('Notes about contact or client details...')}
@@ -1114,7 +1236,15 @@ const Clients: React.FC = () => {
               <Link
                 to={`/tasks?client=${encodeURIComponent(selectedClient.name)}`}
                 className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-blue-700')}
-                onClick={closeClientPanel}
+                onClick={event => {
+                  if (isProfileDirty || isRenameDirty || pendingClientChange || isSavingClient) {
+                    event.preventDefault();
+                    requestDiscard(() => {
+                      closeClientPanel();
+                      navigate(`/tasks?client=${encodeURIComponent(selectedClient.name)}`);
+                    });
+                  } else closeClientPanel();
+                }}
               >
                 {t('View tasks')} <ArrowRight className="h-4 w-4" />
               </Link>
@@ -1123,7 +1253,8 @@ const Clients: React.FC = () => {
                   <>
                     <button
                       type="button"
-                      onClick={() => { setIsRenamingClient(false); setRenameError(''); }}
+                      disabled={isSavingClient}
+                      onClick={() => requestDiscard(() => { setIsRenamingClient(false); setRenameError(''); })}
                       className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
                     >
                       {t('Cancel')}
@@ -1134,14 +1265,15 @@ const Clients: React.FC = () => {
                       disabled={isSavingClient}
                       className={cn(buttonBase, 'min-h-10 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-blue-700')}
                     >
-                      <Save className="h-4 w-4" /> {t('Rename')}
+                      <Save className="h-4 w-4" /> {isSavingClient ? t('Saving…') : t('Rename')}
                     </button>
                   </>
                 ) : isEditingProfile ? (
                     <>
                       <button
                         type="button"
-                        onClick={() => { setIsEditingProfile(false); setProfileError(''); }}
+                        disabled={isSavingClient}
+                        onClick={() => requestDiscard(() => { setIsEditingProfile(false); setProfileError(''); })}
                         className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
                       >
                         {t('Cancel')}
@@ -1152,7 +1284,7 @@ const Clients: React.FC = () => {
                         disabled={isSavingClient}
                         className={cn(buttonBase, 'min-h-10 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white shadow-sm hover:bg-emerald-700')}
                       >
-                        <Save className="h-4 w-4" /> {t('Save')}
+                        <Save className="h-4 w-4" /> {isSavingClient ? t('Saving…') : t('Save')}
                       </button>
                     </>
                 ) : (
@@ -1161,7 +1293,7 @@ const Clients: React.FC = () => {
                     <p className="self-center text-sm font-medium text-red-700 sm:mr-2">{t('Delete this company? This also removes linked tasks, projects, service plans and delivery records. This action cannot be undone.')}</p>
                       <button
                         type="button"
-                        onClick={() => setIsDeleteConfirming(false)}
+                        onClick={() => requestDiscard(() => setIsDeleteConfirming(false))}
                         disabled={isSavingClient}
                         className={cn(buttonBase, 'min-h-10 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50')}
                       >
@@ -1183,6 +1315,7 @@ const Clients: React.FC = () => {
                         type="button"
                         onClick={() => {
                           setRenameValue(selectedClient.name);
+                          setRenameBaseline(selectedClient.name);
                           setRenameError('');
                           setIsRenamingClient(true);
                         }}
@@ -1195,7 +1328,9 @@ const Clients: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          setProfileForm(getProfileForm(selectedClient));
+                          const form = getProfileForm(selectedClient);
+                          setProfileForm(form);
+                          setProfileBaseline(form);
                           setProfileError('');
                           setIsEditingProfile(true);
                         }}
@@ -1209,7 +1344,7 @@ const Clients: React.FC = () => {
                         type="button"
                         onClick={() => {
                           setProfileError('');
-                          setIsDeleteConfirming(true);
+                          prepareClientDeletion(selectedClient);
                         }}
                         className={cn(buttonBase, 'min-h-10 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm text-red-700 shadow-sm hover:bg-red-50')}
                       >
@@ -1223,6 +1358,16 @@ const Clients: React.FC = () => {
             </div>
         </ModalShell>
       )}
+      {discardAction && <ConfirmDialog
+        title={t('Discard unsaved changes?')}
+        description={pendingClientChange ? t('Discard pending changes and reload the latest saved workspace?') : t('Your company changes have not been saved.')}
+        confirmLabel={t('Discard changes')}
+        cancelLabel={t('Keep editing')}
+        labelledBy={discardDialogTitleId}
+        busy={isDiscarding}
+        onConfirm={confirmDiscard}
+        onClose={() => setDiscardAction(null)}
+      />}
       {isCreateClientOpen && <CreateClientProfileModal
         onClose={() => { setIsCreateClientOpen(false); clearSearch(); }}
         onCreateProject={canAddProjects ? (clientId) => {

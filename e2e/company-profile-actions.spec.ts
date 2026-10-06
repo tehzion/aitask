@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 const companyName = 'QA Profile Company';
 
@@ -186,4 +187,226 @@ test('a linked client account does not recreate a deleted company in the Compani
   await page.getByRole('dialog', { name: companyName }).getByRole('button', { name: 'Delete company', exact: true }).click();
   await page.reload();
   await expect(page.getByText('No companies found', { exact: true })).toBeVisible();
+});
+
+for (const action of ['delete', 'rename'] as const) {
+  test(`a rejected company ${action} keeps its dialog and retries without applying the action twice`, async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await seedCompany(page);
+    await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
+    await page.getByRole('button', { name: 'More actions' }).click();
+    await page.getByRole('menuitem', { name: 'Details', exact: true }).click();
+    await page.evaluate(async kind => {
+      const { useStore } = await import('/src/store/index.ts');
+      const state = useStore.getState();
+      const audit = window as unknown as { companyApplyCalls: number; companyRetryCalls: number };
+      audit.companyApplyCalls = 0;
+      audit.companyRetryCalls = 0;
+      useStore.setState({
+        deleteClientProfile: id => { audit.companyApplyCalls++; return state.deleteClientProfile(id); },
+        renameClient: (oldName, newName) => { audit.companyApplyCalls++; return state.renameClient(oldName, newName); },
+        commitPendingMutation: async () => {
+          useStore.setState(current => ({ backend: { ...current.backend, status: 'retry_required', hasLocalChanges: true, pendingMutations: 1 } }));
+          return { ok: false, error: `Supabase rejected company ${kind}.` };
+        },
+        retryPendingSave: async () => {
+          audit.companyRetryCalls++;
+          useStore.setState(current => ({ backend: { ...current.backend, status: 'local', hasLocalChanges: false, pendingMutations: 0 } }));
+          return { ok: true };
+        },
+      });
+    }, action);
+    let dialog = page.getByRole('dialog', { name: companyName });
+    if (action === 'rename') {
+      await dialog.getByRole('button', { name: 'Rename', exact: true }).click();
+      await dialog.getByLabel('Rename client / brand').fill('QA Renamed Company');
+      await dialog.getByRole('button', { name: 'Rename', exact: true }).click();
+      dialog = page.getByRole('dialog', { name: 'QA Renamed Company' });
+    } else {
+      await dialog.getByRole('button', { name: 'Delete company', exact: true }).click();
+      await expect(dialog.getByRole('region', { name: 'Deletion impact' })).toContainText(companyName);
+      await dialog.getByRole('button', { name: 'Delete company', exact: true }).click();
+    }
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('alert')).toHaveText(`Supabase rejected company ${action}.`);
+    await expect(page.getByText(action === 'delete' ? `Company "${companyName}" deleted.` : 'Client renamed to "QA Renamed Company".', { exact: true })).toHaveCount(0);
+    await dialog.getByRole('button', { name: action === 'delete' ? 'Delete company' : 'Rename', exact: true }).click();
+    if (action === 'delete') await expect(dialog).toBeHidden();
+    else await expect(dialog.getByRole('button', { name: 'Edit details', exact: true })).toBeVisible();
+    expect(await page.evaluate(() => {
+      const audit = window as unknown as { companyApplyCalls: number; companyRetryCalls: number };
+      return { apply: audit.companyApplyCalls, retry: audit.companyRetryCalls };
+    })).toEqual({ apply: 1, retry: 1 });
+  });
+}
+
+test('contact edits typed during saving stay dirty and can be saved afterward', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await seedCompany(page);
+  await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
+  const dialog = await openEditor(page, true);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ commitPendingMutation: () => new Promise(resolve => {
+      (window as unknown as { finishCompanySave: () => void }).finishCompanySave = () => resolve({ ok: true });
+    }) });
+  });
+  const contact = dialog.getByLabel('Contact Person', { exact: true });
+  await contact.fill('Submitted contact');
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Saving…', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Close client details' })).toBeDisabled();
+  await contact.fill('Later contact edit');
+  await page.evaluate(() => (window as unknown as { finishCompanySave: () => void }).finishCompanySave());
+  await expect(contact).toHaveValue('Later contact edit');
+  await expect(dialog.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+  expect(await page.evaluate(async () => {
+    const { hasUnsavedChanges } = await import('/src/lib/unsavedChanges.ts');
+    return hasUnsavedChanges();
+  })).toBe(true);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ commitPendingMutation: async () => ({ ok: true }) });
+  });
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Edit details', exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close client details' }).click();
+  await page.reload();
+  const reopened = await openEditor(page, true);
+  await expect(reopened.getByLabel('Contact Person', { exact: true })).toHaveValue('Later contact edit');
+});
+
+test('failed contact saves have no success toast and retry the submitted form before newer edits', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await seedCompany(page);
+  await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
+  const dialog = await openEditor(page, true);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Contact save not confirmed.' }) });
+  });
+  await dialog.getByLabel('Contact Person', { exact: true }).fill('Submitted contact');
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toHaveText('Contact save not confirmed.');
+  await expect(page.getByText(`Client details saved for "${companyName}".`, { exact: true })).toHaveCount(0);
+  await dialog.getByLabel('Contact Person', { exact: true }).fill('Later draft');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ commitPendingMutation: async () => ({ ok: true }) });
+  });
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog.getByLabel('Contact Person', { exact: true })).toHaveValue('Later draft');
+  expect(await page.evaluate(async name => {
+    const { useStore } = await import('/src/store/index.ts');
+    return useStore.getState().clients.find(client => client.clientName === name)?.contactPerson;
+  }, companyName)).toBe('Submitted contact');
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Edit details', exact: true })).toBeVisible();
+});
+
+for (const mobile of [false, true]) {
+  test(`${mobile ? 'mobile' : 'desktop'} protects unsaved company details and labels every contact field`, async ({ page }) => {
+    await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1600, height: 1000 });
+    await seedCompany(page);
+    await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
+    const dialog = await openEditor(page, !mobile);
+    for (const label of ['Client since', 'Contact Person', 'Email', 'Phone', 'Website', 'Facebook Page', 'Address', 'Note / Details']) {
+      await expect(dialog.getByLabel(label, { exact: true })).toBeVisible();
+    }
+    const accessibility = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+    expect(accessibility.violations).toEqual([]);
+    await dialog.getByLabel('Contact Person', { exact: true }).fill('Keep this contact');
+    await page.keyboard.press('Escape');
+    const confirmation = page.getByRole('dialog', { name: 'Discard unsaved changes?' });
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole('button', { name: 'Keep editing' }).click();
+    await expect(dialog.getByLabel('Contact Person', { exact: true })).toHaveValue('Keep this contact');
+    await dialog.getByRole('button', { name: 'Close client details' }).click();
+    await confirmation.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(dialog).toBeHidden();
+    expect(await page.evaluate(async () => {
+      const { hasUnsavedChanges } = await import('/src/lib/unsavedChanges.ts');
+      return hasUnsavedChanges();
+    })).toBe(false);
+  });
+}
+
+test('deletion confirmation lists linked record counts before any records are changed', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const fixture = await seedCompany(page);
+  await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
+  const counts = await page.evaluate(async id => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    return [state.tasks.filter(item => item.clientId === id).length, state.projects.filter(item => item.clientId === id).length,
+      state.clientPlans.filter(item => item.clientId === id).length, state.serviceCycles.filter(item => item.clientId === id).length,
+      state.deliverables.filter(item => item.clientId === id).length];
+  }, fixture.clientId);
+  await page.getByRole('button', { name: 'More actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete company', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: companyName });
+  const impact = dialog.getByRole('region', { name: 'Deletion impact' });
+  expect(await impact.locator('dd').allTextContents()).toEqual(counts.map(String));
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(impact).toBeHidden();
+});
+
+test('a queued scroll with an unchanged menu anchor does not dismiss the menu', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 600 });
+  await seedCompany(page);
+  await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
+  await page.getByRole('button', { name: 'More actions' }).click();
+  await page.locator('main').evaluate(main => main.dispatchEvent(new Event('scroll')));
+  await expect(page.getByRole('menu', { name: 'Client actions' })).toBeVisible();
+});
+
+test('discarding a rejected company deletion reloads saved data before closing', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await seedCompany(page);
+  await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const saved = useStore.getState();
+    useStore.setState({
+      commitPendingMutation: async () => {
+        useStore.setState(state => ({ backend: { ...state.backend, mode: 'supabase', status: 'retry_required', hasLocalChanges: true, pendingMutations: 1 } }));
+        return { ok: false, error: 'Deletion was rejected.' };
+      },
+      discardMutation: async () => useStore.setState(state => ({
+        clients: saved.clients, tasks: saved.tasks, projects: saved.projects, notifications: saved.notifications,
+        clientPlans: saved.clientPlans, serviceCycles: saved.serviceCycles, deliverables: saved.deliverables,
+        backend: { ...state.backend, status: 'live', hasLocalChanges: false, pendingMutations: 0 },
+      })),
+    });
+  });
+  await page.getByRole('button', { name: 'More actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete company', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: companyName });
+  await dialog.getByRole('button', { name: 'Delete company', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toHaveText('Deletion was rejected.');
+  await dialog.getByRole('button', { name: 'Close client details' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Discard unsaved changes?' });
+  await expect(confirmation).toContainText('reload the latest saved workspace');
+  await confirmation.getByRole('button', { name: 'Discard changes' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('row').filter({ hasText: companyName })).toBeVisible();
+});
+
+test('View tasks confirms a dirty company draft once before navigating', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await seedCompany(page);
+  await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
+  const dialog = await openEditor(page, true);
+  await dialog.getByLabel('Contact Person', { exact: true }).fill('Unsaved before navigation');
+  const nativeDialogs: string[] = [];
+  page.on('dialog', async prompt => { nativeDialogs.push(prompt.message()); await prompt.dismiss(); });
+  await dialog.getByRole('link', { name: 'View tasks' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Discard unsaved changes?' });
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(page).toHaveURL(/\/projects\?/);
+  await dialog.getByRole('link', { name: 'View tasks' }).click();
+  await confirmation.getByRole('button', { name: 'Discard changes' }).click();
+  await expect(page).toHaveURL(/\/tasks\?client=/);
+  expect(nativeDialogs).toEqual([]);
 });

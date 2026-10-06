@@ -20,6 +20,9 @@ vi.mock('../lib/supabaseClient', () => ({
 
 import { isPendingMutationResolution, pendingMutationMessage, useStore } from './index';
 import type { User } from '../types';
+import { invalidateWorkspaceSession } from '../lib/workspaceSession';
+
+beforeEach(() => invalidateWorkspaceSession());
 
 const initialState = useStore.getState();
 

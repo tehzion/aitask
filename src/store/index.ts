@@ -3684,7 +3684,6 @@ export const useStore = create<StoreState>()(
             : [...current.clients, profile],
         }));
 
-        useToastStore.getState().addToast(msg('client.detailsSaved', { name: profile.clientName }), 'success');
         return { ok: true, id: profile.id };
       },
 
@@ -3776,7 +3775,6 @@ export const useStore = create<StoreState>()(
           addons: current.addons.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
         }));
 
-        useToastStore.getState().addToast(msg('client.renamed', { name: nextName }), 'success');
         return { ok: true };
       },
 
@@ -3840,7 +3838,6 @@ export const useStore = create<StoreState>()(
           servicePricingSnapshots: current.servicePricingSnapshots.filter(item => item.clientId !== clientId),
         }));
 
-        useToastStore.getState().addToast(msg('client.companyDeletedNamed', { name: client.clientName }), 'success');
         return { ok: true };
       },
 

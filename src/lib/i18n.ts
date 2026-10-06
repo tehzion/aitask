@@ -11,6 +11,12 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  'Deletion impact': '删除影响',
+  'Plans': '方案',
+  'Keep editing': '继续编辑',
+  'Your company changes have not been saved.': '公司资料的更改尚未保存。',
+  'Discard pending changes and reload the latest saved workspace?': '放弃待保存的更改并重新载入最新已保存的工作区？',
+  'Unable to reload saved company data. Try again.': '无法重新载入已保存的公司资料，请重试。',
   'Visible department work only.': '仅统计可见的部门工作。',
   'No department members available.': '暂无部门成员。',
   'Department workload': '部门工作量',
