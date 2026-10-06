@@ -52,6 +52,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const descriptionId = React.useId();
   const projectSelectId = React.useId();
   const taskTitleId = React.useId();
+  const startDateInputId = React.useId();
+  const dueDateInputId = React.useId();
   const clientSelectId = React.useId();
   const departmentId = React.useId();
   const assigneeId = React.useId();
@@ -683,16 +685,18 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Start Date')} <span className="text-red-500">*</span></label>
+                  <label htmlFor={startDateInputId} className="block text-sm font-medium text-slate-700 mb-1">{t('Start Date')} <span className="text-red-500">*</span></label>
                   <input 
+                    id={startDateInputId}
                     type="date" required
                     value={startDate} onChange={e => setStartDate(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Due Date')}</label>
+                  <label htmlFor={dueDateInputId} className="block text-sm font-medium text-slate-700 mb-1">{t('Due Date')}</label>
                   <input 
+                    id={dueDateInputId}
                     type="date"
                     value={dueDate} onChange={e => setDueDate(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"

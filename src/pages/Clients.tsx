@@ -209,9 +209,17 @@ const Clients: React.FC = () => {
   const discardDialogTitleId = React.useId();
   const contactFieldId = React.useId();
   const profileFormRef = React.useRef(profileForm);
-  profileFormRef.current = profileForm;
   const renameValueRef = React.useRef(renameValue);
   renameValueRef.current = renameValue;
+  const setProfileDraft = (form: ClientProfileForm) => {
+    profileFormRef.current = form;
+    setProfileForm(form);
+  };
+  const updateProfileField = (field: keyof ClientProfileForm, value: string) => {
+    const next = { ...profileFormRef.current, [field]: value };
+    setProfileDraft(next);
+    setProfileError('');
+  };
   const isProfileDirty = isEditingProfile && JSON.stringify(profileForm) !== JSON.stringify(profileBaseline);
   const isRenameDirty = isRenamingClient && renameValue !== renameBaseline;
   const clearUnsaved = useUnsavedChanges(isProfileDirty || isRenameDirty || isSavingClient || Boolean(pendingClientChange));
@@ -454,9 +462,10 @@ const Clients: React.FC = () => {
     selectedClientName
       ? clients.find(client => selectedClientSnapshot?.profile
         ? client.profile?.id === selectedClientSnapshot.profile.id
-        : getClientKey(client.name) === getClientKey(selectedClientName)) || (pendingClientChange ? selectedClientSnapshot : null)
+        : getClientKey(client.name) === getClientKey(selectedClientName))
+        || ((pendingClientChange || isSavingClient || isRenamingClient || isDeleteConfirming) ? selectedClientSnapshot : null)
       : null
-  ), [clients, selectedClientName, selectedClientSnapshot, pendingClientChange]);
+  ), [clients, selectedClientName, selectedClientSnapshot, pendingClientChange, isSavingClient, isRenamingClient, isDeleteConfirming]);
 
   const selectedClientProjects = React.useMemo(() => {
     if (!selectedClient) return [];
@@ -506,7 +515,7 @@ const Clients: React.FC = () => {
     setSelectedClientName(client.name);
     setSelectedClientSnapshot(client);
     const form = getProfileForm(client);
-    setProfileForm(form);
+    setProfileDraft(form);
     setProfileBaseline(form);
     setRenameBaseline(client.name);
     setPendingClientChange(null);
@@ -587,6 +596,17 @@ const Clients: React.FC = () => {
     ? useStore.getState().retryPendingSave()
     : commitPendingMutation();
 
+  const isClientChangeConfirmed = (saved: { ok: boolean }) => {
+    if (!saved.ok) return false;
+    const backend = useStore.getState().backend;
+    return backend.mode !== 'supabase' || !backend.isConfigured
+      || (backend.status === 'live' && !backend.hasLocalChanges && backend.pendingMutations === 0);
+  };
+
+  const getClientSaveError = (saved: { error?: string }, fallback: string) => (
+    saved.error || useStore.getState().backend.error || fallback
+  );
+
   const openProjectEditor = (project: Project | null, clientId = '') => {
     setEditingProject(project);
     setInitialProjectClientId(project?.clientId || clientId);
@@ -603,7 +623,7 @@ const Clients: React.FC = () => {
     if (!selectedClient || isSavingClient || (pendingClientChange && pendingClientChange.kind !== 'profile')) return;
     const submitted = pendingClientChange?.kind === 'profile'
       ? pendingClientChange
-      : { kind: 'profile' as const, form: { ...profileForm }, name: selectedClient.name };
+      : { kind: 'profile' as const, form: { ...profileFormRef.current }, name: selectedClient.name };
     if (!pendingClientChange) {
       const result = upsertClientProfile(submitted.name, submitted.form);
       if (!result.ok) { setProfileError(result.error || 'Unable to save client details.'); return; }
@@ -613,7 +633,10 @@ const Clients: React.FC = () => {
     setProfileError('');
     try {
       const saved = await commitClientChange();
-      if (!saved.ok) { setProfileError(saved.error || 'The client details are waiting to be saved.'); return; }
+      if (!isClientChangeConfirmed(saved)) {
+        setProfileError(getClientSaveError(saved, 'The client details are waiting to be saved.'));
+        return;
+      }
       setPendingClientChange(null);
       setProfileBaseline(submitted.form);
       setIsEditingProfile(JSON.stringify(profileFormRef.current) !== JSON.stringify(submitted.form));
@@ -639,7 +662,10 @@ const Clients: React.FC = () => {
     setRenameError('');
     try {
       const saved = await commitClientChange();
-      if (!saved.ok) { setRenameError(saved.error || 'The client rename is waiting to be saved.'); return; }
+      if (!isClientChangeConfirmed(saved)) {
+        setRenameError(getClientSaveError(saved, 'The client rename is waiting to be saved.'));
+        return;
+      }
       setPendingClientChange(null);
       setSelectedClientName(submitted.name);
       setRenameBaseline(submitted.name);
@@ -666,7 +692,10 @@ const Clients: React.FC = () => {
     setProfileError('');
     try {
       const saved = await commitClientChange();
-      if (!saved.ok) { setProfileError(saved.error || 'The company deletion is waiting to be saved.'); return; }
+      if (!isClientChangeConfirmed(saved)) {
+        setProfileError(getClientSaveError(saved, 'The company deletion is waiting to be saved.'));
+        return;
+      }
       useToastStore.getState().addToast(msg('client.companyDeletedNamed', { name: submitted.name }), 'success');
       closeClientPanel();
     } catch (error) {
@@ -1003,9 +1032,9 @@ const Clients: React.FC = () => {
                   </dl>
                 </section>
               )}
-              {profileError && (
+              {(profileError || renameError) && (
                 <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert" aria-live="polite">
-                  {profileError}
+                  {profileError || renameError}
                 </div>
               )}
               {isRenamingClient && (
@@ -1027,7 +1056,6 @@ const Clients: React.FC = () => {
                     }}
                     autoFocus
                   />
-                  {renameError && <p className="mt-2 text-sm font-semibold text-red-700" role="alert" aria-live="polite">{renameError}</p>}
                 </section>
               )}
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -1043,7 +1071,7 @@ const Clients: React.FC = () => {
                             className={cn(inputBase, 'p-2 text-xs')}
                             id={`${contactFieldId}-clientSince`}
                             value={profileForm.clientSince}
-                            onChange={e => setProfileForm({ ...profileForm, clientSince: e.target.value })}
+                            onChange={e => updateProfileField('clientSince', e.target.value)}
                           />
                         </div>
                         <div>
@@ -1053,7 +1081,7 @@ const Clients: React.FC = () => {
                             className={cn(inputBase, 'p-2 text-xs')}
                             id={`${contactFieldId}-contactPerson`}
                             value={profileForm.contactPerson}
-                            onChange={e => setProfileForm({ ...profileForm, contactPerson: e.target.value })}
+                            onChange={e => updateProfileField('contactPerson', e.target.value)}
                             placeholder={t('e.g. John Doe')}
                           />
                         </div>
@@ -1065,7 +1093,7 @@ const Clients: React.FC = () => {
                               className={cn(inputBase, 'p-2 text-xs')}
                               id={`${contactFieldId}-email`}
                               value={profileForm.email}
-                              onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                              onChange={e => updateProfileField('email', e.target.value)}
                               data-i18n-skip
                               placeholder="john@brand.com"
                             />
@@ -1077,7 +1105,7 @@ const Clients: React.FC = () => {
                               className={cn(inputBase, 'p-2 text-xs')}
                               id={`${contactFieldId}-phone`}
                               value={profileForm.phone}
-                              onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
+                              onChange={e => updateProfileField('phone', e.target.value)}
                               placeholder={t('Phone number')}
                             />
                           </div>
@@ -1090,7 +1118,7 @@ const Clients: React.FC = () => {
                               className={cn(inputBase, 'p-2 text-xs')}
                               id={`${contactFieldId}-website`}
                               value={profileForm.website}
-                              onChange={e => setProfileForm({ ...profileForm, website: e.target.value })}
+                              onChange={e => updateProfileField('website', e.target.value)}
                               placeholder="https://..."
                             />
                           </div>
@@ -1101,7 +1129,7 @@ const Clients: React.FC = () => {
                               className={cn(inputBase, 'p-2 text-xs')}
                               id={`${contactFieldId}-facebookPage`}
                               value={profileForm.facebookPage}
-                              onChange={e => setProfileForm({ ...profileForm, facebookPage: e.target.value })}
+                              onChange={e => updateProfileField('facebookPage', e.target.value)}
                               placeholder={t('Facebook URL')}
                             />
                           </div>
@@ -1113,7 +1141,7 @@ const Clients: React.FC = () => {
                             className={cn(inputBase, 'resize-none p-2 text-xs')}
                             id={`${contactFieldId}-address`}
                             value={profileForm.address}
-                            onChange={e => setProfileForm({ ...profileForm, address: e.target.value })}
+                            onChange={e => updateProfileField('address', e.target.value)}
                             placeholder={t('Business address...')}
                           />
                         </div>
@@ -1124,7 +1152,7 @@ const Clients: React.FC = () => {
                             className={cn(inputBase, 'resize-none p-2 text-xs')}
                             id={`${contactFieldId}-notes`}
                             value={profileForm.notes}
-                            onChange={e => setProfileForm({ ...profileForm, notes: e.target.value })}
+                            onChange={e => updateProfileField('notes', e.target.value)}
                             placeholder={t('Notes about contact or client details...')}
                           />
                         </div>
@@ -1329,7 +1357,7 @@ const Clients: React.FC = () => {
                         type="button"
                         onClick={() => {
                           const form = getProfileForm(selectedClient);
-                          setProfileForm(form);
+                          setProfileDraft(form);
                           setProfileBaseline(form);
                           setProfileError('');
                           setIsEditingProfile(true);
