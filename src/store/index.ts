@@ -673,10 +673,11 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
   parsed.users
     .filter(user => user.role === 'Client' && user.companyName)
     .forEach(user => rememberOwner(user.companyName, user.id));
+  // Account metadata can retain a deleted company name. Only work records
+  // should discover a missing company profile.
   const discoveredNames = [
     ...parsed.tasks.map(task => task.clientName),
     ...parsed.projects.map(project => project.clientName),
-    ...parsed.users.filter(user => user.role === 'Client').map(user => user.companyName || ''),
   ].map(name => name.trim()).filter(Boolean);
 
   discoveredNames.forEach(name => {
@@ -3830,6 +3831,7 @@ export const useStore = create<StoreState>()(
           deletedClientIds: Array.from(new Set([...(current.deletedClientIds || []), clientId])),
           projects: current.projects.filter(item => !belongsToClient(item)),
           tasks: current.tasks.filter(item => !belongsToClient(item)),
+          notifications: current.notifications.filter(item => normalizeClientKey(item.targetClient) !== clientKey),
           clientPlans: current.clientPlans.filter(item => item.clientId !== clientId),
           serviceCycles: current.serviceCycles.filter(item => item.clientId !== clientId),
           deliverables: current.deliverables.filter(item => item.clientId !== clientId),

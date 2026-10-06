@@ -2578,7 +2578,7 @@ const zhCopyCoverage: Record<string, string> = {
   'Feedback & Updates': '反馈与动态',
   'Comments & Updates': '评论与动态',
   'Save Task': '保存任务',
-  'Delete this company profile? Linked service plans must be archived first.': '删除此公司档案？必须先归档关联的服务方案。',
+  'Delete this company? This also removes linked tasks, projects, service plans and delivery records. This action cannot be undone.': '删除这家公司？关联的任务、项目、服务方案和交付记录也会一并删除。此操作无法撤销。',
   'Only Boss Koo can reassign tasks.': '只有 Boss Koo 可以重新分配任务。',
   'Project Manager:': '项目经理：',
 

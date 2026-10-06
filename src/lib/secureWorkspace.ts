@@ -1021,6 +1021,7 @@ export const partitionOperationsWithExplicitType = (
 
 const applyCommandVersions = (command: SecureCommand, response: CommandResponse) => {
   const versions = new Map((response.changed || []).map(item => [entityKey(item.entityType, item.entityId), item]));
+  (response.deleted || []).forEach(item => baseline.delete(entityKey(item.entityType, item.entityId)));
   command.operations.forEach(operation => {
     const key = entityKey(operation.entityType, operation.entityId);
     if (operation.action === 'delete') {
@@ -2419,27 +2420,58 @@ export const saveSecureWorkspace = async (
       error: 'The requested workspace command is not supported.',
     };
   }
-  const operations = buildOperations(state, options);
-  if (operations.length === 0) {
+  let pendingOperations = buildOperations(state, options);
+  if (pendingOperations.length === 0) {
     const revision = await loadSecureWorkspaceRevision();
     return { ok: true, data: { ok: true, workspaceVersion: revision.version }, commandId: commandId(), workspaceVersion: revision.version };
   }
-  if (operations.length > 500) {
+
+  let lastResult: MutationResult<CommandResponse> | null = null;
+  let version = expectedWorkspaceVersion;
+  const clientDeletes = pendingOperations.filter(operation => operation.entityType === 'client' && operation.action === 'delete');
+  for (const operation of clientDeletes) {
+    if (!pendingOperations.some(item => item.entityType === 'client' && item.entityId === operation.entityId && item.action === 'delete')) continue;
+
+    // The server owns the company cascade. Send only its client row to the
+    // atomic delete RPC; child rows are returned in `deleted` and removed from
+    // the baseline so they are not sent again through the service RPC.
+    const result = await executeCommand({ id: commandId(), type: 'client.delete', operations: [operation] }, version);
+    if (!isWorkspaceSessionCurrent(saveSession)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    if (result.ok === false) return result;
+
+    lastResult = result;
+    version = result.workspaceVersion ?? version;
+    const deletedKeys = new Set((result.data.deleted || []).map(item => entityKey(item.entityType, item.entityId)));
+    deletedKeys.add(entityKey('client', operation.entityId));
+    pendingOperations = pendingOperations.filter(item => !deletedKeys.has(entityKey(item.entityType, item.entityId)));
+  }
+
+  if (pendingOperations.length === 0) {
+    return lastResult ?? {
+      ok: true,
+      data: { ok: true, workspaceVersion: version ?? 1 },
+      commandId: commandId(),
+      workspaceVersion: version ?? 1,
+    };
+  }
+  if (pendingOperations.length > 500) {
     return {
       ok: false,
       code: 'VALIDATION',
       error: 'This change touches too many records. Save it in smaller steps.',
     };
   }
-  const groups = type
-    ? partitionOperationsWithExplicitType(operations, type, options.actorMemberId)
-    : partitionOperationsForRpc(operations, options.actorMemberId);
+
+  const remainingType = type === 'client.delete' ? undefined : type;
+  const groups = remainingType
+    ? partitionOperationsWithExplicitType(pendingOperations, remainingType, options.actorMemberId)
+    : partitionOperationsForRpc(pendingOperations, options.actorMemberId);
 
   // Task triggers already persist derived delivery progress. A later service
   // group must compare that result before sending the old row version again.
   const touchedDeliverables = new Set<string>();
   const touchedCycles = new Set<string>();
-  operations.filter(operation => operation.entityType === 'task').forEach(operation => {
+  pendingOperations.filter(operation => operation.entityType === 'task').forEach(operation => {
     const previous = baseline.get(entityKey('task', operation.entityId))?.data;
     for (const task of [previous, operation.data]) {
       if (typeof task?.deliverableId === 'string') touchedDeliverables.add(task.deliverableId);
@@ -2451,8 +2483,6 @@ export const saveSecureWorkspace = async (
     if (typeof cycleId === 'string') touchedCycles.add(cycleId);
   });
 
-  let lastResult: MutationResult<CommandResponse> | null = null;
-  let version = expectedWorkspaceVersion;
   for (const group of groups) {
     if (!isWorkspaceSessionCurrent(saveSession)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     let pendingOperations = group.operations;

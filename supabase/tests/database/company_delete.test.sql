@@ -41,7 +41,7 @@ set local role authenticated;
 
 select is(
   (public.aitask_execute_command(
-    'pgtap-company-delete', gen_random_uuid(), 'workspace.patch',
+    'pgtap-company-delete', gen_random_uuid(), 'client.delete',
     jsonb_build_array(jsonb_build_object(
       'kind', 'entity', 'action', 'delete', 'entityType', 'client', 'entityId', 'pgtap-delete-client',
       'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-company-delete' and entity_type = 'client' and entity_id = 'pgtap-delete-client')
@@ -67,7 +67,7 @@ set local role authenticated;
 
 select is(
   (public.aitask_execute_command(
-    'pgtap-company-delete', gen_random_uuid(), 'workspace.patch',
+    'pgtap-company-delete', gen_random_uuid(), 'client.delete',
     jsonb_build_array(jsonb_build_object(
       'kind', 'entity', 'action', 'delete', 'entityType', 'client', 'entityId', 'pgtap-keep-client',
       'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-company-delete' and entity_type = 'client' and entity_id = 'pgtap-keep-client')

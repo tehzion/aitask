@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
@@ -185,7 +186,35 @@ const Clients: React.FC = () => {
   const [initialProjectClientId, setInitialProjectClientId] = React.useState('');
   const [planClientId, setPlanClientId] = React.useState('');
   const [openMenuClientKey, setOpenMenuClientKey] = React.useState<string | null>(null);
+  const [clientMenuAnchor, setClientMenuAnchor] = React.useState<HTMLButtonElement | null>(null);
+  const [clientMenuPosition, setClientMenuPosition] = React.useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const clientMenuRef = React.useRef<HTMLDivElement>(null);
+  const clientMenuId = React.useId();
   const clientDialogTitleId = React.useId();
+
+  React.useLayoutEffect(() => {
+    if (!openMenuClientKey || !clientMenuAnchor || !clientMenuRef.current) {
+      setClientMenuPosition(null);
+      return;
+    }
+    const anchor = clientMenuAnchor.getBoundingClientRect();
+    const menu = clientMenuRef.current;
+    const spaceBelow = window.innerHeight - anchor.bottom - 12;
+    const spaceAbove = anchor.top - 12;
+    const placeBelow = menu.scrollHeight <= spaceBelow || spaceBelow >= spaceAbove;
+    const maxHeight = Math.max(0, placeBelow ? spaceBelow : spaceAbove);
+    setClientMenuPosition({
+      top: placeBelow ? anchor.bottom + 4 : Math.max(8, anchor.top - 4 - Math.min(menu.scrollHeight, maxHeight)),
+      left: Math.max(8, Math.min(anchor.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8)),
+      maxHeight,
+    });
+  }, [openMenuClientKey, clientMenuAnchor]);
+
+  React.useLayoutEffect(() => {
+    if (openMenuClientKey && clientMenuPosition) {
+      clientMenuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true });
+    }
+  }, [openMenuClientKey, clientMenuPosition]);
 
   React.useEffect(() => {
     if (!openMenuClientKey) return;
@@ -199,15 +228,26 @@ const Clients: React.FC = () => {
       closeMenu();
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeMenu();
+      if (event.key === 'Escape') {
+        closeMenu();
+        clientMenuAnchor?.focus({ preventScroll: true });
+      }
+    };
+    const onScroll = (event: Event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target?.closest('[role="menu"]')) closeMenu();
     };
     document.addEventListener('mousedown', onMouseDown);
     document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('resize', closeMenu);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       document.removeEventListener('mousedown', onMouseDown);
       document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('resize', closeMenu);
+      window.removeEventListener('scroll', onScroll, true);
     };
-  }, [openMenuClientKey]);
+  }, [openMenuClientKey, clientMenuAnchor]);
 
   const canSeeAllClients = canViewAllClients(currentUser, rolePermissions);
   const isClientUser = currentUser?.role === 'Client';
@@ -345,7 +385,7 @@ const Clients: React.FC = () => {
         return visibleClientKeys.has(companyKey);
       })
       .forEach(user => {
-        const summary = ensureClient(user.companyName || '');
+        const summary = summaries.get(getClientKey(user.companyName || ''));
         if (!summary) return;
 
         summary.sources.add('Account');
@@ -430,6 +470,7 @@ const Clients: React.FC = () => {
   );
 
   const openClientPanel = (client: ClientSummary, edit = false) => {
+    setOpenMenuClientKey(null);
     setSelectedClientName(client.name);
     setProfileForm(getProfileForm(client));
     setProfileError('');
@@ -437,7 +478,13 @@ const Clients: React.FC = () => {
     setRenameError('');
     setIsRenamingClient(false);
     setIsDeleteConfirming(false);
-    setIsEditingProfile(Boolean(edit && !upgradeRequired && canEditClientProfile(currentUser, client.name, allTasks, rolePermissions)));
+    setIsEditingProfile(Boolean(edit && !upgradeRequired && canEditClientProfile(currentUser, client.name, allTasks, rolePermissions, clientProfiles)));
+  };
+
+  const openClientDeleteConfirmation = (client: ClientSummary) => {
+    setOpenMenuClientKey(null);
+    openClientPanel(client);
+    setIsDeleteConfirming(true);
   };
 
   const closeClientPanel = () => {
@@ -609,6 +656,8 @@ const Clients: React.FC = () => {
         const facebookPage = safeHttpsUrl(contact.facebookPage);
         const serviceContext = getServiceContext(client);
         const canOpenWorkspace = canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles);
+        const canEditProfile = !upgradeRequired && canEditClientProfile(currentUser, client.name, allTasks, rolePermissions, clientProfiles);
+        const canDeleteProfile = Boolean(client.profile && !upgradeRequired && canDeleteClientProfile(currentUser, client.profile.clientName, clientProfiles, rolePermissions, allTasks));
         const assignedTeam = Array.from(client.assignedUserIds)
           .map(userId => users.find(user => user.id === userId)?.name || userId)
           .filter(Boolean);
@@ -690,19 +739,41 @@ const Clients: React.FC = () => {
                             type="button"
                             aria-haspopup="menu"
                             aria-expanded={openMenuClientKey === client.name}
+                            aria-controls={openMenuClientKey === client.name ? clientMenuId : undefined}
                             aria-label={t('More actions')}
-                            onClick={() => setOpenMenuClientKey(prev => prev === client.name ? null : client.name)}
+                            onClick={event => {
+                              setClientMenuAnchor(event.currentTarget);
+                              setOpenMenuClientKey(prev => prev === client.name ? null : client.name);
+                            }}
                             className="flex h-10 w-10 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"
                           >
                             <MoreHorizontal className="h-5 w-5" />
                           </button>
-                          {openMenuClientKey === client.name && (
-                            <div role="menu" aria-label={t('Client actions')} className="absolute right-0 top-11 z-20 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line">
+                          {openMenuClientKey === client.name && createPortal(
+                            <div
+                              ref={clientMenuRef}
+                              id={clientMenuId}
+                              role="menu"
+                              aria-label={t('Client actions')}
+                              className="fixed z-40 w-44 overflow-y-auto rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line"
+                              style={{ ...clientMenuPosition, visibility: clientMenuPosition ? 'visible' : 'hidden' }}
+                              onKeyDown={event => {
+                                if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+                                event.preventDefault();
+                                const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+                                const index = items.indexOf(document.activeElement as HTMLElement);
+                                const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+                                  : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+                                items[next]?.focus();
+                              }}
+                            >
                               <Link role="menuitem" to={`/tasks?client=${encodeURIComponent(client.name)}`} onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">{t('View tasks')}</Link>
+                              {canEditProfile && <button type="button" role="menuitem" onClick={() => { setOpenMenuClientKey(null); openClientPanel(client, true); }} className="flex min-h-10 w-full items-center gap-2 rounded-control px-3 text-left text-sm text-ink hover:bg-inset"><Pencil className="h-4 w-4 text-muted" />{t('Edit details')}</button>}
                               <button type="button" role="menuitem" onClick={() => openClientPanel(client)} className="flex min-h-10 w-full items-center rounded-control px-3 text-left text-sm text-ink hover:bg-inset">{t('Details')}</button>
                               {website && <a role="menuitem" href={website} target="_blank" rel="noopener noreferrer" onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset">{t('Website')}</a>}
                               {facebookPage && <a role="menuitem" href={facebookPage} target="_blank" rel="noopener noreferrer" onClick={() => setOpenMenuClientKey(null)} className="flex min-h-10 items-center rounded-control px-3 text-sm text-ink hover:bg-inset"><span data-i18n-skip>Facebook</span></a>}
-                            </div>
+                              {canDeleteProfile && <button type="button" role="menuitem" onClick={() => openClientDeleteConfirmation(client)} className="mt-1 flex min-h-10 w-full items-center gap-2 rounded-control border-t border-line/70 px-3 pt-1 text-left text-sm text-red-700 hover:bg-red-50"><Trash2 className="h-4 w-4" />{t('Delete company')}</button>}
+                            </div>, document.body,
                           )}
                         </div>
                       </div>
@@ -1081,7 +1152,7 @@ const Clients: React.FC = () => {
                 ) : (
                   isDeleteConfirming ? (
                     <>
-                    <p className="self-center text-sm font-medium text-red-700 sm:mr-2">{t('Delete this company profile? Linked service plans must be archived first.')}</p>
+                    <p className="self-center text-sm font-medium text-red-700 sm:mr-2">{t('Delete this company? This also removes linked tasks, projects, service plans and delivery records. This action cannot be undone.')}</p>
                       <button
                         type="button"
                         onClick={() => setIsDeleteConfirming(false)}

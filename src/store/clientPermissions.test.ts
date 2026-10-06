@@ -174,6 +174,15 @@ describe('client profile store authorization', () => {
     expect(useStore.getState().serviceCycles.some(cycle => cycle.clientId === clientId)).toBe(true);
     expect(useStore.getState().clientPlans.some(plan => plan.clientId === clientId)).toBe(true);
 
+    const notification = {
+      title: 'Company update', message: 'Review company work.', route: { page: 'clients' as const },
+      isRead: false, createdAt: '2026-09-01T00:00:00Z', iconType: 'status' as const,
+    };
+    useStore.setState({ notifications: [
+      { ...notification, id: 'notification-delete-company', targetClient: ' delete co ' },
+      { ...notification, id: 'notification-keep-company', targetClient: 'Keep Co' },
+    ] });
+
     expect(useStore.getState().deleteClientProfile(clientId)).toEqual({ ok: true });
     const state = useStore.getState();
     expect(state.clients).toEqual([]);
@@ -181,6 +190,7 @@ describe('client profile store authorization', () => {
     expect(state.serviceCycles.filter(cycle => cycle.clientId === clientId)).toEqual([]);
     expect(state.deliverables.filter(item => item.clientId === clientId)).toEqual([]);
     expect(state.servicePricingSnapshots.filter(item => item.clientId === clientId)).toEqual([]);
+    expect(state.notifications.map(item => item.id)).toEqual(['notification-keep-company']);
 
     useStore.setState({
       currentUser: makeStaff(true),

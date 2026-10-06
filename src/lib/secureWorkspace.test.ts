@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PersistedWorkspaceState } from './supabaseSnapshot';
 import type { ServiceWorkflowTemplate, Task } from '../types';
 import { BUILTIN_HOD_ROLE_ID, defaultRolePermissions } from './access';
+import { invalidateWorkspaceSession } from './workspaceSession';
 
 const { rpc, refreshSession, from } = vi.hoisted(() => ({
   rpc: vi.fn(),
@@ -42,6 +43,10 @@ import {
   setSecureNotificationsRead,
   type WorkspaceOperation,
 } from './secureWorkspace';
+
+beforeEach(() => {
+  invalidateWorkspaceSession();
+});
 
 afterEach(() => {
   discardSecureWorkspaceCommand();
@@ -1161,6 +1166,248 @@ describe('secure workspace baseline', () => {
           dueDate: '2026-07-24',
         }),
       }),
+    ]);
+  });
+
+  it('sends edited company contact details to the Supabase client upsert command', async () => {
+    const member = {
+      id: 'staff-client-edit',
+      workspace_id: 'aitask-main',
+      auth_user_id: '00000000-0000-4000-8000-000000000210',
+      name: 'Client Editor',
+      email: 'editor@example.com',
+      role: 'Project Manager',
+      departments: ['Management'],
+      department: 'Management',
+      avatar: null,
+      client_name: null,
+      is_super_admin: true,
+      must_reset_password: false,
+      custom_role_id: null,
+      custom_role_name: null,
+      permissions: {},
+      version: 1,
+      updated_at: '2026-09-20T00:00:00Z',
+    };
+    const clientRow = {
+      workspace_id: 'aitask-main',
+      entity_type: 'client',
+      entity_id: 'client-profile-save',
+      parent_id: null,
+      data: {
+        id: 'client-profile-save',
+        clientName: 'Acme Studio',
+        createdBy: member.id,
+        contactPerson: 'Old contact',
+        email: 'old@example.com',
+        phone: '111-222',
+        notes: 'Existing notes',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-09-19T00:00:00Z',
+      },
+      version: 3,
+      updated_at: '2026-09-19T00:00:00Z',
+    };
+
+    from.mockImplementation((table: string) => {
+      const result = table === 'aitask_workspaces'
+        ? Promise.resolve({ data: { version: 7, updated_at: '2026-09-20T00:00:00Z', sync_protocol_version: 1 }, error: null })
+        : table === 'aitask_entities'
+          ? Promise.resolve({ data: [clientRow], error: null })
+          : Promise.resolve({ data: [member], error: null });
+      const fluent: Record<string, () => unknown> = {};
+      fluent.select = () => fluent;
+      fluent.eq = () => fluent;
+      fluent.neq = () => fluent;
+      fluent.order = () => fluent;
+      fluent.range = () => result;
+      fluent.single = () => result;
+      return fluent;
+    });
+    rpc.mockResolvedValueOnce({
+      data: { ok: true, memberId: member.id, items: [], unreadCount: 0, nextCursor: null },
+      error: null,
+    });
+
+    const loaded = await loadSecureWorkspace({ id: member.auth_user_id } as never);
+    rpc.mockClear();
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        workspaceVersion: 8,
+        changed: [{ entityType: 'client', entityId: clientRow.entity_id, version: 4, updatedAt: '2026-09-20T00:01:00Z' }],
+      },
+      error: null,
+    });
+
+    const editedClient = {
+      ...loaded.state.clients?.[0],
+      contactPerson: 'Alicia Tan',
+      email: 'alicia@acme.example',
+      phone: '+60 12-345 6789',
+      notes: 'Call before visiting',
+      updatedAt: '2026-09-20T00:01:00Z',
+    };
+    const result = await saveSecureWorkspace({
+      ...loaded.state,
+      clients: [editedClient],
+    }, undefined, loaded.revision.version, { actorMemberId: member.id });
+
+    expect(result).toMatchObject({ ok: true, workspaceVersion: 8 });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('aitask_execute_command', expect.objectContaining({
+      p_command_type: 'client.upsert',
+      p_expected_workspace_version: 7,
+      p_operations: [expect.objectContaining({
+        action: 'update',
+        entityType: 'client',
+        entityId: clientRow.entity_id,
+        expectedVersion: 3,
+        data: expect.objectContaining({
+          clientName: 'Acme Studio',
+          contactPerson: 'Alicia Tan',
+          email: 'alicia@acme.example',
+          phone: '+60 12-345 6789',
+          notes: 'Call before visiting',
+        }),
+      })],
+    }));
+  });
+
+  it('sends a company delete through the atomic Supabase cascade and clears returned child versions', async () => {
+    const member = {
+      id: 'staff-company-delete',
+      workspace_id: 'aitask-main',
+      auth_user_id: '00000000-0000-4000-8000-000000000211',
+      name: 'Company Deleter',
+      email: 'deleter@example.com',
+      role: 'Project Manager',
+      departments: ['Management'],
+      department: 'Management',
+      avatar: null,
+      client_name: null,
+      is_super_admin: true,
+      must_reset_password: false,
+      custom_role_id: null,
+      custom_role_name: null,
+      permissions: {},
+      version: 1,
+      updated_at: '2026-09-20T00:00:00Z',
+    };
+    const companyRows = [
+      {
+        workspace_id: 'aitask-main', entity_type: 'client', entity_id: 'client-cascade', parent_id: null,
+        data: { id: 'client-cascade', clientName: 'Acme Studio', createdBy: member.id, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-09-19T00:00:00Z' },
+        version: 2, updated_at: '2026-09-19T00:00:00Z',
+      },
+      {
+        workspace_id: 'aitask-main', entity_type: 'project', entity_id: 'project-cascade', parent_id: null,
+        data: { id: 'project-cascade', clientName: 'Acme Studio', projectName: 'Brand refresh', createdBy: member.id, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-09-19T00:00:00Z' },
+        version: 4, updated_at: '2026-09-19T00:00:00Z',
+      },
+      {
+        workspace_id: 'aitask-main', entity_type: 'task', entity_id: 'task-cascade', parent_id: 'project-cascade',
+        data: { id: 'task-cascade', clientName: 'Acme Studio', projectId: 'project-cascade', serviceType: 'Design', title: 'Brand board', department: 'Designer', assignedTo: member.id, createdBy: member.id, startDate: '2026-09-01', status: 'Pending', updatedAt: '2026-09-19T00:00:00Z' },
+        version: 5, updated_at: '2026-09-19T00:00:00Z',
+      },
+    ];
+    from.mockImplementation((table: string) => {
+      const result = table === 'aitask_workspaces'
+        ? Promise.resolve({ data: { version: 12, updated_at: '2026-09-20T00:00:00Z', sync_protocol_version: 1 }, error: null })
+        : table === 'aitask_entities'
+          ? Promise.resolve({ data: companyRows, error: null })
+          : Promise.resolve({ data: [member], error: null });
+      const fluent: Record<string, () => unknown> = {};
+      fluent.select = () => fluent;
+      fluent.eq = () => fluent;
+      fluent.neq = () => fluent;
+      fluent.order = () => fluent;
+      fluent.range = () => result;
+      fluent.single = () => result;
+      return fluent;
+    });
+    rpc.mockResolvedValueOnce({
+      data: { ok: true, memberId: member.id, items: [], unreadCount: 0, nextCursor: null },
+      error: null,
+    });
+
+    const loaded = await loadSecureWorkspace({ id: member.auth_user_id } as never);
+    rpc.mockClear();
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        workspaceVersion: 13,
+        changed: [],
+        deleted: [
+          { entityType: 'client', entityId: 'client-cascade' },
+          { entityType: 'project', entityId: 'project-cascade' },
+          { entityType: 'task', entityId: 'task-cascade' },
+        ],
+        refreshScope: 'workspace',
+      },
+      error: null,
+    });
+
+    const result = await saveSecureWorkspace({
+      ...loaded.state,
+      clients: [],
+      projects: [],
+      tasks: [],
+    }, undefined, loaded.revision.version, { actorMemberId: member.id });
+
+    expect(result).toMatchObject({ ok: true, workspaceVersion: 13 });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('aitask_execute_command', expect.objectContaining({
+      p_command_type: 'client.delete',
+      p_expected_workspace_version: 12,
+      p_operations: [expect.objectContaining({
+        action: 'delete',
+        entityType: 'client',
+        entityId: 'client-cascade',
+        expectedVersion: 2,
+      })],
+    }));
+
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        workspaceVersion: 14,
+        changed: [{ entityType: 'task', entityId: 'task-other-company', version: 1, updatedAt: '2026-09-20T00:02:00Z' }],
+      },
+      error: null,
+    });
+    const nextTask: Task = {
+      id: 'task-other-company',
+      clientName: 'Other Company',
+      serviceType: 'Design',
+      title: 'New independent work',
+      description: '',
+      department: 'Designer' as const,
+      assignedTo: member.id,
+      createdBy: member.id,
+      startDate: '2026-09-20',
+      dueDate: '',
+      priority: 'Medium',
+      status: 'Pending',
+      completionPercentage: 0,
+      isCompleted: false,
+      revisionCount: 0,
+      clientApprovalStatus: 'Pending',
+      isRecurring: false,
+      recurrenceFrequency: 'None',
+    };
+    const nextSave = await saveSecureWorkspace({
+      ...loaded.state,
+      clients: [],
+      projects: [],
+      tasks: [nextTask],
+    }, undefined, result.ok ? result.workspaceVersion : undefined, { actorMemberId: member.id });
+
+    expect(nextSave.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[1][1].p_command_type).toBe('task.create');
+    expect(rpc.mock.calls[1][1].p_operations).toEqual([
+      expect.objectContaining({ action: 'insert', entityType: 'task', entityId: 'task-other-company' }),
     ]);
   });
 
