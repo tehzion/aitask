@@ -61,6 +61,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
 import { useI18n } from '../components/I18nProvider';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useLocalToday } from '../hooks/useLocalToday';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent, onWorkspaceSessionInvalidated } from '../lib/workspaceSession';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -152,6 +153,7 @@ const CalendarMetricButton: React.FC<CalendarMetricButtonProps> = ({ filter, lab
 
 const Calendar: React.FC = () => {
   const { locale, t } = useI18n();
+  const today = useLocalToday();
   const {
     tasks: allTasks,
     users,
@@ -225,10 +227,10 @@ const Calendar: React.FC = () => {
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
     [allTasks, clientProfiles, currentUser, projects, rolePermissions],
   );
-  const overview = getCalendarOverview(visibleTasks);
+  const overview = getCalendarOverview(visibleTasks, today);
   const tasks = useMemo(
-    () => filterCalendarTasks(visibleTasks, calendarFilter),
-    [calendarFilter, visibleTasks],
+    () => filterCalendarTasks(visibleTasks, calendarFilter, today),
+    [calendarFilter, visibleTasks, today],
   );
   const taskById = useMemo(() => new Map(tasks.map(task => [task.id, task])), [tasks]);
   const rangeByTaskId = useMemo(
@@ -682,7 +684,7 @@ const Calendar: React.FC = () => {
   const selectedDayTasks = getTasksForDay(selectedDate);
   const selectedDayHolidays = getHolidaysForDay(selectedDate);
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-  const selectedDaySummary = getCalendarTaskSummary(selectedDayTasks);
+  const selectedDaySummary = getCalendarTaskSummary(selectedDayTasks, today);
   const isClientUser = currentUser?.role === 'Client';
   const localizedTaskDateLabel = (task: Task) => taskDateLabel(
     task,

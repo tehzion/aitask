@@ -355,3 +355,12 @@ create a release tag or deploy. See [release setup](staging-release-setup.md).
 | `4d268d7` | 2026-05-21 | security: harden app for internal production |
 | `e29d064` | 2026-05-21 | chore: protect sensitive data - update .gitignore to exclude .env files |
 | `84465d7` | 2026-05-21 | Initial commit |
+
+## Local re-audit corrections
+
+The preparation commit was subsequently re-audited and corrected locally without
+renumbering the candidate. See [the re-audit](version-3-reaudit-2026-10-07.md) and
+[remediation evidence](version-3-remediation-2026-10-07.md) for Calendar/focus fixes,
+updated browser references, passing bundle budgets, the completed local database
+gate and the remaining Free-plan/hosted staging limitations. The inventory above
+continues to describe the original pre-preparation snapshot.

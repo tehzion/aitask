@@ -16,11 +16,7 @@ export function parseOptionalDate(dateStr?: string): Date | null {
 }
 
 export function parseDateOnlyLocal(dateStr?: string): Date | null {
-  if (!dateStr) return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return parseOptionalDate(dateStr);
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const local = new Date(year, month - 1, day);
-  return Number.isNaN(local.getTime()) ? null : local;
+  return parseOptionalDate(dateStr);
 }
 
 export function getTodayInputDate(date = new Date()): string {

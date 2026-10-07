@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../types';
 import { filterCalendarTasks, getCalendarOverview, getCalendarTaskSummary } from './calendarMetrics';
+import { normalizeCalendarTaskRange } from './calendarRanges';
+import { isTaskOverdue } from './taskReporting';
 
 const makeTask = (overrides: Partial<Task> = {}): Task => ({
   id: 'task-1',
@@ -54,5 +56,15 @@ describe('calendar overview metrics and filters', () => {
     expect(filterCalendarTasks(tasks, 'overdue', now).map(task => task.id)).toEqual(['overdue']);
     expect(filterCalendarTasks(tasks, 'completed', now).map(task => task.id)).toEqual(['completed']);
     expect(filterCalendarTasks(tasks, 'no-due-date', now).map(task => task.id)).toEqual(['no-due-date']);
+  });
+
+  it('keeps impossible dates undated in Calendar, ranges and dashboard overdue totals', () => {
+    const invalid = makeTask({ startDate: '2026-02-01', dueDate: '2026-02-31' });
+    expect(getCalendarOverview([invalid], now)).toMatchObject({ overdue: 0, dueToday: 0, noDueDate: 1 });
+    expect(filterCalendarTasks([invalid], 'overdue', now)).toEqual([]);
+    expect(filterCalendarTasks([invalid], 'no-due-date', now)).toEqual([invalid]);
+    expect(isTaskOverdue(invalid, now)).toBe(false);
+    expect(normalizeCalendarTaskRange(invalid)).toMatchObject({ endDate: '2026-02-01', hasDueDate: false });
+    expect(normalizeCalendarTaskRange({ ...invalid, startDate: '2026-02-31' })).toBeNull();
   });
 });

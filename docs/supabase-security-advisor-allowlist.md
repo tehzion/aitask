@@ -25,3 +25,16 @@ run the advisor and compare its output to this list.
 2. Record the advisor output with the release evidence.
 3. Run the anonymous production verifier read-only; it must confirm the secure
    tables, RPC grants, and storage privacy boundaries remain closed.
+
+## Open hosting limitation — 7 October 2026
+
+The AiTask organization is on the Free plan. The live advisor still reports
+`auth_leaked_password_protection`; Supabase makes leaked-password protection
+available on Pro and above ([official password-security documentation](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)).
+
+This finding is not added to the expected-warning allowlist and no paid upgrade
+or risk exception has been approved by the version 3 code-fix request. Enabling
+it requires the owner to authorize/provision the required plan, enable the Auth
+setting and rerun the advisor. Existing private workspace grants, guarded RPCs,
+password setup and rate limiting remain verified independently; they do not
+replace leaked-password screening.

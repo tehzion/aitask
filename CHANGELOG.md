@@ -6,6 +6,17 @@ number remain uniquely identifiable.
 
 ## [Unreleased]
 
+### Fixed
+
+- Calendar rejects impossible deadlines and refreshes its totals and selected
+  filters at local midnight and when a suspended tab resumes.
+- Deferred navigation focus preserves a control the user has already selected.
+- Startup state and translation modules share a chunk to meet the unchanged
+  eager-JavaScript budget. Release instructions now describe automatic deployment
+  of reviewed master commits and subsequent tag verification.
+- Updated stale browser expectations, pinned the Chinese cycle fixture date and
+  refreshed reviewed Chrome visual references for the current interface.
+
 ## [3.0.0] - 2026-10-07
 
 Version 3 consolidates 85 commits since the source release 2.6.1. The complete
