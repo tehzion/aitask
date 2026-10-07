@@ -11,12 +11,14 @@ export const getCurrentPlanCycle = (
   plan: Pick<ClientServicePlan, 'id' | 'clientId'>,
   cycles: readonly ServiceCycle[],
   today: Date,
+  options: { includeDraft?: boolean } = {},
 ): ServiceCycle | undefined => {
   const day = startOfDay(today);
   return cycles
     .filter(cycle => {
       if (cycle.clientId !== plan.clientId || cycle.planId !== plan.id) return false;
-      if (cycle.status !== 'Published' && cycle.status !== 'Completed') return false;
+      if (cycle.status !== 'Published' && cycle.status !== 'Completed'
+        && !(options.includeDraft && cycle.status === 'Draft')) return false;
       const start = parseOptionalDate(cycle.periodStart);
       const end = parseOptionalDate(cycle.periodEnd);
       return Boolean(start && end && startOfDay(start) <= day && day <= startOfDay(end));

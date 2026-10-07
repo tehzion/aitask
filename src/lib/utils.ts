@@ -3,6 +3,7 @@ import { twMerge } from "tailwind-merge"
 import { parseISO, differenceInDays, startOfDay } from 'date-fns'
 import type { AppLocale } from './i18n'
 import { formatMessage, msg } from './messages'
+import { isTaskCompleted } from './taskCompletion'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -50,7 +51,7 @@ export function getRelativeDueDateString(
     return formatMessage(msg('task.dueToday'), locale);
   } else if (diff < 0) {
     const absDiff = Math.abs(diff);
-    if (isCompleted || status === 'Cancelled') {
+    if (isTaskCompleted({ isCompleted, status }) || status === 'Cancelled') {
       return formatMessage(msg(absDiff === 1 ? 'task.dayAgo' : 'task.daysAgo', { count: absDiff }), locale);
     }
     return formatMessage(msg(absDiff === 1 ? 'task.dayOverdue' : 'task.daysOverdue', { count: absDiff }), locale);

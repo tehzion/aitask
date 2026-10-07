@@ -9,6 +9,7 @@ import {
   getTeamMemberTaskGroups,
   getTeamWorkloadSummaries,
   getTrackedWeeklyCompletions,
+  isTaskOverdue,
 } from './taskReporting';
 
 const makeTask = (overrides: Partial<Task> = {}): Task => ({
@@ -40,6 +41,15 @@ const users: User[] = [
 
 describe('Boss operations reporting', () => {
   const now = new Date(2026, 6, 31, 12, 0, 0);
+
+  it('keeps overdue links consistent for completed, cancelled, invalid and due-today tasks', () => {
+    expect(isTaskOverdue(makeTask({ dueDate: '2026-07-30' }), now)).toBe(true);
+    expect(isTaskOverdue(makeTask({ dueDate: '2026-07-31' }), now)).toBe(false);
+    expect(isTaskOverdue(makeTask({ dueDate: '2026-07-30', status: 'Completed', isCompleted: false }), now)).toBe(false);
+    expect(isTaskOverdue(makeTask({ dueDate: '2026-07-30', status: 'Cancelled' }), now)).toBe(false);
+    expect(isTaskOverdue(makeTask({ dueDate: 'invalid' }), now)).toBe(false);
+    expect(isTaskOverdue(makeTask({ dueDate: '' }), now)).toBe(false);
+  });
 
   it('builds four Monday-to-Saturday due-work cohorts with tracked and open states', () => {
     const weeks = getDueWorkPerformance([

@@ -68,6 +68,8 @@ import SideSheet from "../components/SideSheet";
 import ClientServiceWorkspace from "../components/ClientServiceWorkspace";
 import CreateClientPlanModal from "../components/CreateClientPlanModal";
 import EditClientPlanDatesModal from "../components/EditClientPlanDatesModal";
+import { useLocalToday } from "../hooks/useLocalToday";
+import { getCurrentPlanCycle } from "../lib/dashboardData";
 import ConfirmDialog from "../components/ConfirmDialog";
 
 type Tab = "overview" | "plan" | "cycles" | "addons" | "activity";
@@ -93,6 +95,7 @@ const deliverableStatuses: DeliverableStatus[] = [
 
 const OperationsClientWorkspace = () => {
   const { locale, t } = useI18n();
+  const today = useLocalToday();
   const { clientId = "" } = useParams();
   const store = useStore();
   const client = store.clients.find((item) => item.id === clientId);
@@ -226,7 +229,9 @@ const OperationsClientWorkspace = () => {
         activePlan.taxRateBps,
       )
     : null;
-  const currentCycle = cycles[0];
+  const currentCycle = activePlan
+    ? getCurrentPlanCycle(activePlan, cycles, today, { includeDraft: !isClient })
+    : undefined;
   const currentCycleDeliverables = currentCycle
     ? deliverables.filter((item) => item.cycleId === currentCycle.id)
     : [];
@@ -495,7 +500,7 @@ const OperationsClientWorkspace = () => {
           <Surface variant="inset" className="border-l-2 border-accent p-6 sm:p-8">
             <p className="calm-eyebrow">{t('Delivery progress')}</p>
             <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-              <div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{currentProgress}%</p><p className="mt-2 text-sm text-muted">{currentDelivered}/{currentCycleDeliverables.length} {t('deliverables completed')}</p></div>
+              <div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{currentProgress}%</p><p className="mt-2 text-sm text-muted">{currentCycle ? <>{currentDelivered}/{currentCycleDeliverables.length} {t('deliverables completed')}</> : t('No published cycle for this month')}</p></div>
               {currentCycle && <StatusChip tone={currentCycle.status === "Completed" || currentCycle.status === "Published" ? "emerald" : "slate"}>{currentCycle.status}</StatusChip>}
             </div>
             <ProgressBar className="mt-7" value={currentDelivered} max={Math.max(currentCycleDeliverables.length, 1)} label={t('Current cycle')} />

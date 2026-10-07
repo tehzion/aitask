@@ -60,4 +60,10 @@ describe('current active-plan delivery cycle', () => {
       cycle({ periodStart: '2026-10-31', periodEnd: '2026-10-01' }),
     ], now)).toBeUndefined();
   });
+
+  it('allows a current draft for internal planning only when explicitly requested', () => {
+    const draft = cycle({ status: 'Draft' });
+    expect(getCurrentPlanCycle(plan, [draft], now)).toBeUndefined();
+    expect(getCurrentPlanCycle(plan, [draft], now, { includeDraft: true })).toBe(draft);
+  });
 });

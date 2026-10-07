@@ -87,6 +87,11 @@ export interface TeamTaskGroups {
 const isCancelled = (task: Task) => task.status === 'Cancelled';
 export const isTaskOpen = (task: Task) => !isTaskCompleted(task) && !isCancelled(task);
 
+export const isTaskOverdue = (task: Task, now = new Date()) => {
+  const due = parseOptionalDate(task.dueDate);
+  return Boolean(isTaskOpen(task) && due && due < startOfDay(now));
+};
+
 const isInPeriod = (value: string | undefined, start: Date, end: Date) => {
   const date = parseOptionalDate(value);
   return Boolean(date && isWithinInterval(date, { start, end }));

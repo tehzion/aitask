@@ -14,6 +14,7 @@ import type { ReportChartColors } from '../components/ReportsCharts';
 import { formatLocalizedDate } from '../lib/i18n';
 import { themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
+import { useLocalToday } from '../hooks/useLocalToday';
 
 const ReportsTrendChart = React.lazy(() => import('../components/ReportsCharts').then(module => ({ default: module.ReportsTrendChart })));
 const ReportsDepartmentChart = React.lazy(() => import('../components/ReportsCharts').then(module => ({ default: module.ReportsDepartmentChart })));
@@ -21,6 +22,7 @@ const ReportsDepartmentChart = React.lazy(() => import('../components/ReportsCha
 const Reports: React.FC = () => {
   const { tasks: allTasks, currentUser, rolePermissions, clients, projects, users } = useStore();
   const { locale, t } = useI18n();
+  const today = useLocalToday();
   const tasks = useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects }),
     [allTasks, clients, currentUser, projects, rolePermissions]
@@ -42,7 +44,7 @@ const Reports: React.FC = () => {
     };
   }, [resolvedTheme]);
   const isClientUser = currentUser?.role === 'Client';
-  const performance = useMemo(() => getDueWorkPerformance(tasks, new Date(), 4, locale), [locale, tasks]);
+  const performance = useMemo(() => getDueWorkPerformance(tasks, today, 4, locale), [locale, tasks, today]);
   const dueTasks = performance.flatMap(week => week.tasks);
 
   const formatWeekLabel = (week: { start: Date; end: Date; isCurrent: boolean }) => {
