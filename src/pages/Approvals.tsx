@@ -20,6 +20,7 @@ import ModalShell from '../components/ModalShell';
 import ConfirmDialog from '../components/ConfirmDialog';
 import DepartmentMultiSelect from '../components/DepartmentMultiSelect';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
+import { generateTemporaryPassword } from '../lib/temporaryPassword';
 
 const ROLES: Role[] = ['Project Manager', 'HOD', 'Staff', 'Client'];
 
@@ -115,7 +116,7 @@ const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
           <h2 id={`approval-review-title-${registration.id}`} className="mt-2 truncate text-xl font-semibold tracking-[-0.025em] text-ink sm:text-2xl">{registration.name}</h2>
           <p id={descriptionId} className="mt-1 text-sm leading-6 text-muted">{t('Review identity, requested access, and onboarding before approving this account.')}</p>
         </div>
-        <IconButton label={t('approval.closeReview')} onClick={onClose} className="shrink-0">
+        <IconButton label={t('approval.closeReview')} onClick={onClose} disabled={isSaving} className="shrink-0">
           <X className="h-5 w-5" aria-hidden="true" />
         </IconButton>
       </header>
@@ -339,6 +340,7 @@ const Approvals: React.FC = () => {
   const [approvalTemporaryPassword, setApprovalTemporaryPassword] = useState('');
   const [roleEditorId, setRoleEditorId] = useState<string | null>(null);
   const [roleError, setRoleError] = useState('');
+  const [pendingRoleSave, setPendingRoleSave] = useState(false);
   const [assignmentError, setAssignmentError] = useState('');
   const [actionError, setActionError] = useState('');
   const [isActionSaving, setIsActionSaving] = useState(false);
@@ -430,17 +432,34 @@ const Approvals: React.FC = () => {
   };
 
   const closeApprovalReview = () => {
+    if (isActionSaving) return;
     setSelectedReg(null);
     updateApprovalQuery({ registrationId: null });
   };
 
+  const initializeApprovalFields = React.useCallback((reg: Registration) => {
+    setRole(reg.requestedRole || 'Staff');
+    const requestedDepartment = normalizeDepartment(reg.jobPosition);
+    setApprovalDepartments(reg.requestedRole === 'Client'
+      ? ['Client']
+      : requestedDepartment && requestedDepartment !== 'Client' ? [requestedDepartment] : []);
+    setApprovalCustomRoleId('');
+    setSendApprovalInvitation(false);
+    setApprovalTemporaryPassword('');
+    setCompanyName('');
+    setActionError('');
+  }, []);
+
   useEffect(() => {
+    // Optimistic approval removes the pending row before persistence finishes.
+    if (isActionSaving) return;
     if (activeTab !== 'registrations' || !registrationQueryId) {
       setSelectedReg(null);
       return;
     }
     const registration = pendingRegs.find(item => item.id === registrationQueryId);
     if (registration) {
+      if (selectedReg?.id !== registration.id) initializeApprovalFields(registration);
       setSelectedReg(current => current?.id === registration.id ? current : registration);
       return;
     }
@@ -448,7 +467,7 @@ const Approvals: React.FC = () => {
     const next = new URLSearchParams(searchParams);
     next.delete('registrationId');
     setSearchParams(next, { replace: true });
-  }, [activeTab, pendingRegs, registrationQueryId, searchParams, setSearchParams]);
+  }, [activeTab, pendingRegs, registrationQueryId, searchParams, setSearchParams, isActionSaving, selectedReg?.id, initializeApprovalFields]);
 
   const toggleBulkSelect = (id: string) => {
     setSelectedBulkRegIds(current => {
@@ -493,15 +512,26 @@ const Approvals: React.FC = () => {
 
   const performBulkApprove = async (targets: Registration[]) => {
     const count = targets.length;
+    setIsActionSaving(true);
+    setActionError('');
+    const failures: Registration[] = [];
+    const reportFailures = () => {
+      const names = failures.slice(0, 3).map(reg => reg.name).join(', ');
+      const done = count - failures.length;
+      useToastStore.getState().addToast(
+        done > 0
+          ? msg('approval.bulkApproveFailed', { approved: done, failed: failures.length, names })
+          : msg('approval.bulkApproveNone', { names }),
+        'error',
+      );
+      setActionError(`Unable to approve: ${names}${failures.length > 3 ? '…' : ''}`);
+    };
     if (secureAccounts) {
-      setIsActionSaving(true);
-      setActionError('');
-      const failures: string[] = [];
       for (const reg of targets) {
         const requestedDepartment = normalizeDepartment(reg.jobPosition);
         const departments = requestedDepartment && requestedDepartment !== 'Client' ? [requestedDepartment] : [];
         if (departments.length === 0) {
-          failures.push(reg.name);
+          failures.push(reg);
           continue;
         }
         const result = await addUserBySuperAdmin({
@@ -512,21 +542,12 @@ const Approvals: React.FC = () => {
           registrationId: reg.id,
           sendInvitation: false,
         });
-        if (!result.ok) failures.push(reg.name);
+        if (!result.ok) failures.push(reg);
       }
       setIsActionSaving(false);
-      setSelectedBulkRegIds(new Set());
+      setSelectedBulkRegIds(new Set(failures.map(reg => reg.id)));
       if (failures.length > 0) {
-        const done = count - failures.length;
-        useToastStore.getState().addToast(
-          done > 0
-            ? msg('approval.bulkApproveFailed', { approved: done, failed: failures.length, names: failures.slice(0, 3).join(', ') })
-            : msg('approval.bulkApproveNone', { names: failures.slice(0, 3).join(', ') }),
-          'error',
-        );
-        setActionError(failures.length > 0
-          ? `Unable to approve: ${failures.slice(0, 3).join(', ')}${failures.length > 3 ? '…' : ''}`
-          : 'No registrations were approved.');
+        reportFailures();
         return;
       }
       useToastStore.getState().addToast(msg('approval.registrationApproved', { count }), 'success');
@@ -535,27 +556,25 @@ const Approvals: React.FC = () => {
 
     const previousRegistrations = useStore.getState().registrations;
     const previousUsers = useStore.getState().users;
-    const fallbackPositions: string[] = [];
     targets.forEach(reg => {
       const requestedDepartment = normalizeDepartment(reg.jobPosition);
-      if (!requestedDepartment) fallbackPositions.push(reg.jobPosition || reg.name);
-      approveRegistration(reg.id, reg.requestedRole || 'Staff', requestedDepartment ? [requestedDepartment] : ['Designer'], undefined, undefined);
+      if (!requestedDepartment || requestedDepartment === 'Client') {
+        failures.push(reg);
+        return;
+      }
+      const result = approveRegistration(reg.id, 'Staff', [requestedDepartment], undefined, undefined);
+      if (!result.ok) failures.push(reg);
     });
-    setIsActionSaving(true);
-    const saved = await commitPendingMutation();
+    const saved = failures.length < count ? await commitPendingMutation() : { ok: true };
     setIsActionSaving(false);
-    setSelectedBulkRegIds(new Set());
     if (!saved.ok) {
       useStore.setState({ registrations: previousRegistrations, users: previousUsers });
       setActionError(saved.error || 'The approvals were rolled back. Use Retry required to confirm them.');
       return;
     }
-    if (fallbackPositions.length > 0) {
-      const uniq = Array.from(new Set(fallbackPositions));
-      useToastStore.getState().addToast(
-        msg('approval.departmentFallback', { count: targets.length, departments: uniq.slice(0, 3).join(', ') }),
-        'warning',
-      );
+    setSelectedBulkRegIds(new Set(failures.map(reg => reg.id)));
+    if (failures.length > 0) {
+      reportFailures();
     } else {
       useToastStore.getState().addToast(msg('approval.registrationApproved', { count }), 'success');
     }
@@ -574,23 +593,14 @@ const Approvals: React.FC = () => {
   };
 
   const handleOpenApproval = (reg: Registration) => {
+    if (isActionSaving) return;
     setSelectedReg(reg);
     updateApprovalQuery({ tab: 'registrations', registrationId: reg.id });
-    setActionError('');
-    setRole(reg.requestedRole || 'Staff');
-    if (reg.requestedRole === 'Client') {
-      setApprovalDepartments(['Client']);
-    } else {
-      const requestedDepartment = normalizeDepartment(reg.jobPosition);
-      setApprovalDepartments(requestedDepartment && requestedDepartment !== 'Client' ? [requestedDepartment] : []);
-    }
-    setApprovalCustomRoleId('');
-    setSendApprovalInvitation(false);
-    setApprovalTemporaryPassword('');
-    setCompanyName('');
+    initializeApprovalFields(reg);
   };
 
   const handleTabChange = (tab: ApprovalTab) => {
+    if (isActionSaving) return;
     if (tab !== 'registrations') {
       setSelectedReg(null);
       updateApprovalQuery({ tab, registrationId: null });
@@ -613,9 +623,7 @@ const Approvals: React.FC = () => {
   };
 
   const generateApprovalPassword = () => {
-    const generated = Array.from(crypto.getRandomValues(new Uint8Array(9)))
-      .map(byte => 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'[byte % 55])
-      .join('');
+    const generated = generateTemporaryPassword();
     setApprovalTemporaryPassword(generated);
     void navigator.clipboard?.writeText(generated).catch(() => undefined);
   };
@@ -737,7 +745,21 @@ const Approvals: React.FC = () => {
 
   const handleSaveRole = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isActionSaving || backend.isSaving) return;
     setRoleError('');
+
+    if (pendingRoleSave) {
+      setIsActionSaving(true);
+      const saved = secureAccounts ? await retryMutation() : await commitPendingMutation();
+      setIsActionSaving(false);
+      if (!saved.ok) {
+        setRoleError(saved.error || 'The role is waiting to be saved. Use Retry required to continue.');
+        return;
+      }
+      setPendingRoleSave(false);
+      resetRoleForm(roleForm.baseRole);
+      return;
+    }
 
     const payload = {
       name: roleForm.name,
@@ -766,6 +788,7 @@ const Approvals: React.FC = () => {
     const saved = await commitPendingMutation();
     setIsActionSaving(false);
     if (!saved.ok) {
+      setPendingRoleSave(true);
       setRoleError(saved.error || 'The role is waiting to be saved. Use Retry required to continue.');
       return;
     }
@@ -774,6 +797,7 @@ const Approvals: React.FC = () => {
   };
 
   const handleEditRole = (customRoleId: string) => {
+    if (isActionSaving || pendingRoleSave) return;
     const targetRole = rolePermissions.find(customRole => customRole.id === customRoleId);
     if (!targetRole) return;
 
@@ -897,9 +921,12 @@ const Approvals: React.FC = () => {
     setIsActionSaving(true);
     const result = await changeMemberRole(user.id, 'Client', { companyName: roleCompanyName.trim() });
     setIsActionSaving(false);
+    if (!result.ok) {
+      setAssignmentError(result.error || 'Unable to change role.');
+      return;
+    }
     setRoleCompanyUserId(null);
     setRoleCompanyName('');
-    if (!result.ok) setAssignmentError(result.error || 'Unable to change role.');
   };
 
   const handleEditDepartments = (userId: string) => {
@@ -1403,7 +1430,7 @@ const Approvals: React.FC = () => {
         )}
       </div>
 
-      {selectedReg ? (
+      {selectedReg && !isMobileApprovalViewport ? (
         <section className="hidden min-h-0 min-w-0 flex-col overflow-hidden rounded-panel bg-surface ring-1 ring-line/80 shadow-sm lg:sticky lg:top-6 lg:flex lg:h-[calc(100dvh-29rem)] lg:max-h-[calc(100dvh-29rem)]" aria-labelledby={`approval-review-title-${selectedReg.id}`}>
           <RegistrationReviewPanel
             registration={selectedReg}
@@ -1455,9 +1482,10 @@ const Approvals: React.FC = () => {
             {t('Only Boss Koo can manage roles and members. The controls below are read-only for your account.')}
           </div>
         )}
-        <fieldset disabled={!superAdmin} className="p-0 m-0 border-0 min-w-0">
+        <fieldset disabled={!superAdmin || isActionSaving || backend.isSaving} className="p-0 m-0 border-0 min-w-0">
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-0">
           <form onSubmit={handleSaveRole} className="p-6 border-b xl:border-b-0 xl:border-r border-slate-100 space-y-4">
+            <fieldset disabled={pendingRoleSave} className="min-w-0 space-y-4 border-0 p-0">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">{t('Role Name')}</label>
@@ -1537,21 +1565,22 @@ const Approvals: React.FC = () => {
               ))}
             </div>
 
+            </fieldset>
             {roleError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
                 {roleError}
               </div>
             )}
 
             <div className="flex flex-wrap justify-end gap-3">
               {roleEditorId && (
-                <Button type="button" variant="secondary" onClick={() => resetRoleForm()}>
+                <Button type="button" variant="secondary" onClick={() => resetRoleForm()} disabled={pendingRoleSave}>
                   {t('Cancel Edit')}
                 </Button>
               )}
               <Button type="submit">
                 <Save className="w-4 h-4" />
-                {roleEditorId ? t('Update Role') : t('Create Role')}
+                {isActionSaving ? t('Saving…') : pendingRoleSave ? t('Retry save') : roleEditorId ? t('Update Role') : t('Create Role')}
               </Button>
             </div>
           </form>
@@ -1569,7 +1598,7 @@ const Approvals: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <h3 data-i18n-skip className="font-semibold text-slate-900">{t(getRoleDisplayName(role))}</h3>
                         <Badge tone="purple">{t('Editable default')}</Badge>
-                        {superAdmin && <Button type="button" variant="secondary" className="ml-auto" onClick={() => handleEditRole(templateId)}>{t('Edit permissions')}</Button>}
+                        {superAdmin && <Button type="button" variant="secondary" className="ml-auto" disabled={pendingRoleSave} onClick={() => handleEditRole(templateId)}>{t('Edit permissions')}</Button>}
                       </div>
                       <p className="mt-1 text-sm text-slate-500">{t(BUILTIN_ROLE_DESCRIPTIONS[role])}</p>
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -1599,8 +1628,8 @@ const Approvals: React.FC = () => {
                     {customRole.description && <p className="mt-1 text-sm text-slate-500">{customRole.description}</p>}
                   </div>
                   <div className="flex gap-2">
-                    <Button type="button" variant="secondary" onClick={() => handleEditRole(customRole.id)} disabled={customRole.isProtected}>{t('Edit permissions')}</Button>
-                    <Button type="button" variant="danger" onClick={() => void handleDeleteRole(customRole.id)} disabled={isActionSaving || customRole.isProtected}>{t('Delete')}</Button>
+                    <Button type="button" variant="secondary" onClick={() => handleEditRole(customRole.id)} disabled={pendingRoleSave || customRole.isProtected}>{t('Edit permissions')}</Button>
+                    <Button type="button" variant="danger" onClick={() => void handleDeleteRole(customRole.id)} disabled={pendingRoleSave || isActionSaving || customRole.isProtected}>{t('Delete')}</Button>
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
