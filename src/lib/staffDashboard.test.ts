@@ -29,7 +29,7 @@ describe('Staff dashboard scoped metrics', () => {
   it('counts clients and plans from assigned work, excluding tasks merely created by Staff', () => {
     const assigned = task();
     const created = task({ id: 'created', assignedTo: 'other', createdBy: 'staff', clientName: 'Other company' });
-    const metrics = getStaffDashboardMetrics([assigned], [assigned, created], [plan(), plan({ id: 'other', clientName: 'Other company' })], today);
+    const metrics = getStaffDashboardMetrics([assigned], [assigned, created], [plan(), plan({ id: 'other', clientId: 'other', clientName: 'Other company' })], today);
     expect(metrics.assignedClientCount).toBe(1);
     expect(metrics.activePlanCount).toBe(1);
     expect(metrics.renewals).toBe(1);
@@ -44,7 +44,7 @@ describe('Staff dashboard scoped metrics', () => {
   it('includes today and day 30 renewals and excludes expired, day 31, invalid and absent dates', () => {
     const plans = ['2026-10-07', '2026-11-06', '2026-11-07', '2026-10-06', 'invalid', undefined]
       .map((contractEndDate, index) => plan({ id: `plan-${index}`, contractEndDate }));
-    plans.push(plan({ id: 'paused', status: 'Paused' }), plan({ id: 'draft', status: 'Draft' }), plan({ id: 'outside', clientName: 'Other' }));
+    plans.push(plan({ id: 'paused', status: 'Paused' }), plan({ id: 'draft', status: 'Draft' }), plan({ id: 'outside', clientId: 'other', clientName: 'Other' }));
     const metrics = getStaffDashboardMetrics([task()], [], plans, today);
     expect(metrics.renewals).toBe(2);
     expect(metrics.activePlanCount).toBe(6);
@@ -71,5 +71,52 @@ describe('Staff dashboard scoped metrics', () => {
     const tasks = [task(), task({ id: 'waiting', status: 'Waiting Approval' }), task({ id: 'tomorrow', dueDate: '2026-10-08' })];
     expect(getStaffDashboardMetrics(tasks, tasks, [], today).dueToday).toBe(2);
     expect(getStaffDashboardMetrics(tasks, tasks, [], new Date(2026, 9, 8)).dueToday).toBe(1);
+  });
+
+  it('matches plans and renewals by ID despite stale names after a rename', () => {
+    const metrics = getStaffDashboardMetrics([task({ clientId: 'acme', clientName: 'Old Acme' })], [], [plan()], today);
+    expect(metrics).toMatchObject({ assignedClientCount: 1, activePlanCount: 1, renewals: 1 });
+  });
+
+  it('counts one company for the same ID under different names, including a blank name', () => {
+    const tasks = [task({ clientId: 'acme' }), task({ id: 'old', clientId: 'acme', clientName: 'Old Acme' }), task({ id: 'blank', clientId: 'acme', clientName: '' })];
+    expect(getStaffDashboardMetrics(tasks, tasks, [plan()], today)).toMatchObject({ assignedClientCount: 1, activePlanCount: 1 });
+  });
+
+  it('keeps distinct IDs separate even when their names are identical', () => {
+    const assigned = task({ clientId: 'company-a' });
+    expect(getStaffDashboardMetrics([assigned], [], [plan({ clientId: 'company-b' })], today))
+      .toMatchObject({ assignedClientCount: 1, activePlanCount: 0, renewals: 0 });
+    expect(getStaffDashboardMetrics([assigned, task({ id: 'second', clientId: 'company-b' })], [], [], today).assignedClientCount).toBe(2);
+  });
+
+  it('deduplicates legacy names with a uniquely identified company', () => {
+    const tasks = [task(), task({ id: 'identified', clientId: 'acme', clientName: ' ACME ' })];
+    expect(getStaffDashboardMetrics(tasks, tasks, [plan()], today)).toMatchObject({ assignedClientCount: 1, activePlanCount: 1 });
+  });
+
+  it('uses canonical profiles to connect legacy names to plans with stale names', () => {
+    expect(getStaffDashboardMetrics([task()], [], [plan({ clientName: 'Old Acme' })], today, [{ id: 'acme', clientName: 'Acme' }]))
+      .toMatchObject({ assignedClientCount: 1, activePlanCount: 1, renewals: 1 });
+  });
+
+  it('does not infer an ID from an ambiguous legacy company name', () => {
+    const clients = [{ id: 'acme', clientName: 'Acme' }, { id: 'other', clientName: ' ACME ' }];
+    expect(getStaffDashboardMetrics([task()], [], [plan()], today, clients))
+      .toMatchObject({ assignedClientCount: 1, activePlanCount: 0, renewals: 0 });
+    expect(getStaffDashboardMetrics([task()], [], [plan({ clientId: '' })], today, clients).activePlanCount).toBe(0);
+  });
+
+  it('counts tasks with unavailable dependencies separately from confirmed blockers', () => {
+    const assigned = task({ predecessorTaskIds: ['hidden', 'hidden', 'visible'] });
+    const predecessor = task({ id: 'visible', assignedTo: 'other' });
+    const completed = task({ id: 'completed', status: 'Completed', predecessorTaskIds: ['hidden'] });
+    const cancelled = task({ id: 'cancelled', status: 'Cancelled', predecessorTaskIds: ['hidden'] });
+    const tasks = [assigned, completed, cancelled];
+    expect(getStaffDashboardMetrics(tasks, [...tasks, predecessor], [], today))
+      .toMatchObject({ unavailableDependencyTaskCount: 1, blockedCount: 1 });
+    expect(getStaffDashboardMetrics(tasks, tasks, [], today))
+      .toMatchObject({ unavailableDependencyTaskCount: 1, blockedCount: 0 });
+    expect(getStaffDashboardMetrics([predecessor], [predecessor], [], today).unavailableDependencyTaskCount).toBe(0);
   });
 });

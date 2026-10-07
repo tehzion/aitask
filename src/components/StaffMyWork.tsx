@@ -1,10 +1,10 @@
 import React from 'react';
-import { ArrowRight, CalendarDays, CheckCircle2, Clock3, ListChecks, RotateCcw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, Clock3, ListChecks, RotateCcw } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { getDashboardPersona, getVisibleTasks, isHodUser } from '../lib/access';
-import { buildStaffWorkQueue, getHodScopeTasks, getTaskBlockers, type HodWorkScope, getStaffBucketLabel, getStaffFocusTask, type StaffWorkBucketKey } from '../lib/staffWorkspace';
+import { buildStaffWorkQueue, getHodScopeTasks, getTaskBlockers, getUnavailableTaskDependencyCount, type HodWorkScope, getStaffBucketLabel, getStaffFocusTask, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getMemberDepartments, isMemberInDepartment } from '../lib/departments';
 import { getTeamWorkloadSummaries, isTaskOpen } from '../lib/taskReporting';
 import { getRelativeDueDateString, getTodayInputDate } from '../lib/utils';
@@ -62,10 +62,13 @@ const StaffMyWork: React.FC = () => {
     if (!hasSelectedBucketRef.current) setActiveBucket(defaultBucket);
   }, [defaultBucket, scope]);
 
-  const { blockedCount, assignedClientCount, activePlanCount, renewals, linkedOutputs, dueToday, waitingReview, revisions } = React.useMemo(
-    () => getStaffDashboardMetrics(tasks, accessibleTasks, clientPlans, todayDate),
-    [accessibleTasks, clientPlans, tasks, todayDate],
+  const { blockedCount, unavailableDependencyTaskCount, assignedClientCount, activePlanCount, renewals, linkedOutputs, dueToday, waitingReview, revisions } = React.useMemo(
+    () => getStaffDashboardMetrics(tasks, accessibleTasks, clientPlans, todayDate, clients),
+    [accessibleTasks, clientPlans, clients, tasks, todayDate],
   );
+  const contextUnavailableDependencyTaskCount = isHod
+    ? departmentTasks.filter(task => getUnavailableTaskDependencyCount(task, accessibleTasks) > 0).length
+    : unavailableDependencyTaskCount;
   const persona = getDashboardPersona(currentUser);
   const roleInsight = isHod
     ? { title: t('Department context'), description: t('Department workload, delegated tasks, and review risk.'), values: [[t('Active tasks'), departmentTasks.filter(isTaskOpen).length], [t('Waiting review'), departmentTasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length], [t('Blocked steps'), departmentTasks.filter(task => getTaskBlockers(task, accessibleTasks).length > 0).length]] as const }
@@ -172,6 +175,7 @@ const StaffMyWork: React.FC = () => {
         <div className="grid grid-cols-3 divide-x divide-line border-t border-line bg-surface/60">
           {roleInsight.values.map(([label, value]) => <div key={label} className="px-3 py-4 sm:px-5"><p className="calm-number text-xl font-semibold text-ink">{value}</p><p className="mt-1 text-xs leading-4 text-muted">{label}</p></div>)}
         </div>
+        {contextUnavailableDependencyTaskCount > 0 && <p className="flex items-start gap-2 border-t border-line px-5 py-3 text-sm text-muted"><AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" /><span>{t('Dependency status unavailable')} · {t('Tasks')}: {contextUnavailableDependencyTaskCount}</span></p>}
       </Surface>
 
       {isHod && <section aria-labelledby="hod-workload-title">

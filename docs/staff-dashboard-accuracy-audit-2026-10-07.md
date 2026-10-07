@@ -70,3 +70,24 @@ Verification used a disposable snapshot of committed baseline `85d3efb` plus the
 - No database migration or Edge Function change is required. Existing Supabase records and permission checks are used by the corrected frontend calculations.
 
 This follow-up is committed locally only. It does not push or deploy the corrections; the production-source findings above describe the version audited before this follow-up.
+
+## Second review: company identity and unavailable dependencies
+
+The second review reproduced an additional Account Staff edge case in three disposable diagnostic tests. The name-based helper missed a plan and its renewal when a task retained an old company name with the same valid `clientId`; counted the same ID twice under different names; and matched a plan from a different ID when company names coincided. These probes asserted the old incorrect behavior and were not implementation regressions.
+
+The correction uses explicit company IDs first. Name-only legacy assignments resolve through the supplied company profiles, assigned tasks and plans when the normalized name identifies exactly one ID. Conflicting IDs retain separate identities. An ambiguous legacy name cannot associate a plan with a known company ID or an ID-less plan; unresolved assignments can still be counted by name. Profiles are a calculation input, so profile changes trigger a metric refresh.
+
+Staff queue rows now show the existing translated **Dependency status unavailable** notice when an open task references a predecessor absent from the permission-visible task set. The context summary counts affected tasks separately from confirmed blockers. Duplicate missing references count as one affected task, and completed/cancelled work is excluded. The notice clears when the dependency becomes visible. HOD context follows department work, including when the personal queue is selected. No hidden predecessor name or status is displayed or fetched for this notice.
+
+A read-only Supabase check on 7 October 2026, excluding built-in HOD accounts by role metadata, found **127 Staff assignments, all with saved company IDs**, zero stale task names relative to matching company profiles, zero active-plan/task name mismatches for the same ID, and zero same-name active-plan matches across different saved IDs. Thus the identity defect is reproduced with synthetic records rather than claimed as a current discrepancy in these live assignments. This query is a data check, not an authenticated production dashboard session. No Supabase schema, record, RLS or Edge Function change is required or made.
+
+### Second-review verification
+
+Verification used an isolated snapshot of commit `69cf8f4` plus only these Staff source/test changes. Unrelated Client, reporting and store edits in the shared workspace were excluded.
+
+- **464 unit tests passed across 67 files**, including 14 Staff metric tests covering explicit IDs, stale names, identical names under different IDs, mixed legacy records, canonical profiles, ambiguous names and unavailable dependency counts.
+- **33 browser scenarios passed** across Staff dashboard accuracy, HOD permission parity and role UX. Four added scenarios cover company identity changes, canonical/ambiguous legacy matching, mobile unavailable-dependency notices and HOD department context across queue scopes. The existing inaccessible-predecessor scenario now also checks the summary and task-row notices.
+- TypeScript, scoped ESLint, translation audit (zero findings across 128 files), and production/PWA build passed. Source/test hashes matched the tested snapshot before committing.
+- The first browser run passed 31 cases but timed out on the initial HOD task-dialog assertion while the screenshot still showed **Loading AiTask...**. The complete rerun passed all 33 cases, including that HOD case, without changing the existing HOD test.
+
+The changes remain local under the user's commit-only instruction. Production rendering of these corrections is not claimed as verified, and no push or deployment is performed.

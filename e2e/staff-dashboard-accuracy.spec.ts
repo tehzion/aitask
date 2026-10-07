@@ -108,7 +108,74 @@ test('blocker metrics do not expose an inaccessible predecessor', async ({ page 
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'assigned' ? { ...task, predecessorTaskIds: ['foreign'] } : task) }));
   });
   await expect(metric(page, 'Blocked steps')).toHaveText('0');
+  await expect(page.locator('[aria-labelledby="staff-role-context"]')).toContainText('Dependency status unavailable · Tasks: 1');
+  await expect(page.getByRole('button').filter({ hasText: 'Assigned dependency task' })).toContainText('Dependency status unavailable');
   await expect(page.getByText('Foreign task', { exact: true })).toHaveCount(0);
+});
+
+test('account metrics use company IDs across stale and duplicate saved names', async ({ page }) => {
+  await seed(page, 'Account & Finance');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'assigned' ? { ...task, clientName: 'Old assigned company' } : task) }));
+  });
+  await expect(metric(page, 'Assigned clients')).toHaveText('1');
+  await expect(metric(page, 'Active plans')).toHaveText('1');
+  await expect(metric(page, 'Renewals')).toHaveText('1');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => ({ ...plan, clientId: 'different-company' })) }));
+  });
+  await expect(metric(page, 'Active plans')).toHaveText('0');
+  await expect(metric(page, 'Renewals')).toHaveText('0');
+});
+
+test('canonical profiles resolve legacy assignments without merging ambiguous companies', async ({ page }) => {
+  await seed(page, 'Account & Finance');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({
+      tasks: state.tasks.map(task => task.assignedTo === state.currentUser!.id ? { ...task, clientId: undefined } : task),
+      clients: [{ id: 'staff-dash-a', clientName: 'Assigned company', createdAt: '', updatedAt: '' }],
+      clientPlans: state.clientPlans.map(plan => ({ ...plan, clientName: 'Old assigned company' })),
+    }));
+  });
+  await expect(metric(page, 'Assigned clients')).toHaveText('1');
+  await expect(metric(page, 'Active plans')).toHaveText('1');
+  await expect(metric(page, 'Renewals')).toHaveText('1');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ clients: [...state.clients, { id: 'ambiguous-company', clientName: 'Assigned company', createdAt: '', updatedAt: '' }] }));
+  });
+  await expect(metric(page, 'Active plans')).toHaveText('0');
+});
+
+test('unavailable dependency notices clear when visible and exclude closed tasks', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page, 'Designer');
+  const context = page.locator('[aria-labelledby="staff-role-context"]');
+  await expect(context).not.toContainText('Dependency status unavailable');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'assigned' ? { ...task, predecessorTaskIds: ['foreign', 'foreign'] } : task) }));
+  });
+  await expect(context).toContainText('Dependency status unavailable · Tasks: 1');
+  await expect(metric(page, 'Blocked steps')).toHaveText('0');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'foreign' ? { ...task, createdBy: state.currentUser!.id } : task) }));
+  });
+  await expect(context).not.toContainText('Dependency status unavailable');
+  await expect(metric(page, 'Blocked steps')).toHaveText('1');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'assigned' ? { ...task, status: 'Cancelled', predecessorTaskIds: ['hidden'] } : task) }));
+  });
+  await expect(context).not.toContainText('Dependency status unavailable');
+  await expect(metric(page, 'Blocked steps')).toHaveText('0');
+  await page.getByRole('tab', { name: /Done/ }).click();
+  await expect(page.getByRole('button').filter({ hasText: 'Assigned dependency task' })).not.toContainText('Dependency status unavailable');
 });
 
 test('account metrics and queue counts react to reassignment and plan changes', async ({ page }) => {
@@ -154,4 +221,24 @@ test('mobile Staff dashboard counts remain scoped and advance at midnight', asyn
   await page.clock.fastForward(11000);
   await expect(metric(page, 'Due today')).toHaveText('1');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+});
+
+
+test('HOD dependency context follows department work across personal scope changes', async ({ page }) => {
+  await seed(page, 'Operation');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => {
+      const hod = { ...state.currentUser!, role: 'HOD' as const };
+      return { currentUser: hod, users: state.users.map(user => user.id === hod.id ? hod : user),
+        tasks: state.tasks.map(task => ({ ...task, predecessorTaskIds: task.id === 'creator-visible' ? ['hidden-department-predecessor'] : [] })) };
+    });
+  });
+  await expect(page.getByRole('heading', { name: 'Department work', exact: true })).toBeVisible();
+  const context = page.locator('[aria-labelledby="staff-role-context"]');
+  await expect(context).toContainText('Dependency status unavailable · Tasks: 1');
+  await page.getByRole('tab', { name: /My assignments/ }).click();
+  await expect(context).toContainText('Dependency status unavailable · Tasks: 1');
+  await expect(page.getByRole('button').filter({ hasText: 'Assigned dependency task' })).not.toContainText('Dependency status unavailable');
+  await expect(page.getByRole('button').filter({ hasText: 'Creator visible predecessor' })).toHaveCount(0);
 });
