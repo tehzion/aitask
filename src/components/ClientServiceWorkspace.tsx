@@ -1,9 +1,12 @@
+import { useLocalToday } from '../hooks/useLocalToday';
+import { getCurrentPlanCycle } from '../lib/dashboardData';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import React from 'react';
 import { ArrowRight, CalendarDays, CheckCircle2, Download, FileText, MessageSquareText, PackageCheck } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { useStore } from '../store';
 import { getVisibleTasks } from '../lib/access';
-import { getClientCurrentCycle, getClientServicePlan, getClientDeliveryStageLabel, getClientFocusTask, groupClientDeliveries } from '../lib/clientPortal';
+import { getClientServicePlan, getClientDeliveryStageLabel, getClientFocusTask, groupClientDeliveries } from '../lib/clientPortal';
 import { getLocalizedDeliveryStage } from '../lib/localeLabels';
 import { formatLocalizedDate, formatLocalizedMonth } from '../lib/i18n';
 import { downloadServiceFile } from '../lib/serviceFiles';
@@ -17,11 +20,16 @@ const TABS_ID = 'client-service-workspace-v2';
 
 const ClientServiceWorkspace = () => {
   const { locale, t } = useI18n();
+  const today = useLocalToday();
   const { clientId = '' } = useParams();
   const store = useStore();
   const [tab, setTab] = React.useState<ClientWorkspaceTab>('overview');
   const [message, setMessage] = React.useState('');
   const [downloadingFileId, setDownloadingFileId] = React.useState<string | null>(null);
+  const context = React.useRef(clientId); context.current = clientId;
+  const mounted = React.useRef(true);
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  React.useEffect(() => { setMessage(''); setDownloadingFileId(null); }, [clientId]);
   const client = store.clients.find(item => item.id === clientId);
   const isWorkspaceAvailable = Boolean(
     client
@@ -47,16 +55,22 @@ const ClientServiceWorkspace = () => {
 
   const activePlan = getClientServicePlan(store.clientPlans, client.id);
   const cycles = [...store.serviceCycles]
-    .filter(item => item.clientId === client.id && ['Published', 'Completed'].includes(item.status))
+    .filter(item => {
+      const start = parseOptionalDate(item.periodStart);
+      const end = parseOptionalDate(item.periodEnd);
+      return item.clientId === client.id && ['Published', 'Completed'].includes(item.status)
+        && start && end && start <= end;
+    })
     .sort((left, right) => right.periodStart.localeCompare(left.periodStart));
-  const currentCycle = getClientCurrentCycle(cycles, client.id);
+  const currentCycle = activePlan ? getCurrentPlanCycle(activePlan, cycles, today) : undefined;
   const deliverables = store.deliverables.filter(item => item.clientId === client.id);
   const currentDeliverables = currentCycle ? deliverables.filter(item => item.cycleId === currentCycle.id) : [];
   const deliveredCount = currentDeliverables.filter(item => item.status === 'Delivered').length;
   const cycleCompletion = currentDeliverables.length ? Math.round((deliveredCount / currentDeliverables.length) * 100) : 0;
+  const contractEndDate = parseOptionalDate(activePlan?.contractEndDate);
   const tasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions).filter(task => task.clientName.trim().toLowerCase() === client.clientName.trim().toLowerCase());
-  const taskGroups = groupClientDeliveries(tasks);
-  const focusTask = getClientFocusTask(tasks);
+  const taskGroups = groupClientDeliveries(tasks, today);
+  const focusTask = getClientFocusTask(tasks, today);
   const comments = [...store.cycleComments]
     .filter(item => item.clientId === client.id && item.visibility === 'client-visible')
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
@@ -78,13 +92,18 @@ const ClientServiceWorkspace = () => {
 
   const download = async (attachment: Parameters<typeof downloadServiceFile>[0]) => {
     if (downloadingFileId) return;
+    const session = captureWorkspaceSession();
+    const currentContext = clientId;
+    const isCurrent = () => mounted.current && isWorkspaceSessionCurrent(session) && context.current === currentContext;
     setDownloadingFileId(attachment.id);
     setMessage('');
     try {
       const result = await downloadServiceFile(attachment);
-      if (!result.ok) setMessage(t(result.error));
+      if (isCurrent() && !result.ok) setMessage(t(result.error));
+    } catch (failure) {
+      if (isCurrent()) setMessage(failure instanceof Error ? failure.message : t('The file could not be downloaded.'));
     } finally {
-      setDownloadingFileId(null);
+      if (isCurrent()) setDownloadingFileId(null);
     }
   };
 
@@ -105,13 +124,13 @@ const ClientServiceWorkspace = () => {
         <div id={`${TABS_ID}-panel-overview`} role="tabpanel" aria-labelledby={`${TABS_ID}-tab-overview`} tabIndex={0} className="grid scroll-mt-36 gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,.75fr)]">
           <Surface variant="inset" className="p-6 sm:p-8">
             <p className="calm-eyebrow">{t('Delivery progress')}</p>
-            <div className="mt-5 flex flex-wrap items-end justify-between gap-4"><div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{cycleCompletion}%</p><p className="mt-2 text-sm text-muted">{currentDeliverables.length ? t('clientPortal.deliveredThisCycle', { delivered: deliveredCount, total: currentDeliverables.length }) : t('No published deliverables yet')}</p></div>{currentCycle && <StatusChip tone="emerald">{t(currentCycle.status)}</StatusChip>}</div>
+            <div className="mt-5 flex flex-wrap items-end justify-between gap-4"><div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{cycleCompletion}%</p><p className="mt-2 text-sm text-muted">{currentDeliverables.length ? t('clientPortal.deliveredThisCycle', { delivered: deliveredCount, total: currentDeliverables.length }) : currentCycle ? t('No published deliverables yet') : t('No published cycle for this month')}</p></div>{currentCycle && <StatusChip tone="emerald">{t(currentCycle.status)}</StatusChip>}</div>
             <ProgressBar className="mt-7" value={deliveredCount} max={Math.max(currentDeliverables.length, 1)} label={t('Current cycle')} />
             <div className="mt-7 grid grid-cols-3 overflow-hidden rounded-control bg-surface ring-1 ring-line/70">{[[t('Included'), currentDeliverables.length], [t('Delivered'), deliveredCount], [t('Remaining'), Math.max(0, currentDeliverables.length - deliveredCount)]].map(([label, value]) => <div key={label} className="border-r border-line/70 p-4 last:border-r-0"><p className="calm-number text-xl font-semibold text-ink">{value}</p><p className="mt-1 text-xs text-muted">{label}</p></div>)}</div>
           </Surface>
           <Surface className="p-6">
             <p className="calm-eyebrow">{t('What needs attention')}</p>
-            {focusTask ? <div className="mt-5"><StatusChip tone={taskGroups.needs_review.some(task => task.id === focusTask.id) ? 'amber' : 'blue'}>{getLocalizedDeliveryStage(getClientDeliveryStageLabel(focusTask), locale)}</StatusChip><h2 data-i18n-skip className="mt-3 text-lg font-semibold text-ink text-pretty">{focusTask.title}</h2><p className="mt-2 text-sm text-muted">{focusTask.dueDate ? <>{t('Expected')} {formatLocalizedDate(parseOptionalDate(focusTask.dueDate)!, locale)}</> : t('Date to be confirmed')}</p><Link to={`/tasks?taskId=${encodeURIComponent(focusTask.id)}`} className="mt-5 inline-flex min-h-11 w-full items-center justify-between rounded-control bg-accent px-4 text-sm font-semibold text-white dark:text-[rgb(var(--calm-accent-ink))]">{taskGroups.needs_review.some(task => task.id === focusTask.id) ? t('Review deliverable') : t('View delivery')}<ArrowRight className="h-4 w-4" /></Link></div> : <div className="mt-5"><CheckCircle2 className="h-7 w-7 text-emerald-600" aria-hidden="true" /><p className="mt-3 font-semibold text-ink">{t('Nothing needs your attention')}</p><p className="mt-1 text-sm leading-6 text-muted">{t('New review requests and timing updates will appear here.')}</p></div>}
+            {focusTask ? <div className="mt-5"><StatusChip tone={taskGroups.needs_review.some(task => task.id === focusTask.id) ? 'amber' : 'blue'}>{getLocalizedDeliveryStage(getClientDeliveryStageLabel(focusTask), locale)}</StatusChip><h2 data-i18n-skip className="mt-3 text-lg font-semibold text-ink text-pretty">{focusTask.title}</h2><p className="mt-2 text-sm text-muted">{parseOptionalDate(focusTask.dueDate) ? <>{t('Expected')} {formatLocalizedDate(parseOptionalDate(focusTask.dueDate)!, locale)}</> : t('Date to be confirmed')}</p><Link to={`/tasks?taskId=${encodeURIComponent(focusTask.id)}`} className="mt-5 inline-flex min-h-11 w-full items-center justify-between rounded-control bg-accent px-4 text-sm font-semibold text-white dark:text-[rgb(var(--calm-accent-ink))]">{taskGroups.needs_review.some(task => task.id === focusTask.id) ? t('Review deliverable') : t('View delivery')}<ArrowRight className="h-4 w-4" /></Link></div> : <div className="mt-5"><CheckCircle2 className="h-7 w-7 text-emerald-600" aria-hidden="true" /><p className="mt-3 font-semibold text-ink">{t('Nothing needs your attention')}</p><p className="mt-1 text-sm leading-6 text-muted">{t('New review requests and timing updates will appear here.')}</p></div>}
           </Surface>
         </div>
       )}
@@ -140,7 +159,7 @@ const ClientServiceWorkspace = () => {
           <section className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80">
             <header className="border-b border-line/70 px-4 py-4 sm:px-5"><div className="flex items-center gap-2"><PackageCheck className="h-4 w-4 text-accent" aria-hidden="true" /><h2 className="font-semibold text-ink">{activePlan?.name ? <span data-i18n-skip>{activePlan.name}</span> : t('Services')}</h2></div><p className="mt-1 text-sm text-muted">{t('Your included services and quantities. Internal team details and pricing stay private.')}</p></header>
             {activePlan ? <div className="divide-y divide-line/70">{activePlan.serviceItems.map(item => <article key={item.id} className="grid gap-2 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"><div><p data-i18n-skip className="text-sm font-semibold text-ink">{item.name}</p><p className="mt-1 text-xs text-muted">{item.platforms.length > 0 ? <span data-i18n-skip>{item.platforms.join(', ')}</span> : t('No platform specified')}</p></div><p data-i18n-skip className="text-sm font-medium text-muted">{item.quantity} {item.unit}</p></article>)}</div> : <EmptyState title={t('No active services')} description={t('Your active service package will appear here when it is published.')} className="m-4" />}
-            {activePlan && <footer className="grid gap-3 border-t border-line/70 bg-inset/60 px-4 py-4 text-sm sm:grid-cols-2 sm:px-5"><p><span className="text-muted">{t('Billing day')}</span><span className="calm-number ml-2 font-semibold text-ink">{t('Day')} {activePlan.billingDay}</span></p>{activePlan.contractEndDate && <p className="sm:text-right"><span className="text-muted">{t('Service reminder')}</span><span className="calm-number ml-2 font-semibold text-ink">{formatLocalizedDate(parseOptionalDate(activePlan.contractEndDate)!, locale)}</span></p>}</footer>}
+            {activePlan && <footer className="grid gap-3 border-t border-line/70 bg-inset/60 px-4 py-4 text-sm sm:grid-cols-2 sm:px-5"><p><span className="text-muted">{t('Billing day')}</span><span className="calm-number ml-2 font-semibold text-ink">{t('Day')} {activePlan.billingDay}</span></p>{contractEndDate && <p className="sm:text-right"><span className="text-muted">{t('Service reminder')}</span><span className="calm-number ml-2 font-semibold text-ink">{formatLocalizedDate(contractEndDate!, locale)}</span></p>}</footer>}
           </section>
         </div>
       )}

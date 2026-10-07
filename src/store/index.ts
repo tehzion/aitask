@@ -3153,12 +3153,17 @@ export const useStore = create<StoreState>()(
           return state;
         }
 
+        const reviewNote = note?.trim() || '';
+        if ([...reviewNote].length > 2000 || (status === 'Rejected' && !reviewNote)) {
+          result = { ok: false, error: reviewNote ? 'Decision notes must be 2,000 characters or less.' : 'Tell the team what needs to change before sending the request.' };
+          return state;
+        }
         const now = new Date().toISOString();
         const event: TaskApprovalEvent = {
           id: nowId('A'),
           userId: currentUser.id,
           status,
-          note: note?.trim() || undefined,
+          note: reviewNote || undefined,
           createdAt: now,
         };
 
@@ -3180,40 +3185,22 @@ export const useStore = create<StoreState>()(
 
         const notifications: AppNotification[] = [];
         if (!shouldUseSecureSupabase()) {
+          const recipients = new Set([
+            ...resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects),
+            task.assignedTo,
+          ]);
           notifications.push(...taskUpdateNotifications(
-            resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects),
+            [...recipients],
             {
               title: status === 'Approved' ? 'Client Approved Task' : 'Client Requested Revision',
-              message: `${currentUser.name} ${status === 'Approved' ? 'approved' : 'rejected'} "${task.title}"${note ? `: ${note}` : '.'}`,
+              message: `${currentUser.name} ${status === 'Approved' ? 'approved' : 'rejected'} "${task.title}"${reviewNote ? `: ${reviewNote}` : '.'}`,
               route: { page: 'tasks', entityId: taskId },
               iconType: status === 'Approved' ? 'success' : 'alert',
             },
             currentUser.id,
           ));
-
-          if (status === 'Rejected') {
-            appendNotification(notifications, {
-              targetUserId: task.assignedTo,
-              title: 'Client Requested Revision',
-              message: `${currentUser.name} requested changes on "${task.title}"${note ? `: ${note}` : '.'}`,
-              route: { page: 'tasks', entityId: taskId },
-              iconType: 'alert'
-            });
-          } else {
-            appendNotification(notifications, {
-              targetUserId: task.assignedTo,
-              title: 'Client Approved Task',
-              message: `${currentUser.name} approved "${task.title}".`,
-              route: { page: 'tasks', entityId: taskId },
-              iconType: 'success'
-            });
-          }
         }
 
-        useToastStore.getState().addToast(
-          status === 'Approved' ? 'Task approved successfully' : 'Revision request submitted',
-          status === 'Approved' ? 'success' : 'warning'
-        );
 
         result = { ok: true };
         return {
@@ -4456,8 +4443,11 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'You do not have permission to comment on this task.' };
         }
 
-        // Enforce a reasonable length cap to prevent storage abuse
-        const safeText = text.trim().slice(0, 2000);
+        // Client feedback must match the server limit without losing text.
+        if (currentUser.role === 'Client' && [...text.trim()].length > 2000) {
+          return { ok: false, error: 'Feedback must be 2,000 characters or less.' };
+        }
+        const safeText = currentUser.role === 'Client' ? text.trim() : text.trim().slice(0, 2000);
         if (!safeText) return { ok: false, error: 'Comment cannot be empty.' };
 
         const newComment: TaskComment = {

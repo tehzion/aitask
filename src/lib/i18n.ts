@@ -1246,6 +1246,8 @@ const zhCopyAdditions: Record<string, string> = {
   'Narrow this list without changing what your company can access.': '在不改变您公司可访问内容的前提下缩小列表范围。',
   // Client Delivery Focus
   'Saving…': '保存中…',
+  'Decision notes must be 2,000 characters or less.': '决定备注不能超过 2,000 个字符。',
+  'Feedback must be 2,000 characters or less.': '反馈不能超过 2,000 个字符。',
   'Tell the team what needs to change before sending the request.': '请先告知团队需要修改的内容。',
   'Your change is waiting to be saved. Use Retry my changes in the workspace banner.': '您的更改正在等待保存。请使用工作区横幅中的“重试我的更改”。',
   'The requested outcome will appear here when the team adds a brief.': '团队添加简报后，要求的成果将在此显示。',
