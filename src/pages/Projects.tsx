@@ -1,5 +1,5 @@
 import React, { useId, useState } from 'react';
-import { useStore } from '../store';
+import { isPendingMutationResolution, useStore } from '../store';
 import { FolderKanban, Users, ArrowRight, Pencil, Trash2, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import CreateProjectModal from '../components/CreateProjectModal';
@@ -20,6 +20,8 @@ const Projects: React.FC = () => {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [pendingDeleteProject, setPendingDeleteProject] = useState<Project | null>(null);
   const confirmationTitleId = useId();
 
   const tasks = React.useMemo(
@@ -48,17 +50,27 @@ const Projects: React.FC = () => {
   };
 
   const handleDeleteProject = async (project: Project) => {
-    const result = deleteProject(project.id);
-    if (!result.ok) {
-      useToastStore.getState().addToast(result.error ? t(result.error) : t('client.deleteUnavailable'), 'error');
-      return;
+    setDeleteError('');
+    const isRetry = pendingDeleteProject?.id === project.id;
+    if (!isRetry) {
+      const result = deleteProject(project.id);
+      if (!result.ok) {
+        setDeleteError(result.error ? t(result.error) : t('client.deleteUnavailable'));
+        return false;
+      }
     }
-    const saveResult = await commitPendingMutation();
+    const backend = useStore.getState().backend;
+    const saveResult = isPendingMutationResolution(backend)
+      ? await useStore.getState().retryPendingSave()
+      : await commitPendingMutation();
     if (!saveResult.ok) {
-      useToastStore.getState().addToast(saveResult.error ? t(saveResult.error) : t('client.companyDeleteWaiting'), 'error');
-      return;
+      setPendingDeleteProject(project);
+      setDeleteError(saveResult.error ? t(saveResult.error) : t('client.companyDeleteWaiting'));
+      return false;
     }
+    setPendingDeleteProject(null);
     useToastStore.getState().addToast(t('client.companyDeleted'), 'success');
+    return true;
   };
 
   const getProjectStats = (projectId: string) => {
@@ -167,7 +179,10 @@ const Projects: React.FC = () => {
                 {canDelete && (
                   <button
                     type="button"
-                    onClick={() => setProjectToDelete(project)}
+                    onClick={() => {
+                      if (!pendingDeleteProject) setDeleteError('');
+                      setProjectToDelete(pendingDeleteProject || project);
+                    }}
                     className="inline-flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
                     title={t('Delete company')}
                     aria-label={t('Delete company')}
@@ -193,14 +208,20 @@ const Projects: React.FC = () => {
           labelledBy={confirmationTitleId}
           title={t(`Delete "${projectToDelete.clientName}"?`)}
           description={t('Existing tasks will be kept and unlinked from this company.')}
-          confirmLabel={t('Delete company')}
+          error={deleteError}
+          confirmLabel={t(pendingDeleteProject?.id === projectToDelete.id ? 'Retry' : 'Delete company')}
           busy={isDeleting}
           onClose={() => setProjectToDelete(null)}
           onConfirm={async () => {
             setIsDeleting(true);
-            await handleDeleteProject(projectToDelete);
-            setIsDeleting(false);
-            setProjectToDelete(null);
+            try {
+              const deleted = await handleDeleteProject(projectToDelete);
+              if (deleted) setProjectToDelete(null);
+            } catch (error) {
+              setDeleteError(error instanceof Error ? t(error.message) : t('client.companyDeleteWaiting'));
+            } finally {
+              setIsDeleting(false);
+            }
           }}
         />
       )}

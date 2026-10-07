@@ -76,7 +76,14 @@ const ServiceRoleDashboard = () => {
   ), [store.currentUser, store.projects, store.rolePermissions, store.tasks, store.clients]);
   const serviceTasks = visibleTasks.filter(task => Boolean(task.clientId));
   const myTasks = serviceTasks.filter(task => task.assignedTo === store.currentUser?.id);
-  const scopeTasks = persona === 'production' ? myTasks : persona === 'boss' ? visibleTasks : serviceTasks;
+  // Project Manager visibility already applies their portfolio boundary and
+  // also includes directly created/assigned legacy or independent tasks that
+  // may not have a clientId. Keep those tasks in the PM's delivery queues.
+  const scopeTasks = persona === 'production'
+    ? myTasks
+    : persona === 'boss' || persona === 'projectManager'
+      ? visibleTasks
+      : serviceTasks;
   const overdue = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && isTaskOpen(task) && isBefore(due, now) && !isToday(due)); });
   const dueToday = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && isTaskOpen(task) && isToday(due)); });
   const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && visibleClientKeys.has(getClientKey(plan.clientName)));
