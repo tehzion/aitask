@@ -594,6 +594,8 @@ const zhCopyExtras: Record<string, string> = {
   'Retrying': '正在重试',
   'Retry dates': '重试日期',
   'Assign Task': '分配任务',
+  'The pending task update is no longer available. Review your draft before saving again.': '待保存的任务更改已不存在，请检查草稿后再保存。',
+  'The pending date change was not applied. Review the latest saved dates.': '待保存的日期更改未生效，请检查最新保存的日期。',
   'Edit task dates': '编辑任务日期',
   'Save dates': '保存日期',
   'Start Date': '开始日期',

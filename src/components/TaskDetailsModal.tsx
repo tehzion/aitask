@@ -143,6 +143,13 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
   });
 
   const editBaseline = React.useRef(editForm);
+  const editFormRef = React.useRef(editForm);
+  editFormRef.current = editForm;
+  const pendingDetails = React.useRef<{ taskId: string; values: typeof editForm; persisted: Task } | null>(null);
+  const mutationGeneration = React.useRef(0);
+  const actorIdRef = React.useRef(currentUser?.id);
+  actorIdRef.current = currentUser?.id;
+  useEffect(() => () => { mutationGeneration.current++; }, []);
   const formDirty = Boolean(isOpen && requestedTask && (commentText.trim() || approvalNote.trim() || revisionNote.trim() || isSubmitting
     || attachmentLink !== (requestedTask.attachmentLink || '') || attachmentName !== (requestedTask.attachmentName || '')
     || (isEditingDetails && JSON.stringify(editForm) !== JSON.stringify(editBaseline.current))
@@ -164,6 +171,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
     setIsEditingDetails(false);
     setCommentText('');
     pendingComment.current = null;
+    pendingDetails.current = null;
+    mutationGeneration.current++;
     setIsSubmitting(false);
     setDelegationAssignee('');
     if (draftTask) {
@@ -226,10 +235,30 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
     pendingComment.current = null;
   };
 
+  const acknowledgeDetails = () => {
+    const submitted = pendingDetails.current;
+    if (!submitted || submitted.taskId !== requestedTaskRef.current?.id) return;
+    const latest = useStore.getState().tasks.find(item => item.id === submitted.taskId);
+    const acknowledged = latest && (Object.keys(submitted.values) as (keyof typeof editForm)[])
+      .every(key => (latest[key] ?? '') === (submitted.persisted[key] ?? ''));
+    if (!acknowledged) {
+      pendingDetails.current = null;
+      setMutationError(t('The pending task update is no longer available. Review your draft before saving again.'));
+      return;
+    }
+    editBaseline.current = submitted.values;
+    if (JSON.stringify(editFormRef.current) === JSON.stringify(submitted.values)) setIsEditingDetails(false);
+    pendingDetails.current = null;
+    setEditError('');
+  };
+
   const confirmPendingMutation = async (commandType?: SecureCommandType) => {
     const session = captureWorkspaceSession();
     const taskId = task.id;
-    const isCurrent = () => isWorkspaceSessionCurrent(session) && requestedTaskRef.current?.id === taskId;
+    const actorId = currentUser?.id;
+    const generation = ++mutationGeneration.current;
+    const isCurrent = () => isWorkspaceSessionCurrent(session) && requestedTaskRef.current?.id === taskId
+      && actorIdRef.current === actorId && generation === mutationGeneration.current;
     setIsSubmitting(true);
     try {
       const result = await commitPendingMutation(commandType);
@@ -248,18 +277,24 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
   const resolvePendingMutation = async (action: 'retry' | 'latest') => {
     const session = captureWorkspaceSession();
     const taskId = task.id;
-    const isCurrent = () => isWorkspaceSessionCurrent(session) && requestedTaskRef.current?.id === taskId;
+    const actorId = currentUser?.id;
+    const generation = ++mutationGeneration.current;
+    const isCurrent = () => isWorkspaceSessionCurrent(session) && requestedTaskRef.current?.id === taskId
+      && actorIdRef.current === actorId && generation === mutationGeneration.current;
     setIsSubmitting(true);
     try {
       if (action === 'retry') {
         const result = await retryPendingSave();
         if (!isCurrent()) return;
         setMutationError(result.ok ? '' : result.error || 'The pending change could not be saved yet.');
-        if (result.ok) acknowledgeComment();
+        if (result.ok) { acknowledgeComment(); acknowledgeDetails(); }
       } else {
         await discardMutation();
         if (!isCurrent()) return;
+        const latest = useStore.getState().backend;
+        if (latest.mode === 'supabase' && latest.status !== 'live') { setMutationError(latest.error || 'The change is waiting to be saved.'); return; }
         pendingComment.current = null;
+        pendingDetails.current = null;
         setMutationError('');
       }
     } catch (failure) {
@@ -343,34 +378,15 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
   const handleDetailsSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
+    if (pendingDetails.current) { await resolvePendingMutation('retry'); return; }
     setEditError('');
-
-    const result = updateTask(task.id, {
-      title: editForm.title,
-      description: editForm.description,
-      clientName: editForm.clientName,
-      serviceType: editForm.serviceType,
-      department: editForm.department,
-      assignedTo: editForm.assignedTo,
-      priority: editForm.priority,
-      startDate: editForm.startDate,
-      dueDate: editForm.dueDate,
-      notes: editForm.notes,
-    });
-
-    if (!result.ok) {
-      setEditError(result.error || 'Unable to update this task.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    const saveResult = await commitPendingMutation();
-    setIsSubmitting(false);
-    if (!saveResult.ok) {
-      setEditError(saveResult.error || 'The task update is waiting to be saved.');
-      return;
-    }
-    setIsEditingDetails(false);
+    const submitted = { ...editForm };
+    const result = updateTask(task.id, submitted);
+    if (!result.ok) { setEditError(result.error || 'Unable to update this task.'); return; }
+    const persisted = useStore.getState().tasks.find(item => item.id === task.id);
+    if (!persisted) return;
+    pendingDetails.current = { taskId: task.id, values: submitted, persisted };
+    if (await confirmPendingMutation('task.update')) acknowledgeDetails();
   };
 
   const performDeleteTask = async () => {
@@ -424,7 +440,12 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
               <>
                 <button
                   type="button"
-                  onClick={() => setIsEditingDetails(value => !value)}
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    if (isEditingDetails && JSON.stringify(editForm) !== JSON.stringify(editBaseline.current) && !window.confirm(t('Discard unsaved changes?'))) return;
+                    if (isEditingDetails) setEditForm(editBaseline.current);
+                    setIsEditingDetails(value => !value);
+                  }}
                   className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
                 >
                   <Pencil className="h-3.5 w-3.5" /> {t(isEditingDetails ? 'Cancel Edit' : 'Edit')}
@@ -432,6 +453,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
                 <button
                   type="button"
                   onClick={handleDeleteTask}
+                  disabled={isSubmitting}
                   className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" /> {t('Delete')}

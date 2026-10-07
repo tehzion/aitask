@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-07",
+  "kind": "structured summary of original browser regression output",
+  "baseline": "1fc6ef4775d16ca001779e27554e489af8582387",
+  "data": "synthetic local Staff fixture; delayed/rejected commit responses",
+  "before_fixes": {
+    "tests": 6,
+    "failed": 6
+  },
+  "observations": [
+    {
+      "id": "calendar_unsaved_dates",
+      "check": "hasUnsavedChanges() while date draft differs",
+      "expected": "true",
+      "observed": "false"
+    },
+    {
+      "id": "calendar_fields_during_save",
+      "check": "start date input while save pending",
+      "expected": "disabled",
+      "observed": "enabled"
+    },
+    {
+      "id": "calendar_unexpected_rejection",
+      "check": "save exception feedback and retry controls",
+      "expected": "error shown; controls recovered",
+      "observed": "error not shown; saving controls remained active"
+    },
+    {
+      "id": "calendar_newer_pull_rollback",
+      "check": "task due date after earlier rejected save",
+      "expected": "2026-11-15",
+      "observed": "2026-10-07"
+    },
+    {
+      "id": "calendar_session_rollback",
+      "check": "task due date after session invalidation and earlier rejected save",
+      "expected": "2026-11-15",
+      "observed": "2026-10-07"
+    },
+    {
+      "id": "full_details_newer_draft",
+      "check": "title field after earlier save acknowledgement",
+      "expected": "Later unsent title remains visible",
+      "observed": "details editor closed; field absent"
+    }
+  ]
+}
