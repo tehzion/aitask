@@ -3,7 +3,7 @@ import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock3, Externa
 import { useShallow } from 'zustand/react/shallow';
 import type { Task, TaskStatus } from '../types';
 import { isPendingMutationResolution, useStore } from '../store';
-import { getStaffGuidedAction, getTaskBlockers } from '../lib/staffWorkspace';
+import { getStaffGuidedAction, getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
 import { safeHttpsUrl } from '../lib/security';
 import { getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { inputBase } from './uiTokens';
@@ -108,9 +108,9 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
 
   if (!liveTask) return null;
 
-  const incompletePredecessors = getTaskBlockers(liveTask, getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects }));
-  const unavailablePredecessorCount = (liveTask.predecessorTaskIds || [])
-    .filter(id => !tasks.some(item => item.id === id)).length;
+  const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects });
+  const incompletePredecessors = getTaskBlockers(liveTask, visibleTasks);
+  const unavailablePredecessorCount = getUnavailableTaskDependencyCount(liveTask, visibleTasks);
   const guidedAction = getStaffGuidedAction(liveTask, taskStatuses);
   const deliverable = deliverables.find(item => item.id === liveTask.deliverableId);
   const cycle = serviceCycles.find(item => item.id === liveTask.serviceCycleId);

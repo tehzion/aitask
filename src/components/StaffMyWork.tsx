@@ -75,7 +75,11 @@ const StaffMyWork: React.FC = () => {
       ? { title: t('Account context'), description: t('Clients and plans connected to your assigned work.'), values: [[t('Assigned clients'), visibleClients.length], [t('Active plans'), activePlans.length], [t('Renewals'), renewals.length]] as const }
     : { title: t('Production context'), description: t('Output, blockers, and revision work linked to your assignments.'), values: [[t('Linked outputs'), linkedOutputs], [t('Blocked steps'), blockedCount], [t('Revisions'), revisions]] as const };
 
-  const openTask = (taskId: string) => navigate(`/tasks?taskId=${encodeURIComponent(taskId)}`);
+  const openTask = (taskId: string) => {
+    const params = new URLSearchParams({ taskId });
+    if (isHod) params.set('scope', scope);
+    navigate(`/tasks?${params}`);
+  };
 
   return (
     <div className={`${pageShell} max-w-6xl space-y-6`}>
@@ -131,9 +135,9 @@ const StaffMyWork: React.FC = () => {
         </section>
       ) : (
         <Surface variant="raised" className="p-6 sm:p-8">
-          <CheckCircle2 className="h-9 w-9 text-accent" />
-          <h2 className="mt-4 text-xl font-semibold text-ink">{isHod ? t('Your department queue is clear') : t('Your assigned queue is clear')}</h2>
-          <p className="mt-1 max-w-[52ch] text-sm leading-6 text-muted">{isHod ? t('Delegated work in your departments will appear here. You can still review completed work or open the full workbench.') : t('New assignments will appear here. You can still review completed work or create a secondary task from More.')}</p>
+          {queue.waiting.length > 0 ? <Clock3 aria-hidden="true" className="h-9 w-9 text-accent" /> : <CheckCircle2 aria-hidden="true" className="h-9 w-9 text-accent" />}
+          <h2 className="mt-4 text-xl font-semibold text-ink">{queue.waiting.length > 0 ? t('Waiting for review') : isHod && scope === 'department' ? t('Your department queue is clear') : t('Your assigned queue is clear')}</h2>
+          <p className="mt-1 max-w-[52ch] text-sm leading-6 text-muted">{queue.waiting.length > 0 ? <>{queue.waiting.length} {t('Waiting review')}</> : isHod ? t('Delegated work in your departments will appear here. You can still review completed work or open the full workbench.') : t('New assignments will appear here. You can still review completed work or create a secondary task from More.')}</p>
         </Surface>
       )}
 

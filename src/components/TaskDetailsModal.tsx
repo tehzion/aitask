@@ -1,6 +1,6 @@
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
-import { getTaskBlockers } from '../lib/staffWorkspace';
+import { getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
 import { getTeamWorkloadSummaries } from '../lib/taskReporting';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React, { useEffect, useState } from 'react';
@@ -205,6 +205,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
   );
   const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects });
   const incompletePredecessors = getTaskBlockers(task, visibleTasks);
+  const unavailablePredecessorCount = getUnavailableTaskDependencyCount(task, visibleTasks);
   const assigneeOptions = canAssignOthers
     ? users.filter(user => user.role !== 'Client' && isMemberInDepartment(user, editForm.department))
     : users.filter(user => user.id === editForm.assignedTo);
@@ -541,6 +542,12 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                   <div className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{t('Soft dependency warning')}</p><p className="mt-1 text-amber-800">{t('This task may start early after confirmation, but the following predecessor steps remain incomplete:')}</p><ul className="mt-2 list-disc space-y-1 pl-5">{incompletePredecessors.map(item => <li key={item.id} data-i18n-skip>{item.title}</li>)}</ul></div></div>
                 </div>
+              )}
+
+              {unavailablePredecessorCount > 0 && !isClientTaskViewer && (
+                <section className="rounded-panel border border-line bg-inset p-4 text-sm text-muted" aria-label={t('Dependency status unavailable')}>
+                  {t(`Dependency status for ${unavailablePredecessorCount} earlier step${unavailablePredecessorCount === 1 ? '' : 's'} is unavailable. Confirm with the task owner before starting.`)}
+                </section>
               )}
 
               {isEditingDetails && (
