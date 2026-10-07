@@ -3,7 +3,7 @@ import { ArrowRight, CalendarDays, CheckCircle2, Clock3, ListChecks, RotateCcw }
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
-import { getDashboardPersona, getVisibleClientNames, getVisibleTasks, isHodUser } from '../lib/access';
+import { getDashboardPersona, getVisibleTasks, isHodUser } from '../lib/access';
 import { buildStaffWorkQueue, getHodScopeTasks, getTaskBlockers, type HodWorkScope, getStaffBucketLabel, getStaffFocusTask, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getMemberDepartments, isMemberInDepartment } from '../lib/departments';
 import { getTeamWorkloadSummaries, isTaskOpen } from '../lib/taskReporting';
@@ -14,6 +14,8 @@ import BackendFreshness from './BackendFreshness';
 import StaffWorkItem from './StaffWorkItem';
 import { formatLocalizedWeekdayDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
+import { useLocalToday } from '../hooks/useLocalToday';
+import { getStaffDashboardMetrics } from '../lib/staffDashboard';
 
 const bucketOrder: StaffWorkBucketKey[] = ['needs_action', 'up_next', 'waiting', 'done'];
 
@@ -31,21 +33,25 @@ const StaffMyWork: React.FC = () => {
     rolePermissions: state.rolePermissions,
     clientPlans: state.clientPlans,
   })));
-  const today = getTodayInputDate();
+  const todayDate = useLocalToday();
+  const today = getTodayInputDate(todayDate);
   const isHod = isHodUser(currentUser, rolePermissions);
+  const accessibleTasks = React.useMemo(
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects }),
+    [allTasks, clients, currentUser, projects, rolePermissions],
+  );
   const visibleTasks = React.useMemo(
-    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects })
-      .filter(task => isHod || task.assignedTo === currentUser?.id),
-    [allTasks, clients, currentUser, isHod, projects, rolePermissions],
+    () => accessibleTasks.filter(task => isHod || task.assignedTo === currentUser?.id),
+    [accessibleTasks, currentUser?.id, isHod],
   );
   const tasks = React.useMemo(() => isHod ? getHodScopeTasks(visibleTasks, currentUser?.id, scope) : visibleTasks, [currentUser?.id, isHod, scope, visibleTasks]);
   const departmentTasks = React.useMemo(() => visibleTasks.filter(task => isMemberInDepartment(currentUser, task.department)), [currentUser, visibleTasks]);
   const workload = React.useMemo(() => {
     if (!isHod || !currentUser) return [];
     const members = users.filter(member => getMemberDepartments(currentUser).some(department => isMemberInDepartment(member, department)));
-    return getTeamWorkloadSummaries(departmentTasks, members, 'overall')
+    return getTeamWorkloadSummaries(departmentTasks, members, 'overall', todayDate)
       .sort((left, right) => right.overdue - left.overdue || right.open - left.open || left.member.name.localeCompare(right.member.name));
-  }, [currentUser, departmentTasks, isHod, users]);
+  }, [currentUser, departmentTasks, isHod, todayDate, users]);
   const queue = React.useMemo(() => buildStaffWorkQueue(tasks, today), [tasks, today]);
   const focusTask = getStaffFocusTask(queue);
   const defaultBucket = queue.needs_action.length > 0 ? 'needs_action' : queue.up_next.length > 0 ? 'up_next' : queue.waiting.length > 0 ? 'waiting' : 'done';
@@ -56,23 +62,17 @@ const StaffMyWork: React.FC = () => {
     if (!hasSelectedBucketRef.current) setActiveBucket(defaultBucket);
   }, [defaultBucket, scope]);
 
-  const reportableTasks = tasks.filter(task => task.status !== 'Cancelled');
-  const blockedCount = tasks.filter(task => getTaskBlockers(task, visibleTasks).length > 0).length;
+  const { blockedCount, assignedClientCount, activePlanCount, renewals, linkedOutputs, dueToday, waitingReview, revisions } = React.useMemo(
+    () => getStaffDashboardMetrics(tasks, accessibleTasks, clientPlans, todayDate),
+    [accessibleTasks, clientPlans, tasks, todayDate],
+  );
   const persona = getDashboardPersona(currentUser);
-  const visibleClients = getVisibleClientNames(currentUser, allTasks, projects, rolePermissions, { clients, projects });
-  const visibleClientKeys = new Set(visibleClients.map(name => name.trim().toLowerCase()));
-  const activePlans = clientPlans.filter(plan => plan.status === 'Active' && visibleClientKeys.has(plan.clientName.trim().toLowerCase()));
-  const renewals = activePlans.filter(plan => Boolean(plan.contractEndDate && plan.contractEndDate >= today && plan.contractEndDate <= new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)));
-  const linkedOutputs = new Set(reportableTasks.map(task => task.deliverableId).filter(Boolean)).size;
-  const dueToday = tasks.filter(task => isTaskOpen(task) && task.dueDate === today).length;
-  const waitingReview = queue.waiting.length;
-  const revisions = tasks.filter(task => isTaskOpen(task) && task.revisionCount > 0).length;
   const roleInsight = isHod
-    ? { title: t('Department context'), description: t('Department workload, delegated tasks, and review risk.'), values: [[t('Active tasks'), departmentTasks.filter(isTaskOpen).length], [t('Waiting review'), departmentTasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length], [t('Blocked steps'), departmentTasks.filter(task => getTaskBlockers(task, visibleTasks).length > 0).length]] as const }
+    ? { title: t('Department context'), description: t('Department workload, delegated tasks, and review risk.'), values: [[t('Active tasks'), departmentTasks.filter(isTaskOpen).length], [t('Waiting review'), departmentTasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length], [t('Blocked steps'), departmentTasks.filter(task => getTaskBlockers(task, accessibleTasks).length > 0).length]] as const }
     : persona === 'operation'
     ? { title: t('Operation context'), description: t('Your assigned delivery and review queue.'), values: [[t('Due today'), dueToday], [t('Waiting review'), waitingReview], [t('Blocked steps'), blockedCount]] as const }
     : persona === 'account'
-      ? { title: t('Account context'), description: t('Clients and plans connected to your assigned work.'), values: [[t('Assigned clients'), visibleClients.length], [t('Active plans'), activePlans.length], [t('Renewals'), renewals.length]] as const }
+      ? { title: t('Account context'), description: t('Clients and plans connected to your assigned work.'), values: [[t('Assigned clients'), assignedClientCount], [t('Active plans'), activePlanCount], [t('Renewals'), renewals]] as const }
     : { title: t('Production context'), description: t('Output, blockers, and revision work linked to your assignments.'), values: [[t('Linked outputs'), linkedOutputs], [t('Blocked steps'), blockedCount], [t('Revisions'), revisions]] as const };
 
   const openTask = (taskId: string) => {
@@ -85,7 +85,7 @@ const StaffMyWork: React.FC = () => {
     <div className={`${pageShell} max-w-6xl space-y-6`}>
       <header className="flex items-start justify-between gap-4 border-b border-line/70 pb-4 sm:items-end">
         <div>
-          <p className="calm-eyebrow">{formatLocalizedWeekdayDate(new Date(), locale)}</p>
+          <p className="calm-eyebrow">{formatLocalizedWeekdayDate(todayDate, locale)}</p>
           <h1 className="mt-1 text-[1.8rem] font-semibold leading-9 tracking-[-0.045em] text-ink sm:text-4xl">{isHod ? t('Department work') : t('My work')}</h1>
           <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">{isHod ? t('Start with what needs attention, then review delegated work across your departments.') : t('Start with what needs attention, then move through the rest of your assigned work.')}</p>
         </div>
@@ -160,7 +160,7 @@ const StaffMyWork: React.FC = () => {
           />
         </div>
         <Surface id={`staff-queue-panel-${activeBucket}`} role="tabpanel" aria-labelledby={`staff-queue-tab-${activeBucket}`} tabIndex={0} className="mt-3 overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {queue[activeBucket].slice(0, 8).map(task => <StaffWorkItem key={task.id} task={task} allTasks={visibleTasks} users={users} onOpen={item => openTask(item.id)} />)}
+          {queue[activeBucket].slice(0, 8).map(task => <StaffWorkItem key={task.id} task={task} allTasks={accessibleTasks} users={users} onOpen={item => openTask(item.id)} />)}
           {queue[activeBucket].length === 0 && <div className="px-5 py-12 text-center"><ListChecks className="mx-auto h-7 w-7 text-muted/60" aria-hidden="true" /><p className="mt-3 text-sm font-semibold text-ink">{t('Nothing in')} {t(getStaffBucketLabel(activeBucket))}</p><p className="mt-1 text-sm text-muted">{t('Choose another queue to review your work.')}</p></div>}
         </Surface>
       </section>
