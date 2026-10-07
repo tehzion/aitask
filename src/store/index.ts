@@ -5727,6 +5727,7 @@ export const startBackendAutoSync = () => {
         hasCurrentUser: Boolean(state.currentUser),
         isPulling: state.backend.isPulling,
         isSaving: state.backend.isSaving,
+        hasPendingChange: isPullBlockedByPendingChange(state),
       };
     },
     () => useStore.getState().pullBackendNow({ force: true, silent: true }),
@@ -5798,18 +5799,7 @@ export const startBackendAutoSync = () => {
   });
 
   const unsubscribeBackendState = useStore.subscribe((state, previousState) => {
-    accessRefresh.onStateChange(
-      {
-        hasCurrentUser: Boolean(previousState.currentUser),
-        isPulling: previousState.backend.isPulling,
-        isSaving: previousState.backend.isSaving,
-      },
-      {
-        hasCurrentUser: Boolean(state.currentUser),
-        isPulling: state.backend.isPulling,
-        isSaving: state.backend.isSaving,
-      },
-    );
+    accessRefresh.onStateChange();
 
     if (!shouldUseSupabase() || state.backend.isLoading || state.backend.isPulling || isApplyingRemoteSnapshot || isApplyingNotificationRead) return;
 
