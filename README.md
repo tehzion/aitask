@@ -45,6 +45,9 @@ pnpm build
 
 ## Release Versioning
 
+The current prepared source release is **v3.0.0**. See the
+[consolidated release notes and complete commit inventory](docs/version-3-release-2026-10-07.md).
+
 The semantic release number is stored in `package.json`. Every build appends the
 current Git commit, producing an identifier such as `v1.5.1+d9494d6`; a dirty local
 workspace is marked with `.dev`.

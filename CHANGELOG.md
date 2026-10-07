@@ -6,6 +6,41 @@ number remain uniquely identifiable.
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-07
+
+Version 3 consolidates 85 commits since the source release 2.6.1. The complete
+292-commit source inventory and release scope are recorded in
+[the version 3 release report](docs/version-3-release-2026-10-07.md).
+
+### Reliability and reporting
+
+- Boss Koo approvals and member administration preserve drafts, validate password
+  requirements, and recover correctly after failed or pending saves.
+- Project Manager, HOD and Staff workflows preserve edits through retries,
+  permission refreshes, reassignment and interrupted task/detail/date saves.
+- Dashboard overdue totals and links use the same open-task rule; completed and
+  cancelled tasks and invalid deadlines do not appear as overdue.
+- Daily task views, weekly cohorts, reports, workload and renewal figures refresh
+  at local midnight and when suspended tabs resume. Renewals use calendar days.
+- Current delivery progress follows the selected plan and a cycle covering today;
+  future and other-plan cycles remain in history. Internal planning can show drafts.
+- Staff metrics use assigned work and stable company identities, retain accessible
+  dependencies, and identify unavailable dependency status without exposing hidden work.
+- Customer feedback and approvals validate notes before mutation, preserve Unicode
+  and newer drafts, deduplicate local notices, and provide retry/reload recovery.
+- Company editing, ownership, lifecycle dates, atomic deletion and save feedback
+  follow persisted outcomes. Session, sync, notifications and uploads handle
+  concurrent changes, permission changes and interrupted confirmations more safely.
+
+### Workflow and interface
+
+- Consolidated role workspaces, portfolio and department scopes, company search,
+  task attribution, responsive reporting and accessible navigation.
+- Completed Simplified Chinese translation coverage and regression guardrails.
+- Strengthened PWA recovery, source provenance, bundle checks and release gates.
+
+The entries below preserve the previously unreleased feature and fix notes.
+
 ### Added
 
 - Client Reports distinguish recorded agency completion dates from client approval
