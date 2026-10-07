@@ -11,6 +11,8 @@ import { isTaskOpen } from '../lib/taskReporting';
 import { CountLabel, DataRow, ProgressBar, StatGroup, StatusChip, Surface } from './ui';
 import { formatLocalizedDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
+import { useLocalToday } from '../hooks/useLocalToday';
+import { getCurrentPlanCycle } from '../lib/dashboardData';
 
 type WorkspaceTask = ReturnType<typeof useStore.getState>['tasks'][number];
 
@@ -66,7 +68,7 @@ const ServiceRoleDashboard = () => {
   const { locale, t } = useI18n();
   const persona = getDashboardPersona(store.currentUser);
   const canSeePrices = canViewServicePrices(store.currentUser, store.rolePermissions);
-  const now = new Date();
+  const now = useLocalToday();
   const visibleTasks = React.useMemo(
     () => getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }),
     [store.currentUser, store.rolePermissions, store.tasks, store.clients, store.projects],
@@ -101,9 +103,7 @@ const ServiceRoleDashboard = () => {
     delivered: delivered.filter(item => serviceTasks.some(task => task.assignedTo === user.id && task.deliverableId === item.id)).length,
   }));
   const activeCompanies = React.useMemo(() => activePlans.map(plan => {
-    const currentCycle = store.serviceCycles
-      .filter(cycle => cycle.clientId === plan.clientId && (cycle.status === 'Published' || cycle.status === 'Completed'))
-      .sort((a, b) => b.periodStart.localeCompare(a.periodStart))[0];
+    const currentCycle = getCurrentPlanCycle(plan, store.serviceCycles, now);
     const cycleDeliverables = currentCycle
       ? store.deliverables.filter(item => item.cycleId === currentCycle.id)
       : [];
@@ -119,7 +119,7 @@ const ServiceRoleDashboard = () => {
       inProgress: count('In Progress'),
       planned: count('Planned'),
     };
-  }), [activePlans, store.deliverables, store.serviceCycles]);
+  }), [activePlans, store.deliverables, store.serviceCycles, now]);
 
   if (persona === 'client') return null;
 

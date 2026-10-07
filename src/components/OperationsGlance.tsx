@@ -14,6 +14,7 @@ import { cardBase } from './uiTokens';
 import { formatLocalizedDateTime, formatLocalizedWeekdayDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
 import { getLocalizedDepartment, getLocalizedStatus } from '../lib/localeLabels';
+import { useLocalToday } from '../hooks/useLocalToday';
 
 type OperationsScope = 'agency' | 'staff';
 
@@ -97,7 +98,7 @@ const TaskEntry = ({
 const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope }) => {
   const { locale, t } = useI18n();
   const [completionSegment, setCompletionSegment] = useState<CompletionSegment>('today');
-  const now = new Date();
+  const now = useLocalToday();
   const pulse = getAgencyPulseMetrics(tasks, now, locale);
   const attention = getNeedsAttentionTasks(tasks, now).slice(0, 6);
   const completions = getRecentCompletionTasks(tasks, completionSegment, now).slice(0, 6);

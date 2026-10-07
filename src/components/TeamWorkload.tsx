@@ -29,6 +29,7 @@ import { useI18n } from './I18nProvider';
 import { formatLocalizedDate } from '../lib/i18n';
 import { getLocalizedDepartment, getLocalizedPriority, getLocalizedRole, getLocalizedStatus } from '../lib/localeLabels';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
+import { useLocalToday } from '../hooks/useLocalToday';
 
 interface TeamWorkloadProps {
   tasks: Task[];
@@ -151,6 +152,7 @@ const TaskGroup = ({
 
 const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskFor }) => {
   const { locale, t } = useI18n();
+  const today = useLocalToday();
   const [period] = useState<TeamWorkloadPeriod>('week');
   const [query, setQuery] = useState('');
   const queryInput = useImeSafeInput(query, setQuery);
@@ -168,8 +170,8 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
   )).sort((left, right) => left.localeCompare(right)), [users]);
 
   const rawSummaries = useMemo(
-    () => getTeamWorkloadSummaries(tasks, users, period),
-    [period, tasks, users],
+    () => getTeamWorkloadSummaries(tasks, users, period, today),
+    [period, tasks, users, today],
   );
   const summaries = useMemo(() => {
     const normalizedQuery = queryInput.value.trim().toLowerCase();
@@ -226,8 +228,8 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
     [rawSummaries, selectedMemberId],
   );
   const selectedGroups: TeamTaskGroups | null = useMemo(
-    () => selectedMemberId ? getTeamMemberTaskGroups(tasks, selectedMemberId) : null,
-    [selectedMemberId, tasks],
+    () => selectedMemberId ? getTeamMemberTaskGroups(tasks, selectedMemberId, today) : null,
+    [selectedMemberId, tasks, today],
   );
   const selectedTaskCount = selectedGroups
     ? Object.values(selectedGroups).reduce((total, group) => total + group.length, 0)
