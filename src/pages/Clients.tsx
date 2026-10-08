@@ -787,7 +787,7 @@ const Clients: React.FC = () => {
         const website = safeHttpsUrl(contact.website);
         const facebookPage = safeHttpsUrl(contact.facebookPage);
         const serviceContext = getServiceContext(client);
-        const canOpenWorkspace = canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles);
+        const canOpenWorkspace = canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles, allProjects);
         const canEditProfile = !upgradeRequired && canEditClientProfile(currentUser, client.name, allTasks, rolePermissions, clientProfiles);
         const canDeleteProfile = Boolean(client.profile && !upgradeRequired && canDeleteClientProfile(currentUser, client.profile.clientName, clientProfiles, rolePermissions, allTasks));
         const assignedTeam = Array.from(client.assignedUserIds)
@@ -960,7 +960,7 @@ const Clients: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
-                      {client.profile && canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles) && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>{t('Workspace')} <ArrowRight className="h-4 w-4" /></Link>}
+                      {client.profile && canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles, allProjects) && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>{t('Workspace')} <ArrowRight className="h-4 w-4" /></Link>}
                       <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>
                         {t('View tasks')} <ArrowRight className="h-4 w-4" />
                       </Link>

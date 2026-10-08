@@ -180,7 +180,7 @@ const OperationsClientWorkspace = () => {
     store.rolePermissions,
   );
   const isClient = store.currentUser?.role === "Client";
-  if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions, store.clients))
+  if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions, store.clients, store.projects))
     return <Navigate to="/projects" replace />;
   if (
     isClient &&

@@ -689,14 +689,34 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
     clients.push(client);
   });
 
+  const clientIds = new Set(clients.map(client => client.id));
+  const clientIdsByKey = new Map<string, Set<string>>();
+  clients.forEach(client => {
+    const key = normalizeClientKey(client.clientName);
+    if (!key) return;
+    const ids = clientIdsByKey.get(key) || new Set<string>();
+    ids.add(client.id);
+    clientIdsByKey.set(key, ids);
+  });
+  // Reattach legacy rows only when their stored client ID no longer resolves
+  // and the normalized company name points to one unambiguous profile. Keep
+  // valid IDs authoritative because names can become stale after a rename.
+  const resolveClientId = (clientId: string | undefined, clientName: string | undefined) => {
+    if (clientId && clientIds.has(clientId)) return clientId;
+    const matches = clientIdsByKey.get(normalizeClientKey(clientName || ''));
+    return matches?.size === 1 ? matches.values().next().value : clientId;
+  };
+
   return {
     ...parsed,
     clients,
-    tasks: parsed.tasks.map(task => ({ ...task, clientId: task.clientId || byKey.get(normalizeClientKey(task.clientName))?.id })),
-    projects: parsed.projects.map(project => ({ ...project, clientId: project.clientId || byKey.get(normalizeClientKey(project.clientName))?.id })),
-    clientPlans: parsed.clientPlans.map(item => applyPricingSnapshot(item, pricingByParent.get(item.id))),
-    serviceCycles: parsed.serviceCycles.map(item => applyPricingSnapshot(item, pricingByParent.get(item.id))),
-    addons: parsed.addons.map(item => applyPricingSnapshot(item, pricingByParent.get(item.id))),
+    tasks: parsed.tasks.map(task => ({ ...task, clientId: resolveClientId(task.clientId, task.clientName) })),
+    projects: parsed.projects.map(project => ({ ...project, clientId: resolveClientId(project.clientId, project.clientName) })),
+    clientPlans: parsed.clientPlans.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
+    serviceCycles: parsed.serviceCycles.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
+    deliverables: parsed.deliverables.map(item => ({ ...item, clientId: resolveClientId(item.clientId, item.clientName) })),
+    cycleComments: parsed.cycleComments.map(item => ({ ...item, clientId: resolveClientId(item.clientId, item.clientName) })),
+    addons: parsed.addons.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
     serviceWorkflowTemplates: parsed.serviceWorkflowTemplates.length ? parsed.serviceWorkflowTemplates : [{ ...SHORT_VIDEO_WORKFLOW_TEMPLATE, steps: SHORT_VIDEO_WORKFLOW_TEMPLATE.steps.map(step => ({ ...step })) }],
   };
 };

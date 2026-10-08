@@ -343,6 +343,7 @@ export const canOpenServiceClient = (
   tasks: Task[] = [],
   customRoles: CustomRole[] = [],
   profiles: ClientProfile[] = [],
+  projects: Project[] = [],
 ) => {
   if (!user) return false;
   const clientKey = getClientKey(clientName);
@@ -355,7 +356,8 @@ export const canOpenServiceClient = (
     return tasks.some(task => (
       getClientKey(task.clientName) === clientKey
       && (task.createdBy === user.id || task.assignedTo === user.id)
-    ));
+    )) || getVisibleProjects(user, projects, tasks, customRoles, { clients: profiles })
+      .some(project => getClientKey(project.clientName) === clientKey);
   }
   if (hasPermission(user, 'viewAllServiceClients', customRoles)) return true;
   if (!['Staff', 'HOD'].includes(user.role) || !hasPermission(user, 'viewAssignedServiceClients', customRoles)) return false;
