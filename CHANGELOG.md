@@ -8,6 +8,9 @@ number remain uniquely identifiable.
 
 ### Fixed
 
+- Startup loads member edits, notification handlers and Client portal parsing on
+  demand, with account-change guards, to restore CI's unchanged bundle limit.
+  Date formatting excludes unused locale parser data.
 - Interrupted mixed saves retain every ordered command group, recover lost
   acknowledgements and preserve edits made while saving or retrying.
 - Member onboarding journals stable requests and atomically saves membership,

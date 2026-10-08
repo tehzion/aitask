@@ -4,7 +4,6 @@ import { assertWorkspaceSession, captureWorkspaceSession, isWorkspaceSessionCurr
 import type { User } from '@supabase/supabase-js';
 import type {
   AppNotification,
-  ClientContact,
   ClientPortalPayload,
   ClientProfile,
   ClientServicePlan,
@@ -32,8 +31,7 @@ import {
   getLegacyDepartmentMirror,
   normalizeMemberDepartments,
 } from './departments';
-import { parseNotification, parseWorkspaceSnapshot, safeAvatarSource } from './security';
-import { enrichNotificationMetadata } from './notificationCenter';
+import { parseWorkspaceSnapshot } from './security';
 import { supabase } from './supabaseClient';
 import { stripServiceItemPrices } from './serviceManagement';
 import { msg } from './messages';
@@ -187,7 +185,7 @@ export type CommandResponse = {
   replayed?: boolean;
 };
 
-type MemberDepartmentsResponse = CommandResponse & {
+export type MemberDepartmentsResponse = CommandResponse & {
   member?: {
     id: string;
     departments: Department[];
@@ -197,7 +195,7 @@ type MemberDepartmentsResponse = CommandResponse & {
   };
 };
 
-type MemberPermissionsResponse = CommandResponse & {
+export type MemberPermissionsResponse = CommandResponse & {
   member?: {
     id: string;
     permissions: RolePermissions | Record<string, never>;
@@ -206,7 +204,7 @@ type MemberPermissionsResponse = CommandResponse & {
   };
 };
 
-type MemberRoleResponse = CommandResponse & {
+export type MemberRoleResponse = CommandResponse & {
   member?: {
     id: string;
     role: Role;
@@ -1404,222 +1402,39 @@ export const loadSecureWorkspaceRevision = async () => {
   return { version: Number(data.version) || 1, updatedAt: String(data.updated_at), syncProtocolVersion };
 };
 
-export const saveSecureMemberDepartments = async (
-  member: WorkspaceMember,
-  requestedDepartments: Department[],
-): Promise<MutationResult<MemberDepartmentsResponse>> => {
+// Mutation handlers load only when a member edit is submitted. State stays in this adapter.
+const memberMutationRuntime = () => ({
+  get retryableMemberDepartments() { return retryableMemberDepartments; },
+  set retryableMemberDepartments(value: typeof retryableMemberDepartments) { retryableMemberDepartments = value; },
+  get retryableMemberPermissions() { return retryableMemberPermissions; },
+  set retryableMemberPermissions(value: typeof retryableMemberPermissions) { retryableMemberPermissions = value; },
+  get retryableMemberRole() { return retryableMemberRole; },
+  set retryableMemberRole(value: typeof retryableMemberRole) { retryableMemberRole = value; },
+  get baseline() { return baseline; },
+  captureWorkspaceSession, normalizeMemberDepartments, isWorkspaceSessionCurrent, stable, retainedMemberMutationWithId, commandId, persistRetryableMemberMutation, bindSessionRequest, withSyncTimeout, supabase, isAuthError, refreshSecureSession, SyncRequestTimeoutError, commandErrorCode, clearPersistedRetryableMemberMutation, getLegacyDepartmentMirror, entityKey, memberData, SECURE_WORKSPACE_ID,
+});
+export type SecureMemberMutationRuntime = ReturnType<typeof memberMutationRuntime>;
+
+export const saveSecureMemberDepartments = async (member: WorkspaceMember, requestedDepartments: Department[]): Promise<MutationResult<MemberDepartmentsResponse>> => {
   const sessionToken = captureWorkspaceSession();
-  const departments = normalizeMemberDepartments(member.role, requestedDepartments);
-  if (member.role === 'Client' || (member.role !== 'Project Manager' && departments.length === 0)) {
-    return { ok: false, code: 'VALIDATION', error: 'Choose at least one valid internal department.' };
-  }
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before saving departments.' };
-  }
-
-  const expectedVersion = Math.max(1, Number(member.version) || 1);
-  const matchesRetry = retryableMemberDepartments
-    && retryableMemberDepartments.memberId === member.id
-    && retryableMemberDepartments.expectedVersion === expectedVersion
-    && stable(retryableMemberDepartments.departments) === stable(departments);
-  if (retainedMemberMutationWithId() && !matchesRetry) {
-    return {
-      ok: false,
-      code: 'RETRY_REQUIRED',
-      error: 'Retry or discard the previous member change before submitting a different one.',
-    };
-  }
-  const pending = matchesRetry
-    ? retryableMemberDepartments
-    : { kind: 'departments' as const, id: commandId(), memberId: member.id, departments, expectedVersion };
-  retryableMemberDepartments = pending;
-  persistRetryableMemberMutation();
-
-  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_update_member_departments', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_command_id: pending.id,
-    p_member_id: pending.memberId,
-    p_departments: pending.departments,
-    p_expected_version: pending.expectedVersion,
-  })));
-
-  let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
-    rpcResult = await invoke();
-    if (isAuthError(rpcResult.error) && await refreshSecureSession()) rpcResult = await invoke();
-  } catch (error) {
-    return {
-      ok: false,
-      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
-      error: error instanceof SyncRequestTimeoutError
-        ? 'Save confirmation timed out. Submit again to retry the same department change safely.'
-        : 'Supabase could not confirm the department change. Submit again to retry.',
-    };
+    const module = await import('./secureMemberMutations');
+    if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberDepartments(member, requestedDepartments);
+  } catch {
+    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
   }
-
-  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
-  if (rpcResult.error) {
-    const code = isAuthError(rpcResult.error) ? 'FORBIDDEN' : commandErrorCode(rpcResult.error);
-    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
-      retryableMemberDepartments = null;
-      clearPersistedRetryableMemberMutation();
-    }
-    return {
-      ok: false,
-      code,
-      error: rpcResult.error.message || 'Unable to update departments.',
-    };
-  }
-
-  const response = rpcResult.data as MemberDepartmentsResponse;
-  if (!response?.ok) {
-    const code = response.code || 'RETRY_REQUIRED';
-    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
-      retryableMemberDepartments = null;
-      clearPersistedRetryableMemberMutation();
-    }
-    return {
-      ok: false,
-      code,
-      error: response.error || 'The department change was rejected.',
-      conflict: response.conflict,
-    };
-  }
-
-  retryableMemberDepartments = null;
-  clearPersistedRetryableMemberMutation();
-  const legacyDepartment = getLegacyDepartmentMirror(member.role, departments);
-  const key = entityKey('member', member.id);
-  const previous = baseline.get(key);
-  const nextData = {
-    ...(previous?.data || memberData(member)),
-    departments,
-    department: legacyDepartment,
-  };
-  baseline.set(key, {
-    kind: 'member',
-    entityType: 'member',
-    entityId: member.id,
-    version: Number(response.member?.version) || expectedVersion + 1,
-    data: nextData,
-    serialized: stable({ parentId: null, data: nextData }),
-  });
-
-  return {
-    ok: true,
-    data: response,
-    commandId: response.commandId || pending.id,
-    workspaceVersion: Number(response.workspaceVersion) || 1,
-    replayed: response.replayed,
-  };
 };
 
-export const saveSecureMemberPermissions = async (
-  member: WorkspaceMember,
-  permissions: RolePermissions | null,
-): Promise<MutationResult<MemberPermissionsResponse>> => {
+export const saveSecureMemberPermissions = async (member: WorkspaceMember, permissions: RolePermissions | null): Promise<MutationResult<MemberPermissionsResponse>> => {
   const sessionToken = captureWorkspaceSession();
-  if (!['Staff', 'HOD'].includes(member.role) || member.isSuperAdmin) {
-    return { ok: false, code: 'VALIDATION', error: 'Only Staff and HOD permissions can be customized.' };
-  }
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before saving permissions.' };
-  }
-
-  const expectedVersion = Math.max(1, Number(member.version) || 1);
-  const matchesRetry = retryableMemberPermissions
-    && retryableMemberPermissions.memberId === member.id
-    && retryableMemberPermissions.expectedVersion === expectedVersion
-    && stable(retryableMemberPermissions.permissions) === stable(permissions);
-  if (retainedMemberMutationWithId() && !matchesRetry) {
-    return {
-      ok: false,
-      code: 'RETRY_REQUIRED',
-      error: 'Retry or discard the previous member change before submitting a different one.',
-    };
-  }
-  const pending = matchesRetry
-    ? retryableMemberPermissions
-    : { kind: 'permissions' as const, id: commandId(), memberId: member.id, permissions, expectedVersion };
-  retryableMemberPermissions = pending;
-  persistRetryableMemberMutation();
-
-  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_update_member_permissions', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_command_id: pending.id,
-    p_member_id: pending.memberId,
-    p_permissions: pending.permissions,
-    p_expected_version: pending.expectedVersion,
-  })));
-
-  let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
-    rpcResult = await invoke();
-    if (isAuthError(rpcResult.error) && await refreshSecureSession()) rpcResult = await invoke();
-  } catch (error) {
-    return {
-      ok: false,
-      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
-      error: error instanceof SyncRequestTimeoutError
-        ? 'Save confirmation timed out. Submit again to retry the same permission change safely.'
-        : 'Supabase could not confirm the permission change. Submit again to retry.',
-    };
+    const module = await import('./secureMemberMutations');
+    if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberPermissions(member, permissions);
+  } catch {
+    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
   }
-
-  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
-  if (rpcResult.error) {
-    const code = isAuthError(rpcResult.error) ? 'FORBIDDEN' : commandErrorCode(rpcResult.error);
-    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
-      retryableMemberPermissions = null;
-      clearPersistedRetryableMemberMutation();
-    }
-    return {
-      ok: false,
-      code,
-      error: rpcResult.error.message || 'Unable to update permissions.',
-    };
-  }
-
-  const response = rpcResult.data as MemberPermissionsResponse;
-  if (!response?.ok) {
-    const code = response.code || 'RETRY_REQUIRED';
-    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
-      retryableMemberPermissions = null;
-      clearPersistedRetryableMemberMutation();
-    }
-    return {
-      ok: false,
-      code,
-      error: response.error || 'The permission change was rejected.',
-      conflict: response.conflict,
-    };
-  }
-
-  retryableMemberPermissions = null;
-  clearPersistedRetryableMemberMutation();
-  const nextPermissions = permissions || undefined;
-  const key = entityKey('member', member.id);
-  const previous = baseline.get(key);
-  const nextData = {
-    ...(previous?.data || memberData(member)),
-    permissions: nextPermissions,
-  };
-  baseline.set(key, {
-    kind: 'member',
-    entityType: 'member',
-    entityId: member.id,
-    version: Number(response.member?.version) || expectedVersion + 1,
-    data: nextData,
-    serialized: stable({ parentId: null, data: nextData }),
-  });
-
-  return {
-    ok: true,
-    data: response,
-    commandId: response.commandId || pending.id,
-    workspaceVersion: Number(response.workspaceVersion) || 1,
-    replayed: response.replayed,
-  };
 };
 
 export type RetainedSecureMemberMutation =
@@ -1627,131 +1442,15 @@ export type RetainedSecureMemberMutation =
   | { kind: 'permissions'; memberId: string; permissions: RolePermissions | null; expectedVersion: number }
   | { kind: 'role'; memberId: string; role: Role; customRoleId: string | null; companyName: string | null; departments: Department[]; expectedVersion: number };
 
-export const saveSecureMemberRole = async (
-  member: WorkspaceMember,
-  assignment: MemberRoleAssignment,
-): Promise<MutationResult<MemberRoleResponse>> => {
+export const saveSecureMemberRole = async (member: WorkspaceMember, assignment: MemberRoleAssignment): Promise<MutationResult<MemberRoleResponse>> => {
   const sessionToken = captureWorkspaceSession();
-  if (member.isSuperAdmin) {
-    return { ok: false, code: 'VALIDATION', error: 'Boss Koo keeps permanent super admin permissions.' };
-  }
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before changing the role.' };
-  }
-
-  const expectedVersion = Math.max(1, Number(member.version) || 1);
-  const nextAssignment = {
-    role: assignment.role,
-    customRoleId: assignment.customRoleId || null,
-    companyName: assignment.companyName || null,
-    departments: assignment.departments,
-  };
-  const matchesRetry = retryableMemberRole
-    && retryableMemberRole.memberId === member.id
-    && retryableMemberRole.expectedVersion === expectedVersion
-    && stable({
-      role: retryableMemberRole.role,
-      customRoleId: retryableMemberRole.customRoleId,
-      companyName: retryableMemberRole.companyName,
-      departments: retryableMemberRole.departments,
-    }) === stable(nextAssignment);
-  if (retainedMemberMutationWithId() && !matchesRetry) {
-    return {
-      ok: false,
-      code: 'RETRY_REQUIRED',
-      error: 'Retry or discard the previous member change before submitting a different one.',
-    };
-  }
-  const pending = matchesRetry
-    ? retryableMemberRole
-    : { kind: 'role' as const, id: commandId(), memberId: member.id, ...nextAssignment, expectedVersion };
-  retryableMemberRole = pending;
-  persistRetryableMemberMutation();
-
-  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_update_member_role', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_command_id: pending.id,
-    p_member_id: pending.memberId,
-    p_role: pending.role,
-    p_custom_role_id: pending.customRoleId,
-    p_client_name: pending.companyName,
-    p_departments: pending.departments,
-    p_expected_version: pending.expectedVersion,
-  })));
-
-  let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
-    rpcResult = await invoke();
-    if (isAuthError(rpcResult.error) && await refreshSecureSession()) rpcResult = await invoke();
-  } catch (error) {
-    return {
-      ok: false,
-      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
-      error: error instanceof SyncRequestTimeoutError
-        ? 'Save confirmation timed out. Submit again to retry the role change safely.'
-        : 'Supabase could not confirm the role change. Submit again to retry.',
-    };
+    const module = await import('./secureMemberMutations');
+    if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberRole(member, assignment);
+  } catch {
+    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
   }
-
-  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
-  if (rpcResult.error) {
-    const code = isAuthError(rpcResult.error) ? 'FORBIDDEN' : commandErrorCode(rpcResult.error);
-    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
-      retryableMemberRole = null;
-      clearPersistedRetryableMemberMutation();
-    }
-    return {
-      ok: false,
-      code,
-      error: rpcResult.error.message || 'Unable to change the role.',
-    };
-  }
-
-  const response = rpcResult.data as MemberRoleResponse;
-  if (!response?.ok) {
-    const code = response.code || 'RETRY_REQUIRED';
-    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
-      retryableMemberRole = null;
-      clearPersistedRetryableMemberMutation();
-    }
-    return {
-      ok: false,
-      code,
-      error: response.error || 'The role change was rejected.',
-      conflict: response.conflict,
-    };
-  }
-
-  retryableMemberRole = null;
-  clearPersistedRetryableMemberMutation();
-  const key = entityKey('member', member.id);
-  const previous = baseline.get(key);
-  const nextData = {
-    ...(previous?.data || memberData(member)),
-    role: response.member?.role ?? assignment.role,
-    custom_role_id: response.member?.customRoleId ?? null,
-    custom_role_name: response.member?.customRoleName ?? null,
-    client_name: response.member?.clientName ?? null,
-    departments: response.member?.departments ?? assignment.departments,
-    department: response.member?.department ?? getLegacyDepartmentMirror(assignment.role, assignment.departments),
-    permissions: {},
-  };
-  baseline.set(key, {
-    kind: 'member',
-    entityType: 'member',
-    entityId: member.id,
-    version: Number(response.member?.version) || expectedVersion + 1,
-    data: nextData,
-    serialized: stable({ parentId: null, data: nextData }),
-  });
-
-  return {
-    ok: true,
-    data: response,
-    commandId: response.commandId,
-    workspaceVersion: Number(response.workspaceVersion) || 1,
-    replayed: response.replayed,
-  };
 };
 
 export const getRetainedSecureMemberMutation = (): RetainedSecureMemberMutation | null => {
@@ -1912,177 +1611,30 @@ export const acknowledgeSecureReleaseNotice = async (
   return readReleaseNoticeResponse(result.data, normalizedNoticeId);
 };
 
-const parseNotificationFeedItem = (
-  value: unknown,
-  memberId: string,
-): AppNotification | null => {
-  if (!isRecord(value)) return null;
-  const parsed = parseNotification({
-    ...value,
-    isRead: value.isRead === true,
-    readByUserIds: value.isRead === true ? [memberId] : [],
-    visibleToCurrentUser: true,
-  });
-  return parsed ? enrichNotificationMetadata(parsed) : null;
-};
+const notificationRuntime = () => ({
+  get retryableNotificationMutation() { return retryableNotificationMutation; },
+  set retryableNotificationMutation(value: typeof retryableNotificationMutation) { retryableNotificationMutation = value; },
+  get baseline() { return baseline; },
+  captureWorkspaceSession, isWorkspaceSessionCurrent, isRecord, cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, entityKey, stable, commandId, SyncRequestTimeoutError,
+});
+export type SecureNotificationRuntime = ReturnType<typeof notificationRuntime>;
 
-export const loadSecureNotificationPage = async (
-  query: NotificationFeedQuery = {},
-): Promise<NotificationFeedPage> => {
-  const limit = Math.min(50, Math.max(1, Math.floor(query.limit || 50)));
-  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_read_notifications', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_limit: limit,
-    p_before_created_at: query.cursor?.createdAt || null,
-    p_before_id: query.cursor?.id || null,
-    p_unread_only: Boolean(query.unreadOnly),
-    p_category: query.category || null,
-    p_search: query.search?.trim().slice(0, 200) || null,
-  })));
-
-  let result = await invoke();
-  if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
-  if (result.error) throw result.error;
-  if (!isRecord(result.data) || result.data.ok !== true) {
-    throw new Error(isRecord(result.data) && typeof result.data.error === 'string'
-      ? result.data.error
-      : 'Supabase returned an invalid notification feed.');
-  }
-
-  const memberId = cleanPortalText(result.data.memberId, 160);
-  if (!memberId) throw new Error('The notification feed is not linked to this account.');
-  const items = (Array.isArray(result.data.items) ? result.data.items : [])
-    .map(item => parseNotificationFeedItem(item, memberId))
-    .filter((item): item is AppNotification => Boolean(item));
-  const rawCursor = isRecord(result.data.nextCursor) ? result.data.nextCursor : undefined;
-  const createdAt = cleanPortalText(rawCursor?.createdAt, 80);
-  const cursorId = cleanPortalText(rawCursor?.id, 160);
-
-  return {
-    items,
-    unreadCount: Math.max(0, Number(result.data.unreadCount) || 0),
-    nextCursor: createdAt && cursorId ? { createdAt, id: cursorId } : undefined,
-  };
-};
-
-const applyNotificationReadBaseline = (
-  response: NotificationReadResponse,
-  isRead: boolean,
-) => {
-  const memberId = response.memberId;
-  if (!memberId) return;
-  (response.changedNotifications || []).forEach(changed => {
-    const key = entityKey('notification', changed.id);
-    const previous = baseline.get(key);
-    if (!previous) return;
-    const currentReads = Array.isArray(previous.data.readByUserIds)
-      ? previous.data.readByUserIds.filter((value): value is string => typeof value === 'string')
-      : [];
-    const readByUserIds = isRead
-      ? Array.from(new Set([...currentReads, memberId]))
-      : currentReads.filter(id => id !== memberId);
-    const data = { ...previous.data, readByUserIds };
-    baseline.set(key, {
-      ...previous,
-      version: Math.max(1, Number(changed.version) || previous.version),
-      data,
-      serialized: stable({ parentId: previous.parentId || null, data }),
-    });
-  });
-};
-
-export const setSecureNotificationsRead = async (
-  notificationIds: string[],
-  isRead: boolean,
-  markAll = false,
-): Promise<MutationResult<NotificationReadResponse>> => {
+export const loadSecureNotificationPage = async (query: NotificationFeedQuery = {}): Promise<NotificationFeedPage> => {
   const sessionToken = captureWorkspaceSession();
-  const ids = Array.from(new Set(notificationIds.map(id => id.trim()).filter(Boolean))).sort();
-  if (!markAll && ids.length === 0) {
-    return { ok: false, code: 'VALIDATION', error: 'Choose at least one notification.' };
-  }
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before updating notifications.' };
-  }
-  const matchesRetry = retryableNotificationMutation
-    && retryableNotificationMutation.isRead === isRead
-    && retryableNotificationMutation.markAll === markAll
-    && stable(retryableNotificationMutation.notificationIds) === stable(ids);
-  if (retryableNotificationMutation && !matchesRetry) {
-    return {
-      ok: false,
-      code: 'RETRY_REQUIRED',
-      error: 'Retry the previous notification update before starting another one.',
-    };
-  }
-  const pending = matchesRetry
-    ? retryableNotificationMutation!
-    : { id: commandId(), notificationIds: ids, isRead, markAll };
-  retryableNotificationMutation = pending;
-
-  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_set_notifications_read', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_command_id: pending.id,
-    p_notification_ids: pending.notificationIds,
-    p_is_read: pending.isRead,
-    p_mark_all: pending.markAll,
-  })));
-
-  let result: Awaited<ReturnType<typeof invoke>>;
-  try {
-    result = await invoke();
-    if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
-  } catch (error) {
-    return {
-      ok: false,
-      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
-      error: error instanceof SyncRequestTimeoutError
-        ? 'Notification update confirmation timed out. Try the same action again safely.'
-        : 'Supabase could not confirm the notification update.',
-    };
-  }
-
-  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
-  if (result.error) {
-    if (isAuthError(result.error)) retryableNotificationMutation = null;
-    return {
-      ok: false,
-      code: isAuthError(result.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
-      error: result.error.message || 'Unable to update notifications.',
-    };
-  }
-
-  const response = result.data as NotificationReadResponse;
-  if (!response?.ok) {
-    if (response?.code !== 'RETRY_REQUIRED') retryableNotificationMutation = null;
-    return {
-      ok: false,
-      code: response?.code || 'RETRY_REQUIRED',
-      error: response?.error || 'The notification update was rejected.',
-    };
-  }
-
-  retryableNotificationMutation = null;
-  applyNotificationReadBaseline(response, isRead);
-  return {
-    ok: true,
-    data: response,
-    commandId: response.commandId || pending.id,
-    workspaceVersion: Number(response.workspaceVersion) || 1,
-    replayed: response.replayed,
-  };
+  const module = await import('./secureNotifications');
+  assertWorkspaceSession(sessionToken);
+  return module.createSecureNotifications(notificationRuntime()).loadSecureNotificationPage(query);
 };
 
-const portalRecords = (value: unknown) => (
-  Array.isArray(value) ? value.filter(isRecord) : []
-);
-
-const parseClientContact = (value: unknown): ClientContact | null => {
-  if (!isRecord(value)) return null;
-  const id = cleanPortalText(value.id, 160);
-  const name = cleanPortalText(value.name, 160);
-  if (!id || !name) return null;
-  return { id, name, avatar: safeAvatarSource(value.avatar) };
+export const setSecureNotificationsRead = async (notificationIds: string[], isRead: boolean, markAll = false): Promise<MutationResult<NotificationReadResponse>> => {
+  const sessionToken = captureWorkspaceSession();
+  try {
+    const module = await import('./secureNotifications');
+    if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    return module.createSecureNotifications(notificationRuntime()).setSecureNotificationsRead(notificationIds, isRead, markAll);
+  } catch {
+    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
+  }
 };
 
 const loadClientPortalPayload = async (expectedClientName?: string): Promise<ClientPortalPayload> => {
@@ -2092,54 +1644,8 @@ const loadClientPortalPayload = async (expectedClientName?: string): Promise<Cli
   let result = await invoke();
   if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
   if (result.error) throw result.error;
-  if (!isRecord(result.data)) throw new Error('Supabase returned an invalid Client portal response.');
-
-  const workspaceId = cleanPortalText(result.data.workspaceId, 160);
-  const clientName = cleanPortalText(result.data.clientName, 240);
-  if (workspaceId !== SECURE_WORKSPACE_ID || !clientName) {
-    throw new Error('The Client portal response is not linked to this workspace.');
-  }
-  if (expectedClientName && clientName.toLocaleLowerCase() !== expectedClientName.trim().toLocaleLowerCase()) {
-    throw new Error('The Client portal company does not match this account.');
-  }
-
-  const companyKey = clientName.trim().toLocaleLowerCase();
-  const belongsToClient = (item: { clientName?: string }) => (
-    cleanPortalText(item.clientName, 240).trim().toLocaleLowerCase() === companyKey
-  );
-
-  const tasks = portalRecords(result.data.tasks)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['tasks'];
-  const projects = portalRecords(result.data.projects)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['projects'];
-  const clients = portalRecords(result.data.clients)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['clients'];
-  const contacts = (Array.isArray(result.data.contacts) ? result.data.contacts : [])
-    .map(parseClientContact)
-    .filter((contact): contact is ClientContact => Boolean(contact));
-  const clientPlans = portalRecords(result.data.clientPlans)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['clientPlans'];
-  const serviceCycles = portalRecords(result.data.serviceCycles)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['serviceCycles'];
-  const deliverables = portalRecords(result.data.deliverables)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['deliverables'];
-  const cycleComments = portalRecords(result.data.cycleComments)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['cycleComments'];
-  const taskComments = portalRecords(result.data.taskComments)
-    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.taskId, 160))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['taskComments'];
-  const taskApprovals = portalRecords(result.data.taskApprovals)
-    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.taskId, 160))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['taskApprovals'];
-
-  return { workspaceId, clientName, tasks, projects, clients, contacts, clientPlans, serviceCycles, deliverables, cycleComments, taskComments, taskApprovals };
+  const { parseClientPortalPayload } = await import('./clientPortalPayload');
+  return parseClientPortalPayload(result.data, SECURE_WORKSPACE_ID, expectedClientName);
 };
 
 const projectionToEntityRow = (

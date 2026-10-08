@@ -37,6 +37,7 @@ import {
   retryRetainedSecureMemberMutation,
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
+  saveSecureMemberPermissions,
   saveSecureMemberRole,
   saveSecureWorkspace,
   serializeClientProjectedTask,
@@ -92,6 +93,25 @@ describe('Client portal command projection', () => {
       'notes', 'priority', 'department', 'createdBy', 'isRecurring',
       'recurrenceFrequency', 'dueReminderSent', 'version', 'updatedAt',
     ]));
+  });
+});
+
+describe('session changes while loading deferred handlers', () => {
+  it.each(['departments', 'permissions', 'role', 'notifications'] as const)('blocks %s before issuing an RPC', async action => {
+    rpc.mockClear();
+    discardRetainedSecureMemberMutation();
+    const member = { ...stateWithUser('deferred-member').users[0], role: 'Staff' as const };
+    const operations = {
+      departments: () => saveSecureMemberDepartments(member, ['Designer']),
+      permissions: () => saveSecureMemberPermissions(member, null),
+      role: () => saveSecureMemberRole(member, { role: 'HOD', departments: ['Designer'] }),
+      notifications: () => setSecureNotificationsRead(['notification-1'], true),
+    };
+    const pending = operations[action]();
+    invalidateWorkspaceSession();
+    expect(await pending).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(getRetainedSecureMemberMutation()).toBeNull();
   });
 });
 

@@ -2,8 +2,9 @@
 
 **Release status: blocked.** The implementation addresses the eleven confirmed
 source defects in [the pre-live audit](version-3-prelive-audit-2026-10-08.md).
-Protected staging access has supporting code but remains unverified and its
-Trusted Sources rules are unsaved at the user's request. Version remains 3.0.0.
+Protected staging access remains unverified. Its two Trusted Sources rules are
+now saved, but CI deployment credentials and Supabase staging access still block
+hosted QA. Version remains 3.0.0.
 The user requested a local Git commit after validation. No push, tag, production
 migration, deployment or paid upgrade is included in that authorization.
 
@@ -41,7 +42,7 @@ is persisted. Foreign-key indexes are included and schema lint has no findings.
 | Production build and static PWA | Passed on an isolated candidate excluding unrelated workspace changes. Build provenance uses the original source commit for local verification only; it does not identify a newly committed release. |
 | Bundle budgets | Passed unchanged limits: eager graph 307,158 bytes gzip against 307,200, leaving only 42 bytes. Initial entry about 26.8 KiB gzip; report charts about 113.5 KiB. Recheck after the final commit because build metadata can change size. |
 | CI/OIDC/artifact regressions | Passed pipeline failure, shared concurrency, configuration, exact-origin token handling and compressed credential detection. |
-| Hosted staging | Not run: staging Supabase access is unauthorized and Vercel Trusted Sources rules remain unsaved. |
+| Hosted staging | Not run: staging Supabase access is unauthorized and CI's Vercel credential cannot access the staging team. Both Trusted Sources rules are now saved. |
 | Production database alignment | Correctly failed closed: `20261007173905_reliable_member_onboarding` is still pending. |
 
 Local verification logs are retained under `/private/tmp/aitask-v3-remediation-*`,
@@ -71,11 +72,11 @@ before credential reuse.
 
 ## Remaining release blockers and rollout order
 
-1. **Prepared protection rules:** the user explicitly chose “Leave the rules
-   prepared.” The unsaved first Vercel form stays open. The second specification
-   is in [staging setup](staging-release-setup.md). Activate only the exact
-   `tehzion/aitask` repository and its two QA workflows on `aitask-staging`, then
-   verify protected access and absence of credential leakage.
+1. **Protected staging verification:** both rules are saved and read back under
+   the user's later authorization to proceed. They allow only `tehzion/aitask`
+   and its two named QA workflows on `aitask-staging`. Vercel Authentication is
+   still enabled. Verify protected access and absence of credential leakage after
+   the deployment credential is repaired.
 2. **Staging access and hosted QA:** the Supabase connector denied staging project
    `dyaxtloducpgjoxuaszk`; CLI project listing returned Unauthorized. Restore
    authorized isolated staging access, verify its credentials, then run the
@@ -96,3 +97,33 @@ Keep the release blocked until these gates pass. No risk exception is implied by
 passing local tests. When publication is separately requested, rebuild artifacts
 from the final reviewed, committed source and verify that exact deployment's
 provenance; the current working-tree build is not a release package.
+
+## PR CI follow-up — 8 October 2026
+
+[PR #5](https://github.com/tehzion/aitask/pull/5) contains the full version 3 branch.
+The first hosted checks confirmed the database gate passed, while quality failed
+at a 301.8 KiB eager bundle and staging failed with Vercel
+`scope-not-accessible`. Cleanup also failed to reach the configured Supabase
+staging Auth endpoint. The configured staging project is not visible in the
+authorized organization's project list; production was not substituted for it.
+
+The startup fix loads member mutation handlers, notification handlers and Client
+portal response parsing on demand. Retained state stays in the original adapter;
+session guards run before issuing requests after a deferred import. Four new
+regressions reject account changes during loading without sending an RPC.
+Formatting locales retain the exact date/relative-distance formatters but omit
+unused parser/relative-calendar fields. Bundle limits are unchanged.
+
+Local follow-up validation passed 506 unit tests, existing member/notification and
+translation regressions, and 24 Boss/Customer browser recovery scenarios. The
+eager bundle is about 297.9 KiB gzip on the local runtime. CI must verify this
+same source on Linux; the preceding near-limit local result did not establish a
+passing hosted budget. All three PWA browser scenarios passed again after the
+split; final CI results are recorded when complete.
+
+Automatic approval review rejected the direct master push because it could
+trigger production before the migration and release/security prerequisites were
+resolved. It separately rejected issuing/storing a replacement project-scoped
+staging Vercel token without exact user authorization; that approval question is
+pending. Master protection and its independent approving-review requirement
+remain intact. No production rollout or paid upgrade was performed.

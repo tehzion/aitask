@@ -48,9 +48,11 @@ rules **only in the isolated `aitask-staging` Vercel project**:
 | Deployment environment | Production **within the staging project** |
 
 This follows [Vercel Trusted Sources](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/trusted-sources).
-On 8 October the user chose to leave the rules prepared. The first rule remains
-in an unsaved browser form; the second rule's specification is recorded above.
-Neither rule has been activated or verified against a protected deployment.
+Both rules were saved and read back on 8 October after the user authorized
+continuing staging setup. Vercel Authentication remains enabled. Protected hosted
+access still needs verification: CI's current deployment token cannot access the
+configured staging team, and the Supabase staging project is unavailable to the
+current account.
 
 Both workflows grant `id-token: write`. The helper requests a short-lived token
 for this audience and attaches `x-vercel-trusted-oidc-idp-token` only when the
@@ -150,8 +152,8 @@ email delivery and refuses hosted targets.
 Release remains blocked until protected hosted staging passes, the ordered
 production migration tail is separately approved and verified, leaked-password
 protection is enabled, and the managed database security patch is resolved.
-Staging project access currently returns authorization denial, and the Trusted
-Sources rules remain unsaved at the user's request. No production deployment,
+Staging Supabase project access currently returns authorization denial, and CI's
+Vercel deployment credential fails its staging-team preflight. No production deployment,
 migration, paid upgrade or release publication is authorized by this remediation.
 See [the remediation report](version-3-prelive-remediation-2026-10-08.md) for actual
 results and limitations. Rebuild release artifacts from the final committed source

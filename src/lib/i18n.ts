@@ -1995,7 +1995,11 @@ const MONTH_ABBREVIATIONS: Array<[RegExp, string]> = [
   [/\bDec\b/g, '12月'],
 ];
 
-const DATE_LOCALES = { en: enUS, zh: zhCN } as const;
+// Formatting does not need locale parsers or relative-calendar rules.
+const DATE_LOCALES = {
+  en: { options: enUS.options, localize: enUS.localize, formatLong: enUS.formatLong, formatDistance: enUS.formatDistance },
+  zh: { options: zhCN.options, localize: zhCN.localize, formatLong: zhCN.formatLong, formatDistance: zhCN.formatDistance },
+} as const;
 
 const isValidDate = (value: Date) => !Number.isNaN(value.getTime());
 
@@ -2727,6 +2731,7 @@ const zhCopyCoverage: Record<string, string> = {
   'Supabase did not confirm the request within 20 seconds.': 'Supabase 未在 20 秒内确认请求。',
   'Super Admin permission required.': '需要超级管理员权限。',
   'Supabase could not be reached. Your change is retained for retry.': '无法连接 Supabase。您的更改已保留以便重试。',
+  'Supabase could not be reached. Keep your draft and retry.': '无法连接 Supabase。请保留您的草稿并重试。',
   '[AiTask sync] Supabase RPC failed.': '[AiTask 同步] Supabase RPC 失败。',
   '[AiTask sync] Command rejected.': '[AiTask 同步] 命令被拒绝。',
   'Save confirmation timed out. Submit again to retry the same department change safely.': '保存确认超时。请再次提交以安全重试相同的部门更改。',
