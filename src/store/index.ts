@@ -2022,9 +2022,11 @@ export const useStore = create<StoreState>()(
           },
         }));
 
+        const workspaceBeforeRetry = selectPersistedWorkspaceState(get());
         const result = await retrySecureWorkspaceCommand(get().backend.workspaceVersion || undefined, {
           excludeSuperAdminEntities: !get().currentUser?.isSuperAdmin,
           actorMemberId: get().currentUser?.id,
+          excludedEntityTypes: excludedServiceMetadataEntityTypes(get().currentUser, get().rolePermissions),
         });
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         if (result.ok === false) {
@@ -2054,10 +2056,11 @@ export const useStore = create<StoreState>()(
         }
 
         const savedAt = new Date().toISOString();
+        const hasNewerChanges = !workspaceStatesEqual(workspaceBeforeRetry, selectPersistedWorkspaceState(get()));
         apply((state) => ({
           backend: {
             ...state.backend,
-            status: 'live',
+            status: hasNewerChanges ? 'saving' : 'live',
             isSaving: false,
             upgradeRequired: false,
             workspaceVersion: Math.max(state.backend.workspaceVersion || 0, result.workspaceVersion),
@@ -2067,14 +2070,15 @@ export const useStore = create<StoreState>()(
             conflict: undefined,
             error: undefined,
             hasRemoteUpdate: false,
-            hasLocalChanges: false,
-            pendingMutations: 0,
-            pendingCommandType: undefined,
-            message: 'Saved.',
+            hasLocalChanges: hasNewerChanges,
+            pendingMutations: hasNewerChanges ? 1 : 0,
+            pendingCommandType: hasNewerChanges ? state.backend.pendingCommandType : undefined,
+            message: hasNewerChanges ? 'Saving newer changes.' : 'Saved.',
           },
         }));
 
-        await get().pullBackendNow({ force: true, silent: true });
+        if (hasNewerChanges) queueMicrotask(() => { if (isWorkspaceSessionCurrent(sessionToken)) void get().syncBackendNow(); });
+        else await get().pullBackendNow({ force: true, silent: true });
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         return { ok: true };
       },
@@ -4691,7 +4695,14 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: `This role can only be assigned to ${selectedCustomRole.baseRole} members.` };
         }
 
-        const duplicate = !data.memberId && !data.registrationId && get().users.some(user => (
+        const { onboardingRequestKey, pendingOnboardingCommand, retainOnboardingCommand, clearOnboardingCommand } = await import('../lib/onboardingCommand');
+        const onboardingPayload = { name, email, role: data.role, departments, companyName,
+          customRoleId: data.customRoleId || null, workerType: ['Staff', 'HOD'].includes(data.role) ? data.workerType || 'employee' : 'employee',
+          registrationId: data.registrationId || null, memberId: data.memberId || null, sendInvitation };
+        const onboardingKey = shouldUseSecureSupabase() && currentUser.authUserId
+          ? await onboardingRequestKey(currentUser.authUserId, onboardingPayload) : '';
+        if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
+        const duplicate = !pendingOnboardingCommand(onboardingKey) && !data.memberId && !data.registrationId && get().users.some(user => (
           user.name.toLowerCase() === name.toLowerCase() ||
           (email && user.email?.toLowerCase() === email.toLowerCase())
         ));
@@ -4745,6 +4756,7 @@ export const useStore = create<StoreState>()(
           const { error } = await supabase.functions.invoke('invite-aitask-member', {
             headers: { Authorization: `Bearer ${session.access_token}` },
             body: {
+              commandId: retainOnboardingCommand(onboardingKey),
               name,
               email,
               role: data.role,
@@ -4759,7 +4771,9 @@ export const useStore = create<StoreState>()(
               password: needsTemporaryPassword ? initialPassword : undefined,
             },
           });
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
           if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to send the invitation.') };
+          clearOnboardingCommand(onboardingKey);
           if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
             await get().pullBackendNow({ force: true });
           }

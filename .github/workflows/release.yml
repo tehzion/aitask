@@ -5,11 +5,16 @@ on:
     tags:
       - 'v*'
 
+defaults:
+  run:
+    shell: bash
+
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
-  group: production-release
+  group: aitask-staging-fixture
   cancel-in-progress: false
 
 jobs:
@@ -42,6 +47,7 @@ jobs:
           STAGING_VERCEL_PROJECT_ID: ${{ secrets.STAGING_VERCEL_PROJECT_ID }}
           STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
           STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
           STAGING_SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
           PRODUCTION_SUPABASE_URL: ${{ secrets.PRODUCTION_SUPABASE_URL }}
           PRODUCTION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PRODUCTION_SUPABASE_PUBLISHABLE_KEY }}
@@ -71,7 +77,7 @@ jobs:
           test -n "$VERCEL_CLI_VERSION"
           for value in \
             "$STAGING_VERCEL_TOKEN" "$STAGING_VERCEL_ORG_ID" "$STAGING_VERCEL_PROJECT_ID" \
-            "$STAGING_SUPABASE_URL" "$STAGING_SUPABASE_PUBLISHABLE_KEY" "$STAGING_SUPABASE_PROJECT_REF" \
+            "$STAGING_SUPABASE_URL" "$STAGING_SUPABASE_PUBLISHABLE_KEY" "$STAGING_SUPABASE_SERVICE_ROLE_KEY" "$STAGING_SUPABASE_PROJECT_REF" \
             "$PRODUCTION_SUPABASE_URL" "$PRODUCTION_SUPABASE_PUBLISHABLE_KEY" \
             "$STAGING_QA_SUPER_ADMIN_EMAIL" "$STAGING_QA_SUPER_ADMIN_PASSWORD" \
             "$STAGING_QA_OPERATION_EMAIL" "$STAGING_QA_OPERATION_PASSWORD" \
@@ -157,6 +163,7 @@ jobs:
       - name: Verify staging provenance and secure cutover
         env:
           RELEASE_URL: ${{ steps.staging.outputs.url }}
+          STAGING_PROTECTION_ORIGIN: ${{ steps.staging.outputs.url }}
           VITE_AITASK_BACKEND: supabase
           VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
@@ -189,7 +196,10 @@ jobs:
 
       - name: Run authenticated staging release QA
         env:
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.STAGING_SUPABASE_PUBLISHABLE_KEY }}
           STAGING_E2E_BASE_URL: ${{ steps.staging.outputs.url }}
+          STAGING_PROTECTION_ORIGIN: ${{ steps.staging.outputs.url }}
           STAGING_QA_SUPER_ADMIN_EMAIL: ${{ secrets.STAGING_QA_SUPER_ADMIN_EMAIL }}
           STAGING_QA_SUPER_ADMIN_PASSWORD: ${{ secrets.STAGING_QA_SUPER_ADMIN_PASSWORD }}
           STAGING_QA_OPERATION_EMAIL: ${{ secrets.STAGING_QA_OPERATION_EMAIL }}
@@ -267,8 +277,24 @@ jobs:
           cp release-evidence/build-info.body release-evidence/build-info.json
           pnpm verify:release-provenance -- --file release-evidence/build-info.json --version "${GITHUB_REF_NAME#v}" --commit "$GITHUB_SHA"
 
-      - name: Retain release evidence
+      - name: Verify artifact credential safety
+        id: artifact-safety
         if: always()
+        env:
+          STAGING_QA_SUPER_ADMIN_PASSWORD: ${{ secrets.STAGING_QA_SUPER_ADMIN_PASSWORD }}
+          STAGING_QA_OPERATION_PASSWORD: ${{ secrets.STAGING_QA_OPERATION_PASSWORD }}
+          STAGING_QA_HOD_PASSWORD: ${{ secrets.STAGING_QA_HOD_PASSWORD }}
+          STAGING_QA_PRODUCTION_PASSWORD: ${{ secrets.STAGING_QA_PRODUCTION_PASSWORD }}
+          STAGING_QA_ACCOUNT_PASSWORD: ${{ secrets.STAGING_QA_ACCOUNT_PASSWORD }}
+          STAGING_QA_CLIENT_PASSWORD: ${{ secrets.STAGING_QA_CLIENT_PASSWORD }}
+          STAGING_QA_PASSWORD_SETUP_PASSWORD: ${{ secrets.STAGING_QA_PASSWORD_SETUP_PASSWORD }}
+          STAGING_QA_PASSWORD_SETUP_NEW_PASSWORD: ${{ secrets.STAGING_QA_PASSWORD_SETUP_NEW_PASSWORD }}
+          STAGING_VERCEL_TOKEN: ${{ secrets.STAGING_VERCEL_TOKEN }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+        run: python3 scripts/verify-qa-artifacts.py test-results playwright-report staging-fixture.json release-evidence
+
+      - name: Retain release evidence
+        if: always() && steps.artifact-safety.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.ref_name }}-release-evidence

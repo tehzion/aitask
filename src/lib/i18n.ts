@@ -1027,6 +1027,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Sync is local on this deployed build': '此部署版本的同步仅在本机生效',
   'Supabase sync is not configured': '尚未配置 Supabase 同步',
   // Sync state messages
+  'This action is not allowed for your account.': '您的账号无权执行此操作。',
   'Retrying pending change.': '正在重试待保存的更改。',
   'Another synchronization request is still running.': '另一个同步请求仍在执行。',
   'Waiting for sync…': '正在等待同步…',

@@ -201,6 +201,11 @@ Deno.serve(async (request) => {
 
   if (action !== 'invite_member') return json({ error: 'Unsupported account action' }, 400);
 
+  const commandId = typeof body.commandId === 'string' ? body.commandId.trim().toLowerCase() : '';
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(commandId)) {
+    return json({ code: 'CLIENT_UPGRADE_REQUIRED', error: 'Reload AiTask, restore your draft, then retry this invitation.' }, 409);
+  }
+
   const registrationId = typeof body.registrationId === 'string' ? body.registrationId.trim() : '';
   const memberId = typeof body.memberId === 'string' ? body.memberId.trim() : '';
   let name = typeof body.name === 'string' ? body.name.trim() : '';
@@ -224,7 +229,7 @@ Deno.serve(async (request) => {
       .eq('entity_type', 'registration')
       .eq('entity_id', registrationId)
       .maybeSingle();
-    if (error || !registration || registration.data?.status !== 'Pending' || registration.data?.requestedRole !== 'Staff') {
+    if (error || !registration || !['Pending', 'Approved'].includes(registration.data?.status) || registration.data?.requestedRole !== 'Staff') {
       return json({ error: 'Pending Staff registration not found' }, 404);
     }
     name = typeof registration.data.name === 'string' ? registration.data.name.trim() : '';
@@ -262,10 +267,28 @@ Deno.serve(async (request) => {
     customRoleName = typeof customRole.data?.name === 'string' ? customRole.data.name : null;
   }
 
+  const payload = { name, email, role, departments, companyName, customRoleId, customRoleName,
+    memberId: memberId || null, registrationId: registrationId || null, workerType, sendInvitation };
+  const retryError = (message: string) => json({ code: 'ONBOARDING_RETRY_REQUIRED', error: message, commandId }, 409);
+  const { data: reserved, error: reserveError } = await adminClient.rpc('aitask_reserve_member_onboarding', {
+    p_actor_member_id: actor.id, p_command_id: commandId, p_payload: payload,
+  });
+  if (reserveError || !reserved?.ok) return retryError('Onboarding could not be reserved. Keep this draft and retry after the backend is available.');
+  if (reserved.result) return json(reserved.result);
+
   const { users: authUsers, error: listError } = await listAllAuthUsers(adminClient);
   if (listError) return json({ error: 'Unable to verify the Auth user' }, 500);
   let authUser = authUsers.find(user => user.email?.toLowerCase() === email);
   let createdAuthUser = false;
+  const ownsPreparedAccount = (user: SupabaseAuthUser) => user.app_metadata?.aitask_onboarding_command === commandId
+    && user.app_metadata?.aitask_onboarding_actor === actor.id
+    && user.app_metadata?.aitask_onboarding_workspace === actor.workspace_id;
+  const preparationMetadata = { aitask_onboarding_command: commandId, aitask_onboarding_actor: actor.id,
+    aitask_onboarding_workspace: actor.workspace_id };
+  const recoverPreparedAccount = async () => {
+    const refreshed = await listAllAuthUsers(adminClient);
+    return refreshed.error ? undefined : refreshed.users.find(user => user.email?.toLowerCase() === email && ownsPreparedAccount(user));
+  };
   const appUrl = publicAppUrl();
   if (!appUrl) return json({ error: 'The public AiTask URL is not configured' }, 500);
   const passwordSetupUrl = `${appUrl}/account/password`;
@@ -274,21 +297,22 @@ Deno.serve(async (request) => {
     if (!authUser && onboardingMode === 'legacy_invite') {
       if (sendInvitation) {
         const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-          data: { name, aitask_registration_source: 'legacy_invite' },
+          data: { name, aitask_registration_source: 'legacy_invite', aitask_onboarding_command: commandId },
           redirectTo: passwordSetupUrl,
         });
-        if (inviteError || !invited.user) return json({ error: inviteError?.message || 'Invitation failed' }, 400);
-        authUser = invited.user;
+        authUser = invited.user || await recoverPreparedAccount();
+        if (!authUser) return retryError(inviteError?.message || 'Invitation delivery is not confirmed. Keep this draft and retry.');
       } else {
         if (temporaryPassword.length < 12) return json({ error: 'A temporary password of at least 12 characters is required' }, 400);
         const { data: created, error: createError } = await adminClient.auth.admin.createUser({
           email,
           password: temporaryPassword,
           email_confirm: true,
+          app_metadata: preparationMetadata,
           user_metadata: { name, aitask_registration_source: 'legacy_invite' },
         });
-        if (createError || !created.user) return json({ error: createError?.message || 'Account creation failed' }, 400);
-        authUser = created.user;
+        authUser = created.user || await recoverPreparedAccount();
+        if (!authUser) return retryError(createError?.message || 'Account creation is not confirmed. Keep this draft and retry.');
       }
       createdAuthUser = true;
     } else if (!authUser) {
@@ -305,69 +329,47 @@ Deno.serve(async (request) => {
   } else if (!authUser) {
     if (sendInvitation) {
       const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-        data: { name, company_name: companyName },
+        data: { name, company_name: companyName, aitask_onboarding_command: commandId },
         redirectTo: passwordSetupUrl,
       });
-      if (inviteError || !invited.user) return json({ error: inviteError?.message || 'Invitation failed' }, 400);
-      authUser = invited.user;
+      authUser = invited.user || await recoverPreparedAccount();
+      if (!authUser) return retryError(inviteError?.message || 'Invitation delivery is not confirmed. Keep this draft and retry.');
     } else {
       if (temporaryPassword.length < 12) return json({ error: 'A temporary password of at least 12 characters is required' }, 400);
       const { data: created, error: createError } = await adminClient.auth.admin.createUser({
         email,
         password: temporaryPassword,
         email_confirm: true,
+        app_metadata: preparationMetadata,
         user_metadata: { name, company_name: companyName },
       });
-      if (createError || !created.user) return json({ error: createError?.message || 'Account creation failed' }, 400);
-      authUser = created.user;
+      authUser = created.user || await recoverPreparedAccount();
+      if (!authUser) return retryError(createError?.message || 'Account creation is not confirmed. Keep this draft and retry.');
     }
     createdAuthUser = true;
-  } else if (!registrationId) {
+  } else if (!registrationId && !ownsPreparedAccount(authUser)) {
     return json({ error: 'An Auth account already exists for this email. Use its pending registration instead.' }, 409);
   }
 
+  if (!createdAuthUser && authUser && ownsPreparedAccount(authUser) && sendInvitation && !authUser.email_confirmed_at) {
+    const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+      data: { name, aitask_onboarding_command: commandId }, redirectTo: passwordSetupUrl,
+    });
+    if (inviteError || !invited.user || invited.user.id !== authUser.id) return retryError('Invitation delivery is not confirmed. Keep this draft and retry.');
+    authUser = invited.user;
+  }
   if (!authUser) return json({ error: 'Unable to prepare the Auth user' }, 500);
 
-  let resolvedMemberId = memberId;
-  if (!resolvedMemberId && registrationId && onboardingMode === 'legacy_invite') {
-    const { data: existingMember, error: memberError } = await userClient
-      .from('aitask_members')
-      .select('id')
-      .eq('workspace_id', actor.workspace_id)
-      .is('auth_user_id', null)
-      .eq('email', email)
-      .maybeSingle();
-    if (memberError) {
-      if (createdAuthUser) await adminClient.auth.admin.deleteUser(authUser.id);
-      return json({ error: 'Unable to verify the legacy member record' }, 500);
-    }
-    resolvedMemberId = existingMember?.id || '';
-  }
-
-  const { data: result, error: finalizeError } = await adminClient.rpc('aitask_finalize_member_invitation_v2', {
-    p_actor_member_id: actor.id,
-    p_auth_user_id: authUser.id,
-    p_name: name,
-    p_email: email,
-    p_role: role,
-    p_departments: role === 'Client' ? ['Client'] : departments,
-    p_client_name: companyName,
-    p_custom_role_id: customRoleId,
-    p_custom_role_name: customRoleName,
-    p_member_id: resolvedMemberId || null,
-    p_registration_id: registrationId || null,
+  const { data: result, error: finalizeError } = await adminClient.rpc('aitask_finalize_member_invitation_v3', {
+    p_actor_member_id: actor.id, p_command_id: commandId, p_auth_user_id: authUser.id, p_payload: payload,
   });
-
   if (finalizeError) {
-    if (createdAuthUser) await adminClient.auth.admin.deleteUser(authUser.id);
-    return json({ error: finalizeError.message }, 400);
+    // A transport error cannot establish whether the transaction committed.
+    const { data: reconciled, error: reconcileError } = await adminClient.rpc('aitask_reserve_member_onboarding', {
+      p_actor_member_id: actor.id, p_command_id: commandId, p_payload: payload,
+    });
+    if (!reconcileError && reconciled?.result) return json(reconciled.result);
+    return retryError('Invitation confirmation is pending. Keep this draft and retry; the prepared login has been retained.');
   }
-
-  const { error: workerTypeError } = await adminClient.from('aitask_members')
-    .update({ worker_type: workerType })
-    .eq('workspace_id', actor.workspace_id)
-    .eq('auth_user_id', authUser.id);
-  if (workerTypeError) return json({ error: 'Member created, but worker type could not be saved. Retry the invitation update.' }, 409);
-
   return json(result, createdAuthUser ? 201 : 200);
 });

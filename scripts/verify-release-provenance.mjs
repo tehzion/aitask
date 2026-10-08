@@ -1,3 +1,4 @@
+import { deploymentProtectionHeaders } from './deployment-protection.mjs';
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -43,7 +44,8 @@ if (file) {
   let response;
   try {
     response = await fetch(endpoint, {
-      headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+      headers: { Accept: 'application/json', 'Cache-Control': 'no-cache', ...await deploymentProtectionHeaders(endpoint) },
+      redirect: 'error',
       signal: AbortSignal.timeout(15_000),
     });
   } catch (error) {

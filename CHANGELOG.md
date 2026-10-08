@@ -8,6 +8,21 @@ number remain uniquely identifiable.
 
 ### Fixed
 
+- Interrupted mixed saves retain every ordered command group, recover lost
+  acknowledgements and preserve edits made while saving or retrying.
+- Member onboarding journals stable requests and atomically saves membership,
+  registration approval and worker type. Uncertain responses preserve prepared
+  logins, and older clients receive a reload instruction while retaining drafts.
+- Plan, project and add-on defaults use local dates; untouched add-ons keep their
+  baseline across midnight. Calendar bars fit the six visible days, and Delivery
+  tracker overdue summaries refresh at midnight and when a tab resumes.
+- Release pipelines fail on piped command errors, serialize their shared staging
+  fixture, validate configuration before deployment and scope short-lived OIDC
+  protection access to the exact staging origin. Hosted artifacts disable full
+  credential-bearing traces and pass a credential scan before upload.
+- Required GitHub review/check protection and isolated HOD QA secrets are
+  configured. Hosted staging and the remaining hosting security requirements
+  still block release; see the pre-live remediation report.
 - Calendar rejects impossible deadlines and refreshes its totals and selected
   filters at local midnight and when a suspended tab resumes.
 - Deferred navigation focus preserves a control the user has already selected.

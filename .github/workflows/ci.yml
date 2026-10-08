@@ -5,6 +5,10 @@ on:
   push:
     branches: [main, master]
 
+defaults:
+  run:
+    shell: bash
+
 permissions:
   contents: read
 

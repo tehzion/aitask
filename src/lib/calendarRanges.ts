@@ -1,3 +1,4 @@
+import { DAYS_IN_WORK_WEEK } from './workWeek';
 import {
   addDays,
   differenceInCalendarDays,
@@ -138,7 +139,7 @@ export const buildCalendarWeekLayout = (
   maxVisibleLanes: number,
 ): CalendarWeekLayout => {
   const weekStart = parseISO(dateKey(weekStartDate));
-  const weekEnd = addDays(weekStart, 6);
+  const weekEnd = addDays(weekStart, DAYS_IN_WORK_WEEK - 1);
   const ranges = tasks
     .map(normalizeCalendarTaskRange)
     .filter((range): range is CalendarTaskRange => Boolean(

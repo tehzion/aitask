@@ -1,3 +1,4 @@
+import { getTodayInputDate } from '../lib/utils';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import DraftRecoveryNotice from './DraftRecoveryNotice';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -119,13 +120,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     if (project) {
       setClientId(project.clientId || clientOptions.find(option => option.name.toLowerCase() === project.clientName.trim().toLowerCase())?.id || '');
       setProjectName(project.projectName);
-      setStartDate(project.startDate || new Date().toISOString().slice(0, 10));
+      setStartDate(project.startDate || getTodayInputDate());
       setDeadline(project.deadline || '');
       setSelectedServices(project.services || []);
     } else {
       setClientId(initialClientId || '');
       setProjectName('');
-      setStartDate(new Date().toISOString().slice(0, 10));
+      setStartDate(getTodayInputDate());
       setDeadline('');
       setSelectedServices([]);
     }

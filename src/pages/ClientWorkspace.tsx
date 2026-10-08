@@ -36,7 +36,7 @@ import {
   Surface,
 } from "../components/ui";
 import { cardBase, inputBase, pageShell } from "../components/uiTokens";
-import { cn } from "../lib/utils";
+import { cn, getTodayInputDate } from "../lib/utils";
 import { parseOptionalDate } from "../lib/utils";
 import { formatLocalizedDate } from "../lib/i18n";
 import {
@@ -148,16 +148,17 @@ const OperationsClientWorkspace = () => {
   const [addonEndDates, setAddonEndDates] = React.useState<
     Record<string, string>
   >({});
+  const [addonDefaultDate] = React.useState(() => getTodayInputDate());
   const [addon, setAddon] = React.useState({
     name: "",
     platforms: "",
     quantity: 1,
     unitPrice: 0,
     billingMode: "one_off" as AddonBillingMode,
-    effectiveFrom: new Date().toISOString().slice(0, 10),
+    effectiveFrom: addonDefaultDate,
     targetCycleId: "",
   });
-  useUnsavedChanges(addonSaving || Boolean(addon.name.trim() || addon.platforms.trim() || addon.quantity !== 1 || addon.unitPrice !== 0 || addon.billingMode !== 'one_off' || addon.targetCycleId || addon.effectiveFrom !== new Date().toISOString().slice(0, 10)));
+  useUnsavedChanges(addonSaving || Boolean(addon.name.trim() || addon.platforms.trim() || addon.quantity !== 1 || addon.unitPrice !== 0 || addon.billingMode !== 'one_off' || addon.targetCycleId || addon.effectiveFrom !== addonDefaultDate));
 
   if (!client) return <Navigate to="/projects" replace />;
 
