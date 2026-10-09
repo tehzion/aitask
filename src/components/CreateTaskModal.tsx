@@ -1,3 +1,4 @@
+import { useSaveAction } from '../hooks/useSaveAction';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import DraftRecoveryNotice from './DraftRecoveryNotice';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -88,7 +89,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [notes, setNotes] = useState('');
   const [assignmentError, setAssignmentError] = useState('');
   const [formError, setFormError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { busy: isSubmitting, run: runTask } = useSaveAction(String(isOpen));
+  const pendingTaskRecord = React.useRef<(typeof tasks)[number] | null>(null);
   const markPristine = useUnsavedChanges(isOpen && (formEdited || isSubmitting));
   const [pendingTaskId, setPendingTaskId] = useState('');
   const pendingResolution = isPendingMutationResolution(backend);
@@ -165,9 +167,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setNotes('');
     setAssignmentError('');
     setFormError('');
-    setIsSubmitting(false);
     setPendingTaskId('');
+    pendingTaskRecord.current = null;
   }, [currentUser?.role]);
+
+  React.useEffect(() => { resetForm(); }, [currentUser?.id, resetForm]);
 
   const recovery = useRecoverableForm('create-task', { projectId, title, description, clientName, customerDetails, facebookPage, website, department, assignedTo, serviceType, priority, visibility, startDate, dueDate, attachmentLink, attachmentName, notes, customServiceInput }, formEdited, isOpen && !pendingTaskId);
   const restoreDraft = () => {
@@ -281,13 +285,31 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handlePermanentSaveRejection = async (error?: string) => {
-    // The server rejected the command, so an identical retry cannot succeed.
-    // Restore the last confirmed workspace while leaving the form values in
-    // place for the user to correct.
-    await discardMutation({ reload: true, confirm: false });
-    setPendingTaskId('');
-    setFormError(error || 'This task was not saved. Review your permissions and task details.');
+  const confirmTaskSave = async (taskId: string) => {
+    setPendingTaskId(taskId);
+    const result = await runTask(() => retryPendingSave('task.create'));
+    if (!result) return;
+    if (!result.ok) {
+      if (result.code === 'FORBIDDEN' || result.code === 'VALIDATION') {
+        const discarded = await runTask(async () => { await discardMutation({ reload: true, confirm: false }); return { ok: true, error: undefined }; });
+        if (!discarded) return;
+        if (!discarded.ok) { setFormError(discarded.error); return; }
+        pendingTaskRecord.current = null;
+        setPendingTaskId('');
+      }
+      setFormError(result.error || 'The task is waiting to be saved. Review the sync status and retry.');
+      return;
+    }
+    const submitted = pendingTaskRecord.current;
+    const latest = useStore.getState().tasks.find(task => task.id === taskId);
+    if (!submitted || !latest || ['title', 'description', 'assignedTo', 'department', 'clientName', 'projectId', 'startDate', 'dueDate', 'serviceType', 'priority', 'visibility'].some(key => JSON.stringify(latest[key as keyof typeof latest]) !== JSON.stringify(submitted[key as keyof typeof submitted]))) {
+      pendingTaskRecord.current = null;
+      setPendingTaskId('');
+      setFormError(t('The pending task creation is no longer available. Review your draft before saving again.'));
+      return;
+    }
+    closeAndReset();
+    navigate(`/tasks?taskId=${taskId}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -296,23 +318,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setFormError('');
     if (!currentUser) return;
 
-    if (pendingTaskId) {
-      setIsSubmitting(true);
-      const pendingResult = await retryPendingSave('task.create');
-      setIsSubmitting(false);
-      if (!pendingResult.ok) {
-        if (pendingResult.code === 'FORBIDDEN' || pendingResult.code === 'VALIDATION') {
-          await handlePermanentSaveRejection(pendingResult.error);
-          return;
-        }
-        setFormError(pendingResult.error || 'The task is still waiting to be saved.');
-        return;
-      }
-      const savedTaskId = pendingTaskId;
-      closeAndReset();
-      navigate(`/tasks?taskId=${savedTaskId}`);
-      return;
-    }
+    if (isSubmitting) return;
+    if (pendingTaskId) { await confirmTaskSave(pendingTaskId); return; }
 
     const trimmedTitle = title.trim();
     const trimmedClientName = clientName.trim();
@@ -362,7 +369,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    setIsSubmitting(true);
     const taskId = addTask({
       title: trimmedTitle,
       description: description.trim(),
@@ -393,7 +399,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     });
 
     if (!taskId) {
-      setIsSubmitting(false);
       setFormError(
         canCreateTasks(currentUser, rolePermissions)
           ? 'This task could not be created. Review the selected company, department, and fields.'
@@ -402,20 +407,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    const saveResult = await retryPendingSave('task.create');
-    setIsSubmitting(false);
-    if (!saveResult.ok) {
-      if (saveResult.code === 'FORBIDDEN' || saveResult.code === 'VALIDATION') {
-        await handlePermanentSaveRejection(saveResult.error);
-        return;
-      }
-      setPendingTaskId(taskId);
-      setFormError(saveResult.error || 'The task is waiting to be saved. Review the sync status and retry.');
-      return;
-    }
-
-    closeAndReset();
-    navigate(`/tasks?taskId=${taskId}`);
+    pendingTaskRecord.current = useStore.getState().tasks.find(task => task.id === taskId) || null;
+    await confirmTaskSave(taskId);
   };
 
   return (
@@ -448,6 +441,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
         {/* Body */}
         <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
           <form id="create-task-form" onSubmit={handleSubmit} className="space-y-6">
+            <fieldset disabled={isSubmitting || Boolean(pendingTaskId)} className="min-w-0 border-0 p-0 space-y-6">
             
             {/* Task Basic Info */}
             <div className="space-y-4">
@@ -748,6 +742,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               </div>
             </div>
 
+            </fieldset>
             {(formError || pendingResolution) && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
                 <p>{formError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
@@ -769,7 +764,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
           <button 
             type="submit"
             form="create-task-form"
-            disabled={isSubmitting || pendingResolution}
+            disabled={isSubmitting || (pendingResolution && !pendingTaskId)}
             className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? t('Saving task...') : pendingTaskId ? t('Retry saving task') : t('Create & open task')}

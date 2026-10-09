@@ -21,6 +21,9 @@ import ModalShell from '../components/ModalShell';
 import ConfirmDialog from '../components/ConfirmDialog';
 import DepartmentMultiSelect from '../components/DepartmentMultiSelect';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useSaveAction } from '../hooks/useSaveAction';
+import { rollbackUnchangedRows } from '../lib/actionRollback';
 import { generateTemporaryPassword } from '../lib/temporaryPassword';
 
 const ROLES: Role[] = ['Project Manager', 'HOD', 'Staff', 'Client'];
@@ -344,7 +347,9 @@ const Approvals: React.FC = () => {
   const [pendingRoleSave, setPendingRoleSave] = useState(false);
   const [assignmentError, setAssignmentError] = useState('');
   const [actionError, setActionError] = useState('');
-  const [isActionSaving, setIsActionSaving] = useState(false);
+  const { busy: isActionSaving, run: runAction } = useSaveAction();
+  const pendingRoleRecord = React.useRef<CustomRole | null>(null);
+  const pendingNewMember = React.useRef<User | null>(null);
   const [memberDepartmentsId, setMemberDepartmentsId] = useState<string | null>(null);
   const [memberDepartments, setMemberDepartments] = useState<Department[]>([]);
   const [memberDepartmentsError, setMemberDepartmentsError] = useState('');
@@ -368,6 +373,10 @@ const Approvals: React.FC = () => {
     permissions: clonePermissions(defaultRolePermissions.Staff),
   });
 
+  const roleBaseline = React.useRef(JSON.stringify(roleForm));
+  const roleDirty = JSON.stringify(roleForm) !== roleBaseline.current;
+  useUnsavedChanges(roleDirty || pendingRoleSave || isActionSaving);
+
   // Delete User Modal State
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [deleteUserError, setDeleteUserError] = useState('');
@@ -380,6 +389,18 @@ const Approvals: React.FC = () => {
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
+
+  useEffect(() => {
+    pendingRoleRecord.current = null;
+    pendingNewMember.current = null;
+    setPendingRoleSave(false); setRoleEditorId(null);
+    const blankRole = { name: '', description: '', baseRole: 'Staff' as Role, departmentScoped: false, permissions: clonePermissions(defaultRolePermissions.Staff) };
+    roleBaseline.current = JSON.stringify(blankRole); setRoleForm(blankRole);
+    setRoleError(''); setActionError(''); setAssignmentError('');
+    setSelectedReg(null); setSelectedBulkRegIds(new Set()); setConfirmation(null);
+    setIsAddUserOpen(false); setAddUserError(''); setUserToDelete(null);
+    setMemberDepartmentsId(null); setMemberPermissionsId(null); setRoleCompanyUserId(null); setRoleDeptUserId(null);
+  }, [currentUser?.id]);
 
   const pendingDays = (reg: Registration) => {
     const created = new Date(reg.createdAt).getTime();
@@ -490,12 +511,12 @@ const Approvals: React.FC = () => {
         return;
       }
     }
-    setIsActionSaving(true);
-    const saved = await commitPendingMutation();
-    setIsActionSaving(false);
+    const submitted = useStore.getState();
+    const saved = await runAction(() => commitPendingMutation());
+    if (!saved) return;
     setSelectedBulkRegIds(new Set());
     if (!saved.ok) {
-      useStore.setState({ registrations: previousRegistrations });
+      useStore.setState(state => ({ registrations: rollbackUnchangedRows(state.registrations, previousRegistrations, submitted.registrations) }));
       setActionError(saved.error || 'The rejection was rolled back. Use Retry required to confirm it.');
     }
   };
@@ -513,7 +534,6 @@ const Approvals: React.FC = () => {
 
   const performBulkApprove = async (targets: Registration[]) => {
     const count = targets.length;
-    setIsActionSaving(true);
     setActionError('');
     const failures: Registration[] = [];
     const reportFailures = () => {
@@ -528,29 +548,22 @@ const Approvals: React.FC = () => {
       setActionError(`Unable to approve: ${names}${failures.length > 3 ? '…' : ''}`);
     };
     if (secureAccounts) {
-      for (const reg of targets) {
-        const requestedDepartment = normalizeDepartment(reg.jobPosition);
-        const departments = requestedDepartment && requestedDepartment !== 'Client' ? [requestedDepartment] : [];
-        if (departments.length === 0) {
-          failures.push(reg);
-          continue;
+      const actorId = useStore.getState().currentUser?.id;
+      const saved = await runAction(async isCurrent => {
+        for (const reg of targets) {
+          if (!isCurrent() || useStore.getState().currentUser?.id !== actorId) return { ok: false, error: 'Your session changed. Sign in again.' };
+          const requestedDepartment = normalizeDepartment(reg.jobPosition);
+          const departments = requestedDepartment && requestedDepartment !== 'Client' ? [requestedDepartment] : [];
+          if (departments.length === 0) { failures.push(reg); continue; }
+          const result = await addUserBySuperAdmin({ name: reg.name, email: reg.email, role: 'Staff', departments, registrationId: reg.id, sendInvitation: false });
+          if (!result.ok) failures.push(reg);
         }
-        const result = await addUserBySuperAdmin({
-          name: reg.name,
-          email: reg.email,
-          role: 'Staff',
-          departments,
-          registrationId: reg.id,
-          sendInvitation: false,
-        });
-        if (!result.ok) failures.push(reg);
-      }
-      setIsActionSaving(false);
+        return { ok: true, error: undefined };
+      });
+      if (!saved) return;
+      if (!saved.ok) { setActionError(saved.error || 'Unable to approve this member.'); return; }
       setSelectedBulkRegIds(new Set(failures.map(reg => reg.id)));
-      if (failures.length > 0) {
-        reportFailures();
-        return;
-      }
+      if (failures.length > 0) { reportFailures(); return; }
       useToastStore.getState().addToast(msg('approval.registrationApproved', { count }), 'success');
       return;
     }
@@ -566,10 +579,11 @@ const Approvals: React.FC = () => {
       const result = approveRegistration(reg.id, 'Staff', [requestedDepartment], undefined, undefined);
       if (!result.ok) failures.push(reg);
     });
-    const saved = failures.length < count ? await commitPendingMutation() : { ok: true };
-    setIsActionSaving(false);
+    const submitted = useStore.getState();
+    const saved = failures.length < count ? await runAction(() => commitPendingMutation()) : { ok: true };
+    if (!saved) return;
     if (!saved.ok) {
-      useStore.setState({ registrations: previousRegistrations, users: previousUsers });
+      useStore.setState(state => ({ registrations: rollbackUnchangedRows(state.registrations, previousRegistrations, submitted.registrations), users: rollbackUnchangedRows(state.users, previousUsers, submitted.users) }));
       setActionError(saved.error || 'The approvals were rolled back. Use Retry required to confirm them.');
       return;
     }
@@ -642,9 +656,8 @@ const Approvals: React.FC = () => {
       setActionError('Choose at least one department before approving this member.');
       return;
     }
-    setIsActionSaving(true);
     if (secureAccounts) {
-      const inviteResult = await addUserBySuperAdmin({
+      const inviteResult = await runAction(() => addUserBySuperAdmin({
         name: selectedReg.name,
         email: selectedReg.email,
         role,
@@ -656,13 +669,12 @@ const Approvals: React.FC = () => {
         password: selectedReg.onboardingMode === 'legacy_invite' && !sendApprovalInvitation
           ? approvalTemporaryPassword
           : undefined,
-      });
+      }));
+      if (!inviteResult) return;
       if (!inviteResult.ok) {
-        setIsActionSaving(false);
         setActionError(inviteResult.error || 'Unable to approve this member.');
         return;
       }
-      setIsActionSaving(false);
       closeApprovalReview();
       setRole('Staff');
       setApprovalDepartments([]);
@@ -676,17 +688,18 @@ const Approvals: React.FC = () => {
     const usersBefore = users;
     const approved = approveRegistration(selectedReg.id, role, departments, role === 'Client' ? companyName : undefined, approvalCustomRoleId || undefined);
     if (!approved.ok) {
-      setIsActionSaving(false);
       setActionError(approved.error || 'Unable to approve this member.');
       return;
     }
-    const saved = await commitPendingMutation();
-    setIsActionSaving(false);
+    const submitted = useStore.getState();
+    const saved = await runAction(() => commitPendingMutation(), result => {
+      if (!result.ok) useStore.setState(state => ({
+        registrations: rollbackUnchangedRows(state.registrations, registrationsBefore, submitted.registrations),
+        users: rollbackUnchangedRows(state.users, usersBefore, submitted.users),
+      }));
+    });
+    if (!saved) return;
     if (!saved.ok) {
-      useStore.setState({
-        registrations: registrationsBefore,
-        users: usersBefore,
-      });
       setActionError(saved.error || 'The approval is waiting to be saved. Use Retry required to continue.');
       return;
     }
@@ -716,13 +729,9 @@ const Approvals: React.FC = () => {
 
   const resetRoleForm = (baseRole: Role = 'Staff') => {
     setRoleEditorId(null);
-    setRoleForm({
-      name: '',
-      description: '',
-      baseRole,
-      departmentScoped: baseRole === 'HOD',
-      permissions: clonePermissions(defaultRolePermissions[baseRole]),
-    });
+    const blankRole = { name: '', description: '', baseRole, departmentScoped: baseRole === 'HOD', permissions: clonePermissions(defaultRolePermissions[baseRole]) };
+    roleBaseline.current = JSON.stringify(blankRole);
+    setRoleForm(blankRole);
     setRoleError('');
   };
 
@@ -744,19 +753,31 @@ const Approvals: React.FC = () => {
     });
   };
 
+  const confirmRoleRecord = () => {
+    const submitted = pendingRoleRecord.current;
+    const latest = useStore.getState().rolePermissions.find(role => role.id === submitted?.id);
+    pendingRoleRecord.current = null;
+    setPendingRoleSave(false);
+    if (!submitted || !latest || ['name', 'description', 'baseRole', 'departmentScoped', 'permissions'].some(key => JSON.stringify(latest[key as keyof CustomRole]) !== JSON.stringify(submitted[key as keyof CustomRole]))) {
+      setRoleError(t('The pending role is no longer available. Review your draft before saving again.'));
+      return false;
+    }
+    return true;
+  };
+
   const handleSaveRole = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isActionSaving || backend.isSaving) return;
     setRoleError('');
 
     if (pendingRoleSave) {
-      setIsActionSaving(true);
-      const saved = secureAccounts ? await retryMutation() : await commitPendingMutation();
-      setIsActionSaving(false);
+      const saved = await runAction(() => secureAccounts ? retryMutation() : commitPendingMutation());
+      if (!saved) return;
       if (!saved.ok) {
         setRoleError(saved.error || 'The role is waiting to be saved. Use Retry required to continue.');
         return;
       }
+      if (!confirmRoleRecord()) return;
       setPendingRoleSave(false);
       resetRoleForm(roleForm.baseRole);
       return;
@@ -785,31 +806,30 @@ const Approvals: React.FC = () => {
       return;
     }
 
-    setIsActionSaving(true);
-    const saved = await commitPendingMutation();
-    setIsActionSaving(false);
+    pendingRoleRecord.current = useStore.getState().rolePermissions.find(role => role.id === (roleEditorId || ('id' in result ? result.id : undefined))) || null;
+    setPendingRoleSave(true);
+    const saved = await runAction(() => commitPendingMutation());
+    if (!saved) return;
     if (!saved.ok) {
       setPendingRoleSave(true);
       setRoleError(saved.error || 'The role is waiting to be saved. Use Retry required to continue.');
       return;
     }
 
+    if (!confirmRoleRecord()) return;
     resetRoleForm(roleForm.baseRole);
   };
 
   const handleEditRole = (customRoleId: string) => {
     if (isActionSaving || pendingRoleSave) return;
+    if (roleDirty && !window.confirm(t('Discard unsaved changes?'))) return;
     const targetRole = rolePermissions.find(customRole => customRole.id === customRoleId);
     if (!targetRole) return;
 
     setRoleEditorId(targetRole.id);
-    setRoleForm({
-      name: targetRole.name,
-      description: targetRole.description || '',
-      baseRole: targetRole.baseRole,
-      departmentScoped: targetRole.departmentScoped === true,
-      permissions: clonePermissions(targetRole.permissions),
-    });
+    const draft = { name: targetRole.name, description: targetRole.description || '', baseRole: targetRole.baseRole, departmentScoped: targetRole.departmentScoped === true, permissions: clonePermissions(targetRole.permissions) };
+    roleBaseline.current = JSON.stringify(draft);
+    setRoleForm(draft);
     setRoleError('');
   };
 
@@ -825,11 +845,11 @@ const Approvals: React.FC = () => {
       return;
     }
 
-    setIsActionSaving(true);
-    const saved = await commitPendingMutation();
-    setIsActionSaving(false);
+    const submitted = useStore.getState();
+    const saved = await runAction(() => commitPendingMutation());
+    if (!saved) return;
     if (!saved.ok) {
-      useStore.setState({ rolePermissions: previousRoles, users: previousUsers, deletedRoleIds: previousDeletedRoleIds });
+      useStore.setState(state => ({ rolePermissions: rollbackUnchangedRows(state.rolePermissions, previousRoles, submitted.rolePermissions), users: rollbackUnchangedRows(state.users, previousUsers, submitted.users), deletedRoleIds: state.deletedRoleIds === submitted.deletedRoleIds ? previousDeletedRoleIds : state.deletedRoleIds }));
       setRoleError(saved.error || 'The role deletion was rolled back. Use Retry required to confirm it.');
       return;
     }
@@ -891,9 +911,8 @@ const Approvals: React.FC = () => {
     customRoleId?: string,
     departments?: Department[],
   ) => {
-    setIsActionSaving(true);
-    const result = await changeMemberRole(user.id, nextRole, { customRoleId, departments });
-    setIsActionSaving(false);
+    const result = await runAction(() => changeMemberRole(user.id, nextRole, { customRoleId, departments }));
+    if (!result) return false;
     if (!result.ok) {
       setAssignmentError(result.error || 'Unable to change role.');
       return false;
@@ -919,9 +938,8 @@ const Approvals: React.FC = () => {
       setAssignmentError('Choose a company for this client account.');
       return;
     }
-    setIsActionSaving(true);
-    const result = await changeMemberRole(user.id, 'Client', { companyName: roleCompanyName.trim() });
-    setIsActionSaving(false);
+    const result = await runAction(() => changeMemberRole(user.id, 'Client', { companyName: roleCompanyName.trim() }));
+    if (!result) return;
     if (!result.ok) {
       setAssignmentError(result.error || 'Unable to change role.');
       return;
@@ -947,9 +965,8 @@ const Approvals: React.FC = () => {
       setMemberDepartmentsError('Choose at least one department.');
       return;
     }
-    setIsActionSaving(true);
-    const result = await updateMemberDepartments(memberDepartmentsId, memberDepartments);
-    setIsActionSaving(false);
+    const result = await runAction(() => updateMemberDepartments(memberDepartmentsId, memberDepartments));
+    if (!result) return;
     if (!result.ok) {
       setMemberDepartmentsError(result.error || 'Unable to update departments.');
       return;
@@ -978,12 +995,11 @@ const Approvals: React.FC = () => {
     e.preventDefault();
     if (!memberPermissionsId) return;
     setMemberPermissionsError('');
-    setIsActionSaving(true);
-    const result = await updateMemberPermissions(
+    const result = await runAction(() => updateMemberPermissions(
       memberPermissionsId,
       memberPermissionsCustom ? memberPermissions : undefined,
-    );
-    setIsActionSaving(false);
+    ));
+    if (!result) return;
     if (!result.ok) {
       setMemberPermissionsError(result.error || 'Unable to update member permissions.');
       return;
@@ -1000,9 +1016,8 @@ const Approvals: React.FC = () => {
     ) return;
     if (kind === 'departments') setMemberDepartmentsError('');
     else setMemberPermissionsError('');
-    setIsActionSaving(true);
-    const result = await retryMutation();
-    setIsActionSaving(false);
+    const result = await runAction(() => retryMutation());
+    if (!result) return;
     if (!result.ok) {
       if (kind === 'departments') setMemberDepartmentsError(result.error || 'Unable to retry the department change.');
       else setMemberPermissionsError(result.error || 'Unable to retry the permission change.');
@@ -1024,11 +1039,11 @@ const Approvals: React.FC = () => {
       setActionError(String(t(localResult.error || 'The registration could not be rejected.')));
       return;
     }
-    setIsActionSaving(true);
-    const saved = await commitPendingMutation();
-    setIsActionSaving(false);
+    const submitted = useStore.getState();
+    const saved = await runAction(() => commitPendingMutation());
+    if (!saved) return;
     if (!saved.ok) {
-      useStore.setState({ registrations: previousRegistrations });
+      useStore.setState(state => ({ registrations: rollbackUnchangedRows(state.registrations, previousRegistrations, submitted.registrations) }));
       setActionError(saved.error || 'The rejection was rolled back. Use Retry required to confirm it.');
     }
   };
@@ -1052,38 +1067,35 @@ const Approvals: React.FC = () => {
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isActionSaving) return;
     setAddUserError('');
-    setIsActionSaving(true);
-    const result = await addUserBySuperAdmin({
-      name: newUser.name,
-      email: newUser.email || undefined,
-      password: newUser.password,
-      role: newUser.role,
-      departments: newUser.role === 'Client' ? ['Client'] : newUser.departments,
-      companyName: newUser.role === 'Client' ? newUser.companyName : undefined,
-      customRoleId: newUser.customRoleId || undefined,
-      workerType: ['Staff', 'HOD'].includes(newUser.role) ? newUser.workerType : undefined,
-      sendInvitation: sendNewUserInvitation,
+    const previousIds = new Set(useStore.getState().users.map(user => user.id));
+    const result = await runAction(async isCurrent => {
+      if (!pendingNewMember.current) {
+        const created = await addUserBySuperAdmin({
+          name: newUser.name, email: newUser.email || undefined, password: newUser.password,
+          role: newUser.role, departments: newUser.role === 'Client' ? ['Client'] : newUser.departments,
+          companyName: newUser.role === 'Client' ? newUser.companyName : undefined,
+          customRoleId: newUser.customRoleId || undefined,
+          workerType: ['Staff', 'HOD'].includes(newUser.role) ? newUser.workerType : undefined,
+          sendInvitation: sendNewUserInvitation,
+        });
+        if (!isCurrent() || !created.ok || secureAccounts) return created;
+        pendingNewMember.current = useStore.getState().users.find(user => !previousIds.has(user.id)
+          && user.name === newUser.name.trim() && (user.email || '').toLowerCase() === newUser.email.trim().toLowerCase()) || null;
+      }
+      return commitPendingMutation();
     });
-    setIsActionSaving(false);
-
-    if (!result.ok) {
-      setAddUserError(result.error || 'Unable to add member.');
+    if (!result) return;
+    if (!result.ok) { setAddUserError(result.error || 'The member is waiting to be saved.'); return; }
+    const submittedMember = pendingNewMember.current;
+    const latestMember = useStore.getState().users.find(user => user.id === submittedMember?.id);
+    if (!secureAccounts && (!submittedMember || !latestMember || ['name', 'email', 'role', 'companyName', 'customRoleId', 'workerType', 'departments'].some(key => JSON.stringify(latestMember[key as keyof User]) !== JSON.stringify(submittedMember[key as keyof User])))) {
+      pendingNewMember.current = null;
+      setAddUserError(t('The pending member is no longer available. Review your draft before saving again.'));
       return;
     }
-
-    if (secureAccounts) {
-      resetNewUser();
-      setIsAddUserOpen(false);
-      return;
-    }
-
-    const saved = await commitPendingMutation();
-    if (!saved.ok) {
-      setAddUserError(saved.error || 'The member is waiting to be saved.');
-      return;
-    }
-
+    pendingNewMember.current = null;
     resetNewUser();
     setIsAddUserOpen(false);
   };
@@ -1092,22 +1104,22 @@ const Approvals: React.FC = () => {
     if (!userToDelete) return;
 
     const previous = useStore.getState();
-    setIsActionSaving(true);
-    const result = await deleteUser(userToDelete);
+    const result = await runAction(() => deleteUser(userToDelete));
+    if (!result) return;
     if (!result.ok) {
-      setIsActionSaving(false);
       setDeleteUserError(result.error || 'Unable to delete this user.');
       return;
     }
 
-    const saved = secureAccounts ? { ok: true } : await commitPendingMutation();
-    setIsActionSaving(false);
+    const submitted = useStore.getState();
+    const saved = secureAccounts ? { ok: true } : await runAction(() => commitPendingMutation());
+    if (!saved) return;
     if (!saved.ok) {
-      useStore.setState({
-        users: previous.users,
-        notifications: previous.notifications,
-        deletedUserIds: previous.deletedUserIds,
-      });
+      useStore.setState(state => ({
+        users: rollbackUnchangedRows(state.users, previous.users, submitted.users),
+        notifications: rollbackUnchangedRows(state.notifications, previous.notifications, submitted.notifications),
+        deletedUserIds: state.deletedUserIds === submitted.deletedUserIds ? previous.deletedUserIds : state.deletedUserIds,
+      }));
       setDeleteUserError(saved.error || 'The member deletion was rolled back. Use Retry required to confirm it.');
       return;
     }
@@ -1577,7 +1589,7 @@ const Approvals: React.FC = () => {
 
             <div className="flex flex-wrap justify-end gap-3">
               {roleEditorId && (
-                <Button type="button" variant="secondary" onClick={() => resetRoleForm()} disabled={pendingRoleSave}>
+                <Button type="button" variant="secondary" onClick={() => { if (!roleDirty || window.confirm(t('Discard unsaved changes?'))) resetRoleForm(); }} disabled={pendingRoleSave}>
                   {t('Cancel Edit')}
                 </Button>
               )}
@@ -2011,7 +2023,7 @@ const Approvals: React.FC = () => {
             </p>
           </div>
           <form onSubmit={handleSaveDepartments} className="space-y-5 p-6">
-            <DepartmentMultiSelect value={memberDepartments} onChange={setMemberDepartments} />
+            <DepartmentMultiSelect value={memberDepartments} onChange={setMemberDepartments} disabled={isActionSaving} />
             {memberDepartmentsError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
                 {memberDepartmentsError}
@@ -2062,11 +2074,11 @@ const Approvals: React.FC = () => {
           </div>
           <form onSubmit={handleSaveMemberPermissions} className="space-y-5 p-6">
             <div className="grid gap-3 sm:grid-cols-2">
-              <button type="button" aria-pressed={!memberPermissionsCustom} onClick={() => setMemberPermissionsCustom(false)} className={cn('min-h-20 rounded-lg border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400', !memberPermissionsCustom ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50')}>
+              <button type="button" disabled={isActionSaving} aria-pressed={!memberPermissionsCustom} onClick={() => setMemberPermissionsCustom(false)} className={cn('min-h-20 rounded-lg border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400', !memberPermissionsCustom ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50')}>
                 <span className="block text-sm font-semibold text-slate-900">{t('approval.useRoleDefaults')}</span>
                 <span className="mt-1 block text-xs leading-5 text-slate-500">{t('Follow {role} permissions and future role updates.', { role: getEffectiveRoleName({ ...memberPermissionsUser, permissions: undefined }, rolePermissions) })}</span>
               </button>
-              <button type="button" aria-pressed={memberPermissionsCustom} onClick={() => setMemberPermissionsCustom(true)} className={cn('min-h-20 rounded-lg border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400', memberPermissionsCustom ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50')}>
+              <button type="button" disabled={isActionSaving} aria-pressed={memberPermissionsCustom} onClick={() => setMemberPermissionsCustom(true)} className={cn('min-h-20 rounded-lg border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400', memberPermissionsCustom ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50')}>
                 <span className="block text-sm font-semibold text-slate-900">{t('approval.customAccess')}</span>
                 <span className="mt-1 block text-xs leading-5 text-slate-500">{t('Save a dedicated permission set for this member.')}</span>
               </button>
@@ -2098,7 +2110,7 @@ const Approvals: React.FC = () => {
               </div>
             </section>
 
-            <fieldset disabled={!memberPermissionsCustom} className="space-y-4 disabled:opacity-55">
+            <fieldset disabled={!memberPermissionsCustom || isActionSaving} className="space-y-4 disabled:opacity-55">
               <legend className="sr-only">{t('Member permissions')}</legend>
               {permissionGroups.map(group => (
                 <div key={group.title}>
@@ -2139,7 +2151,8 @@ const Approvals: React.FC = () => {
         <ModalShell
           labelledBy={addMemberTitleId}
           onClose={() => {
-            resetNewUser();
+            if (isActionSaving) return;
+            if (!pendingNewMember.current) resetNewUser();
             setIsAddUserOpen(false);
           }}
           panelClassName="max-w-lg "
@@ -2150,6 +2163,7 @@ const Approvals: React.FC = () => {
             </div>
 
             <form onSubmit={handleAddUser} className="p-6 space-y-4">
+              <fieldset disabled={isActionSaving || Boolean(pendingNewMember.current)} className="min-w-0 border-0 p-0 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">{t('Full Name')}</label>
@@ -2279,6 +2293,7 @@ const Approvals: React.FC = () => {
                 </div>
               )}
 
+              </fieldset>
               {addUserError && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert" aria-live="assertive">
                   {addUserError}
@@ -2290,7 +2305,8 @@ const Approvals: React.FC = () => {
                   type="button"
                   variant="secondary"
                   onClick={() => {
-                    resetNewUser();
+                    if (isActionSaving) return;
+                    if (!pendingNewMember.current) resetNewUser();
                     setIsAddUserOpen(false);
                   }}
                 >
@@ -2299,7 +2315,7 @@ const Approvals: React.FC = () => {
                 <Button type="submit" disabled={isActionSaving || backend.isSaving}>
                   {isActionSaving
                     ? sendNewUserInvitation ? t('Sending invitation...') : t('Creating account...')
-                    : t('Create member')}
+                    : pendingNewMember.current ? t('Retry save') : t('Create member')}
                 </Button>
               </div>
             </form>

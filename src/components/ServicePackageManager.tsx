@@ -8,6 +8,7 @@ import { formatMoney, snapshotWorkflow } from '../lib/serviceManagement';
 import { cn } from '../lib/utils';
 import { useI18n } from './I18nProvider';
 import ConfirmDialog from './ConfirmDialog';
+import { useCatalogEditor } from '../hooks/useCatalogEditor';
 
 const blankItem = (): ServiceItem => ({
   id: crypto.randomUUID(), name: '', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 0,
@@ -19,34 +20,23 @@ const blankPackage = (): Omit<ServicePackage, 'id' | 'revision' | 'createdAt' | 
 
 const ServicePackageManager = () => {
   const { locale, t } = useI18n();
-  const { servicePackages, serviceWorkflowTemplates, saveServicePackage, deleteServicePackage, retryPendingSave } = useStore();
-  const [editingId, setEditingId] = React.useState<string>();
-  const [draft, setDraft] = React.useState(blankPackage);
-  const [message, setMessage] = React.useState('');
-  const [saving, setSaving] = React.useState(false);
+  const { servicePackages, serviceWorkflowTemplates, saveServicePackage, deleteServicePackage } = useStore();
+  const { editingId, draft, setDraft, message, setMessage, saving, hasPending, edit, save: persistDraft, deleteItem } = useCatalogEditor({
+    blank: blankPackage,
+    fromRecord: (pkg: ServicePackage) => ({
+      name: pkg.name, description: pkg.description, currency: 'MYR' as const,
+      serviceItems: structuredClone(pkg.serviceItems), discountType: pkg.discountType,
+      discountValue: pkg.discountValue, taxRateBps: pkg.taxRateBps, isActive: pkg.isActive,
+    }),
+    findRecord: id => useStore.getState().servicePackages.find(pkg => pkg.id === id),
+    persist: (value, id) => saveServicePackage({ ...value, id }), remove: deleteServicePackage,
+    command: 'service_package.manage', savedMessage: 'Package saved. Existing client plans remain unchanged.',
+    deletedMessage: 'Package deleted. Existing client plans remain unchanged.',
+  });
   const [packageToDelete, setPackageToDelete] = React.useState<ServicePackage | null>(null);
 
   const handleDelete = async (pkg: ServicePackage) => {
-    const result = deleteServicePackage(pkg.id);
-    if (!result.ok) return setMessage(result.error || t('Unable to delete the package.'));
-    setSaving(true);
-    const committed = await retryPendingSave('service_package.manage');
-    setSaving(false);
-    if (!committed.ok) {
-      setMessage(committed.error || t('The deletion is waiting to be saved.'));
-      return;
-    }
-    if (editingId === pkg.id) edit();
-    setMessage(t('Package deleted. Existing client plans remain unchanged.'));
-  };
-
-  const edit = (pkg?: ServicePackage) => {
-    setEditingId(pkg?.id);
-    setDraft(pkg ? {
-      name: pkg.name, description: pkg.description, currency: 'MYR', serviceItems: pkg.serviceItems.map(item => ({ ...item, platforms: [...item.platforms] })),
-      discountType: pkg.discountType, discountValue: pkg.discountValue, taxRateBps: pkg.taxRateBps, isActive: pkg.isActive,
-    } : blankPackage());
-    setMessage('');
+    await deleteItem(pkg);
   };
 
   const updateItem = (id: string, patch: Partial<ServiceItem>) => setDraft(current => ({
@@ -55,6 +45,7 @@ const ServicePackageManager = () => {
   }));
 
   const save = async () => {
+    if (hasPending) { await persistDraft(); return; }
     setMessage('');
     if (!draft.name.trim()) return setMessage(t('Package name is required.'));
     if (draft.serviceItems.length === 0) return setMessage(t('Add at least one service item.'));
@@ -63,14 +54,7 @@ const ServicePackageManager = () => {
     if (draft.serviceItems.some(item => item.unitPriceMinor < 0 || !Number.isFinite(item.unitPriceMinor))) return setMessage(t('Unit prices must be non-negative.'));
     if (draft.discountType === 'percent' && draft.discountValue > 10000) return setMessage(t('Percent discount cannot exceed 100%.'));
 
-    const result = saveServicePackage({ ...draft, id: editingId });
-    if (!result.ok) return setMessage(result.error || t('Unable to save the package.'));
-    setSaving(true);
-    const committed = await retryPendingSave('service_package.manage');
-    setSaving(false);
-    if (!committed.ok) return setMessage(committed.error || t('The package is waiting to be saved.'));
-    edit();
-    setMessage(t('Package saved. Existing client plans remain unchanged.'));
+    await persistDraft();
   };
 
   return (
@@ -80,7 +64,7 @@ const ServicePackageManager = () => {
           <h2 id="service-packages-title" className="font-semibold text-slate-950">{t('Service Packages')}</h2>
           <p className="mt-1 text-sm text-slate-500">{t('Reusable plan templates. Saved client plans always keep their own snapshot.')}</p>
         </div>
-        <Button variant="secondary" onClick={() => edit()}><PackagePlus className="h-4 w-4" />{t('New package')}</Button>
+        <Button variant="secondary" onClick={() => edit()} disabled={saving || hasPending}><PackagePlus className="h-4 w-4" />{t('New package')}</Button>
       </div>
       <div className="grid gap-0 lg:grid-cols-[280px_1fr]">
         <div className="border-b border-line bg-inset/60 p-3 lg:border-b-0 lg:border-r lg:border-line">
@@ -88,14 +72,14 @@ const ServicePackageManager = () => {
           <div className="space-y-2">
             {servicePackages.map(pkg => (
               <div key={pkg.id} className={cn('group flex items-stretch gap-1 rounded-control', editingId === pkg.id ? 'bg-surface text-ink shadow-sm ring-1 ring-line' : 'hover:bg-surface/70')}>
-              <button onClick={() => edit(pkg)} aria-current={editingId === pkg.id ? 'true' : undefined} className="min-w-0 flex-1 rounded-control px-3 py-3 text-left transition-colors">
+              <button onClick={() => edit(pkg)} disabled={saving || hasPending} aria-current={editingId === pkg.id ? 'true' : undefined} className="min-w-0 flex-1 rounded-control px-3 py-3 text-left transition-colors">
                 <span className="block truncate text-sm font-semibold text-slate-900" data-i18n-skip>{pkg.name}</span>
                 <span className="mt-1 block text-xs text-slate-500">{t('Revision')} {pkg.revision} · {pkg.serviceItems.length} {t(pkg.serviceItems.length === 1 ? 'service' : 'services')}</span>
               </button>
               <button
                 type="button"
                 onClick={() => setPackageToDelete(pkg)}
-                disabled={saving}
+                disabled={saving || hasPending}
                 data-i18n-skip
                 aria-label={`${t('Delete package')} ${pkg.name}`}
                 title={`${t('Delete')} ${pkg.name}`}
@@ -140,7 +124,7 @@ const ServicePackageManager = () => {
             <div className="text-right"><p className="text-xs text-slate-500">{t('Monthly subtotal')}</p><p className="font-semibold text-slate-950">{formatMoney(draft.serviceItems.reduce((sum, item) => sum + item.quantity * item.unitPriceMinor, 0), draft.currency, locale)}</p></div>
           </div>
           {message && <p className="text-sm font-medium text-blue-700" role="status">{message}</p>}
-          <div className="sticky bottom-0 -mx-5 -mb-5 flex justify-end border-t border-line bg-surface/95 px-5 py-4 backdrop-blur sm:-mx-6 sm:-mb-6 sm:px-6"><Button onClick={save} disabled={saving}><Save className="h-4 w-4" />{saving ? t('Saving...') : t('Save package')}</Button></div>
+          <div className="sticky bottom-0 -mx-5 -mb-5 flex justify-end border-t border-line bg-surface/95 px-5 py-4 backdrop-blur sm:-mx-6 sm:-mb-6 sm:px-6"><Button onClick={save} disabled={saving}><Save className="h-4 w-4" />{saving ? t('Saving...') : hasPending ? t('Retry save') : t('Save package')}</Button></div>
         </div>
       </div>
       {packageToDelete && (

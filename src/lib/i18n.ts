@@ -11,6 +11,15 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  'The pending project change is no longer available. Review your draft before saving again.': '待保存的项目更改已不存在，请检查草稿后再保存。',
+  'The pending role is no longer available. Review your draft before saving again.': '待保存的角色已不可用。请检查草稿后再次保存。',
+  'The pending member is no longer available. Review your draft before saving again.': '待保存的成员已不可用。请检查草稿后再次保存。',
+  'The pending status change is no longer available. Review your draft before saving again.': '待保存的状态更改已不可用。请检查草稿后再次保存。',
+  'The pending profile change is no longer available. Review your draft before saving again.': '待保存的个人资料更改已不可用。请检查草稿后再次保存。',
+  'The pending task creation is no longer available. Review your draft before saving again.': '待创建的任务已不可用。请检查草稿后再次保存。',
+  'The pending add-on is no longer available. Review your draft before saving again.': '待保存的附加服务已不可用。请检查草稿后再次保存。',
+  'The pending company is no longer available. Review your draft before saving again.': '待保存的公司已不存在，请检查草稿后再保存。',
+  'The pending catalog change is no longer available. Review your draft before saving again.': '待保存的模板更改已不存在，请检查草稿后再保存。',
   'Deletion impact': '删除影响',
   'Plans': '方案',
   'Keep editing': '继续编辑',
