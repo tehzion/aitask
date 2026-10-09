@@ -36,6 +36,7 @@ test('member creation cannot close during saving and retries one account after a
   await expect(dialog.getByRole('button', { name: 'Creating account...', exact: true })).toBeDisabled();
   await page.keyboard.press('Escape');
   await expect(dialog).toBeVisible();
+  await page.waitForFunction(() => typeof (window as unknown as { rejectMember?: unknown }).rejectMember === 'function');
   await page.evaluate(() => (window as unknown as { rejectMember: () => void }).rejectMember());
   await expect(dialog.getByText('Injected member exception')).toBeVisible();
   await expect(dialog.getByRole('textbox').first()).toBeDisabled();

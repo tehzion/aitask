@@ -91,6 +91,16 @@ export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime
     const legacyDepartment = getLegacyDepartmentMirror(member.role, departments);
     const key = entityKey('member', member.id);
     const previous = runtime.baseline.get(key);
+    // A receipt can predate the canonical snapshot loaded before this retry.
+    if (previous && previous.version > (Number(response.member?.version) || expectedVersion + 1)) {
+      return {
+        ok: true,
+        data: response,
+        commandId: response.commandId || pending.id,
+        workspaceVersion: Number(response.workspaceVersion) || 1,
+        replayed: response.replayed,
+      };
+    }
     const nextData = {
       ...(previous?.data || memberData(member)),
       departments,
@@ -200,6 +210,16 @@ export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime
     const nextPermissions = permissions || undefined;
     const key = entityKey('member', member.id);
     const previous = runtime.baseline.get(key);
+    // A receipt can predate the canonical snapshot loaded before this retry.
+    if (previous && previous.version > (Number(response.member?.version) || expectedVersion + 1)) {
+      return {
+        ok: true,
+        data: response,
+        commandId: response.commandId || pending.id,
+        workspaceVersion: Number(response.workspaceVersion) || 1,
+        replayed: response.replayed,
+      };
+    }
     const nextData = {
       ...(previous?.data || memberData(member)),
       permissions: nextPermissions,
@@ -321,6 +341,16 @@ export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime
     clearPersistedRetryableMemberMutation();
     const key = entityKey('member', member.id);
     const previous = runtime.baseline.get(key);
+    // A receipt can predate the canonical snapshot loaded before this retry.
+    if (previous && previous.version > (Number(response.member?.version) || expectedVersion + 1)) {
+      return {
+        ok: true,
+        data: response,
+        commandId: response.commandId || pending.id,
+        workspaceVersion: Number(response.workspaceVersion) || 1,
+        replayed: response.replayed,
+      };
+    }
     const nextData = {
       ...(previous?.data || memberData(member)),
       role: response.member?.role ?? assignment.role,

@@ -313,6 +313,39 @@ describe('retryPendingSave', () => {
     expect(useStore.getState().backend.pendingMutations).toBe(0);
   });
 
+  it('confirms an old department receipt without replacing newer canonical member data', async () => {
+    const manager: User = { ...staff, role: 'Project Manager', version: 1 };
+    useStore.setState(state => ({ users: [...state.users, manager] }));
+    rpc.mockRejectedValueOnce(new Error('response lost'));
+    expect(await useStore.getState().updateMemberDepartments(manager.id, [])).toMatchObject({ ok: false });
+    const firstCommandId = rpc.mock.calls[0][1].p_command_id;
+
+    useStore.setState(state => ({
+      users: state.users.map(user => user.id === manager.id
+        ? { ...user, version: 3, departments: ['Video Editor'], department: 'Video Editor' }
+        : user),
+    }));
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        commandId: firstCommandId,
+        workspaceVersion: 6,
+        replayed: true,
+        member: { id: manager.id, departments: [], version: 2, updated_at: '2026-09-10T00:00:00.000Z' },
+      },
+      error: null,
+    });
+
+    expect(await useStore.getState().retryPendingSave()).toMatchObject({ ok: true });
+    expect(rpc).toHaveBeenLastCalledWith('aitask_update_member_departments', expect.objectContaining({
+      p_command_id: firstCommandId, p_expected_version: 1, p_departments: [],
+    }));
+    expect(useStore.getState().users.find(user => user.id === manager.id)).toMatchObject({
+      version: 3, departments: ['Video Editor'], department: 'Video Editor',
+    });
+    expect(useStore.getState().backend.pendingMutations).toBe(0);
+  });
+
   it('retries a timed-out member role update with the same command ID', async () => {
     useStore.setState(state => ({ users: [...state.users, staff] }));
 

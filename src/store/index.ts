@@ -1908,7 +1908,7 @@ export const useStore = create<StoreState>()(
             ? result.data.member
             : undefined;
           apply((state) => ({
-            users: state.users.map(user => user.id === targetUser.id
+            users: state.users.map(user => user.id === targetUser.id && (Number(user.version) || 1) <= version
               ? retainedMemberMutation.kind === 'departments'
                 ? {
                     ...user,

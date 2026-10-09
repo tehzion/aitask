@@ -669,6 +669,50 @@ describe('secure command retry identity', () => {
     discardRetainedSecureMemberMutation();
   });
 
+  it('reconciles empty PM departments after reload sees the committed member version', async () => {
+    const values = new Map<string, string>();
+    const sessionStorage: Storage = {
+      get length() { return values.size; },
+      clear: () => values.clear(),
+      getItem: key => values.get(key) ?? null,
+      key: index => [...values.keys()][index] ?? null,
+      removeItem: key => { values.delete(key); },
+      setItem: (key, value) => { values.set(key, value); },
+    };
+    vi.stubGlobal('window', { sessionStorage });
+    const member = { ...stateWithUser('member-retry').users[0], role: 'Project Manager' as const };
+    restoreSecureMemberMutation('auth-member-retry');
+    rpc.mockRejectedValueOnce(new Error('response lost'));
+
+    const first = await saveSecureMemberDepartments(member, []);
+    expect(first).toMatchObject({ ok: false, code: 'RETRY_REQUIRED' });
+    const commandId = rpc.mock.calls[0][1].p_command_id;
+    expect(sessionStorage.length).toBe(1);
+
+    restoreSecureMemberMutation('different-auth-user');
+    expect(getRetainedSecureMemberMutation()).toBeNull();
+    expect(restoreSecureMemberMutation('auth-member-retry')).toMatchObject({
+      kind: 'departments', memberId: member.id, departments: [],
+    });
+
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        replayed: true,
+        commandId,
+        workspaceVersion: 3,
+        member: { id: member.id, departments: [], department: 'Designer', version: 2, updated_at: '2026-09-10T00:00:00.000Z' },
+      },
+      error: null,
+    });
+    const retried = await retryRetainedSecureMemberMutation({ ...member, version: 2 });
+    expect(retried).toMatchObject({ ok: true, replayed: true });
+    expect(rpc.mock.calls[1][1].p_expected_version).toBe(1);
+    expect(rpc.mock.calls[1][1].p_command_id).toBe(commandId);
+    expect(sessionStorage.length).toBe(0);
+    discardRetainedSecureMemberMutation();
+  });
+
   it('clears a retained member role retry when the workspace command is discarded', async () => {
     const values = new Map<string, string>();
     const sessionStorage: Storage = {

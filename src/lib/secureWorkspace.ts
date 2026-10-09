@@ -1502,9 +1502,13 @@ export const retryRetainedSecureMemberMutation = async (
   if (!pending || pending.memberId !== member.id) {
     return { ok: false, code: 'NOT_FOUND', error: 'There is no member change waiting to retry.' };
   }
-  if (pending.kind === 'departments') return saveSecureMemberDepartments(member, pending.departments);
-  if (pending.kind === 'permissions') return saveSecureMemberPermissions(member, pending.permissions);
-  return saveSecureMemberRole(member, {
+  // Replay the original optimistic version even if reload already sees the
+  // committed update. Keep the current role for fresh validation and let the
+  // server reconcile the original receipt or return a version conflict.
+  const originalRequestMember = { ...member, version: pending.expectedVersion };
+  if (pending.kind === 'departments') return saveSecureMemberDepartments(originalRequestMember, pending.departments);
+  if (pending.kind === 'permissions') return saveSecureMemberPermissions(originalRequestMember, pending.permissions);
+  return saveSecureMemberRole(originalRequestMember, {
     role: pending.role,
     customRoleId: pending.customRoleId || undefined,
     companyName: pending.companyName || undefined,
