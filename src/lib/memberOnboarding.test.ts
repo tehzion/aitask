@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { transpileModule, ScriptTarget, ModuleKind } from 'typescript';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-type AuthAccount = { id: string; email: string; email_confirmed_at: string; app_metadata: Record<string, unknown> };
+type AuthAccount = { id: string; email: string; email_confirmed_at: string; app_metadata: Record<string, unknown>; password?: string };
 const source = readFileSync(new URL('../../supabase/functions/invite-aitask-member/index.ts', import.meta.url), 'utf8').split('\n').slice(2).join('\n');
 const executable = transpileModule(source, { compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.None } }).outputText;
 const commandId = '00000000-0000-4000-8000-000000000001';
@@ -17,8 +17,8 @@ const actor = { id: 'boss', workspace_id: 'aitask-main', is_super_admin: true };
 beforeEach(() => {
   users = []; completed = null; loseConfirmation = false; failBeforeCommit = false;
   deleteUser.mockReset(); createUser.mockReset();
-  createUser.mockImplementation(async ({ email, app_metadata }) => {
-    const user = { id: 'prepared-auth', email, email_confirmed_at: '2026-10-08', app_metadata };
+  createUser.mockImplementation(async ({ email, app_metadata, password }) => {
+    const user = { id: 'prepared-auth', email, email_confirmed_at: '2026-10-08', app_metadata, password };
     users.push(user); return { data: { user }, error: null };
   });
   const admin = {
@@ -34,7 +34,10 @@ beforeEach(() => {
       return loseConfirmation ? { data: null, error: { message: 'lost acknowledgement' } } : { data: completed, error: null };
     },
   };
-  const client = { from: () => {
+  const client = { auth: { signInWithPassword: async ({ email, password }: { email: string; password: string }) => {
+    const user = users.find(item => item.email === email && item.password === password);
+    return { data: { user }, error: user ? null : { message: 'Invalid credentials' } };
+  } }, from: () => {
     const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: actor, error: null }) };
     return query;
   } };
@@ -63,6 +66,23 @@ describe('actual onboarding Edge handler', () => {
     expect((await handler(request())).status).toBe(200);
     expect(createUser).toHaveBeenCalledTimes(1);
     expect(deleteUser).not.toHaveBeenCalled();
+  });
+  it('rejects a changed temporary password on retry without changing the prepared credential', async () => {
+    failBeforeCommit = true;
+    expect((await handler(request())).status).toBe(409);
+    failBeforeCommit = false;
+    const mismatch = await handler(request({ password: 'different-password' }));
+    expect(mismatch.status).toBe(409);
+    expect(await mismatch.json()).toMatchObject({ code: 'ONBOARDING_PASSWORD_MISMATCH' });
+    expect(completed).toBeNull(); expect(users[0].password).toBe('temporary-password');
+    expect((await handler(request())).status).toBe(200);
+  });
+  it('returns the completed receipt while explicitly declining to apply a new password', async () => {
+    await handler(request());
+    const replay = await handler(request({ password: 'different-password' }));
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ replayed: true, passwordApplied: false, notice: expect.stringContaining('not applied') });
+    expect(users[0].password).toBe('temporary-password'); expect(createUser).toHaveBeenCalledTimes(1);
   });
   it('recovers an Auth creation acknowledgement lost after the account was inserted', async () => {
     const original = createUser.getMockImplementation()!;

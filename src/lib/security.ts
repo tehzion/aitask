@@ -1,3 +1,4 @@
+import { legacyCompanyId } from './companyIdentity';
 import type {
   AppNotification,
   ClientProfile,
@@ -276,7 +277,7 @@ const parseClientProfile = (value: unknown): ClientProfile | null => {
   if (!clientName) return null;
 
   const now = new Date().toISOString();
-  const id = cleanText(value.id, 160) || `CL-${clientName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'client'}`;
+  const id = cleanText(value.id, 160) || legacyCompanyId(clientName);
   const createdAt = safeIsoTimestamp(value.createdAt) || safeIsoTimestamp(value.updatedAt) || now;
 
   return {

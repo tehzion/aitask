@@ -1,3 +1,4 @@
+import { normalizeCompanyIdentities } from '../lib/companyIdentity';
 import { recordDiagnostic } from '../lib/diagnostics';
 import { clearRecoveredDrafts } from '../lib/draftRecovery';
 import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
@@ -145,7 +146,6 @@ import {
   resolveDeliverableStatus,
   SHORT_VIDEO_WORKFLOW_TEMPLATE,
 } from '../lib/serviceManagement';
-import { cleanupPendingServiceFiles, reconcilePendingServiceFiles } from '../lib/serviceFiles';
 
 export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required' | 'upgrade_required';
 
@@ -228,6 +228,7 @@ type ClientPlanInput = Omit<ClientPlanSetupInput, 'clientName' | 'contactPerson'
 type AddMemberInput = Omit<User, 'id' | 'avatar' | 'isSuperAdmin'> & {
   registrationId?: string;
   memberId?: string;
+  commandId?: string;
   sendInvitation?: boolean;
 };
 
@@ -370,7 +371,7 @@ interface StoreState {
   markAllNotificationsRead: () => void;
   sendDueDateReminders: () => void;
   registerUser: (data: Omit<Registration, 'id' | 'status' | 'createdAt'>) => Promise<{ ok: boolean; error?: string }>;
-  addUserBySuperAdmin: (data: AddMemberInput) => Promise<{ ok: boolean; error?: string }>;
+  addUserBySuperAdmin: (data: AddMemberInput) => Promise<{ ok: boolean; error?: string; notice?: string }>;
   updateMemberDepartments: (userId: string, departments: Department[]) => Promise<{ ok: boolean; error?: string }>;
   updateMemberPermissions: (userId: string, permissions?: RolePermissions) => Promise<{ ok: boolean; error?: string }>;
   addCustomRole: (data: Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt' | 'isProtected'>) => { ok: boolean; id?: string; error?: string };
@@ -653,70 +654,14 @@ export const normalizeWorkspaceUserForBackend = (user: User, secureAuth: boolean
 );
 
 const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorkspaceState => {
-  const parsed = parseWorkspaceSnapshot(state);
+  const parsed = normalizeCompanyIdentities(parseWorkspaceSnapshot(state));
   const pricingByParent = new Map(parsed.servicePricingSnapshots.map(item => [item.parentId, item]));
-  const clients = [...parsed.clients];
-  const byKey = new Map(clients.map(client => [normalizeClientKey(client.clientName), client]));
-  // A company discovered from a plan, project, task, or client account should
-  // inherit that record's creator so the owning PM/Staff keeps seeing it under
-  // portfolio scoping. Rows with no derivable owner stay ownerless (Boss Koo).
-  const ownerByKey = new Map<string, string>();
-  const rememberOwner = (name: string | undefined, ownerId: string | undefined) => {
-    const key = normalizeClientKey(name || '');
-    if (!key || !ownerId || ownerByKey.has(key)) return;
-    ownerByKey.set(key, ownerId);
-  };
-  (parsed.clientPlans || []).forEach(plan => rememberOwner(plan.clientName, plan.createdBy));
-  parsed.projects.forEach(project => rememberOwner(project.clientName, project.createdBy));
-  parsed.tasks.forEach(task => rememberOwner(task.clientName, task.createdBy));
-  parsed.users
-    .filter(user => user.role === 'Client' && user.companyName)
-    .forEach(user => rememberOwner(user.companyName, user.id));
-  // Account metadata can retain a deleted company name. Only work records
-  // should discover a missing company profile.
-  const discoveredNames = [
-    ...parsed.tasks.map(task => task.clientName),
-    ...parsed.projects.map(project => project.clientName),
-  ].map(name => name.trim()).filter(Boolean);
-
-  discoveredNames.forEach(name => {
-    const key = normalizeClientKey(name);
-    if (byKey.has(key)) return;
-    const now = new Date(0).toISOString();
-    const slug = key.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'client';
-    const client: ClientProfile = { id: `CL-${slug}`, clientName: name, createdBy: ownerByKey.get(key), discovered: true, createdAt: now, updatedAt: now };
-    byKey.set(key, client);
-    clients.push(client);
-  });
-
-  const clientIds = new Set(clients.map(client => client.id));
-  const clientIdsByKey = new Map<string, Set<string>>();
-  clients.forEach(client => {
-    const key = normalizeClientKey(client.clientName);
-    if (!key) return;
-    const ids = clientIdsByKey.get(key) || new Set<string>();
-    ids.add(client.id);
-    clientIdsByKey.set(key, ids);
-  });
-  // Reattach legacy rows only when their stored client ID no longer resolves
-  // and the normalized company name points to one unambiguous profile. Keep
-  // valid IDs authoritative because names can become stale after a rename.
-  const resolveClientId = (clientId: string | undefined, clientName: string | undefined) => {
-    if (clientId && clientIds.has(clientId)) return clientId;
-    const matches = clientIdsByKey.get(normalizeClientKey(clientName || ''));
-    return matches?.size === 1 ? matches.values().next().value : clientId;
-  };
 
   return {
     ...parsed,
-    clients,
-    tasks: parsed.tasks.map(task => ({ ...task, clientId: resolveClientId(task.clientId, task.clientName) })),
-    projects: parsed.projects.map(project => ({ ...project, clientId: resolveClientId(project.clientId, project.clientName) })),
-    clientPlans: parsed.clientPlans.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
-    serviceCycles: parsed.serviceCycles.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
-    deliverables: parsed.deliverables.map(item => ({ ...item, clientId: resolveClientId(item.clientId, item.clientName) })),
-    cycleComments: parsed.cycleComments.map(item => ({ ...item, clientId: resolveClientId(item.clientId, item.clientName) })),
-    addons: parsed.addons.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
+    clientPlans: parsed.clientPlans.map(item => applyPricingSnapshot(item, pricingByParent.get(item.id))),
+    serviceCycles: parsed.serviceCycles.map(item => applyPricingSnapshot(item, pricingByParent.get(item.id))),
+    addons: parsed.addons.map(item => applyPricingSnapshot(item, pricingByParent.get(item.id))),
     serviceWorkflowTemplates: parsed.serviceWorkflowTemplates.length ? parsed.serviceWorkflowTemplates : [{ ...SHORT_VIDEO_WORKFLOW_TEMPLATE, steps: SHORT_VIDEO_WORKFLOW_TEMPLATE.steps.map(step => ({ ...step })) }],
   };
 };
@@ -2132,8 +2077,12 @@ export const useStore = create<StoreState>()(
         }
         if (!isWorkspaceSessionCurrent(sessionToken) || !actorId) return;
         if (shouldUseSecureSupabase() && get().backend.status !== 'live') return;
-        reconcilePendingServiceFiles(actorId, selectPersistedWorkspaceState(get()));
-        const cleanup = await cleanupPendingServiceFiles(actorId, { abandonSubmitted: true, commandIds: discardedCommandId ? [discardedCommandId] : [], includeUnsubmitted: false });
+        let files: typeof import('../lib/serviceFiles');
+        try { files = await import('../lib/serviceFiles'); }
+        catch { apply(state => ({ backend: { ...state.backend, error: 'Upload recovery could not be loaded. Reconnect and try again.' } })); return; }
+        if (!isWorkspaceSessionCurrent(sessionToken)) return;
+        files.reconcilePendingServiceFiles(actorId, selectPersistedWorkspaceState(get()));
+        const cleanup = await files.cleanupPendingServiceFiles(actorId, { abandonSubmitted: true, commandIds: discardedCommandId ? [discardedCommandId] : [], includeUnsubmitted: false });
         if (!cleanup.ok) apply(state => ({ backend: { ...state.backend, error: cleanup.error, message: cleanup.error } }));
       },
 
@@ -4698,7 +4647,7 @@ export const useStore = create<StoreState>()(
         if (departments.length === 0 && data.role !== 'Project Manager') {
           return { ok: false, error: 'Choose at least one department.' };
         }
-        if (initialPassword !== DEFAULT_USER_PASSWORD && initialPassword.length < 12) {
+        if (initialPassword && initialPassword !== DEFAULT_USER_PASSWORD && initialPassword.length < 12) {
           return { ok: false, error: 'Custom initial passwords must be at least 12 characters.' };
         }
         if (data.role === 'Client' && !companyName) {
@@ -4722,7 +4671,7 @@ export const useStore = create<StoreState>()(
         const onboardingKey = shouldUseSecureSupabase() && currentUser.authUserId
           ? await onboardingRequestKey(currentUser.authUserId, onboardingPayload) : '';
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
-        const duplicate = !pendingOnboardingCommand(onboardingKey) && !data.memberId && !data.registrationId && get().users.some(user => (
+        const duplicate = !data.commandId && !pendingOnboardingCommand(onboardingKey) && !data.memberId && !data.registrationId && get().users.some(user => (
           user.name.toLowerCase() === name.toLowerCase() ||
           (email && user.email?.toLowerCase() === email.toLowerCase())
         ));
@@ -4731,7 +4680,7 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'A member with that name or email already exists.' };
         }
 
-        const pendingRegistration = !data.registrationId && email
+        const pendingRegistration = !data.commandId && !data.registrationId && email
           ? get().registrations.find(registration => (
               registration.status === 'Pending' && registration.email.trim().toLowerCase() === email.toLowerCase()
             ))
@@ -4773,10 +4722,10 @@ export const useStore = create<StoreState>()(
           if (sessionError || !session?.access_token) {
             return { ok: false, error: 'Your secure session has expired. Sign out, then sign in again.' };
           }
-          const { error } = await supabase.functions.invoke('invite-aitask-member', {
+          const { data: receipt, error } = await supabase.functions.invoke('invite-aitask-member', {
             headers: { Authorization: `Bearer ${session.access_token}` },
             body: {
-              commandId: retainOnboardingCommand(onboardingKey),
+              commandId: data.commandId || retainOnboardingCommand(onboardingKey),
               name,
               email,
               role: data.role,
@@ -4797,7 +4746,8 @@ export const useStore = create<StoreState>()(
           if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
             await get().pullBackendNow({ force: true });
           }
-          return { ok: true };
+          if (receipt?.notice) useToastStore.getState().addToast(msg('onboarding.replayed'), 'info');
+          return { ok: true, notice: typeof receipt?.notice === 'string' ? receipt.notice : undefined };
         }
 
         const customRole = selectedCustomRole;

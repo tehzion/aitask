@@ -605,9 +605,11 @@
     "20260930154013_initialize_deadline_reminder_claim",
     "20261002065644_hod_permission_parity_followups",
     "20261002101435_universal_notification_audience_guard",
-    "20261007173905_reliable_member_onboarding"
+    "20261007173905_reliable_member_onboarding",
+    "20261008145256_account_consistency_and_onboarding_recovery"
   ],
   "pendingProductionMigrations": [
-    "20261007173905_reliable_member_onboarding"
+    "20261007173905_reliable_member_onboarding",
+    "20261008145256_account_consistency_and_onboarding_recovery"
   ]
 }

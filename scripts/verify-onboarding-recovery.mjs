@@ -52,11 +52,25 @@ await rpc('aitask_finalize_member_invitation_v3', { ...unrelatedEnvelope, p_auth
 const actorLogin = await request('/auth/v1/token?grant_type=password', { email: `boss-${id}@example.test`, password: bossPassword });
 let handler;
 let loseFinalizationResponse = true;
+let failFinalization = false;
+let loseEmailResponse = false;
+let failDeletion = false;
+let loseDeletionResponse = false;
 const source = readFileSync(new URL('../supabase/functions/invite-aitask-member/index.ts', import.meta.url), 'utf8').split('\n').slice(2).join('\n');
 const executable = transpileModule(source, { compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.None } }).outputText;
 const deno = { env: { get: key => ({ SUPABASE_URL: base.toString().replace(/\/$/, ''), SUPABASE_SERVICE_ROLE_KEY: secret, SUPABASE_ANON_KEY: process.env.AITASK_LOCAL_TEST_PUBLIC, AITASK_PUBLIC_URL: 'https://app.test' }[key]) }, serve: next => { handler = next; } };
 const clientFactory = (url, key, options) => createClient(url, key, { ...options, global: { ...options?.global, fetch: async (...args) => {
+  const target = String(args[0]);
+  const method = args[1]?.method;
+  if (target.includes('/rpc/aitask_finalize_member_invitation_v3') && failFinalization) throw new TypeError('Simulated unconfirmed finalization');
+  if (target.includes('/auth/v1/admin/users/') && method === 'DELETE' && failDeletion) throw new TypeError('Simulated unconfirmed deletion');
   const response = await fetch(...args);
+  if (target.includes('/auth/v1/admin/users/') && method === 'PUT' && response.ok && loseEmailResponse) {
+    loseEmailResponse=false; await response.text(); throw new TypeError('Simulated lost email acknowledgement');
+  }
+  if (target.includes('/auth/v1/admin/users/') && method === 'DELETE' && response.ok && loseDeletionResponse) {
+    loseDeletionResponse=false; await response.text(); throw new TypeError('Simulated lost cleanup acknowledgement');
+  }
   if (String(args[0]).includes('/rpc/aitask_finalize_member_invitation_v3') && response.ok && loseFinalizationResponse) {
     loseFinalizationResponse = false;
     await response.text();
@@ -78,3 +92,64 @@ const login = await request('/auth/v1/token?grant_type=password', {email:handler
 assert.equal(login.user.id,confirmed.member.auth_user_id);
 console.log('[onboarding] Actual Edge handler preserved the real login after lost finalization response and replayed its confirmed member.');
 console.log('[onboarding] Real local Auth/REST verified atomic worker types, receipt replay, lost-confirmation reconciliation, email-invite stamping and unrelated-account denial.');
+
+const invokeBody = async (body, token = actorLogin.access_token) => handler(new Request('https://app.test/invite', {
+  method:'POST', headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body),
+}));
+// Auth email and member email must survive a lost Auth response together.
+const changedEmail=`changed-boss-${id}@example.test`;
+loseEmailResponse=true;
+const emailResponse=await invokeBody({action:'update_self_email',email:changedEmail,currentPassword:bossPassword});
+assert.equal(emailResponse.status,200);
+assert.equal((await request(`/auth/v1/admin/users/${actor.id}`)).email,changedEmail);
+const emailRows=await request(`/rest/v1/aitask_members?id=eq.${actorId}&select=email`);
+assert.equal(emailRows[0].email,changedEmail);
+// A duplicate workspace member rejects the Auth update transaction atomically.
+const blockedEmail=`blocked-${id}@example.test`;
+execFileSync('docker',['exec',database,'psql','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1','-c',
+ `insert into public.aitask_members(id,workspace_id,name,email,role,department,departments) values ('blocked-${id}','${workspace}','Blocked','${blockedEmail}','Staff','Designer',array['Designer']);`],{stdio:'pipe'});
+assert.equal((await invokeBody({action:'update_self_email',email:blockedEmail,currentPassword:bossPassword})).status,409);
+assert.equal((await request(`/auth/v1/admin/users/${actor.id}`)).email,changedEmail);
+
+// Lose the browser journal, then resume the server-owned original payload.
+const recoveryBody={...handlerBody,commandId:crypto.randomUUID(),email:`recovery-${id}@example.test`,name:'Browser recovery '+id};
+failFinalization=true;
+assert.equal((await invokeBody(recoveryBody)).status,409);
+failFinalization=false;
+const pending=await (await invokeBody({action:'list_onboarding'})).json();
+const saved=pending.operations.find(item=>item.commandId===recoveryBody.commandId);
+assert.ok(saved); assert.equal(saved.prepared,true);
+assert.ok(!JSON.stringify(saved).includes(handlerPassword));
+const wrong=await invokeBody({...saved.payload,commandId:saved.commandId,password:crypto.randomUUID()+'Aa1!'});
+assert.equal(wrong.status,409); assert.equal((await wrong.json()).code,'ONBOARDING_PASSWORD_MISMATCH');
+const resumed=await invokeBody({...saved.payload,commandId:saved.commandId,password:handlerPassword});
+assert.equal(resumed.status,200);
+const replay=await (await invokeBody({...recoveryBody,password:crypto.randomUUID()+'Aa1!'})).json();
+assert.equal(replay.passwordApplied,false); assert.equal(replay.replayed,true);
+const completedCancellation=await (await invokeBody({action:'cancel_onboarding',commandId:recoveryBody.commandId})).json();
+assert.equal(completedCancellation.state,'completed');
+await request('/auth/v1/token?grant_type=password',{email:recoveryBody.email,password:handlerPassword});
+
+// Cancellation uncertainty keeps the reservation fenced. Lost deletion ACK
+// reconciles through real PostgreSQL; a replacement is allowed only afterwards.
+const cancelBody={...handlerBody,commandId:crypto.randomUUID(),email:`cancel-${id}@example.test`,name:'Cancel recovery '+id};
+failFinalization=true;
+assert.equal((await invokeBody(cancelBody)).status,409);
+failFinalization=false; failDeletion=true;
+assert.equal((await invokeBody({action:'cancel_onboarding',commandId:cancelBody.commandId})).status,409);
+await rpc('aitask_reserve_member_onboarding',{p_actor_member_id:actorId,p_command_id:crypto.randomUUID(),p_payload:{...payloadFor(cancelBody.email),name:cancelBody.name}},400);
+failDeletion=false; loseDeletionResponse=true;
+assert.equal((await invokeBody({action:'cancel_onboarding',commandId:cancelBody.commandId})).status,200);
+assert.equal((await invokeBody(cancelBody)).status,409);
+const lateCreate=await fetch(new URL('/auth/v1/admin/users',base),{method:'POST',headers:{apikey:secret,Authorization:`Bearer ${secret}`,'Content-Type':'application/json'},body:JSON.stringify({email:cancelBody.email,password:handlerPassword,email_confirm:true,
+ app_metadata:{aitask_onboarding_command:cancelBody.commandId,aitask_onboarding_actor:actorId,aitask_onboarding_workspace:workspace}})});
+assert.equal(lateCreate.ok,false);
+const replacement=await invokeBody({...cancelBody,commandId:crypto.randomUUID()});
+assert.equal(replacement.status,201);
+// Cancelling a journal must not delete a matching, unrelated signup account.
+assert.equal((await invokeBody({action:'cancel_onboarding',commandId:unrelatedCommand})).status,200);
+assert.equal((await request(`/auth/v1/admin/users/${unrelated.id}`)).id,unrelated.id);
+const staffLogin=await request('/auth/v1/token?grant_type=password',{email:handlerBody.email,password:handlerPassword});
+assert.equal((await invokeBody({action:'list_onboarding'},staffLogin.access_token)).status,403);
+assert.equal((await invokeBody({action:'cancel_onboarding',commandId:handlerCommand},staffLogin.access_token)).status,403);
+console.log('[account recovery] Real Auth/REST verified atomic email ACK loss, duplicate rejection, cross-browser recovery, original password enforcement, completed replay, cancellation cleanup uncertainty, late-creation fencing and Staff isolation.');

@@ -8,6 +8,21 @@ export type MessageValues = Record<string, MessageValue>;
  * identifiers instead of passing English prose through the DOM translator.
  */
 export const enMessages = {
+  'onboarding.pending': "Pending invitations",
+  'onboarding.refresh': "Refresh invitations",
+  'onboarding.guidance': "Resume the saved request, or cancel it before changing its details. Requests are available when you sign in on another device.",
+  'onboarding.resume': "Resume invitation",
+  'onboarding.cancel': "Cancel request",
+  'onboarding.retryCancel': "Retry cancellation",
+  'onboarding.savedRequest': "The original request details will be used. Enter the original temporary password, or cancel and start again.",
+  'onboarding.originalPassword': "Original temporary password",
+  'onboarding.cancelDescription': "Cancel this saved request and remove only its unused prepared login. A replacement can be created after cleanup is confirmed. Completed members are preserved.",
+  'onboarding.cancelled': "Invitation cancelled. You can create a replacement.",
+  'onboarding.completed': "Invitation completed.",
+  'onboarding.replayed': "This invitation was already completed. The submitted password was not applied.",
+  'onboarding.unavailable': "Unable to confirm invitation recovery. Retry when the backend is available.",
+  'onboarding.working': "Working…",
+
   'clientPortal.reviewCount': '{count} deliveries need your review',
   'clientPortal.viewAllReviews': 'View all {count} review requests',
   'clientReport.timingTitle': 'Agency completion and your approval',
@@ -324,6 +339,21 @@ export const enMessages = {
 } as const;
 
 export const zhMessages: Record<keyof typeof enMessages, string> = {
+  'onboarding.pending': "待完成的邀请",
+  'onboarding.refresh': "刷新邀请",
+  'onboarding.guidance': "恢复原请求，或先取消再更改详情。登录其他设备后也可以恢复请求。",
+  'onboarding.resume': "恢复邀请",
+  'onboarding.cancel': "取消请求",
+  'onboarding.retryCancel': "重试取消",
+  'onboarding.savedRequest': "将使用原请求的详情。请输入原临时密码，或取消后重新开始。",
+  'onboarding.originalPassword': "原临时密码",
+  'onboarding.cancelDescription': "取消此请求，并仅删除尚未使用的预备登录账号。确认清理完成后可创建新请求。已完成的成员将保留。",
+  'onboarding.cancelled': "邀请已取消。可以创建新请求。",
+  'onboarding.completed': "邀请已完成。",
+  'onboarding.replayed': "此邀请已完成。本次提交的密码未被应用。",
+  'onboarding.unavailable': "无法确认邀请恢复。后端可用时请重试。",
+  'onboarding.working': "处理中…",
+
   'clientPortal.reviewCount': '{count} 项交付需要您审阅',
   'clientPortal.viewAllReviews': '查看全部 {count} 项审阅请求',
   'clientReport.timingTitle': '团队完成时间与您的批准时间',

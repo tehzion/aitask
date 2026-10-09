@@ -37,7 +37,7 @@ beforeEach(() => {
     return q;
   });
   mocks.rpc.mockImplementation(async (name: string, args: Record<string,unknown>) => {
-    if (name === 'aitask_get_backend_capabilities') return {data:{ok:true,schemaVersion:4,workspaceOptimisticLock:true,serviceOperations:true,releaseNoticeAcknowledgements:true,memberPermissionManagement:true},error:null};
+    if (name === 'aitask_get_backend_capabilities') return {data:{ok:true,schemaVersion:4,workspaceOptimisticLock:true,serviceOperations:true,releaseNoticeAcknowledgements:true,memberPermissionManagement:true,emailSynchronization:true,onboardingRecovery:true},error:null};
     if (name === 'aitask_read_notifications') return {data:{ok:true,memberId:member.id,items:[],unreadCount:0},error:null};
     if (name === 'aitask_execute_command' || name === 'aitask_execute_service_command') {
       if (name === 'aitask_execute_service_command' && failService) { failService = false; throw new Error('Lost service connection'); }

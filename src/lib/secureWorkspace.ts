@@ -1,5 +1,4 @@
 import { recordDiagnostic } from './diagnostics';
-import { bindPendingServiceFiles, acknowledgePendingServiceFiles } from './serviceFiles';
 import { assertWorkspaceSession, captureWorkspaceSession, isWorkspaceSessionCurrent, onWorkspaceSessionInvalidated } from './workspaceSession';
 import type { User } from '@supabase/supabase-js';
 import type {
@@ -249,6 +248,8 @@ export type SecureBackendCapabilities = {
   serviceOperations: boolean;
   releaseNoticeAcknowledgements: boolean;
   memberPermissionManagement: boolean;
+  emailSynchronization: boolean;
+  onboardingRecovery: boolean;
 };
 
 export type SecureBackendCompatibility =
@@ -382,7 +383,6 @@ const isRetainedSecureMemberMutation = (value: unknown): value is RetainedSecure
   }
   if (mutation.kind === 'departments') {
     return Array.isArray(mutation.departments)
-      && mutation.departments.length > 0
       && mutation.departments.length <= 16
       && mutation.departments.every(department => typeof department === 'string' && department.length > 0 && department.length <= 80);
   }
@@ -1248,7 +1248,14 @@ const executeCommand = async (
   }
 
   const sessionToken = captureWorkspaceSession();
-  bindPendingServiceFiles(command.id, command.operations);
+  let files: typeof import('./serviceFiles');
+  try { files = await import('./serviceFiles'); }
+  catch {
+    retainSecureWorkspaceCommand(command);
+    return { ok: false, code: 'RETRY_REQUIRED', error: 'Save support could not be loaded. Your change is retained; reconnect and retry.' };
+  }
+  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+  files.bindPendingServiceFiles(command.id, command.operations);
   const serviceCommand = serviceCommandTypes.has(command.type);
   const invoke = bindSessionRequest(() => command.type === 'deliverable.workflow.generate'
     ? withSyncTimeout(supabase.rpc('aitask_generate_deliverable_task_chain', {
@@ -1326,7 +1333,7 @@ const executeCommand = async (
     };
   }
 
-  acknowledgePendingServiceFiles(command.id);
+  files.acknowledgePendingServiceFiles(command.id);
   applyCommandVersions(command, response);
   if (!retryableBatch) {
     retryableCommand = null;
@@ -1368,13 +1375,17 @@ export const loadSecureBackendCapabilities = async (): Promise<SecureBackendComp
     serviceOperations: response?.serviceOperations === true,
     releaseNoticeAcknowledgements: response?.releaseNoticeAcknowledgements === true,
     memberPermissionManagement: response?.memberPermissionManagement === true,
+    emailSynchronization: response?.emailSynchronization === true,
+    onboardingRecovery: response?.onboardingRecovery === true,
   };
   const compatible = response?.ok === true
     && capabilities.schemaVersion === SECURE_BACKEND_SCHEMA_VERSION
     && capabilities.workspaceOptimisticLock
     && capabilities.serviceOperations
     && capabilities.releaseNoticeAcknowledgements
-    && capabilities.memberPermissionManagement;
+    && capabilities.memberPermissionManagement
+    && capabilities.emailSynchronization
+    && capabilities.onboardingRecovery;
   return compatible
     ? { compatible: true, capabilities }
     : { compatible: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE };

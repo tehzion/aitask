@@ -141,31 +141,47 @@ Deno.serve(async (request) => {
     const duplicate = authUsers.some(user => user.id !== authData.user.id && user.email?.toLowerCase() === nextEmail);
     if (duplicate) return json({ error: 'Another account already uses this email address' }, 409);
 
-    const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(authData.user.id, {
-      email: nextEmail,
-      email_confirm: true,
-    });
-    if (updateAuthError) return json({ error: updateAuthError.message || 'Unable to update the login email' }, 400);
-
-    const { data: result, error: memberError } = await adminClient.rpc('aitask_update_member_email', {
-      p_actor_member_id: actor.id,
-      p_email: nextEmail,
-    });
-    if (memberError) {
-      const { error: rollbackError } = await adminClient.auth.admin.updateUserById(authData.user.id, {
-        email: oldEmail,
-        email_confirm: true,
-      });
-      if (rollbackError) console.error('Auth email rollback failed', { memberId: actor.id, message: rollbackError.message });
-      return json({ error: memberError.message || 'Unable to update the workspace email' }, 400);
+    // Auth and member email commit together. A missing acknowledgement must
+    // be reconciled from canonical state, never compensated with an old email.
+    let updateMessage = '';
+    try {
+      const { error } = await adminClient.auth.admin.updateUserById(authData.user.id, { email: nextEmail, email_confirm: true });
+      updateMessage = error?.message || '';
+    } catch { updateMessage = 'Email confirmation is pending'; }
+    const { data: canonical, error: canonicalError } = await adminClient.auth.admin.getUserById(authData.user.id);
+    const { data: member, error: memberError } = await adminClient.from('aitask_members')
+      .select('email').eq('id', actor.id).eq('workspace_id', actor.workspace_id).maybeSingle();
+    if (!canonicalError && !memberError && canonical.user?.email?.toLowerCase() === nextEmail && member?.email?.toLowerCase() === nextEmail) {
+      return json({ ok: true });
     }
-
-    return json(result);
+    return json({ code: 'EMAIL_RETRY_REQUIRED', error: updateMessage || 'Email confirmation is pending. Check your account email and retry.' }, 409);
   }
 
   if (!actor.is_super_admin) {
     console.warn('Account management denied for non-Super-Admin member', { memberId: actor.id, action });
     return json({ error: 'Boss Koo Super Admin access is required. Sign in with the Boss Koo account.' }, 403);
+  }
+
+  if (action === 'list_onboarding') {
+    const { data, error } = await adminClient.rpc('aitask_list_member_onboarding', { p_actor_member_id: actor.id });
+    return error ? json({ error: 'Unable to load pending invitations. Retry when the backend is available.' }, 503) : json(data);
+  }
+
+  if (action === 'cancel_onboarding') {
+    const commandId = typeof body.commandId === 'string' ? body.commandId.trim().toLowerCase() : '';
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(commandId)) return json({ error: 'Invalid invitation request' }, 400);
+    const envelope = { p_actor_member_id: actor.id, p_command_id: commandId };
+    const { data: operation, error } = await adminClient.rpc('aitask_cancel_member_onboarding', envelope);
+    if (error || !operation?.ok) return json({ error: 'Unable to cancel this invitation for your account.' }, 409);
+    if (operation.state !== 'cancelling') return json(operation);
+    if (operation.authUserId) {
+      // The database returns only a server-owned, unlinked prepared account.
+      // Cleanup uncertainty leaves the reservation fenced until confirmation.
+      try { await adminClient.auth.admin.deleteUser(operation.authUserId); } catch { /* Reconcile below. */ }
+    }
+    const { data: finished, error: finishError } = await adminClient.rpc('aitask_cancel_member_onboarding', { ...envelope, p_finish: true });
+    if (finishError || !finished?.ok) return json({ code: 'ONBOARDING_CANCELLATION_PENDING', error: 'Cancellation cleanup is pending. Retry cancellation before creating a replacement.' }, 409);
+    return json(finished);
   }
 
   if (action === 'delete_member') {
@@ -273,8 +289,8 @@ Deno.serve(async (request) => {
   const { data: reserved, error: reserveError } = await adminClient.rpc('aitask_reserve_member_onboarding', {
     p_actor_member_id: actor.id, p_command_id: commandId, p_payload: payload,
   });
-  if (reserveError || !reserved?.ok) return retryError('Onboarding could not be reserved. Keep this draft and retry after the backend is available.');
-  if (reserved.result) return json(reserved.result);
+  if (reserveError || !reserved?.ok) return retryError('Onboarding could not be reserved. Resume the original request from Pending invitations, or cancel it before changing the request.');
+  if (reserved.result) return json({ ...reserved.result, replayed: true, passwordApplied: false, notice: 'This invitation was already completed. The submitted password was not applied.' });
 
   const { users: authUsers, error: listError } = await listAllAuthUsers(adminClient);
   if (listError) return json({ error: 'Unable to verify the Auth user' }, 500);
@@ -349,6 +365,13 @@ Deno.serve(async (request) => {
     createdAuthUser = true;
   } else if (!registrationId && !ownsPreparedAccount(authUser)) {
     return json({ error: 'An Auth account already exists for this email. Use its pending registration instead.' }, 409);
+  }
+
+  if (authUser && ownsPreparedAccount(authUser) && !sendInvitation) {
+    const verifier = createClient(url, anonKey, { auth: { persistSession: false } });
+    const { data: credential, error: credentialError } = await verifier.auth.signInWithPassword({ email, password: temporaryPassword });
+    if (credentialError || credential.user?.id !== authUser.id) return json({ code: 'ONBOARDING_PASSWORD_MISMATCH', commandId,
+      error: 'Enter the original temporary password for this request, or cancel it and start again. The new password has not been applied.' }, 409);
   }
 
   if (!createdAuthUser && authUser && ownsPreparedAccount(authUser) && sendInvitation && !authUser.email_confirmed_at) {

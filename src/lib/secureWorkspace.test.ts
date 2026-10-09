@@ -625,6 +625,50 @@ describe('secure command retry identity', () => {
     discardRetainedSecureMemberMutation();
   });
 
+  it('keeps empty PM departments across reload and rejects them after a role change', async () => {
+    const values = new Map<string, string>();
+    const sessionStorage: Storage = {
+      get length() { return values.size; },
+      clear: () => values.clear(),
+      getItem: key => values.get(key) ?? null,
+      key: index => [...values.keys()][index] ?? null,
+      removeItem: key => { values.delete(key); },
+      setItem: (key, value) => { values.set(key, value); },
+    };
+    vi.stubGlobal('window', { sessionStorage });
+    const member = { ...stateWithUser('member-retry').users[0], role: 'Project Manager' as const };
+    restoreSecureMemberMutation('auth-member-retry');
+    rpc.mockRejectedValueOnce(new Error('response lost'));
+
+    const first = await saveSecureMemberDepartments(member, []);
+    expect(first).toMatchObject({ ok: false, code: 'RETRY_REQUIRED' });
+    const commandId = rpc.mock.calls[0][1].p_command_id;
+    expect(sessionStorage.length).toBe(1);
+
+    restoreSecureMemberMutation('different-auth-user');
+    expect(getRetainedSecureMemberMutation()).toBeNull();
+    expect(restoreSecureMemberMutation('auth-member-retry')).toMatchObject({
+      kind: 'departments', memberId: member.id, departments: [],
+    });
+
+    expect(await retryRetainedSecureMemberMutation({ ...member, role: 'Staff' })).toMatchObject({ ok: false, code: 'VALIDATION' });
+    expect(getRetainedSecureMemberMutation()).not.toBeNull();
+    rpc.mockResolvedValueOnce({
+      data: {
+        ok: true,
+        commandId,
+        workspaceVersion: 3,
+        member: { id: member.id, departments: [], department: 'Designer', version: 2, updated_at: '2026-09-10T00:00:00.000Z' },
+      },
+      error: null,
+    });
+    const retried = await retryRetainedSecureMemberMutation(member);
+    expect(retried.ok).toBe(true);
+    expect(rpc.mock.calls[1][1].p_command_id).toBe(commandId);
+    expect(sessionStorage.length).toBe(0);
+    discardRetainedSecureMemberMutation();
+  });
+
   it('clears a retained member role retry when the workspace command is discarded', async () => {
     const values = new Map<string, string>();
     const sessionStorage: Storage = {
@@ -731,15 +775,23 @@ describe('secure backend compatibility', () => {
         workspaceOptimisticLock: true,
         serviceOperations: true,
         releaseNoticeAcknowledgements: true,
-        memberPermissionManagement: true,
+        memberPermissionManagement: true, emailSynchronization: true, onboardingRecovery: true,
       },
       error: null,
     });
 
     const result = await loadSecureBackendCapabilities();
 
-    expect(result).toMatchObject({ compatible: true, capabilities: { schemaVersion: 4, memberPermissionManagement: true } });
+    expect(result).toMatchObject({ compatible: true, capabilities: { schemaVersion: 4, memberPermissionManagement: true, emailSynchronization: true, onboardingRecovery: true } });
     expect(rpc).toHaveBeenCalledWith('aitask_get_backend_capabilities', { p_workspace_id: 'aitask-main' });
+  });
+
+  it('holds writes when either new account consistency capability is missing', async () => {
+    for (const missing of ['emailSynchronization', 'onboardingRecovery']) {
+      rpc.mockResolvedValueOnce({ data: { ok: true, schemaVersion: 4, workspaceOptimisticLock: true, serviceOperations: true,
+        releaseNoticeAcknowledgements: true, memberPermissionManagement: true, emailSynchronization: true, onboardingRecovery: true, [missing]: false }, error: null });
+      expect(await loadSecureBackendCapabilities()).toMatchObject({ compatible: false });
+    }
   });
 
   it('turns a missing PostgREST function into a read-only upgrade state', async () => {

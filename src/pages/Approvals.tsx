@@ -1,3 +1,4 @@
+import PendingInvitations from '../components/PendingInvitations';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
@@ -1154,6 +1155,8 @@ const Approvals: React.FC = () => {
           {actionError}
         </div>
       )}
+
+      {secureAccounts && superAdmin && currentUser?.authUserId && <PendingInvitations authUserId={currentUser.authUserId} refreshKey={isActionSaving}/> }
 
       <section aria-label={t('Approval overview')} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard title={t('Pending registrations')} value={pendingRegs.length} icon={UserCheck} tone="blue" footer={t('Awaiting review')} />
