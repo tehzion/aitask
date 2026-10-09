@@ -131,3 +131,63 @@ not substitute for hosted authenticated checks. No schema migration or live
 rollout was performed here. Production/staging rollout, the known onboarding
 migration/function gap, managed PostgreSQL patch and password-screening issue
 remain as recorded in the Supabase audit.
+
+## Deletion, owner and CI follow-up — 9 October
+
+The next review reproduced two additional action failures. A rejected task
+deletion removed its optimistic row and therefore its details view, hiding the
+save error. Company-owner changes let a rejected promise escape without visible
+feedback and announced success when the owner was staged, before confirmation.
+
+Task deletion now retains its submitted task and session until acknowledgement
+or explicit discard. The details view survives the parent's missing-row state,
+locks further edits, catches exceptions and exposes Retry/Use latest. Retry
+confirms the existing deletion without staging another one; a task restored by
+canonical data prevents a false success. Use latest preserves the reloaded row,
+and closing after confirmed discard closes the view. Account changes invalidate
+the retained view and late responses. Store staging no longer emits a deletion
+success toast; confirmed absence does.
+
+Company-owner changes retain the company ID and submitted owner for retry,
+catch transport exceptions, lock the owner choice while pending and show
+feedback in the company dialog. Confirmation checks the canonical company's
+owner before emitting success. The pending owner joins the existing discard
+guard; account changes clear its editor and fence late acknowledgements.
+
+The failed Staff dashboard CI scenario had an inconsistent fixture. Its seed
+supplied a plan/task client ID without a company profile. Local snapshot
+normalization discovered `CL-assigned-company` on reload, while the later test
+inserted the different profile ID `staff-dash-a`. The diagnostic helper correctly
+reported zero matching active plans. Seeding both company profiles before reload
+preserves their IDs; the test now asserts the plan ID survived. Existing checks
+still reject ambiguous company names and unrelated IDs. Production matching
+rules were not weakened.
+
+CI on `236477c` completed with 206 standard browser passes, one failed Staff
+fixture scenario and two tests that passed on retry. The member exception test
+now waits for its mocked request to start before injecting failure, fixing its
+undefined rejection callback race. Nine permanent deletion/owner regressions
+in `e2e/deletion-owner-recovery.spec.ts` cover rejected/throwing saves, stable
+retry targets, canonical restoration, discard/close and account fencing.
+
+The original three local reproductions failed before these corrections and
+passed afterward. Evidence is in `/private/tmp/aitask-missed-actions/repro.log`,
+`dashboard-diagnostic.log` and `fixed.log`. The expanded affected run passed 48
+cases; its two initial deletion-toast assertions compared untranslated message
+descriptors with an incorrect English string. Those assertions were corrected
+to use the application's message formatter. They are not outstanding app bugs.
+
+Final follow-up verification passed all 218 standard browser scenarios in one
+completed run with retries disabled, including the nine new regressions and the
+previously failed Staff dashboard case. All 517 unit tests in 74 files passed.
+The final production build/type validation, full ESLint, strict translations
+and static PWA checks passed. Eager JavaScript is 298.2 KiB gzip under the
+unchanged 300 KiB cap. Logs are `/private/tmp/aitask-three-fixes-browser-full.log`,
+`aitask-three-fixes-unit.log`, `aitask-three-fixes-build-final.log`,
+`aitask-three-fixes-lint-confirmed.log` and `aitask-three-fixes-i18n.log`.
+These browser save tests control the transport boundary; they do not establish
+fresh hosted Supabase behavior or a successful production rollout.
+
+The follow-up changes no production schema, function, credential or deployment.
+Protected staging access, production onboarding alignment, database/password
+security prerequisites and independent PR review remain separate release gates.

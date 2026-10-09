@@ -33,6 +33,7 @@ test('member creation cannot close during saving and retries one account after a
     } });
   });
   await dialog.getByRole('button', { name: 'Create member', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => typeof (window as unknown as { rejectMember?: () => void }).rejectMember)).toBe('function');
   await expect(dialog.getByRole('button', { name: 'Creating account...', exact: true })).toBeDisabled();
   await page.keyboard.press('Escape');
   await expect(dialog).toBeVisible();

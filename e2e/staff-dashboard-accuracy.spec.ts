@@ -20,7 +20,11 @@ const seed = async (page: Page, department: 'Operation' | 'Account & Finance' | 
     const template = { ...state.tasks[0], clientId: 'staff-dash-a', clientName: 'Assigned company', projectId: undefined, projectName: undefined,
       assignedTo: staff.id, createdBy: other.id, department, startDate: '2026-10-01', dueDate: '2026-10-07', status: 'Pending', isCompleted: false,
       revisionCount: 0, predecessorTaskIds: [], comments: [], approvalHistory: [], deliverableId: undefined, serviceCycleId: undefined };
-    useStore.setState({ currentUser: staff, users: [staff, other], rolePermissions: [], clients: [], projects: [],
+    useStore.setState({ currentUser: staff, users: [staff, other], rolePermissions: [],
+      clients: [
+        { id: 'staff-dash-a', clientName: 'Assigned company', createdAt: '2026-10-01', updatedAt: '2026-10-01' },
+        { id: 'staff-dash-b', clientName: 'Creator only company', createdAt: '2026-10-01', updatedAt: '2026-10-01' },
+      ], projects: [],
       tasks: [
         { ...template, id: 'assigned', title: 'Assigned dependency task', predecessorTaskIds: ['creator-visible'] },
         { ...template, id: 'creator-visible', title: 'Creator visible predecessor', clientId: 'staff-dash-b', clientName: 'Creator only company', assignedTo: other.id, createdBy: staff.id },
@@ -35,7 +39,12 @@ const seed = async (page: Page, department: 'Operation' | 'Account & Finance' | 
   await page.goto('/');
   await page.clock.runFor(600);
   await expect(page.getByRole('heading', { name: 'My work', exact: true })).toBeVisible();
-  await page.evaluate(async () => (await import('/src/store/index.ts')).stopBackendAutoSync());
+  const planClientId = await page.evaluate(async () => {
+    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
+    stopBackendAutoSync();
+    return useStore.getState().clientPlans[0].clientId;
+  });
+  expect(planClientId).toBe('staff-dash-a');
 };
 
 test('assigned queue totals and basic open-task metrics match the role scope', async ({ page }) => {

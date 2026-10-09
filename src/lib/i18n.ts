@@ -2596,6 +2596,7 @@ const zhCopyCoverage: Record<string, string> = {
   'Enter a valid https:// link for the attachment.': '请输入有效的 https:// 附件链接。',
   'The task update is waiting to be saved.': '任务更新正在等待保存。',
   'The task deletion is waiting to be saved.': '任务删除正在等待保存。',
+  'The task is still available. Use latest before deleting it again.': '任务仍然存在。请先使用最新数据，再重新删除。',
   'Cancel Edit': '取消编辑',
   'Save Changes': '保存更改',
   'Changes requested': '已请求修改',
@@ -2721,6 +2722,7 @@ const zhCopyCoverage: Record<string, string> = {
   'Choose a Project Manager or HOD as the owner.': '请选择项目经理或部门主管作为负责人。',
   'Unable to assign owner.': '无法分配负责人。',
   'The owner change is waiting to be saved.': '负责人更改正在等待保存。',
+  'The pending owner change is no longer available. Review the company before saving again.': '待保存的负责人更改已不可用。请检查公司后再保存。',
 
   // Page-level labels and messages
   'dates updated': '日期已更新',

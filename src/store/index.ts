@@ -3154,7 +3154,6 @@ export const useStore = create<StoreState>()(
             ...deriveServiceProgress(tasks, deliverables, current.serviceCycles),
           };
         });
-        useToastStore.getState().addToast(msg('task.deleted', { title: task.title }), 'success');
         return { ok: true };
       },
 
@@ -3793,10 +3792,6 @@ export const useStore = create<StoreState>()(
             ? { ...item, createdBy: nextOwner, updatedAt: now }
             : item),
         }));
-        useToastStore.getState().addToast(
-          nextOwner ? `Owner updated for "${client.clientName}".` : `Owner cleared for "${client.clientName}".`,
-          'success',
-        );
         return { ok: true };
       },
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSaveAction } from '../hooks/useSaveAction';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -181,7 +182,8 @@ const Clients: React.FC = () => {
   const [profileBaseline, setProfileBaseline] = React.useState<ClientProfileForm>(emptyProfileForm);
   const [renameBaseline, setRenameBaseline] = React.useState('');
   const [pendingClientChange, setPendingClientChange] = React.useState<
-    { kind: 'profile'; form: ClientProfileForm; name: string } | { kind: 'rename'; name: string } | { kind: 'delete'; name: string } | null
+    { kind: 'profile'; form: ClientProfileForm; name: string } | { kind: 'rename'; name: string } | { kind: 'delete'; name: string }
+    | { kind: 'owner'; clientId: string; ownerId?: string; name: string } | null
   >(null);
   const [discardAction, setDiscardAction] = React.useState<(() => void) | null>(null);
   const [isDiscarding, setIsDiscarding] = React.useState(false);
@@ -192,7 +194,9 @@ const Clients: React.FC = () => {
   const [profileError, setProfileError] = React.useState('');
   const [renameValue, setRenameValue] = React.useState('');
   const [renameError, setRenameError] = React.useState('');
-  const [isSavingClient, setIsSavingClient] = React.useState(false);
+  const [isClientMutationSaving, setIsSavingClient] = React.useState(false);
+  const { busy: isOwnerSaving, run: runOwner } = useSaveAction(selectedClientSnapshot?.profile?.id || selectedClientName);
+  const isSavingClient = isClientMutationSaving || isOwnerSaving;
   const [isDeleteConfirming, setIsDeleteConfirming] = React.useState(false);
   const [isCreateClientOpen, setIsCreateClientOpen] = React.useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = React.useState(false);
@@ -223,6 +227,13 @@ const Clients: React.FC = () => {
   const isProfileDirty = isEditingProfile && JSON.stringify(profileForm) !== JSON.stringify(profileBaseline);
   const isRenameDirty = isRenamingClient && renameValue !== renameBaseline;
   const clearUnsaved = useUnsavedChanges(isProfileDirty || isRenameDirty || isSavingClient || Boolean(pendingClientChange));
+
+  React.useEffect(() => {
+    setPendingClientChange(null);
+    setProfileError('');
+    setSelectedClientName('');
+    setSelectedClientSnapshot(null);
+  }, [currentUser?.id]);
 
   React.useLayoutEffect(() => {
     if (!openMenuClientKey || !clientMenuAnchor || !clientMenuRef.current) {
@@ -606,6 +617,36 @@ const Clients: React.FC = () => {
   const getClientSaveError = (saved: { error?: string }, fallback: string) => (
     saved.error || useStore.getState().backend.error || fallback
   );
+
+  const saveClientOwner = async (ownerId?: string) => {
+    if (!selectedClient?.profile || isSavingClient || (pendingClientChange && pendingClientChange.kind !== 'owner')) return;
+    const retry = pendingClientChange?.kind === 'owner';
+    const submitted = retry ? pendingClientChange
+      : { kind: 'owner' as const, clientId: selectedClient.profile.id, ownerId, name: selectedClient.name };
+    setProfileError('');
+    const saved = await runOwner(async () => {
+      if (!retry) {
+        const staged = assignClientOwner(submitted.clientId, submitted.ownerId);
+        if (!staged.ok) return staged;
+        setPendingClientChange(submitted);
+      }
+      return retry && useStore.getState().backend.mode === 'supabase'
+        ? useStore.getState().retryPendingSave() : commitClientChange();
+    });
+    if (!saved) return;
+    if (!isClientChangeConfirmed(saved)) {
+      setProfileError(getClientSaveError(saved, 'The owner change is waiting to be saved.'));
+      return;
+    }
+    const latest = useStore.getState().clients.find(client => client.id === submitted.clientId);
+    setPendingClientChange(null);
+    if (!latest || (latest.createdBy || undefined) !== submitted.ownerId) {
+      setProfileError(t('The pending owner change is no longer available. Review the company before saving again.'));
+      return;
+    }
+    useToastStore.getState().addToast(submitted.ownerId
+      ? t(`Owner updated for "${submitted.name}".`) : t(`Owner cleared for "${submitted.name}".`), 'success');
+  };
 
   const openProjectEditor = (project: Project | null, clientId = '') => {
     setEditingProject(project);
@@ -1172,18 +1213,19 @@ const Clients: React.FC = () => {
                           aria-label={t('Owner')} data-i18n-skip
                           className={cn(inputBase, 'mt-1 inline-block w-auto p-2 text-xs')}
                           value={selectedClient.profile.createdBy || ''}
-                          onChange={async (event) => {
-                            const result = assignClientOwner(selectedClient.profile!.id, event.target.value || undefined);
-                            if (!result.ok) { setProfileError(result.error || 'Unable to assign owner.'); return; }
-                            const saveResult = await commitPendingMutation();
-                            if (!saveResult.ok) setProfileError(saveResult.error || 'The owner change is waiting to be saved.');
-                          }}
+                          disabled={isSavingClient || Boolean(pendingClientChange) || upgradeRequired}
+                          onChange={event => void saveClientOwner(event.target.value || undefined)}
                         >
                           <option value="">{t('Unassigned')}</option>
                           {users.filter(user => ['Project Manager', 'HOD'].includes(user.role)).sort((a, b) => a.name.localeCompare(b.name)).map(user => (
                             <option key={user.id} value={user.id}>{user.name} · {t(getRoleDisplayName(user.role))}</option>
                           ))}
                         </select>
+                        {pendingClientChange?.kind === 'owner' && (
+                          <Button type="button" variant="secondary" disabled={isSavingClient} onClick={() => void saveClientOwner()} className="mt-2">
+                            {isOwnerSaving ? t('Saving…') : t('Retry save')}
+                          </Button>
+                        )}
                       </p>
                     )}
                     <p>

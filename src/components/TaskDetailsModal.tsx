@@ -1,4 +1,8 @@
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
+import type { WorkspaceSessionToken } from '../lib/workspaceSession';
+import { useSaveAction } from '../hooks/useSaveAction';
+import { useToastStore } from '../store/useToastStore';
+import { msg } from '../lib/messages';
 import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
 import { getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
 import { getTeamWorkloadSummaries } from '../lib/taskReporting';
@@ -66,7 +70,7 @@ const ExternalTaskLink: React.FC<{ value: string; label: string; invalidLabel: s
   );
 };
 
-const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requestedTask }) => {
+const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onClose, task: routedTask }) => {
   const { locale, t } = useI18n();
   const {
     users,
@@ -111,6 +115,13 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
     backend: state.backend,
     upgradeRequired: state.backend.upgradeRequired === true,
   })));
+  const [pendingDeletion, setPendingDeletion] = useState<{ task: Task; actorId: string; session: WorkspaceSessionToken } | null>(null);
+  const ownedDeletion = pendingDeletion && pendingDeletion.actorId === currentUser?.id && isWorkspaceSessionCurrent(pendingDeletion.session)
+    ? pendingDeletion : null;
+  const requestedTask = routedTask || ownedDeletion?.task || null;
+  const isDeletingTask = Boolean(ownedDeletion && ownedDeletion.task.id === requestedTask?.id);
+  const isOpen = requestedOpen || isDeletingTask;
+  const { busy: isDeletionSaving, run: runDeletion } = useSaveAction(requestedTask?.id);
   const [commentText, setCommentText] = useState('');
   const pendingComment = React.useRef<{ taskId: string; id: string; text: string } | null>(null);
   const [attachmentLink, setAttachmentLink] = useState('');
@@ -120,7 +131,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [editError, setEditError] = useState('');
   const [mutationError, setMutationError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isMutationSubmitting, setIsSubmitting] = useState(false);
+  const isSubmitting = isMutationSubmitting || isDeletionSaving;
   const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
   const [delegationAssignee, setDelegationAssignee] = useState('');
   const titleId = React.useId();
@@ -150,13 +162,14 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
   const actorIdRef = React.useRef(currentUser?.id);
   actorIdRef.current = currentUser?.id;
   useEffect(() => () => { mutationGeneration.current++; }, []);
-  const formDirty = Boolean(isOpen && requestedTask && (commentText.trim() || approvalNote.trim() || revisionNote.trim() || isSubmitting
+  const formDirty = Boolean(isOpen && requestedTask && (commentText.trim() || approvalNote.trim() || revisionNote.trim() || isSubmitting || isDeletingTask
     || attachmentLink !== (requestedTask.attachmentLink || '') || attachmentName !== (requestedTask.attachmentName || '')
     || (isEditingDetails && JSON.stringify(editForm) !== JSON.stringify(editBaseline.current))
     || (delegationAssignee && delegationAssignee !== requestedTask.assignedTo)));
   const markPristine = useUnsavedChanges(formDirty);
   const requestClose = () => {
     if (isSubmitting || (formDirty && !window.confirm(t('Discard unsaved changes?')))) return;
+    if (isDeletingTask) { void resolvePendingMutation('latest', true); return; }
     markPristine(); onClose();
   };
 
@@ -172,6 +185,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
     setCommentText('');
     pendingComment.current = null;
     pendingDetails.current = null;
+    setPendingDeletion(null);
+    setConfirmation(null);
     mutationGeneration.current++;
     setIsSubmitting(false);
     setDelegationAssignee('');
@@ -190,10 +205,10 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
       };
       editBaseline.current = initialEdit; setEditForm(initialEdit);
     }
-  }, [requestedTaskId]);
+  }, [requestedTaskId, currentUser?.id]);
 
   if (!isOpen || !requestedTask) return null;
-  const task = tasks.find(item => item.id === requestedTask.id);
+  const task = tasks.find(item => item.id === requestedTask.id) || (isDeletingTask ? ownedDeletion?.task : null);
   if (!task) return null;
 
   const assignee = users.find(u => u.id === task.assignedTo);
@@ -202,11 +217,11 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
   const taskAccess = getTaskAccess(currentUser, task, rolePermissions, { clients, projects });
   if (!taskAccess.canView) return null;
   const pendingResolution = isPendingMutationResolution(backend);
-  const canEditTask = !upgradeRequired && !pendingResolution && taskAccess.canEdit;
-  const canAddComment = !upgradeRequired && !pendingResolution && taskAccess.canComment;
-  const canClientReview = !upgradeRequired && !pendingResolution && taskAccess.canView && canReviewTaskAsClient(currentUser, task, rolePermissions);
+  const canEditTask = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canEdit;
+  const canAddComment = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canComment;
+  const canClientReview = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canView && canReviewTaskAsClient(currentUser, task, rolePermissions);
   const isClientTaskViewer = currentUser?.role === 'Client';
-  const canAssignOthers = !upgradeRequired && !pendingResolution && taskAccess.canAssign;
+  const canAssignOthers = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canAssign;
   const canDelegateAssignedTask = Boolean(
     canAssignOthers
     && isDepartmentScopedUser(currentUser, rolePermissions)
@@ -274,7 +289,33 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
     }
   };
 
-  const resolvePendingMutation = async (action: 'retry' | 'latest') => {
+  const resolvePendingMutation = async (action: 'retry' | 'latest', closeAfterDiscard = false) => {
+    if (ownedDeletion) {
+      const submitted = ownedDeletion;
+      const result = await runDeletion(async () => {
+        if (action === 'retry') return useStore.getState().backend.mode === 'supabase'
+          ? retryPendingSave() : commitPendingMutation();
+        await discardMutation();
+        const latest = useStore.getState().backend;
+        return latest.mode === 'supabase' && latest.status !== 'live'
+          ? { ok: false, error: latest.error || 'The change is waiting to be saved.' } : { ok: true };
+      });
+      if (!result) return;
+      if (!result.ok) { setMutationError(result.error || 'The task deletion is waiting to be saved.'); return; }
+      if (action === 'retry') {
+        if (useStore.getState().tasks.some(item => item.id === submitted.task.id)) {
+          setMutationError(t('The task is still available. Use latest before deleting it again.'));
+          return;
+        }
+        useToastStore.getState().addToast(msg('task.deleted', { title: submitted.task.title }), 'success');
+      }
+      setPendingDeletion(null);
+      setMutationError('');
+      if (closeAfterDiscard || action === 'retry' || !useStore.getState().tasks.some(item => item.id === submitted.task.id)) {
+        markPristine(); onClose();
+      }
+      return;
+    }
     const session = captureWorkspaceSession();
     const taskId = task.id;
     const actorId = currentUser?.id;
@@ -390,19 +431,26 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
   };
 
   const performDeleteTask = async () => {
-    const result = deleteTask(task.id);
-    if (!result.ok) {
-      setEditError(result.error || 'Unable to delete this task.');
-      setIsEditingDetails(true);
-      return;
-    }
-
-    const saveResult = await commitPendingMutation();
+    if (isSubmitting || isDeletingTask || !currentUser) return;
+    const submitted = { task, actorId: currentUser.id, session: captureWorkspaceSession() };
+    const saveResult = await runDeletion(async () => {
+      setPendingDeletion(submitted);
+      const result = deleteTask(task.id);
+      if (!result.ok) { setPendingDeletion(null); return result; }
+      return commitPendingMutation();
+    });
+    if (!saveResult) return;
     if (!saveResult.ok) {
-      setEditError(saveResult.error || 'The task deletion is waiting to be saved.');
-      setIsEditingDetails(true);
+      setMutationError(saveResult.error || 'The task deletion is waiting to be saved.');
       return;
     }
+    if (useStore.getState().tasks.some(item => item.id === task.id)) {
+      setMutationError(t('The task is still available. Use latest before deleting it again.'));
+      return;
+    }
+    useToastStore.getState().addToast(msg('task.deleted', { title: task.title }), 'success');
+    setPendingDeletion(null);
+    markPristine();
     onClose();
   };
 
@@ -466,10 +514,10 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
           </div>
         </div>
 
-        {(mutationError || pendingResolution) && (
+        {(mutationError || pendingResolution || isDeletingTask) && (
           <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm font-medium text-amber-800" role="alert" aria-live="assertive">
             <p>{mutationError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
-            {pendingResolution && (
+            {(pendingResolution || isDeletingTask) && (
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -572,7 +620,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
                 </section>
               )}
 
-              {isEditingDetails && (
+              {isEditingDetails && !isDeletingTask && (
                 <form onSubmit={handleDetailsSave} className="rounded-lg border border-blue-100 bg-blue-50/40 p-4 space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="md:col-span-2">
@@ -1039,8 +1087,9 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen, onClose, task: requ
             busy={isSubmitting}
             onClose={() => setConfirmation(null)}
             onConfirm={async () => {
-              await confirmation.action();
-              setConfirmation(null);
+              const submitted = confirmation;
+              await submitted.action();
+              setConfirmation(current => current === submitted ? null : current);
             }}
           />
         )}
