@@ -3858,6 +3858,7 @@ export const useStore = create<StoreState>()(
         if (serviceItems.length === 0) return { ok: false, error: 'Add at least one service item.' };
         if (serviceItems.reduce((sum, item) => sum + item.quantity, 0) > 400) return { ok: false, error: 'A package can generate at most 400 deliverables per cycle.' };
         const existing = data.id ? state.servicePackages.find(item => item.id === data.id) : undefined;
+        if (data.id && !existing) return { ok: false, error: 'Package not found.' };
         const now = new Date().toISOString();
         const item: ServicePackage = {
           id: existing?.id || nowId('PKG'),
@@ -3878,7 +3879,6 @@ export const useStore = create<StoreState>()(
             ? current.servicePackages.map(pkg => pkg.id === existing.id ? item : pkg)
             : [...current.servicePackages, item],
         }));
-        useToastStore.getState().addToast(msg('package.saved', { name: item.name }), 'success');
         return { ok: true, id: item.id };
       },
 
@@ -3904,6 +3904,7 @@ export const useStore = create<StoreState>()(
         if (!steps.length) return { ok: false, error: 'Add at least one workflow step.' };
         if (steps.some(step => !allowedDepartments.has(step.department))) return { ok: false, error: 'Every workflow step needs a valid department.' };
         const existing = data.id ? state.serviceWorkflowTemplates.find(item => item.id === data.id) : undefined;
+        if (data.id && !existing) return { ok: false, error: 'Workflow template not found.' };
         const now = new Date().toISOString();
         const item: ServiceWorkflowTemplate = {
           id: existing?.id || nowId('SWT'),
@@ -3935,7 +3936,6 @@ export const useStore = create<StoreState>()(
         set(current => ({
           servicePackages: current.servicePackages.filter(item => item.id !== id),
         }));
-        useToastStore.getState().addToast(msg('package.deleted', { name: existing.name }), 'success');
         return { ok: true };
       },
 
@@ -3959,7 +3959,6 @@ export const useStore = create<StoreState>()(
         set(current => ({
           serviceWorkflowTemplates: current.serviceWorkflowTemplates.filter(item => item.id !== id),
         }));
-        useToastStore.getState().addToast(msg('workflow.deleted', { name: existing.name }), 'success');
         return { ok: true };
       },
 

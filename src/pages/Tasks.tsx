@@ -23,6 +23,7 @@ import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
 import ClientDeliveries from '../components/ClientDeliveries';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import { useLocalToday } from '../hooks/useLocalToday';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 
 const CLIENT_BOARD_COLUMNS = [
   { value: 'active', label: 'In progress' },
@@ -78,16 +79,25 @@ const TasksWorkspace: React.FC = () => {
   const pendingResolution = isPendingMutationResolution(backend);
 
   const persistQuickChange = async (previousTask: Task) => {
-    const result = await commitPendingMutation();
+    const session = captureWorkspaceSession();
+    const actorId = useStore.getState().currentUser?.id;
+    const submittedTask = useStore.getState().tasks.find(task => task.id === previousTask.id);
+    let result: { ok: boolean; error?: string };
+    try { result = await commitPendingMutation(); }
+    catch (error) { result = { ok: false, error: error instanceof Error ? error.message : 'Unable to save this change.' }; }
+    if (!isWorkspaceSessionCurrent(session) || useStore.getState().currentUser?.id !== actorId) return false;
     if (result.ok) {
       const saved = useStore.getState().tasks.find(task => task.id === previousTask.id);
-      if (saved && saved.status !== previousTask.status) announceTaskStatusSaved(saved.status);
+      if (saved && submittedTask && submittedTask.status !== previousTask.status
+        && saved.status === submittedTask.status) announceTaskStatusSaved(saved.status);
       setQuickSyncError('');
       return true;
     }
     useStore.setState(state => ({
       tasks: state.tasks.map(task => {
-        if (task.id !== previousTask.id) return task;
+        // A pull or another edit may have replaced this row while saving. Only
+        // undo the exact optimistic row submitted by this action.
+        if (task !== submittedTask) return task;
         return { ...previousTask };
       }),
     }));

@@ -11,6 +11,7 @@ import { useToastStore } from '../store/useToastStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useI18n } from './I18nProvider';
 import type { ClientServicePlan } from '../types';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 
 type Props = {
   plan: ClientServicePlan;
@@ -32,6 +33,15 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
   const [contractEndDate, setContractEndDate] = React.useState(plan.contractEndDate || '');
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const mounted = React.useRef(false);
+  const currentPlanId = React.useRef(plan.id); currentPlanId.current = plan.id;
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  React.useEffect(() => {
+    setStartDate(plan.startDate || ''); setBillingDay(String(plan.billingDay || 1));
+    setContractEndDate(plan.contractEndDate || ''); setError(''); setSaving(false);
+  // A different plan starts a new editor; updates to this plan retain its draft.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan.id]);
   const dirty = startDate !== plan.startDate || Number(billingDay) !== plan.billingDay || contractEndDate !== (plan.contractEndDate || '');
   useUnsavedChanges(saving || dirty);
   const requestClose = () => { if (!saving && (!dirty || window.confirm(t('Discard unsaved changes?')))) onClose(); };
@@ -61,14 +71,24 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
       return;
     }
     setSaving(true);
-    const committed = await retryPendingSave();
-    setSaving(false);
-    if (!committed.ok) {
-      setError(t(committed.error || 'The plan date change is waiting to be saved.'));
-      return;
+    const session = captureWorkspaceSession();
+    const actorId = useStore.getState().currentUser?.id;
+    const isCurrent = () => mounted.current && currentPlanId.current === plan.id
+      && isWorkspaceSessionCurrent(session) && useStore.getState().currentUser?.id === actorId;
+    try {
+      const committed = await retryPendingSave();
+      if (!isCurrent()) return;
+      if (!committed.ok) {
+        setError(t(committed.error || 'The plan date change is waiting to be saved.'));
+        return;
+      }
+      useToastStore.getState().addToast({ id: 'errors.planDatesUpdated', values: { name: plan.clientName } }, 'success');
+      onClose();
+    } catch (error) {
+      if (isCurrent()) setError(error instanceof Error ? error.message : t('Unable to save this change.'));
+    } finally {
+      if (mounted.current && currentPlanId.current === plan.id) setSaving(false);
     }
-    useToastStore.getState().addToast({ id: 'errors.planDatesUpdated', values: { name: plan.clientName } }, 'success');
-    onClose();
   };
 
   return (
@@ -85,7 +105,7 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
         <label className="block text-sm font-medium text-ink">{t('Start date')}
           <input
             type="date"
-            disabled={!isDraft}
+            disabled={!isDraft || saving}
             className={`${inputBase} mt-1.5 px-3 py-2.5 disabled:cursor-not-allowed disabled:bg-inset disabled:text-muted`}
             value={startDate}
             onChange={event => setStartDate(event.target.value)}
@@ -97,6 +117,7 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
             type="number"
             min={1}
             max={31}
+            disabled={saving}
             className={`${inputBase} mt-1.5 px-3 py-2.5`}
             value={billingDay}
             onChange={event => setBillingDay(event.target.value)}
@@ -111,6 +132,7 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
           <input
             type="date"
             min={startDate || undefined}
+            disabled={saving}
             className={`${inputBase} mt-1.5 px-3 py-2.5`}
             value={contractEndDate}
             onChange={event => setContractEndDate(event.target.value)}

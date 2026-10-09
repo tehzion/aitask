@@ -1,3 +1,5 @@
+import { useSaveAction } from '../hooks/useSaveAction';
+import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { hasUnsavedChanges } from '../lib/unsavedChanges';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -114,7 +116,8 @@ const OperationsClientWorkspace = () => {
   const [activityFeedback, setActivityFeedback] = React.useState<ActivityFeedback | null>(null);
   const [addonSheetOpen, setAddonSheetOpen] = React.useState(false);
   const [activitySheetOpen, setActivitySheetOpen] = React.useState(false);
-  const [addonSaving, setAddonSaving] = React.useState(false);
+  const { busy: addonSaving, run: runServiceAction } = useSaveAction(clientId);
+  const pendingAddon = React.useRef<(typeof store.addons)[number] | null>(null);
   const [activitySaving, setActivitySaving] = React.useState(false);
   const activityContext = React.useRef({ clientId, actorId: store.currentUser?.id });
   activityContext.current = { clientId, actorId: store.currentUser?.id };
@@ -158,6 +161,10 @@ const OperationsClientWorkspace = () => {
     effectiveFrom: addonDefaultDate,
     targetCycleId: "",
   });
+  React.useEffect(() => {
+    pendingAddon.current = null; setAddonSheetOpen(false); setPlanAction(null); setMessage('');
+    setAddon({ name: '', platforms: '', quantity: 1, unitPrice: 0, billingMode: 'one_off', effectiveFrom: addonDefaultDate, targetCycleId: '' });
+  }, [clientId, store.currentUser?.id, addonDefaultDate]);
   useUnsavedChanges(addonSaving || Boolean(addon.name.trim() || addon.platforms.trim() || addon.quantity !== 1 || addon.unitPrice !== 0 || addon.billingMode !== 'one_off' || addon.targetCycleId || addon.effectiveFrom !== addonDefaultDate));
 
   if (!client) return <Navigate to="/projects" replace />;
@@ -251,19 +258,20 @@ const OperationsClientWorkspace = () => {
       setMessage(result.error || "Unable to save this change.");
       return false;
     }
-    const saved = await store.commitPendingMutation(command);
+    const saved = await runServiceAction(() => store.commitPendingMutation(command));
+    if (!saved) return false;
     setMessage(
       saved.ok ? "Saved." : saved.error || "The change is waiting to be saved.",
     );
     return saved.ok;
   };
   const confirmPlanAction = async () => {
-    if (!activePlan || !planAction) return;
-    await saveAndCommit(
+    if (!activePlan || !planAction || addonSaving) return;
+    const saved = await saveAndCommit(
       store.setClientPlanStatus(activePlan.id, planAction === "pause" ? "Paused" : "Ended"),
       "client_plan.manage",
     );
-    setPlanAction(null);
+    if (saved) setPlanAction(null);
   };
   const submitComment = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -375,58 +383,48 @@ const OperationsClientWorkspace = () => {
   const addAddon = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!activePlan || addonSaving) return;
-    if (addon.quantity < 1 || !Number.isInteger(addon.quantity) || addon.unitPrice < 0 || !Number.isFinite(addon.unitPrice)) {
-      setMessage("Enter a whole quantity of at least one and a valid non-negative price.");
-      return;
+    const retry = Boolean(pendingAddon.current);
+    if (!retry) {
+      if (addon.quantity < 1 || !Number.isInteger(addon.quantity) || addon.unitPrice < 0 || !Number.isFinite(addon.unitPrice)) {
+        setMessage("Enter a whole quantity of at least one and a valid non-negative price."); return;
+      }
+      if (addon.billingMode === "one_off" && !addon.targetCycleId) {
+        setMessage("Choose a service cycle for this one-off add-on."); return;
+      }
+      const result = store.addAddon({ clientId: client.id, clientName: client.clientName, planId: activePlan.id,
+        name: addon.name, platforms: addon.platforms.split(',').map(value => value.trim()).filter(Boolean),
+        quantity: addon.quantity, unitPriceMinor: Math.round(addon.unitPrice * 100), billingMode: addon.billingMode,
+        targetCycleId: addon.billingMode === 'one_off' ? addon.targetCycleId || undefined : undefined,
+        effectiveFrom: addon.effectiveFrom, isActive: true });
+      if (!result.ok) { setMessage(result.error || 'Unable to save this change.'); return; }
+      pendingAddon.current = useStore.getState().addons.find(item => item.id === result.id) || null;
     }
-    if (addon.billingMode === "one_off" && !addon.targetCycleId) {
-      setMessage("Choose a service cycle for this one-off add-on.");
-      return;
-    }
-    setAddonSaving(true);
-    const saved = await saveAndCommit(
-      store.addAddon({
-        clientId: client.id,
-        clientName: client.clientName,
-        planId: activePlan.id,
-        name: addon.name,
-        platforms: addon.platforms
-          .split(",")
-          .map((value) => value.trim())
-          .filter(Boolean),
-        quantity: addon.quantity,
-        unitPriceMinor: Math.round(addon.unitPrice * 100),
-        billingMode: addon.billingMode,
-        targetCycleId:
-          addon.billingMode === "one_off"
-            ? addon.targetCycleId || undefined
-            : undefined,
-        effectiveFrom: addon.effectiveFrom,
-        isActive: true,
-      }),
-      "addon.manage",
-    );
-    setAddonSaving(false);
+    const submitted = pendingAddon.current;
+    const saved = await runServiceAction(() => retry && shouldUseSecureSupabase() ? store.retryPendingSave('addon.manage') : store.commitPendingMutation('addon.manage'));
     if (!saved) return;
-    setAddon((current) => ({
-      ...current,
-      name: "",
-      platforms: "",
-      quantity: 1,
-      unitPrice: 0,
-    }));
+    if (!saved.ok) { setMessage(saved.error || 'The change is waiting to be saved.'); return; }
+    const latest = useStore.getState().addons.find(item => item.id === submitted?.id);
+    pendingAddon.current = null;
+    if (!submitted || !latest || ['name', 'platforms', 'quantity', 'unitPriceMinor', 'billingMode', 'targetCycleId', 'effectiveFrom'].some(key => JSON.stringify(latest[key as keyof typeof latest]) !== JSON.stringify(submitted[key as keyof typeof submitted]))) {
+      setMessage(t('The pending add-on is no longer available. Review your draft before saving again.')); return;
+    }
+    setMessage(t('Saved.'));
+    setAddon(current => ({ ...current, name: '', platforms: '', quantity: 1, unitPrice: 0 }));
     setAddonSheetOpen(false);
   };
+
   const createRevision = async () => {
-    if (!activePlan) return;
+    if (!activePlan || addonSaving) return;
     const result = store.createClientPlanRevision(activePlan.id);
     await saveAndCommit(result, "client_plan.manage");
   };
   const generateTaskChain = async (deliverableId: string) => {
+    if (addonSaving) return;
     const result = store.generateDeliverableTaskChain(deliverableId);
     await saveAndCommit(result, "deliverable.workflow.generate");
   };
   const changeAddonState = async (addonId: string, isActive: boolean) => {
+    if (addonSaving) return;
     await saveAndCommit(
       store.setAddonActive(addonId, isActive, addonEndDates[addonId]),
       "addon.manage",
@@ -1016,9 +1014,11 @@ const OperationsClientWorkspace = () => {
         onClose={() => { if (!addonSaving) setAddonSheetOpen(false); }}
         title={t("Add service add-on")}
         description={t("Add one-off work to a cycle or recurring work from an effective date. Prices remain internal.")}
-        footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setAddonSheetOpen(false)} disabled={addonSaving}>{t("Cancel")}</Button><Button type="submit" form="add-addon-form" disabled={addonSaving}><Plus className="h-4 w-4" />{addonSaving ? t("Saving…") : t("Add add-on")}</Button></div>}
+        footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setAddonSheetOpen(false)} disabled={addonSaving}>{t("Cancel")}</Button><Button type="submit" form="add-addon-form" disabled={addonSaving}><Plus className="h-4 w-4" />{addonSaving ? t("Saving…") : pendingAddon.current ? t("Retry save") : t("Add add-on")}</Button></div>}
       >
         <form id="add-addon-form" onSubmit={addAddon} className="space-y-5">
+          {message && <p role="alert">{message}</p>}
+          <fieldset disabled={addonSaving || Boolean(pendingAddon.current)} className="min-w-0 border-0 p-0 space-y-5">
           <label className="block text-sm font-medium text-ink">{t("Add-on name")}<input data-i18n-skip required className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.name} onChange={(e) => setAddon({ ...addon, name: e.target.value })} /></label>
           <label className="block text-sm font-medium text-ink">{t("Platforms")}<input data-i18n-skip placeholder={t("Instagram, TikTok")} className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.platforms} onChange={(e) => setAddon({ ...addon, platforms: e.target.value })} /></label>
           <div className="grid grid-cols-2 gap-3">
@@ -1031,6 +1031,7 @@ const OperationsClientWorkspace = () => {
           ) : (
             <label className="block text-sm font-medium text-ink">{t("Effective from")}<input type="date" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.effectiveFrom} onChange={(e) => setAddon({ ...addon, effectiveFrom: e.target.value })} /></label>
           )}
+          </fieldset>
         </form>
       </SideSheet>
 

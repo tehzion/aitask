@@ -1,3 +1,4 @@
+import { useSaveAction } from '../hooks/useSaveAction';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
 import UploadRecoveryPanel from '../components/UploadRecoveryPanel';
 import { clearWorkspaceSession } from '../store';
@@ -142,7 +143,7 @@ const Settings: React.FC = () => {
   const [avatarUrl, setAvatarUrl] = React.useState(currentUser?.avatar || '');
   const [profileMessage, setProfileMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [avatarUploadMessage, setAvatarUploadMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
-  const [isPreparingAvatar, setIsPreparingAvatar] = React.useState(false);
+  const { busy: isPreparingAvatar, run: runAvatar } = useSaveAction();
   const [avatarPreviewFailed, setAvatarPreviewFailed] = React.useState(false);
   const [profileRetryDraft, setProfileRetryDraft] = React.useState<Pick<User, 'name' | 'email' | 'avatar'> | null>(null);
   const avatarFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -165,8 +166,10 @@ const Settings: React.FC = () => {
   const [passwordMessage, setPasswordMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [newStatusInput, setNewStatusInput] = React.useState('');
   const [statusError, setStatusError] = React.useState('');
-  const [isProfileSaving, setIsProfileSaving] = React.useState(false);
-  const [isStatusSaving, setIsStatusSaving] = React.useState(false);
+  const { busy: isProfileSaving, run: runProfile } = useSaveAction();
+  const { busy: isPasswordSaving, run: runPassword } = useSaveAction();
+  const { busy: isStatusSaving, run: runStatus } = useSaveAction();
+  const pendingStatus = React.useRef<{ kind: 'add' | 'delete'; name: string; raw: string } | null>(null);
   const [hasPendingStatusAdd, setHasPendingStatusAdd] = React.useState(false);
   const [localDemoMessage, setLocalDemoMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [confirmation, setConfirmation] = React.useState<{
@@ -178,55 +181,47 @@ const Settings: React.FC = () => {
   const [isConfirming, setIsConfirming] = React.useState(false);
   const confirmationTitleId = React.useId();
 
-  const handleStatusAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!hasPendingStatusAdd) {
-      const result = addTaskStatus(newStatusInput);
-      if (!result.ok) {
-        setStatusError(result.error || 'Failed to add status.');
-        return;
-      }
-    }
-
-    setIsStatusSaving(true);
-    const saved = await commitPendingMutation();
-    setIsStatusSaving(false);
-    if (!saved.ok) {
-      setHasPendingStatusAdd(true);
-      setStatusError(saved.error || 'The status is queued but not saved. Resolve the sync issue in the Data Backend panel and try again.');
+  const confirmStatus = async (retry = false) => {
+    const submitted = pendingStatus.current;
+    if (!submitted) return;
+    const saved = await runStatus(() => retry && shouldUseSecureSupabase() ? useStore.getState().retryPendingSave() : commitPendingMutation());
+    if (!saved) return;
+    if (!saved.ok) { setStatusError(saved.error || t('The change is waiting to be saved.')); return; }
+    const present = useStore.getState().taskStatuses.includes(submitted.name);
+    pendingStatus.current = null;
+    setHasPendingStatusAdd(false);
+    if (present !== (submitted.kind === 'add')) {
+      setStatusError(t('The pending status change is no longer available. Review your draft before saving again.'));
       return;
     }
-
-    setHasPendingStatusAdd(false);
-    setNewStatusInput('');
+    if (submitted.kind === 'add') setNewStatusInput(current => current === submitted.raw ? '' : current);
     setStatusError('');
-    useToastStore.getState().addToast(t('Status added successfully'), 'success');
+    useToastStore.getState().addToast(t(submitted.kind === 'add' ? 'Status added successfully' : `Status "${submitted.name}" deleted successfully`), 'success');
+  };
+
+  const handleStatusAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isStatusSaving) return;
+    const retry = Boolean(pendingStatus.current);
+    if (!pendingStatus.current) {
+      const result = addTaskStatus(newStatusInput);
+      if (!result.ok) { setStatusError(result.error || 'Failed to add status.'); return; }
+      pendingStatus.current = { kind: 'add', name: newStatusInput.trim(), raw: newStatusInput };
+      setHasPendingStatusAdd(true);
+    }
+    await confirmStatus(retry);
   };
 
   const handleDeleteStatus = async (status: string) => {
-    setConfirmation({
-      title: t(`Delete the "${status}" status?`),
-      description: t('Tasks using another status are not changed.'),
-      confirmLabel: t('Delete status'),
+    if (isStatusSaving || pendingStatus.current) return;
+    setConfirmation({ title: t(`Delete the "${status}" status?`),
+      description: t('Tasks using another status are not changed.'), confirmLabel: t('Delete status'),
       action: async () => {
-        const previousStatuses = useStore.getState().taskStatuses;
         const result = deleteTaskStatus(status);
-        if (!result.ok) {
-          setStatusError(result.error || 'Failed to delete status.');
-          return;
-        }
-
-        setIsStatusSaving(true);
-        const saved = await commitPendingMutation();
-        setIsStatusSaving(false);
-        if (!saved.ok) {
-          useStore.setState({ taskStatuses: previousStatuses });
-          setStatusError(saved.error || 'The status could not be deleted.');
-          return;
-        }
-
-        setStatusError('');
-        useToastStore.getState().addToast(t(`Status "${status}" deleted successfully`), 'success');
+        if (!result.ok) { setStatusError(result.error || 'Failed to delete status.'); return; }
+        pendingStatus.current = { kind: 'delete', name: status, raw: '' };
+        setHasPendingStatusAdd(true);
+        await confirmStatus();
       },
     });
   };
@@ -256,7 +251,7 @@ const Settings: React.FC = () => {
   const profileEmailChanged = profileEmail.trim().toLowerCase() !== (currentUser?.email || '').trim().toLowerCase();
   const isUploadedAvatar = avatarUrl.startsWith('data:image/');
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
-  useUnsavedChanges(profileChanged || passwordChanged || Boolean(profileCurrentPassword) || isProfileSaving || isPreparingAvatar);
+  useUnsavedChanges(profileChanged || passwordChanged || Boolean(profileCurrentPassword) || isProfileSaving || isPasswordSaving || isPreparingAvatar || hasPendingStatusAdd || Boolean(newStatusInput.trim()));
   const mustResetPassword = Boolean(currentUser?.mustResetPassword);
   const canBypassPasswordReset = mustResetPassword && canUsePasswordResetBypass();
   const bypassActive = currentUser ? hasPasswordResetBypass(currentUser.id) : false;
@@ -337,60 +332,44 @@ const Settings: React.FC = () => {
     setProfileRetryDraft(null);
     setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setPasswordMessage(null);
-  }, [currentUser?.id, currentUser?.name, currentUser?.email, currentUser?.avatar]);
+    pendingStatus.current = null; setHasPendingStatusAdd(false); setStatusError(''); setNewStatusInput('');
+    setConfirmation(null);
+    // Account identity owns the draft; profile refreshes must not erase it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]);
 
   const saveProfileChanges = async () => {
-    setIsProfileSaving(true);
-
-    const previousProfile = {
-      name: currentUser?.name || '',
-      email: currentUser?.email || '',
-      avatar: currentUser?.avatar || '',
-    };
-    const emailChanged = profileEmail.trim().toLowerCase() !== (currentUser?.email || '').trim().toLowerCase();
-    if (backend.mode === 'supabase' && emailChanged) {
-      const emailResult = await updateCurrentUserEmail(profileEmail, profileCurrentPassword);
-      if (!emailResult.ok) {
-        setIsProfileSaving(false);
-        setProfileMessage({ tone: 'error', text: emailResult.error || t('Login email could not be updated.') });
-        return;
+    if (isProfileSaving || isPreparingAvatar) return;
+    const submitted = profileRetryDraft || { name: profileName, email: profileEmail, avatar: avatarUrl };
+    let staged = Boolean(profileRetryDraft);
+    const saved = await runProfile(async isCurrent => {
+      if (!staged) {
+        const emailChanged = submitted.email?.trim().toLowerCase() !== (currentUser?.email || '').trim().toLowerCase();
+        if (backend.mode === 'supabase' && emailChanged) {
+          const result = await updateCurrentUserEmail(submitted.email || '', profileCurrentPassword);
+          if (!isCurrent() || !result.ok) return result;
+          setProfileCurrentPassword('');
+        }
+        const result = updateCurrentUserProfile(submitted);
+        if (!result.ok) return result;
+        staged = true;
       }
-      setProfileCurrentPassword('');
-    }
-
-    const result = updateCurrentUserProfile({
-      name: profileName,
-      email: profileEmail,
-      avatar: avatarUrl,
+      return profileRetryDraft && shouldUseSecureSupabase() ? useStore.getState().retryPendingSave() : commitPendingMutation();
     });
-
-    if (!result.ok) {
-      setIsProfileSaving(false);
-      setProfileMessage({ tone: 'error', text: result.error || t('Profile could not be updated.') });
+    if (!saved) return;
+    if (!saved.ok) {
+      if (staged) setProfileRetryDraft(submitted);
+      setProfileMessage({ tone: 'error', text: saved.error || t('Profile is waiting to be saved. Use Retry required to try again.') });
       return;
     }
-
-    const saved = await commitPendingMutation();
-    setIsProfileSaving(false);
-    if (!saved.ok) {
-      useStore.setState(state => ({
-        users: state.users.map(user => user.id === currentUser?.id
-          ? { ...user, name: previousProfile.name, email: previousProfile.email, avatar: previousProfile.avatar }
-          : user),
-        currentUser: state.currentUser?.id === currentUser?.id
-          ? { ...(state.currentUser as User), name: previousProfile.name, email: previousProfile.email, avatar: previousProfile.avatar }
-          : state.currentUser,
-      }));
-      setProfileRetryDraft({ name: profileName, email: profileEmail, avatar: avatarUrl });
+    const latest = useStore.getState().currentUser;
+    setProfileRetryDraft(null);
+    if (!latest || latest.name !== submitted.name.trim() || (latest.email || '').toLowerCase() !== (submitted.email || '').trim().toLowerCase() || (latest.avatar || '') !== (submitted.avatar || '').trim()) {
+      setProfileMessage({ tone: 'error', text: t('The pending profile change is no longer available. Review your draft before saving again.') });
+      return;
     }
-    setProfileMessage({
-      tone: saved.ok ? 'success' : 'error',
-      text: saved.ok ? t('Profile updated.') : saved.error || t('Profile is waiting to be saved. Use Retry required to try again.'),
-    });
-    if (saved.ok) {
-      setProfileRetryDraft(null);
-      setAvatarUploadMessage(null);
-    }
+    setProfileMessage({ tone: 'success', text: t('Profile updated.') });
+    setAvatarUploadMessage(null);
   };
 
   const handleProfileSave = async (event: React.FormEvent) => {
@@ -398,21 +377,13 @@ const Settings: React.FC = () => {
     await saveProfileChanges();
   };
 
-  const retryProfileSave = () => {
-    if (!profileRetryDraft || isProfileSaving) return;
-    setProfileName(profileRetryDraft.name);
-    setProfileEmail(profileRetryDraft.email);
-    setAvatarUrl(profileRetryDraft.avatar || '');
-    setAvatarPreviewFailed(false);
-    setProfileMessage(null);
-    window.setTimeout(() => profileFormRef.current?.requestSubmit(), 0);
-  };
+  const retryProfileSave = () => { if (profileRetryDraft && !isProfileSaving) void saveProfileChanges(); };
 
   const discardPendingProfileChange = async () => {
-    if (isProfileSaving) return;
-    await discardMutation();
-    setProfileRetryDraft(null);
-    setProfileMessage(null);
+    const result = await runProfile(async () => { await discardMutation(); return { ok: true, error: undefined }; });
+    if (!result) return;
+    if (!result.ok) { setProfileMessage({ tone: 'error', text: result.error }); return; }
+    resetProfileForm();
   };
 
   const resetProfileForm = () => {
@@ -466,23 +437,15 @@ const Settings: React.FC = () => {
       return;
     }
 
-    try {
-      setIsPreparingAvatar(true);
-      const resizedAvatar = await resizeAvatarImage(file);
-      setAvatarUrl(resizedAvatar);
-      setAvatarPreviewFailed(false);
-      setAvatarUploadMessage({
-        tone: 'success',
-        text: t('Photo ready. Save profile to apply it.'),
-      });
-    } catch (error) {
-      setAvatarUploadMessage({
-        tone: 'error',
-        text: error instanceof Error ? t(error.message) : t('Could not prepare that photo.'),
-      });
-    } finally {
-      setIsPreparingAvatar(false);
+    const prepared = await runAvatar(async () => ({ ok: true, error: undefined, avatar: await resizeAvatarImage(file) }));
+    if (!prepared) return;
+    if (!prepared.ok || !('avatar' in prepared)) {
+      setAvatarUploadMessage({ tone: 'error', text: t(prepared.error || 'Could not prepare that photo.') });
+      return;
     }
+    setAvatarUrl(prepared.avatar);
+    setAvatarPreviewFailed(false);
+    setAvatarUploadMessage({ tone: 'success', text: t('Photo ready. Save profile to apply it.') });
   };
 
   const updatePasswordField = (field: keyof typeof passwordForm, value: string) => {
@@ -493,12 +456,14 @@ const Settings: React.FC = () => {
   const handlePasswordSave = async (event: React.FormEvent) => {
     event.preventDefault();
     const wasResetRequired = mustResetPassword;
-    const result = await updateCurrentUserPassword(passwordForm);
+    if (isPasswordSaving) return;
+    const result = await runPassword(() => updateCurrentUserPassword(passwordForm));
+    if (!result) return;
 
     if (result.ok) {
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       if (wasResetRequired) {
-        window.setTimeout(() => navigate(defaultAccessiblePath, { replace: true }), 900);
+        navigate(defaultAccessiblePath, { replace: true });
       }
     }
 
@@ -609,6 +574,7 @@ const Settings: React.FC = () => {
             <h2 className="text-lg font-semibold text-ink">{t('Profile')}</h2>
           </div>
           <form ref={profileFormRef} onSubmit={handleProfileSave} className="p-6 space-y-5" aria-busy={isProfileSaving || isPreparingAvatar}>
+            <fieldset disabled={isProfileSaving || Boolean(profileRetryDraft)} className="min-w-0 border-0 p-0 space-y-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
               <div className="flex flex-col items-start gap-3 lg:w-64 lg:shrink-0">
                 <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-line bg-inset">
@@ -774,6 +740,7 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
+            </fieldset>
             <div className="flex flex-col gap-3 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-h-5 text-sm">
                 {profileMessage && (
@@ -826,6 +793,7 @@ const Settings: React.FC = () => {
                 <input
                   id="current-password"
                   type="password"
+                  disabled={isPasswordSaving}
                   value={passwordForm.currentPassword}
                   onChange={event => updatePasswordField('currentPassword', event.target.value)}
                   className={cn(inputBase, 'px-3 py-2.5')}
@@ -838,6 +806,7 @@ const Settings: React.FC = () => {
                 <input
                   id="new-password"
                   type="password"
+                  disabled={isPasswordSaving}
                   value={passwordForm.newPassword}
                   onChange={event => updatePasswordField('newPassword', event.target.value)}
                   className={cn(inputBase, 'px-3 py-2.5')}
@@ -851,6 +820,7 @@ const Settings: React.FC = () => {
                 <input
                   id="confirm-password"
                   type="password"
+                  disabled={isPasswordSaving}
                   value={passwordForm.confirmPassword}
                   onChange={event => updatePasswordField('confirmPassword', event.target.value)}
                   className={cn(inputBase, 'px-3 py-2.5')}
@@ -869,7 +839,7 @@ const Settings: React.FC = () => {
                   </p>
                 )}
               </div>
-              <Button type="submit" disabled={!passwordChanged}>
+              <Button type="submit" disabled={!passwordChanged || isPasswordSaving}>
                 {mustResetPassword ? t('Set password') : t('Update password')}
               </Button>
             </div>
@@ -1080,8 +1050,8 @@ const Settings: React.FC = () => {
                     className={cn(inputBase, 'flex-1 px-3 py-2 text-sm')}
                     maxLength={50}
                   />
-                  <Button type="submit" disabled={!newStatusInput.trim() || isStatusSaving}>
-                    {isStatusSaving ? t('Saving...') : t('Add Status')}
+                  <Button type="submit" disabled={(!newStatusInput.trim() && !hasPendingStatusAdd) || isStatusSaving}>
+                    {isStatusSaving ? t('Saving...') : hasPendingStatusAdd ? t('Retry save') : t('Add Status')}
                   </Button>
                 </form>
                 {statusError && (
@@ -1270,9 +1240,9 @@ const Settings: React.FC = () => {
           onClose={() => setConfirmation(null)}
           onConfirm={async () => {
             setIsConfirming(true);
-            await confirmation.action();
-            setIsConfirming(false);
-            setConfirmation(null);
+            try { await confirmation.action(); setConfirmation(null); }
+            catch (error) { setStatusError(error instanceof Error ? error.message : t('The change is waiting to be saved.')); }
+            finally { setIsConfirming(false); }
           }}
         />
       )}

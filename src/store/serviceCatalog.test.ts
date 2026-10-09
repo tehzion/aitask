@@ -1,12 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.hoisted(() => {
+const runtime = vi.hoisted(() => {
   process.env.VITE_AITASK_BACKEND = 'local';
   process.env.VITE_AITASK_SHOW_DEMO_LOGIN = 'true';
+  return { secure: false };
 });
+vi.mock('../lib/supabaseClient', async importOriginal => ({
+  ...await importOriginal<typeof import('../lib/supabaseClient')>(),
+  shouldUseSecureSupabase: () => runtime.secure,
+}));
 
 import type { ServicePackage, ServiceWorkflowTemplate, User } from '../types';
 import { useStore } from './index';
+import { useToastStore } from './useToastStore';
 
 const initialState = useStore.getState();
 
@@ -44,6 +50,8 @@ const makeTemplate = (overrides: Partial<ServiceWorkflowTemplate> = {}): Service
 
 describe('service catalog deletion', () => {
   beforeEach(() => {
+    runtime.secure = false;
+    useToastStore.getState().toasts.forEach(toast => useToastStore.getState().removeToast(toast.id));
     useStore.setState({
       ...initialState,
       currentUser: boss,
@@ -57,6 +65,8 @@ describe('service catalog deletion', () => {
   });
 
   afterEach(() => {
+    runtime.secure = false;
+    useToastStore.getState().toasts.forEach(toast => useToastStore.getState().removeToast(toast.id));
     useStore.setState(initialState);
   });
 
@@ -72,6 +82,30 @@ describe('service catalog deletion', () => {
   it('rejects deleting a missing package', () => {
     const result = useStore.getState().deleteServicePackage('PKG-missing');
     expect(result).toEqual({ ok: false, error: 'Package not found.' });
+  });
+
+  it('does not recreate a package that was removed while its editor was open', () => {
+    const result = useStore.getState().saveServicePackage(makePackage());
+    expect(result).toEqual({ ok: false, error: 'Package not found.' });
+    expect(useStore.getState().servicePackages).toHaveLength(0);
+  });
+
+  it('does not recreate a workflow that was removed while its editor was open', () => {
+    const result = useStore.getState().saveWorkflowTemplate(makeTemplate());
+    expect(result).toEqual({ ok: false, error: 'Workflow template not found.' });
+    expect(useStore.getState().serviceWorkflowTemplates).toHaveLength(0);
+  });
+
+  it.each(['package.save', 'package.delete', 'workflow.delete'] as const)('%s does not announce success before a remote save confirms', operation => {
+    useStore.setState({ servicePackages: [makePackage()], serviceWorkflowTemplates: [makeTemplate()] });
+    runtime.secure = true;
+    const result = operation === 'package.save'
+      ? useStore.getState().saveServicePackage(makePackage())
+      : operation === 'package.delete'
+        ? useStore.getState().deleteServicePackage('PKG-e2e-catalog')
+        : useStore.getState().deleteWorkflowTemplate('SWT-e2e-catalog');
+    expect(result.ok).toBe(true);
+    expect(useToastStore.getState().toasts.filter(toast => toast.type === 'success')).toEqual([]);
   });
 
   it('blocks deleting a workflow template that is frozen into a package', () => {
