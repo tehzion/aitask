@@ -5,7 +5,7 @@ const install = async (page: Page, mode: 'resume' | 'cancel' | 'switch' = 'resum
   await page.goto('/login');
   await page.evaluate(async mode => {
     const { installRecoveryHarness } = await import('/e2e/fixtures/recovery-harness.tsx');
-    installRecoveryHarness(mode);
+    await installRecoveryHarness(mode);
   },mode);
 };
 
@@ -45,6 +45,7 @@ test('uncertain invitation cleanup exposes cancellation retry on mobile',async({
   dialog=page.getByRole('dialog'); await dialog.getByRole('button',{name:'Cancel request',exact:true}).click();
   await expect(dialog).toBeHidden(); await expect(region.getByRole('status')).toHaveText('Invitation cancelled. You can create a replacement.');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+  expect(await page.evaluate(()=>(window as unknown as {nextRecoveryCommand:()=>string}).nextRecoveryCommand())).not.toBe('00000000-0000-4000-8000-000000007991');
 });
 
 test('an account switch fences an outstanding invitation summary',async({page})=>{

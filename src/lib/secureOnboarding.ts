@@ -24,5 +24,10 @@ export const onboardingAction = async (authUserId: string, action: 'list_onboard
     throw new Error(payload?.error || 'Unable to confirm invitation recovery. Retry when the backend is available.');
   }
   if (!data?.ok) throw new Error('Unable to confirm invitation recovery. Retry when the backend is available.');
+  if (action === 'cancel_onboarding' && commandId && (data.state === 'cancelled' || data.state === 'completed')) {
+    const { clearOnboardingCommandId } = await import('./onboardingCommand');
+    if (!isWorkspaceSessionCurrent(fence)) throw new Error('Your session changed. Sign in again.');
+    clearOnboardingCommandId(authUserId, commandId);
+  }
   return data as { ok: true; operations?: OnboardingOperation[]; state?: 'cancelled' | 'completed'; result?: unknown };
 };

@@ -75,7 +75,11 @@ export default function PendingInvitations({ authUserId, refreshKey }: { authUse
         <p className="text-sm text-muted">{t('onboarding.savedRequest')}</p>
         {requiresPassword && <label className="block text-sm">{t('onboarding.originalPassword')}<input className={`${inputBase} mt-2 w-full p-3`} type="password" autoComplete="off" value={password} onChange={event => setPassword(event.target.value)} minLength={12} required disabled={busy}/></label>}
         {error && <p role="alert" className="text-sm text-red-700">{t(error)}</p>}
-        <Button type="submit" disabled={busy}>{t(busy ? 'onboarding.working' : 'onboarding.resume')}</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" disabled={busy}>{t(busy ? 'onboarding.working' : 'onboarding.resume')}</Button>
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => { setSelected(null); setPassword(''); }}>{t('common.close')}</Button>
+          <Button type="button" variant="danger" disabled={busy} onClick={() => { setCancellation(selected); setSelected(null); setPassword(''); setError(''); }}>{t('onboarding.cancel')}</Button>
+        </div>
       </form>
     </ModalShell>}
     {cancellation && <ConfirmDialog labelledBy="cancel-invitation-title" title={t('onboarding.cancel')} description={t('onboarding.cancelDescription')}

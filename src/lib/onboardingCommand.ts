@@ -21,3 +21,15 @@ export const clearOnboardingCommand = (key: string) => {
   memory.delete(key);
   try { window.sessionStorage.removeItem(key); } catch { /* Storage may be unavailable. */ }
 };
+
+// A confirmed cancellation releases every same-account fingerprint that still
+// refers to this intent, including a draft entered with different email casing.
+export const clearOnboardingCommandId = (authUserId: string, commandId: string) => {
+  const accountPrefix = `${prefix}:${authUserId}:`;
+  for (const [key, id] of memory) if (key.startsWith(accountPrefix) && id === commandId) memory.delete(key);
+  try {
+    const storage = window.sessionStorage;
+    const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index));
+    for (const key of keys) if (key?.startsWith(accountPrefix) && storage.getItem(key) === commandId) storage.removeItem(key);
+  } catch { /* The in-memory intent is still released without storage access. */ }
+};

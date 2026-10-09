@@ -1,3 +1,4 @@
+import { onboardingRequestKey, retainOnboardingCommand } from '../../src/lib/onboardingCommand';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore, stopBackendAutoSync } from '../../src/store';
@@ -6,12 +7,15 @@ import { invalidateWorkspaceSession } from '../../src/lib/workspaceSession';
 import { I18nProvider } from '../../src/components/I18nProvider';
 import PendingInvitations from '../../src/components/PendingInvitations';
 
-export const installRecoveryHarness = (mode: 'resume' | 'cancel' | 'switch') => {
+export const installRecoveryHarness = async (mode: 'resume' | 'cancel' | 'switch') => {
     stopBackendAutoSync();
     const boss={...useStore.getState().users.find(user=>user.isSuperAdmin)!,authUserId:'recovery-boss-auth'};
     useStore.setState({currentUser:boss});
     const operation={commandId:'00000000-0000-4000-8000-000000007991',state:'pending',createdAt:'2026-10-08T00:00:00.000Z',prepared:true,
       payload:{name:'Saved invitation',email:'saved-invitation@example.test',role:'Staff',departments:['Designer'],companyName:null,customRoleId:null,customRoleName:null,memberId:null,registrationId:null,workerType:'freelancer',sendInvitation:false}};
+    const journalKey=await onboardingRequestKey(boss.authUserId,operation.payload);
+    sessionStorage.setItem(journalKey,operation.commandId);
+    Object.assign(window,{nextRecoveryCommand:()=>retainOnboardingCommand(journalKey)});
     let operations=[operation]; let cancellations=0;
     const inputs: Array<{commandId?:string;name:string}>=[];
     Object.assign(window,{recoveryInputs:inputs,switchRecoveryAccount:()=>{
