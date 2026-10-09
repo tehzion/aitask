@@ -90,7 +90,6 @@ import {
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
-import { getWorkWeekRange } from '../lib/workWeek';
 import { createAccessRefreshCoordinator } from '../lib/accessRefresh';
 import {
   BACKEND_UPGRADE_REQUIRED_MESSAGE,
@@ -690,14 +689,34 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
     clients.push(client);
   });
 
+  const clientIds = new Set(clients.map(client => client.id));
+  const clientIdsByKey = new Map<string, Set<string>>();
+  clients.forEach(client => {
+    const key = normalizeClientKey(client.clientName);
+    if (!key) return;
+    const ids = clientIdsByKey.get(key) || new Set<string>();
+    ids.add(client.id);
+    clientIdsByKey.set(key, ids);
+  });
+  // Reattach legacy rows only when their stored client ID no longer resolves
+  // and the normalized company name points to one unambiguous profile. Keep
+  // valid IDs authoritative because names can become stale after a rename.
+  const resolveClientId = (clientId: string | undefined, clientName: string | undefined) => {
+    if (clientId && clientIds.has(clientId)) return clientId;
+    const matches = clientIdsByKey.get(normalizeClientKey(clientName || ''));
+    return matches?.size === 1 ? matches.values().next().value : clientId;
+  };
+
   return {
     ...parsed,
     clients,
-    tasks: parsed.tasks.map(task => ({ ...task, clientId: task.clientId || byKey.get(normalizeClientKey(task.clientName))?.id })),
-    projects: parsed.projects.map(project => ({ ...project, clientId: project.clientId || byKey.get(normalizeClientKey(project.clientName))?.id })),
-    clientPlans: parsed.clientPlans.map(item => applyPricingSnapshot(item, pricingByParent.get(item.id))),
-    serviceCycles: parsed.serviceCycles.map(item => applyPricingSnapshot(item, pricingByParent.get(item.id))),
-    addons: parsed.addons.map(item => applyPricingSnapshot(item, pricingByParent.get(item.id))),
+    tasks: parsed.tasks.map(task => ({ ...task, clientId: resolveClientId(task.clientId, task.clientName) })),
+    projects: parsed.projects.map(project => ({ ...project, clientId: resolveClientId(project.clientId, project.clientName) })),
+    clientPlans: parsed.clientPlans.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
+    serviceCycles: parsed.serviceCycles.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
+    deliverables: parsed.deliverables.map(item => ({ ...item, clientId: resolveClientId(item.clientId, item.clientName) })),
+    cycleComments: parsed.cycleComments.map(item => ({ ...item, clientId: resolveClientId(item.clientId, item.clientName) })),
+    addons: parsed.addons.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
     serviceWorkflowTemplates: parsed.serviceWorkflowTemplates.length ? parsed.serviceWorkflowTemplates : [{ ...SHORT_VIDEO_WORKFLOW_TEMPLATE, steps: SHORT_VIDEO_WORKFLOW_TEMPLATE.steps.map(step => ({ ...step })) }],
   };
 };
@@ -2023,9 +2042,11 @@ export const useStore = create<StoreState>()(
           },
         }));
 
+        const workspaceBeforeRetry = selectPersistedWorkspaceState(get());
         const result = await retrySecureWorkspaceCommand(get().backend.workspaceVersion || undefined, {
           excludeSuperAdminEntities: !get().currentUser?.isSuperAdmin,
           actorMemberId: get().currentUser?.id,
+          excludedEntityTypes: excludedServiceMetadataEntityTypes(get().currentUser, get().rolePermissions),
         });
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         if (result.ok === false) {
@@ -2055,10 +2076,11 @@ export const useStore = create<StoreState>()(
         }
 
         const savedAt = new Date().toISOString();
+        const hasNewerChanges = !workspaceStatesEqual(workspaceBeforeRetry, selectPersistedWorkspaceState(get()));
         apply((state) => ({
           backend: {
             ...state.backend,
-            status: 'live',
+            status: hasNewerChanges ? 'saving' : 'live',
             isSaving: false,
             upgradeRequired: false,
             workspaceVersion: Math.max(state.backend.workspaceVersion || 0, result.workspaceVersion),
@@ -2068,14 +2090,15 @@ export const useStore = create<StoreState>()(
             conflict: undefined,
             error: undefined,
             hasRemoteUpdate: false,
-            hasLocalChanges: false,
-            pendingMutations: 0,
-            pendingCommandType: undefined,
-            message: 'Saved.',
+            hasLocalChanges: hasNewerChanges,
+            pendingMutations: hasNewerChanges ? 1 : 0,
+            pendingCommandType: hasNewerChanges ? state.backend.pendingCommandType : undefined,
+            message: hasNewerChanges ? 'Saving newer changes.' : 'Saved.',
           },
         }));
 
-        await get().pullBackendNow({ force: true, silent: true });
+        if (hasNewerChanges) queueMicrotask(() => { if (isWorkspaceSessionCurrent(sessionToken)) void get().syncBackendNow(); });
+        else await get().pullBackendNow({ force: true, silent: true });
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         return { ok: true };
       },
@@ -2725,24 +2748,6 @@ export const useStore = create<StoreState>()(
           });
         }
 
-        useToastStore.getState().addToast(msg('task.statusUpdated', { status: nextStatus }), 'success');
-
-        if (isCompleted && !wasCompleted && currentUser) {
-          const celebrateKey = `aitask:completion-celebrated:${currentUser.id}`;
-          let celebrated = false;
-          try { celebrated = window.sessionStorage.getItem(celebrateKey) === '1'; } catch { /* session storage unavailable */ }
-          if (!celebrated) {
-            try { window.sessionStorage.setItem(celebrateKey, '1'); } catch { /* keep going without persistence */ }
-            const { start: weekStart, end: weekEnd } = getWorkWeekRange(new Date());
-            const weekCompletions = newTasks.filter(item => {
-              if (item.assignedTo !== currentUser.id || !isTaskCompleted(item) || !item.completedAt) return false;
-              const completedAt = new Date(item.completedAt);
-              return completedAt >= weekStart && completedAt <= weekEnd;
-            }).length;
-            useToastStore.getState().addToast(msg('task.completedThisWeek', { count: weekCompletions }), 'success');
-          }
-        }
-
         result = { ok: true };
         return {
           tasks: newTasks,
@@ -3149,7 +3154,6 @@ export const useStore = create<StoreState>()(
             ...deriveServiceProgress(tasks, deliverables, current.serviceCycles),
           };
         });
-        useToastStore.getState().addToast(msg('task.deleted', { title: task.title }), 'success');
         return { ok: true };
       },
 
@@ -3172,12 +3176,17 @@ export const useStore = create<StoreState>()(
           return state;
         }
 
+        const reviewNote = note?.trim() || '';
+        if ([...reviewNote].length > 2000 || (status === 'Rejected' && !reviewNote)) {
+          result = { ok: false, error: reviewNote ? 'Decision notes must be 2,000 characters or less.' : 'Tell the team what needs to change before sending the request.' };
+          return state;
+        }
         const now = new Date().toISOString();
         const event: TaskApprovalEvent = {
           id: nowId('A'),
           userId: currentUser.id,
           status,
-          note: note?.trim() || undefined,
+          note: reviewNote || undefined,
           createdAt: now,
         };
 
@@ -3199,40 +3208,22 @@ export const useStore = create<StoreState>()(
 
         const notifications: AppNotification[] = [];
         if (!shouldUseSecureSupabase()) {
+          const recipients = new Set([
+            ...resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects),
+            task.assignedTo,
+          ]);
           notifications.push(...taskUpdateNotifications(
-            resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects),
+            [...recipients],
             {
               title: status === 'Approved' ? 'Client Approved Task' : 'Client Requested Revision',
-              message: `${currentUser.name} ${status === 'Approved' ? 'approved' : 'rejected'} "${task.title}"${note ? `: ${note}` : '.'}`,
+              message: `${currentUser.name} ${status === 'Approved' ? 'approved' : 'rejected'} "${task.title}"${reviewNote ? `: ${reviewNote}` : '.'}`,
               route: { page: 'tasks', entityId: taskId },
               iconType: status === 'Approved' ? 'success' : 'alert',
             },
             currentUser.id,
           ));
-
-          if (status === 'Rejected') {
-            appendNotification(notifications, {
-              targetUserId: task.assignedTo,
-              title: 'Client Requested Revision',
-              message: `${currentUser.name} requested changes on "${task.title}"${note ? `: ${note}` : '.'}`,
-              route: { page: 'tasks', entityId: taskId },
-              iconType: 'alert'
-            });
-          } else {
-            appendNotification(notifications, {
-              targetUserId: task.assignedTo,
-              title: 'Client Approved Task',
-              message: `${currentUser.name} approved "${task.title}".`,
-              route: { page: 'tasks', entityId: taskId },
-              iconType: 'success'
-            });
-          }
         }
 
-        useToastStore.getState().addToast(
-          status === 'Approved' ? 'Task approved successfully' : 'Revision request submitted',
-          status === 'Approved' ? 'success' : 'warning'
-        );
 
         result = { ok: true };
         return {
@@ -3801,10 +3792,6 @@ export const useStore = create<StoreState>()(
             ? { ...item, createdBy: nextOwner, updatedAt: now }
             : item),
         }));
-        useToastStore.getState().addToast(
-          nextOwner ? `Owner updated for "${client.clientName}".` : `Owner cleared for "${client.clientName}".`,
-          'success',
-        );
         return { ok: true };
       },
 
@@ -3866,6 +3853,7 @@ export const useStore = create<StoreState>()(
         if (serviceItems.length === 0) return { ok: false, error: 'Add at least one service item.' };
         if (serviceItems.reduce((sum, item) => sum + item.quantity, 0) > 400) return { ok: false, error: 'A package can generate at most 400 deliverables per cycle.' };
         const existing = data.id ? state.servicePackages.find(item => item.id === data.id) : undefined;
+        if (data.id && !existing) return { ok: false, error: 'Package not found.' };
         const now = new Date().toISOString();
         const item: ServicePackage = {
           id: existing?.id || nowId('PKG'),
@@ -3886,7 +3874,6 @@ export const useStore = create<StoreState>()(
             ? current.servicePackages.map(pkg => pkg.id === existing.id ? item : pkg)
             : [...current.servicePackages, item],
         }));
-        useToastStore.getState().addToast(msg('package.saved', { name: item.name }), 'success');
         return { ok: true, id: item.id };
       },
 
@@ -3912,6 +3899,7 @@ export const useStore = create<StoreState>()(
         if (!steps.length) return { ok: false, error: 'Add at least one workflow step.' };
         if (steps.some(step => !allowedDepartments.has(step.department))) return { ok: false, error: 'Every workflow step needs a valid department.' };
         const existing = data.id ? state.serviceWorkflowTemplates.find(item => item.id === data.id) : undefined;
+        if (data.id && !existing) return { ok: false, error: 'Workflow template not found.' };
         const now = new Date().toISOString();
         const item: ServiceWorkflowTemplate = {
           id: existing?.id || nowId('SWT'),
@@ -3943,7 +3931,6 @@ export const useStore = create<StoreState>()(
         set(current => ({
           servicePackages: current.servicePackages.filter(item => item.id !== id),
         }));
-        useToastStore.getState().addToast(msg('package.deleted', { name: existing.name }), 'success');
         return { ok: true };
       },
 
@@ -3967,7 +3954,6 @@ export const useStore = create<StoreState>()(
         set(current => ({
           serviceWorkflowTemplates: current.serviceWorkflowTemplates.filter(item => item.id !== id),
         }));
-        useToastStore.getState().addToast(msg('workflow.deleted', { name: existing.name }), 'success');
         return { ok: true };
       },
 
@@ -4475,8 +4461,11 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'You do not have permission to comment on this task.' };
         }
 
-        // Enforce a reasonable length cap to prevent storage abuse
-        const safeText = text.trim().slice(0, 2000);
+        // Client feedback must match the server limit without losing text.
+        if (currentUser.role === 'Client' && [...text.trim()].length > 2000) {
+          return { ok: false, error: 'Feedback must be 2,000 characters or less.' };
+        }
+        const safeText = currentUser.role === 'Client' ? text.trim() : text.trim().slice(0, 2000);
         if (!safeText) return { ok: false, error: 'Comment cannot be empty.' };
 
         const newComment: TaskComment = {
@@ -4720,7 +4709,14 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: `This role can only be assigned to ${selectedCustomRole.baseRole} members.` };
         }
 
-        const duplicate = !data.memberId && !data.registrationId && get().users.some(user => (
+        const { onboardingRequestKey, pendingOnboardingCommand, retainOnboardingCommand, clearOnboardingCommand } = await import('../lib/onboardingCommand');
+        const onboardingPayload = { name, email, role: data.role, departments, companyName,
+          customRoleId: data.customRoleId || null, workerType: ['Staff', 'HOD'].includes(data.role) ? data.workerType || 'employee' : 'employee',
+          registrationId: data.registrationId || null, memberId: data.memberId || null, sendInvitation };
+        const onboardingKey = shouldUseSecureSupabase() && currentUser.authUserId
+          ? await onboardingRequestKey(currentUser.authUserId, onboardingPayload) : '';
+        if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
+        const duplicate = !pendingOnboardingCommand(onboardingKey) && !data.memberId && !data.registrationId && get().users.some(user => (
           user.name.toLowerCase() === name.toLowerCase() ||
           (email && user.email?.toLowerCase() === email.toLowerCase())
         ));
@@ -4774,6 +4770,7 @@ export const useStore = create<StoreState>()(
           const { error } = await supabase.functions.invoke('invite-aitask-member', {
             headers: { Authorization: `Bearer ${session.access_token}` },
             body: {
+              commandId: retainOnboardingCommand(onboardingKey),
               name,
               email,
               role: data.role,
@@ -4788,7 +4785,9 @@ export const useStore = create<StoreState>()(
               password: needsTemporaryPassword ? initialPassword : undefined,
             },
           });
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
           if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to send the invitation.') };
+          clearOnboardingCommand(onboardingKey);
           if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
             await get().pullBackendNow({ force: true });
           }
@@ -5746,6 +5745,7 @@ export const startBackendAutoSync = () => {
         hasCurrentUser: Boolean(state.currentUser),
         isPulling: state.backend.isPulling,
         isSaving: state.backend.isSaving,
+        hasPendingChange: isPullBlockedByPendingChange(state),
       };
     },
     () => useStore.getState().pullBackendNow({ force: true, silent: true }),
@@ -5817,18 +5817,7 @@ export const startBackendAutoSync = () => {
   });
 
   const unsubscribeBackendState = useStore.subscribe((state, previousState) => {
-    accessRefresh.onStateChange(
-      {
-        hasCurrentUser: Boolean(previousState.currentUser),
-        isPulling: previousState.backend.isPulling,
-        isSaving: previousState.backend.isSaving,
-      },
-      {
-        hasCurrentUser: Boolean(state.currentUser),
-        isPulling: state.backend.isPulling,
-        isSaving: state.backend.isSaving,
-      },
-    );
+    accessRefresh.onStateChange();
 
     if (!shouldUseSupabase() || state.backend.isLoading || state.backend.isPulling || isApplyingRemoteSnapshot || isApplyingNotificationRead) return;
 

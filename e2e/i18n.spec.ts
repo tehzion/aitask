@@ -107,6 +107,7 @@ test('user-authored task content stays exactly as typed in Chinese mode', async 
 });
 
 test('client portal and workspace keep user-authored names untouched in Chinese mode', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-08-18T00:00:00.000Z') });
   await page.goto('/login');
   await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
@@ -182,7 +183,7 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
 
   await page.goto(`/clients/${seeded.clientId}`);
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-  await expect(page.getByText('本周期已交付 0 / 1 项').first()).toBeVisible();
+  await expect(page.getByText('本周期已交付 0/1').first()).toBeVisible();
   await page.getByRole('tab', { name: '交付内容', exact: true }).click();
   await expect(page.locator('main').getByText('Dashboard', { exact: true }).first()).toBeVisible();
   await expect(page.locator('main').getByText(/关联任务/)).toHaveCount(0);

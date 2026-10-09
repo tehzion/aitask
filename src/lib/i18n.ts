@@ -11,9 +11,20 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  'The pending project change is no longer available. Review your draft before saving again.': '待保存的项目更改已不存在，请检查草稿后再保存。',
+  'The pending role is no longer available. Review your draft before saving again.': '待保存的角色已不可用。请检查草稿后再次保存。',
+  'The pending member is no longer available. Review your draft before saving again.': '待保存的成员已不可用。请检查草稿后再次保存。',
+  'The pending status change is no longer available. Review your draft before saving again.': '待保存的状态更改已不可用。请检查草稿后再次保存。',
+  'The pending profile change is no longer available. Review your draft before saving again.': '待保存的个人资料更改已不可用。请检查草稿后再次保存。',
+  'The pending task creation is no longer available. Review your draft before saving again.': '待创建的任务已不可用。请检查草稿后再次保存。',
+  'The pending add-on is no longer available. Review your draft before saving again.': '待保存的附加服务已不可用。请检查草稿后再次保存。',
+  'The pending company is no longer available. Review your draft before saving again.': '待保存的公司已不存在，请检查草稿后再保存。',
+  'The pending catalog change is no longer available. Review your draft before saving again.': '待保存的模板更改已不存在，请检查草稿后再保存。',
   'Deletion impact': '删除影响',
   'Plans': '方案',
   'Keep editing': '继续编辑',
+  'Your work update has not been sent.': '工作更新尚未发送。',
+  'The pending activity is no longer available. Review your draft before saving again.': '待保存的活动已不存在，请检查草稿后再保存。',
   'Your company changes have not been saved.': '公司资料的更改尚未保存。',
   'Discard pending changes and reload the latest saved workspace?': '放弃待保存的更改并重新载入最新已保存的工作区？',
   'Unable to reload saved company data. Try again.': '无法重新载入已保存的公司资料，请重试。',
@@ -592,6 +603,8 @@ const zhCopyExtras: Record<string, string> = {
   'Retrying': '正在重试',
   'Retry dates': '重试日期',
   'Assign Task': '分配任务',
+  'The pending task update is no longer available. Review your draft before saving again.': '待保存的任务更改已不存在，请检查草稿后再保存。',
+  'The pending date change was not applied. Review the latest saved dates.': '待保存的日期更改未生效，请检查最新保存的日期。',
   'Edit task dates': '编辑任务日期',
   'Save dates': '保存日期',
   'Start Date': '开始日期',
@@ -1023,6 +1036,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Sync is local on this deployed build': '此部署版本的同步仅在本机生效',
   'Supabase sync is not configured': '尚未配置 Supabase 同步',
   // Sync state messages
+  'This action is not allowed for your account.': '您的账号无权执行此操作。',
   'Retrying pending change.': '正在重试待保存的更改。',
   'Another synchronization request is still running.': '另一个同步请求仍在执行。',
   'Waiting for sync…': '正在等待同步…',
@@ -1242,6 +1256,8 @@ const zhCopyAdditions: Record<string, string> = {
   'Narrow this list without changing what your company can access.': '在不改变您公司可访问内容的前提下缩小列表范围。',
   // Client Delivery Focus
   'Saving…': '保存中…',
+  'Decision notes must be 2,000 characters or less.': '决定备注不能超过 2,000 个字符。',
+  'Feedback must be 2,000 characters or less.': '反馈不能超过 2,000 个字符。',
   'Tell the team what needs to change before sending the request.': '请先告知团队需要修改的内容。',
   'Your change is waiting to be saved. Use Retry my changes in the workspace banner.': '您的更改正在等待保存。请使用工作区横幅中的“重试我的更改”。',
   'The requested outcome will appear here when the team adds a brief.': '团队添加简报后，要求的成果将在此显示。',
@@ -1988,7 +2004,11 @@ const MONTH_ABBREVIATIONS: Array<[RegExp, string]> = [
   [/\bDec\b/g, '12月'],
 ];
 
-const DATE_LOCALES = { en: enUS, zh: zhCN } as const;
+// Formatting does not need locale parsers or relative-calendar rules.
+const DATE_LOCALES = {
+  en: { options: enUS.options, localize: enUS.localize, formatLong: enUS.formatLong, formatDistance: enUS.formatDistance },
+  zh: { options: zhCN.options, localize: zhCN.localize, formatLong: zhCN.formatLong, formatDistance: zhCN.formatDistance },
+} as const;
 
 const isValidDate = (value: Date) => !Number.isNaN(value.getTime());
 
@@ -2576,6 +2596,7 @@ const zhCopyCoverage: Record<string, string> = {
   'Enter a valid https:// link for the attachment.': '请输入有效的 https:// 附件链接。',
   'The task update is waiting to be saved.': '任务更新正在等待保存。',
   'The task deletion is waiting to be saved.': '任务删除正在等待保存。',
+  'The task is still available. Use latest before deleting it again.': '任务仍然存在。请先使用最新数据，再重新删除。',
   'Cancel Edit': '取消编辑',
   'Save Changes': '保存更改',
   'Changes requested': '已请求修改',
@@ -2701,6 +2722,7 @@ const zhCopyCoverage: Record<string, string> = {
   'Choose a Project Manager or HOD as the owner.': '请选择项目经理或部门主管作为负责人。',
   'Unable to assign owner.': '无法分配负责人。',
   'The owner change is waiting to be saved.': '负责人更改正在等待保存。',
+  'The pending owner change is no longer available. Review the company before saving again.': '待保存的负责人更改已不可用。请检查公司后再保存。',
 
   // Page-level labels and messages
   'dates updated': '日期已更新',
@@ -2720,6 +2742,7 @@ const zhCopyCoverage: Record<string, string> = {
   'Supabase did not confirm the request within 20 seconds.': 'Supabase 未在 20 秒内确认请求。',
   'Super Admin permission required.': '需要超级管理员权限。',
   'Supabase could not be reached. Your change is retained for retry.': '无法连接 Supabase。您的更改已保留以便重试。',
+  'Supabase could not be reached. Keep your draft and retry.': '无法连接 Supabase。请保留您的草稿并重试。',
   '[AiTask sync] Supabase RPC failed.': '[AiTask 同步] Supabase RPC 失败。',
   '[AiTask sync] Command rejected.': '[AiTask 同步] 命令被拒绝。',
   'Save confirmation timed out. Submit again to retry the same department change safely.': '保存确认超时。请再次提交以安全重试相同的部门更改。',

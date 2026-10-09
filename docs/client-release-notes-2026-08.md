@@ -1,6 +1,21 @@
 # AiTask client release notes
 
-**Coverage:** the latest prepared release is v2.5.1 (12 September 2026), following prepared v2.5.0 (11 September 2026), deployed v2.3.1 (11 September 2026), v2.3.0 (10 September 2026), v2.2.0 (7 September 2026), v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+**Coverage:** the latest prepared release is v3.0.0 (7 October 2026), consolidating source changes through 2.6.1 and the subsequent audits. Earlier notes cover prepared v2.5.1 (12 September 2026), prepared v2.5.0 (11 September 2026), deployed v2.3.1 (11 September 2026), v2.3.0 (10 September 2026), v2.2.0 (7 September 2026), v2.1.5 (5 September 2026), v2.1.4 (4 September 2026), v2.1.3 (3 September 2026), and v2.1.2 (2 September 2026). v2.1.0 was a superseded release candidate and was not announced as a deployed client release.
+
+## v3.0.0 — prepared 7 October 2026
+
+- **Reliable work across roles.** Boss Koo, Project Manager, HOD, Staff and Customer
+  actions retain drafts and recover more consistently after interrupted saves.
+- **Accurate daily figures.** Overdue totals, current delivery progress, renewal
+  reminders and daily/weekly reports follow consistent dates and refresh overnight.
+- **Clearer Staff responsibilities.** Counts follow assigned work and company
+  identity, with useful dependency warnings within the member's permitted scope.
+- **Safer Customer reviews.** Feedback and approvals validate complete notes,
+  preserve newer edits, and provide clear retry and reload actions.
+- **A more complete workspace.** Company editing, search, ownership, delivery
+  tracking, mobile accessibility and Chinese translations are consolidated.
+- **Prepared release.** This version has not been announced as deployed. The full
+  source history is in [the version 3 report](version-3-release-2026-10-07.md).
 
 ## v2.5.1 — prepared 12 September 2026
 

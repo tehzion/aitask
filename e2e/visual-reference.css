@@ -1,0 +1,5 @@
+/* Pixel references show completed page entry, independent of frame timing. */
+.app-page {
+  animation: none !important;
+  transform: none !important;
+}

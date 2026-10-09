@@ -18,6 +18,7 @@ import { inputBase, pageShell } from './uiTokens';
 import SideSheet from './SideSheet';
 import ClientDeliveryFocus from './ClientDeliveryFocus';
 import { useI18n } from './I18nProvider';
+import { useLocalToday } from '../hooks/useLocalToday';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 
 type DateFilter = 'any' | 'next_7' | 'this_month' | 'no_date';
@@ -48,8 +49,10 @@ const ClientDeliveries = () => {
   })));
   const [searchParams, setSearchParams] = useSearchParams();
   const [filtersOpen, setFiltersOpen] = React.useState(false);
-  const [serviceFilter, setServiceFilter] = React.useState('All');
-  const [dateFilter, setDateFilter] = React.useState<DateFilter>('any');
+  const now = useLocalToday();
+  const serviceFilter = searchParams.get('service') || 'All';
+  const requestedDate = searchParams.get('date');
+  const dateFilter: DateFilter = ['next_7', 'this_month', 'no_date'].includes(requestedDate || '') ? requestedDate as DateFilter : 'any';
   const tasks = React.useMemo(() => getVisibleTasks(currentUser, allTasks, rolePermissions), [allTasks, currentUser, rolePermissions]);
   const searchTerm = searchParams.get('search') || '';
   const requestedStage = searchParams.get('stage');
@@ -61,36 +64,36 @@ const ClientDeliveries = () => {
   const services = React.useMemo(() => [...new Set(tasks.map(task => task.serviceType).filter(Boolean))].sort(), [tasks]);
 
   const setParam = (key: string, value?: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    setSearchParams(next, { replace: true });
+    setSearchParams(previous => { const next = new URLSearchParams(previous); if (value) next.set(key, value); else next.delete(key); return next; }, { replace: true });
   };
+  const setServiceFilter = (value: string) => setParam('service', value === 'All' ? undefined : value);
+  const setDateFilter = (value: DateFilter) => setParam('date', value === 'any' ? undefined : value);
   const searchInput = useImeSafeInput(searchTerm, value => setParam('search', value), { commitDelayMs: 180 });
   const searchValue = searchInput.value;
 
   const filteredTasks = React.useMemo(() => {
     const normalizedSearch = searchValue.trim().toLowerCase();
-    const now = new Date();
     const today = dateKey(now);
     const nextWeek = new Date(now);
     nextWeek.setDate(now.getDate() + 7);
     const monthKey = today.slice(0, 7);
     return tasks.filter(task => {
       const stage = getClientDeliveryStage(task, now);
+      const parsedDueDate = parseOptionalDate(task.dueDate);
+      const dueKey = parsedDueDate ? dateKey(parsedDueDate) : null;
       const searchable = [task.title, task.description, task.serviceType, task.projectName].filter(Boolean).join(' ').toLowerCase();
       const matchesSearch = !normalizedSearch || searchable.includes(normalizedSearch);
       const matchesService = serviceFilter === 'All' || task.serviceType === serviceFilter;
       const matchesStage = stageFilter === 'all' || stage === stageFilter;
       const matchesDate = dateFilter === 'any'
-        || (dateFilter === 'no_date' && !task.dueDate)
-        || (dateFilter === 'next_7' && Boolean(task.dueDate && task.dueDate >= today && task.dueDate <= dateKey(nextWeek)))
-        || (dateFilter === 'this_month' && task.dueDate?.startsWith(monthKey));
+        || (dateFilter === 'no_date' && !dueKey)
+        || (dateFilter === 'next_7' && Boolean(dueKey && dueKey >= today && dueKey <= dateKey(nextWeek)))
+        || (dateFilter === 'this_month' && dueKey?.startsWith(monthKey));
       return matchesSearch && matchesService && matchesStage && matchesDate;
     });
-  }, [dateFilter, searchValue, serviceFilter, stageFilter, tasks]);
+  }, [dateFilter, now, searchValue, serviceFilter, stageFilter, tasks]);
 
-  const groups = React.useMemo(() => groupClientDeliveries(filteredTasks), [filteredTasks]);
+  const groups = React.useMemo(() => groupClientDeliveries(filteredTasks, now), [filteredTasks, now]);
   const visibleStages = CLIENT_DELIVERY_STAGE_ORDER.filter(stage => groups[stage].length > 0);
   const activeFilterCount = Number(stageFilter !== 'all') + Number(serviceFilter !== 'All') + Number(dateFilter !== 'any');
   const contactName = (id: string) => {
@@ -103,11 +106,7 @@ const ClientDeliveries = () => {
     return `/tasks?${next.toString()}`;
   };
   const clearFilters = () => {
-    setServiceFilter('All');
-    setDateFilter('any');
-    const next = new URLSearchParams(searchParams);
-    next.delete('stage');
-    setSearchParams(next, { replace: true });
+    setSearchParams(previous => { const next = new URLSearchParams(previous); ['stage', 'service', 'date'].forEach(key => next.delete(key)); return next; }, { replace: true });
   };
 
   const stageLabel = (stage: ClientDeliveryStage | 'all') => stage === 'all'

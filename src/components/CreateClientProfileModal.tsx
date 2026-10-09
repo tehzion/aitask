@@ -11,6 +11,7 @@ import { inputBase, modalFooter } from './uiTokens';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { useI18n } from './I18nProvider';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 
 type Props = {
   onClose: () => void;
@@ -34,6 +35,8 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
   const [saving, setSaving] = React.useState(false);
   const [pendingClientId, setPendingClientId] = React.useState('');
   const [createdClientId, setCreatedClientId] = React.useState('');
+  const mounted = React.useRef(false);
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const formDirty = !createdClientId && Object.values(form).some(value => value.trim());
   const markPristine = useUnsavedChanges(saving || formDirty);
   const recovery = useRecoverableForm('create-client-profile', form, formDirty, !createdClientId && !pendingClientId);
@@ -68,6 +71,9 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
 
     setSaving(true);
     setError('');
+    const session = captureWorkspaceSession();
+    const actorId = useStore.getState().currentUser?.id;
+    const isCurrent = () => mounted.current && isWorkspaceSessionCurrent(session) && useStore.getState().currentUser?.id === actorId;
     try {
       let clientId = pendingClientId;
       if (!clientId) {
@@ -80,16 +86,24 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
         setPendingClientId(clientId);
       }
       const committed = await retryPendingSave();
+      if (!isCurrent()) return;
       if (!committed.ok) {
         setError(t(committed.error || 'The company is waiting to be saved. Retry to finish syncing.'));
+        return;
+      }
+      if (!useStore.getState().clients.some(client => client.id === clientId)) {
+        setPendingClientId('');
+        setError(t('The pending company is no longer available. Review your draft before saving again.'));
         return;
       }
       recovery.clear(); markPristine(); setPendingClientId('');
       setCreatedClientId(clientId);
       clearCompanySearch();
       onCreated?.(clientId);
+    } catch (error) {
+      if (isCurrent()) setError(error instanceof Error ? error.message : t('Unable to save this change.'));
     } finally {
-      setSaving(false);
+      if (mounted.current) setSaving(false);
     }
   };
 

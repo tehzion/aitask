@@ -1,8 +1,9 @@
+import { useLocalToday } from '../hooks/useLocalToday';
+import { getCurrentPlanCycle } from '../lib/dashboardData';
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, FileCheck2, MessageSquareText, TimerReset } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Task, WorkspaceMember } from '../types';
 import {
-  getClientCurrentCycle,
   getClientServicePlan,
   getClientDeliveryStage,
   getClientDeliveryStageLabel,
@@ -39,6 +40,7 @@ const expectedDate = (task: Task, locale: AppLocale, fallback: string) => {
 
 const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => {
   const { locale, t } = useI18n();
+  const today = useLocalToday();
   const currentUser = useStore(state => state.currentUser);
   const clients = useStore(state => state.clients);
   const clientPlans = useStore(state => state.clientPlans);
@@ -47,12 +49,12 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
   const clientKey = currentUser?.companyName?.trim().toLowerCase();
   const client = clients.find(item => item.clientName.trim().toLowerCase() === clientKey);
   const activePlan = getClientServicePlan(clientPlans, client?.id);
-  const currentCycle = getClientCurrentCycle(serviceCycles, client?.id);
+  const currentCycle = activePlan ? getCurrentPlanCycle(activePlan, serviceCycles, today) : undefined;
   const cycleDeliverables = currentCycle ? deliverables.filter(item => item.cycleId === currentCycle.id) : [];
   const deliveredCount = cycleDeliverables.filter(item => item.status === 'Delivered').length;
   const cycleCompletion = cycleDeliverables.length ? Math.round((deliveredCount / cycleDeliverables.length) * 100) : 0;
-  const groups = groupClientDeliveries(tasks);
-  const focusTask = getClientFocusTask(tasks);
+  const groups = groupClientDeliveries(tasks, today);
+  const focusTask = getClientFocusTask(tasks, today);
   const focusStage = focusTask ? getClientDeliveryStage(focusTask) : null;
   const reviewQueue = groups.needs_review.filter(task => task.id !== focusTask?.id).slice(0, 4);
   const activeQueue = [...groups.timing_changed, ...groups.in_delivery, ...groups.scheduled]
@@ -129,7 +131,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
         <Surface className="p-6">
           <p className="calm-eyebrow">{t('clientPortal.deliveryProgress')}</p>
           <div className="mt-5 flex items-end justify-between gap-4">
-            <div><p className="calm-number text-4xl font-semibold tracking-tight text-ink">{cycleCompletion}%</p><p className="mt-2 text-sm text-muted">{cycleDeliverables.length ? t('clientPortal.deliveredThisCycle', { delivered: deliveredCount, total: cycleDeliverables.length }) : t('clientPortal.noPublishedDeliverables')}</p></div>
+            <div><p className="calm-number text-4xl font-semibold tracking-tight text-ink">{cycleCompletion}%</p><p className="mt-2 text-sm text-muted">{cycleDeliverables.length ? t('clientPortal.deliveredThisCycle', { delivered: deliveredCount, total: cycleDeliverables.length }) : currentCycle ? t('clientPortal.noPublishedDeliverables') : t('No published cycle for this month')}</p></div>
             {currentCycle && <StatusChip tone="emerald">{getLocalizedStatus(currentCycle.status, locale)}</StatusChip>}
           </div>
           <ProgressBar className="mt-6" value={deliveredCount} max={Math.max(cycleDeliverables.length, 1)} label={t('clientPortal.deliveryProgress')} />

@@ -1,4 +1,16 @@
+import { deploymentProtectionHeaders } from '../scripts/deployment-protection.mjs';
 import { expect, test, type Page } from '@playwright/test';
+
+test.beforeEach(async ({ context, baseURL }) => {
+  if (!baseURL || new URL(baseURL).origin !== new URL(process.env.STAGING_PROTECTION_ORIGIN || baseURL).origin) throw new Error('Staging deployment origin mismatch.');
+  await context.route('**/*', async route => {
+    const headers = await deploymentProtectionHeaders(route.request().url());
+    const original = route.request().headers();
+    delete original['x-vercel-trusted-oidc-idp-token'];
+    await route.continue({ headers: { ...original, ...headers } });
+  });
+});
+
 
 type QaRole = 'SUPER_ADMIN' | 'OPERATION' | 'HOD' | 'PRODUCTION' | 'ACCOUNT' | 'CLIENT';
 

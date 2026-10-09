@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSaveAction } from '../hooks/useSaveAction';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -181,7 +182,8 @@ const Clients: React.FC = () => {
   const [profileBaseline, setProfileBaseline] = React.useState<ClientProfileForm>(emptyProfileForm);
   const [renameBaseline, setRenameBaseline] = React.useState('');
   const [pendingClientChange, setPendingClientChange] = React.useState<
-    { kind: 'profile'; form: ClientProfileForm; name: string } | { kind: 'rename'; name: string } | { kind: 'delete'; name: string } | null
+    { kind: 'profile'; form: ClientProfileForm; name: string } | { kind: 'rename'; name: string } | { kind: 'delete'; name: string }
+    | { kind: 'owner'; clientId: string; ownerId?: string; name: string } | null
   >(null);
   const [discardAction, setDiscardAction] = React.useState<(() => void) | null>(null);
   const [isDiscarding, setIsDiscarding] = React.useState(false);
@@ -192,7 +194,9 @@ const Clients: React.FC = () => {
   const [profileError, setProfileError] = React.useState('');
   const [renameValue, setRenameValue] = React.useState('');
   const [renameError, setRenameError] = React.useState('');
-  const [isSavingClient, setIsSavingClient] = React.useState(false);
+  const [isClientMutationSaving, setIsSavingClient] = React.useState(false);
+  const { busy: isOwnerSaving, run: runOwner } = useSaveAction(selectedClientSnapshot?.profile?.id || selectedClientName);
+  const isSavingClient = isClientMutationSaving || isOwnerSaving;
   const [isDeleteConfirming, setIsDeleteConfirming] = React.useState(false);
   const [isCreateClientOpen, setIsCreateClientOpen] = React.useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = React.useState(false);
@@ -209,12 +213,27 @@ const Clients: React.FC = () => {
   const discardDialogTitleId = React.useId();
   const contactFieldId = React.useId();
   const profileFormRef = React.useRef(profileForm);
-  profileFormRef.current = profileForm;
   const renameValueRef = React.useRef(renameValue);
   renameValueRef.current = renameValue;
+  const setProfileDraft = (form: ClientProfileForm) => {
+    profileFormRef.current = form;
+    setProfileForm(form);
+  };
+  const updateProfileField = (field: keyof ClientProfileForm, value: string) => {
+    const next = { ...profileFormRef.current, [field]: value };
+    setProfileDraft(next);
+    setProfileError('');
+  };
   const isProfileDirty = isEditingProfile && JSON.stringify(profileForm) !== JSON.stringify(profileBaseline);
   const isRenameDirty = isRenamingClient && renameValue !== renameBaseline;
   const clearUnsaved = useUnsavedChanges(isProfileDirty || isRenameDirty || isSavingClient || Boolean(pendingClientChange));
+
+  React.useEffect(() => {
+    setPendingClientChange(null);
+    setProfileError('');
+    setSelectedClientName('');
+    setSelectedClientSnapshot(null);
+  }, [currentUser?.id]);
 
   React.useLayoutEffect(() => {
     if (!openMenuClientKey || !clientMenuAnchor || !clientMenuRef.current) {
@@ -454,9 +473,10 @@ const Clients: React.FC = () => {
     selectedClientName
       ? clients.find(client => selectedClientSnapshot?.profile
         ? client.profile?.id === selectedClientSnapshot.profile.id
-        : getClientKey(client.name) === getClientKey(selectedClientName)) || (pendingClientChange ? selectedClientSnapshot : null)
+        : getClientKey(client.name) === getClientKey(selectedClientName))
+        || ((pendingClientChange || isSavingClient || isRenamingClient || isDeleteConfirming) ? selectedClientSnapshot : null)
       : null
-  ), [clients, selectedClientName, selectedClientSnapshot, pendingClientChange]);
+  ), [clients, selectedClientName, selectedClientSnapshot, pendingClientChange, isSavingClient, isRenamingClient, isDeleteConfirming]);
 
   const selectedClientProjects = React.useMemo(() => {
     if (!selectedClient) return [];
@@ -506,7 +526,7 @@ const Clients: React.FC = () => {
     setSelectedClientName(client.name);
     setSelectedClientSnapshot(client);
     const form = getProfileForm(client);
-    setProfileForm(form);
+    setProfileDraft(form);
     setProfileBaseline(form);
     setRenameBaseline(client.name);
     setPendingClientChange(null);
@@ -587,6 +607,47 @@ const Clients: React.FC = () => {
     ? useStore.getState().retryPendingSave()
     : commitPendingMutation();
 
+  const isClientChangeConfirmed = (saved: { ok: boolean }) => {
+    if (!saved.ok) return false;
+    const backend = useStore.getState().backend;
+    return backend.mode !== 'supabase' || !backend.isConfigured
+      || (backend.status === 'live' && !backend.hasLocalChanges && backend.pendingMutations === 0);
+  };
+
+  const getClientSaveError = (saved: { error?: string }, fallback: string) => (
+    saved.error || useStore.getState().backend.error || fallback
+  );
+
+  const saveClientOwner = async (ownerId?: string) => {
+    if (!selectedClient?.profile || isSavingClient || (pendingClientChange && pendingClientChange.kind !== 'owner')) return;
+    const retry = pendingClientChange?.kind === 'owner';
+    const submitted = retry ? pendingClientChange
+      : { kind: 'owner' as const, clientId: selectedClient.profile.id, ownerId, name: selectedClient.name };
+    setProfileError('');
+    const saved = await runOwner(async () => {
+      if (!retry) {
+        const staged = assignClientOwner(submitted.clientId, submitted.ownerId);
+        if (!staged.ok) return staged;
+        setPendingClientChange(submitted);
+      }
+      return retry && useStore.getState().backend.mode === 'supabase'
+        ? useStore.getState().retryPendingSave() : commitClientChange();
+    });
+    if (!saved) return;
+    if (!isClientChangeConfirmed(saved)) {
+      setProfileError(getClientSaveError(saved, 'The owner change is waiting to be saved.'));
+      return;
+    }
+    const latest = useStore.getState().clients.find(client => client.id === submitted.clientId);
+    setPendingClientChange(null);
+    if (!latest || (latest.createdBy || undefined) !== submitted.ownerId) {
+      setProfileError(t('The pending owner change is no longer available. Review the company before saving again.'));
+      return;
+    }
+    useToastStore.getState().addToast(submitted.ownerId
+      ? t(`Owner updated for "${submitted.name}".`) : t(`Owner cleared for "${submitted.name}".`), 'success');
+  };
+
   const openProjectEditor = (project: Project | null, clientId = '') => {
     setEditingProject(project);
     setInitialProjectClientId(project?.clientId || clientId);
@@ -603,7 +664,7 @@ const Clients: React.FC = () => {
     if (!selectedClient || isSavingClient || (pendingClientChange && pendingClientChange.kind !== 'profile')) return;
     const submitted = pendingClientChange?.kind === 'profile'
       ? pendingClientChange
-      : { kind: 'profile' as const, form: { ...profileForm }, name: selectedClient.name };
+      : { kind: 'profile' as const, form: { ...profileFormRef.current }, name: selectedClient.name };
     if (!pendingClientChange) {
       const result = upsertClientProfile(submitted.name, submitted.form);
       if (!result.ok) { setProfileError(result.error || 'Unable to save client details.'); return; }
@@ -613,7 +674,10 @@ const Clients: React.FC = () => {
     setProfileError('');
     try {
       const saved = await commitClientChange();
-      if (!saved.ok) { setProfileError(saved.error || 'The client details are waiting to be saved.'); return; }
+      if (!isClientChangeConfirmed(saved)) {
+        setProfileError(getClientSaveError(saved, 'The client details are waiting to be saved.'));
+        return;
+      }
       setPendingClientChange(null);
       setProfileBaseline(submitted.form);
       setIsEditingProfile(JSON.stringify(profileFormRef.current) !== JSON.stringify(submitted.form));
@@ -639,7 +703,10 @@ const Clients: React.FC = () => {
     setRenameError('');
     try {
       const saved = await commitClientChange();
-      if (!saved.ok) { setRenameError(saved.error || 'The client rename is waiting to be saved.'); return; }
+      if (!isClientChangeConfirmed(saved)) {
+        setRenameError(getClientSaveError(saved, 'The client rename is waiting to be saved.'));
+        return;
+      }
       setPendingClientChange(null);
       setSelectedClientName(submitted.name);
       setRenameBaseline(submitted.name);
@@ -666,7 +733,10 @@ const Clients: React.FC = () => {
     setProfileError('');
     try {
       const saved = await commitClientChange();
-      if (!saved.ok) { setProfileError(saved.error || 'The company deletion is waiting to be saved.'); return; }
+      if (!isClientChangeConfirmed(saved)) {
+        setProfileError(getClientSaveError(saved, 'The company deletion is waiting to be saved.'));
+        return;
+      }
       useToastStore.getState().addToast(msg('client.companyDeletedNamed', { name: submitted.name }), 'success');
       closeClientPanel();
     } catch (error) {
@@ -758,7 +828,7 @@ const Clients: React.FC = () => {
         const website = safeHttpsUrl(contact.website);
         const facebookPage = safeHttpsUrl(contact.facebookPage);
         const serviceContext = getServiceContext(client);
-        const canOpenWorkspace = canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles);
+        const canOpenWorkspace = canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles, allProjects);
         const canEditProfile = !upgradeRequired && canEditClientProfile(currentUser, client.name, allTasks, rolePermissions, clientProfiles);
         const canDeleteProfile = Boolean(client.profile && !upgradeRequired && canDeleteClientProfile(currentUser, client.profile.clientName, clientProfiles, rolePermissions, allTasks));
         const assignedTeam = Array.from(client.assignedUserIds)
@@ -931,7 +1001,7 @@ const Clients: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
-                      {client.profile && canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles) && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>{t('Workspace')} <ArrowRight className="h-4 w-4" /></Link>}
+                      {client.profile && canOpenServiceClient(currentUser, client.name, allTasks, rolePermissions, clientProfiles, allProjects) && <Link to={`/clients/${encodeURIComponent(client.profile.id)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>{t('Workspace')} <ArrowRight className="h-4 w-4" /></Link>}
                       <Link to={`/tasks?client=${encodeURIComponent(client.name)}`} className={cn(buttonBase, 'min-h-10 bg-accent px-3 py-2 text-sm text-white')}>
                         {t('View tasks')} <ArrowRight className="h-4 w-4" />
                       </Link>
@@ -1003,9 +1073,9 @@ const Clients: React.FC = () => {
                   </dl>
                 </section>
               )}
-              {profileError && (
+              {(profileError || renameError) && (
                 <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert" aria-live="polite">
-                  {profileError}
+                  {profileError || renameError}
                 </div>
               )}
               {isRenamingClient && (
@@ -1027,7 +1097,6 @@ const Clients: React.FC = () => {
                     }}
                     autoFocus
                   />
-                  {renameError && <p className="mt-2 text-sm font-semibold text-red-700" role="alert" aria-live="polite">{renameError}</p>}
                 </section>
               )}
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -1043,7 +1112,7 @@ const Clients: React.FC = () => {
                             className={cn(inputBase, 'p-2 text-xs')}
                             id={`${contactFieldId}-clientSince`}
                             value={profileForm.clientSince}
-                            onChange={e => setProfileForm({ ...profileForm, clientSince: e.target.value })}
+                            onChange={e => updateProfileField('clientSince', e.target.value)}
                           />
                         </div>
                         <div>
@@ -1053,7 +1122,7 @@ const Clients: React.FC = () => {
                             className={cn(inputBase, 'p-2 text-xs')}
                             id={`${contactFieldId}-contactPerson`}
                             value={profileForm.contactPerson}
-                            onChange={e => setProfileForm({ ...profileForm, contactPerson: e.target.value })}
+                            onChange={e => updateProfileField('contactPerson', e.target.value)}
                             placeholder={t('e.g. John Doe')}
                           />
                         </div>
@@ -1065,7 +1134,7 @@ const Clients: React.FC = () => {
                               className={cn(inputBase, 'p-2 text-xs')}
                               id={`${contactFieldId}-email`}
                               value={profileForm.email}
-                              onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
+                              onChange={e => updateProfileField('email', e.target.value)}
                               data-i18n-skip
                               placeholder="john@brand.com"
                             />
@@ -1077,7 +1146,7 @@ const Clients: React.FC = () => {
                               className={cn(inputBase, 'p-2 text-xs')}
                               id={`${contactFieldId}-phone`}
                               value={profileForm.phone}
-                              onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })}
+                              onChange={e => updateProfileField('phone', e.target.value)}
                               placeholder={t('Phone number')}
                             />
                           </div>
@@ -1090,7 +1159,7 @@ const Clients: React.FC = () => {
                               className={cn(inputBase, 'p-2 text-xs')}
                               id={`${contactFieldId}-website`}
                               value={profileForm.website}
-                              onChange={e => setProfileForm({ ...profileForm, website: e.target.value })}
+                              onChange={e => updateProfileField('website', e.target.value)}
                               placeholder="https://..."
                             />
                           </div>
@@ -1101,7 +1170,7 @@ const Clients: React.FC = () => {
                               className={cn(inputBase, 'p-2 text-xs')}
                               id={`${contactFieldId}-facebookPage`}
                               value={profileForm.facebookPage}
-                              onChange={e => setProfileForm({ ...profileForm, facebookPage: e.target.value })}
+                              onChange={e => updateProfileField('facebookPage', e.target.value)}
                               placeholder={t('Facebook URL')}
                             />
                           </div>
@@ -1113,7 +1182,7 @@ const Clients: React.FC = () => {
                             className={cn(inputBase, 'resize-none p-2 text-xs')}
                             id={`${contactFieldId}-address`}
                             value={profileForm.address}
-                            onChange={e => setProfileForm({ ...profileForm, address: e.target.value })}
+                            onChange={e => updateProfileField('address', e.target.value)}
                             placeholder={t('Business address...')}
                           />
                         </div>
@@ -1124,7 +1193,7 @@ const Clients: React.FC = () => {
                             className={cn(inputBase, 'resize-none p-2 text-xs')}
                             id={`${contactFieldId}-notes`}
                             value={profileForm.notes}
-                            onChange={e => setProfileForm({ ...profileForm, notes: e.target.value })}
+                            onChange={e => updateProfileField('notes', e.target.value)}
                             placeholder={t('Notes about contact or client details...')}
                           />
                         </div>
@@ -1144,18 +1213,19 @@ const Clients: React.FC = () => {
                           aria-label={t('Owner')} data-i18n-skip
                           className={cn(inputBase, 'mt-1 inline-block w-auto p-2 text-xs')}
                           value={selectedClient.profile.createdBy || ''}
-                          onChange={async (event) => {
-                            const result = assignClientOwner(selectedClient.profile!.id, event.target.value || undefined);
-                            if (!result.ok) { setProfileError(result.error || 'Unable to assign owner.'); return; }
-                            const saveResult = await commitPendingMutation();
-                            if (!saveResult.ok) setProfileError(saveResult.error || 'The owner change is waiting to be saved.');
-                          }}
+                          disabled={isSavingClient || Boolean(pendingClientChange) || upgradeRequired}
+                          onChange={event => void saveClientOwner(event.target.value || undefined)}
                         >
                           <option value="">{t('Unassigned')}</option>
                           {users.filter(user => ['Project Manager', 'HOD'].includes(user.role)).sort((a, b) => a.name.localeCompare(b.name)).map(user => (
                             <option key={user.id} value={user.id}>{user.name} · {t(getRoleDisplayName(user.role))}</option>
                           ))}
                         </select>
+                        {pendingClientChange?.kind === 'owner' && (
+                          <Button type="button" variant="secondary" disabled={isSavingClient} onClick={() => void saveClientOwner()} className="mt-2">
+                            {isOwnerSaving ? t('Saving…') : t('Retry save')}
+                          </Button>
+                        )}
                       </p>
                     )}
                     <p>
@@ -1329,7 +1399,7 @@ const Clients: React.FC = () => {
                         type="button"
                         onClick={() => {
                           const form = getProfileForm(selectedClient);
-                          setProfileForm(form);
+                          setProfileDraft(form);
                           setProfileBaseline(form);
                           setProfileError('');
                           setIsEditingProfile(true);

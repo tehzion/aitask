@@ -80,27 +80,37 @@ describe('calendar task ranges', () => {
 
   it('splits a range at week boundaries and marks continuation edges', () => {
     const tasks = [{ id: 'task-1', startDate: '2026-07-10', dueDate: '2026-07-15' }];
-    const firstWeek = buildCalendarWeekLayout(tasks, parseISO('2026-07-05'), 3);
-    const secondWeek = buildCalendarWeekLayout(tasks, parseISO('2026-07-12'), 3);
+    const firstWeek = buildCalendarWeekLayout(tasks, parseISO('2026-07-06'), 3);
+    const secondWeek = buildCalendarWeekLayout(tasks, parseISO('2026-07-13'), 3);
 
     expect(firstWeek.segments[0]).toMatchObject({
       startDate: '2026-07-10',
       endDate: '2026-07-11',
-      startColumn: 6,
+      startColumn: 5,
       spanDays: 2,
       isActualStart: true,
       isActualEnd: false,
       continuesAfter: true,
     });
     expect(secondWeek.segments[0]).toMatchObject({
-      startDate: '2026-07-12',
+      startDate: '2026-07-13',
       endDate: '2026-07-15',
       startColumn: 1,
-      spanDays: 4,
+      spanDays: 3,
       isActualStart: false,
       isActualEnd: true,
       continuesBefore: true,
     });
+  });
+
+  it('excludes Sunday-only ranges and clips full weeks to Saturday', () => {
+    const layout = buildCalendarWeekLayout([
+      { id: 'sunday', startDate: '2026-10-11', dueDate: '2026-10-11' },
+      { id: 'full', startDate: '2026-10-05', dueDate: '2026-10-11' },
+    ], parseISO('2026-10-05'), 3);
+    expect(layout.weekEnd).toBe('2026-10-10');
+    expect(layout.segments).toHaveLength(1);
+    expect(layout.segments[0]).toMatchObject({ taskId: 'full', startColumn: 1, spanDays: 6, continuesAfter: true, isActualEnd: false });
   });
 
   it('assigns stable non-overlapping lanes and reports hidden ranges by day', () => {
@@ -108,7 +118,7 @@ describe('calendar task ranges', () => {
       { id: 'a', startDate: '2026-07-05', dueDate: '2026-07-08' },
       { id: 'b', startDate: '2026-07-06', dueDate: '2026-07-09' },
       { id: 'c', startDate: '2026-07-07', dueDate: '2026-07-10' },
-    ], parseISO('2026-07-05'), 2);
+    ], parseISO('2026-07-06'), 2);
 
     expect(layout.segments.map(segment => ({
       id: segment.taskId,

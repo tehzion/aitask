@@ -6,6 +6,7 @@ import type { Priority, TaskStatus } from '../types';
 import { useStore } from '../store';
 import { getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../lib/access';
 import { buildStaffWorkQueue, getHodScopeTasks, getStaffBucketLabel, type StaffWorkBucketKey } from '../lib/staffWorkspace';
+import { normalizeDepartment } from '../lib/departments';
 import { getTodayInputDate } from '../lib/utils';
 import { Button, PageHeader, SegmentedTabs, Surface } from './ui';
 import { inputBase, pageShell } from './uiTokens';
@@ -50,7 +51,8 @@ const StaffAllWork: React.FC = () => {
   const setProject = (value: string) => setParam('project', value);
   const assignee = (searchParams.get('assignee') || 'All');
   const setAssignee = (value: string) => setParam('assignee', value);
-  const department = (searchParams.get('department') || 'All');
+  const requestedDepartment = searchParams.get('department') || 'All';
+  const department = normalizeDepartment(requestedDepartment) || requestedDepartment;
   const setDepartment = (value: string) => setParam('department', value);
   const creator = (searchParams.get('creator') || 'All');
   const setCreator = (value: string) => setParam('creator', value);
@@ -82,7 +84,8 @@ const StaffAllWork: React.FC = () => {
     }
     return visibleTasks;
   }, [currentUser, isHod, rolePermissions, scopeView, visibleTasks]);
-  const queue = React.useMemo(() => buildStaffWorkQueue(tasks, getTodayInputDate()), [tasks]);
+  const today = getTodayInputDate();
+  const queue = React.useMemo(() => buildStaffWorkQueue(tasks, today), [tasks, today]);
   const orderedTasks = React.useMemo(() => (
     bucket === 'all'
       ? [...queue.needs_action, ...queue.up_next, ...queue.waiting, ...queue.done]
@@ -90,7 +93,7 @@ const StaffAllWork: React.FC = () => {
   ), [bucket, queue]);
   const clients = React.useMemo(() => Array.from(new Set(tasks.map(task => task.clientName).filter(Boolean))).sort(), [tasks]);
   const projectsForFilter = React.useMemo(() => Array.from(new Set(tasks.map(task => task.projectName).filter(Boolean))).sort(), [tasks]);
-  const departments = React.useMemo(() => Array.from(new Set(tasks.map(task => task.department).filter(Boolean))).sort(), [tasks]);
+  const departments = React.useMemo(() => Array.from(new Set(tasks.map(task => normalizeDepartment(task.department) || task.department).filter(Boolean))).sort(), [tasks]);
   const assignees = React.useMemo(() => users.filter(user => tasks.some(task => task.assignedTo === user.id)), [tasks, users]);
   const creators = React.useMemo(() => users.filter(user => tasks.some(task => task.createdBy === user.id)), [tasks, users]);
   const deferredSearch = React.useDeferredValue(searchInput.value);
@@ -101,7 +104,7 @@ const StaffAllWork: React.FC = () => {
       && (client === 'All' || task.clientName === client)
       && (project === 'All' || task.projectName === project)
       && (assignee === 'All' || task.assignedTo === assignee)
-      && (department === 'All' || task.department === department)
+      && (department === 'All' || (normalizeDepartment(task.department) || task.department) === department)
       && (creator === 'All' || task.createdBy === creator)
       && (status === 'All' || task.status === status)
       && (priority === 'All' || task.priority === priority)
@@ -109,14 +112,17 @@ const StaffAllWork: React.FC = () => {
       && (!dueTo || Boolean(task.dueDate && task.dueDate <= dueTo));
   }), [assignee, client, creator, department, dueFrom, dueTo, normalizedSearch, orderedTasks, priority, project, status]);
   const taskId = searchParams.get('taskId');
-  const selectedTask = taskId ? tasks.find(task => task.id === taskId) || null : null;
+  // List filters and scope must not dismiss authorized details after delegation.
+  const selectedTask = taskId ? visibleTasks.find(task => task.id === taskId) || null : null;
   const activeFilterCount = [Boolean(searchInput.value.trim()), client !== 'All', project !== 'All', assignee !== 'All', department !== 'All', creator !== 'All', status !== 'All', priority !== 'All', Boolean(dueFrom), Boolean(dueTo)].filter(Boolean).length;
 
   const setTaskId = (taskIdValue?: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (taskIdValue) next.set('taskId', taskIdValue);
-    else next.delete('taskId');
-    setSearchParams(next, { replace: true });
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      if (taskIdValue) next.set('taskId', taskIdValue);
+      else next.delete('taskId');
+      return next;
+    }, { replace: true });
   };
 
   const clearFilters = () => {

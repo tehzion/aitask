@@ -70,7 +70,8 @@ export const getClientDeliveryStage = (task: Task, now = new Date()): ClientDeli
   if (task.status === 'Cancelled') return 'cancelled';
   if (task.clientApprovalStatus === 'Approved') return 'delivered';
   if (task.status === 'Waiting Approval' || task.status === 'Completed' || task.isCompleted) return 'needs_review';
-  if (task.dueDate && task.dueDate < localDateKey(now)) return 'timing_changed';
+  const dueDate = parseOptionalDate(task.dueDate);
+  if (dueDate && localDateKey(dueDate) < localDateKey(now)) return 'timing_changed';
   if (task.status === 'Pending') return 'scheduled';
   return 'in_delivery';
 };

@@ -1,3 +1,6 @@
+import { useSaveAction } from '../hooks/useSaveAction';
+import { shouldUseSecureSupabase } from '../lib/supabaseClient';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { hasUnsavedChanges } from '../lib/unsavedChanges';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React from "react";
@@ -35,7 +38,7 @@ import {
   Surface,
 } from "../components/ui";
 import { cardBase, inputBase, pageShell } from "../components/uiTokens";
-import { cn } from "../lib/utils";
+import { cn, getTodayInputDate } from "../lib/utils";
 import { parseOptionalDate } from "../lib/utils";
 import { formatLocalizedDate } from "../lib/i18n";
 import {
@@ -67,6 +70,8 @@ import SideSheet from "../components/SideSheet";
 import ClientServiceWorkspace from "../components/ClientServiceWorkspace";
 import CreateClientPlanModal from "../components/CreateClientPlanModal";
 import EditClientPlanDatesModal from "../components/EditClientPlanDatesModal";
+import { useLocalToday } from "../hooks/useLocalToday";
+import { getCurrentPlanCycle } from "../lib/dashboardData";
 import ConfirmDialog from "../components/ConfirmDialog";
 
 type Tab = "overview" | "plan" | "cycles" | "addons" | "activity";
@@ -92,6 +97,7 @@ const deliverableStatuses: DeliverableStatus[] = [
 
 const OperationsClientWorkspace = () => {
   const { locale, t } = useI18n();
+  const today = useLocalToday();
   const { clientId = "" } = useParams();
   const store = useStore();
   const client = store.clients.find((item) => item.id === clientId);
@@ -110,24 +116,56 @@ const OperationsClientWorkspace = () => {
   const [activityFeedback, setActivityFeedback] = React.useState<ActivityFeedback | null>(null);
   const [addonSheetOpen, setAddonSheetOpen] = React.useState(false);
   const [activitySheetOpen, setActivitySheetOpen] = React.useState(false);
-  const [addonSaving, setAddonSaving] = React.useState(false);
+  const { busy: addonSaving, run: runServiceAction } = useSaveAction(clientId);
+  const pendingAddon = React.useRef<(typeof store.addons)[number] | null>(null);
   const [activitySaving, setActivitySaving] = React.useState(false);
+  const activityContext = React.useRef({ clientId, actorId: store.currentUser?.id });
+  activityContext.current = { clientId, actorId: store.currentUser?.id };
+  const activityDraft = React.useRef({ comment, file, visibility });
+  activityDraft.current = { comment, file, visibility };
+  const pendingActivity = React.useRef<{ comment: string; commentId: string; file?: File; visibility: CommentVisibility; attachment?: AttachmentRef } | null>(null);
   useUnsavedChanges(Boolean(comment.trim() || file || activitySaving));
+  React.useEffect(() => {
+    setComment(''); setFile(undefined); setActivitySaving(false); setActivityStage('idle');
+    setActivityFeedback(null); setActivitySheetOpen(false); pendingActivity.current = null;
+    if (activityFileInputRef.current) activityFileInputRef.current.value = '';
+  }, [clientId, store.currentUser?.id]);
+  const acknowledgeActivity = (submitted: NonNullable<typeof pendingActivity.current>) => {
+    const current = activityDraft.current;
+    const sameText = current.comment === submitted.comment;
+    const sameFile = current.file === submitted.file;
+    const sameVisibility = current.visibility === submitted.visibility;
+    if (sameText) setComment('');
+    if (sameFile) {
+      setFile(undefined);
+      if (activityFileInputRef.current) activityFileInputRef.current.value = '';
+    }
+    if (submitted.attachment) forgetPendingServiceFile(submitted.attachment);
+    pendingActivity.current = null;
+    setActivityFeedback(null);
+    setMessage(t('Activity added.'));
+    if (sameText && sameFile && sameVisibility) setActivitySheetOpen(false);
+  };
   const [planAction, setPlanAction] = React.useState<"pause" | "end" | null>(null);
   const planConfirmationTitleId = React.useId();
   const [addonEndDates, setAddonEndDates] = React.useState<
     Record<string, string>
   >({});
+  const [addonDefaultDate] = React.useState(() => getTodayInputDate());
   const [addon, setAddon] = React.useState({
     name: "",
     platforms: "",
     quantity: 1,
     unitPrice: 0,
     billingMode: "one_off" as AddonBillingMode,
-    effectiveFrom: new Date().toISOString().slice(0, 10),
+    effectiveFrom: addonDefaultDate,
     targetCycleId: "",
   });
-  useUnsavedChanges(addonSaving || Boolean(addon.name.trim() || addon.platforms.trim() || addon.quantity !== 1 || addon.unitPrice !== 0 || addon.billingMode !== 'one_off' || addon.targetCycleId || addon.effectiveFrom !== new Date().toISOString().slice(0, 10)));
+  React.useEffect(() => {
+    pendingAddon.current = null; setAddonSheetOpen(false); setPlanAction(null); setMessage('');
+    setAddon({ name: '', platforms: '', quantity: 1, unitPrice: 0, billingMode: 'one_off', effectiveFrom: addonDefaultDate, targetCycleId: '' });
+  }, [clientId, store.currentUser?.id, addonDefaultDate]);
+  useUnsavedChanges(addonSaving || Boolean(addon.name.trim() || addon.platforms.trim() || addon.quantity !== 1 || addon.unitPrice !== 0 || addon.billingMode !== 'one_off' || addon.targetCycleId || addon.effectiveFrom !== addonDefaultDate));
 
   if (!client) return <Navigate to="/projects" replace />;
 
@@ -149,7 +187,7 @@ const OperationsClientWorkspace = () => {
     store.rolePermissions,
   );
   const isClient = store.currentUser?.role === "Client";
-  if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions, store.clients))
+  if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions, store.clients, store.projects))
     return <Navigate to="/projects" replace />;
   if (
     isClient &&
@@ -199,7 +237,9 @@ const OperationsClientWorkspace = () => {
         activePlan.taxRateBps,
       )
     : null;
-  const currentCycle = cycles[0];
+  const currentCycle = activePlan
+    ? getCurrentPlanCycle(activePlan, cycles, today, { includeDraft: !isClient })
+    : undefined;
   const currentCycleDeliverables = currentCycle
     ? deliverables.filter((item) => item.cycleId === currentCycle.id)
     : [];
@@ -218,30 +258,37 @@ const OperationsClientWorkspace = () => {
       setMessage(result.error || "Unable to save this change.");
       return false;
     }
-    const saved = await store.commitPendingMutation(command);
+    const saved = await runServiceAction(() => store.commitPendingMutation(command));
+    if (!saved) return false;
     setMessage(
       saved.ok ? "Saved." : saved.error || "The change is waiting to be saved.",
     );
     return saved.ok;
   };
   const confirmPlanAction = async () => {
-    if (!activePlan || !planAction) return;
-    await saveAndCommit(
+    if (!activePlan || !planAction || addonSaving) return;
+    const saved = await saveAndCommit(
       store.setClientPlanStatus(activePlan.id, planAction === "pause" ? "Paused" : "Ended"),
       "client_plan.manage",
     );
-    setPlanAction(null);
+    if (saved) setPlanAction(null);
   };
   const submitComment = async (event: React.FormEvent) => {
     event.preventDefault();
     if (activitySaving) return;
+    if (pendingActivity.current) { await retryActivitySave(); return; }
     const cycle = cycles[0];
     if (!cycle)
       return setActivityFeedback({ tone: "error", text: t("Create a service cycle before adding activity.") });
     if (file && file.size > SERVICE_FILE_MAX_BYTES) {
-      setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller.") });
+      setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller."), action: pendingActivity.current ? "save" : undefined });
       return;
     }
+    const submitted = { comment, file, visibility };
+    const session = captureWorkspaceSession();
+    const actorId = store.currentUser?.id;
+    const requestClientId = clientId;
+    const isCurrent = () => isWorkspaceSessionCurrent(session) && activityContext.current.clientId === requestClientId && activityContext.current.actorId === actorId;
     setActivitySaving(true);
     setActivityStage(file ? "uploading" : "saving");
     let attachment: AttachmentRef | undefined;
@@ -254,6 +301,7 @@ const OperationsClientWorkspace = () => {
         cycleId: cycle.id,
         userId: store.currentUser.id,
       });
+      if (!isCurrent()) return;
       if (uploaded.ok === false) {
         setActivitySaving(false);
         setActivityStage("idle");
@@ -288,98 +336,95 @@ const OperationsClientWorkspace = () => {
         });
       }
     }
-    const saved = await store.commitPendingMutation("cycle_comment.manage");
-    setActivitySaving(false);
-    setActivityStage("idle");
-    if (!saved.ok) {
-      setActivityFeedback({ tone: "error", text: t(saved.error || "The activity is waiting to be saved."), action: "save" });
-      return;
-    }
-    if (attachment) forgetPendingServiceFile(attachment);
-    setMessage(t("Activity added."));
-    setActivityFeedback(null);
-    if (saved.ok) {
-      setComment("");
-      setFile(undefined);
-      if (activityFileInputRef.current) activityFileInputRef.current.value = "";
-      setActivitySheetOpen(false);
+    const pending = { ...submitted, attachment, commentId: result.id };
+    pendingActivity.current = pending;
+    try {
+      const saved = await store.commitPendingMutation("cycle_comment.manage");
+      if (!isCurrent()) return;
+      if (!saved.ok) {
+        setActivityFeedback({ tone: "error", text: t(saved.error || "The activity is waiting to be saved."), action: "save" });
+        return;
+      }
+      acknowledgeActivity(pending);
+    } catch (failure) {
+      if (isCurrent()) setActivityFeedback({ tone: "error", text: failure instanceof Error ? failure.message : t("The activity is waiting to be saved."), action: "save" });
+    } finally {
+      if (isCurrent()) { setActivitySaving(false); setActivityStage("idle"); }
     }
   };
 
   const retryActivitySave = async () => {
-    if (activitySaving) return;
+    const submitted = pendingActivity.current;
+    if (activitySaving || !submitted) return;
+    const session = captureWorkspaceSession();
+    const actorId = store.currentUser?.id;
+    const requestClientId = clientId;
+    const isCurrent = () => isWorkspaceSessionCurrent(session) && activityContext.current.clientId === requestClientId && activityContext.current.actorId === actorId;
     setActivitySaving(true);
     setActivityStage("saving");
     setActivityFeedback({ tone: "status", text: t("Saving activity…") });
-    const saved = await store.retryPendingSave("cycle_comment.manage");
-    setActivitySaving(false);
-    setActivityStage("idle");
-    if (!saved.ok) {
-      setActivityFeedback({ tone: "error", text: t(saved.error || "The activity is waiting to be saved."), action: "save" });
-      return;
+    try {
+      const saved = await store.retryPendingSave("cycle_comment.manage");
+      if (!isCurrent()) return;
+      if (!saved.ok) { setActivityFeedback({ tone: "error", text: t(saved.error || "The activity is waiting to be saved."), action: "save" }); return; }
+      if (!useStore.getState().cycleComments.some(item => item.id === submitted.commentId)) {
+        pendingActivity.current = null;
+        setActivityFeedback({ tone: "error", text: t("The pending activity is no longer available. Review your draft before saving again.") });
+        return;
+      }
+      acknowledgeActivity(submitted);
+    } catch (failure) {
+      if (isCurrent()) setActivityFeedback({ tone: "error", text: failure instanceof Error ? failure.message : t("The activity is waiting to be saved."), action: "save" });
+    } finally {
+      if (isCurrent()) { setActivitySaving(false); setActivityStage("idle"); }
     }
-    setMessage(t("Activity added."));
-    setActivityFeedback(null);
-    setComment("");
-    setFile(undefined);
-    if (activityFileInputRef.current) activityFileInputRef.current.value = "";
-    setActivitySheetOpen(false);
   };
+
   const addAddon = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!activePlan || addonSaving) return;
-    if (addon.quantity < 1 || !Number.isInteger(addon.quantity) || addon.unitPrice < 0 || !Number.isFinite(addon.unitPrice)) {
-      setMessage("Enter a whole quantity of at least one and a valid non-negative price.");
-      return;
+    const retry = Boolean(pendingAddon.current);
+    if (!retry) {
+      if (addon.quantity < 1 || !Number.isInteger(addon.quantity) || addon.unitPrice < 0 || !Number.isFinite(addon.unitPrice)) {
+        setMessage("Enter a whole quantity of at least one and a valid non-negative price."); return;
+      }
+      if (addon.billingMode === "one_off" && !addon.targetCycleId) {
+        setMessage("Choose a service cycle for this one-off add-on."); return;
+      }
+      const result = store.addAddon({ clientId: client.id, clientName: client.clientName, planId: activePlan.id,
+        name: addon.name, platforms: addon.platforms.split(',').map(value => value.trim()).filter(Boolean),
+        quantity: addon.quantity, unitPriceMinor: Math.round(addon.unitPrice * 100), billingMode: addon.billingMode,
+        targetCycleId: addon.billingMode === 'one_off' ? addon.targetCycleId || undefined : undefined,
+        effectiveFrom: addon.effectiveFrom, isActive: true });
+      if (!result.ok) { setMessage(result.error || 'Unable to save this change.'); return; }
+      pendingAddon.current = useStore.getState().addons.find(item => item.id === result.id) || null;
     }
-    if (addon.billingMode === "one_off" && !addon.targetCycleId) {
-      setMessage("Choose a service cycle for this one-off add-on.");
-      return;
-    }
-    setAddonSaving(true);
-    const saved = await saveAndCommit(
-      store.addAddon({
-        clientId: client.id,
-        clientName: client.clientName,
-        planId: activePlan.id,
-        name: addon.name,
-        platforms: addon.platforms
-          .split(",")
-          .map((value) => value.trim())
-          .filter(Boolean),
-        quantity: addon.quantity,
-        unitPriceMinor: Math.round(addon.unitPrice * 100),
-        billingMode: addon.billingMode,
-        targetCycleId:
-          addon.billingMode === "one_off"
-            ? addon.targetCycleId || undefined
-            : undefined,
-        effectiveFrom: addon.effectiveFrom,
-        isActive: true,
-      }),
-      "addon.manage",
-    );
-    setAddonSaving(false);
+    const submitted = pendingAddon.current;
+    const saved = await runServiceAction(() => retry && shouldUseSecureSupabase() ? store.retryPendingSave('addon.manage') : store.commitPendingMutation('addon.manage'));
     if (!saved) return;
-    setAddon((current) => ({
-      ...current,
-      name: "",
-      platforms: "",
-      quantity: 1,
-      unitPrice: 0,
-    }));
+    if (!saved.ok) { setMessage(saved.error || 'The change is waiting to be saved.'); return; }
+    const latest = useStore.getState().addons.find(item => item.id === submitted?.id);
+    pendingAddon.current = null;
+    if (!submitted || !latest || ['name', 'platforms', 'quantity', 'unitPriceMinor', 'billingMode', 'targetCycleId', 'effectiveFrom'].some(key => JSON.stringify(latest[key as keyof typeof latest]) !== JSON.stringify(submitted[key as keyof typeof submitted]))) {
+      setMessage(t('The pending add-on is no longer available. Review your draft before saving again.')); return;
+    }
+    setMessage(t('Saved.'));
+    setAddon(current => ({ ...current, name: '', platforms: '', quantity: 1, unitPrice: 0 }));
     setAddonSheetOpen(false);
   };
+
   const createRevision = async () => {
-    if (!activePlan) return;
+    if (!activePlan || addonSaving) return;
     const result = store.createClientPlanRevision(activePlan.id);
     await saveAndCommit(result, "client_plan.manage");
   };
   const generateTaskChain = async (deliverableId: string) => {
+    if (addonSaving) return;
     const result = store.generateDeliverableTaskChain(deliverableId);
     await saveAndCommit(result, "deliverable.workflow.generate");
   };
   const changeAddonState = async (addonId: string, isActive: boolean) => {
+    if (addonSaving) return;
     await saveAndCommit(
       store.setAddonActive(addonId, isActive, addonEndDates[addonId]),
       "addon.manage",
@@ -454,7 +499,7 @@ const OperationsClientWorkspace = () => {
           <Surface variant="inset" className="border-l-2 border-accent p-6 sm:p-8">
             <p className="calm-eyebrow">{t('Delivery progress')}</p>
             <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-              <div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{currentProgress}%</p><p className="mt-2 text-sm text-muted">{currentDelivered}/{currentCycleDeliverables.length} {t('deliverables completed')}</p></div>
+              <div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{currentProgress}%</p><p className="mt-2 text-sm text-muted">{currentCycle ? <>{currentDelivered}/{currentCycleDeliverables.length} {t('deliverables completed')}</> : t('No published cycle for this month')}</p></div>
               {currentCycle && <StatusChip tone={currentCycle.status === "Completed" || currentCycle.status === "Published" ? "emerald" : "slate"}>{currentCycle.status}</StatusChip>}
             </div>
             <ProgressBar className="mt-7" value={currentDelivered} max={Math.max(currentCycleDeliverables.length, 1)} label={t('Current cycle')} />
@@ -923,7 +968,7 @@ const OperationsClientWorkspace = () => {
 
       {tab === "activity" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-activity`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-activity`} tabIndex={0} className="scroll-mt-36 space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {!isClient && <div className="flex justify-end"><Button onClick={() => { setActivityFeedback(null); setActivitySheetOpen(true); }}><MessageSquareText className="h-4 w-4" />{t("Add activity")}</Button></div>}
+          {!isClient && <div className="flex justify-end"><Button onClick={() => { if (!pendingActivity.current) setActivityFeedback(null); setActivitySheetOpen(true); }}><MessageSquareText className="h-4 w-4" />{t("Add activity")}</Button></div>}
           <section className={cn(cardBase, "divide-y divide-line/70")}>
             {comments.map((item) => (
               <article key={item.id} className="p-5">
@@ -969,9 +1014,11 @@ const OperationsClientWorkspace = () => {
         onClose={() => { if (!addonSaving) setAddonSheetOpen(false); }}
         title={t("Add service add-on")}
         description={t("Add one-off work to a cycle or recurring work from an effective date. Prices remain internal.")}
-        footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setAddonSheetOpen(false)} disabled={addonSaving}>{t("Cancel")}</Button><Button type="submit" form="add-addon-form" disabled={addonSaving}><Plus className="h-4 w-4" />{addonSaving ? t("Saving…") : t("Add add-on")}</Button></div>}
+        footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setAddonSheetOpen(false)} disabled={addonSaving}>{t("Cancel")}</Button><Button type="submit" form="add-addon-form" disabled={addonSaving}><Plus className="h-4 w-4" />{addonSaving ? t("Saving…") : pendingAddon.current ? t("Retry save") : t("Add add-on")}</Button></div>}
       >
         <form id="add-addon-form" onSubmit={addAddon} className="space-y-5">
+          {message && <p role="alert">{message}</p>}
+          <fieldset disabled={addonSaving || Boolean(pendingAddon.current)} className="min-w-0 border-0 p-0 space-y-5">
           <label className="block text-sm font-medium text-ink">{t("Add-on name")}<input data-i18n-skip required className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.name} onChange={(e) => setAddon({ ...addon, name: e.target.value })} /></label>
           <label className="block text-sm font-medium text-ink">{t("Platforms")}<input data-i18n-skip placeholder={t("Instagram, TikTok")} className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.platforms} onChange={(e) => setAddon({ ...addon, platforms: e.target.value })} /></label>
           <div className="grid grid-cols-2 gap-3">
@@ -984,17 +1031,19 @@ const OperationsClientWorkspace = () => {
           ) : (
             <label className="block text-sm font-medium text-ink">{t("Effective from")}<input type="date" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.effectiveFrom} onChange={(e) => setAddon({ ...addon, effectiveFrom: e.target.value })} /></label>
           )}
+          </fieldset>
         </form>
       </SideSheet>
 
         <SideSheet
         isOpen={activitySheetOpen && !isClient}
+        closeDisabled={activitySaving}
         onClose={() => { if (!activitySaving) setActivitySheetOpen(false); }}
         title={t("Add activity")}
         description={t("Share an internal note or a client-visible update with an optional private file.")}
         footer={<div className="flex flex-col-reverse justify-end gap-2 sm:flex-row"><Button variant="secondary" onClick={() => setActivitySheetOpen(false)} disabled={activitySaving}>{t("Cancel")}</Button><Button type="submit" form="add-activity-form" disabled={activitySaving} aria-busy={activitySaving}><CheckCircle2 className="h-4 w-4" aria-hidden="true" />{activityStage === "uploading" ? t("Uploading…") : activityStage === "saving" ? t("Saving…") : activityFeedback?.action === "save" ? t("Retry save") : t("Add activity")}</Button></div>}
       >
-        <form ref={activityFormRef} id="add-activity-form" onSubmit={activityFeedback?.action === "save" ? (event) => { event.preventDefault(); void retryActivitySave(); } : submitComment} className="space-y-5" aria-busy={activitySaving}>
+        <form ref={activityFormRef} id="add-activity-form" noValidate={Boolean(pendingActivity.current)} onSubmit={activityFeedback?.action === "save" ? (event) => { event.preventDefault(); void retryActivitySave(); } : submitComment} className="space-y-5" aria-busy={activitySaving}>
           {activityFeedback && (
             <div
               id="activity-feedback"
@@ -1058,17 +1107,17 @@ const OperationsClientWorkspace = () => {
                 if (selected && selected.size > SERVICE_FILE_MAX_BYTES) {
                   e.target.value = "";
                   setFile(undefined);
-                  setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller.") });
+                  setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller."), action: pendingActivity.current ? "save" : undefined });
                   return;
                 }
                 if (selected && !getServiceFileMimeType(selected)) {
                   e.target.value = "";
                   setFile(undefined);
-                  setActivityFeedback({ tone: "error", text: t(SERVICE_FILE_TYPE_ERROR) });
+                  setActivityFeedback({ tone: "error", text: t(SERVICE_FILE_TYPE_ERROR), action: pendingActivity.current ? "save" : undefined });
                   return;
                 }
                 setFile(selected);
-                setActivityFeedback(null);
+                if (!pendingActivity.current) setActivityFeedback(null);
               }}
               className="mt-2 block min-h-11 w-full rounded-control border border-line bg-surface px-3 py-2 text-sm text-muted file:mr-3 file:rounded-control file:border-0 file:bg-accent-soft file:px-3 file:py-1.5 file:font-semibold file:text-accent focus:outline-none focus:ring-2 focus:ring-accent/35"
             />
@@ -1079,7 +1128,7 @@ const OperationsClientWorkspace = () => {
                   <p className="truncate font-semibold text-ink" data-i18n-skip>{file.name}</p>
                   <p className="text-xs text-muted">{formatFileSize(file.size)}</p>
                 </div>
-                <button type="button" onClick={() => { setFile(undefined); setActivityFeedback(null); if (activityFileInputRef.current) activityFileInputRef.current.value = ""; }} disabled={activitySaving} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent/35 disabled:cursor-not-allowed disabled:opacity-50" aria-label={t("Remove selected file")} title={t("Remove selected file")}>
+                <button type="button" onClick={() => { setFile(undefined); if (!pendingActivity.current) setActivityFeedback(null); if (activityFileInputRef.current) activityFileInputRef.current.value = ""; }} disabled={activitySaving} className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent/35 disabled:cursor-not-allowed disabled:opacity-50" aria-label={t("Remove selected file")} title={t("Remove selected file")}>
                   <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>

@@ -10,7 +10,7 @@ import ModalShell from './ModalShell';
 import BackendFreshness from './BackendFreshness';
 import { Button } from './ui';
 import { inputBase } from './uiTokens';
-import { cn } from '../lib/utils';
+import { cn, getTodayInputDate } from '../lib/utils';
 import { calculatePlanTotalMinor, formatMoney, snapshotWorkflow } from '../lib/serviceManagement';
 import { useI18n } from './I18nProvider';
 
@@ -34,7 +34,7 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
   const [mode, setMode] = React.useState<PlanOrigin>('standard');
   const [packageId, setPackageId] = React.useState(servicePackages.find(item => item.isActive)?.id || '');
   const [profile, setProfile] = React.useState({ clientName: '', contactPerson: '', email: '', phone: '', address: '', website: '', facebookPage: '', notes: '' });
-  const [plan, setPlan] = React.useState({ name: '', startDate: new Date().toISOString().slice(0, 10), billingDay: new Date().getDate(), contractEndDate: '', discountType: 'none' as 'none' | 'percent' | 'fixed', discountValue: 0, taxRateBps: 0 });
+  const [plan, setPlan] = React.useState(() => { const now = new Date(); return { name: '', startDate: getTodayInputDate(now), billingDay: now.getDate(), contractEndDate: '', discountType: 'none' as 'none' | 'percent' | 'fixed', discountValue: 0, taxRateBps: 0 }; });
   const [items, setItems] = React.useState<ServiceItem[]>([blankItem()]);
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);

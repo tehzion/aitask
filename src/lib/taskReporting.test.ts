@@ -9,6 +9,7 @@ import {
   getTeamMemberTaskGroups,
   getTeamWorkloadSummaries,
   getTrackedWeeklyCompletions,
+  isTaskOverdue,
 } from './taskReporting';
 
 const makeTask = (overrides: Partial<Task> = {}): Task => ({
@@ -40,6 +41,15 @@ const users: User[] = [
 
 describe('Boss operations reporting', () => {
   const now = new Date(2026, 6, 31, 12, 0, 0);
+
+  it('keeps overdue links consistent for completed, cancelled, invalid and due-today tasks', () => {
+    expect(isTaskOverdue(makeTask({ dueDate: '2026-07-30' }), now)).toBe(true);
+    expect(isTaskOverdue(makeTask({ dueDate: '2026-07-31' }), now)).toBe(false);
+    expect(isTaskOverdue(makeTask({ dueDate: '2026-07-30', status: 'Completed', isCompleted: false }), now)).toBe(false);
+    expect(isTaskOverdue(makeTask({ dueDate: '2026-07-30', status: 'Cancelled' }), now)).toBe(false);
+    expect(isTaskOverdue(makeTask({ dueDate: 'invalid' }), now)).toBe(false);
+    expect(isTaskOverdue(makeTask({ dueDate: '' }), now)).toBe(false);
+  });
 
   it('builds four Monday-to-Saturday due-work cohorts with tracked and open states', () => {
     const weeks = getDueWorkPerformance([
@@ -123,6 +133,21 @@ describe('Boss operations reporting', () => {
     ];
     expect(getNeedsAttentionTasks(tasks, now).map(task => task.id))
       .toEqual(['earlier-overdue', 'later-overdue', 'waiting']);
+  });
+
+  it('counts work overdue earlier this week as well as previous weeks', () => {
+    const tasks = [
+      makeTask({ id: 'yesterday', dueDate: '2026-07-30' }),
+      makeTask({ id: 'monday', dueDate: '2026-07-27' }),
+      makeTask({ id: 'last-week', dueDate: '2026-07-24' }),
+      makeTask({ id: 'today', dueDate: '2026-07-31' }),
+      makeTask({ id: 'future', dueDate: '2026-08-01' }),
+      makeTask({ id: 'cancelled', dueDate: '2026-07-30', status: 'Cancelled' }),
+      makeTask({ id: 'completed', dueDate: '2026-07-30', status: 'Completed' }),
+      makeTask({ id: 'no-deadline', dueDate: '' }),
+    ];
+    expect(getAgencyPulseMetrics(tasks, now).week.overdue).toBe(3);
+    expect(getNeedsAttentionTasks(tasks, now).map(task => task.id)).toEqual(['last-week', 'monday', 'yesterday']);
   });
 
   it('excludes untracked historical completions from period lists and charts', () => {
