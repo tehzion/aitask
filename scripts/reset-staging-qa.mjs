@@ -1,3 +1,4 @@
+import { RECOVERY_COMMAND_ID, RECOVERY_FILE_PATH, recoveryFixture } from './account-recovery-fixture.mjs';
 import { createClient } from '@supabase/supabase-js';
 
 const WORKSPACE_ID = 'aitask-main';
@@ -91,10 +92,14 @@ const listAuthUsers = async () => {
   }
 };
 
+const recovery = recoveryFixture(roles.find(role => role.key === 'SUPER_ADMIN').email);
+
 const deleteNamedQaUsers = async () => {
-  const qaEmails = new Set(roles.map((role) => role.email));
+  const recoveryEmails = new Set([recovery.email,recovery.changedEmail]);
+  const qaEmails = new Set([...roles.map((role) => role.email),...recoveryEmails]);
   const users = await listAuthUsers();
   for (const user of users.filter((candidate) => candidate.email && qaEmails.has(candidate.email.toLowerCase()))) {
+    if (recoveryEmails.has(user.email.toLowerCase()) && user.app_metadata?.aitask_fixture !== WORKSPACE_NAME) throw new Error('Refusing to delete an unrelated recovery account.');
     const { error } = await supabase.auth.admin.deleteUser(user.id, true);
     assertOk(error, `Unable to delete staging QA Auth user ${user.id}`);
   }
@@ -116,6 +121,12 @@ const resetWorkspace = async () => {
   }
 };
 
+// Verify fixture ownership before any cleanup mutation.
+const { data: existingQaWorkspace, error: existingQaWorkspaceError } = await supabase.from('aitask_workspaces').select('name').eq('id',WORKSPACE_ID).maybeSingle();
+assertOk(existingQaWorkspaceError,'Unable to verify recovery cleanup workspace');
+if (existingQaWorkspace && !['AiTask',WORKSPACE_NAME].includes(existingQaWorkspace.name)) throw new Error('Refusing recovery cleanup outside the QA workspace.');
+const { error: recoveryFileCleanupError } = await supabase.storage.from('client-service-files').remove([RECOVERY_FILE_PATH]);
+assertOk(recoveryFileCleanupError, 'Unable to clean the isolated recovery fixture upload');
 await deleteNamedQaUsers();
 await resetWorkspace();
 
@@ -245,6 +256,19 @@ const entities = [
 
 const { error: entityError } = await supabase.from('aitask_entities').insert(entities);
 assertOk(entityError, 'Unable to create staging QA entities');
+
+// Prepare a real unfinished request so a fresh browser can recover it. Its
+// original password is an existing QA secret and is never journaled or emitted.
+const { error: reserveRecoveryError } = await supabase.rpc('aitask_reserve_member_onboarding', {
+  p_actor_member_id: memberId.SUPER_ADMIN, p_command_id: RECOVERY_COMMAND_ID, p_payload: recovery.payload,
+});
+assertOk(reserveRecoveryError, 'Unable to reserve isolated invitation recovery fixture');
+const { error: prepareRecoveryError } = await supabase.auth.admin.createUser({
+  email: recovery.email, password: roles.find(role => role.key === 'OPERATION').password, email_confirm: true,
+  app_metadata: { aitask_fixture: WORKSPACE_NAME, aitask_onboarding_command: RECOVERY_COMMAND_ID,
+    aitask_onboarding_actor: memberId.SUPER_ADMIN, aitask_onboarding_workspace: WORKSPACE_ID },
+});
+assertOk(prepareRecoveryError, 'Unable to prepare isolated recovery login');
 
 console.log(JSON.stringify({
   workspaceId: WORKSPACE_ID,

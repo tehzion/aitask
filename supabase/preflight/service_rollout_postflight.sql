@@ -56,3 +56,19 @@ select jsonb_build_object(
 ) as service_infrastructure
 from storage.buckets bucket
 where bucket.id = 'client-service-files';
+
+-- Account consistency and invitation recovery are part of the unchanged v4
+-- backend contract; frontend publication requires these additive capabilities.
+do $$
+begin
+  if not exists(select 1 from pg_catalog.pg_trigger where tgrelid='auth.users'::regclass
+    and tgname='aitask_sync_auth_member_email' and tgenabled<>'D') then
+    raise exception 'Auth/member email synchronization is unavailable'; end if;
+  if not exists(select 1 from pg_catalog.pg_attribute where attrelid='private.aitask_member_onboarding'::regclass
+    and attname='state' and not attisdropped) then raise exception 'Onboarding recovery state is unavailable'; end if;
+  if not has_function_privilege('service_role','public.aitask_list_member_onboarding(text)','EXECUTE')
+    or has_function_privilege('authenticated','public.aitask_list_member_onboarding(text)','EXECUTE')
+    or has_function_privilege('anon','public.aitask_cancel_member_onboarding(text,uuid,boolean)','EXECUTE') then
+    raise exception 'Onboarding recovery privileges are invalid'; end if;
+end; $$;
+select jsonb_build_object('emailSynchronization',true,'onboardingRecovery',true,'schemaVersion',4) as account_consistency_capabilities;

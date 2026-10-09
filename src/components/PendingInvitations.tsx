@@ -59,7 +59,7 @@ export default function PendingInvitations({ authUserId, refreshKey }: { authUse
       <Button variant="secondary" disabled={busy} onClick={() => void load()}>{t('onboarding.refresh')}</Button>
     </div>
     <p className="mt-2 text-sm text-muted">{t('onboarding.guidance')}</p>
-    {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+    {error && <p role="alert" className="mt-3 text-sm text-red-700">{t(error)}</p>}
     {notice && <p role="status" className="mt-3 text-sm">{notice}</p>}
     {operations.map(operation => <div key={operation.commandId} className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
       <div className="min-w-0"><p className="break-words font-medium">{operation.payload.name}</p><p className="break-all text-sm text-muted">{operation.payload.email}</p></div>
@@ -74,11 +74,11 @@ export default function PendingInvitations({ authUserId, refreshKey }: { authUse
         <p className="break-words text-sm">{selected.payload.name} · {selected.payload.email}</p>
         <p className="text-sm text-muted">{t('onboarding.savedRequest')}</p>
         {requiresPassword && <label className="block text-sm">{t('onboarding.originalPassword')}<input className={`${inputBase} mt-2 w-full p-3`} type="password" autoComplete="off" value={password} onChange={event => setPassword(event.target.value)} minLength={12} required disabled={busy}/></label>}
-        {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+        {error && <p role="alert" className="text-sm text-red-700">{t(error)}</p>}
         <Button type="submit" disabled={busy}>{t(busy ? 'onboarding.working' : 'onboarding.resume')}</Button>
       </form>
     </ModalShell>}
     {cancellation && <ConfirmDialog labelledBy="cancel-invitation-title" title={t('onboarding.cancel')} description={t('onboarding.cancelDescription')}
-      confirmLabel={t('onboarding.cancel')} error={error} busy={busy} onClose={() => setCancellation(null)} onConfirm={cancel}/>}
+      confirmLabel={t('onboarding.cancel')} error={t(error)} busy={busy} onClose={() => setCancellation(null)} onConfirm={cancel}/>}
   </section>;
 }

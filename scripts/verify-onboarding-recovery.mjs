@@ -153,3 +153,38 @@ const staffLogin=await request('/auth/v1/token?grant_type=password',{email:handl
 assert.equal((await invokeBody({action:'list_onboarding'},staffLogin.access_token)).status,403);
 assert.equal((await invokeBody({action:'cancel_onboarding',commandId:handlerCommand},staffLogin.access_token)).status,403);
 console.log('[account recovery] Real Auth/REST verified atomic email ACK loss, duplicate rejection, cross-browser recovery, original password enforcement, completed replay, cancellation cleanup uncertainty, late-creation fencing and Staff isolation.');
+
+// Competing finalization and cancellation must produce one coherent outcome.
+const raceBody={...handlerBody,commandId:crypto.randomUUID(),email:`race-${id}@example.test`,name:'Race recovery '+id};
+failFinalization=true; assert.equal((await invokeBody(raceBody)).status,409); failFinalization=false;
+const [raceFinalize,raceCancel]=await Promise.all([invokeBody(raceBody),invokeBody({action:'cancel_onboarding',commandId:raceBody.commandId})]);
+const raceReceipt=await raceCancel.json();
+assert.equal(raceCancel.status,200);
+assert.ok(['completed','cancelled'].includes(raceReceipt.state));
+if(raceReceipt.state==='completed') {
+  assert.equal(raceFinalize.status,200);
+  await request('/auth/v1/token?grant_type=password',{email:raceBody.email,password:handlerPassword});
+} else {
+  assert.equal(raceFinalize.status,409);
+  const absent=await fetch(new URL('/auth/v1/token?grant_type=password',base),{method:'POST',headers:{apikey:secret,'Content-Type':'application/json'},body:JSON.stringify({email:raceBody.email,password:handlerPassword})});
+  assert.equal(absent.ok,false);
+}
+// Retain a saved object owned by the removed member, including its reference.
+const storage=createClient(base.toString(),secret,{auth:{persistSession:false,autoRefreshToken:false}});
+const retainedPath=`${workspace}/client/cycle/member-removal.pdf`;
+const upload=await storage.storage.from('client-service-files').upload(retainedPath,new Blob(['%PDF-1.4 retained'],{type:'application/pdf'}),{contentType:'application/pdf'});
+assert.ifError(upload.error);
+execFileSync('docker',['exec',database,'psql','-U','postgres','-d','postgres','-v','ON_ERROR_STOP=1','-c',
+ `update storage.objects set owner_id='${confirmed.member.auth_user_id}',owner='${confirmed.member.auth_user_id}' where bucket_id='client-service-files' and name='${retainedPath}';
+ insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
+ ('${workspace}','client','client','{"id":"client","clientName":"Retention QA","createdBy":"${actorId}"}'),
+ ('${workspace}','service_cycle','cycle','{"id":"cycle","clientId":"client","clientName":"Retention QA"}'),
+ ('${workspace}','cycle_comment','retained-comment','{"id":"retained-comment","clientId":"client","clientName":"Retention QA","cycleId":"cycle","authorId":"${confirmed.member.id}","attachments":[{"bucket":"client-service-files","path":"${retainedPath}"}]}');`],{stdio:'pipe'});
+assert.equal((await invokeBody({action:'delete_member',memberId:confirmed.member.id})).status,200);
+assert.ifError((await storage.storage.from('client-service-files').download(retainedPath)).error);
+assert.equal((await request(`/rest/v1/aitask_members?id=eq.${confirmed.member.id}&select=id`)).length,0);
+const retainedComment=await request(`/rest/v1/aitask_entities?workspace_id=eq.${workspace}&entity_id=eq.retained-comment&select=data`);
+assert.equal(retainedComment[0].data.attachments[0].path,retainedPath);
+const removedLogin=await fetch(new URL('/auth/v1/token?grant_type=password',base),{method:'POST',headers:{apikey:secret,'Content-Type':'application/json'},body:JSON.stringify({email:handlerBody.email,password:handlerPassword})});
+assert.equal(removedLogin.ok,false);
+console.log('[account recovery] Racing finalization/cancellation stayed coherent; actual member removal disabled login and retained an owned saved Storage object and attachment reference.');

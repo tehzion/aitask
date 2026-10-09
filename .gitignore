@@ -40,3 +40,6 @@ skills-lock.json
 *.njsproj
 *.sln
 *.sw?
+
+# Generated verification artifacts are kept per frozen candidate.
+release-evidence

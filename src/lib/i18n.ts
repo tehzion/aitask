@@ -11,6 +11,14 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  'Upload recovery could not be loaded. Reconnect and try again.': '无法加载上传恢复。请重新连接后重试。',
+  "Enter the original temporary password for this request, or cancel it and start again. The new password has not been applied.": "请输入此请求的原临时密码，或取消后重新开始。新密码尚未应用。",
+  "Cancellation cleanup is pending. Retry cancellation before creating a replacement.": "取消清理尚未确认。创建新请求前请重试取消。",
+  "Onboarding could not be reserved. Resume the original request from Pending invitations, or cancel it before changing the request.": "无法预留此邀请。请从待完成的邀请中恢复原请求，或先取消再更改。",
+  "Unable to confirm invitation recovery. Retry when the backend is available.": "无法确认邀请恢复。后端可用时请重试。",
+  "Unable to load pending invitations. Retry when the backend is available.": "无法加载待完成的邀请。后端可用时请重试。",
+  "Unable to cancel this invitation for your account.": "无法为此账号取消该邀请。",
+
   'The pending project change is no longer available. Review your draft before saving again.': '待保存的项目更改已不存在，请检查草稿后再保存。',
   'The pending role is no longer available. Review your draft before saving again.': '待保存的角色已不可用。请检查草稿后再次保存。',
   'The pending member is no longer available. Review your draft before saving again.': '待保存的成员已不可用。请检查草稿后再次保存。',

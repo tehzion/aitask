@@ -5,7 +5,8 @@ if (!baseURL) throw new Error('STAGING_E2E_BASE_URL is required for authenticate
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'staging-release.spec.ts',
+  outputDir: process.env.AITASK_E2E_OUTPUT_DIR || 'test-results',
+  testMatch: ['staging-release.spec.ts','staging-account-recovery.spec.ts'],
   fullyParallel: false,
   workers: 1,
   retries: 1,
