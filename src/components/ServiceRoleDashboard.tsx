@@ -12,7 +12,7 @@ import { CountLabel, DataRow, ProgressBar, StatGroup, StatusChip, Surface } from
 import { formatLocalizedDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
 import { useLocalToday } from '../hooks/useLocalToday';
-import { getCurrentPlanCycle } from '../lib/dashboardData';
+import { getPlanDeliverySummary, getCompanyTaskActivity } from '../lib/dashboardData';
 
 type WorkspaceTask = ReturnType<typeof useStore.getState>['tasks'][number];
 
@@ -63,6 +63,27 @@ const TaskQueueContent = ({ title, tasks, empty }: { title: string; tasks: Works
   </Surface>
 };
 
+const CompanyTaskActivity = ({ activity }: { activity: ReturnType<typeof getCompanyTaskActivity> }) => {
+  const { t } = useI18n();
+  const renderHandler = (handler: typeof activity.handlers[number]) => <li key={handler.id} className="flex items-start justify-between gap-3">
+    <span className="min-w-0 break-words">{handler.name ? <span data-i18n-skip>{handler.name}</span> : t('Assigned member unavailable')}</span>
+    <span className="shrink-0">{handler.open} {t('open tasks')}</span>
+  </li>;
+  return <div className="mt-3 border-t border-line/60 pt-3 text-xs text-muted">
+    <p className="font-medium text-ink">{t('Tasks completed this month')}: <span className="calm-number">{activity.completedThisMonth}</span></p>
+    {activity.completionDateUnavailable > 0 && <p className="mt-1">{t('Completion date unavailable')}: {activity.completionDateUnavailable}</p>}
+    <p className="mt-2 font-medium text-ink">{t('Currently handled by')}</p>
+    <ul className="mt-1 space-y-1">{activity.handlers.slice(0, 3).map(renderHandler)}</ul>
+    {activity.handlers.length > 3 && <details className="mt-1">
+      <summary className="cursor-pointer py-2 font-medium text-accent">{t('Show more handlers')} ({activity.handlers.length - 3})</summary>
+      <ul className="space-y-1">{activity.handlers.slice(3).map(renderHandler)}</ul>
+    </details>}
+    {activity.unassignedOpen > 0 && <p className="mt-1">{t('Unassigned open tasks')}: {activity.unassignedOpen}</p>}
+    {activity.handlers.length === 0 && activity.unassignedOpen === 0 && <p className="mt-1">{t('No open company tasks')}</p>}
+    <p className="mt-2">{t('Company-wide task activity; separate from plan delivery progress.')}</p>
+  </div>;
+};
+
 const ServiceRoleDashboard = () => {
   const store = useStore();
   const { locale, t } = useI18n();
@@ -103,23 +124,14 @@ const ServiceRoleDashboard = () => {
     delivered: delivered.filter(item => serviceTasks.some(task => task.assignedTo === user.id && task.deliverableId === item.id)).length,
   }));
   const activeCompanies = React.useMemo(() => activePlans.map(plan => {
-    const currentCycle = getCurrentPlanCycle(plan, store.serviceCycles, now);
-    const cycleDeliverables = currentCycle
-      ? store.deliverables.filter(item => item.cycleId === currentCycle.id)
-      : [];
-    const count = (status: string) => cycleDeliverables.filter(item => item.status === status).length;
     return {
       clientId: plan.clientId,
       clientName: plan.clientName,
       plan,
-      currentCycle,
-      total: cycleDeliverables.length,
-      delivered: count('Delivered'),
-      ready: count('Ready'),
-      inProgress: count('In Progress'),
-      planned: count('Planned'),
+      ...getPlanDeliverySummary(plan, store.serviceCycles, store.deliverables, visibleTasks, now),
+      taskActivity: getCompanyTaskActivity(plan.clientId, visibleTasks, store.users, now),
     };
-  }), [activePlans, store.deliverables, store.serviceCycles, now]);
+  }), [activePlans, store.deliverables, store.serviceCycles, visibleTasks, store.users, now]);
 
   if (persona === 'client') return null;
 
@@ -156,12 +168,13 @@ const ServiceRoleDashboard = () => {
       </div>
       <div className="divide-y divide-line/60">
         {activeCompanies.map(item => (
-          <div key={item.clientId} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
+          <div key={item.plan.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
             <div className="min-w-0">
               <Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="truncate text-sm font-semibold text-ink hover:text-accent">{item.clientName}</Link>
-              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t('No published cycle for this month')}</>}</p>
+              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t(item.draftCycle ? 'Current cycle not published' : 'No published cycle covering today')}</>}</p>
             </div>
             <div className="min-w-0">
+              {item.currentCycle && item.total > 0 ? <>
               <ProgressBar className="mb-1.5" label={`${t('Deliverables')} ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />
               <div className="flex flex-wrap gap-1.5 text-[11px] text-muted">
                 <StatusChip tone="emerald">{item.delivered} {t('Delivered')}</StatusChip>
@@ -169,6 +182,13 @@ const ServiceRoleDashboard = () => {
                 <StatusChip tone="indigo">{item.inProgress} {t('In Progress')}</StatusChip>
                 <StatusChip tone="slate">{item.planned} {t('Planned')}</StatusChip>
               </div>
+              </> : <StatusChip tone="slate">{t(item.draftCycle
+                ? 'Awaiting publication'
+                : item.currentCycle ? 'No deliverables in this cycle' : 'No current published cycle')}</StatusChip>}
+              <CompanyTaskActivity activity={item.taskActivity} />
+              {item.currentCycle && item.total > 0 && <p className="mt-2 text-xs text-muted">
+                {t('Progress counts confirmed deliveries, not completed tasks.')}
+              </p>}
             </div>
           </div>
         ))}
@@ -188,12 +208,13 @@ const ServiceRoleDashboard = () => {
       </div>
       <div className="divide-y divide-line/60">
         {activeCompanies.map(item => (
-          <div key={item.clientId} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
+          <div key={item.plan.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
             <div className="min-w-0">
               <Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="truncate text-sm font-semibold text-ink hover:text-accent">{item.clientName}</Link>
-              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t('No published cycle for this month')}</>}</p>
+              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t(item.draftCycle ? 'Current cycle not published' : 'No published cycle covering today')}</>}</p>
             </div>
             <div className="min-w-0">
+              {item.currentCycle && item.total > 0 ? <>
               <ProgressBar className="mb-1.5" label={`${t('Deliverables')} ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />
               <div className="flex flex-wrap gap-1.5 text-[11px] text-muted">
                 <StatusChip tone="emerald">{item.delivered} {t('Delivered')}</StatusChip>
@@ -201,6 +222,13 @@ const ServiceRoleDashboard = () => {
                 <StatusChip tone="indigo">{item.inProgress} {t('In Progress')}</StatusChip>
                 <StatusChip tone="slate">{item.planned} {t('Planned')}</StatusChip>
               </div>
+              </> : <StatusChip tone="slate">{t(item.draftCycle
+                ? 'Awaiting publication'
+                : item.currentCycle ? 'No deliverables in this cycle' : 'No current published cycle')}</StatusChip>}
+              <CompanyTaskActivity activity={item.taskActivity} />
+              {item.currentCycle && item.total > 0 && <p className="mt-2 text-xs text-muted">
+                {t('Progress counts confirmed deliveries, not completed tasks.')}
+              </p>}
             </div>
           </div>
         ))}
