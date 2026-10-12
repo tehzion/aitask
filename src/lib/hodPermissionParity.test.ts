@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canAccessPath, canAssignTasksToOthers, canDeleteClientProfile, canEditTask, canOpenServiceClient, canLinkTaskToProject, defaultRolePermissions, getEffectivePermissions, getTaskAccess } from './access';
-import type { Project, Task, User } from '../types';
+import type { CustomRole, Project, Task, User } from '../types';
 
 const hod: User = { id: 'hod', name: 'HOD', role: 'HOD', department: 'Video Shooting', departments: ['Video Shooting', 'Video Editor'] };
 const task = (values: Partial<Task> = {}) => ({ id: 'task', clientName: 'Visible Co', department: 'Video Editor', createdBy: 'pm', assignedTo: 'editor', ...values } as Task);
@@ -8,7 +8,7 @@ const task = (values: Partial<Task> = {}) => ({ id: 'task', clientName: 'Visible
 describe('HOD permission parity', () => {
   it.each(['Editor', 'video-editor', 'video editing', 'editing'])('recognizes the legacy department %s without granting delegation of somebody else’s task', department => {
     const work = task({ department: department as Task['department'] });
-    expect(getTaskAccess(hod, work)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: false });
+    expect(getTaskAccess(hod, work)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: false, canAssign: false });
   });
   it('separates department oversight from assignment authority', () => {
     expect(canAssignTasksToOthers(hod, [], task())).toBe(false);
@@ -16,6 +16,20 @@ describe('HOD permission parity', () => {
     expect(canAssignTasksToOthers(hod, [], task({ createdBy: hod.id }))).toBe(true);
     expect(canAssignTasksToOthers({ ...hod, permissions: { ...defaultRolePermissions.HOD, manageCreatedTasks: false } }, [], task({ assignedTo: hod.id }))).toBe(false);
     expect(canEditTask(hod, task({ department: 'Designer' }))).toBe(false);
+  });
+  it('requires delegation authority for deletion without revoking department edits', () => {
+    expect(getTaskAccess(hod, task())).toMatchObject({ canEdit: true, canDelete: false });
+    expect(getTaskAccess(hod, task({ assignedTo: hod.id }))).toMatchObject({ canDelete: true });
+    expect(getTaskAccess(hod, task({ createdBy: hod.id }))).toMatchObject({ canDelete: true });
+    const revoked = { ...hod, permissions: { ...defaultRolePermissions.HOD, manageCreatedTasks: false } };
+    expect(getTaskAccess(revoked, task({ assignedTo: hod.id }))).toMatchObject({ canEdit: true, canDelete: false });
+    expect(getTaskAccess(hod, task({ department: 'Designer', assignedTo: hod.id }))).toMatchObject({ canEdit: true, canDelete: false });
+  });
+  it('applies the destructive boundary to department-scoped Staff custom roles', () => {
+    const role: CustomRole = { id: 'department-lead', name: 'Department lead', baseRole: 'Staff', departmentScoped: true, permissions: { ...defaultRolePermissions.Staff, manageCreatedTasks: true }, createdAt: '', updatedAt: '' };
+    const lead: User = { ...hod, role: 'Staff', customRoleId: role.id };
+    expect(getTaskAccess(lead, task(), [role])).toMatchObject({ canEdit: true, canDelete: false });
+    expect(getTaskAccess(lead, task({ assignedTo: lead.id }), [role])).toMatchObject({ canDelete: true });
   });
   it('does not expose service records just because a task is in the HOD department', () => {
     expect(canOpenServiceClient(hod, 'Visible Co', [task()])).toBe(false);

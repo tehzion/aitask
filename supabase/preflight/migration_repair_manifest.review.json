@@ -664,7 +664,10 @@
     "20261002101435_universal_notification_audience_guard",
     "20261007173905_reliable_member_onboarding",
     "20261012162419_client_portal_review_privacy",
-    "20261012164407_delivery_link_derivation"
+    "20261012164407_delivery_link_derivation",
+    "20261012165347_hod_task_deletion_authority"
   ],
-  "pendingProductionMigrations": []
+  "pendingProductionMigrations": [
+    "20261012165347_hod_task_deletion_authority"
+  ]
 }

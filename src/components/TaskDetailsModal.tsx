@@ -218,6 +218,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   if (!taskAccess.canView) return null;
   const pendingResolution = isPendingMutationResolution(backend);
   const canEditTask = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canEdit;
+  const canDeleteTask = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canDelete;
   const canAddComment = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canComment;
   const canClientReview = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canView && canReviewTaskAsClient(currentUser, task, rolePermissions);
   const isClientTaskViewer = currentUser?.role === 'Client';
@@ -485,7 +486,6 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {canEditTask && (
-              <>
                 <button
                   type="button"
                   disabled={isSubmitting}
@@ -498,6 +498,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 >
                   <Pencil className="h-3.5 w-3.5" /> {t(isEditingDetails ? 'Cancel Edit' : 'Edit')}
                 </button>
+            )}
+            {canDeleteTask && (
                 <button
                   type="button"
                   onClick={handleDeleteTask}
@@ -506,7 +508,6 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 >
                   <Trash2 className="h-3.5 w-3.5" /> {t('Delete')}
                 </button>
-              </>
             )}
             <button onClick={requestClose} aria-label={t('task.closeDetails', { title: task.title })} title={t('common.close')} className="inline-flex h-11 w-11 items-center justify-center rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
               <X className="w-5 h-5" />
