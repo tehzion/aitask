@@ -74,6 +74,7 @@ import {
   canManageClientPlans,
   canManageServiceCatalog,
   canManageServiceCycles,
+  hasPermission,
   canManageTaskTemplates,
   canViewServicePrices,
   canViewAllClients,
@@ -4303,9 +4304,10 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const task = state.tasks.find(item => item.id === taskId);
-        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
+        if (!hasPermission(state.currentUser, 'editTasks', state.rolePermissions) || !task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
         const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
         if (deliverableId && (!deliverable || deliverable.cycleId !== cycleId || deliverable.clientId !== task.clientId)) return { ok: false, error: 'The task and deliverable must belong to the same client and cycle.' };
+        if (deliverableId && ((task.deliverableId && task.deliverableId !== deliverableId) || state.deliverables.some(item => item.id !== deliverableId && item.taskIds.includes(taskId)))) return { ok: false, error: 'This task is already linked to another deliverable.' };
         const now = new Date().toISOString();
         set(current => {
           const tasks = current.tasks.map(item => item.id === taskId ? { ...item, serviceCycleId: cycleId, deliverableId, updatedAt: now } : item);

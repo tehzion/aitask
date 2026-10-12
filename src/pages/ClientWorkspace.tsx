@@ -1,3 +1,5 @@
+import DeliveryReviewPanel from '../components/DeliveryReviewPanel';
+import { DeliveryProgress } from '../components/DeliveryProgress';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
@@ -19,7 +21,7 @@ import {
   StopCircle,
   X,
 } from "lucide-react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useStore } from "../store";
 import type {
   AddonBillingMode,
@@ -32,7 +34,6 @@ import {
   Button,
   EmptyState,
   PageHeader,
-  ProgressBar,
   SegmentedTabs,
   StatusChip,
   Surface,
@@ -52,6 +53,7 @@ import {
   canOpenServiceClient,
   canViewServicePrices,
   hasPermission,
+  getVisibleTasks,
 } from "../lib/access";
 import { SECURE_WORKSPACE_ID } from "../lib/secureWorkspace";
 import { useI18n } from "../components/I18nProvider";
@@ -100,8 +102,10 @@ const OperationsClientWorkspace = () => {
   const today = useLocalToday();
   const { clientId = "" } = useParams();
   const store = useStore();
+  const [searchParams] = useSearchParams();
   const client = store.clients.find((item) => item.id === clientId);
-  const [tab, setTab] = React.useState<Tab>("overview");
+  const [tab, setTab] = React.useState<Tab>(searchParams.get("tab") === "cycles" ? "cycles" : "overview");
+  React.useEffect(() => { if (searchParams.get("tab") === "cycles") setTab("cycles"); }, [searchParams]);
   const [planModalOpen, setPlanModalOpen] = React.useState(false);
   const [planDatesOpen, setPlanDatesOpen] = React.useState(false);
   const [comment, setComment] = React.useState("");
@@ -224,7 +228,7 @@ const OperationsClientWorkspace = () => {
       (!isClient || item.visibility === "client-visible"),
   );
   const addons = store.addons.filter((item) => item.clientId === client.id);
-  const tasks = store.tasks.filter(
+  const tasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }).filter(
     (item) =>
       item.clientId === client.id &&
       (!isClient || item.visibility !== "internal"),
@@ -238,7 +242,7 @@ const OperationsClientWorkspace = () => {
       )
     : null;
   const currentCycle = activePlan
-    ? getCurrentPlanCycle(activePlan, cycles, today, { includeDraft: !isClient })
+    ? getCurrentPlanCycle(activePlan, cycles, today)
     : undefined;
   const currentCycleDeliverables = currentCycle
     ? deliverables.filter((item) => item.cycleId === currentCycle.id)
@@ -246,9 +250,7 @@ const OperationsClientWorkspace = () => {
   const currentDelivered = currentCycleDeliverables.filter(
     (item) => item.status === "Delivered",
   ).length;
-  const currentProgress = currentCycleDeliverables.length
-    ? Math.round((currentDelivered / currentCycleDeliverables.length) * 100)
-    : 0;
+
 
   const saveAndCommit = async (
     result: { ok: boolean; error?: string },
@@ -498,14 +500,9 @@ const OperationsClientWorkspace = () => {
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-overview`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-overview`} tabIndex={0} className="grid scroll-mt-36 gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
           <Surface variant="inset" className="border-l-2 border-accent p-6 sm:p-8">
             <p className="calm-eyebrow">{t('Delivery progress')}</p>
-            <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-              <div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{currentProgress}%</p><p className="mt-2 text-sm text-muted">{currentCycle ? <>{currentDelivered}/{currentCycleDeliverables.length} {t('deliverables completed')}</> : t('No published cycle for this month')}</p></div>
-              {currentCycle && <StatusChip tone={currentCycle.status === "Completed" || currentCycle.status === "Published" ? "emerald" : "slate"}>{currentCycle.status}</StatusChip>}
-            </div>
-            <ProgressBar className="mt-7" value={currentDelivered} max={Math.max(currentCycleDeliverables.length, 1)} label={t('Current cycle')} />
-            <div className="mt-7 grid grid-cols-3 border-t border-line/70">
-              {[["Included", currentCycleDeliverables.length], ["Completed", currentDelivered], ["Remaining", currentCycleDeliverables.length - currentDelivered]].map(([label, value]) => <div key={label} className="p-4"><p className="calm-number text-2xl font-semibold text-ink">{value}</p><p className="mt-1 text-xs text-muted">{t(String(label))}</p></div>)}
-            </div>
+            <DeliveryProgress published={Boolean(currentCycle)} total={currentCycleDeliverables.length} delivered={currentDelivered}
+              draft={!isClient && allCycles.some(item => item.status === 'Draft' && parseOptionalDate(item.periodStart) && parseOptionalDate(item.periodEnd) && parseOptionalDate(item.periodStart)! <= today && today <= parseOptionalDate(item.periodEnd)!)} />
+            {!isClient && <DeliveryReviewPanel clientId={client.id} includeOpenTasks />}
           </Surface>
           <Surface className="p-6">
             <p className="calm-eyebrow">{t('Plan details')}</p>
@@ -665,7 +662,7 @@ const OperationsClientWorkspace = () => {
             const completedTotal = progress.reduce((sum, item) => sum + item.completed, 0);
             return (
               <section
-                key={cycle.id}
+                key={cycle.id} id={`cycle-${cycle.id}`}
                 className={cn(cardBase, "overflow-hidden")}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
@@ -705,18 +702,14 @@ const OperationsClientWorkspace = () => {
                   </div>
                 </div>
                 <div className="border-b border-line bg-inset/70 px-5 py-5">
-                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-                    <ProgressBar value={completedTotal} max={Math.max(includedTotal, 1)} label={`${completedTotal}/${includedTotal} ${t('deliverables completed')}`} />
-                    <div className="grid grid-cols-3 gap-6 text-right">
-                      {[["Included", includedTotal], ["Completed", completedTotal], ["Remaining", Math.max(0, includedTotal - completedTotal)]].map(([label, value]) => <span key={label}><strong className="calm-number block text-lg text-ink">{value}</strong><small className="text-muted">{t(String(label))}</small></span>)}
-                    </div>
-                  </div>
-                  {progress.length > 1 && <p className="mt-4 text-xs text-muted">{progress.map((item) => `${item.name} ${item.completed}/${item.included}`).join(" · ")}</p>}
+                  <DeliveryProgress published={cycle.status === 'Published' || cycle.status === 'Completed'} total={includedTotal} delivered={completedTotal} draft={cycle.status === 'Draft'} />
+                  {cycle.status === 'Draft' && <p className="mt-2 text-sm text-muted">{t('Planned deliverables')}: {includedTotal}</p>}
+                  {progress.length > 1 && <p className="mt-4 text-xs text-muted">{progress.map((item) => item.name).join(" · ")}</p>}
                 </div>
                 <div className="divide-y divide-line/70">
                   {cycleDeliverables.map((deliverable) => {
                     const linkedTasks = tasks
-                      .filter((task) => deliverable.taskIds.includes(task.id))
+                      .filter((task) => task.deliverableId === deliverable.id || deliverable.taskIds.includes(task.id))
                       .sort(
                         (a, b) =>
                           (a.workflowStepOrder || 0) -
@@ -831,38 +824,7 @@ const OperationsClientWorkspace = () => {
                                   }{" "}{t("tasks")}
                                 </Button>
                               )}
-                            {canLinkTasks && (
-                            <select
-                              className={cn(
-                                inputBase,
-                                "min-w-44 flex-1 px-3 py-2",
-                              )}
-                              value=""
-                              onChange={(e) =>
-                                void saveAndCommit(
-                                  store.linkTaskToDeliverable(
-                                    e.target.value,
-                                    cycle.id,
-                                    deliverable.id,
-                                  ),
-                                  "deliverable.manage",
-                                )
-                              }
-                            >
-                              <option value="">{t("Link a task...")}</option>
-                              {tasks
-                                .filter(
-                                  (task) =>
-                                    !task.deliverableId ||
-                                    task.deliverableId === deliverable.id,
-                                )
-                                .map((task) => (
-                                  <option key={task.id} value={task.id} data-i18n-skip>
-                                    {task.title}
-                                  </option>
-                                ))}
-                            </select>
-                            )}
+                            {canLinkTasks && <Button variant="secondary" onClick={() => setTab('overview')}>{t('Review task links')}</Button>}
                             <Button
                               variant="secondary"
                               onClick={() =>
@@ -1027,7 +989,7 @@ const OperationsClientWorkspace = () => {
           </div>
           <label className="block text-sm font-medium text-ink">{t("Billing mode")}<select className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.billingMode} onChange={(e) => setAddon({ ...addon, billingMode: e.target.value as AddonBillingMode })}><option value="one_off">{t("One-off")}</option><option value="monthly">{t("Monthly")}</option></select></label>
           {addon.billingMode === "one_off" ? (
-            <label className="block text-sm font-medium text-ink">{t("Service cycle")}<select className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.targetCycleId} onChange={(e) => setAddon({ ...addon, targetCycleId: e.target.value })}><option value="">{t("Choose cycle")}</option>{allCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.periodStart}</option>)}</select></label>
+            <label className="block text-sm font-medium text-ink">{t("Service cycle")}<select className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.targetCycleId} onChange={(e) => setAddon({ ...addon, targetCycleId: e.target.value })}><option value="">{t("Choose cycle")}</option>{allCycles.map((cycle) => <option key={cycle.id} id={`cycle-${cycle.id}`} value={cycle.id}>{cycle.periodStart}</option>)}</select></label>
           ) : (
             <label className="block text-sm font-medium text-ink">{t("Effective from")}<input type="date" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.effectiveFrom} onChange={(e) => setAddon({ ...addon, effectiveFrom: e.target.value })} /></label>
           )}

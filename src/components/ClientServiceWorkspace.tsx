@@ -1,3 +1,4 @@
+import { DeliveryProgress } from './DeliveryProgress';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getCurrentPlanCycle } from '../lib/dashboardData';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
@@ -11,7 +12,7 @@ import { getLocalizedDeliveryStage } from '../lib/localeLabels';
 import { formatLocalizedDate, formatLocalizedMonth } from '../lib/i18n';
 import { downloadServiceFile } from '../lib/serviceFiles';
 import { parseOptionalDate } from '../lib/utils';
-import { EmptyState, PageHeader, ProgressBar, SegmentedTabs, StatusChip, Surface } from './ui';
+import { EmptyState, PageHeader, SegmentedTabs, StatusChip, Surface } from './ui';
 import { pageShell } from './uiTokens';
 import { useI18n } from './I18nProvider';
 
@@ -66,7 +67,6 @@ const ClientServiceWorkspace = () => {
   const deliverables = store.deliverables.filter(item => item.clientId === client.id);
   const currentDeliverables = currentCycle ? deliverables.filter(item => item.cycleId === currentCycle.id) : [];
   const deliveredCount = currentDeliverables.filter(item => item.status === 'Delivered').length;
-  const cycleCompletion = currentDeliverables.length ? Math.round((deliveredCount / currentDeliverables.length) * 100) : 0;
   const contractEndDate = parseOptionalDate(activePlan?.contractEndDate);
   const tasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions).filter(task => task.clientName.trim().toLowerCase() === client.clientName.trim().toLowerCase());
   const taskGroups = groupClientDeliveries(tasks, today);
@@ -80,13 +80,12 @@ const ClientServiceWorkspace = () => {
     { id: 'activity' as const, label: t('Files & updates'), compactLabel: t('Updates') },
     { id: 'services' as const, label: t('Services') },
   ];
-  const taskForDeliverable = (deliverable: { primaryTaskId?: string; taskIds?: string[] }) => {
+  const taskForDeliverable = (deliverable: { id: string; primaryTaskId?: string; taskIds?: string[] }) => {
     const byPrimary = deliverable.primaryTaskId ? tasks.find(task => task.id === deliverable.primaryTaskId) : undefined;
     if (byPrimary) return byPrimary;
     const ids = deliverable.taskIds || [];
-    if (ids.length === 0) return undefined;
     return tasks
-      .filter(task => ids.includes(task.id))
+      .filter(task => task.deliverableId === deliverable.id || ids.includes(task.id))
       .sort((left, right) => (right.workflowStepOrder || 0) - (left.workflowStepOrder || 0))[0];
   };
 
@@ -124,9 +123,7 @@ const ClientServiceWorkspace = () => {
         <div id={`${TABS_ID}-panel-overview`} role="tabpanel" aria-labelledby={`${TABS_ID}-tab-overview`} tabIndex={0} className="grid scroll-mt-36 gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,.75fr)]">
           <Surface variant="inset" className="p-6 sm:p-8">
             <p className="calm-eyebrow">{t('Delivery progress')}</p>
-            <div className="mt-5 flex flex-wrap items-end justify-between gap-4"><div><p className="calm-number text-5xl font-semibold tracking-tight text-ink">{cycleCompletion}%</p><p className="mt-2 text-sm text-muted">{currentDeliverables.length ? t('clientPortal.deliveredThisCycle', { delivered: deliveredCount, total: currentDeliverables.length }) : currentCycle ? t('No published deliverables yet') : t('No published cycle for this month')}</p></div>{currentCycle && <StatusChip tone="emerald">{t(currentCycle.status)}</StatusChip>}</div>
-            <ProgressBar className="mt-7" value={deliveredCount} max={Math.max(currentDeliverables.length, 1)} label={t('Current cycle')} />
-            <div className="mt-7 grid grid-cols-3 overflow-hidden rounded-control bg-surface ring-1 ring-line/70">{[[t('Included'), currentDeliverables.length], [t('Delivered'), deliveredCount], [t('Remaining'), Math.max(0, currentDeliverables.length - deliveredCount)]].map(([label, value]) => <div key={label} className="border-r border-line/70 p-4 last:border-r-0"><p className="calm-number text-xl font-semibold text-ink">{value}</p><p className="mt-1 text-xs text-muted">{label}</p></div>)}</div>
+          <DeliveryProgress published={Boolean(currentCycle)} total={currentDeliverables.length} delivered={deliveredCount} draft={Boolean(activePlan)} />
           </Surface>
           <Surface className="p-6">
             <p className="calm-eyebrow">{t('What needs attention')}</p>

@@ -1,3 +1,4 @@
+import DeliveryReviewPanel from './DeliveryReviewPanel';
 import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileCheck2, UsersRound, WalletCards } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -141,7 +142,8 @@ const ServiceRoleDashboard = () => {
       <WorkbenchHeader id="production-workbench-title" title={t('Assigned production work')} description={t('Deadlines, revisions, review queues, and completed output.')} />
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label={t('My open tasks')} value={open.length} icon={Clock3} detail={t('Only tasks assigned to you are included.')} /><StatGroup className="grid-cols-3"><CompactStat label={t('Overdue')} value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label={t('Revisions')} value={revisions.length} icon={FileCheck2} tone="warning" /><CompactStat label={t('Completed')} value={completed.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
       <div className="grid gap-4 xl:grid-cols-[1.25fr_1fr]"><TaskQueue title={t('Deadline')} tasks={[...open].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty={t('No assigned deadlines.')} /><TaskQueue title={t('Revision / internal review')} tasks={[...revisions, ...waitingInternal.filter(task => !revisions.some(item => item.id === task.id))]} empty={t('No revision or review work.')} /></div>
-    </section>;
+      <DeliveryReviewPanel />
+  </section>;
   }
 
   if (persona === 'operation') return <section className="space-y-5" aria-labelledby="operation-workbench-title">
@@ -149,12 +151,14 @@ const ServiceRoleDashboard = () => {
     <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label={t('Due today')} value={dueToday.length} icon={Clock3} detail={<>{overdue.length} {t('overdue tasks require attention.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label={t('Overdue')} value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label={t('Internal review')} value={waitingInternal.length} icon={FileCheck2} tone="warning" /><CompactStat label={t('Client approval')} value={waitingClient.length} icon={UsersRound} /></StatGroup></div>
     <div className="grid gap-4 xl:grid-cols-3"><TaskQueue title={t('Urgent today')} tasks={[...overdue, ...dueToday]} empty={t('No urgent production work.')} /><TaskQueue title={t('Internal review')} tasks={waitingInternal} empty={t('The internal review queue is clear.')} /><TaskQueue title={t('Client approval')} tasks={waitingClient} empty={t('No client approval is waiting.')} /></div>
     <Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Team handoffs')}</h3><p className="mt-1 text-sm text-muted">{t('Open work and delivered output by person.')}</p></div><div className="grid divide-y divide-line/60 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">{workers.slice(0, 4).map(item => <div key={item.user.id} className="p-4"><p data-i18n-skip className="font-semibold text-ink">{item.user.name}</p><p className="mt-1 text-xs text-muted">{item.open} {t('open')} · {item.completed} {t('completed')}</p><ProgressBar className="mt-4" label={t('Delivered output')} value={item.delivered} max={Math.max(1, item.completed)} /></div>)}</div></Surface>
+    <DeliveryReviewPanel />
   </section>;
 
   if (persona === 'account') return <section className="space-y-5" aria-labelledby="account-workbench-title">
     <WorkbenchHeader id="account-workbench-title" title={t('Accounts')} description={t('Client plans, renewals, commercial records, and delivery output.')} />
     <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label={t('Monthly management value')} value={canSeePrices ? formatMoney(contractedMonthly, 'MYR', locale) : t('Restricted')} icon={WalletCards} detail={<>{activePlans.length} {t(activePlans.length === 1 ? 'active client package.' : 'active client packages.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label={t('Active packages')} value={activePlans.length} icon={UsersRound} /><CompactStat label={t('Contract reminders')} value={renewalPlans.length} icon={CalendarDays} tone="warning" /><CompactStat label={t('Delivered outputs')} value={delivered.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
     <div className="grid gap-4 xl:grid-cols-2"><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Plans and renewals')}</h3></div><div className="divide-y divide-line/60">{activePlans.map(plan => { const contractEnd = parseOptionalDate(plan.contractEndDate); return <DataRow key={plan.id} titleI18nSkip={false} descriptionI18nSkip={false} title={<Link to={`/clients/${encodeURIComponent(plan.clientId)}`} className="hover:text-accent"><span data-i18n-skip>{plan.clientName}</span></Link>} description={<><span data-i18n-skip>{plan.name}</span> · {t('renewal')} {contractEnd ? formatLocalizedDate(contractEnd, locale) : t('not set')}</>} action={canSeePrices ? <span className="calm-number text-sm font-semibold text-ink">{formatMoney(store.servicePricingSnapshots.find(item => item.parentId === plan.id)?.totalMinor || 0, 'MYR', locale)}</span> : undefined} />; })}</div></Surface><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Delivery output by worker')}</h3></div><div className="divide-y divide-line/60">{workers.map(item => <DataRow key={item.user.id} titleI18nSkip={false} descriptionI18nSkip={false} title={<span data-i18n-skip>{item.user.name}</span>} description={<span data-i18n-skip>{item.user.workerType || t('employee')}</span>} action={<span className="calm-number text-xs text-muted">{item.completed} {t('tasks')} · {item.delivered} {t('delivered')}</span>} />)}</div></Surface></div>
+    <DeliveryReviewPanel />
   </section>;
 
   if (persona === 'projectManager') return <section className="space-y-5" aria-labelledby="portfolio-workbench-title">
@@ -196,6 +200,7 @@ const ServiceRoleDashboard = () => {
       </div>
     </Surface>
     <Surface variant="inset" className="flex flex-wrap items-center justify-between gap-3 p-5"><div><p className="calm-eyebrow">{t('Commercial summary')}</p><p className="mt-1 text-sm text-muted">{t('Active plan value in your visible portfolio.')}</p></div><p className="calm-number text-2xl font-semibold text-ink">{formatMoney(contractedMonthly, 'MYR', locale)}</p></Surface>
+    <DeliveryReviewPanel />
   </section>;
 
   return <section className="space-y-5" aria-labelledby="management-workbench-title">
@@ -235,6 +240,7 @@ const ServiceRoleDashboard = () => {
         {activeCompanies.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">{t('No active companies yet.')}</p>}
       </div>
     </Surface>
+    <DeliveryReviewPanel />
   </section>;
 };
 

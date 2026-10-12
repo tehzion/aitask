@@ -1,3 +1,4 @@
+import { DeliveryProgress } from './DeliveryProgress';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getCurrentPlanCycle } from '../lib/dashboardData';
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, FileCheck2, MessageSquareText, TimerReset } from 'lucide-react';
@@ -12,10 +13,10 @@ import {
   groupClientDeliveries,
 } from '../lib/clientPortal';
 import { formatLocalizedDate, formatLocalizedDistanceToNow, type AppLocale } from '../lib/i18n';
-import { getLocalizedDeliveryStage, getLocalizedStatus } from '../lib/localeLabels';
+import { getLocalizedDeliveryStage } from '../lib/localeLabels';
 import { parseOptionalDate } from '../lib/utils';
 import { useStore } from '../store';
-import { ProgressBar, StatusChip, Surface } from './ui';
+import { StatusChip, Surface } from './ui';
 import { useI18n } from './I18nProvider';
 
 interface ClientPortalDashboardProps {
@@ -52,7 +53,6 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
   const currentCycle = activePlan ? getCurrentPlanCycle(activePlan, serviceCycles, today) : undefined;
   const cycleDeliverables = currentCycle ? deliverables.filter(item => item.cycleId === currentCycle.id) : [];
   const deliveredCount = cycleDeliverables.filter(item => item.status === 'Delivered').length;
-  const cycleCompletion = cycleDeliverables.length ? Math.round((deliveredCount / cycleDeliverables.length) * 100) : 0;
   const groups = groupClientDeliveries(tasks, today);
   const focusTask = getClientFocusTask(tasks, today);
   const focusStage = focusTask ? getClientDeliveryStage(focusTask) : null;
@@ -130,11 +130,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
 
         <Surface className="p-6">
           <p className="calm-eyebrow">{t('clientPortal.deliveryProgress')}</p>
-          <div className="mt-5 flex items-end justify-between gap-4">
-            <div><p className="calm-number text-4xl font-semibold tracking-tight text-ink">{cycleCompletion}%</p><p className="mt-2 text-sm text-muted">{cycleDeliverables.length ? t('clientPortal.deliveredThisCycle', { delivered: deliveredCount, total: cycleDeliverables.length }) : currentCycle ? t('clientPortal.noPublishedDeliverables') : t('No published cycle for this month')}</p></div>
-            {currentCycle && <StatusChip tone="emerald">{getLocalizedStatus(currentCycle.status, locale)}</StatusChip>}
-          </div>
-          <ProgressBar className="mt-6" value={deliveredCount} max={Math.max(cycleDeliverables.length, 1)} label={t('clientPortal.deliveryProgress')} />
+          <DeliveryProgress published={Boolean(currentCycle)} total={cycleDeliverables.length} delivered={deliveredCount} draft={Boolean(activePlan)} />
           {client && activePlan && (
             <Link to={`/clients/${encodeURIComponent(client.id)}`} className="mt-6 inline-flex min-h-11 w-full items-center justify-between rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
               <span data-i18n-skip>{activePlan.name}</span><ArrowRight className="h-4 w-4 text-accent" />

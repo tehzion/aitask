@@ -83,3 +83,20 @@ export const getCompanyTaskActivity = (
     .sort((a, b) => b.open - a.open || (a.name || '').localeCompare(b.name || '') || a.id.localeCompare(b.id));
   return { completedThisMonth, completionDateUnavailable, unassignedOpen, handlers };
 };
+
+export const isTaskLinkedToDeliverable = (task: Pick<Task, 'id' | 'deliverableId'>, deliverables: readonly Deliverable[]) =>
+  Boolean(task.deliverableId || deliverables.some(item => item.taskIds.includes(task.id)));
+
+export const getDeliveryReviewRecords = (
+  visibleTasks: readonly Task[], cycles: readonly ServiceCycle[], deliverables: readonly Deliverable[], today: Date,
+) => {
+  const day = startOfDay(today);
+  return {
+    unlinkedTasks: visibleTasks.filter(task => isTaskCompleted(task) && task.clientId && !isTaskLinkedToDeliverable(task, deliverables)),
+    draftCycles: cycles.filter(cycle => {
+      const start = parseOptionalDate(cycle.periodStart);
+      const end = parseOptionalDate(cycle.periodEnd);
+      return cycle.status === 'Draft' && Boolean(start && end && startOfDay(start) <= day && day <= startOfDay(end));
+    }),
+  };
+};

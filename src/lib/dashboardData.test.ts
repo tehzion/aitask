@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ServiceCycle, Deliverable, Task } from '../types';
-import { getContractDaysRemaining, getCurrentPlanCycle, getPlanDeliverySummary, getCompanyTaskActivity } from './dashboardData';
+import { getContractDaysRemaining, getCurrentPlanCycle, getPlanDeliverySummary, getCompanyTaskActivity, getDeliveryReviewRecords } from './dashboardData';
 
 const now = new Date(2026, 9, 7, 14);
 const plan = { id: 'active-plan', clientId: 'client-1' };
@@ -149,5 +149,26 @@ describe('company task activity', () => {
     const members = ['a', 'b', 'c', 'd'].map(id => ({ id, name: id.toUpperCase() }));
     expect(getCompanyTaskActivity(plan.clientId, tasks, members, now).handlers.map(item => item.name))
       .toEqual(['A', 'B', 'C', 'D']);
+  });
+});
+
+
+describe('delivery records needing review', () => {
+  it('recognizes forward and reverse task links and only reviews visible completed tasks', () => {
+    const tasks = [
+      { id: 'unlinked', clientId: plan.clientId, status: 'Completed' },
+      { id: 'forward', clientId: plan.clientId, status: 'Completed', deliverableId: 'd' },
+      { id: 'reverse', clientId: plan.clientId, isCompleted: true },
+      { id: 'open', clientId: plan.clientId, status: 'Pending' },
+    ] as Task[];
+    const deliverables = [{ id: 'd', taskIds: ['reverse'] }] as Deliverable[];
+    expect(getDeliveryReviewRecords(tasks, [], deliverables, now).unlinkedTasks.map(t => t.id)).toEqual(['unlinked']);
+  });
+  it('reviews only drafts covering today, excluding expired, future, cancelled and malformed cycles', () => {
+    const cycles = [cycle({ id: 'current', status: 'Draft' }),
+      cycle({ status: 'Draft', periodEnd: '2026-09-30' }),
+      cycle({ status: 'Draft', periodStart: '2026-11-01' }),
+      cycle({ status: 'Cancelled' }), cycle({ status: 'Draft', periodStart: 'bad' })];
+    expect(getDeliveryReviewRecords([], cycles, [], now).draftCycles.map(c => c.id)).toEqual(['current']);
   });
 });
