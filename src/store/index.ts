@@ -3324,6 +3324,7 @@ export const useStore = create<StoreState>()(
           );
           if (!assignableProjectIds.has(taskData.projectId)) return '';
         }
+        if (taskData.deliverableId && state.deliverables.some(item => item.id === taskData.deliverableId && item.status === 'Delivered')) return '';
         if (['Staff', 'HOD'].includes(currentUser.role) && !project) {
           const serviceDeliverable = taskData.deliverableId
             ? state.deliverables.find(item => item.id === taskData.deliverableId && item.cycleId === taskData.serviceCycleId)
@@ -4283,7 +4284,7 @@ export const useStore = create<StoreState>()(
         const deliverable = state.deliverables.find(item => item.id === deliverableId);
         const actor = state.currentUser;
         if (!deliverable || !actor) return { ok: false, error: 'Deliverable not found.' };
-        const authorized = canManageServiceCycles(actor, state.rolePermissions) || (['Staff', 'HOD'].includes(actor.role) && state.tasks.some(task => task.deliverableId === deliverable.id && task.assignedTo === actor.id));
+        const authorized = canManageServiceCycles(actor, state.rolePermissions) || (['Staff', 'HOD'].includes(actor.role) && state.tasks.some(task => (task.deliverableId === deliverable.id || deliverable.taskIds.includes(task.id)) && task.assignedTo === actor.id));
         if (!authorized || (!canManageServiceCycles(actor, state.rolePermissions) && !canOpenServiceClient(actor, deliverable.clientName, state.tasks, state.rolePermissions, state.clients))) return { ok: false, error: 'You do not have access to this deliverable.' };
         if (resolveDeliverableStatus({ ...deliverable, status }, state.tasks) !== status) return { ok: false, error: 'Deliverable status must match the progress of its required tasks.' };
         set(current => {
@@ -4307,6 +4308,7 @@ export const useStore = create<StoreState>()(
         if (!hasPermission(state.currentUser, 'editTasks', state.rolePermissions) || !task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
         const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
         if (deliverableId && (!deliverable || deliverable.cycleId !== cycleId || deliverable.clientId !== task.clientId)) return { ok: false, error: 'The task and deliverable must belong to the same client and cycle.' };
+        if (deliverable?.status === 'Delivered' && task.deliverableId !== deliverable.id && !deliverable.taskIds.includes(taskId)) return { ok: false, error: 'Reopen the delivery before adding task links.' };
         if (deliverableId && ((task.deliverableId && task.deliverableId !== deliverableId) || state.deliverables.some(item => item.id !== deliverableId && item.taskIds.includes(taskId)))) return { ok: false, error: 'This task is already linked to another deliverable.' };
         const now = new Date().toISOString();
         set(current => {
@@ -4336,6 +4338,7 @@ export const useStore = create<StoreState>()(
         if (!cycle || !workflow?.steps.length) return { ok: false, error: 'This service item has no frozen task workflow.' };
         const existing = state.tasks.filter(task => task.deliverableId === deliverable.id && task.generatedFromDeliverable);
         if (existing.length) return { ok: true, taskIds: existing.sort((a, b) => (a.workflowStepOrder || 0) - (b.workflowStepOrder || 0)).map(task => task.id) };
+        if (deliverable.status === 'Delivered') return { ok: false, error: 'Reopen the delivery before adding task links.' };
         const generationId = nowId('WFG');
         const now = new Date().toISOString();
         const startDate = cycle.periodStart;
@@ -5576,7 +5579,8 @@ export const useStore = create<StoreState>()(
 
         // The service walkthrough is intentionally limited to an explicitly local browser
         // workspace. It never creates a pending mutation or reaches a Supabase command.
-        if (!isLocalServiceDemoEnabled() || hasLocalServiceData(get()) || getLocalServiceDemoVersion() === LOCAL_SERVICE_DEMO_VERSION) return;
+        if (!(import.meta.env.DEV || import.meta.env.VITE_AITASK_BACKEND === 'local')
+          || !isLocalServiceDemoEnabled() || hasLocalServiceData(get()) || getLocalServiceDemoVersion() === LOCAL_SERVICE_DEMO_VERSION) return;
 
         const fixture = createLocalServiceDemoFixture();
         const demoUserIds = new Set(fixture.users.map(user => user.id));

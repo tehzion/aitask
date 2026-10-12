@@ -109,6 +109,19 @@ describe('Chinese UI translations', () => {
     )).toBe('3 个前置步骤的状态不可用。开始前请与任务负责人确认。');
   });
 
+  it('keeps exact calendar labels at local year boundaries and rejects invalid dates', () => {
+    const last = new Date(2026, 11, 31, 23, 59);
+    const first = new Date(2027, 0, 1, 0, 1);
+    expect(formatLocalizedDate(last, 'en')).toBe('31 Dec 2026');
+    expect(formatLocalizedDate(first, 'zh')).toBe('2027年1月1日');
+    expect(formatLocalizedWeekdayDate(first, 'en', true)).toBe('Friday, 1 January 2027');
+    expect(formatLocalizedWeekdayDate(first, 'zh', true)).toBe('2027年1月1日 星期五');
+    expect(formatLocalizedSyncTime(last, 'en', first)).toBe('31 Dec 2026, 23:59');
+    expect(formatLocalizedDate(new Date(2026, 8, 1), 'en')).toBe('1 Sep 2026');
+    expect(formatLocalizedDate(new Date('invalid'), 'en')).toBe('');
+    expect(formatLocalizedDateTime(new Date('invalid'), 'zh')).toBe('');
+  });
+
   it('formats structured dates and relative times in the selected application locale', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 7, 21, 12, 0));

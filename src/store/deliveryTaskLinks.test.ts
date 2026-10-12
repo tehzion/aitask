@@ -31,4 +31,14 @@ describe('explicit delivery task links', () => {
     expect(useStore.getState().linkTaskToDeliverable(task.id, cycle.id, deliverable.id).ok).toBe(false);
     expect(useStore.getState().deliverables[0]).toEqual(deliverable);
   });
+  it('rejects adding work to a Delivered item without changing its confirmation timestamp', () => {
+    const confirmed = { ...deliverable, status: 'Delivered' as const, deliveredAt: '2026-10-01T10:00:00Z' };
+    useStore.setState({ deliverables: [confirmed], tasks: [{ ...task, status: 'Pending', isCompleted: false }] });
+    const before = structuredClone(useStore.getState().tasks);
+    expect(useStore.getState().linkTaskToDeliverable(task.id, cycle.id, deliverable.id))
+      .toMatchObject({ ok: false, error: 'Reopen the delivery before adding task links.' });
+    expect(useStore.getState().tasks).toEqual(before);
+    expect(useStore.getState().deliverables).toEqual([confirmed]);
+  });
+
 });

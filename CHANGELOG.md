@@ -8,6 +8,14 @@ number remain uniquely identifiable.
 
 ### Fixed
 
+- Confirmed deliveries reject new task links and task creation until explicitly
+  reopened. Staff/HOD delivery confirmation recognizes both task-link forms.
+- Delivery review saves clear only the submitted task selection; other drafts
+  survive successful saves, retries and cycle publication.
+- Calendar labels retain their English/Chinese format while using browser locale
+  formatting to reduce startup JavaScript. Review panels load on demand.
+- Staging cleanup runs only after fixture seeding was attempted, and Vercel
+  credentials stay in environment variables rather than command arguments.
 - Startup loads member edits, notification handlers and Client portal parsing on
   demand, with account-change guards, to restore CI's unchanged bundle limit.
   Date formatting excludes unused locale parser data.

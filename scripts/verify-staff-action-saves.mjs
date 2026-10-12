@@ -115,6 +115,20 @@ try {
   assert.equal(retried.ok, true, `retry failed: ${retried.error}`);
   await login('staff');
   assert.equal(useStore.getState().tasks.find(item => item.id === 'task').dueDate, '2026-10-28');
+  // Real Auth/REST must accept legacy reverse-only links as the frontend does.
+  sql("update public.aitask_entities set data=(data - 'deliverableId') || '{\"status\":\"Completed\",\"isCompleted\":true}'::jsonb where workspace_id='aitask-main' and entity_type='task' and entity_id='task'; update public.aitask_entities set data=(data - 'deliveredAt') || '{\"status\":\"Ready\"}'::jsonb where workspace_id='aitask-main' and entity_type='deliverable' and entity_id='deliverable';");
+  await login('staff');
+  await save('Reverse-linked Staff delivery confirmation', useStore.getState().updateDeliverableStatus('deliverable', 'Delivered'), 'deliverable.manage');
+  await login('staff');
+  assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').status, 'Delivered');
+  console.log('[staff-saves] Reverse-linked assigned Staff delivery persisted through real authenticated REST.');
+  sql("update public.aitask_entities set data=data || '{\"assignedTo\":\"hod\"}'::jsonb where workspace_id='aitask-main' and entity_type='task' and entity_id='task'; update public.aitask_entities set data=(data - 'deliveredAt') || '{\"status\":\"Ready\"}'::jsonb where workspace_id='aitask-main' and entity_type='deliverable' and entity_id='deliverable'; update public.aitask_entities set data=data || '{\"status\":\"Published\"}'::jsonb where workspace_id='aitask-main' and entity_type='service_cycle' and entity_id='cycle';");
+  await login('hod');
+  await save('Reverse-linked HOD delivery confirmation', useStore.getState().updateDeliverableStatus('deliverable', 'Delivered'), 'deliverable.manage');
+  await login('hod');
+  assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').status, 'Delivered');
+  console.log('[staff-saves] Reverse-linked assigned HOD delivery persisted through real authenticated REST.');
+
   console.log('[staff-saves] Actual frontend actions persisted through authenticated REST: creation/deletion, edits, status, priority, dates, comments, derived delivery/reopening, HOD delegation, reload and lost-confirmation retry.');
 } finally {
   globalThis.fetch = originalFetch;

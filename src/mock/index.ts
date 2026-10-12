@@ -1,5 +1,6 @@
 import { User, Project, Task } from '../types';
-import { addDays, subDays, format } from 'date-fns';
+import { addDays, subDays } from 'date-fns';
+import { getTodayInputDate } from '../lib/utils';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { LOCAL_SERVICE_DEMO_USER_IDS } from './localServiceDemo';
 
@@ -24,8 +25,8 @@ export const mockProjects: Project[] = [
     clientName: 'TechNova',
     projectName: 'Q3 Brand Awareness',
     services: ['Social Media', 'Design', 'Ads'],
-    startDate: format(today, 'yyyy-MM-dd'),
-    deadline: format(addDays(today, 30), 'yyyy-MM-dd'),
+    startDate: getTodayInputDate(today),
+    deadline: getTodayInputDate(addDays(today, 30)),
     totalTasks: 0,
     completedTasks: 0,
   },
@@ -34,8 +35,8 @@ export const mockProjects: Project[] = [
     clientName: 'EcoLife',
     projectName: 'Website Revamp',
     services: ['Website', 'SEO', 'Design'],
-    startDate: format(subDays(today, 10), 'yyyy-MM-dd'),
-    deadline: format(addDays(today, 15), 'yyyy-MM-dd'),
+    startDate: getTodayInputDate(subDays(today, 10)),
+    deadline: getTodayInputDate(addDays(today, 15)),
     totalTasks: 0,
     completedTasks: 0,
   },
@@ -44,8 +45,8 @@ export const mockProjects: Project[] = [
     clientName: 'UrbanEats',
     projectName: 'Promo Video Campaign',
     services: ['Video', 'Social Media'],
-    startDate: format(subDays(today, 5), 'yyyy-MM-dd'),
-    deadline: format(addDays(today, 5), 'yyyy-MM-dd'),
+    startDate: getTodayInputDate(subDays(today, 5)),
+    deadline: getTodayInputDate(addDays(today, 5)),
     totalTasks: 0,
     completedTasks: 0,
   }

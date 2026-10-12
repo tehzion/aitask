@@ -24,6 +24,14 @@ describe.each(['Staff', 'HOD'] as const)('%s assigned-service access', role => {
     expect(useStore.getState().addCycleComment(cycle.id, 'Ready for review', 'internal').ok).toBe(true);
   });
 
+  it('allows assigned reverse-only links while denying unrelated assignees', () => {
+    const reverse = { ...useStore.getState().tasks[0], deliverableId: undefined, status: 'Completed' as const, isCompleted: true };
+    useStore.setState({ tasks: [reverse] });
+    expect(useStore.getState().updateDeliverableStatus(deliverable.id, 'Delivered').ok).toBe(true);
+    useStore.setState({ tasks: [{ ...reverse, assignedTo: 'other-worker' }] });
+    expect(useStore.getState().updateDeliverableStatus(deliverable.id, 'Delivered').ok).toBe(false);
+  });
+
   it('rejects manual cycle changes while deriving cycle completion from delivery', () => {
     expect(useStore.getState().setServiceCycleStatus(cycle.id, 'Published').ok).toBe(false);
     expect(useStore.getState().setServiceCycleStatus(cycle.id, 'Completed').ok).toBe(false);
