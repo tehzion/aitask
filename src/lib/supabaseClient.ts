@@ -33,6 +33,8 @@ export const subscribeToCurrentMemberAccessChanges = (
   onChange: () => void,
 ) => {
   if (!isSafeRealtimeFilterValue(authUserId)) return () => undefined;
+  let active = true;
+  const notify = () => { if (active) onChange(); };
   const channel = supabase
     .channel(`aitask-member-access:${authUserId}`)
     .on('postgres_changes', {
@@ -40,7 +42,7 @@ export const subscribeToCurrentMemberAccessChanges = (
       schema: 'public',
       table: 'aitask_members',
       filter: `auth_user_id=eq.${authUserId}`,
-    }, onChange);
+    }, notify);
 
   // Refresh when the member's custom role, or the editable default template for
   // their base role, changes so permission edits take effect without a reload.
@@ -52,12 +54,17 @@ export const subscribeToCurrentMemberAccessChanges = (
       event: 'UPDATE',
       schema: 'public',
       table: 'aitask_entities',
-      filter: `entity_type=eq.custom_role,entity_id=eq.${roleId}`,
-    }, onChange);
+      filter: `entity_id=eq.${roleId}`,
+    }, payload => {
+      // Use a single column filter across Realtime versions. Check the
+      // entity type locally before triggering a permission refresh.
+      if (payload.new.entity_type === 'custom_role' && payload.new.entity_id === roleId) notify();
+    });
   });
 
   channel.subscribe();
   return () => {
+    active = false;
     void supabase.removeChannel(channel);
   };
 };

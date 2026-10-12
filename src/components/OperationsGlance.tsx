@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { isBefore, startOfDay } from 'date-fns';
 import { AlertTriangle, CheckCircle2, ChevronRight, CircleDot, Clock3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Task, User } from '../types';
@@ -7,6 +6,7 @@ import {
   getAgencyPulseMetrics,
   getNeedsAttentionTasks,
   getRecentCompletionTasks,
+  isTaskOverdue,
   type CompletionSegment,
 } from '../lib/taskReporting';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
@@ -14,6 +14,7 @@ import { cardBase } from './uiTokens';
 import { formatLocalizedDateTime, formatLocalizedWeekdayDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
 import { getLocalizedDepartment, getLocalizedStatus } from '../lib/localeLabels';
+import { useLocalToday } from '../hooks/useLocalToday';
 
 type OperationsScope = 'agency' | 'staff';
 
@@ -55,7 +56,7 @@ const TaskEntry = ({
   const { locale, t } = useI18n();
   const dueDate = parseOptionalDate(task.dueDate);
   const completedAt = parseOptionalDate(task.completedAt);
-  const isOverdue = Boolean(dueDate && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDate, startOfDay(new Date())));
+  const isOverdue = isTaskOverdue(task);
   const timestamp = mode === 'completion' ? completedAt : dueDate;
   const timing = mode === 'completion'
     ? completedAt ? <>{t('Completed')} {formatLocalizedDateTime(completedAt, locale)}</> : t('Completion time unavailable')
@@ -97,7 +98,7 @@ const TaskEntry = ({
 const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope }) => {
   const { locale, t } = useI18n();
   const [completionSegment, setCompletionSegment] = useState<CompletionSegment>('today');
-  const now = new Date();
+  const now = useLocalToday();
   const pulse = getAgencyPulseMetrics(tasks, now, locale);
   const attention = getNeedsAttentionTasks(tasks, now).slice(0, 6);
   const completions = getRecentCompletionTasks(tasks, completionSegment, now).slice(0, 6);

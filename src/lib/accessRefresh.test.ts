@@ -12,9 +12,8 @@ describe('permission refresh coordinator', () => {
     coordinator.request();
     expect(refresh).not.toHaveBeenCalled();
 
-    const previousState = state;
     state = { ...idle };
-    coordinator.onStateChange(previousState, state);
+    coordinator.onStateChange();
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   });
 
@@ -41,7 +40,42 @@ describe('permission refresh coordinator', () => {
     coordinator.request();
     coordinator.reset();
     state = { ...idle };
-    coordinator.onStateChange({ ...idle, isPulling: true }, state);
+    coordinator.onStateChange();
     expect(refresh).not.toHaveBeenCalled();
   });
+});
+
+describe('access refresh lifecycle and pending changes', () => {
+  it('cancels a scheduled refresh when the HOD session is reset before its microtask runs', async () => {
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    const coordinator = createAccessRefreshCoordinator(() => idle, refresh);
+    coordinator.request();
+    coordinator.reset();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(refresh).not.toHaveBeenCalled();
+  });
+  it('holds a permission refresh until the pending HOD edit has been resolved', async () => {
+    let state: AccessRefreshState = { ...idle, hasPendingChange: true };
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    const coordinator = createAccessRefreshCoordinator(() => state, refresh);
+    coordinator.request();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(refresh).not.toHaveBeenCalled();
+    state = { ...idle, hasPendingChange: false };
+    coordinator.onStateChange();
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  });
+});
+
+it('rechecks a save that starts between scheduling and running a permission refresh', async () => {
+  let state: AccessRefreshState = { ...idle };
+  const refresh = vi.fn().mockResolvedValue(undefined);
+  const coordinator = createAccessRefreshCoordinator(() => state, refresh);
+  coordinator.request();
+  state = { ...idle, isSaving: true };
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(refresh).not.toHaveBeenCalled();
+  state = { ...idle };
+  coordinator.onStateChange();
+  await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce());
 });

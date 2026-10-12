@@ -1,4 +1,4 @@
-import { getTaskBlockers } from '../lib/staffWorkspace';
+import { getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
 import React from 'react';
 import { AlertTriangle, ArrowRight, Paperclip, RotateCcw } from 'lucide-react';
 import type { Task, User } from '../types';
@@ -25,6 +25,7 @@ interface StaffWorkItemProps {
 const StaffWorkItem: React.FC<StaffWorkItemProps> = ({ task, allTasks, users = [], onOpen, emphasized = false }) => {
   const { locale, t } = useI18n();
   const incompletePredecessors = getTaskBlockers(task, allTasks);
+  const unavailablePredecessorCount = getUnavailableTaskDependencyCount(task, allTasks);
   const isRevision = task.revisionCount > 0 && !task.isCompleted;
   const assignee = users.find(user => user.id === task.assignedTo)?.name;
   const creator = users.find(user => user.id === task.createdBy)?.name;
@@ -52,6 +53,7 @@ const StaffWorkItem: React.FC<StaffWorkItemProps> = ({ task, allTasks, users = [
           <span>{getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}</span>
           {isRevision && <span className="inline-flex items-center gap-1 text-amber-700"><RotateCcw className="h-3.5 w-3.5" />{t('Revision')} {task.revisionCount}</span>}
           {incompletePredecessors.length > 0 && <span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />{incompletePredecessors.length} {t(incompletePredecessors.length === 1 ? 'blocker' : 'blockers')}</span>}
+          {unavailablePredecessorCount > 0 && <span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />{t('Dependency status unavailable')}</span>}
           {task.attachmentLink && <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" />{t('File')}</span>}
         </span>
         {task.status === 'In Progress' && (

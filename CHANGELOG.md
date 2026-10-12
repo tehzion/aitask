@@ -6,6 +6,70 @@ number remain uniquely identifiable.
 
 ## [Unreleased]
 
+### Fixed
+
+- Startup loads member edits, notification handlers and Client portal parsing on
+  demand, with account-change guards, to restore CI's unchanged bundle limit.
+  Date formatting excludes unused locale parser data.
+- Interrupted mixed saves retain every ordered command group, recover lost
+  acknowledgements and preserve edits made while saving or retrying.
+- Member onboarding journals stable requests and atomically saves membership,
+  registration approval and worker type. Uncertain responses preserve prepared
+  logins, and older clients receive a reload instruction while retaining drafts.
+- Plan, project and add-on defaults use local dates; untouched add-ons keep their
+  baseline across midnight. Calendar bars fit the six visible days, and Delivery
+  tracker overdue summaries refresh at midnight and when a tab resumes.
+- Release pipelines fail on piped command errors, serialize their shared staging
+  fixture, validate configuration before deployment and scope short-lived OIDC
+  protection access to the exact staging origin. Hosted artifacts disable full
+  credential-bearing traces and pass a credential scan before upload.
+- Required GitHub review/check protection and isolated HOD QA secrets are
+  configured. Hosted staging and the remaining hosting security requirements
+  still block release; see the pre-live remediation report.
+- Calendar rejects impossible deadlines and refreshes its totals and selected
+  filters at local midnight and when a suspended tab resumes.
+- Deferred navigation focus preserves a control the user has already selected.
+- Startup state and translation modules share a chunk to meet the unchanged
+  eager-JavaScript budget. Release instructions now describe automatic deployment
+  of reviewed master commits and subsequent tag verification.
+- Updated stale browser expectations, pinned the Chinese cycle fixture date and
+  refreshed reviewed Chrome visual references for the current interface.
+
+## [3.0.0] - 2026-10-07
+
+Version 3 consolidates 85 commits since the source release 2.6.1. The complete
+292-commit source inventory and release scope are recorded in
+[the version 3 release report](docs/version-3-release-2026-10-07.md).
+
+### Reliability and reporting
+
+- Boss Koo approvals and member administration preserve drafts, validate password
+  requirements, and recover correctly after failed or pending saves.
+- Project Manager, HOD and Staff workflows preserve edits through retries,
+  permission refreshes, reassignment and interrupted task/detail/date saves.
+- Dashboard overdue totals and links use the same open-task rule; completed and
+  cancelled tasks and invalid deadlines do not appear as overdue.
+- Daily task views, weekly cohorts, reports, workload and renewal figures refresh
+  at local midnight and when suspended tabs resume. Renewals use calendar days.
+- Current delivery progress follows the selected plan and a cycle covering today;
+  future and other-plan cycles remain in history. Internal planning can show drafts.
+- Staff metrics use assigned work and stable company identities, retain accessible
+  dependencies, and identify unavailable dependency status without exposing hidden work.
+- Customer feedback and approvals validate notes before mutation, preserve Unicode
+  and newer drafts, deduplicate local notices, and provide retry/reload recovery.
+- Company editing, ownership, lifecycle dates, atomic deletion and save feedback
+  follow persisted outcomes. Session, sync, notifications and uploads handle
+  concurrent changes, permission changes and interrupted confirmations more safely.
+
+### Workflow and interface
+
+- Consolidated role workspaces, portfolio and department scopes, company search,
+  task attribution, responsive reporting and accessible navigation.
+- Completed Simplified Chinese translation coverage and regression guardrails.
+- Strengthened PWA recovery, source provenance, bundle checks and release gates.
+
+The entries below preserve the previously unreleased feature and fix notes.
+
 ### Added
 
 - Client Reports distinguish recorded agency completion dates from client approval

@@ -3,7 +3,7 @@ import { isPendingMutationResolution, useStore } from '../store';
 import { useI18n } from '../components/I18nProvider';
 import { useShallow } from 'zustand/react/shallow';
 import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone, Plus } from 'lucide-react';
-import { format, isBefore, isToday } from 'date-fns';
+import { format } from 'date-fns';
 import { Priority, Task, TaskStatus } from '../types';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -14,13 +14,16 @@ import { canAssignTasksToOthers, canCreateTasks, canEditTask as canEditTaskByRol
 import { SkeletonTableRow, SkeletonMobileCard } from '../components/SkeletonCard';
 import { safeHttpsUrl } from '../lib/security';
 import { DEPARTMENTS } from '../lib/departments';
-import { getOperationsPeriod, type TeamWorkloadPeriod } from '../lib/taskReporting';
+import { getOperationsPeriod, isTaskOpen, isTaskOverdue, type TeamWorkloadPeriod } from '../lib/taskReporting';
 import { getClientTaskStage } from '../lib/clientPortal';
 import { getLocalizedDepartment, getLocalizedPriority, getLocalizedStatus } from '../lib/localeLabels';
 import { formatLocalizedDate } from '../lib/i18n';
 import StaffAllWork from '../components/StaffAllWork';
+import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
 import ClientDeliveries from '../components/ClientDeliveries';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
+import { useLocalToday } from '../hooks/useLocalToday';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 
 const CLIENT_BOARD_COLUMNS = [
   { value: 'active', label: 'In progress' },
@@ -53,6 +56,7 @@ const priorityColors: Record<Priority, string> = {
 
 const TasksWorkspace: React.FC = () => {
   const { locale, t } = useI18n();
+  const today = useLocalToday();
   const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore(useShallow(state => ({
     tasks: state.tasks,
     clients: state.clients,
@@ -75,14 +79,25 @@ const TasksWorkspace: React.FC = () => {
   const pendingResolution = isPendingMutationResolution(backend);
 
   const persistQuickChange = async (previousTask: Task) => {
-    const result = await commitPendingMutation();
+    const session = captureWorkspaceSession();
+    const actorId = useStore.getState().currentUser?.id;
+    const submittedTask = useStore.getState().tasks.find(task => task.id === previousTask.id);
+    let result: { ok: boolean; error?: string };
+    try { result = await commitPendingMutation(); }
+    catch (error) { result = { ok: false, error: error instanceof Error ? error.message : 'Unable to save this change.' }; }
+    if (!isWorkspaceSessionCurrent(session) || useStore.getState().currentUser?.id !== actorId) return false;
     if (result.ok) {
+      const saved = useStore.getState().tasks.find(task => task.id === previousTask.id);
+      if (saved && submittedTask && submittedTask.status !== previousTask.status
+        && saved.status === submittedTask.status) announceTaskStatusSaved(saved.status);
       setQuickSyncError('');
       return true;
     }
     useStore.setState(state => ({
       tasks: state.tasks.map(task => {
-        if (task.id !== previousTask.id) return task;
+        // A pull or another edit may have replaced this row while saving. Only
+        // undo the exact optimistic row submitted by this action.
+        if (task !== submittedTask) return task;
         return { ...previousTask };
       }),
     }));
@@ -260,14 +275,14 @@ const TasksWorkspace: React.FC = () => {
   }, [tasks, users]);
 
   const routePeriodBounds = useMemo(() => {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    if (periodRouteFilter === 'today') return { from: today, to: today };
+    const todayKey = format(today, 'yyyy-MM-dd');
+    if (periodRouteFilter === 'today') return { from: todayKey, to: todayKey };
     if (periodRouteFilter === 'week') {
-      const period = getOperationsPeriod(new Date(), locale);
+      const period = getOperationsPeriod(today, locale);
       return { from: format(period.start, 'yyyy-MM-dd'), to: format(period.end, 'yyyy-MM-dd') };
     }
     return null;
-  }, [locale, periodRouteFilter]);
+  }, [locale, periodRouteFilter, today]);
 
   const filteredTasks = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -304,20 +319,14 @@ const TasksWorkspace: React.FC = () => {
         && task.dueDate <= routePeriodBounds.to
       );
       const matchesFocus = routeFocus === 'overdue'
-        ? Boolean(
-            task.dueDate
-            && !task.isCompleted
-            && task.status !== 'Cancelled'
-            && isBefore(parseOptionalDate(task.dueDate) || new Date(0), new Date())
-            && !isToday(parseOptionalDate(task.dueDate) || new Date(0)),
-          )
+        ? isTaskOverdue(task, today)
         : routeFocus === 'waiting'
-          ? task.status === 'Waiting Approval' && !task.isCompleted
+          ? task.status === 'Waiting Approval' && isTaskOpen(task)
           : true;
 
       return matchesSearch && matchesDept && matchesAssignee && matchesClient && matchesStatus && matchesPriority && matchesDateFrom && matchesDateTo && matchesProject && matchesTask && matchesRoutePeriod && matchesFocus;
     });
-  }, [assigneeRouteFilter, clientRouteFilter, dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, projectIdFilter, routeFocus, routePeriodBounds, searchTerm, taskIdFilter, tasks, users]);
+  }, [assigneeRouteFilter, clientRouteFilter, dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, projectIdFilter, routeFocus, routePeriodBounds, searchTerm, taskIdFilter, tasks, users, today]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTasks.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -405,11 +414,17 @@ const TasksWorkspace: React.FC = () => {
     setSearchParams(next, { replace: true });
   };
 
-  const clearTaskRouteFocus = () => {
-    if (!routeFocus) return;
+  const applyQuickFilter = (value: 'all' | 'today' | 'overdue' | 'waiting') => {
     const next = new URLSearchParams(searchParams);
     next.delete('focus');
+    next.delete('period');
+    if (value === 'today') next.set('period', 'today');
+    else if (value === 'overdue' || value === 'waiting') next.set('focus', value);
     setSearchParams(next, { replace: true });
+    setDateFrom('');
+    setDateTo('');
+    setFilterStatus('All');
+    setPage(1);
   };
 
   const clearAllFilters = () => {
@@ -646,39 +661,18 @@ const TasksWorkspace: React.FC = () => {
                 ['waiting', t('Waiting approval')],
               ] as const).map(([value, label]) => {
                 const isActive = value === 'all'
-                  ? !routeFocus && !dateFrom && !dateTo && filterStatus === 'All'
+                  ? !routeFocus && !periodRouteFilter && !dateFrom && !dateTo && filterStatus === 'All'
                   : value === 'today'
-                    ? dateFrom === format(new Date(), 'yyyy-MM-dd') && dateTo === format(new Date(), 'yyyy-MM-dd')
+                    ? periodRouteFilter === 'today' || (!routeFocus && dateFrom === format(today, 'yyyy-MM-dd') && dateTo === format(today, 'yyyy-MM-dd'))
                     : value === 'overdue'
-                      ? routeFocus === 'overdue' || (!routeFocus && !dateFrom && dateTo === format(new Date(), 'yyyy-MM-dd'))
+                      ? routeFocus === 'overdue'
                       : routeFocus === 'waiting' || (!routeFocus && filterStatus === 'Waiting Approval');
                 return (
                   <button
                     key={value}
                     type="button"
                     aria-pressed={isActive}
-                    onClick={() => {
-                      clearTaskRouteFocus();
-                      const todayKey = format(new Date(), 'yyyy-MM-dd');
-                      if (value === 'all') {
-                        setDateFrom('');
-                        setDateTo('');
-                        setFilterStatus('All');
-                      } else if (value === 'today') {
-                        setDateFrom(todayKey);
-                        setDateTo(todayKey);
-                        setFilterStatus('All');
-                      } else if (value === 'overdue') {
-                        setDateFrom('');
-                        setDateTo(todayKey);
-                        setFilterStatus('All');
-                      } else {
-                        setDateFrom('');
-                        setDateTo('');
-                        setFilterStatus('Waiting Approval');
-                      }
-                      setPage(1);
-                    }}
+                    onClick={() => applyQuickFilter(value)}
                     className={cn(
                       'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
                       isActive
@@ -853,7 +847,7 @@ const TasksWorkspace: React.FC = () => {
                     pagedTasks.map((task) => {
                       const startDateParsed = parseOptionalDate(task.startDate);
                       const dueDateParsed = parseOptionalDate(task.dueDate);
-                      const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
+                      const isOverdue = isTaskOverdue(task, today);
 
                       return (
                         <tr
@@ -957,7 +951,7 @@ const TasksWorkspace: React.FC = () => {
               ) : (
                 pagedTasks.map(task => {
                   const dueDateParsed = parseOptionalDate(task.dueDate);
-                  const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
+                  const isOverdue = isTaskOverdue(task, today);
 
                   return (
                     <article
@@ -1068,7 +1062,7 @@ const TasksWorkspace: React.FC = () => {
                       ) : (
                         columnTasks.map(task => {
                           const dueDateParsed = parseOptionalDate(task.dueDate);
-                          const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
+                          const isOverdue = isTaskOverdue(task, today);
                           const canDrag = canEditTask(task);
 
                           return (

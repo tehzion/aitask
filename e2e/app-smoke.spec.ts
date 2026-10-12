@@ -118,7 +118,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByRole('region', { name: 'Portfolio delivery' })).toBeVisible();
   await switchDemoAccount(page, 'Staff Demo');
   await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
-  await expect(page.getByText('Next due')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Assigned queue' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'My work pulse' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Workspace metrics' })).toHaveCount(0);

@@ -4,7 +4,6 @@ import { assertWorkspaceSession, captureWorkspaceSession, isWorkspaceSessionCurr
 import type { User } from '@supabase/supabase-js';
 import type {
   AppNotification,
-  ClientContact,
   ClientPortalPayload,
   ClientProfile,
   ClientServicePlan,
@@ -32,8 +31,7 @@ import {
   getLegacyDepartmentMirror,
   normalizeMemberDepartments,
 } from './departments';
-import { parseNotification, parseWorkspaceSnapshot, safeAvatarSource } from './security';
-import { enrichNotificationMetadata } from './notificationCenter';
+import { parseWorkspaceSnapshot } from './security';
 import { supabase } from './supabaseClient';
 import { stripServiceItemPrices } from './serviceManagement';
 import { msg } from './messages';
@@ -144,7 +142,7 @@ type MemberRow = {
   updated_at: string;
 };
 
-type EntityRow = {
+export type EntityRow = {
   workspace_id: string;
   entity_type: string;
   entity_id: string;
@@ -164,7 +162,7 @@ export type WorkspaceOperation = {
   data?: Record<string, unknown>;
 };
 
-type BaselineRow = {
+export type BaselineRow = {
   kind: WorkspaceOperation['kind'];
   entityType: string;
   entityId: string;
@@ -174,7 +172,7 @@ type BaselineRow = {
   serialized: string;
 };
 
-type CommandResponse = {
+export type CommandResponse = {
   ok: boolean;
   code?: MutationErrorCode;
   error?: string;
@@ -187,7 +185,7 @@ type CommandResponse = {
   replayed?: boolean;
 };
 
-type MemberDepartmentsResponse = CommandResponse & {
+export type MemberDepartmentsResponse = CommandResponse & {
   member?: {
     id: string;
     departments: Department[];
@@ -197,7 +195,7 @@ type MemberDepartmentsResponse = CommandResponse & {
   };
 };
 
-type MemberPermissionsResponse = CommandResponse & {
+export type MemberPermissionsResponse = CommandResponse & {
   member?: {
     id: string;
     permissions: RolePermissions | Record<string, never>;
@@ -206,7 +204,7 @@ type MemberPermissionsResponse = CommandResponse & {
   };
 };
 
-type MemberRoleResponse = CommandResponse & {
+export type MemberRoleResponse = CommandResponse & {
   member?: {
     id: string;
     role: Role;
@@ -262,6 +260,7 @@ type PendingCommandEnvelope = {
   workspaceId: string;
   authUserId: string;
   command: SecureCommand;
+  batch?: PendingCommandBatch;
 };
 
 export type MemberRoleAssignment = {
@@ -292,6 +291,14 @@ type PendingMemberMutationEnvelope = {
   mutation: RetainedSecureMemberMutationWithId;
 };
 
+export type PendingCommandBatch = {
+  commands: SecureCommand[];
+  before: BaselineRow[];
+  cursor: number;
+  workspaceVersion?: number;
+  attempted: boolean;
+};
+let retryableBatch: PendingCommandBatch | null = null;
 let baseline = new Map<string, BaselineRow>();
 let retryableCommand: SecureCommand | null = null;
 let activeSecureAuthUserId: string | null = null;
@@ -343,7 +350,7 @@ const isWorkspaceOperation = (value: unknown): value is WorkspaceOperation => {
     && (operation.data === undefined || (typeof operation.data === 'object' && operation.data !== null && !Array.isArray(operation.data)));
 };
 
-const isSecureCommand = (value: unknown): value is SecureCommand => {
+const isSecureCommand = (value: unknown, allowEmpty = false): value is SecureCommand => {
   if (!value || typeof value !== 'object') return false;
   const command = value as Partial<SecureCommand>;
   return typeof command.id === 'string'
@@ -351,7 +358,7 @@ const isSecureCommand = (value: unknown): value is SecureCommand => {
     && command.id.length <= 160
     && isSecureCommandType(command.type)
     && Array.isArray(command.operations)
-    && command.operations.length > 0
+    && (allowEmpty || command.operations.length > 0)
     && command.operations.length <= 500
     && command.operations.every(isWorkspaceOperation);
 };
@@ -388,10 +395,11 @@ const persistRetryableCommand = () => {
   const storage = getSessionStorage();
   if (!storage) return;
   const envelope: PendingCommandEnvelope = {
-    version: PENDING_COMMAND_STORAGE_VERSION,
+    version: 2,
     workspaceId: SECURE_WORKSPACE_ID,
     authUserId: activeSecureAuthUserId,
     command: retryableCommand,
+    batch: retryableBatch || undefined,
   };
   try {
     storage.setItem(pendingCommandStorageKey(activeSecureAuthUserId), JSON.stringify(envelope));
@@ -450,6 +458,7 @@ export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand
   if (!authUserId) return null;
   if (activeSecureAuthUserId && activeSecureAuthUserId !== authUserId) {
     retryableCommand = null;
+    retryableBatch = null;
     retryableMemberDepartments = null;
     retryableMemberPermissions = null;
     retryableMemberRole = null;
@@ -463,15 +472,32 @@ export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand
     if (!raw) return null;
     const envelope = JSON.parse(raw) as Partial<PendingCommandEnvelope>;
     if (
-      envelope.version !== PENDING_COMMAND_STORAGE_VERSION
+      ![1, 2].includes(envelope.version || 0)
       || envelope.workspaceId !== SECURE_WORKSPACE_ID
       || envelope.authUserId !== authUserId
-      || !isSecureCommand(envelope.command)
+      || !isSecureCommand(envelope.command, envelope.version === 2 && Boolean(envelope.batch))
     ) {
       storage.removeItem(pendingCommandStorageKey(authUserId));
       return null;
     }
+    if (envelope.batch !== undefined) {
+      const batch = envelope.batch;
+      if (!Array.isArray(batch.commands) || batch.commands.length === 0 || batch.commands.length > 500
+        || !batch.commands.every(command => isSecureCommand(command, true)) || batch.commands.reduce((n, c) => n + c.operations.length, 0) > 500
+        || !Number.isInteger(batch.cursor) || batch.cursor < 0 || batch.cursor >= batch.commands.length
+        || typeof batch.attempted !== 'boolean' || !Array.isArray(batch.before)
+        || batch.before.length > 2000 || !batch.before.every(row => row && typeof row.serialized === 'string'
+          && isWorkspaceOperation({ ...row, action: 'update', expectedVersion: row.version }))
+        || (batch.workspaceVersion !== undefined && (!Number.isInteger(batch.workspaceVersion) || batch.workspaceVersion < 1))
+        || batch.commands[batch.cursor].id !== envelope.command.id) {
+        storage.removeItem(pendingCommandStorageKey(authUserId));
+        return null;
+      }
+      retryableBatch = batch;
+    }
     retryableCommand = envelope.command;
+    // Older single-command envelopes become a durable one-group batch on retry.
+    persistRetryableCommand();
     return retryableCommand;
   } catch {
     storage.removeItem(pendingCommandStorageKey(authUserId));
@@ -483,6 +509,7 @@ export const restoreSecureMemberMutation = (authUserId: string): RetainedSecureM
   if (!authUserId) return null;
   if (activeSecureAuthUserId && activeSecureAuthUserId !== authUserId) {
     retryableCommand = null;
+    retryableBatch = null;
     retryableMemberDepartments = null;
     retryableMemberPermissions = null;
     retryableMemberRole = null;
@@ -1051,6 +1078,7 @@ export const overlayRetainedWorkspaceEntities = (
   local: PersistedWorkspaceState,
   operations: WorkspaceOperation[],
 ): PersistedWorkspaceState => {
+  if (retryableBatch && operations === retryableCommand?.operations) operations = retryableBatch.commands.slice(retryableBatch.cursor).flatMap(command => command.operations);
   const opsByType = new Map<string, WorkspaceOperation[]>();
   operations.forEach(operation => {
     const list = opsByType.get(operation.entityType) || [];
@@ -1283,7 +1311,7 @@ const executeCommand = async (
       item.entityType === response.conflict?.entityType && item.entityId === response.conflict?.entityId
     ));
     const conflict = response.conflict && operation
-      ? { ...response.conflict, attempted: operation.data, changedFields: changedFieldsForConflict(operation, response.conflict.current) }
+      ? { ...response.conflict, attempted: operation.data, changedFields: changedFieldsForConflict(operation, retryableBatch?.before.find(row => row.entityType === operation.entityType && row.entityId === operation.entityId)?.data ?? response.conflict.current) }
       : response.conflict;
     if (response.code === 'CONFLICT' || response.code === 'RETRY_REQUIRED') retainSecureWorkspaceCommand(command);
     else {
@@ -1300,8 +1328,10 @@ const executeCommand = async (
 
   acknowledgePendingServiceFiles(command.id);
   applyCommandVersions(command, response);
-  retryableCommand = null;
-  clearPersistedRetryableCommand();
+  if (!retryableBatch) {
+    retryableCommand = null;
+    clearPersistedRetryableCommand();
+  }
   return {
     ok: true,
     data: response,
@@ -1372,222 +1402,39 @@ export const loadSecureWorkspaceRevision = async () => {
   return { version: Number(data.version) || 1, updatedAt: String(data.updated_at), syncProtocolVersion };
 };
 
-export const saveSecureMemberDepartments = async (
-  member: WorkspaceMember,
-  requestedDepartments: Department[],
-): Promise<MutationResult<MemberDepartmentsResponse>> => {
+// Mutation handlers load only when a member edit is submitted. State stays in this adapter.
+const memberMutationRuntime = () => ({
+  get retryableMemberDepartments() { return retryableMemberDepartments; },
+  set retryableMemberDepartments(value: typeof retryableMemberDepartments) { retryableMemberDepartments = value; },
+  get retryableMemberPermissions() { return retryableMemberPermissions; },
+  set retryableMemberPermissions(value: typeof retryableMemberPermissions) { retryableMemberPermissions = value; },
+  get retryableMemberRole() { return retryableMemberRole; },
+  set retryableMemberRole(value: typeof retryableMemberRole) { retryableMemberRole = value; },
+  get baseline() { return baseline; },
+  captureWorkspaceSession, normalizeMemberDepartments, isWorkspaceSessionCurrent, stable, retainedMemberMutationWithId, commandId, persistRetryableMemberMutation, bindSessionRequest, withSyncTimeout, supabase, isAuthError, refreshSecureSession, SyncRequestTimeoutError, commandErrorCode, clearPersistedRetryableMemberMutation, getLegacyDepartmentMirror, entityKey, memberData, SECURE_WORKSPACE_ID,
+});
+export type SecureMemberMutationRuntime = ReturnType<typeof memberMutationRuntime>;
+
+export const saveSecureMemberDepartments = async (member: WorkspaceMember, requestedDepartments: Department[]): Promise<MutationResult<MemberDepartmentsResponse>> => {
   const sessionToken = captureWorkspaceSession();
-  const departments = normalizeMemberDepartments(member.role, requestedDepartments);
-  if (member.role === 'Client' || (member.role !== 'Project Manager' && departments.length === 0)) {
-    return { ok: false, code: 'VALIDATION', error: 'Choose at least one valid internal department.' };
-  }
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before saving departments.' };
-  }
-
-  const expectedVersion = Math.max(1, Number(member.version) || 1);
-  const matchesRetry = retryableMemberDepartments
-    && retryableMemberDepartments.memberId === member.id
-    && retryableMemberDepartments.expectedVersion === expectedVersion
-    && stable(retryableMemberDepartments.departments) === stable(departments);
-  if (retainedMemberMutationWithId() && !matchesRetry) {
-    return {
-      ok: false,
-      code: 'RETRY_REQUIRED',
-      error: 'Retry or discard the previous member change before submitting a different one.',
-    };
-  }
-  const pending = matchesRetry
-    ? retryableMemberDepartments
-    : { kind: 'departments' as const, id: commandId(), memberId: member.id, departments, expectedVersion };
-  retryableMemberDepartments = pending;
-  persistRetryableMemberMutation();
-
-  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_update_member_departments', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_command_id: pending.id,
-    p_member_id: pending.memberId,
-    p_departments: pending.departments,
-    p_expected_version: pending.expectedVersion,
-  })));
-
-  let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
-    rpcResult = await invoke();
-    if (isAuthError(rpcResult.error) && await refreshSecureSession()) rpcResult = await invoke();
-  } catch (error) {
-    return {
-      ok: false,
-      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
-      error: error instanceof SyncRequestTimeoutError
-        ? 'Save confirmation timed out. Submit again to retry the same department change safely.'
-        : 'Supabase could not confirm the department change. Submit again to retry.',
-    };
+    const module = await import('./secureMemberMutations');
+    if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberDepartments(member, requestedDepartments);
+  } catch {
+    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
   }
-
-  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
-  if (rpcResult.error) {
-    const code = isAuthError(rpcResult.error) ? 'FORBIDDEN' : commandErrorCode(rpcResult.error);
-    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
-      retryableMemberDepartments = null;
-      clearPersistedRetryableMemberMutation();
-    }
-    return {
-      ok: false,
-      code,
-      error: rpcResult.error.message || 'Unable to update departments.',
-    };
-  }
-
-  const response = rpcResult.data as MemberDepartmentsResponse;
-  if (!response?.ok) {
-    const code = response.code || 'RETRY_REQUIRED';
-    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
-      retryableMemberDepartments = null;
-      clearPersistedRetryableMemberMutation();
-    }
-    return {
-      ok: false,
-      code,
-      error: response.error || 'The department change was rejected.',
-      conflict: response.conflict,
-    };
-  }
-
-  retryableMemberDepartments = null;
-  clearPersistedRetryableMemberMutation();
-  const legacyDepartment = getLegacyDepartmentMirror(member.role, departments);
-  const key = entityKey('member', member.id);
-  const previous = baseline.get(key);
-  const nextData = {
-    ...(previous?.data || memberData(member)),
-    departments,
-    department: legacyDepartment,
-  };
-  baseline.set(key, {
-    kind: 'member',
-    entityType: 'member',
-    entityId: member.id,
-    version: Number(response.member?.version) || expectedVersion + 1,
-    data: nextData,
-    serialized: stable({ parentId: null, data: nextData }),
-  });
-
-  return {
-    ok: true,
-    data: response,
-    commandId: response.commandId || pending.id,
-    workspaceVersion: Number(response.workspaceVersion) || 1,
-    replayed: response.replayed,
-  };
 };
 
-export const saveSecureMemberPermissions = async (
-  member: WorkspaceMember,
-  permissions: RolePermissions | null,
-): Promise<MutationResult<MemberPermissionsResponse>> => {
+export const saveSecureMemberPermissions = async (member: WorkspaceMember, permissions: RolePermissions | null): Promise<MutationResult<MemberPermissionsResponse>> => {
   const sessionToken = captureWorkspaceSession();
-  if (!['Staff', 'HOD'].includes(member.role) || member.isSuperAdmin) {
-    return { ok: false, code: 'VALIDATION', error: 'Only Staff and HOD permissions can be customized.' };
-  }
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before saving permissions.' };
-  }
-
-  const expectedVersion = Math.max(1, Number(member.version) || 1);
-  const matchesRetry = retryableMemberPermissions
-    && retryableMemberPermissions.memberId === member.id
-    && retryableMemberPermissions.expectedVersion === expectedVersion
-    && stable(retryableMemberPermissions.permissions) === stable(permissions);
-  if (retainedMemberMutationWithId() && !matchesRetry) {
-    return {
-      ok: false,
-      code: 'RETRY_REQUIRED',
-      error: 'Retry or discard the previous member change before submitting a different one.',
-    };
-  }
-  const pending = matchesRetry
-    ? retryableMemberPermissions
-    : { kind: 'permissions' as const, id: commandId(), memberId: member.id, permissions, expectedVersion };
-  retryableMemberPermissions = pending;
-  persistRetryableMemberMutation();
-
-  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_update_member_permissions', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_command_id: pending.id,
-    p_member_id: pending.memberId,
-    p_permissions: pending.permissions,
-    p_expected_version: pending.expectedVersion,
-  })));
-
-  let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
-    rpcResult = await invoke();
-    if (isAuthError(rpcResult.error) && await refreshSecureSession()) rpcResult = await invoke();
-  } catch (error) {
-    return {
-      ok: false,
-      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
-      error: error instanceof SyncRequestTimeoutError
-        ? 'Save confirmation timed out. Submit again to retry the same permission change safely.'
-        : 'Supabase could not confirm the permission change. Submit again to retry.',
-    };
+    const module = await import('./secureMemberMutations');
+    if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberPermissions(member, permissions);
+  } catch {
+    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
   }
-
-  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
-  if (rpcResult.error) {
-    const code = isAuthError(rpcResult.error) ? 'FORBIDDEN' : commandErrorCode(rpcResult.error);
-    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
-      retryableMemberPermissions = null;
-      clearPersistedRetryableMemberMutation();
-    }
-    return {
-      ok: false,
-      code,
-      error: rpcResult.error.message || 'Unable to update permissions.',
-    };
-  }
-
-  const response = rpcResult.data as MemberPermissionsResponse;
-  if (!response?.ok) {
-    const code = response.code || 'RETRY_REQUIRED';
-    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
-      retryableMemberPermissions = null;
-      clearPersistedRetryableMemberMutation();
-    }
-    return {
-      ok: false,
-      code,
-      error: response.error || 'The permission change was rejected.',
-      conflict: response.conflict,
-    };
-  }
-
-  retryableMemberPermissions = null;
-  clearPersistedRetryableMemberMutation();
-  const nextPermissions = permissions || undefined;
-  const key = entityKey('member', member.id);
-  const previous = baseline.get(key);
-  const nextData = {
-    ...(previous?.data || memberData(member)),
-    permissions: nextPermissions,
-  };
-  baseline.set(key, {
-    kind: 'member',
-    entityType: 'member',
-    entityId: member.id,
-    version: Number(response.member?.version) || expectedVersion + 1,
-    data: nextData,
-    serialized: stable({ parentId: null, data: nextData }),
-  });
-
-  return {
-    ok: true,
-    data: response,
-    commandId: response.commandId || pending.id,
-    workspaceVersion: Number(response.workspaceVersion) || 1,
-    replayed: response.replayed,
-  };
 };
 
 export type RetainedSecureMemberMutation =
@@ -1595,131 +1442,15 @@ export type RetainedSecureMemberMutation =
   | { kind: 'permissions'; memberId: string; permissions: RolePermissions | null; expectedVersion: number }
   | { kind: 'role'; memberId: string; role: Role; customRoleId: string | null; companyName: string | null; departments: Department[]; expectedVersion: number };
 
-export const saveSecureMemberRole = async (
-  member: WorkspaceMember,
-  assignment: MemberRoleAssignment,
-): Promise<MutationResult<MemberRoleResponse>> => {
+export const saveSecureMemberRole = async (member: WorkspaceMember, assignment: MemberRoleAssignment): Promise<MutationResult<MemberRoleResponse>> => {
   const sessionToken = captureWorkspaceSession();
-  if (member.isSuperAdmin) {
-    return { ok: false, code: 'VALIDATION', error: 'Boss Koo keeps permanent super admin permissions.' };
-  }
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before changing the role.' };
-  }
-
-  const expectedVersion = Math.max(1, Number(member.version) || 1);
-  const nextAssignment = {
-    role: assignment.role,
-    customRoleId: assignment.customRoleId || null,
-    companyName: assignment.companyName || null,
-    departments: assignment.departments,
-  };
-  const matchesRetry = retryableMemberRole
-    && retryableMemberRole.memberId === member.id
-    && retryableMemberRole.expectedVersion === expectedVersion
-    && stable({
-      role: retryableMemberRole.role,
-      customRoleId: retryableMemberRole.customRoleId,
-      companyName: retryableMemberRole.companyName,
-      departments: retryableMemberRole.departments,
-    }) === stable(nextAssignment);
-  if (retainedMemberMutationWithId() && !matchesRetry) {
-    return {
-      ok: false,
-      code: 'RETRY_REQUIRED',
-      error: 'Retry or discard the previous member change before submitting a different one.',
-    };
-  }
-  const pending = matchesRetry
-    ? retryableMemberRole
-    : { kind: 'role' as const, id: commandId(), memberId: member.id, ...nextAssignment, expectedVersion };
-  retryableMemberRole = pending;
-  persistRetryableMemberMutation();
-
-  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_update_member_role', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_command_id: pending.id,
-    p_member_id: pending.memberId,
-    p_role: pending.role,
-    p_custom_role_id: pending.customRoleId,
-    p_client_name: pending.companyName,
-    p_departments: pending.departments,
-    p_expected_version: pending.expectedVersion,
-  })));
-
-  let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
-    rpcResult = await invoke();
-    if (isAuthError(rpcResult.error) && await refreshSecureSession()) rpcResult = await invoke();
-  } catch (error) {
-    return {
-      ok: false,
-      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
-      error: error instanceof SyncRequestTimeoutError
-        ? 'Save confirmation timed out. Submit again to retry the role change safely.'
-        : 'Supabase could not confirm the role change. Submit again to retry.',
-    };
+    const module = await import('./secureMemberMutations');
+    if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberRole(member, assignment);
+  } catch {
+    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
   }
-
-  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
-  if (rpcResult.error) {
-    const code = isAuthError(rpcResult.error) ? 'FORBIDDEN' : commandErrorCode(rpcResult.error);
-    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
-      retryableMemberRole = null;
-      clearPersistedRetryableMemberMutation();
-    }
-    return {
-      ok: false,
-      code,
-      error: rpcResult.error.message || 'Unable to change the role.',
-    };
-  }
-
-  const response = rpcResult.data as MemberRoleResponse;
-  if (!response?.ok) {
-    const code = response.code || 'RETRY_REQUIRED';
-    if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') {
-      retryableMemberRole = null;
-      clearPersistedRetryableMemberMutation();
-    }
-    return {
-      ok: false,
-      code,
-      error: response.error || 'The role change was rejected.',
-      conflict: response.conflict,
-    };
-  }
-
-  retryableMemberRole = null;
-  clearPersistedRetryableMemberMutation();
-  const key = entityKey('member', member.id);
-  const previous = baseline.get(key);
-  const nextData = {
-    ...(previous?.data || memberData(member)),
-    role: response.member?.role ?? assignment.role,
-    custom_role_id: response.member?.customRoleId ?? null,
-    custom_role_name: response.member?.customRoleName ?? null,
-    client_name: response.member?.clientName ?? null,
-    departments: response.member?.departments ?? assignment.departments,
-    department: response.member?.department ?? getLegacyDepartmentMirror(assignment.role, assignment.departments),
-    permissions: {},
-  };
-  baseline.set(key, {
-    kind: 'member',
-    entityType: 'member',
-    entityId: member.id,
-    version: Number(response.member?.version) || expectedVersion + 1,
-    data: nextData,
-    serialized: stable({ parentId: null, data: nextData }),
-  });
-
-  return {
-    ok: true,
-    data: response,
-    commandId: response.commandId,
-    workspaceVersion: Number(response.workspaceVersion) || 1,
-    replayed: response.replayed,
-  };
 };
 
 export const getRetainedSecureMemberMutation = (): RetainedSecureMemberMutation | null => {
@@ -1880,177 +1611,30 @@ export const acknowledgeSecureReleaseNotice = async (
   return readReleaseNoticeResponse(result.data, normalizedNoticeId);
 };
 
-const parseNotificationFeedItem = (
-  value: unknown,
-  memberId: string,
-): AppNotification | null => {
-  if (!isRecord(value)) return null;
-  const parsed = parseNotification({
-    ...value,
-    isRead: value.isRead === true,
-    readByUserIds: value.isRead === true ? [memberId] : [],
-    visibleToCurrentUser: true,
-  });
-  return parsed ? enrichNotificationMetadata(parsed) : null;
-};
+const notificationRuntime = () => ({
+  get retryableNotificationMutation() { return retryableNotificationMutation; },
+  set retryableNotificationMutation(value: typeof retryableNotificationMutation) { retryableNotificationMutation = value; },
+  get baseline() { return baseline; },
+  captureWorkspaceSession, isWorkspaceSessionCurrent, isRecord, cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, entityKey, stable, commandId, SyncRequestTimeoutError,
+});
+export type SecureNotificationRuntime = ReturnType<typeof notificationRuntime>;
 
-export const loadSecureNotificationPage = async (
-  query: NotificationFeedQuery = {},
-): Promise<NotificationFeedPage> => {
-  const limit = Math.min(50, Math.max(1, Math.floor(query.limit || 50)));
-  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_read_notifications', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_limit: limit,
-    p_before_created_at: query.cursor?.createdAt || null,
-    p_before_id: query.cursor?.id || null,
-    p_unread_only: Boolean(query.unreadOnly),
-    p_category: query.category || null,
-    p_search: query.search?.trim().slice(0, 200) || null,
-  })));
-
-  let result = await invoke();
-  if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
-  if (result.error) throw result.error;
-  if (!isRecord(result.data) || result.data.ok !== true) {
-    throw new Error(isRecord(result.data) && typeof result.data.error === 'string'
-      ? result.data.error
-      : 'Supabase returned an invalid notification feed.');
-  }
-
-  const memberId = cleanPortalText(result.data.memberId, 160);
-  if (!memberId) throw new Error('The notification feed is not linked to this account.');
-  const items = (Array.isArray(result.data.items) ? result.data.items : [])
-    .map(item => parseNotificationFeedItem(item, memberId))
-    .filter((item): item is AppNotification => Boolean(item));
-  const rawCursor = isRecord(result.data.nextCursor) ? result.data.nextCursor : undefined;
-  const createdAt = cleanPortalText(rawCursor?.createdAt, 80);
-  const cursorId = cleanPortalText(rawCursor?.id, 160);
-
-  return {
-    items,
-    unreadCount: Math.max(0, Number(result.data.unreadCount) || 0),
-    nextCursor: createdAt && cursorId ? { createdAt, id: cursorId } : undefined,
-  };
-};
-
-const applyNotificationReadBaseline = (
-  response: NotificationReadResponse,
-  isRead: boolean,
-) => {
-  const memberId = response.memberId;
-  if (!memberId) return;
-  (response.changedNotifications || []).forEach(changed => {
-    const key = entityKey('notification', changed.id);
-    const previous = baseline.get(key);
-    if (!previous) return;
-    const currentReads = Array.isArray(previous.data.readByUserIds)
-      ? previous.data.readByUserIds.filter((value): value is string => typeof value === 'string')
-      : [];
-    const readByUserIds = isRead
-      ? Array.from(new Set([...currentReads, memberId]))
-      : currentReads.filter(id => id !== memberId);
-    const data = { ...previous.data, readByUserIds };
-    baseline.set(key, {
-      ...previous,
-      version: Math.max(1, Number(changed.version) || previous.version),
-      data,
-      serialized: stable({ parentId: previous.parentId || null, data }),
-    });
-  });
-};
-
-export const setSecureNotificationsRead = async (
-  notificationIds: string[],
-  isRead: boolean,
-  markAll = false,
-): Promise<MutationResult<NotificationReadResponse>> => {
+export const loadSecureNotificationPage = async (query: NotificationFeedQuery = {}): Promise<NotificationFeedPage> => {
   const sessionToken = captureWorkspaceSession();
-  const ids = Array.from(new Set(notificationIds.map(id => id.trim()).filter(Boolean))).sort();
-  if (!markAll && ids.length === 0) {
-    return { ok: false, code: 'VALIDATION', error: 'Choose at least one notification.' };
-  }
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before updating notifications.' };
-  }
-  const matchesRetry = retryableNotificationMutation
-    && retryableNotificationMutation.isRead === isRead
-    && retryableNotificationMutation.markAll === markAll
-    && stable(retryableNotificationMutation.notificationIds) === stable(ids);
-  if (retryableNotificationMutation && !matchesRetry) {
-    return {
-      ok: false,
-      code: 'RETRY_REQUIRED',
-      error: 'Retry the previous notification update before starting another one.',
-    };
-  }
-  const pending = matchesRetry
-    ? retryableNotificationMutation!
-    : { id: commandId(), notificationIds: ids, isRead, markAll };
-  retryableNotificationMutation = pending;
-
-  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_set_notifications_read', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_command_id: pending.id,
-    p_notification_ids: pending.notificationIds,
-    p_is_read: pending.isRead,
-    p_mark_all: pending.markAll,
-  })));
-
-  let result: Awaited<ReturnType<typeof invoke>>;
-  try {
-    result = await invoke();
-    if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
-  } catch (error) {
-    return {
-      ok: false,
-      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
-      error: error instanceof SyncRequestTimeoutError
-        ? 'Notification update confirmation timed out. Try the same action again safely.'
-        : 'Supabase could not confirm the notification update.',
-    };
-  }
-
-  if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
-  if (result.error) {
-    if (isAuthError(result.error)) retryableNotificationMutation = null;
-    return {
-      ok: false,
-      code: isAuthError(result.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
-      error: result.error.message || 'Unable to update notifications.',
-    };
-  }
-
-  const response = result.data as NotificationReadResponse;
-  if (!response?.ok) {
-    if (response?.code !== 'RETRY_REQUIRED') retryableNotificationMutation = null;
-    return {
-      ok: false,
-      code: response?.code || 'RETRY_REQUIRED',
-      error: response?.error || 'The notification update was rejected.',
-    };
-  }
-
-  retryableNotificationMutation = null;
-  applyNotificationReadBaseline(response, isRead);
-  return {
-    ok: true,
-    data: response,
-    commandId: response.commandId || pending.id,
-    workspaceVersion: Number(response.workspaceVersion) || 1,
-    replayed: response.replayed,
-  };
+  const module = await import('./secureNotifications');
+  assertWorkspaceSession(sessionToken);
+  return module.createSecureNotifications(notificationRuntime()).loadSecureNotificationPage(query);
 };
 
-const portalRecords = (value: unknown) => (
-  Array.isArray(value) ? value.filter(isRecord) : []
-);
-
-const parseClientContact = (value: unknown): ClientContact | null => {
-  if (!isRecord(value)) return null;
-  const id = cleanPortalText(value.id, 160);
-  const name = cleanPortalText(value.name, 160);
-  if (!id || !name) return null;
-  return { id, name, avatar: safeAvatarSource(value.avatar) };
+export const setSecureNotificationsRead = async (notificationIds: string[], isRead: boolean, markAll = false): Promise<MutationResult<NotificationReadResponse>> => {
+  const sessionToken = captureWorkspaceSession();
+  try {
+    const module = await import('./secureNotifications');
+    if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    return module.createSecureNotifications(notificationRuntime()).setSecureNotificationsRead(notificationIds, isRead, markAll);
+  } catch {
+    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
+  }
 };
 
 const loadClientPortalPayload = async (expectedClientName?: string): Promise<ClientPortalPayload> => {
@@ -2060,54 +1644,8 @@ const loadClientPortalPayload = async (expectedClientName?: string): Promise<Cli
   let result = await invoke();
   if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
   if (result.error) throw result.error;
-  if (!isRecord(result.data)) throw new Error('Supabase returned an invalid Client portal response.');
-
-  const workspaceId = cleanPortalText(result.data.workspaceId, 160);
-  const clientName = cleanPortalText(result.data.clientName, 240);
-  if (workspaceId !== SECURE_WORKSPACE_ID || !clientName) {
-    throw new Error('The Client portal response is not linked to this workspace.');
-  }
-  if (expectedClientName && clientName.toLocaleLowerCase() !== expectedClientName.trim().toLocaleLowerCase()) {
-    throw new Error('The Client portal company does not match this account.');
-  }
-
-  const companyKey = clientName.trim().toLocaleLowerCase();
-  const belongsToClient = (item: { clientName?: string }) => (
-    cleanPortalText(item.clientName, 240).trim().toLocaleLowerCase() === companyKey
-  );
-
-  const tasks = portalRecords(result.data.tasks)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['tasks'];
-  const projects = portalRecords(result.data.projects)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['projects'];
-  const clients = portalRecords(result.data.clients)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['clients'];
-  const contacts = (Array.isArray(result.data.contacts) ? result.data.contacts : [])
-    .map(parseClientContact)
-    .filter((contact): contact is ClientContact => Boolean(contact));
-  const clientPlans = portalRecords(result.data.clientPlans)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['clientPlans'];
-  const serviceCycles = portalRecords(result.data.serviceCycles)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['serviceCycles'];
-  const deliverables = portalRecords(result.data.deliverables)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['deliverables'];
-  const cycleComments = portalRecords(result.data.cycleComments)
-    .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['cycleComments'];
-  const taskComments = portalRecords(result.data.taskComments)
-    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.taskId, 160))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['taskComments'];
-  const taskApprovals = portalRecords(result.data.taskApprovals)
-    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.taskId, 160))
-    .map(item => ({ ...item })) as unknown as ClientPortalPayload['taskApprovals'];
-
-  return { workspaceId, clientName, tasks, projects, clients, contacts, clientPlans, serviceCycles, deliverables, cycleComments, taskComments, taskApprovals };
+  const { parseClientPortalPayload } = await import('./clientPortalPayload');
+  return parseClientPortalPayload(result.data, SECURE_WORKSPACE_ID, expectedClientName);
 };
 
 const projectionToEntityRow = (
@@ -2337,6 +1875,7 @@ const loadSecureWorkspaceInternal = async (authUser: User, options: { preserveRe
   alignBaselineToCanonicalState(state);
   if (!options.preserveRetainedCommand) {
     retryableCommand = null;
+    retryableBatch = null;
     clearPersistedRetryableCommand();
   } else if (retainedBeforeLoad) {
     retryableCommand = retainedBeforeLoad;
@@ -2420,139 +1959,59 @@ export const saveSecureWorkspace = async (
       error: 'The requested workspace command is not supported.',
     };
   }
-  let pendingOperations = buildOperations(state, options);
+  const pendingOperations = buildOperations(state, options);
   if (pendingOperations.length === 0) {
     const revision = await loadSecureWorkspaceRevision();
     return { ok: true, data: { ok: true, workspaceVersion: revision.version }, commandId: commandId(), workspaceVersion: revision.version };
   }
 
-  let lastResult: MutationResult<CommandResponse> | null = null;
-  let version = expectedWorkspaceVersion;
+  if (retryableBatch) return { ok: false, code: 'RETRY_REQUIRED', error: 'Save was not confirmed. Your pending change is retained for retry.' };
+  if (pendingOperations.length > 500) return { ok: false, code: 'VALIDATION', error: 'This change touches too many records. Save it in smaller steps.' };
   const clientDeletes = pendingOperations.filter(operation => operation.entityType === 'client' && operation.action === 'delete');
-  for (const operation of clientDeletes) {
-    if (!pendingOperations.some(item => item.entityType === 'client' && item.entityId === operation.entityId && item.action === 'delete')) continue;
-
-    // The server owns the company cascade. Send only its client row to the
-    // atomic delete RPC; child rows are returned in `deleted` and removed from
-    // the baseline so they are not sent again through the service RPC.
-    const result = await executeCommand({ id: commandId(), type: 'client.delete', operations: [operation] }, version);
-    if (!isWorkspaceSessionCurrent(saveSession)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
-    if (result.ok === false) return result;
-
-    lastResult = result;
-    version = result.workspaceVersion ?? version;
-    const deletedKeys = new Set((result.data.deleted || []).map(item => entityKey(item.entityType, item.entityId)));
-    deletedKeys.add(entityKey('client', operation.entityId));
-    pendingOperations = pendingOperations.filter(item => !deletedKeys.has(entityKey(item.entityType, item.entityId)));
-  }
-
-  if (pendingOperations.length === 0) {
-    return lastResult ?? {
-      ok: true,
-      data: { ok: true, workspaceVersion: version ?? 1 },
-      commandId: commandId(),
-      workspaceVersion: version ?? 1,
-    };
-  }
-  if (pendingOperations.length > 500) {
-    return {
-      ok: false,
-      code: 'VALIDATION',
-      error: 'This change touches too many records. Save it in smaller steps.',
-    };
-  }
-
+  const remaining = pendingOperations.filter(operation => !clientDeletes.includes(operation));
   const remainingType = type === 'client.delete' ? undefined : type;
   const groups = remainingType
-    ? partitionOperationsWithExplicitType(pendingOperations, remainingType, options.actorMemberId)
-    : partitionOperationsForRpc(pendingOperations, options.actorMemberId);
+    ? partitionOperationsWithExplicitType(remaining, remainingType, options.actorMemberId)
+    : partitionOperationsForRpc(remaining, options.actorMemberId);
+  const commands: SecureCommand[] = [
+    ...clientDeletes.map(operation => ({ id: commandId(), type: 'client.delete' as const, operations: [operation] })),
+    ...groups.filter(group => group.operations.length > 0).map(group => ({ id: commandId(), ...group })),
+  ];
+  const { createCommandBatch } = await import('./secureCommandBatch');
+  if (!isWorkspaceSessionCurrent(saveSession)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+  retryableBatch = createCommandBatch(commands, baseline, expectedWorkspaceVersion);
+  // All later groups are retained before the first request can reach the server.
+  retainSecureWorkspaceCommand(commands[0]);
+  return runSecureCommandBatch(saveSession, options);
+};
 
-  // Task triggers already persist derived delivery progress. A later service
-  // group must compare that result before sending the old row version again.
-  const touchedDeliverables = new Set<string>();
-  const touchedCycles = new Set<string>();
-  pendingOperations.filter(operation => operation.entityType === 'task').forEach(operation => {
-    const previous = baseline.get(entityKey('task', operation.entityId))?.data;
-    for (const task of [previous, operation.data]) {
-      if (typeof task?.deliverableId === 'string') touchedDeliverables.add(task.deliverableId);
-      if (typeof task?.serviceCycleId === 'string') touchedCycles.add(task.serviceCycleId);
-    }
+const runSecureCommandBatch = async (
+  saveSession: ReturnType<typeof captureWorkspaceSession>,
+  options: BuildOperationsOptions = {},
+): Promise<MutationResult<CommandResponse>> => {
+  const batch = retryableBatch;
+  if (!batch) return { ok: false, code: 'NOT_FOUND', error: 'There is no command waiting to retry.' };
+  const module = await import('./secureCommandBatch').catch(() => null);
+  if (!module) return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Your change is retained for retry.' };
+  const { runCommandBatch } = module;
+  return runCommandBatch(batch, options, {
+    isCurrent: () => isWorkspaceSessionCurrent(saveSession),
+    superAdminOnlyEntityTypes, serviceCommandTypes,
+    changedFields: changedFieldsForConflict, baseline,
+    retain: retainSecureWorkspaceCommand,
+    complete: () => { retryableBatch = null; retryableCommand = null; clearPersistedRetryableCommand(); },
+    execute: executeCommand,
+    loadEntity: async operation => {
+      const query = await withSyncTimeout(supabase.from('aitask_entities')
+        .select('entity_type,entity_id,parent_id,data,version,updated_at')
+        .eq('workspace_id', SECURE_WORKSPACE_ID).eq('entity_type', operation.entityType)
+        .eq('entity_id', operation.entityId).single());
+      return { ...query, data: query.data as EntityRow | null };
+    },
+    canonicalRows: (collection, row) => stateToRows(parseWorkspaceSnapshot({
+      [collection]: [{ ...row.data, version: row.version, updatedAt: row.updated_at }],
+    })),
   });
-  touchedDeliverables.forEach(id => {
-    const cycleId = baseline.get(entityKey('deliverable', id))?.data.cycleId;
-    if (typeof cycleId === 'string') touchedCycles.add(cycleId);
-  });
-
-  for (const group of groups) {
-    if (!isWorkspaceSessionCurrent(saveSession)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
-    let pendingOperations = group.operations;
-    if (lastResult && !serviceCommandTypes.has(groups[0].type)) {
-      const reconciled: WorkspaceOperation[] = [];
-      for (const operation of pendingOperations) {
-        const touched = operation.entityType === 'deliverable'
-          ? touchedDeliverables.has(operation.entityId)
-          : operation.entityType === 'service_cycle' && touchedCycles.has(operation.entityId);
-        const previous = baseline.get(entityKey(operation.entityType, operation.entityId));
-        const fields = operation.entityType === 'deliverable'
-          ? new Set(['status', 'deliveredAt', 'updatedAt'])
-          : new Set(['status', 'updatedAt']);
-        const localFields = previous ? changedFieldsForConflict(operation, previous.data) : [];
-        if (!touched || operation.action !== 'update' || !previous || !operation.data
-          || !localFields.every(field => fields.has(field))) {
-          reconciled.push(operation);
-          continue;
-        }
-        const query = await withSyncTimeout(supabase.from('aitask_entities')
-          .select('entity_type,entity_id,parent_id,data,version,updated_at')
-          .eq('workspace_id', SECURE_WORKSPACE_ID).eq('entity_type', operation.entityType)
-          .eq('entity_id', operation.entityId).single());
-        assertWorkspaceSession(saveSession);
-        if (query.error || !query.data) {
-          reconciled.push(operation);
-          continue;
-        }
-        const row = query.data as EntityRow;
-        const collection = operation.entityType === 'deliverable' ? 'deliverables' : 'serviceCycles';
-        const canonical = stateToRows(parseWorkspaceSnapshot({
-          [collection]: [{ ...row.data, version: row.version, updatedAt: row.updated_at }],
-        })).find(item => item.entityType === operation.entityType && item.entityId === operation.entityId);
-        if (!canonical || canonical.data.status !== operation.data.status
-          || !changedFieldsForConflict({ ...operation, data: canonical.data }, previous.data)
-          .every(field => fields.has(field))) {
-          // Another member changed more than derived progress: keep the old
-          // version so the ordinary conflict review protects their changes.
-          reconciled.push(operation);
-          continue;
-        }
-        const remainingFields = changedFieldsForConflict(operation, canonical.data).filter(field => field !== 'updatedAt');
-        if (remainingFields.length === 0) {
-          baseline.set(entityKey(operation.entityType, operation.entityId), {
-            ...canonical, data: operation.data,
-            serialized: stable({ parentId: operation.parentId || null, data: operation.data }),
-          });
-        } else if (remainingFields.every(field => field === 'deliveredAt')
-          && stable(canonical.data.deliveredAt) === stable(previous.data.deliveredAt)) {
-          reconciled.push({ ...operation, expectedVersion: Number(row.version) });
-        } else {
-          reconciled.push(operation);
-        }
-      }
-      pendingOperations = reconciled;
-    }
-    if (pendingOperations.length === 0) continue;
-    const command: SecureCommand = { id: commandId(), type: group.type, operations: pendingOperations };
-    const result = await executeCommand(command, version);
-    if (!isWorkspaceSessionCurrent(saveSession)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
-    if (result.ok === false) return result;
-    lastResult = result;
-    version = result.workspaceVersion ?? version;
-  }
-  return lastResult ?? {
-    ok: true,
-    data: { ok: true, workspaceVersion: version ?? 1 },
-    commandId: commandId(),
-    workspaceVersion: version ?? 1,
-  };
 };
 
 export const retrySecureWorkspaceCommand = async (
@@ -2566,7 +2025,7 @@ export const retrySecureWorkspaceCommand = async (
   // A non-super-admin must never retry an operation type the server reserves
   // for Boss Koo. Older retained commands can still carry those ops, or an
   // update to another member that the earlier bundling path misclassified.
-  if (options.excludeSuperAdminEntities) {
+  if (options.excludeSuperAdminEntities && !retryableBatch) {
     command.operations = command.operations.filter(operation => !superAdminOnlyEntityTypes.has(operation.entityType));
     if (options.actorMemberId) {
       command.operations = command.operations.filter(operation => (
@@ -2574,7 +2033,7 @@ export const retrySecureWorkspaceCommand = async (
       ));
     }
   }
-  if (command.operations.length === 0) {
+  if (command.operations.length === 0 && !retryableBatch) {
     // Nothing left to send (already applied, or every op was reserved for Boss).
     retryableCommand = null;
     clearPersistedRetryableCommand();
@@ -2597,7 +2056,12 @@ export const retrySecureWorkspaceCommand = async (
   if (command.operations.some(operation => operation.expectedVersion < 0)) {
     return { ok: false, code: 'CONFLICT', error: 'Review the latest record before retrying.' };
   }
-  return executeCommand(command, expectedWorkspaceVersion);
+  if (!retryableBatch) retryableBatch = { commands: [command], before: structuredClone(command.operations.map(operation => baseline.get(entityKey(operation.entityType, operation.entityId))).filter((row): row is BaselineRow => Boolean(row))), cursor: 0, workspaceVersion: expectedWorkspaceVersion, attempted: true };
+  else {
+    retryableBatch.commands[retryableBatch.cursor] = command;
+    if (expectedWorkspaceVersion !== undefined) retryableBatch.workspaceVersion = expectedWorkspaceVersion;
+  }
+  return runSecureCommandBatch(captureWorkspaceSession(), options);
 };
 
 export const rebaseRetryableCommand = (conflict: MutationConflict) => {
@@ -2632,12 +2096,14 @@ export const rebaseRetryableCommand = (conflict: MutationConflict) => {
   // Keep the same command id: a previously applied command replays through the
   // server receipt instead of conflicting again.
   retryableCommand = { ...retryableCommand, operations };
+  if (retryableBatch) retryableBatch.commands[retryableBatch.cursor] = retryableCommand;
   persistRetryableCommand();
   return true;
 };
 
 export const discardSecureWorkspaceCommand = () => {
   retryableCommand = null;
+  retryableBatch = null;
   clearPersistedRetryableCommand();
   retryableMemberDepartments = null;
   retryableMemberPermissions = null;
@@ -2651,6 +2117,7 @@ export const getRetainedSecureCommand = (): SecureCommand | null => retryableCom
 onWorkspaceSessionInvalidated(() => {
   baseline = new Map();
   retryableCommand = null;
+  retryableBatch = null;
   retryableMemberDepartments = null;
   retryableMemberPermissions = null;
   retryableMemberRole = null;

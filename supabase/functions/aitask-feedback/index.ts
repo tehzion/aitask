@@ -1,5 +1,5 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { createClient } from 'npm:@supabase/supabase-js@2.116.0';
+import { createClient } from 'npm:@supabase/supabase-js@2.117.3';
 
 const allowedOrigins = new Set([
   'https://aitask-virid.vercel.app',

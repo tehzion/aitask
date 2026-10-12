@@ -1,3 +1,4 @@
+import DeliveryReviewPanel from './DeliveryReviewPanel';
 import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileCheck2, UsersRound, WalletCards } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -11,6 +12,8 @@ import { isTaskOpen } from '../lib/taskReporting';
 import { CountLabel, DataRow, ProgressBar, StatGroup, StatusChip, Surface } from './ui';
 import { formatLocalizedDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
+import { useLocalToday } from '../hooks/useLocalToday';
+import { getPlanDeliverySummary, getCompanyTaskActivity } from '../lib/dashboardData';
 
 type WorkspaceTask = ReturnType<typeof useStore.getState>['tasks'][number];
 
@@ -61,12 +64,33 @@ const TaskQueueContent = ({ title, tasks, empty }: { title: string; tasks: Works
   </Surface>
 };
 
+const CompanyTaskActivity = ({ activity }: { activity: ReturnType<typeof getCompanyTaskActivity> }) => {
+  const { t } = useI18n();
+  const renderHandler = (handler: typeof activity.handlers[number]) => <li key={handler.id} className="flex items-start justify-between gap-3">
+    <span className="min-w-0 break-words">{handler.name ? <span data-i18n-skip>{handler.name}</span> : t('Assigned member unavailable')}</span>
+    <span className="shrink-0">{handler.open} {t('open tasks')}</span>
+  </li>;
+  return <div className="mt-3 border-t border-line/60 pt-3 text-xs text-muted">
+    <p className="font-medium text-ink">{t('Tasks completed this month')}: <span className="calm-number">{activity.completedThisMonth}</span></p>
+    {activity.completionDateUnavailable > 0 && <p className="mt-1">{t('Completion date unavailable')}: {activity.completionDateUnavailable}</p>}
+    <p className="mt-2 font-medium text-ink">{t('Currently handled by')}</p>
+    <ul className="mt-1 space-y-1">{activity.handlers.slice(0, 3).map(renderHandler)}</ul>
+    {activity.handlers.length > 3 && <details className="mt-1">
+      <summary className="cursor-pointer py-2 font-medium text-accent">{t('Show more handlers')} ({activity.handlers.length - 3})</summary>
+      <ul className="space-y-1">{activity.handlers.slice(3).map(renderHandler)}</ul>
+    </details>}
+    {activity.unassignedOpen > 0 && <p className="mt-1">{t('Unassigned open tasks')}: {activity.unassignedOpen}</p>}
+    {activity.handlers.length === 0 && activity.unassignedOpen === 0 && <p className="mt-1">{t('No open company tasks')}</p>}
+    <p className="mt-2">{t('Company-wide task activity; separate from plan delivery progress.')}</p>
+  </div>;
+};
+
 const ServiceRoleDashboard = () => {
   const store = useStore();
   const { locale, t } = useI18n();
   const persona = getDashboardPersona(store.currentUser);
   const canSeePrices = canViewServicePrices(store.currentUser, store.rolePermissions);
-  const now = new Date();
+  const now = useLocalToday();
   const visibleTasks = React.useMemo(
     () => getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }),
     [store.currentUser, store.rolePermissions, store.tasks, store.clients, store.projects],
@@ -76,7 +100,14 @@ const ServiceRoleDashboard = () => {
   ), [store.currentUser, store.projects, store.rolePermissions, store.tasks, store.clients]);
   const serviceTasks = visibleTasks.filter(task => Boolean(task.clientId));
   const myTasks = serviceTasks.filter(task => task.assignedTo === store.currentUser?.id);
-  const scopeTasks = persona === 'production' ? myTasks : persona === 'boss' ? visibleTasks : serviceTasks;
+  // Project Manager visibility already applies their portfolio boundary and
+  // also includes directly created/assigned legacy or independent tasks that
+  // may not have a clientId. Keep those tasks in the PM's delivery queues.
+  const scopeTasks = persona === 'production'
+    ? myTasks
+    : persona === 'boss' || persona === 'projectManager'
+      ? visibleTasks
+      : serviceTasks;
   const overdue = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && isTaskOpen(task) && isBefore(due, now) && !isToday(due)); });
   const dueToday = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && isTaskOpen(task) && isToday(due)); });
   const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && visibleClientKeys.has(getClientKey(plan.clientName)));
@@ -94,25 +125,14 @@ const ServiceRoleDashboard = () => {
     delivered: delivered.filter(item => serviceTasks.some(task => task.assignedTo === user.id && task.deliverableId === item.id)).length,
   }));
   const activeCompanies = React.useMemo(() => activePlans.map(plan => {
-    const currentCycle = store.serviceCycles
-      .filter(cycle => cycle.clientId === plan.clientId && (cycle.status === 'Published' || cycle.status === 'Completed'))
-      .sort((a, b) => b.periodStart.localeCompare(a.periodStart))[0];
-    const cycleDeliverables = currentCycle
-      ? store.deliverables.filter(item => item.cycleId === currentCycle.id)
-      : [];
-    const count = (status: string) => cycleDeliverables.filter(item => item.status === status).length;
     return {
       clientId: plan.clientId,
       clientName: plan.clientName,
       plan,
-      currentCycle,
-      total: cycleDeliverables.length,
-      delivered: count('Delivered'),
-      ready: count('Ready'),
-      inProgress: count('In Progress'),
-      planned: count('Planned'),
+      ...getPlanDeliverySummary(plan, store.serviceCycles, store.deliverables, visibleTasks, now),
+      taskActivity: getCompanyTaskActivity(plan.clientId, visibleTasks, store.users, now),
     };
-  }), [activePlans, store.deliverables, store.serviceCycles]);
+  }), [activePlans, store.deliverables, store.serviceCycles, visibleTasks, store.users, now]);
 
   if (persona === 'client') return null;
 
@@ -122,7 +142,8 @@ const ServiceRoleDashboard = () => {
       <WorkbenchHeader id="production-workbench-title" title={t('Assigned production work')} description={t('Deadlines, revisions, review queues, and completed output.')} />
       <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label={t('My open tasks')} value={open.length} icon={Clock3} detail={t('Only tasks assigned to you are included.')} /><StatGroup className="grid-cols-3"><CompactStat label={t('Overdue')} value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label={t('Revisions')} value={revisions.length} icon={FileCheck2} tone="warning" /><CompactStat label={t('Completed')} value={completed.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
       <div className="grid gap-4 xl:grid-cols-[1.25fr_1fr]"><TaskQueue title={t('Deadline')} tasks={[...open].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty={t('No assigned deadlines.')} /><TaskQueue title={t('Revision / internal review')} tasks={[...revisions, ...waitingInternal.filter(task => !revisions.some(item => item.id === task.id))]} empty={t('No revision or review work.')} /></div>
-    </section>;
+      <DeliveryReviewPanel />
+  </section>;
   }
 
   if (persona === 'operation') return <section className="space-y-5" aria-labelledby="operation-workbench-title">
@@ -130,12 +151,14 @@ const ServiceRoleDashboard = () => {
     <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label={t('Due today')} value={dueToday.length} icon={Clock3} detail={<>{overdue.length} {t('overdue tasks require attention.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label={t('Overdue')} value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label={t('Internal review')} value={waitingInternal.length} icon={FileCheck2} tone="warning" /><CompactStat label={t('Client approval')} value={waitingClient.length} icon={UsersRound} /></StatGroup></div>
     <div className="grid gap-4 xl:grid-cols-3"><TaskQueue title={t('Urgent today')} tasks={[...overdue, ...dueToday]} empty={t('No urgent production work.')} /><TaskQueue title={t('Internal review')} tasks={waitingInternal} empty={t('The internal review queue is clear.')} /><TaskQueue title={t('Client approval')} tasks={waitingClient} empty={t('No client approval is waiting.')} /></div>
     <Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Team handoffs')}</h3><p className="mt-1 text-sm text-muted">{t('Open work and delivered output by person.')}</p></div><div className="grid divide-y divide-line/60 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">{workers.slice(0, 4).map(item => <div key={item.user.id} className="p-4"><p data-i18n-skip className="font-semibold text-ink">{item.user.name}</p><p className="mt-1 text-xs text-muted">{item.open} {t('open')} · {item.completed} {t('completed')}</p><ProgressBar className="mt-4" label={t('Delivered output')} value={item.delivered} max={Math.max(1, item.completed)} /></div>)}</div></Surface>
+    <DeliveryReviewPanel />
   </section>;
 
   if (persona === 'account') return <section className="space-y-5" aria-labelledby="account-workbench-title">
     <WorkbenchHeader id="account-workbench-title" title={t('Accounts')} description={t('Client plans, renewals, commercial records, and delivery output.')} />
     <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]"><SpotlightMetric label={t('Monthly management value')} value={canSeePrices ? formatMoney(contractedMonthly, 'MYR', locale) : t('Restricted')} icon={WalletCards} detail={<>{activePlans.length} {t(activePlans.length === 1 ? 'active client package.' : 'active client packages.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label={t('Active packages')} value={activePlans.length} icon={UsersRound} /><CompactStat label={t('Contract reminders')} value={renewalPlans.length} icon={CalendarDays} tone="warning" /><CompactStat label={t('Delivered outputs')} value={delivered.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
     <div className="grid gap-4 xl:grid-cols-2"><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Plans and renewals')}</h3></div><div className="divide-y divide-line/60">{activePlans.map(plan => { const contractEnd = parseOptionalDate(plan.contractEndDate); return <DataRow key={plan.id} titleI18nSkip={false} descriptionI18nSkip={false} title={<Link to={`/clients/${encodeURIComponent(plan.clientId)}`} className="hover:text-accent"><span data-i18n-skip>{plan.clientName}</span></Link>} description={<><span data-i18n-skip>{plan.name}</span> · {t('renewal')} {contractEnd ? formatLocalizedDate(contractEnd, locale) : t('not set')}</>} action={canSeePrices ? <span className="calm-number text-sm font-semibold text-ink">{formatMoney(store.servicePricingSnapshots.find(item => item.parentId === plan.id)?.totalMinor || 0, 'MYR', locale)}</span> : undefined} />; })}</div></Surface><Surface className="overflow-hidden"><div className="border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Delivery output by worker')}</h3></div><div className="divide-y divide-line/60">{workers.map(item => <DataRow key={item.user.id} titleI18nSkip={false} descriptionI18nSkip={false} title={<span data-i18n-skip>{item.user.name}</span>} description={<span data-i18n-skip>{item.user.workerType || t('employee')}</span>} action={<span className="calm-number text-xs text-muted">{item.completed} {t('tasks')} · {item.delivered} {t('delivered')}</span>} />)}</div></Surface></div>
+    <DeliveryReviewPanel />
   </section>;
 
   if (persona === 'projectManager') return <section className="space-y-5" aria-labelledby="portfolio-workbench-title">
@@ -149,12 +172,13 @@ const ServiceRoleDashboard = () => {
       </div>
       <div className="divide-y divide-line/60">
         {activeCompanies.map(item => (
-          <div key={item.clientId} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
+          <div key={item.plan.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
             <div className="min-w-0">
               <Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="truncate text-sm font-semibold text-ink hover:text-accent">{item.clientName}</Link>
-              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t('No published cycle for this month')}</>}</p>
+              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t(item.draftCycle ? 'Current cycle not published' : 'No published cycle covering today')}</>}</p>
             </div>
             <div className="min-w-0">
+              {item.currentCycle && item.total > 0 ? <>
               <ProgressBar className="mb-1.5" label={`${t('Deliverables')} ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />
               <div className="flex flex-wrap gap-1.5 text-[11px] text-muted">
                 <StatusChip tone="emerald">{item.delivered} {t('Delivered')}</StatusChip>
@@ -162,6 +186,13 @@ const ServiceRoleDashboard = () => {
                 <StatusChip tone="indigo">{item.inProgress} {t('In Progress')}</StatusChip>
                 <StatusChip tone="slate">{item.planned} {t('Planned')}</StatusChip>
               </div>
+              </> : <StatusChip tone="slate">{t(item.draftCycle
+                ? 'Awaiting publication'
+                : item.currentCycle ? 'No deliverables in this cycle' : 'No current published cycle')}</StatusChip>}
+              <CompanyTaskActivity activity={item.taskActivity} />
+              {item.currentCycle && item.total > 0 && <p className="mt-2 text-xs text-muted">
+                {t('Progress counts confirmed deliveries, not completed tasks.')}
+              </p>}
             </div>
           </div>
         ))}
@@ -169,6 +200,7 @@ const ServiceRoleDashboard = () => {
       </div>
     </Surface>
     <Surface variant="inset" className="flex flex-wrap items-center justify-between gap-3 p-5"><div><p className="calm-eyebrow">{t('Commercial summary')}</p><p className="mt-1 text-sm text-muted">{t('Active plan value in your visible portfolio.')}</p></div><p className="calm-number text-2xl font-semibold text-ink">{formatMoney(contractedMonthly, 'MYR', locale)}</p></Surface>
+    <DeliveryReviewPanel />
   </section>;
 
   return <section className="space-y-5" aria-labelledby="management-workbench-title">
@@ -181,12 +213,13 @@ const ServiceRoleDashboard = () => {
       </div>
       <div className="divide-y divide-line/60">
         {activeCompanies.map(item => (
-          <div key={item.clientId} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
+          <div key={item.plan.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
             <div className="min-w-0">
               <Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="truncate text-sm font-semibold text-ink hover:text-accent">{item.clientName}</Link>
-              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t('No published cycle for this month')}</>}</p>
+              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t(item.draftCycle ? 'Current cycle not published' : 'No published cycle covering today')}</>}</p>
             </div>
             <div className="min-w-0">
+              {item.currentCycle && item.total > 0 ? <>
               <ProgressBar className="mb-1.5" label={`${t('Deliverables')} ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />
               <div className="flex flex-wrap gap-1.5 text-[11px] text-muted">
                 <StatusChip tone="emerald">{item.delivered} {t('Delivered')}</StatusChip>
@@ -194,12 +227,20 @@ const ServiceRoleDashboard = () => {
                 <StatusChip tone="indigo">{item.inProgress} {t('In Progress')}</StatusChip>
                 <StatusChip tone="slate">{item.planned} {t('Planned')}</StatusChip>
               </div>
+              </> : <StatusChip tone="slate">{t(item.draftCycle
+                ? 'Awaiting publication'
+                : item.currentCycle ? 'No deliverables in this cycle' : 'No current published cycle')}</StatusChip>}
+              <CompanyTaskActivity activity={item.taskActivity} />
+              {item.currentCycle && item.total > 0 && <p className="mt-2 text-xs text-muted">
+                {t('Progress counts confirmed deliveries, not completed tasks.')}
+              </p>}
             </div>
           </div>
         ))}
         {activeCompanies.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">{t('No active companies yet.')}</p>}
       </div>
     </Surface>
+    <DeliveryReviewPanel />
   </section>;
 };
 

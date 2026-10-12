@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../types';
-import { buildStaffWorkQueue, getStaffFocusTask, getStaffGuidedAction, getTaskBlockers, getHodScopeTasks } from './staffWorkspace';
+import { buildStaffWorkQueue, getStaffFocusTask, getStaffGuidedAction, getTaskBlockers, getHodScopeTasks, getUnavailableTaskDependencyCount } from './staffWorkspace';
 
 const task = (overrides: Partial<Task>): Task => ({
   id: overrides.id || crypto.randomUUID(),
@@ -119,5 +119,17 @@ describe('HOD oversight', () => {
     expect(getHodScopeTasks(visible, 'hod', 'delegated').map(item => item.id)).toEqual(['created', 'reassigned']);
     expect(getHodScopeTasks(visible, 'hod', 'department')).toEqual(visible);
     expect(getHodScopeTasks(visible, undefined, 'delegated')).toEqual([]);
+  });
+});
+
+
+describe('unavailable task dependencies', () => {
+  it('counts unique unavailable predecessors without inferring hidden status', () => {
+    const work = task({ predecessorTaskIds: ['visible', 'hidden', 'hidden', 'missing'] });
+    const visible = [task({ id: 'visible', status: 'Completed' })];
+    expect(getUnavailableTaskDependencyCount(work, visible)).toBe(2);
+    expect(getUnavailableTaskDependencyCount({ ...work, status: 'Completed' }, visible)).toBe(0);
+    expect(getUnavailableTaskDependencyCount({ ...work, status: 'Cancelled' }, visible)).toBe(0);
+    expect(getUnavailableTaskDependencyCount(task({}), visible)).toBe(0);
   });
 });

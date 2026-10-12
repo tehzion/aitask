@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+// Visual references capture the settled layout, independent of entry motion.
+test.use({ reducedMotion: 'reduce' });
+
 const hasCommittedVisualBaseline = process.platform === 'darwin';
 
 const screenshotOptions = (page: import('@playwright/test').Page) => ({
@@ -30,7 +33,7 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   test.setTimeout(90_000);
   await openStaffWorkspace(page);
 
-  await expect(page.getByText('Next due')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Assigned queue' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Open work/ })).toBeVisible();
   await expect(page.getByText('Workspace analytics')).toHaveCount(0);
   await expect(page.locator('main').getByRole('button', { name: 'Create Task' })).toHaveCount(0);
@@ -65,17 +68,16 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
     await expect(page).toHaveScreenshot('staff-v2-all-work-desktop-light.png', screenshotOptions(page));
   }
 
-  await page.getByRole('button', { name: /6\. Video Editing/ }).click();
+  const taskRow = page.getByRole('button', { name: /6\. Video Editing/ });
+  await expect(taskRow.getByText('Dependency status unavailable', { exact: true })).toBeVisible();
+  await taskRow.click();
   await expect(page.getByRole('combobox', { name: 'All task statuses' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Send for review' })).toBeVisible();
-  await expect(page.getByText('Check the earlier step')).toBeVisible();
   const taskFocusAxe = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
   expect(taskFocusAxe.violations, `Staff task focus: ${taskFocusAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
 
   await page.getByRole('button', { name: 'Send for review' }).click();
-  const dependencyConfirmation = page.getByRole('alertdialog', { name: 'Start with an incomplete earlier step?' });
-  await expect(dependencyConfirmation).toBeVisible();
-  await dependencyConfirmation.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('alertdialog', { name: 'Start with an incomplete earlier step?' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Waiting for review' })).toBeDisabled();
 });
 
@@ -115,7 +117,7 @@ test('staff v2 remains readable in Chinese dark mode', async ({ page }) => {
   await page.reload();
   await expect(page.locator('html')).toHaveClass(/dark/);
   await expect(page.getByRole('heading', { name: '我的工作' })).toBeVisible();
-  await expect(page.getByText('下一步工作')).toBeVisible();
+  await expect(page.getByRole('region', { name: '已分配队列' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   if (hasCommittedVisualBaseline) {
     await expect(page).toHaveScreenshot('staff-v2-dashboard-mobile-dark-zh.png', screenshotOptions(page));

@@ -60,6 +60,9 @@ import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
 import { useI18n } from '../components/I18nProvider';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useLocalToday } from '../hooks/useLocalToday';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent, onWorkspaceSessionInvalidated } from '../lib/workspaceSession';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -150,6 +153,7 @@ const CalendarMetricButton: React.FC<CalendarMetricButtonProps> = ({ filter, lab
 
 const Calendar: React.FC = () => {
   const { locale, t } = useI18n();
+  const today = useLocalToday();
   const {
     tasks: allTasks,
     users,
@@ -193,6 +197,27 @@ const Calendar: React.FC = () => {
   const [dateDraftError, setDateDraftError] = useState('');
   const [pendingDateAttempt, setPendingDateAttempt] = useState<PendingDateAttempt | null>(null);
   const successTimer = useRef<number | null>(null);
+  const operationGeneration = useRef(0);
+  const savingTaskIdRef = useRef<string | null>(null);
+  const editorTaskIdRef = useRef(editingTaskId);
+  editorTaskIdRef.current = editingTaskId;
+  const dateBaseline = useRef<DateEditorDraft | null>(null);
+  const dateDirty = Boolean(dateDraft && dateBaseline.current && (dateDraft.startDate !== dateBaseline.current.startDate || dateDraft.dueDate !== dateBaseline.current.dueDate));
+  const markDatesPristine = useUnsavedChanges(dateDirty || Boolean(savingTaskId || pendingDateAttempt));
+
+  useEffect(() => {
+    const reset = () => {
+      operationGeneration.current++;
+      savingTaskIdRef.current = null;
+      setSavingTaskId(null); setEditingTaskId(null); setDateDraft(null);
+      setPendingDateAttempt(null); setDateDraftError(''); setSyncError(''); setDropSuccess(null);
+      dateBaseline.current = null;
+      markDatesPristine();
+    };
+    const unsubscribe = onWorkspaceSessionInvalidated(reset);
+    const generation = operationGeneration;
+    return () => { unsubscribe(); generation.current++; };
+  }, [markDatesPristine]);
 
   useEffect(() => () => {
     if (successTimer.current) window.clearTimeout(successTimer.current);
@@ -202,10 +227,10 @@ const Calendar: React.FC = () => {
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
     [allTasks, clientProfiles, currentUser, projects, rolePermissions],
   );
-  const overview = getCalendarOverview(visibleTasks);
+  const overview = getCalendarOverview(visibleTasks, today);
   const tasks = useMemo(
-    () => filterCalendarTasks(visibleTasks, calendarFilter),
-    [calendarFilter, visibleTasks],
+    () => filterCalendarTasks(visibleTasks, calendarFilter, today),
+    [calendarFilter, visibleTasks, today],
   );
   const taskById = useMemo(() => new Map(tasks.map(task => [task.id, task])), [tasks]);
   const rangeByTaskId = useMemo(
@@ -217,10 +242,6 @@ const Calendar: React.FC = () => {
     ? pendingDateAttempt
     : null;
   const hasBlockedMutation = isPendingMutationResolution(backend);
-  const savingTaskIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    savingTaskIdRef.current = savingTaskId;
-  }, [savingTaskId]);
 
   const nextPeriod = () => {
     const nextDate = viewMode === 'month' ? addMonths(currentDate, 1) : addWeeks(currentDate, 1);
@@ -309,7 +330,7 @@ const Calendar: React.FC = () => {
   const canEditTaskDates = useCallback(
     (task: Task) => (
       canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects })
-      && savingTaskIdRef.current !== task.id
+      && !savingTaskIdRef.current
       && !backend.isSaving
       && !hasBlockedMutation
     ),
@@ -327,98 +348,93 @@ const Calendar: React.FC = () => {
     nextDates: DateEditorDraft,
     successMessage = 'dates updated',
     source: PendingDateAttempt['source'] = 'editor',
-  ) => {
+  ): Promise<{ ok: boolean; error?: string; stale?: boolean }> => {
     const task = useStore.getState().tasks.find(item => item.id === taskId);
-    if (!task) {
-      const error = 'This task is no longer available.';
-      setSyncError(error);
-      return { ok: false, error };
-    }
-    if (savingTaskId === taskId) return { ok: false, error: 'This task is already being saved.' };
+    if (!task) return { ok: false, error: 'This task is no longer available.' };
+    if (savingTaskIdRef.current) return { ok: false, error: 'This task is already being saved.' };
     if (task.startDate === nextDates.startDate && task.dueDate === nextDates.dueDate) {
       setSyncError('');
       return { ok: true };
     }
-
-    const previous = {
-      startDate: task.startDate,
-      dueDate: task.dueDate,
-      updatedAt: task.updatedAt,
-    };
+    const session = captureWorkspaceSession();
+    const actorId = currentUser?.id;
+    const generation = ++operationGeneration.current;
+    const isCurrent = () => isWorkspaceSessionCurrent(session) && generation === operationGeneration.current
+      && useStore.getState().currentUser?.id === actorId;
+    const previous = { startDate: task.startDate, dueDate: task.dueDate, updatedAt: task.updatedAt };
+    let optimisticVersion: string | undefined;
+    savingTaskIdRef.current = taskId;
     setSavingTaskId(taskId);
     setSyncError('');
-
-    const updateResult = updateTask(taskId, nextDates);
-    if (!updateResult.ok) {
-      const error = updateResult.error || 'Unable to update the task dates.';
-      setSavingTaskId(null);
-      setSyncError(error);
-      if (source === 'drag') {
-        setEditingTaskId(taskId);
-        setDateDraft(nextDates);
-        setDateDraftError(error);
+    try {
+      const updateResult = updateTask(taskId, nextDates);
+      if (!updateResult.ok) {
+        const error = updateResult.error || 'Unable to update the task dates.';
+        setSyncError(error);
+        if (source === 'drag') {
+          dateBaseline.current = previous;
+          setEditingTaskId(taskId); setDateDraft(nextDates); setDateDraftError(error);
+        }
+        return { ok: false, error };
       }
-      return { ok: false, error };
+      optimisticVersion = useStore.getState().tasks.find(item => item.id === taskId)?.updatedAt;
+      let result: { ok: boolean; error?: string };
+      try { result = await commitPendingMutation('task.update'); }
+      catch (failure) { result = { ok: false, error: failure instanceof Error ? failure.message : 'Unable to update the task dates.' }; }
+      if (!isCurrent()) return { ok: false, stale: true };
+      if (!result.ok) {
+        const error = result.error || 'The date change was rolled back. Review the attempted dates before retrying.';
+        // Restore only this optimistic revision. A pull or another session owns newer records.
+        useStore.setState(state => ({ tasks: state.tasks.map(item => item.id === taskId
+          && item.updatedAt === optimisticVersion && item.startDate === nextDates.startDate && item.dueDate === nextDates.dueDate
+          ? { ...item, ...previous } : item) }));
+        setPendingDateAttempt({ taskId, original: previous, attempted: nextDates, source, lastPulledAt: useStore.getState().backend.lastPulledAt });
+        dateBaseline.current = previous;
+        setEditingTaskId(taskId); setDateDraft(nextDates); setDateDraftError(error); setSyncError(error);
+        return { ok: false, error };
+      }
+      setPendingDateAttempt(null);
+      setSyncError('');
+      showSavedMessage(`${task.title} · ${successMessage}`);
+      return { ok: true };
+    } finally {
+      if (isCurrent()) { savingTaskIdRef.current = null; setSavingTaskId(null); }
     }
-
-    const saveResult = await commitPendingMutation('task.update');
-    if (!saveResult.ok) {
-      const error = saveResult.error || 'The date change was rolled back. Review the attempted dates before retrying.';
-      useStore.setState(state => ({
-        tasks: state.tasks.map(item => (
-          item.id === taskId
-            ? {
-                ...item,
-                startDate: previous.startDate,
-                dueDate: previous.dueDate,
-                updatedAt: previous.updatedAt,
-              }
-          : item
-        )),
-      }));
-      setPendingDateAttempt({
-        taskId,
-        original: previous,
-        attempted: nextDates,
-        source,
-        lastPulledAt: useStore.getState().backend.lastPulledAt,
-      });
-      setEditingTaskId(taskId);
-      setDateDraft(nextDates);
-      setDateDraftError(error);
-      setSavingTaskId(null);
-      setSyncError(error);
-      return { ok: false, error };
-    }
-
-    setSavingTaskId(null);
-    setPendingDateAttempt(null);
-    setSyncError('');
-    showSavedMessage(`${task.title} · ${successMessage}`);
-    return { ok: true };
   };
 
   const openDateEditor = (task: Task) => {
+    if (savingTaskIdRef.current) return;
+    if (dateDirty && !window.confirm(t('Discard unsaved changes?'))) return;
     if (!canEditTaskByRole(currentUser, task, rolePermissions, { clients: clientProfiles, projects })) {
       navigate(`/tasks?taskId=${encodeURIComponent(task.id)}`);
       return;
     }
+    dateBaseline.current = { startDate: task.startDate, dueDate: task.dueDate };
     setEditingTaskId(task.id);
     const pending = pendingDateAttempt?.taskId === task.id ? pendingDateAttempt : null;
     setDateDraft(pending?.attempted || { startDate: task.startDate, dueDate: task.dueDate });
     setDateDraftError(pending ? 'Review the attempted dates, then retry or use the latest saved range.' : '');
   };
 
+  const resetDateEditor = () => {
+    dateBaseline.current = null;
+    markDatesPristine();
+    setEditingTaskId(null); setDateDraft(null); setDateDraftError('');
+  };
   const closeDateEditor = () => {
-    if (savingTaskId === editingTaskId) return;
+    if (savingTaskIdRef.current) return false;
+    if (dateDirty && !pendingDateAttempt && !window.confirm(t('Discard unsaved changes?'))) return false;
+    dateBaseline.current = null;
     setEditingTaskId(null);
     setDateDraft(null);
     setDateDraftError('');
+    if (!pendingDateAttempt) markDatesPristine();
+    return true;
   };
 
   const handleDateEditorSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!editingTask || !dateDraft) return;
+    if (!editingTask || !dateDraft || savingTaskIdRef.current || hasBlockedMutation) return;
     if (!DATE_PATTERN.test(dateDraft.startDate)) {
       setDateDraftError('Choose a valid start date.');
       return;
@@ -433,43 +449,64 @@ const Calendar: React.FC = () => {
     }
 
     setDateDraftError('');
-    const result = await saveTaskDateRange(editingTask.id, dateDraft);
+    const taskId = editingTask.id;
+    const result = await saveTaskDateRange(taskId, dateDraft);
+    if (result.stale || editorTaskIdRef.current !== taskId) return;
     if (result.ok) {
-      closeDateEditor();
+      resetDateEditor();
     } else {
       setDateDraftError(result.error || 'Unable to save these dates.');
     }
   };
 
-  const handleRetryDates = async () => {
-    if (!editingPendingAttempt || savingTaskId === editingPendingAttempt.taskId) return;
-    setSavingTaskId(editingPendingAttempt.taskId);
-    setDateDraftError('');
-    const result = await retryPendingSave('task.update');
-    setSavingTaskId(null);
-    if (!result.ok) {
-      setDateDraftError(result.error || 'The date change still needs attention.');
-      return;
+  const resolveDateAttempt = async (action: 'retry' | 'latest') => {
+    const attempt = editingPendingAttempt;
+    if (!attempt || savingTaskIdRef.current) return;
+    const session = captureWorkspaceSession();
+    const actorId = currentUser?.id;
+    const generation = ++operationGeneration.current;
+    const isCurrent = () => isWorkspaceSessionCurrent(session) && generation === operationGeneration.current
+      && useStore.getState().currentUser?.id === actorId;
+    savingTaskIdRef.current = attempt.taskId;
+    setSavingTaskId(attempt.taskId); setDateDraftError('');
+    try {
+      if (action === 'retry') {
+        const result = await retryPendingSave('task.update');
+        if (!isCurrent()) return;
+        if (!result.ok) { setDateDraftError(result.error || 'The date change still needs attention.'); return; }
+      } else {
+        await discardMutation({ reload: true, confirm: false });
+        if (!isCurrent()) return;
+        const latestBackend = useStore.getState().backend;
+        if (latestBackend.mode === 'supabase' && latestBackend.status !== 'live') {
+          setDateDraftError(latestBackend.error || 'The date change still needs attention.'); return;
+        }
+      }
+      const latest = useStore.getState().tasks.find(item => item.id === attempt.taskId);
+      if (!latest) { setDateDraftError('The task was saved but could not be reloaded. Check the latest workspace state.'); return; }
+      const applied = latest.startDate === attempt.attempted.startDate && latest.dueDate === attempt.attempted.dueDate;
+      setPendingDateAttempt(null); setSyncError('');
+      if (action === 'retry' && applied) showSavedMessage(`${latest.title} · dates updated`);
+      if (editorTaskIdRef.current === attempt.taskId) {
+        if (action === 'retry' && applied) resetDateEditor();
+        else {
+          dateBaseline.current = { startDate: latest.startDate, dueDate: latest.dueDate };
+          setDateDraft(dateBaseline.current);
+          setDateDraftError(action === 'retry' ? 'The pending date change was not applied. Review the latest saved dates.' : '');
+          markDatesPristine();
+        }
+      }
+    } catch (failure) {
+      if (isCurrent()) setDateDraftError(failure instanceof Error ? failure.message : 'The date change still needs attention.');
+    } finally {
+      if (isCurrent()) { savingTaskIdRef.current = null; setSavingTaskId(null); }
     }
-
-    const latestTask = useStore.getState().tasks.find(item => item.id === editingPendingAttempt.taskId);
-    if (!latestTask) {
-      setDateDraftError('The task was saved but could not be reloaded. Check the latest workspace state.');
-      return;
-    }
-    setDateDraft({ startDate: latestTask.startDate, dueDate: latestTask.dueDate });
   };
-
-  const handleUseLatestDates = async () => {
-    if (!editingPendingAttempt || savingTaskId === editingPendingAttempt.taskId) return;
-    setSavingTaskId(editingPendingAttempt.taskId);
-    setDateDraftError('');
-    await discardMutation();
-    setSavingTaskId(null);
-  };
+  const handleRetryDates = () => resolveDateAttempt('retry');
+  const handleUseLatestDates = () => resolveDateAttempt('latest');
 
   useEffect(() => {
-    if (!pendingDateAttempt) return;
+    if (!pendingDateAttempt || savingTaskIdRef.current) return;
     if (
       backend.pendingMutations > 0
       || backend.status !== 'live'
@@ -488,9 +525,11 @@ const Calendar: React.FC = () => {
     }
 
     setPendingDateAttempt(null);
-    setEditingTaskId(null);
-    setDateDraft(null);
-    setDateDraftError('');
+    if (editorTaskIdRef.current === pendingDateAttempt.taskId) {
+      dateBaseline.current = null;
+      setEditingTaskId(null); setDateDraft(null); setDateDraftError('');
+      markDatesPristine();
+    }
     setSyncError('');
   }, [
     backend.isPulling,
@@ -499,6 +538,7 @@ const Calendar: React.FC = () => {
     backend.pendingMutations,
     backend.status,
     pendingDateAttempt,
+    markDatesPristine,
   ]);
 
   const startTaskDrag = (
@@ -583,7 +623,7 @@ const Calendar: React.FC = () => {
       mode === 'move' ? 'date range moved' : `${mode === 'start' ? 'start' : 'due'} date adjusted`,
       'drag',
     );
-    if (result.ok) setCurrentDate(targetDay);
+    if (result.ok && !result.stale) setCurrentDate(targetDay);
   };
 
   const handleWeekDrop = (event: React.DragEvent<HTMLDivElement>, weekDays: Date[]) => {
@@ -644,7 +684,7 @@ const Calendar: React.FC = () => {
   const selectedDayTasks = getTasksForDay(selectedDate);
   const selectedDayHolidays = getHolidaysForDay(selectedDate);
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-  const selectedDaySummary = getCalendarTaskSummary(selectedDayTasks);
+  const selectedDaySummary = getCalendarTaskSummary(selectedDayTasks, today);
   const isClientUser = currentUser?.role === 'Client';
   const localizedTaskDateLabel = (task: Task) => taskDateLabel(
     task,
@@ -1332,7 +1372,7 @@ const Calendar: React.FC = () => {
                     required
                     value={dateDraft.startDate}
                     max={dateDraft.dueDate || undefined}
-                    disabled={Boolean(editingPendingAttempt)}
+                    disabled={Boolean(editingPendingAttempt) || Boolean(savingTaskId)}
                     onChange={event => {
                       setDateDraft(current => current ? { ...current, startDate: event.target.value } : current);
                       setDateDraftError('');
@@ -1347,7 +1387,7 @@ const Calendar: React.FC = () => {
                     type="date"
                     value={dateDraft.dueDate}
                     min={dateDraft.startDate || undefined}
-                    disabled={Boolean(editingPendingAttempt)}
+                    disabled={Boolean(editingPendingAttempt) || Boolean(savingTaskId)}
                     onChange={event => {
                       setDateDraft(current => current ? { ...current, dueDate: event.target.value } : current);
                       setDateDraftError('');
@@ -1364,7 +1404,7 @@ const Calendar: React.FC = () => {
                 {dateDraft.dueDate && (
                   <button
                     type="button"
-                    disabled={Boolean(editingPendingAttempt)}
+                    disabled={Boolean(editingPendingAttempt) || Boolean(savingTaskId)}
                     onClick={() => {
                       setDateDraft(current => current ? { ...current, dueDate: '' } : current);
                       setDateDraftError('');
@@ -1378,7 +1418,7 @@ const Calendar: React.FC = () => {
 
               {dateDraftError && (
                 <div className="rounded-control border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700" role="alert">
-                  {dateDraftError}
+                  {t(dateDraftError)}
                 </div>
               )}
               {editingPendingAttempt ? (
@@ -1404,10 +1444,9 @@ const Calendar: React.FC = () => {
               <Link
                 to={`/tasks?taskId=${encodeURIComponent(editingTask.id)}`}
                 onClick={event => {
-                  if (editingPendingAttempt) event.preventDefault();
-                  else closeDateEditor();
+                  if (editingPendingAttempt || savingTaskIdRef.current || !closeDateEditor()) event.preventDefault();
                 }}
-                aria-disabled={Boolean(editingPendingAttempt)}
+                aria-disabled={Boolean(editingPendingAttempt) || Boolean(savingTaskId)}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control px-3 text-sm font-semibold text-muted transition-colors hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
                 {t('Open task')} <ExternalLink className="h-4 w-4" aria-hidden="true" />
@@ -1418,14 +1457,14 @@ const Calendar: React.FC = () => {
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={() => void handleUseLatestDates()}
+                      onClick={event => { event.preventDefault(); void handleUseLatestDates(); }}
                       disabled={savingTaskId === editingTask.id || backend.status === 'offline'}
                     >
                       {t('Use latest')}
                     </Button>
                     <Button
                       type="button"
-                      onClick={() => void handleRetryDates()}
+                      onClick={event => { event.preventDefault(); void handleRetryDates(); }}
                       disabled={savingTaskId === editingTask.id || backend.status === 'offline'}
                     >
                       {savingTaskId === editingTask.id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}

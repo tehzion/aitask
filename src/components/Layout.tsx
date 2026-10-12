@@ -191,6 +191,8 @@ const Layout: React.FC = () => {
       const main = mainRef.current;
       if (!main) return;
       main.scrollTop = 0;
+      // A user may already have chosen a control before this deferred route focus runs.
+      if (document.activeElement !== main && main.contains(document.activeElement)) return;
       main.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);

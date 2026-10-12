@@ -1,3 +1,4 @@
+import { getTodayInputDate } from '../lib/utils';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import DraftRecoveryNotice from './DraftRecoveryNotice';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -14,6 +15,7 @@ import { fieldLabel, modalFooter } from './uiTokens';
 import { canCreateClientProfiles, canViewAllClients, getVisibleClientNames } from '../lib/access';
 import CreateClientProfileModal from './CreateClientProfileModal';
 import { useI18n } from './I18nProvider';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 
 interface Props {
   isOpen: boolean;
@@ -68,9 +70,12 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   React.useEffect(() => { if (!isOpen) setFormEdited(false); }, [isOpen]);
   const markPristine = useUnsavedChanges(isOpen && (formEdited || isSubmitting));
   const [pendingProjectId, setPendingProjectId] = useState('');
+  const pendingProjectSnapshot = useRef<Project | null>(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const customInputRef = useRef<HTMLInputElement>(null);
   const initializedFormKeyRef = useRef('');
+  const mounted = useRef(false);
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const clientOptions = React.useMemo(() => {
     const visibleKeys = new Set(getVisibleClientNames(currentUser, tasks, projects, rolePermissions, { clients, projects }).map(value => value.trim().toLowerCase()));
     const byName = new Map(clients
@@ -112,6 +117,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     setFormError('');
     setIsSubmitting(false);
     setPendingProjectId('');
+    pendingProjectSnapshot.current = null;
     setCustomError('');
     setCustomInput('');
     setCustomServices([]);
@@ -119,13 +125,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     if (project) {
       setClientId(project.clientId || clientOptions.find(option => option.name.toLowerCase() === project.clientName.trim().toLowerCase())?.id || '');
       setProjectName(project.projectName);
-      setStartDate(project.startDate || new Date().toISOString().slice(0, 10));
+      setStartDate(project.startDate || getTodayInputDate());
       setDeadline(project.deadline || '');
       setSelectedServices(project.services || []);
     } else {
       setClientId(initialClientId || '');
       setProjectName('');
-      setStartDate(new Date().toISOString().slice(0, 10));
+      setStartDate(getTodayInputDate());
       setDeadline('');
       setSelectedServices([]);
     }
@@ -178,6 +184,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   };
 
   const resetForm = () => {
+    setPendingProjectId('');
+    pendingProjectSnapshot.current = null;
     setClientId('');
     setProjectName('');
     setStartDate('');
@@ -192,19 +200,44 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const handleClose = () => { recovery.clear(); markPristine(); setFormEdited(false); resetForm(); onClose(); };
   const requestClose = () => { if (!isSubmitting && (!formEdited || window.confirm(t('Discard unsaved changes?')))) handleClose(); };
 
+  const confirmProjectSave = async (id: string) => {
+    const session = captureWorkspaceSession();
+    const actorId = useStore.getState().currentUser?.id;
+    const formKey = initializedFormKeyRef.current;
+    const isCurrent = () => mounted.current && isWorkspaceSessionCurrent(session) && useStore.getState().currentUser?.id === actorId
+      && initializedFormKeyRef.current === formKey;
+    pendingProjectSnapshot.current ||= useStore.getState().projects.find(item => item.id === id) || null;
+    setPendingProjectId(id);
+    setIsSubmitting(true);
+    try {
+      const result = await retryPendingSave();
+      if (!isCurrent()) return false;
+      if (!result.ok) { setFormError(result.error || 'The project is still waiting to be saved.'); return false; }
+      const canonical = useStore.getState().projects.find(item => item.id === id);
+      const submitted = pendingProjectSnapshot.current;
+      const fields = ['clientId', 'clientName', 'projectName', 'startDate', 'deadline', 'services'] as const;
+      if (!canonical || !submitted || !fields.every(key => JSON.stringify(canonical[key]) === JSON.stringify(submitted[key]))) {
+        setPendingProjectId(''); pendingProjectSnapshot.current = null;
+        setFormError('The pending project change is no longer available. Review your draft before saving again.');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      if (isCurrent()) setFormError(error instanceof Error ? error.message : 'Unable to save this change.');
+      return false;
+    } finally {
+      if (mounted.current && useStore.getState().currentUser?.id === actorId && initializedFormKeyRef.current === formKey) setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setFormError('');
     setCustomError('');
 
     if (pendingProjectId) {
-      setIsSubmitting(true);
-      const pendingResult = await retryPendingSave();
-      setIsSubmitting(false);
-      if (!pendingResult.ok) {
-        setFormError(pendingResult.error || 'The project is still waiting to be saved.');
-        return;
-      }
+      if (!await confirmProjectSave(pendingProjectId)) return;
       if (project) onProjectUpdated?.(pendingProjectId);
       else onProjectCreated?.(pendingProjectId);
       clearCompanySearch();
@@ -255,14 +288,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         return;
       }
 
-      setIsSubmitting(true);
-      const saveResult = await retryPendingSave();
-      setIsSubmitting(false);
-      if (!saveResult.ok) {
-        setPendingProjectId(project.id);
-        setFormError(saveResult.error || 'The project update is waiting to be saved.');
-        return;
-      }
+      if (!await confirmProjectSave(project.id)) return;
 
       if (onProjectUpdated) onProjectUpdated(project.id);
       clearCompanySearch();
@@ -284,14 +310,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       return;
     }
 
-    setIsSubmitting(true);
-    const saveResult = await retryPendingSave();
-    setIsSubmitting(false);
-    if (!saveResult.ok) {
-      setPendingProjectId(newProjectId);
-      setFormError(saveResult.error || 'The project is waiting to be saved.');
-      return;
-    }
+    if (!await confirmProjectSave(newProjectId)) return;
 
     if (onProjectCreated) onProjectCreated(newProjectId);
     clearCompanySearch();
@@ -327,7 +346,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         {/* Body */}
         <div className="p-6 overflow-y-auto flex-1">
           <form id="create-project-form" onSubmit={handleSubmit} className="space-y-5">
-
+            <fieldset disabled={isSubmitting || Boolean(pendingProjectId)} className="contents">
             <div>
               <div className="mb-1 flex items-center justify-between gap-3">
                 <label htmlFor={clientSelectId} className={fieldLabel}>
@@ -470,6 +489,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
               )}
             </div>
 
+            </fieldset>
             {(formError || pendingResolution) && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
                 <p>{formError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>

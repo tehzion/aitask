@@ -1,3 +1,4 @@
+import { useLocalToday } from '../hooks/useLocalToday';
 import React from 'react';
 import {
   CalendarDays,
@@ -52,6 +53,7 @@ const readableDate = (value: string | undefined, locale: Parameters<typeof forma
 
 const DeliveryTracker: React.FC = () => {
   const { locale, t } = useI18n();
+  const today = useLocalToday();
   const {
     currentUser,
     rolePermissions,
@@ -127,8 +129,9 @@ const DeliveryTracker: React.FC = () => {
     period,
     range,
     clientView: isClientView,
+    today,
     searchQuery: deferredSearch,
-  }), [deferredSearch, deliverables, isClientView, period, range, serviceCycles, users, visibleClientKeys, visibleClientNames, visibleTasks]);
+  }), [deferredSearch, deliverables, isClientView, period, range, serviceCycles, today, users, visibleClientKeys, visibleClientNames, visibleTasks]);
 
   const filteredSummaries = React.useMemo(() => {
     const query = deferredSearch.trim().toLowerCase();

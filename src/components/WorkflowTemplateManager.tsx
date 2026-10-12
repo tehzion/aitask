@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 import { useI18n } from './I18nProvider';
 import ConfirmDialog from './ConfirmDialog';
 import { getLocalizedDepartment } from '../lib/localeLabels';
+import { useCatalogEditor } from '../hooks/useCatalogEditor';
 
 const stepKinds: { value: WorkflowStepKind; label: string }[] = [
   { value: 'work', label: 'Work' },
@@ -27,37 +28,22 @@ const blankTemplate = (): Omit<ServiceWorkflowTemplate, 'id' | 'revision' | 'cre
 
 const WorkflowTemplateManager = () => {
   const { locale, t } = useI18n();
-  const { serviceWorkflowTemplates, saveWorkflowTemplate, deleteWorkflowTemplate, retryPendingSave } = useStore();
-  const [editingId, setEditingId] = React.useState<string>();
-  const [draft, setDraft] = React.useState(blankTemplate);
-  const [message, setMessage] = React.useState('');
-  const [saving, setSaving] = React.useState(false);
+  const { serviceWorkflowTemplates, saveWorkflowTemplate, deleteWorkflowTemplate } = useStore();
+  const { editingId, draft, setDraft, message, saving, hasPending, edit, save, deleteItem } = useCatalogEditor({
+    blank: blankTemplate,
+    fromRecord: (template: ServiceWorkflowTemplate) => ({
+      name: template.name, description: template.description, serviceTypes: [...template.serviceTypes],
+      isActive: template.isActive, steps: structuredClone(template.steps).sort((left, right) => left.order - right.order),
+    }),
+    findRecord: id => useStore.getState().serviceWorkflowTemplates.find(template => template.id === id),
+    persist: (value, id) => saveWorkflowTemplate({ ...value, id }), remove: deleteWorkflowTemplate,
+    command: 'service_workflow.manage', savedMessage: 'Workflow saved. Existing client and cycle snapshots were not changed.',
+    deletedMessage: 'Workflow template deleted. Frozen copies in plans remain unchanged.',
+  });
   const [templateToDelete, setTemplateToDelete] = React.useState<ServiceWorkflowTemplate | null>(null);
 
   const handleDelete = async (template: ServiceWorkflowTemplate) => {
-    const result = deleteWorkflowTemplate(template.id);
-    if (!result.ok) return setMessage(result.error || t('Unable to delete the workflow template.'));
-    setSaving(true);
-    const committed = await retryPendingSave('service_workflow.manage');
-    setSaving(false);
-    if (!committed.ok) {
-      setMessage(committed.error || t('The deletion is waiting to be saved.'));
-      return;
-    }
-    if (editingId === template.id) edit();
-    setMessage(t('Workflow template deleted. Frozen copies in plans remain unchanged.'));
-  };
-
-  const edit = (template?: ServiceWorkflowTemplate) => {
-    setEditingId(template?.id);
-    setDraft(template ? {
-      name: template.name,
-      description: template.description,
-      serviceTypes: [...template.serviceTypes],
-      isActive: template.isActive,
-      steps: template.steps.map(step => ({ ...step })).sort((left, right) => left.order - right.order),
-    } : blankTemplate());
-    setMessage('');
+    await deleteItem(template);
   };
 
   const updateStep = (id: string, patch: Partial<ServiceWorkflowStep>) => setDraft(current => ({
@@ -73,17 +59,6 @@ const WorkflowTemplateManager = () => {
     return { ...current, steps: steps.map((step, stepIndex) => ({ ...step, order: stepIndex + 1 })) };
   });
 
-  const save = async () => {
-    const result = saveWorkflowTemplate({ ...draft, id: editingId });
-    if (!result.ok) return setMessage(result.error || t('Unable to save the workflow template.'));
-    setSaving(true);
-    const committed = await retryPendingSave('service_workflow.manage');
-    setSaving(false);
-    if (!committed.ok) return setMessage(committed.error || t('The workflow is waiting to be saved.'));
-    edit();
-    setMessage(t('Workflow saved. Existing client and cycle snapshots were not changed.'));
-  };
-
   return (
     <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="workflow-templates-title">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-5">
@@ -91,7 +66,7 @@ const WorkflowTemplateManager = () => {
           <h2 id="workflow-templates-title" className="font-semibold text-slate-950">{t('Task Workflow Templates')}</h2>
           <p className="mt-1 text-sm text-slate-500">{t('Reusable internal task chains that are frozen with each client plan.')}</p>
         </div>
-        <Button variant="secondary" onClick={() => edit()}><Workflow className="h-4 w-4" />{t('New workflow')}</Button>
+        <Button variant="secondary" onClick={() => edit()} disabled={saving || hasPending}><Workflow className="h-4 w-4" />{t('New workflow')}</Button>
       </div>
       <div className="grid lg:grid-cols-[280px_1fr]">
         <div className="border-b border-line bg-inset/60 p-3 lg:border-b-0 lg:border-r lg:border-line">
@@ -99,14 +74,14 @@ const WorkflowTemplateManager = () => {
           <div className="space-y-2">
             {serviceWorkflowTemplates.map(template => (
               <div key={template.id} className={cn('group flex items-stretch gap-1 rounded-control', editingId === template.id ? 'bg-surface text-ink shadow-sm ring-1 ring-line' : 'hover:bg-surface/70')}>
-              <button onClick={() => edit(template)} aria-current={editingId === template.id ? 'true' : undefined} className="min-w-0 flex-1 rounded-control px-3 py-3 text-left transition-colors">
+              <button onClick={() => edit(template)} disabled={saving || hasPending} aria-current={editingId === template.id ? 'true' : undefined} className="min-w-0 flex-1 rounded-control px-3 py-3 text-left transition-colors">
                 <span data-i18n-skip className="block truncate text-sm font-semibold text-slate-900">{template.name}</span>
                 <span className="mt-1 block text-xs text-slate-500">{t('Revision')} {template.revision} · {template.steps.length} {t('steps')}</span>
               </button>
               <button
                 type="button"
                 onClick={() => setTemplateToDelete(template)}
-                disabled={saving}
+                disabled={saving || hasPending}
                 aria-label={t('workflow.deleteNamed', { name: template.name })}
                 title={t('workflow.deleteNamed', { name: template.name })}
                 className="flex w-10 items-center justify-center rounded-control text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
@@ -150,7 +125,7 @@ const WorkflowTemplateManager = () => {
           </div>
           <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur sm:-mx-6 sm:-mb-6 sm:px-6">
             <Button variant="secondary" onClick={() => setDraft(current => ({ ...current, steps: [...current.steps, blankStep(current.steps.length + 1)] }))}><Plus className="h-4 w-4" />{t('Add step')}</Button>
-            <Button onClick={save} disabled={saving}><Save className="h-4 w-4" />{saving ? t('Saving...') : t('Save workflow')}</Button>
+            <Button onClick={() => void save()} disabled={saving}><Save className="h-4 w-4" />{saving ? t('Saving...') : hasPending ? t('Retry save') : t('Save workflow')}</Button>
           </div>
           {message && <p className="text-sm font-medium text-blue-700" role="status">{message}</p>}
         </div>

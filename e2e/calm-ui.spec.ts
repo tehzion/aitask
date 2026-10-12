@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
+
+// Visual references capture the settled layout, independent of entry motion.
+test.use({ reducedMotion: 'reduce' });
+
+const settledPageStylePath = fileURLToPath(new URL('./visual-reference.css', import.meta.url));
 
 const routes = [
   { path: '/', heading: 'Portfolio work' },
@@ -16,6 +22,7 @@ const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.waitForURL(url => ['/', '/settings'].includes(url.pathname));
   if (/\/settings$/.test(page.url())) {
     await page.getByRole('button', { name: 'Continue for now' }).click();
   }
@@ -59,7 +66,7 @@ test('core operations screens keep their semantic layout in light and dark modes
 
     for (const theme of ['Light', 'Dark'] as const) {
       await setTheme(page, theme);
-      const expectedCanvas = theme === 'Dark' ? 'rgb(20, 22, 24)' : 'rgb(246, 246, 246)';
+      const expectedCanvas = theme === 'Dark' ? 'rgb(21, 22, 23)' : 'rgb(248, 247, 244)';
       await expect.poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(expectedCanvas);
 
       for (const route of routes) {
@@ -72,6 +79,7 @@ test('core operations screens keep their semantic layout in light and dark modes
         if (hasCommittedVisualBaseline) {
           await expect(page).toHaveScreenshot(`calm-${pageName}-${viewport.name}-${theme.toLowerCase()}.png`, {
             animations: 'disabled',
+            stylePath: settledPageStylePath,
             caret: 'hide',
             maxDiffPixelRatio: 0.01,
             scale: 'css',
@@ -93,6 +101,7 @@ test('core operations screens keep their semantic layout in light and dark modes
   if (hasCommittedVisualBaseline) {
     await expect(page).toHaveScreenshot('calm-clients-mobile-dark-zh.png', {
       animations: 'disabled',
+      stylePath: settledPageStylePath,
       caret: 'hide',
       maxDiffPixelRatio: 0.01,
       scale: 'css',

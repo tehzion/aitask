@@ -37,6 +37,7 @@ import {
   retryRetainedSecureMemberMutation,
   retrySecureWorkspaceCommand,
   saveSecureMemberDepartments,
+  saveSecureMemberPermissions,
   saveSecureMemberRole,
   saveSecureWorkspace,
   serializeClientProjectedTask,
@@ -92,6 +93,25 @@ describe('Client portal command projection', () => {
       'notes', 'priority', 'department', 'createdBy', 'isRecurring',
       'recurrenceFrequency', 'dueReminderSent', 'version', 'updatedAt',
     ]));
+  });
+});
+
+describe('session changes while loading deferred handlers', () => {
+  it.each(['departments', 'permissions', 'role', 'notifications'] as const)('blocks %s before issuing an RPC', async action => {
+    rpc.mockClear();
+    discardRetainedSecureMemberMutation();
+    const member = { ...stateWithUser('deferred-member').users[0], role: 'Staff' as const };
+    const operations = {
+      departments: () => saveSecureMemberDepartments(member, ['Designer']),
+      permissions: () => saveSecureMemberPermissions(member, null),
+      role: () => saveSecureMemberRole(member, { role: 'HOD', departments: ['Designer'] }),
+      notifications: () => setSecureNotificationsRead(['notification-1'], true),
+    };
+    const pending = operations[action]();
+    invalidateWorkspaceSession();
+    expect(await pending).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+    expect(rpc).not.toHaveBeenCalled();
+    expect(getRetainedSecureMemberMutation()).toBeNull();
   });
 });
 
@@ -462,7 +482,7 @@ describe('secure command retry identity', () => {
     expect(rpc.mock.calls[1][1].p_command_id).toBe(firstCommandId);
   });
 
-  it('drops Boss-only operations when retrying a retained command as a non-super-admin', async () => {
+  it('blocks a captured batch when Boss privileges change without rewriting its identity', async () => {
     rpc
       .mockRejectedValueOnce(new Error('fetch failed'))
       .mockResolvedValueOnce({ data: { ok: true, workspaceVersion: 4, changed: [] }, error: null });
@@ -495,11 +515,10 @@ describe('secure command retry identity', () => {
     expect(firstOperations.some(operation => operation.entityType === 'task_status')).toBe(true);
 
     const retry = await retrySecureWorkspaceCommand(undefined, { excludeSuperAdminEntities: true });
-    expect(retry.ok).toBe(true);
-    const retriedOperations = rpc.mock.calls[1][1].p_operations as WorkspaceOperation[];
-    expect(retriedOperations.some(operation => operation.entityType === 'custom_role')).toBe(false);
-    expect(retriedOperations.some(operation => operation.entityType === 'task_status')).toBe(false);
-    expect(retriedOperations.some(operation => operation.entityType === 'client' && operation.entityId === 'client-1')).toBe(true);
+    expect(retry).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(getRetainedSecureCommand()?.operations.some(operation => operation.entityType === 'custom_role')).toBe(true);
+    expect(getRetainedSecureCommand()?.operations.some(operation => operation.entityType === 'client' && operation.entityId === 'client-1')).toBe(true);
   });
 
   it('does not retain a task command rejected by a database permission rule', async () => {

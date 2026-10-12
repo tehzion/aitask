@@ -45,6 +45,9 @@ pnpm build
 
 ## Release Versioning
 
+The current prepared source release is **v3.0.0**. See the
+[consolidated release notes and complete commit inventory](docs/version-3-release-2026-10-07.md).
+
 The semantic release number is stored in `package.json`. Every build appends the
 current Git commit, producing an identifier such as `v1.5.1+d9494d6`; a dirty local
 workspace is marked with `.dev`.
@@ -61,9 +64,11 @@ pnpm release:major
 - Minor: backward-compatible features (`1.0.0` to `1.1.0`).
 - Major: breaking data, API, or workflow changes (`1.0.0` to `2.0.0`).
 
-Production promotion is tag-only. Create a matching `v<version>` tag after the
-release checks pass; the tagged workflow verifies the generated
-`/build-info.json` version and full Git commit before and after deployment. See
+Releases follow the staging-first pull-request process. Merge only after the
+required checks pass; Vercel automatically deploys the reviewed `master` commit.
+Create a matching `v<version>` tag at that merge commit. The tagged workflow
+repeats release checks and verifies that production `/build-info.json` identifies
+the version and exact commit. See
 [`docs/staging-release-setup.md`](docs/staging-release-setup.md) for the required
 staging tenant, CI secrets, and rollback procedure.
 

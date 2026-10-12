@@ -6,7 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
-import { isToday, isThisWeek, isBefore, differenceInDays } from 'date-fns';
+import { isSameDay, isWithinInterval, isBefore } from 'date-fns';
 import { AlertCircle, LayoutList, Calendar, ArrowRight, Plus, FolderKanban, UserPlus, Users, FileCheck2, CalendarClock } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, PageHeader, SegmentedTabs } from '../components/ui';
@@ -27,6 +27,9 @@ import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
 import StaffMyWork from '../components/StaffMyWork';
 import { useI18n } from '../components/I18nProvider';
 import { isLocalServiceDemoEnabled, LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID } from '../mock/localServiceDemo';
+import { useLocalToday } from '../hooks/useLocalToday';
+import { getContractDaysRemaining } from '../lib/dashboardData';
+import { getWorkWeekRange } from '../lib/workWeek';
 
 type BossTab = 'overview' | 'pulse' | 'workload';
 
@@ -61,6 +64,7 @@ const Dashboard: React.FC = () => {
     clientProfiles: state.clients,
   })));
   const { locale, t } = useI18n();
+  const today = useLocalToday();
   const [bossTab, setBossTab] = useState<BossTab>('overview');
   const [portfolioOwner, setPortfolioOwner] = useState('All');
   const [searchParams] = useSearchParams();
@@ -175,17 +179,16 @@ const Dashboard: React.FC = () => {
 
   const bossBriefing = useMemo(() => {
     if (!showBossOperations) return null;
-    const today = new Date();
     const pendingRegs = (registrations || []).filter(reg => reg.status === 'Pending');
     const overdue = tasks.filter(task => {
       const dueDate = parseOptionalDate(task.dueDate);
-      return Boolean(isTaskOpen(task) && dueDate && isBefore(dueDate, today) && !isToday(dueDate));
+      return Boolean(isTaskOpen(task) && dueDate && isBefore(dueDate, today));
     });
     const waitingApproval = tasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval');
     const renewing = (clientPlans || []).filter(plan => {
       if (plan.status !== 'Active' || !plan.contractEndDate) return false;
-      const days = differenceInDays(parseOptionalDate(plan.contractEndDate) || today, today);
-      return days >= 0 && days <= 30;
+      const days = getContractDaysRemaining(plan.contractEndDate, today);
+      return days !== null && days >= 0 && days <= 30;
     });
     return {
       pendingRegs,
@@ -193,7 +196,7 @@ const Dashboard: React.FC = () => {
       waitingCount: waitingApproval.length,
       renewals: renewing.sort((a, b) => (a.contractEndDate || '').localeCompare(b.contractEndDate || '')),
     };
-  }, [clientPlans, registrations, showBossOperations, tasks]);
+  }, [clientPlans, registrations, showBossOperations, tasks, today]);
 
   const onboardingSteps = useMemo(() => {
     if (!showBossOperations) return [];
@@ -229,7 +232,6 @@ const Dashboard: React.FC = () => {
       : <>{t('Welcome back,')} <span data-i18n-skip>{currentUser?.name}</span>{t('! Your live workspace is ready.')}</>;
 
   const stats = useMemo(() => {
-    const today = new Date();
     
     const activeProjects = visibleProjects.length;
       
@@ -238,21 +240,21 @@ const Dashboard: React.FC = () => {
     
     const overdueTasks = tasks.filter(t => {
       const dueDate = parseOptionalDate(t.dueDate);
-      return Boolean(dueDate && isTaskOpen(t) && isBefore(dueDate, today) && !isToday(dueDate));
+      return Boolean(dueDate && isTaskOpen(t) && isBefore(dueDate, today));
     }).length;
     
     const dueTodayTasks = tasks.filter(t => {
       const dueDate = parseOptionalDate(t.dueDate);
-      return Boolean(dueDate && isTaskOpen(t) && isToday(dueDate));
+      return Boolean(dueDate && isTaskOpen(t) && isSameDay(dueDate, today));
     }).length;
     
     const dueThisWeekTasks = tasks.filter(t => {
       const dueDate = parseOptionalDate(t.dueDate);
-      return Boolean(dueDate && isTaskOpen(t) && isThisWeek(dueDate));
+      return Boolean(dueDate && isTaskOpen(t) && isWithinInterval(dueDate, getWorkWeekRange(today)));
     }).length;
 
     return { activeProjects, pendingTasks, completedTasks, overdueTasks, dueTodayTasks, dueThisWeekTasks };
-  }, [tasks, visibleProjects]);
+  }, [tasks, visibleProjects, today]);
 
   const tasksByTeamData = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -270,7 +272,7 @@ const Dashboard: React.FC = () => {
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
   }, [tasks]);
 
-  const monthlyData = useMemo(() => getTrackedMonthlyCompletions(tasks, new Date(), 6, locale), [locale, tasks]);
+  const monthlyData = useMemo(() => getTrackedMonthlyCompletions(tasks, today, 6, locale), [locale, tasks, today]);
   const hasTrackedCompletionData = monthlyData.some(month => month.completed > 0);
 
   const recentTasks = useMemo(
@@ -282,7 +284,6 @@ const Dashboard: React.FC = () => {
 
   const myTasks = useMemo(() => {
     if (!currentUser) return { dueToday: [], overdue: [], actionRequired: [] };
-    const today = new Date();
     const isPersonalTask = (task: (typeof tasks)[number]) => currentUser.role === 'Client'
       ? getClientKey(task.clientName) === getClientKey(currentUser.companyName)
       : task.assignedTo === currentUser.id;
@@ -291,10 +292,9 @@ const Dashboard: React.FC = () => {
       const dueDate = parseOptionalDate(t.dueDate);
       return Boolean(
         dueDate &&
-        !t.isCompleted &&
-        t.status !== 'Cancelled' &&
+        isTaskOpen(t) &&
         isPersonalTask(t) &&
-        isToday(dueDate)
+        isSameDay(dueDate, today)
       );
     });
 
@@ -303,11 +303,9 @@ const Dashboard: React.FC = () => {
         const dueDate = parseOptionalDate(t.dueDate);
         return Boolean(
           dueDate &&
-          !t.isCompleted &&
-          t.status !== 'Cancelled' &&
+          isTaskOpen(t) &&
           isPersonalTask(t) &&
-          isBefore(dueDate, today) &&
-          !isToday(dueDate)
+          isBefore(dueDate, today)
         );
       }
     );
@@ -317,13 +315,13 @@ const Dashboard: React.FC = () => {
         return getClientKey(t.clientName) === getClientKey(currentUser.companyName)
           && getClientTaskStage(t) === 'awaiting_review';
       } else {
-        return !t.isCompleted && t.status !== 'Cancelled'
+        return isTaskOpen(t)
           && t.assignedTo === currentUser.id && t.status === 'Waiting Approval';
       }
     });
 
     return { dueToday, overdue, actionRequired };
-  }, [tasks, currentUser]);
+  }, [tasks, currentUser, today]);
   const staffBriefing = useMemo(() => {
     if (!showStaffOperations || !currentUser) return null;
     const dueSoon = staffAssignedTasks
@@ -354,11 +352,11 @@ const Dashboard: React.FC = () => {
     const openCount = departmentTasks.filter(isTaskOpen).length;
     const overdueCount = departmentTasks.filter(task => {
       const dueDate = parseOptionalDate(task.dueDate);
-      return Boolean(isTaskOpen(task) && dueDate && isBefore(dueDate, new Date()) && !isToday(dueDate));
+      return Boolean(isTaskOpen(task) && dueDate && isBefore(dueDate, today));
     }).length;
     const waitingCount = departmentTasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length;
     return { primaryDepartment, teammates, openCount, overdueCount, waitingCount };
-  }, [allTasks, currentUser, showStaffOperations, users]);
+  }, [allTasks, currentUser, showStaffOperations, users, today]);
 
   const staffOnboardingSteps = useMemo(() => {
     if (!showStaffOperations || !currentUser) return [];
@@ -687,7 +685,8 @@ const Dashboard: React.FC = () => {
                     </div>
                     <div className="divide-y divide-line/60">
                       {bossBriefing.renewals.slice(0, 6).map(plan => {
-                        const days = differenceInDays(parseOptionalDate(plan.contractEndDate) || new Date(), new Date());
+                        const days = getContractDaysRemaining(plan.contractEndDate, today);
+                        if (days === null) return null;
                         return (
                           <div key={plan.id} className="flex items-center justify-between gap-3 px-5 py-3">
                             <Link to={`/clients/${encodeURIComponent(plan.clientId)}`} className="min-w-0 truncate text-sm font-medium text-ink hover:text-accent">
@@ -911,7 +910,7 @@ const Dashboard: React.FC = () => {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             {recentTasks.map(task => {
               const dueDateParsed = parseOptionalDate(task.dueDate);
-              const isOverdue = Boolean(dueDateParsed && !task.isCompleted && task.status !== 'Cancelled' && isBefore(dueDateParsed, new Date()) && !isToday(dueDateParsed));
+              const isOverdue = Boolean(dueDateParsed && isTaskOpen(task) && isBefore(dueDateParsed, today));
 
               return (
                 <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="min-w-0 rounded-control bg-inset/70 p-3 transition-colors hover:bg-inset">

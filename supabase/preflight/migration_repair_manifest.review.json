@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "migration_validated_and_applied_after_20261002065644_including_20261002101435",
+  "status": "migration_validated_and_applied_through_20261007173905; production connector 20261009024458 verified",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
-    "verifiedAt": "2026-10-02",
-    "historyThrough": "hod_permission_parity_followups (production 20261002070755; repository 20261002065644); additional pending migrations applied through production 20261002164513",
+    "verifiedAt": "2026-10-09",
+    "historyThrough": "20261009024458_reliable_member_onboarding (repository 20261007173905); connector aliases preserved",
     "historyAligned": false,
     "historyAlignmentNote": "The connector stored deployment IDs 20260919065513, 20260919065609, 20260919065620, 20260919065648, and 20260919072524 for the five matching repository migrations. Names and live SQL are verified; timestamp repair is intentionally prohibited.",
     "clientOwnershipRollout": {
@@ -158,6 +158,10 @@
         {
           "repository": "20261002101435_universal_notification_audience_guard",
           "production": "20261002164513_universal_notification_audience_guard"
+        },
+        {
+          "repository": "20261007173905_reliable_member_onboarding",
+          "production": "20261009024458_reliable_member_onboarding"
         }
       ]
     },
@@ -376,7 +380,7 @@
     "directProductionRelease": {
       "date": "2026-10-02",
       "userInstruction": "just to the live",
-      "stagingQa": "Skipped at the release owner\u2019s explicit request; staging connector remains inaccessible.",
+      "stagingQa": "Skipped at the release owner’s explicit request; staging connector remains inaccessible.",
       "appVersion": "2.6.1",
       "appCommit": "7a269d852eb304b453e8885e6aa16f21a29fccfa",
       "deploymentId": "dpl_FvR7U5FX86Tgn8GtjG2DX7DhtCwN",
@@ -389,6 +393,36 @@
       "verification": "Business entity counts and hashes unchanged. RLS enabled on all three new tables. Upload RPC denies unauthenticated calls, invalid feedback parameters rejected, missing-workspace reminder probe returns zero. New cron jobs active, attachment guard and restricted delete policy present. Deployed build provenance verified through authenticated Vercel access.",
       "securityAdvisors": "No ERROR findings. Authenticated SECURITY DEFINER RPC warnings are intentional command endpoints; internal tables intentionally deny direct client access. Existing leaked-password protection warning persists.",
       "access": "Existing Vercel login protection retained."
+    },
+    "reliableMemberOnboarding": {
+      "appliedAt": "2026-10-09",
+      "repositoryMigration": "20261007173905_reliable_member_onboarding",
+      "productionVersion": "20261009024458",
+      "method": "Supabase connector apply_migration; generated timestamp retained",
+      "edgeFunction": {
+        "name": "invite-aitask-member",
+        "version": 35,
+        "verifyJwt": true,
+        "sourceMatchesRepository": true
+      },
+      "verification": {
+        "localPgTapFiles": 41,
+        "localPgTapAssertions": 578,
+        "localStorageStaffSavesAndAuthRecovery": "passed",
+        "hostedDatabaseAssertions": 15,
+        "hostedDatabaseFailures": 0,
+        "hostedDatabaseFixtures": "rolled back; no test Auth accounts or journal rows retained",
+        "anonymousIsolation": "passed",
+        "membersUnchanged": 11,
+        "entityCountsAndHashesUnchanged": true,
+        "serviceOnlyRpcGrants": true,
+        "fixedEmptySearchPaths": true
+      },
+      "limitations": [
+        "Authenticated hosted Edge/Auth recovery was not executed; actual-handler recovery passed against real disposable local Auth/REST.",
+        "Frontend deployment is outside this Supabase rollout.",
+        "Leaked-password protection remains disabled; existing plan limitation persists."
+      ]
     }
   },
   "schemaEquivalence": {
@@ -604,7 +638,8 @@
     "20260930111033_service_upload_reconciliation",
     "20260930154013_initialize_deadline_reminder_claim",
     "20261002065644_hod_permission_parity_followups",
-    "20261002101435_universal_notification_audience_guard"
+    "20261002101435_universal_notification_audience_guard",
+    "20261007173905_reliable_member_onboarding"
   ],
   "pendingProductionMigrations": []
 }

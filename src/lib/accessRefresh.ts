@@ -2,6 +2,7 @@ export interface AccessRefreshState {
   hasCurrentUser: boolean;
   isPulling: boolean;
   isSaving: boolean;
+  hasPendingChange?: boolean;
 }
 
 export const createAccessRefreshCoordinator = (
@@ -10,15 +11,25 @@ export const createAccessRefreshCoordinator = (
 ) => {
   let pending = false;
   let inFlight = false;
+  let generation = 0;
+
+  const canRefresh = () => {
+    const state = getState();
+    return state.hasCurrentUser && !state.isPulling && !state.isSaving && !state.hasPendingChange;
+  };
 
   const flush = () => {
-    const state = getState();
-    if (!pending || inFlight || !state.hasCurrentUser || state.isPulling || state.isSaving) return;
+    if (!pending || inFlight || !canRefresh()) return;
 
     pending = false;
     inFlight = true;
+    const scheduledGeneration = generation;
     void Promise.resolve()
-      .then(refresh)
+      .then(() => {
+        if (scheduledGeneration !== generation) return;
+        if (!canRefresh()) { pending = true; return; }
+        return refresh();
+      })
       .catch(() => undefined)
       .finally(() => {
         inFlight = false;
@@ -31,15 +42,9 @@ export const createAccessRefreshCoordinator = (
       pending = true;
       flush();
     },
-    onStateChange: (previousState: AccessRefreshState, state: AccessRefreshState) => {
-      if (
-        pending
-        && (previousState.isSaving || previousState.isPulling)
-        && !state.isSaving
-        && !state.isPulling
-      ) flush();
-    },
+    onStateChange: flush,
     reset: () => {
+      generation += 1;
       pending = false;
     },
   };

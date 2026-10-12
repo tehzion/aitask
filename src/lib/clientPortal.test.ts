@@ -39,6 +39,12 @@ const makeTask = (overrides: Partial<Task> = {}): Task => ({
 });
 
 describe('Client portal reporting', () => {
+  it('does not classify malformed dates as overdue', () => {
+    const today = new Date(2026, 9, 7);
+    expect(getClientDeliveryStage(makeTask({ dueDate: '0000-invalid' }), today)).toBe('in_delivery');
+    expect(getClientDeliveryStage(makeTask({ dueDate: '2026-10-99' }), today)).toBe('in_delivery');
+  });
+
   it('treats completed but unapproved work as awaiting review', () => {
     const task = makeTask({ status: 'Completed', isCompleted: true, clientApprovalStatus: 'Pending' });
     expect(getClientTaskStage(task)).toBe('awaiting_review');

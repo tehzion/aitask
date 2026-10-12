@@ -42,6 +42,12 @@ export const getTaskBlockers = (task: Task, visibleTasks: Task[]): Task[] => {
   const predecessorIds = new Set(task.predecessorTaskIds || []);
   return visibleTasks.filter(item => predecessorIds.has(item.id) && isTaskOpen(item));
 };
+export const getUnavailableTaskDependencyCount = (task: Task, visibleTasks: Task[]): number => {
+  if (!isTaskOpen(task)) return 0;
+  const visibleIds = new Set(visibleTasks.map(item => item.id));
+  return [...new Set(task.predecessorTaskIds || [])].filter(id => !visibleIds.has(id)).length;
+};
+
 const isWaiting = (task: Task) => !isTerminal(task) && task.status === 'Waiting Approval';
 
 const urgencyRank = (task: Task, today: string) => {

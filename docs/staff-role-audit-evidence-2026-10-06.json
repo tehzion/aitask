@@ -1,0 +1,59 @@
+[
+  {
+    "scenario": "comment typed during an in-flight save",
+    "valueAfterSave": "",
+    "comments": [
+      "Submitted work note"
+    ]
+  },
+  {
+    "scenario": "Escape discards an unsent Staff update",
+    "registeredAsUnsaved": false,
+    "closedWithoutPrompt": true,
+    "prompts": [],
+    "valueAfterReopen": ""
+  },
+  {
+    "scenario": "retry a pending comment then send the remaining draft",
+    "draftAfterRetry": "Retry this work note",
+    "staleErrorAfterRetry": 1,
+    "comments": [
+      "Retry this work note",
+      "Retry this work note"
+    ]
+  },
+  {
+    "scenario": "rejected Staff status change",
+    "visibleError": 1,
+    "successToast": [
+      {
+        "id": "task.statusUpdated",
+        "values": {
+          "status": "In Progress"
+        }
+      }
+    ]
+  },
+  {
+    "scenario": "old task save resolves while another task is open",
+    "taskBDraft": ""
+  },
+  {
+    "scenario": "desktop task sheet accessibility",
+    "violations": [],
+    "documentOverflow": false
+  },
+  {
+    "scenario": "mobile task sheet accessibility",
+    "violations": [],
+    "documentOverflow": false
+  },
+  {
+    "scenario": "service activity accepts newer notes and files during save",
+    "role": "Staff",
+    "company": "UrbanEats",
+    "closedOnOldSave": true,
+    "draftAfterSave": "",
+    "fileAfterSave": 0
+  }
+]
