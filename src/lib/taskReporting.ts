@@ -7,7 +7,8 @@ import {
   subMonths,
   subWeeks,
 } from 'date-fns';
-import type { Task, User } from '../types';
+import type { Department, Task, User } from '../types';
+import { getMemberDepartments, normalizeDepartment } from './departments';
 import { parseOptionalDate } from './utils';
 import { isTaskCompleted } from './taskCompletion';
 import { getWorkWeekRange } from './workWeek';
@@ -82,6 +83,11 @@ export interface TeamTaskGroups {
   later: Task[];
   noDueDate: Task[];
   completedThisWeek: Task[];
+}
+
+export interface DepartmentWorkloadSummary extends TeamWorkloadSummary {
+  department: Department;
+  members: number;
 }
 
 const isCancelled = (task: Task) => task.status === 'Cancelled';
@@ -238,6 +244,45 @@ export const getTeamWorkloadSummaries = (
         signal: getWorkloadSignal(period, periodOpen, overdue),
       };
     });
+};
+
+/** Each assigned task belongs to its own department, irrespective of the
+ * assignee's department order. The caller supplies the authorized task scope. */
+export const getDepartmentWorkloadSummaries = (
+  tasks: Task[],
+  users: User[],
+  period: TeamWorkloadPeriod,
+  now = new Date(),
+): DepartmentWorkloadSummary[] => {
+  const members = users.filter(member => member.role !== 'Client' && !member.directoryOnly);
+  const memberIds = new Set(members.map(member => member.id));
+  const assignedTasks = tasks.filter(task => memberIds.has(task.assignedTo));
+  const departments = new Set(members.flatMap(getMemberDepartments));
+  assignedTasks.forEach(task => {
+    const department = normalizeDepartment(task.department);
+    if (department) departments.add(department);
+  });
+  return Array.from(departments).map(department => {
+    const departmentTasks = assignedTasks.filter(task => normalizeDepartment(task.department) === department);
+    const summaries = getTeamWorkloadSummaries(departmentTasks, members, period, now);
+    const totals = summaries.reduce((total, summary) => ({
+      dueToday: total.dueToday + summary.dueToday,
+      dueThisWeek: total.dueThisWeek + summary.dueThisWeek,
+      open: total.open + summary.open,
+      overdue: total.overdue + summary.overdue,
+      waitingApproval: total.waitingApproval + summary.waitingApproval,
+      completedThisWeek: total.completedThisWeek + summary.completedThisWeek,
+      periodOpen: total.periodOpen + summary.periodOpen,
+    }), { dueToday: 0, dueThisWeek: 0, open: 0, overdue: 0, waitingApproval: 0, completedThisWeek: 0, periodOpen: 0 });
+    const assignedIds = new Set(departmentTasks.map(task => task.assignedTo));
+    return {
+      ...totals,
+      department,
+      member: { id: `department:${department}`, name: department, role: 'Staff', departments: [department] },
+      members: members.filter(member => getMemberDepartments(member).includes(department) || assignedIds.has(member.id)).length,
+      signal: getWorkloadSignal(period, totals.periodOpen, totals.overdue),
+    };
+  });
 };
 
 export const getTeamMemberTaskGroups = (

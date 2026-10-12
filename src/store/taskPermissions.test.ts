@@ -82,6 +82,18 @@ describe('task store authorization', () => {
     useStore.setState(initialState, true);
   });
 
+  it('keeps HOD oversight edits while rejecting deletion before any local mutation', () => {
+    const hod: User = { id: 'hod-delete-scope', name: 'HOD', role: 'HOD', departments: ['Designer'] };
+    useStore.setState({ currentUser: hod, users: [hod, staff, otherStaff], tasks: [ownTask] });
+    expect(useStore.getState().updateTask(ownTask.id, { priority: 'High' }).ok).toBe(true);
+    const before = useStore.getState();
+    expect(useStore.getState().deleteTask(ownTask.id)).toEqual({ ok: false, error: 'You do not have permission to delete this task.' });
+    expect(useStore.getState().tasks).toBe(before.tasks);
+    expect(useStore.getState().notifications).toBe(before.notifications);
+    useStore.setState({ tasks: [{ ...ownTask, assignedTo: hod.id }] });
+    expect(useStore.getState().deleteTask(ownTask.id).ok).toBe(true);
+  });
+
   it('allows assigned or created work and rejects unrelated work by default', () => {
     expect(useStore.getState().updateTask(ownTask.id, { priority: 'High' }).ok).toBe(true);
     expect(useStore.getState().updateTask(unrelatedTask.id, { priority: 'High' })).toEqual({

@@ -689,7 +689,7 @@ describe('staff permission matrix', () => {
     const hod: User = { ...staff, id: 'hod-1', name: 'HOD', role: 'HOD', customRoleId: hodRole.id, customRoleName: hodRole.name };
     const hodDepartmentTask = makeTask({ id: 'hod-department', department: 'Designer', createdBy: otherStaff.id, assignedTo: otherStaff.id });
     const hodOtherDepartmentTask = makeTask({ id: 'hod-other-department', department: 'Video Editor', createdBy: otherStaff.id, assignedTo: otherStaff.id });
-    expect(getTaskAccess(hod, hodDepartmentTask, [hodRole])).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: false });
+    expect(getTaskAccess(hod, hodDepartmentTask, [hodRole])).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: false, canAssign: false });
     expect(getTaskAccess(hod, hodOtherDepartmentTask, [hodRole])).toEqual({ canView: false, canEdit: false, canComment: false, canDelete: false, canAssign: false });
 
     const staffAssignedTask = makeTask({ id: 'staff-assigned', assignedTo: staff.id });

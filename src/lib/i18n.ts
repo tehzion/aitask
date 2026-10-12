@@ -1393,6 +1393,8 @@ const zhCopyAdditions: Record<string, string> = {
   'Sort team workload': '排序团队工作量',
   'Close team member details': '关闭成员详情',
   'See assigned work by person, grouped by day, week, and open review state.': '按人员查看分配的工作，按日、周与待审阅状态分组。',
+  'Assigned tasks are counted in their task department, once per task.': '已分配任务按任务所属部门统计，每项任务只计一次。',
+  'Member filters include every department. Workload shows each person’s total assigned work.': '人员筛选涵盖所有所属部门，工作量显示每人的全部已分配任务。',
   'Based on assigned due work for the selected period; this is not a performance score.': '基于所选周期内分配的到期工作；此非绩效评分。',
   // Service package manager
   'Edit standard package': '编辑标准配套',

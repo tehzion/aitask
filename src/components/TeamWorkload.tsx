@@ -10,12 +10,12 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Department, Task, User } from '../types';
-import { getMemberDepartments } from '../lib/departments';
+import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
 import { getRoleDisplayName } from '../lib/access';
 import {
   getTeamMemberTaskGroups,
+  getDepartmentWorkloadSummaries,
   getTeamWorkloadSummaries,
-  getWorkloadSignal,
   type TeamTaskGroups,
   type TeamWorkloadPeriod,
   type TeamWorkloadSignal,
@@ -163,11 +163,14 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
   const titleId = React.useId();
   const descriptionId = React.useId();
 
-  const departmentOptions = useMemo(() => Array.from(new Set(
-    users
-      .filter(member => member.role !== 'Client' && !member.directoryOnly)
-      .flatMap(getMemberDepartments),
-  )).sort((left, right) => left.localeCompare(right)), [users]);
+  const departmentOptions = useMemo(() => {
+    const members = users.filter(member => member.role !== 'Client' && !member.directoryOnly);
+    const ids = new Set(members.map(member => member.id));
+    return Array.from(new Set([
+      ...members.flatMap(getMemberDepartments),
+      ...tasks.filter(task => ids.has(task.assignedTo)).map(task => normalizeDepartment(task.department)).filter((value): value is Department => Boolean(value)),
+    ])).sort((left, right) => left.localeCompare(right));
+  }, [tasks, users]);
 
   const rawSummaries = useMemo(
     () => getTeamWorkloadSummaries(tasks, users, period, today),
@@ -177,7 +180,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
     const normalizedQuery = queryInput.value.trim().toLowerCase();
     const filtered = rawSummaries.filter(summary => (
       (!normalizedQuery || summary.member.name.toLowerCase().includes(normalizedQuery))
-      && (department === 'All' || getMemberDepartments(summary.member)[0] === department)
+      && (department === 'All' || getMemberDepartments(summary.member).includes(department))
     ));
 
     return [...filtered].sort((left, right) => {
@@ -192,36 +195,17 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
 
   const departmentSummaries = useMemo(() => {
     if (view !== 'department') return [];
-    const byDepartment = new Map<Department, typeof summaries[number] & { members: number }>();
-    summaries.forEach(summary => {
-      const primary = getMemberDepartments(summary.member)[0];
-      if (!primary) return;
-      const existing = byDepartment.get(primary);
-      if (!existing) {
-        byDepartment.set(primary, {
-          ...summary,
-          member: { ...summary.member, name: primary },
-          members: 1,
-        });
-        return;
-      }
-      existing.open += summary.open;
-      existing.overdue += summary.overdue;
-      existing.dueToday += summary.dueToday;
-      existing.dueThisWeek += summary.dueThisWeek;
-      existing.waitingApproval += summary.waitingApproval;
-      existing.completedThisWeek += summary.completedThisWeek;
-      existing.periodOpen += summary.periodOpen;
-      existing.members += 1;
-    });
-    return Array.from(byDepartment.values())
-      .map(entry => ({ ...entry, signal: getWorkloadSignal(period, entry.periodOpen, entry.overdue) }))
-      .sort((left, right) => (
-        right.overdue - left.overdue
-        || right.periodOpen - left.periodOpen
-        || left.member.name.localeCompare(right.member.name)
-      ));
-  }, [period, summaries, view]);
+    const query = queryInput.value.trim().toLowerCase();
+    const members = users.filter(member => !query || member.name.toLowerCase().includes(query));
+    return getDepartmentWorkloadSummaries(tasks, members, period, today)
+      .filter(entry => department === 'All' || entry.department === department)
+      .sort((left, right) => {
+        if (sort === 'name') return left.member.name.localeCompare(right.member.name);
+        if (sort === 'open') return right.open - left.open || left.member.name.localeCompare(right.member.name);
+        return right.overdue - left.overdue || right.waitingApproval - left.waitingApproval
+          || right.periodOpen - left.periodOpen || left.member.name.localeCompare(right.member.name);
+      });
+  }, [department, period, queryInput.value, sort, tasks, today, users, view]);
 
   const selectedSummary = useMemo(
     () => rawSummaries.find(summary => summary.member.id === selectedMemberId),
@@ -244,7 +228,7 @@ const TeamWorkload: React.FC<TeamWorkloadProps> = ({ tasks, users, onCreateTaskF
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 id="team-workload-title" className="text-lg font-semibold text-slate-950">{t('Team workload')}</h2>
-          <p className="mt-1 text-sm text-slate-500">{t('See assigned work by person, grouped by day, week, and open review state.')}</p>
+          <p className="mt-1 text-sm text-slate-500">{t(view === 'department' ? 'Assigned tasks are counted in their task department, once per task.' : 'Member filters include every department. Workload shows each person’s total assigned work.')}</p>
         </div>
         <div className="inline-flex w-fit rounded-lg border border-slate-200 bg-slate-50 p-1" aria-label={t('Workload view')}>
           {([['person', 'By person'], ['department', 'By department']] as const).map(([value, label]) => (

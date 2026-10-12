@@ -532,7 +532,16 @@ export const canEditTask = (
   (user?.role === 'Project Manager' && isTaskInOwnedPortfolio(user, task, scope)) ||
   (isDepartmentScopedUser(user, customRoles) && isMemberInDepartment(user, task.department))
 );
-export const canDeleteTask = canEditTask;
+// Department oversight permits routine edits, but destructive actions require
+// the same ownership/assignment and management authority as delegation.
+export const canDeleteTask = (
+  user: User | null | undefined,
+  task: Task,
+  customRoles: CustomRole[] = [],
+  scope: VisibilityScope = {},
+) => canEditTask(user, task, customRoles, scope)
+  && (isBossKoo(user) || !isDepartmentScopedUser(user, customRoles)
+    || canAssignTasksToOthers(user, customRoles, task, scope));
 export const isProjectParticipant = (user: User | null | undefined, project: Project, tasks: Task[] = []) => {
   if (!user) return false;
   return tasks.some(task => (
@@ -577,7 +586,7 @@ export const getTaskAccess = (
   const canView = canViewTask(user, task, customRoles, scope);
   const canEdit = canView && canEditTask(user, task, customRoles, scope);
   const canComment = canView && canCommentOnTask(user, task, customRoles, scope);
-  const canDelete = canEdit;
+  const canDelete = canView && canDeleteTask(user, task, customRoles, scope);
   const canAssign = canEdit && canAssignTasksToOthers(user, customRoles, task, scope);
   return { canView, canEdit, canComment, canDelete, canAssign };
 };
