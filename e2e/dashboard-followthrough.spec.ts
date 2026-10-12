@@ -167,27 +167,37 @@ const seedCompanyCycles = async (page: Page) => {
   });
 };
 
-test('company operations uses the current plan cycle while retaining internal draft progress', async ({ page }) => {
+test('company operations keeps current draft planning separate from confirmed progress', async ({ page }) => {
   await seedBoss(page);
   await seedCompanyCycles(page);
   await page.goto('/clients/followup-company');
   await page.clock.runFor(500);
-  await expect(page.getByText('0/3 deliverables completed', { exact: true })).toBeVisible();
+  await expect(page.getByText('Awaiting publication', { exact: true })).toBeVisible();
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ serviceCycles: useStore.getState().serviceCycles.map(cycle => cycle.id === 'followup-current-cycle' ? { ...cycle, status: 'Published' } : cycle) });
+  });
+  await expect(page.getByText('Delivered 0/3', { exact: true })).toBeVisible();
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ serviceCycles: useStore.getState().serviceCycles.filter(cycle => cycle.id !== 'followup-current-cycle') });
   });
-  await expect(page.getByText('No published cycle for this month', { exact: true })).toBeVisible();
-  await expect(page.getByText('2/4 deliverables completed', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('No current published cycle', { exact: true })).toBeVisible();
+  await expect(page.getByText('Delivered 2/4', { exact: true })).toHaveCount(0);
 });
 
 test('company operations progresses to the next dated cycle at midnight', async ({ page }) => {
   await seedBoss(page, '2026-10-31T16:59:50Z');
   await seedCompanyCycles(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ serviceCycles: useStore.getState().serviceCycles.map(cycle => cycle.id === 'followup-current-cycle' ? { ...cycle, status: 'Published' } : cycle) });
+  });
   await page.goto('/clients/followup-company');
   await page.clock.runFor(500);
-  await expect(page.getByText('0/3 deliverables completed', { exact: true })).toBeVisible();
+  await expect(page.getByText('Delivered 0/3', { exact: true })).toBeVisible();
   await page.clock.fastForward(11_000);
-  await expect(page.getByText('2/4 deliverables completed', { exact: true })).toBeVisible();
-  await expect(page.getByText('0/3 deliverables completed', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Delivered 2/4', { exact: true })).toBeVisible();
+  await expect(page.getByText('Delivered 0/3', { exact: true })).toHaveCount(0);
 });

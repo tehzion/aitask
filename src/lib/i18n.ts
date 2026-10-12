@@ -1,4 +1,4 @@
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { enUS } from 'date-fns/locale/en-US';
 import { zhCN } from 'date-fns/locale/zh-CN';
 
@@ -1006,6 +1006,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Service plan, monthly cycles, deliverables and client files.': '服务方案、月度周期、交付物与客户文件。',
   'Service context': '服务背景',
   'Monthly deliverables': '月度交付物',
+  'Reopen the delivery before adding task links.': '添加任务关联前，请先重新开启此交付。',
   'Planned deliverables': '计划交付物',
   'Review task links': '检查任务关联',
   'Task without a deliverable link': '任务尚未关联交付物',
@@ -2032,53 +2033,58 @@ const MONTH_ABBREVIATIONS: Array<[RegExp, string]> = [
   [/\bDec\b/g, '12月'],
 ];
 
-// Formatting does not need locale parsers or relative-calendar rules.
-const DATE_LOCALES = {
-  en: { options: enUS.options, localize: enUS.localize, formatLong: enUS.formatLong, formatDistance: enUS.formatDistance },
-  zh: { options: zhCN.options, localize: zhCN.localize, formatLong: zhCN.formatLong, formatDistance: zhCN.formatDistance },
+// Calendar labels use the browser's locale formatter. Keep only distance
+// formatting from date-fns so calendar/token parsers do not enter startup.
+const DISTANCE_LOCALES = {
+  en: { formatDistance: enUS.formatDistance },
+  zh: { formatDistance: zhCN.formatDistance },
 } as const;
-
+const shortMonth = new Intl.DateTimeFormat('en-US', { month: 'short' });
+const longMonth = new Intl.DateTimeFormat('en-US', { month: 'long' });
+const weekdays = {
+  en: new Intl.DateTimeFormat('en-US', { weekday: 'long' }),
+  zh: new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }),
+};
 const isValidDate = (value: Date) => !Number.isNaN(value.getTime());
+const calendarYear = (value: Date) => String(value.getFullYear()).padStart(4, '0');
+const clockTime = (value: Date) => `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
 
 /** Formats structured dates without translating user-authored text. */
 export const formatLocalizedDate = (value: Date, locale: AppLocale) => {
   if (!isValidDate(value)) return '';
-  return format(value, locale === 'zh' ? 'yyyy年M月d日' : 'd MMM yyyy', { locale: DATE_LOCALES[locale] });
+  return locale === 'zh'
+    ? `${calendarYear(value)}年${value.getMonth() + 1}月${value.getDate()}日`
+    : `${value.getDate()} ${shortMonth.format(value)} ${calendarYear(value)}`;
 };
 
-/** Formats role-workspace headers with the application locale instead of the browser locale. */
+/** Formats role-workspace headers with the selected locale. */
 export const formatLocalizedWeekdayDate = (value: Date, locale: AppLocale, includeYear = false) => {
   if (!isValidDate(value)) return '';
-  const pattern = locale === 'zh'
-    ? includeYear ? 'yyyy年M月d日 EEEE' : 'M月d日 EEEE'
-    : includeYear ? 'EEEE, d MMMM yyyy' : 'EEEE, d MMMM';
-  return format(value, pattern, { locale: DATE_LOCALES[locale] });
+  return locale === 'zh'
+    ? `${includeYear ? `${calendarYear(value)}年` : ''}${value.getMonth() + 1}月${value.getDate()}日 ${weekdays.zh.format(value)}`
+    : `${weekdays.en.format(value)}, ${value.getDate()} ${longMonth.format(value)}${includeYear ? ` ${calendarYear(value)}` : ''}`;
 };
 
 /** Formats a delivery/service period without relying on browser locale defaults. */
 export const formatLocalizedMonth = (value: Date, locale: AppLocale) => {
   if (!isValidDate(value)) return '';
-  return format(value, locale === 'zh' ? 'yyyy年M月' : 'MMMM yyyy', { locale: DATE_LOCALES[locale] });
+  return locale === 'zh' ? `${calendarYear(value)}年${value.getMonth() + 1}月` : `${longMonth.format(value)} ${calendarYear(value)}`;
 };
 
-/** Formats feedback timestamps using the application locale. */
 export const formatLocalizedDateTime = (value: Date, locale: AppLocale) => {
   if (!isValidDate(value)) return '';
-  return format(value, locale === 'zh' ? 'yyyy年M月d日 HH:mm' : 'd MMM yyyy, HH:mm', { locale: DATE_LOCALES[locale] });
+  return `${formatLocalizedDate(value, locale)}${locale === 'zh' ? ' ' : ', '}${clockTime(value)}`;
 };
 
-/** Formats sync metadata consistently while preserving the existing compact-today behavior. */
 export const formatLocalizedSyncTime = (value: Date, locale: AppLocale, now = new Date()) => {
   if (!isValidDate(value)) return '';
-  const sameDay = format(value, 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd');
-  return sameDay
-    ? format(value, 'HH:mm', { locale: DATE_LOCALES[locale] })
-    : formatLocalizedDateTime(value, locale);
+  const sameDay = value.getFullYear() === now.getFullYear() && value.getMonth() === now.getMonth() && value.getDate() === now.getDate();
+  return sameDay ? clockTime(value) : formatLocalizedDateTime(value, locale);
 };
 
 export const formatLocalizedDistanceToNow = (value: Date, locale: AppLocale) => {
   if (!isValidDate(value)) return '';
-  return formatDistanceToNow(value, { addSuffix: true, locale: DATE_LOCALES[locale] });
+  return formatDistanceToNow(value, { addSuffix: true, locale: DISTANCE_LOCALES[locale] });
 };
 
 const translateInlineDate = (value: string) => {

@@ -1,4 +1,3 @@
-import DeliveryReviewPanel from '../components/DeliveryReviewPanel';
 import { DeliveryProgress } from '../components/DeliveryProgress';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
@@ -77,6 +76,8 @@ import { getCurrentPlanCycle } from "../lib/dashboardData";
 import ConfirmDialog from "../components/ConfirmDialog";
 
 type Tab = "overview" | "plan" | "cycles" | "addons" | "activity";
+const DeliveryReviewPanel = React.lazy(() => import('../components/DeliveryReviewPanel'));
+
 const CLIENT_WORKSPACE_TABS_ID = "client-workspace";
 type ActivityStage = "idle" | "uploading" | "saving";
 type ActivityFeedback = {
@@ -502,7 +503,7 @@ const OperationsClientWorkspace = () => {
             <p className="calm-eyebrow">{t('Delivery progress')}</p>
             <DeliveryProgress published={Boolean(currentCycle)} total={currentCycleDeliverables.length} delivered={currentDelivered}
               draft={!isClient && allCycles.some(item => item.status === 'Draft' && parseOptionalDate(item.periodStart) && parseOptionalDate(item.periodEnd) && parseOptionalDate(item.periodStart)! <= today && today <= parseOptionalDate(item.periodEnd)!)} />
-            {!isClient && <DeliveryReviewPanel clientId={client.id} includeOpenTasks />}
+            {!isClient && <React.Suspense fallback={null}><DeliveryReviewPanel clientId={client.id} includeOpenTasks /></React.Suspense>}
           </Surface>
           <Surface className="p-6">
             <p className="calm-eyebrow">{t('Plan details')}</p>
@@ -810,7 +811,7 @@ const OperationsClientWorkspace = () => {
                         )}
                         {!isClient && (
                           <div className="flex flex-wrap gap-2">
-                            {canManageCycles &&
+                            {canManageCycles && deliverable.status !== "Delivered" &&
                               serviceItem?.workflow &&
                               linkedTasks.length === 0 && (
                                 <Button
@@ -827,6 +828,8 @@ const OperationsClientWorkspace = () => {
                             {canLinkTasks && <Button variant="secondary" onClick={() => setTab('overview')}>{t('Review task links')}</Button>}
                             <Button
                               variant="secondary"
+                              disabled={deliverable.status === 'Delivered'}
+                              title={deliverable.status === 'Delivered' ? t('Reopen the delivery before adding task links.') : undefined}
                               onClick={() =>
                                 store.openCreateTaskForDeliverable({
                                   clientId: client.id,

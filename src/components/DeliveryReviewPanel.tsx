@@ -13,6 +13,8 @@ import { useI18n } from './I18nProvider';
 import { Button } from './ui';
 import { inputBase } from './uiTokens';
 
+type PendingReview = { command: 'service_cycle.manage' | 'task.update'; taskId?: string; deliverableId?: string };
+
 const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?: string; includeOpenTasks?: boolean }) => {
   const store = useStore();
   const { t, locale } = useI18n();
@@ -20,7 +22,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   const { busy, run } = useSaveAction(clientId);
   const [selections, setSelections] = React.useState<Record<string, string>>({});
   const [message, setMessage] = React.useState('');
-  const [pending, setPending] = React.useState<'service_cycle.manage' | 'task.update' | null>(null);
+  const [pending, setPending] = React.useState<PendingReview | null>(null);
   React.useEffect(() => { setSelections({}); setMessage(''); setPending(null); }, [clientId, store.currentUser?.id]);
   useUnsavedChanges(Boolean(pending || Object.values(selections).some(Boolean)));
   const visibleTasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects })
@@ -32,16 +34,23 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   const canPublish = canManageServiceCycles(store.currentUser, store.rolePermissions);
   const canLink = hasPermission(store.currentUser, 'editTasks', store.rolePermissions);
   const date = (value: string) => { const parsed = parseOptionalDate(value); return parsed ? formatLocalizedDate(parsed, locale) : t('Date to be confirmed'); };
-  const save = (operation: () => { ok: boolean; error?: string }, command: NonNullable<typeof pending>) => {
+  const save = (operation: () => { ok: boolean; error?: string }, command: PendingReview['command'], submitted?: { taskId: string; deliverableId: string }) => {
+    const receipt = pending || { command, ...submitted };
     void run(async () => {
-      if (pending) return useStore.getState().retryPendingSave(pending);
+      if (pending) return useStore.getState().retryPendingSave(pending.command);
       const result = operation();
       if (!result.ok) return result;
-      setPending(command);
+      setPending(receipt);
       return useStore.getState().commitPendingMutation(command);
     }, result => {
       setMessage(result.ok ? t('Saved.') : t(result.error || 'The change is waiting to be saved.'));
-      if (result.ok) { setPending(null); setSelections({}); }
+      if (result.ok) {
+        setPending(null);
+        if (receipt.taskId) setSelections(current => {
+          if (current[receipt.taskId!] !== receipt.deliverableId) return current;
+          const next = { ...current }; delete next[receipt.taskId!]; return next;
+        });
+      }
     });
   };
   if (!store.currentUser || store.currentUser.role === 'Client') return null;
@@ -50,7 +59,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
     <h3 className="font-semibold text-ink">{t('Delivery records need review')}</h3>
     <p className="mt-1 text-xs text-muted">{t('Review links and publication before confirming delivery.')}</p>
     {message && <p className="mt-3 text-sm" role="status">{message}</p>}
-    {pending && <Button className="mt-3" disabled={busy} onClick={() => save(() => ({ ok: true }), pending)}>{t('Retry pending save')}</Button>}
+    {pending && <Button className="mt-3" disabled={busy} onClick={() => save(() => ({ ok: true }), pending.command)}>{t('Retry pending save')}</Button>}
     <div className="mt-3 space-y-4">
       {records.draftCycles.map(cycle => <div key={cycle.id} className="flex flex-wrap items-center justify-between gap-3 text-sm">
         <div><Link className="font-medium text-accent" to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=cycles#cycle-${encodeURIComponent(cycle.id)}`}><span data-i18n-skip>{cycle.clientName}</span></Link>
@@ -59,7 +68,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
       </div>)}
       {reviewTasks.map(task => {
         const editable = canLink && canEditTask(store.currentUser, task, store.rolePermissions, { clients: store.clients, projects: store.projects });
-        const eligible = store.deliverables.filter(item => item.clientId === task.clientId && cycles.some(cycle => cycle.id === item.cycleId && ['Draft', 'Published'].includes(cycle.status)));
+        const eligible = store.deliverables.filter(item => item.clientId === task.clientId && item.status !== 'Delivered' && cycles.some(cycle => cycle.id === item.cycleId && ['Draft', 'Published'].includes(cycle.status)));
         return <div key={task.id} className="space-y-2 text-sm">
           <Link className="font-medium text-accent" to={`/tasks?taskId=${encodeURIComponent(task.id)}`}><span data-i18n-skip>{task.title}</span></Link>
           <p className="text-xs text-muted">{t(isTaskCompleted(task) ? 'Completed task without a deliverable link' : 'Task without a deliverable link')}</p>
@@ -70,7 +79,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
             </select>
             <Button disabled={busy || Boolean(pending) || !selections[task.id]} onClick={() => {
               const item = eligible.find(d => d.id === selections[task.id]);
-              if (item) save(() => useStore.getState().linkTaskToDeliverable(task.id, item.cycleId, item.id), 'task.update');
+              if (item) save(() => useStore.getState().linkTaskToDeliverable(task.id, item.cycleId, item.id), 'task.update', { taskId: task.id, deliverableId: item.id });
             }}>{t('Link task')}</Button>
           </div>}
           {editable && eligible.length === 0 && <p className="text-xs text-muted">{t('No eligible deliverable. Review the company service cycle.')}</p>}

@@ -18,7 +18,7 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
     const cycle = { ...state.serviceCycles[0], id: 'review-cycle', planId: plan.id, clientId: client.id, clientName: client.clientName, status: 'Draft' as const, periodStart: '2026-10-01', periodEnd: '2026-10-31', serviceItems: [] };
     const deliverable = { ...state.deliverables[0], id: 'review-deliverable', cycleId: cycle.id, planId: plan.id, clientId: client.id, clientName: client.clientName, title: 'Review output', status: 'Planned' as const, taskIds: [], attachments: [] };
     const task = { ...state.tasks[0], id: 'review-task', clientId: client.id, clientName: client.clientName, title: 'Completed review work', assignedTo: boss.id, createdBy: boss.id, status: 'Completed' as const, isCompleted: true, completedAt: '2026-10-12T04:00:00Z', deliverableId: undefined, serviceCycleId: undefined, projectId: undefined };
-    useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [client], clientPlans: [plan], serviceCycles: [cycle], deliverables: [deliverable], tasks: [task], projects: [],
+    useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [client], clientPlans: [plan], serviceCycles: [cycle], deliverables: [deliverable], tasks: [task, { ...task, id: 'review-task-second', title: 'Second review work' }], projects: [],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
     stopBackendAutoSync();
   }, locale);
@@ -27,22 +27,27 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
   await expect(panel).toBeVisible();
   await expect(page.getByText('0%', { exact: true })).toHaveCount(0);
   await expect(panel.getByRole('button', { name: locale === 'en' ? 'Publish' : '发布', exact: true })).toBeVisible();
-  const selector = panel.getByRole('combobox');
-  await selector.selectOption('review-deliverable');
+  const selectors = panel.getByRole('combobox');
+  await selectors.nth(0).selectOption('review-deliverable');
+  await selectors.nth(1).selectOption('review-deliverable');
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'The change is waiting to be saved.' }), retryPendingSave: async () => ({ ok: true }) });
   });
-  await panel.getByRole('button', { name: locale === 'en' ? 'Link task' : '关联任务', exact: true }).click();
+  await panel.getByRole('button', { name: locale === 'en' ? 'Link task' : '关联任务', exact: true }).nth(0).click();
   const retry = panel.getByRole('button', { name: locale === 'en' ? 'Retry pending save' : '重试待保存更改' });
   await expect(retry).toBeVisible();
   await retry.click();
   await expect(retry).toHaveCount(0);
+  await expect(panel.getByRole('combobox')).toHaveValue('review-deliverable');
+  await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ commitPendingMutation: async () => ({ ok: true }) }); });
+  await panel.getByRole('button', { name: locale === 'en' ? 'Publish' : '发布', exact: true }).click();
+  await expect(panel.getByRole('combobox')).toHaveValue('review-deliverable');
   const result = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     return { cycle: useStore.getState().serviceCycles[0].status, deliverable: useStore.getState().deliverables[0].status, link: useStore.getState().tasks[0].deliverableId };
   });
-  expect(result).toEqual({ cycle: 'Draft', deliverable: 'Ready', link: 'review-deliverable' });
+  expect(result).toEqual({ cycle: 'Published', deliverable: 'Ready', link: 'review-deliverable' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: `/tmp/aitask-delivery-review-${locale}.png`, fullPage: true });
 });

@@ -63,8 +63,9 @@ for (const mobile of [false, true]) {
     await expectMetric(overview, 'Overdue tasks', 1);
     await expectMetric(overview, 'Overdue production', 1);
     await expectMetric(overview, 'Renewals in 30 days', 0);
-    await expect(overview.getByText(/No published cycle for this month/)).toBeVisible();
-    await expect(overview.getByText('0 Delivered', { exact: true })).toBeVisible();
+    await expect(overview.getByText(/No published cycle covering today/)).toBeVisible();
+    await expect(overview.getByText('No current published cycle', { exact: true })).toBeVisible();
+    await expect(overview.getByText('0 Delivered', { exact: true })).toHaveCount(0);
     await page.getByRole('tab', { name: 'Agency pulse', exact: true }).click();
     await expectMetric(page.getByRole('tabpanel'), 'Overdue now', 1);
   });
