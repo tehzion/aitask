@@ -1,5 +1,4 @@
 import type { ClientContact, ClientPortalPayload } from '../types';
-import { safeAvatarSource } from './security';
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const cleanPortalText = (value: unknown, maxLength: number) => typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
@@ -7,14 +6,6 @@ const cleanPortalText = (value: unknown, maxLength: number) => typeof value === 
 const portalRecords = (value: unknown) => (
   Array.isArray(value) ? value.filter(isRecord) : []
 );
-
-const parseClientContact = (value: unknown): ClientContact | null => {
-  if (!isRecord(value)) return null;
-  const id = cleanPortalText(value.id, 160);
-  const name = cleanPortalText(value.name, 160);
-  if (!id || !name) return null;
-  return { id, name, avatar: safeAvatarSource(value.avatar) };
-};
 
 export const parseClientPortalPayload = (value: unknown, expectedWorkspaceId: string, expectedClientName?: string): ClientPortalPayload => {
   if (!isRecord(value)) throw new Error('Supabase returned an invalid Client portal response.');
@@ -42,9 +33,9 @@ export const parseClientPortalPayload = (value: unknown, expectedWorkspaceId: st
   const clients = portalRecords(value.clients)
     .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
     .map(item => ({ ...item })) as unknown as ClientPortalPayload['clients'];
-  const contacts = (Array.isArray(value.contacts) ? value.contacts : [])
-    .map(parseClientContact)
-    .filter((contact): contact is ClientContact => Boolean(contact));
+  // Ignore contact metadata from older servers too: Clients never need the
+  // internal member directory to review a delivery or share feedback.
+  const contacts: ClientContact[] = [];
   const clientPlans = portalRecords(value.clientPlans)
     .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
     .map(item => ({ ...item })) as unknown as ClientPortalPayload['clientPlans'];

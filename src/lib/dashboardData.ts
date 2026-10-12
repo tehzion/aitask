@@ -1,8 +1,10 @@
 import { differenceInCalendarDays, startOfDay } from 'date-fns';
-import type { ClientServicePlan, ServiceCycle, Deliverable, Task, User } from '../types';
+import type { ClientProfile, ClientServicePlan, ServiceCycle, Deliverable, Task, User } from '../types';
 import { parseOptionalDate } from './utils';
 import { isTaskCompleted } from './taskCompletion';
 import { isTaskOpen } from './taskReporting';
+import { hasInvalidDeliveryLink, isTaskLinkedToDeliverable } from './deliveryLinks';
+export { hasInvalidDeliveryLink, isTaskLinkedToDeliverable } from './deliveryLinks';
 
 export const getContractDaysRemaining = (contractEndDate: string | undefined, today: Date): number | null => {
   const end = parseOptionalDate(contractEndDate);
@@ -84,15 +86,22 @@ export const getCompanyTaskActivity = (
   return { completedThisMonth, completionDateUnavailable, unassignedOpen, handlers };
 };
 
-export const isTaskLinkedToDeliverable = (task: Pick<Task, 'id' | 'deliverableId'>, deliverables: readonly Deliverable[]) =>
-  Boolean(task.deliverableId || deliverables.some(item => item.taskIds.includes(task.id)));
+/** Hosted Clients receive a boolean only; local workspaces can derive it. */
+export const isAwaitingPublication = (client: ClientProfile | undefined, plan: Pick<ClientServicePlan, 'id' | 'clientId'> | undefined,
+  cycles: readonly ServiceCycle[], today: Date) => Boolean(client?.awaitingPublication
+    || (plan && getCurrentPlanCycle(plan, cycles.filter(cycle => cycle.status === 'Draft'), today, { includeDraft: true })));
 
 export const getDeliveryReviewRecords = (
   visibleTasks: readonly Task[], cycles: readonly ServiceCycle[], deliverables: readonly Deliverable[], today: Date,
 ) => {
   const day = startOfDay(today);
   return {
+    invalidLinkedTasks: visibleTasks.filter(task => task.clientId && hasInvalidDeliveryLink(task, deliverables)),
     unlinkedTasks: visibleTasks.filter(task => isTaskCompleted(task) && task.clientId && !isTaskLinkedToDeliverable(task, deliverables)),
+    expiredDraftCycles: cycles.filter(cycle => {
+      const end = parseOptionalDate(cycle.periodEnd);
+      return cycle.status === 'Draft' && Boolean(end && startOfDay(end) < day);
+    }),
     draftCycles: cycles.filter(cycle => {
       const start = parseOptionalDate(cycle.periodStart);
       const end = parseOptionalDate(cycle.periodEnd);

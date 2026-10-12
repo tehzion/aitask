@@ -126,8 +126,9 @@ const supabase = (...args) => run(supabaseCli, ['--workdir', validationRoot, ...
 try {
   console.log(`[rollout] Validating ${validatedMigrations.join(', ')} in ${validationRoot}`);
   run(supabaseCli, ['--workdir', validationRoot, 'start', '--exclude', 'realtime,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor'], {
-    cwd: validationRoot,
+    cwd: validationRoot, capture: true, suppressStdoutOnError: true,
   });
+  // Startup output includes disposable service keys; never retain it in CI artifacts.
   console.log('[rollout] Disposable Supabase stack started.');
   supabase('migration', 'list', '--local');
   supabase('test', 'db', 'supabase/tests/database', '--local');
