@@ -12,7 +12,7 @@ describe.each(['Staff', 'HOD'] as const)('%s assigned-service access', role => {
   beforeEach(() => useStore.setState({
     ...initialState,
     currentUser: actor, users: [actor], rolePermissions: [],
-    tasks: [{ id: 'task', clientName: 'Company', assignedTo: actor.id, createdBy: 'pm', department: 'Designer', serviceCycleId: cycle.id, deliverableId: deliverable.id } as Task],
+    tasks: [{ id: 'task', clientId: deliverable.clientId, clientName: 'Company', assignedTo: actor.id, createdBy: 'pm', department: 'Designer', serviceCycleId: cycle.id, deliverableId: deliverable.id } as Task],
     clients: [], serviceCycles: [structuredClone(cycle)], deliverables: [structuredClone(deliverable)], cycleComments: [],
     backend: { ...initialState.backend, mode: 'local', status: 'local', pendingMutations: 0 },
   }, true));

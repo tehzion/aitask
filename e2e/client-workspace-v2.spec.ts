@@ -64,6 +64,11 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ users: useStore.getState().users.map(user => user.role === 'Client' ? user : { ...user, name: 'PRIVATE STAFF IDENTITY' }) });
+  });
+  await expect(page.getByText('PRIVATE STAFF IDENTITY', { exact: true })).toHaveCount(0);
   if (seeded.clientId) await expect(page.getByText('Growth Plan', { exact: true })).toBeVisible();
   const primaryAction = page.getByRole('link', { name: 'Review deliverable' }).first();
   await expect(primaryAction).toBeVisible();
@@ -79,6 +84,8 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
 
   await page.goto('/tasks?taskId=client-v2-review');
   const focus = page.getByRole('dialog', { name: 'Delivery details' });
+  await expect(focus.getByText('PRIVATE STAFF IDENTITY', { exact: true })).toHaveCount(0);
+  await expect(focus.getByText('Agency team', { exact: true })).toBeVisible();
   await expect(focus).toBeVisible();
   await expect(focus.getByText('Approve September campaign', { exact: true })).toBeVisible();
   await focus.getByRole('button', { name: 'Request changes' }).click();

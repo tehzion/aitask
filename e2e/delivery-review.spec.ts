@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 test.use({ timezoneId: 'Asia/Kuala_Lumpur' });
-for (const locale of ['en', 'zh']) test(`delivery review preserves pending actions and empty progress (${locale})`, async ({ page }) => {
+const seedReview = async (page: import('@playwright/test').Page, locale: string) => {
   await page.setViewportSize(locale === 'zh' ? { width: 390, height: 844 } : { width: 1440, height: 1000 });
   await page.clock.install({ time: new Date('2026-10-12T04:00:00Z') });
   await page.goto('/login');
@@ -23,6 +23,9 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
     stopBackendAutoSync();
   }, locale);
   await page.goto('/clients/review-client');
+};
+for (const locale of ['en', 'zh']) test(`delivery review preserves pending actions and empty progress (${locale})`, async ({ page }) => {
+  await seedReview(page, locale);
   const panel = page.getByRole('region', { name: locale === 'en' ? 'Delivery records need review' : '交付记录需要审核' });
   await expect(panel).toBeVisible();
   await expect(page.getByText('0%', { exact: true })).toHaveCount(0);
@@ -30,12 +33,20 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
   const selectors = panel.getByRole('combobox');
   await selectors.nth(0).selectOption('review-deliverable');
   await selectors.nth(1).selectOption('review-deliverable');
+  await page.getByRole('tab', { name: locale === 'en' ? 'Cycles' : '周期', exact: true }).click();
+  await expect(panel).toBeHidden();
+  await page.getByRole('tab', { name: locale === 'en' ? 'Overview' : '概览', exact: true }).click();
+  await expect(selectors.nth(0)).toHaveValue('review-deliverable');
+  await expect(selectors.nth(1)).toHaveValue('review-deliverable');
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'The change is waiting to be saved.' }), retryPendingSave: async () => ({ ok: true }) });
   });
   await panel.getByRole('button', { name: locale === 'en' ? 'Link task' : '关联任务', exact: true }).nth(0).click();
   const retry = panel.getByRole('button', { name: locale === 'en' ? 'Retry pending save' : '重试待保存更改' });
+  await expect(retry).toBeVisible();
+  await page.getByRole('tab', { name: locale === 'en' ? 'Cycles' : '周期', exact: true }).click();
+  await page.getByRole('tab', { name: locale === 'en' ? 'Overview' : '概览', exact: true }).click();
   await expect(retry).toBeVisible();
   await retry.click();
   await expect(retry).toHaveCount(0);
@@ -50,4 +61,34 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
   expect(result).toEqual({ cycle: 'Published', deliverable: 'Ready', link: 'review-deliverable' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: `/tmp/aitask-delivery-review-${locale}.png`, fullPage: true });
+});
+
+test('invalid links and expired drafts require explicit scoped review', async ({ page }) => {
+  await seedReview(page, 'en');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    const foreign = { ...state.deliverables[0], id: 'foreign-output', clientId: 'foreign-company', title: 'Foreign secret output', taskIds: ['review-task'] };
+    useStore.setState({ tasks: state.tasks.map(task => task.id === 'review-task' ? { ...task, deliverableId: foreign.id } : task),
+      deliverables: [...state.deliverables, foreign], serviceCycles: [...state.serviceCycles, { ...state.serviceCycles[0], id: 'expired-review-cycle', periodStart: '2026-09-01', periodEnd: '2026-09-30' }] });
+  });
+  const panel = page.getByRole('region', { name: 'Delivery records need review' });
+  await expect(panel.getByText('Invalid delivery link. Review before linking again.')).toBeVisible();
+  await expect(panel.getByText('Foreign secret output')).toHaveCount(0);
+  await expect(panel.getByRole('combobox')).toHaveCount(1);
+  await panel.getByRole('button', { name: 'Older unpublished cycles (1)' }).click();
+  await expect(panel.getByText(/Expired unpublished cycle/)).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Publish', exact: true })).toHaveCount(1);
+  page.once('dialog', dialog => dialog.dismiss());
+  await panel.getByRole('button', { name: 'Remove invalid link' }).click();
+  await expect(panel.getByRole('combobox')).toHaveCount(1);
+  page.once('dialog', dialog => dialog.accept());
+  await panel.getByRole('button', { name: 'Remove invalid link' }).click();
+  await expect(panel.getByRole('combobox')).toHaveCount(2);
+  const state = await page.evaluate(async () => {
+    const store = (await import('/src/store/index.ts')).useStore.getState();
+    return { taskExists: store.tasks.some(task => task.id === 'review-task'), taskLink: store.tasks.find(task => task.id === 'review-task')?.deliverableId,
+      foreignLinks: store.deliverables.find(item => item.id === 'foreign-output')?.taskIds, oldCycle: store.serviceCycles.find(item => item.id === 'expired-review-cycle')?.status };
+  });
+  expect(state).toEqual({ taskExists: true, taskLink: undefined, foreignLinks: [], oldCycle: 'Draft' });
 });

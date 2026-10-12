@@ -5,7 +5,7 @@ import { useLocalToday } from '../hooks/useLocalToday';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { canEditTask, canManageServiceCycles, canOpenServiceClient, getVisibleTasks, hasPermission } from '../lib/access';
-import { getDeliveryReviewRecords, isTaskLinkedToDeliverable } from '../lib/dashboardData';
+import { getDeliveryReviewRecords, isTaskLinkedToDeliverable, hasInvalidDeliveryLink } from '../lib/dashboardData';
 import { isTaskCompleted } from '../lib/taskCompletion';
 import { formatLocalizedDate } from '../lib/i18n';
 import { parseOptionalDate } from '../lib/utils';
@@ -23,6 +23,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   const [selections, setSelections] = React.useState<Record<string, string>>({});
   const [message, setMessage] = React.useState('');
   const [pending, setPending] = React.useState<PendingReview | null>(null);
+  const [showOlderDrafts, setShowOlderDrafts] = React.useState(false);
   React.useEffect(() => { setSelections({}); setMessage(''); setPending(null); }, [clientId, store.currentUser?.id]);
   useUnsavedChanges(Boolean(pending || Object.values(selections).some(Boolean)));
   const visibleTasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects })
@@ -30,7 +31,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   const cycles = store.serviceCycles.filter(cycle => (!clientId || cycle.clientId === clientId)
     && canOpenServiceClient(store.currentUser, cycle.clientName, visibleTasks, store.rolePermissions, store.clients, store.projects));
   const records = getDeliveryReviewRecords(visibleTasks, cycles, store.deliverables, today);
-  const reviewTasks = includeOpenTasks ? visibleTasks.filter(task => task.clientId && !isTaskLinkedToDeliverable(task, store.deliverables) && task.status !== 'Cancelled') : records.unlinkedTasks;
+  const reviewTasks = [...records.invalidLinkedTasks, ...(includeOpenTasks ? visibleTasks.filter(task => task.clientId && !isTaskLinkedToDeliverable(task, store.deliverables) && task.status !== 'Cancelled') : records.unlinkedTasks)];
   const canPublish = canManageServiceCycles(store.currentUser, store.rolePermissions);
   const canLink = hasPermission(store.currentUser, 'editTasks', store.rolePermissions);
   const date = (value: string) => { const parsed = parseOptionalDate(value); return parsed ? formatLocalizedDate(parsed, locale) : t('Date to be confirmed'); };
@@ -54,7 +55,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
     });
   };
   if (!store.currentUser || store.currentUser.role === 'Client') return null;
-  if (!reviewTasks.length && !records.draftCycles.length && !pending && !message) return null;
+  if (!reviewTasks.length && !records.draftCycles.length && !records.expiredDraftCycles.length && !pending && !message) return null;
   return <section className="mt-5 rounded-control border border-line p-4" aria-label={t('Delivery records need review')}>
     <h3 className="font-semibold text-ink">{t('Delivery records need review')}</h3>
     <p className="mt-1 text-xs text-muted">{t('Review links and publication before confirming delivery.')}</p>
@@ -66,13 +67,25 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
           <p className="text-xs text-muted">{t('Awaiting publication')} · {date(cycle.periodStart)} – {date(cycle.periodEnd)}</p></div>
         {canPublish && <Button disabled={busy || Boolean(pending)} onClick={() => save(() => useStore.getState().setServiceCycleStatus(cycle.id, 'Published'), 'service_cycle.manage')}>{t('Publish')}</Button>}
       </div>)}
+      {records.expiredDraftCycles.length > 0 && <div>
+        <Button variant="secondary" aria-expanded={showOlderDrafts} onClick={() => setShowOlderDrafts(value => !value)}>{t('Older unpublished cycles')} ({records.expiredDraftCycles.length})</Button>
+        {showOlderDrafts && <div className="mt-3 space-y-3">{records.expiredDraftCycles.map(cycle => <div key={cycle.id} className="text-sm">
+          <Link className="font-medium text-accent" to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=cycles#cycle-${encodeURIComponent(cycle.id)}`}><span data-i18n-skip>{cycle.clientName}</span></Link>
+          <p className="text-xs text-muted">{t('Expired unpublished cycle')} · {date(cycle.periodStart)} – {date(cycle.periodEnd)}</p>
+        </div>)}</div>}
+      </div>}
       {reviewTasks.map(task => {
         const editable = canLink && canEditTask(store.currentUser, task, store.rolePermissions, { clients: store.clients, projects: store.projects });
+        const invalidLink = hasInvalidDeliveryLink(task, store.deliverables);
         const eligible = store.deliverables.filter(item => item.clientId === task.clientId && item.status !== 'Delivered' && cycles.some(cycle => cycle.id === item.cycleId && ['Draft', 'Published'].includes(cycle.status)));
         return <div key={task.id} className="space-y-2 text-sm">
           <Link className="font-medium text-accent" to={`/tasks?taskId=${encodeURIComponent(task.id)}`}><span data-i18n-skip>{task.title}</span></Link>
-          <p className="text-xs text-muted">{t(isTaskCompleted(task) ? 'Completed task without a deliverable link' : 'Task without a deliverable link')}</p>
-          {editable && eligible.length > 0 && <div className="flex flex-wrap gap-2">
+          <p className="text-xs text-muted">{t(invalidLink ? 'Invalid delivery link. Review before linking again.' : isTaskCompleted(task) ? 'Completed task without a deliverable link' : 'Task without a deliverable link')}</p>
+          {editable && invalidLink && <Button variant="secondary" disabled={busy || Boolean(pending)} onClick={() => {
+            if (window.confirm(t('Remove the invalid delivery link? The task will remain and require an explicit new link.')))
+              save(() => useStore.getState().unlinkInvalidTaskDelivery(task.id), 'task.update');
+          }}>{t('Remove invalid link')}</Button>}
+          {editable && !invalidLink && eligible.length > 0 && <div className="flex flex-wrap gap-2">
             <select aria-label={t('Choose a deliverable')} className={`${inputBase} min-w-0 flex-1`} disabled={busy || Boolean(pending)} value={selections[task.id] || ''} onChange={event => setSelections(current => ({ ...current, [task.id]: event.target.value }))}>
               <option value="">{t('Choose a deliverable')}</option>
               {eligible.map(item => { const cycle = cycles.find(c => c.id === item.cycleId)!; const plan = store.clientPlans.find(p => p.id === cycle.planId); return <option key={item.id} value={item.id} data-i18n-skip>{item.title} · {plan?.name || cycle.clientName} · {date(cycle.periodStart)} – {date(cycle.periodEnd)}</option>; })}
@@ -82,7 +95,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
               if (item) save(() => useStore.getState().linkTaskToDeliverable(task.id, item.cycleId, item.id), 'task.update', { taskId: task.id, deliverableId: item.id });
             }}>{t('Link task')}</Button>
           </div>}
-          {editable && eligible.length === 0 && <p className="text-xs text-muted">{t('No eligible deliverable. Review the company service cycle.')}</p>}
+          {editable && !invalidLink && eligible.length === 0 && <p className="text-xs text-muted">{t('No eligible deliverable. Review the company service cycle.')}</p>}
         </div>;
       })}
     </div>

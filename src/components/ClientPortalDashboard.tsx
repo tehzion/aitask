@@ -1,6 +1,6 @@
 import { DeliveryProgress } from './DeliveryProgress';
 import { useLocalToday } from '../hooks/useLocalToday';
-import { getCurrentPlanCycle } from '../lib/dashboardData';
+import { getCurrentPlanCycle, isAwaitingPublication } from '../lib/dashboardData';
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, FileCheck2, MessageSquareText, TimerReset } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Task, WorkspaceMember } from '../types';
@@ -39,7 +39,7 @@ const expectedDate = (task: Task, locale: AppLocale, fallback: string) => {
   return dueDate ? formatLocalizedDate(dueDate, locale) : fallback;
 };
 
-const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => {
+const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
   const { locale, t } = useI18n();
   const today = useLocalToday();
   const currentUser = useStore(state => state.currentUser);
@@ -62,10 +62,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
     .slice(0, 6);
   const updates = getClientLatestUpdates(tasks).filter(task => task.id !== focusTask?.id).slice(0, 5);
   const delivered = getClientLatestUpdates(groups.delivered).slice(0, 5);
-  const contactName = (id: string) => {
-    const name = users.find(user => user.id === id)?.name;
-    return name ? <span data-i18n-skip>{name}</span> : t('Agency team');
-  };
+  const contactName = () => t('Agency team');
   const latestTeamComment = focusTask?.comments
     ?.filter(comment => comment.userId !== currentUser?.id)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
@@ -80,7 +77,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
           <StatusChip tone={stageTone(task)}>{getLocalizedDeliveryStage(getClientDeliveryStageLabel(task), locale)}</StatusChip>
         </div>
         <p className="mt-1 text-xs leading-5 text-muted">
-          <span data-i18n-skip>{task.serviceType}</span> · {contactName(task.assignedTo)}
+          <span data-i18n-skip>{task.serviceType}</span> · {contactName()}
           <span> · {expectedDate(task, locale, t('Date to be confirmed'))}</span>
         </p>
       </div>
@@ -107,12 +104,12 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
               <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
                 <span data-i18n-skip className="font-medium text-ink">{focusTask.serviceType}</span>
                 <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{expectedDate(focusTask, locale, t('Date to be confirmed'))}</span>
-                <span>{contactName(focusTask.assignedTo)}</span>
+                <span>{contactName()}</span>
               </div>
               {focusStage === 'timing_changed' && (
                 <div className="mt-5 max-w-2xl rounded-control border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm leading-6 text-amber-900 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100">
                   <p className="font-semibold">{t('clientPortal.expectedTimingChanged')}</p>
-                  <p className="mt-1">{latestTeamComment?.text ? <span data-i18n-skip>{latestTeamComment.text}</span> : <>{t('clientPortal.currentExpectedDate')} {expectedDate(focusTask, locale, t('clientPortal.dateToBeConfirmed'))}. {contactName(focusTask.assignedTo)} {t('clientPortal.contactForTiming')}</>}</p>
+                  <p className="mt-1">{latestTeamComment?.text ? <span data-i18n-skip>{latestTeamComment.text}</span> : <>{t('clientPortal.currentExpectedDate')} {expectedDate(focusTask, locale, t('clientPortal.dateToBeConfirmed'))}. {contactName()} {t('clientPortal.contactForTiming')}</>}</p>
                 </div>
               )}
               <Link to={taskPath(focusTask)} className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-control bg-accent px-5 text-sm font-semibold text-white shadow-[0_12px_28px_-18px_rgb(var(--calm-accent)/0.9)] transition duration-160 hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 active:translate-y-px dark:text-[rgb(var(--calm-accent-ink))]">
@@ -130,7 +127,7 @@ const ClientPortalDashboard = ({ tasks, users }: ClientPortalDashboardProps) => 
 
         <Surface className="p-6">
           <p className="calm-eyebrow">{t('clientPortal.deliveryProgress')}</p>
-          <DeliveryProgress published={Boolean(currentCycle)} total={cycleDeliverables.length} delivered={deliveredCount} draft={Boolean(activePlan)} />
+          <DeliveryProgress published={Boolean(currentCycle)} total={cycleDeliverables.length} delivered={deliveredCount} draft={isAwaitingPublication(client, activePlan, serviceCycles, today)} />
           {client && activePlan && (
             <Link to={`/clients/${encodeURIComponent(client.id)}`} className="mt-6 inline-flex min-h-11 w-full items-center justify-between rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
               <span data-i18n-skip>{activePlan.name}</span><ArrowRight className="h-4 w-4 text-accent" />
