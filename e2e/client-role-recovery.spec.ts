@@ -171,9 +171,11 @@ test('Customer progress uses the current plan and period while preserving delive
   await page.goto('/clients/role-company');
   await expect(page.getByText('50%', { exact: true }).first()).toBeVisible();
   await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ serviceCycles: useStore.getState().serviceCycles.filter(item => item.id !== 'current-cycle') }); });
-  await expect(page.getByText('No published cycle for this month', { exact: true })).toBeVisible();
+  await expect(page.getByText('Awaiting publication', { exact: true })).toBeVisible();
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.goto('/');
-  await expect(page.getByText('No published cycle for this month', { exact: true })).toBeVisible();
+  await expect(page.getByText('Awaiting publication', { exact: true })).toBeVisible();
+  await expect(page.getByText('50%', { exact: true })).toHaveCount(0);
 });
 
 test('Customer workspace retry reconciles submitted feedback while retaining a newer draft', async ({ page }) => {

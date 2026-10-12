@@ -8,6 +8,10 @@ number remain uniquely identifiable.
 
 ### Fixed
 
+- Published cycles retain Included, Delivered and Remaining counters; draft and
+  empty cycles show publication states without misleading zero percentages.
+- Browser assertions cover the current publication labels and midnight changes;
+  CI allows the complete serial browser suite to finish without a job timeout.
 - Confirmed deliveries reject new task links and task creation until explicitly
   reopened. Staff/HOD delivery confirmation recognizes both task-link forms.
 - Delivery review saves clear only the submitted task selection; other drafts
