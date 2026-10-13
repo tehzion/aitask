@@ -644,13 +644,15 @@
     "20261013035142_staff_workflow_recovery",
     "20261013053636_hod_review_handoff",
     "20261013055051_task_stage_progress",
-    "20261013105534_task_role_readiness_hardening"
+    "20261013105534_task_role_readiness_hardening",
+    "20261013160804_task_dependency_review_invalidation"
   ],
   "pendingProductionMigrations": [
     "20261012165347_hod_task_deletion_authority",
     "20261013035142_staff_workflow_recovery",
     "20261013053636_hod_review_handoff",
     "20261013055051_task_stage_progress",
-    "20261013105534_task_role_readiness_hardening"
+    "20261013105534_task_role_readiness_hardening",
+    "20261013160804_task_dependency_review_invalidation"
   ]
 }
