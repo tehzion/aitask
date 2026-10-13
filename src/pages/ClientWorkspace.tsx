@@ -647,7 +647,7 @@ const OperationsClientWorkspace = () => {
             )}
           </section>
           {canManagePlans && scheduledRevision && (
-            <DraftServicePlanEditor plan={scheduledRevision} />
+            <DraftServicePlanEditor key={scheduledRevision.id} plan={scheduledRevision} />
           )}
         </div>
       )}

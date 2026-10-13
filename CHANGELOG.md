@@ -8,6 +8,8 @@ number remain uniquely identifiable.
 
 ### Fixed
 
+- Confirmed plan revision saves close the editor into a Saved summary with an Edit
+  revision action. Failed saves and newer unsaved edits keep the form open.
 - Plan revision save labels stay readable during selection and saving, and saved
   feedback uses the theme’s high-contrast text color.
 - Client dashboards use generic team labels and the portal payload excludes staff

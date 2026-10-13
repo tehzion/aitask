@@ -2,17 +2,17 @@ import { mergeDraft, type DraftConflict } from '../lib/draftMerge';
 import { readRecoveredDraft, writeRecoveredDraft, removeRecoveredDraft } from '../lib/draftRecovery';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React from 'react';
-import { Save } from 'lucide-react';
+import { Check, Pencil, Save } from 'lucide-react';
 import { useStore } from '../store';
 import type { ClientServicePlan, ServiceItem } from '../types';
-import { snapshotWorkflow } from '../lib/serviceManagement';
+import { calculatePlanTotalMinor, formatMoney, snapshotWorkflow } from '../lib/serviceManagement';
 import { Badge, Button } from './ui';
 import { cardBase, inputBase } from './uiTokens';
 import { cn } from '../lib/utils';
 import { useI18n } from './I18nProvider';
 
 const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { serviceWorkflowTemplates, updateDraftClientPlan, commitPendingMutation } = useStore();
   const [name, setName] = React.useState(plan.name);
   const [contractEndDate, setContractEndDate] = React.useState(plan.contractEndDate || '');
@@ -22,6 +22,10 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
   const [taxRateBps, setTaxRateBps] = React.useState(plan.taxRateBps);
   const [message, setMessage] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+  const [showSavedSummary, setShowSavedSummary] = React.useState(false);
+  const actionRef = React.useRef<HTMLDivElement>(null);
+  const nameRef = React.useRef<HTMLInputElement>(null);
+  const focusAfterRender = React.useRef<'edit' | 'name' | null>(null);
   const isDirtyRef = React.useRef(false);
   const [dirty, setDirty] = React.useState(false);
   const [conflict, setConflict] = React.useState(false);
@@ -102,6 +106,8 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
   }, [plan, saving]);
 
   const markDirty = () => {
+    setShowSavedSummary(false);
+    setMessage('');
     isDirtyRef.current = true;
     editSequence.current += 1;
     setDirty(true);
@@ -147,6 +153,8 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
         isDirtyRef.current = false; setDirty(false); removeRecoveredDraft(account, recoveryKey, recovery?.storageKey); setRecovery(null);
         if (canonical) applyDraft(draftOf(canonical));
         setConflict(false);
+        if (canonical && actionRef.current?.contains(document.activeElement)) focusAfterRender.current = 'edit';
+        setShowSavedSummary(Boolean(canonical));
       } else {
         // New typing is based on the submitted draft, not on a remote revision
         // that may have arrived while its acknowledgement was pending.
@@ -157,14 +165,40 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
       }
     }
     setSaving(false);
-    setMessage(committed.ok ? t('Draft revision saved.') : committed.error || t('The revision is waiting to be saved.'));
+    setMessage(committed.ok
+      ? (editSequence.current === submittedSequence ? 'Draft revision saved.' : 'Submitted changes saved. Newer edits are still unsaved.')
+      : committed.error || t('The revision is waiting to be saved.'));
   };
+
+  const saved = showSavedSummary && !dirty && !saving && !conflict && !recovery;
+  const totals = calculatePlanTotalMinor(plan.serviceItems, plan.discountType, plan.discountValue, plan.taxRateBps);
+  React.useEffect(() => {
+    const target = focusAfterRender.current;
+    focusAfterRender.current = null;
+    // Move focus only if it is still on the saved action or was lost as the form closed.
+    if (document.activeElement !== document.body && !actionRef.current?.contains(document.activeElement)) return;
+    if (target === 'edit') actionRef.current?.querySelector('button')?.focus({ preventScroll: true });
+    if (target === 'name') nameRef.current?.focus({ preventScroll: true });
+  }, [saved]);
 
   return <section className={cn(cardBase, 'overflow-hidden border-blue-200')}>
     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-blue-100 bg-blue-50 px-5 py-4">
-      <div><div className="flex items-center gap-2"><h2 className="font-semibold text-blue-950">{t('Scheduled revision')} {plan.revision}</h2><Badge tone="amber">{t('Draft')}</Badge></div><p className="mt-1 text-sm text-blue-800">{t('Takes effect on')} {plan.effectiveFromCycleStart}. {t('Existing cycles remain unchanged.')}</p></div>
-      <Button className="disabled:bg-inset disabled:!text-muted disabled:opacity-100" onClick={() => void save()} disabled={saving || conflict}><Save className="h-4 w-4" aria-hidden="true" />{saving ? t('Saving…') : t('Save revision')}</Button>
+      <div><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-blue-950">{t('Scheduled revision')} {plan.revision}</h2><Badge tone="amber">{t('Draft')}</Badge>{saved && <Badge tone="emerald"><Check className="h-3.5 w-3.5" aria-hidden="true" />{t('Saved')}</Badge>}</div><p className="mt-1 text-sm text-blue-800">{t('Takes effect on')} {plan.effectiveFromCycleStart}. {t('Existing cycles remain unchanged.')}</p></div>
+      <div ref={actionRef}>{saved
+        ? <Button variant="secondary" onClick={() => { focusAfterRender.current = 'name'; setShowSavedSummary(false); setMessage(''); }}><Pencil className="h-4 w-4" aria-hidden="true" />{t('Edit revision')}</Button>
+        : <Button className="disabled:bg-inset disabled:!text-muted disabled:opacity-100" onClick={() => void save()} disabled={saving || conflict}><Save className="h-4 w-4" aria-hidden="true" />{saving ? t('Saving…') : t('Save revision')}</Button>}</div>
     </div>
+    {saved ? <div className="space-y-4 p-5" role="region" aria-label={t('Saved revision')}>
+      <dl className="grid gap-4 text-sm sm:grid-cols-3">
+        <div><dt className="text-muted">{t('Plan name')}</dt><dd className="mt-1 break-words font-semibold text-ink" data-i18n-skip>{plan.name}</dd></div>
+        <div><dt className="text-muted">{t('Contract end date')}</dt><dd className="mt-1 font-medium text-ink">{plan.contractEndDate || t('Not specified')}</dd></div>
+        <div><dt className="text-muted">{t('Internal monthly total')}</dt><dd className="mt-1 font-semibold text-ink">{formatMoney(totals.total, plan.currency, locale)}</dd></div>
+      </dl>
+      <div className="border-t border-line pt-3">
+        <p className="text-xs font-medium text-muted">{t('Services')}</p>
+        <ul className="mt-2 space-y-1 text-sm text-ink">{plan.serviceItems.map(item => <li key={item.id} className="break-words"><span data-i18n-skip>{item.quantity} × {item.name}</span>{item.platforms.length > 0 && <span className="text-muted" data-i18n-skip> · {item.platforms.join(', ')}</span>}</li>)}</ul>
+      </div>
+    </div> : <>
     {recovery && <div className="border-b border-line bg-inset px-5 py-4" role="status"><p>{t('A recoverable draft is available on this device.')}</p><div className="mt-3 flex gap-2"><Button variant="secondary" onClick={restoreRecovery}>{t('Restore recovered draft')}</Button><Button variant="secondary" onClick={() => { removeRecoveredDraft(account, recoveryKey, recovery?.storageKey); setRecovery(null); }}>{t('Discard recovered draft')}</Button></div></div>}
     {conflict && <div className="border-b border-line bg-inset px-5 py-4" role="alert">
       <p className="text-sm text-ink">{t('This revision changed elsewhere. Review the latest version before saving.')}</p>
@@ -172,7 +206,7 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
       {mergeConflicts.map(item => <div key={item.path} className="mt-3 rounded-lg border border-line p-3"><p className="text-sm">{t('Both versions changed this field. Choose which value to keep.')}</p><p data-i18n-skip className="mt-1 break-all font-mono text-xs">{item.path}</p><div className="mt-2 grid gap-2 sm:grid-cols-2"><div><pre data-i18n-skip className="max-h-32 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(item.local, null, 2) ?? t('Removed')}</pre><Button variant="secondary" onClick={() => chooseConflict(item.path, 'local')}>{t('Use my value')}</Button></div><div><pre data-i18n-skip className="max-h-32 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(item.remote, null, 2) ?? t('Removed')}</pre><Button variant="secondary" onClick={() => chooseConflict(item.path, 'remote')}>{t('Use latest value')}</Button></div></div></div>)}
     </div>}
     <fieldset disabled={mergeConflicts.length > 0} className="contents"><div className="grid gap-4 border-b border-slate-100 p-5 md:grid-cols-2">
-      <label className="text-sm font-semibold text-slate-700">{t('Plan name')}<input data-i18n-skip className={cn(inputBase, 'mt-1 px-3 py-2')} value={name} onChange={event => { markDirty(); setName(event.target.value); }} /></label>
+      <label className="text-sm font-semibold text-slate-700">{t('Plan name')}<input ref={nameRef} data-i18n-skip className={cn(inputBase, 'mt-1 px-3 py-2')} value={name} onChange={event => { markDirty(); setName(event.target.value); }} /></label>
       <label className="text-sm font-semibold text-slate-700">{t('Contract end date')}<input type="date" className={cn(inputBase, 'mt-1 px-3 py-2')} value={contractEndDate} onChange={event => { markDirty(); setContractEndDate(event.target.value); }} /></label>
     </div>
     <div className="divide-y divide-slate-100">{serviceItems.map(item => <div key={item.id} className="grid gap-3 p-5 md:grid-cols-12">
@@ -190,7 +224,8 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
       <label className="text-sm font-semibold text-slate-700">{t('Tax rate (%)')}<input type="number" min="0" max="100" step="0.01" className={cn(inputBase, 'mt-1 px-3 py-2')} value={taxRateBps / 100} onChange={event => { markDirty(); setTaxRateBps(Math.round(Number(event.target.value) * 100)); }} /></label>
     </div>
     </fieldset>
-    {message && <p className="border-t border-slate-100 px-5 py-3 text-sm font-medium text-ink" role="status">{message}</p>}
+    </>}
+    {message && <p className="border-t border-slate-100 px-5 py-3 text-sm font-medium text-ink" role="status">{t(message)}</p>}
   </section>;
 };
 

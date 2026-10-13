@@ -21,16 +21,68 @@ const seedPlan = async (page: Page) => {
   return result;
 };
 
+for (const locale of ['en', 'zh'] as const) {
+  test(`${locale} confirmed revision save closes the editor, shows saved data and reopens for editing`, async ({ page }) => {
+    await page.setViewportSize(locale === 'en' ? { width: 1440, height: 900 } : { width: 390, height: 844 });
+    const { draftId } = await seedPlan(page);
+    if (locale === 'zh') await page.getByRole('button', { name: '切换为中文' }).click();
+    const copy = locale === 'en'
+      ? { name: 'Plan name', save: 'Save revision', edit: 'Edit revision', summary: 'Saved revision', saved: 'Saved', error: 'The revision is waiting to be saved.' }
+      : { name: '方案名称', save: '保存修订', edit: '编辑修订版本', summary: '已保存的修订版本', saved: '已保存', error: '该修订版本正在等待保存。' };
+    await page.getByLabel(copy.name, { exact: true }).fill('Saved QA revision');
+    await page.evaluate(async () => {
+      const { useStore } = await import('/src/store/index.ts');
+      useStore.setState({ commitPendingMutation: () => new Promise(resolve => {
+        (window as unknown as { finishRevisionSave: (ok: boolean, error?: string) => void }).finishRevisionSave = (ok, error) => resolve({ ok, error });
+      }) });
+    });
+    const save = page.getByRole('button', { name: copy.save, exact: true });
+    await save.click();
+    await expect(page.getByRole('region', { name: copy.summary })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: copy.edit })).toHaveCount(0);
+    await page.evaluate(error => (window as unknown as { finishRevisionSave: (ok: boolean, error?: string) => void }).finishRevisionSave(false, error), copy.error);
+    await expect(page.getByText(copy.error, { exact: true })).toBeVisible();
+    await expect(page.getByLabel(copy.name, { exact: true })).toHaveValue('Saved QA revision');
+    await expect(page.getByRole('region', { name: copy.summary })).toHaveCount(0);
+    await save.click();
+    await expect(page.getByLabel(copy.name, { exact: true })).toBeVisible();
+    await page.evaluate(() => (window as unknown as { finishRevisionSave: (ok: boolean) => void }).finishRevisionSave(true));
+    const summary = page.getByRole('region', { name: copy.summary });
+    await expect(summary).toBeVisible();
+    await expect(summary).toContainText('Saved QA revision');
+    await expect(page.getByText(copy.saved, { exact: true })).toBeVisible();
+    await expect(page.getByLabel(copy.name, { exact: true })).toHaveCount(0);
+    await expect(save).toHaveCount(0);
+    await page.getByRole('button', { name: locale === 'en' ? '切换为中文' : 'Switch to English' }).click();
+    await expect(page.getByText(locale === 'en' ? '草稿修订版本已保存。' : 'Draft revision saved.', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: locale === 'en' ? 'Switch to English' : '切换为中文' }).click();
+    expect(await page.evaluate(async id => {
+      const { useStore } = await import('/src/store/index.ts');
+      return useStore.getState().clientPlans.find(plan => plan.id === id)?.status;
+    }, draftId)).toBe('Draft');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.getByRole('button', { name: copy.edit, exact: true }).click();
+    await expect(summary).toHaveCount(0);
+    await expect(page.getByLabel(copy.name, { exact: true })).toHaveValue('Saved QA revision');
+    await expect(page.getByLabel(copy.name, { exact: true })).toBeFocused();
+    await expect(save).toBeEnabled();
+  });
+}
+
 test('saved drafts accept newer canonical data and dirty drafts require reconciliation', async ({ page }) => {
   const { draftId } = await seedPlan(page);
   const name = page.getByLabel('Plan name', { exact: true });
   await name.fill('Saved A');
   await page.getByRole('button', { name: 'Save revision' }).click();
   await expect(page.getByText('Draft revision saved.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save revision' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Saved revision' })).toContainText('Saved A');
   await page.evaluate(async id => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id ? { ...plan, name: 'Remote B', version: (plan.version || 0) + 1 } : plan) }));
   }, draftId);
+  await expect(page.getByRole('region', { name: 'Saved revision' })).toContainText('Remote B');
+  await page.getByRole('button', { name: 'Edit revision' }).click();
   await expect(name).toHaveValue('Remote B');
   await name.fill('Local C');
   await page.evaluate(async id => {
@@ -62,6 +114,8 @@ test('typing during an in-flight save remains dirty and blocks PWA reload', asyn
   await page.evaluate(() => (window as unknown as { finishAuditSave: () => void }).finishAuditSave());
   await expect(page.getByRole('button', { name: 'Save revision' })).toBeEnabled();
   await expect(name).toHaveValue('Typed while saving');
+  await expect(page.getByRole('region', { name: 'Saved revision' })).toHaveCount(0);
+  await expect(page.getByText('Submitted changes saved. Newer edits are still unsaved.', { exact: true })).toBeVisible();
   expect(await page.evaluate(async () => { const { hasUnsavedChanges } = await import('/src/lib/unsavedChanges.ts'); return hasUnsavedChanges(); })).toBe(true);
   expect(await page.evaluate(async id => { const { useStore } = await import('/src/store/index.ts'); return useStore.getState().clientPlans.find(plan => plan.id === id)?.name; }, draftId)).toBe('Submitted');
   await page.evaluate(async () => {
@@ -184,6 +238,8 @@ test('a failed save does not mistake its own optimistic draft for a remote confl
   await expect(page.getByText('The revision is waiting to be saved.', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Reload latest' })).toHaveCount(0);
   await expect(page.getByLabel('Plan name', { exact: true })).toHaveValue('Pending own draft');
+  await expect(page.getByRole('region', { name: 'Saved revision' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Edit revision' })).toHaveCount(0);
 });
 
 
