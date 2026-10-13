@@ -4,10 +4,12 @@ select plan(17);
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000001301','authenticated','authenticated','staff-workflow@aitask.local','',now(),'{}','{}',now(),now()),
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000001302','authenticated','authenticated','owner-workflow@aitask.local','',now(),'{}','{}',now(),now()),
-('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000001303','authenticated','authenticated','client-workflow@aitask.local','',now(),'{}','{}',now(),now());
+('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000001303','authenticated','authenticated','client-workflow@aitask.local','',now(),'{}','{}',now(),now()),
+('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000001304','authenticated','authenticated','hod-workflow@aitask.local','',now(),'{}','{}',now(),now());
 insert into public.aitask_workspaces(id,name) values('staff-workflow-test','Staff workflow test');
 insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,department,departments,is_super_admin) values
 ('workflow-staff','staff-workflow-test','00000000-0000-0000-0000-000000001301','Staff','staff-workflow@aitask.local','Staff','Designer',array['Designer'],false),
+('workflow-hod','staff-workflow-test','00000000-0000-0000-0000-000000001304','HOD','hod-workflow@aitask.local','HOD','Designer',array['Designer'],false),
 ('workflow-owner','staff-workflow-test','00000000-0000-0000-0000-000000001302','Owner','owner-workflow@aitask.local','Project Manager','Designer',array['Designer'],true);
 insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,department,departments,client_name) values ('workflow-client','staff-workflow-test','00000000-0000-0000-0000-000000001303','Client','client-workflow@aitask.local','Client','Client',array['Client'],'Company');
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values

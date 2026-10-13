@@ -8,7 +8,10 @@ export const canReviewTaskInternally = (user: User | null | undefined, task: Tas
 export const canRequestTaskRevision = (user: User | null | undefined, task: Task, roles: CustomRole[] = []) => Boolean(user
   && (user.role === 'Project Manager' || canReviewTaskInternally(user, task, roles)));
 
-export const taskTransitionError = (user: User | null | undefined, before: Task | undefined, after: Pick<Task, 'status' | 'isCompleted' | 'department'>, roles: CustomRole[] = []) => {
+export const taskTransitionError = (user: User | null | undefined, before: Task | undefined, after: Pick<Task, 'status' | 'isCompleted' | 'department'> & Partial<Task>, roles: CustomRole[] = []) => {
+  const protectedOutput = before?.status === 'Approved' ? ['title', 'description', 'notes', 'attachmentLink', 'attachmentName'] as const
+    : before?.status === 'Completed' ? ['title', 'description', 'attachmentLink', 'attachmentName'] as const : [];
+  if (before && ['Approved', 'Completed'].includes(after.status) && protectedOutput.some(field => Object.prototype.hasOwnProperty.call(after, field) && (before[field] || '') !== (after[field] || ''))) return 'Ask the HOD or project manager to return approved work for revision.';
   if (before?.status === after.status && before.isCompleted === after.isCompleted) return undefined;
   if (after.status === 'Approved' && (!before || before.status !== 'Waiting Approval'
     || !canReviewTaskInternally(user, before, roles))) return 'Only the department HOD can approve submitted work.';
@@ -25,3 +28,6 @@ export const getTaskStatusOptions = (user: User | null | undefined, task: Task, 
 // Task access still applies at every store/database mutation boundary.
 export const canApproveTaskInternally = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: Parameters<typeof canEditTask>[3] = {}) =>
   task.status === 'Waiting Approval' && canReviewTaskInternally(user, task, roles) && canEditTask(user, task, roles, scope);
+
+export const TASK_HOD_REQUIRED = 'No HOD is configured for this department. Ask your project manager to configure a reviewer before submitting.';
+export const getDepartmentReviewers = (users: readonly User[], task: Pick<Task, 'department'>, roles: CustomRole[] = []) => users.filter(user => isHodUser(user, roles) && isMemberInDepartment(user, task.department));

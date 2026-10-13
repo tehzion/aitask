@@ -248,7 +248,8 @@ export const getEffectivePermissions = (
   const customRole = user.customRoleId
     ? customRoles.find(role => role.id === user.customRoleId)
     : undefined;
-  const builtinRole = customRoles.find(role => role.isBuiltin && role.baseRole === user.role);
+  const effectiveBaseRole = user.role === 'Staff' && user.customRoleId === BUILTIN_HOD_ROLE_ID ? 'HOD' : user.role;
+  const builtinRole = customRoles.find(role => role.isBuiltin && role.baseRole === effectiveBaseRole);
 
   const directPermissions = user.permissions && Object.keys(user.permissions).length > 0
     ? user.permissions
@@ -257,20 +258,20 @@ export const getEffectivePermissions = (
   // override never silently revokes the role's own grants. Without a custom
   // role it remains the complete effective set, matching the server.
   const source = directPermissions
-    ? (customRole ? { ...customRole.permissions, ...directPermissions } : { ...(builtinRole?.permissions || defaultRolePermissions[user.role]), ...directPermissions })
-    : (customRole?.permissions || builtinRole?.permissions || defaultRolePermissions[user.role]);
+    ? (customRole ? { ...customRole.permissions, ...directPermissions } : { ...(builtinRole?.permissions || defaultRolePermissions[effectiveBaseRole]), ...directPermissions })
+    : (customRole?.permissions || builtinRole?.permissions || defaultRolePermissions[effectiveBaseRole]);
   const permissions = makePermissions(
     (Object.keys(permissionLabels) as RolePermissionKey[]).filter(key => (
       source[key] === true
       || (key === 'viewDeliveryTracker' && source.viewDeliveryTracker === undefined && source.viewProjects === true)
     ))
   );
-  return sanitizeRolePermissions(permissions, user.role);
+  return sanitizeRolePermissions(permissions, effectiveBaseRole);
 };
 
 export const isHodRole = (role: CustomRole | null | undefined) => Boolean(role?.isBuiltin && role.baseRole === 'HOD');
 export const isHodUser = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
-  Boolean(user?.role === 'HOD' || (user?.customRoleId && customRoles.some(role => role.id === user.customRoleId && isHodRole(role))))
+  Boolean(user?.role === 'HOD' || (user?.role === 'Staff' && (user.customRoleId === 'builtin-hod' || (user.customRoleId && customRoles.some(role => role.id === user.customRoleId && isHodRole(role))))))
 );
 /**
  * True when an internal member's effective role is limited to their own
@@ -282,7 +283,7 @@ export const isDepartmentScopedUser = (user: User | null | undefined, customRole
   if (user.role === 'HOD') return true;
   if (user.role !== 'Staff') return false;
   const customRole = user.customRoleId ? customRoles.find(role => role.id === user.customRoleId) : undefined;
-  return isHodRole(customRole) || customRole?.departmentScoped === true;
+  return user.customRoleId === BUILTIN_HOD_ROLE_ID || isHodRole(customRole) || customRole?.departmentScoped === true;
 };
 export const getAssignableCustomRoles = (userRole: Role, customRoles: CustomRole[] = []) => (
   customRoles.filter(role => role.baseRole === userRole)

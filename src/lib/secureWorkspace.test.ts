@@ -83,6 +83,7 @@ describe('Client portal command projection', () => {
       updatedAt: '2026-08-01T10:00:00.000Z',
     });
 
+    expect(projected).not.toHaveProperty('assignedTo');
     expect(projected).toMatchObject({
       id: 'client-task',
       title: 'Client artwork',
@@ -90,7 +91,7 @@ describe('Client portal command projection', () => {
       clientApprovalStatus: 'Pending',
     });
     expect(Object.keys(projected)).not.toEqual(expect.arrayContaining([
-      'notes', 'priority', 'department', 'createdBy', 'isRecurring',
+      'notes', 'priority', 'department', 'assignedTo', 'createdBy', 'isRecurring',
       'recurrenceFrequency', 'dueReminderSent', 'version', 'updatedAt',
     ]));
   });
@@ -1660,5 +1661,21 @@ describe('secure command insert-conflict rebase', () => {
     const retry = await retrySecureWorkspaceCommand();
     expect(retry.ok).toBe(true);
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe('task workflow backend versions', () => {
+  it.each([{ version: 4, gate: false, compatible: true }, { version: 5, gate: true, compatible: true }, { version: 5, gate: false, compatible: false }, { version: 6, gate: true, compatible: false }])('requires known capability contracts for schema $version with gate $gate', async ({ version, gate, compatible }) => {
+    rpc.mockResolvedValueOnce({ data: { ok: true, schemaVersion: version, workflowReviewGate: gate, workspaceOptimisticLock: true, serviceOperations: true, releaseNoticeAcknowledgements: true, memberPermissionManagement: true }, error: null });
+    expect((await loadSecureBackendCapabilities()).compatible).toBe(compatible);
+  });
+});
+
+describe('minimal Client service projection', () => {
+  it('loads and diffs a public cycle without private addon snapshots', () => {
+    const state = stateWithUser('client');
+    state.users[0].role = 'Client';
+    state.serviceCycles = [{ id: 'cycle', clientId: 'company', planId: 'plan', serviceItems: [] } as unknown as NonNullable<PersistedWorkspaceState['serviceCycles']>[number]];
+    expect(() => buildOperations(state)).not.toThrow();
   });
 });

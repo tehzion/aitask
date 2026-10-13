@@ -245,6 +245,7 @@ export type SecureCommand = {
 
 export type SecureBackendCapabilities = {
   schemaVersion: number;
+  workflowReviewGate?: boolean;
   workspaceOptimisticLock: boolean;
   serviceOperations: boolean;
   releaseNoticeAcknowledgements: boolean;
@@ -636,7 +637,6 @@ const CLIENT_TASK_PROJECTION_KEYS = [
   'serviceType',
   'title',
   'description',
-  'assignedTo',
   'startDate',
   'dueDate',
   'status',
@@ -780,7 +780,7 @@ const stateToRows = (state: PersistedWorkspaceState) => {
   state.serviceCycles?.forEach(item => push('entity', 'service_cycle', item.id, {
     ...item,
     serviceItems: stripServiceItemPrices(item.serviceItems),
-    addonSnapshots: item.addonSnapshots.map(addon => ({ ...addon, unitPriceMinor: 0 })),
+    addonSnapshots: (item.addonSnapshots || []).map(addon => ({ ...addon, unitPriceMinor: 0 })),
     discountValue: 0,
     taxRateBps: 0,
   } as unknown as Record<string, unknown>, item.version, item.planId));
@@ -1364,13 +1364,15 @@ export const loadSecureBackendCapabilities = async (): Promise<SecureBackendComp
   const response = result.data as Partial<SecureBackendCapabilities> & { ok?: boolean };
   const capabilities: SecureBackendCapabilities = {
     schemaVersion: Number(response?.schemaVersion) || 0,
+    workflowReviewGate: response?.workflowReviewGate === true,
     workspaceOptimisticLock: response?.workspaceOptimisticLock === true,
     serviceOperations: response?.serviceOperations === true,
     releaseNoticeAcknowledgements: response?.releaseNoticeAcknowledgements === true,
     memberPermissionManagement: response?.memberPermissionManagement === true,
   };
   const compatible = response?.ok === true
-    && capabilities.schemaVersion === SECURE_BACKEND_SCHEMA_VERSION
+    && (capabilities.schemaVersion === SECURE_BACKEND_SCHEMA_VERSION
+      || (capabilities.schemaVersion === 5 && capabilities.workflowReviewGate === true))
     && capabilities.workspaceOptimisticLock
     && capabilities.serviceOperations
     && capabilities.releaseNoticeAcknowledgements

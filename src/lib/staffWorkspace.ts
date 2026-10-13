@@ -49,7 +49,7 @@ export const getUnavailableTaskDependencyCount = (task: Task, visibleTasks: Task
   return [...new Set(task.predecessorTaskIds || [])].filter(id => !visibleIds.has(id)).length;
 };
 
-const isWaiting = (task: Task) => !isTerminal(task) && task.status === 'Waiting Approval';
+const isWaiting = (task: Task) => !isTerminal(task) && ['Waiting Approval', 'Approved'].includes(task.status);
 
 const urgencyRank = (task: Task, today: string) => {
   if (task.revisionCount > 0) return 0;
@@ -128,15 +128,15 @@ export const getStaffGuidedAction = (task: Task, taskStatuses: TaskStatus[], act
   if (task.status === 'Waiting Approval') {
     return { kind: 'waiting', label: 'Waiting for review', disabled: true };
   }
-  if (task.status === 'Pending' && taskStatuses.includes('In Progress')) {
+  if (['Pending', 'Revision'].includes(task.status) && options.includes('In Progress')) {
     return {
       kind: 'advance',
-      label: task.revisionCount > 0 ? 'Start revision' : 'Start work',
+      label: task.status === 'Revision' || task.revisionCount > 0 ? 'Start revision' : 'Start work',
       targetStatus: 'In Progress',
       disabled: false,
     };
   }
-  if (task.status === 'In Progress' && taskStatuses.includes('Waiting Approval')) {
+  if (task.status === 'In Progress' && options.includes('Waiting Approval')) {
     return {
       kind: 'advance',
       label: 'Send for review',

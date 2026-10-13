@@ -2863,6 +2863,7 @@ const zhCopyCoverage: Record<string, string> = {
   'Boss Koo': 'Boss Koo',
   'Client actions': '客户操作',
   'Client completion': '客户完成度',
+  'No HOD is configured for this department. Ask your project manager to configure a reviewer before submitting.': '该部门尚未配置 HOD，请联系项目经理配置审核人后再送审。',
   'Work progress': '工作阶段进度',
   'tasks completed': '项任务已完成',
   'Confirm completion': '确认最终完成',

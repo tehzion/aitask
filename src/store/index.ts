@@ -1,6 +1,6 @@
 import { recordDiagnostic } from '../lib/diagnostics';
 import { getTaskProgress } from '../lib/taskProgress';
-import { canRequestTaskRevision, taskTransitionError } from '../lib/taskWorkflowAccess';
+import { canRequestTaskRevision, getDepartmentReviewers, TASK_HOD_REQUIRED, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { clearRecoveredDrafts } from '../lib/draftRecovery';
 import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { create } from 'zustand';
@@ -91,7 +91,6 @@ import {
   isNotificationVisible,
   isBossKoo,
   isHodRole,
-  isHodUser,
   sanitizeRolePermissions,
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
@@ -621,10 +620,9 @@ const taskUpdateNotifications = (
 
 // Hosted review handoffs are generated atomically by the database. Mirror them
 // only in local workspaces, so cached clients and the full editor behave alike.
-const localHodReviewNotifications = (users: User[], roles: CustomRole[], before: Task, after: Task, actorId: string) => {
-  if (after.status !== 'Waiting Approval' || before.status === after.status) return [];
-  return taskUpdateNotifications(users.filter(user => ['HOD', 'Staff'].includes(user.role) && isHodUser(user, roles)
-    && isMemberInDepartment(user, after.department)).map(user => user.id), {
+const localHodReviewNotifications = (users: User[], roles: CustomRole[], before: Task | undefined, after: Task, actorId: string) => {
+  if (after.status !== 'Waiting Approval' || before?.status === after.status) return [];
+  return taskUpdateNotifications(getDepartmentReviewers(users, after, roles).map(user => user.id), {
     title: 'Task Ready for Approval',
     message: `"${after.title}" is ready for department review.`,
     route: { page: 'tasks', entityId: after.id },
@@ -2744,6 +2742,7 @@ export const useStore = create<StoreState>()(
         const evidenceError = taskEvidenceError(task, { ...task, status: nextStatus, isCompleted }, state.deliverables);
         if (evidenceError) { result = { ok: false, error: evidenceError }; return state; }
         const isWaitingApproval = nextStatus === 'Waiting Approval';
+        if (state.backend.mode === 'local' && isWaitingApproval && task.status !== nextStatus && !getDepartmentReviewers(state.users, task, state.rolePermissions).length) { result = { ok: false, error: TASK_HOD_REQUIRED }; return state; }
         const isReadyForClientReview = isCompleted || isWaitingApproval;
         const wasCompleted = isTaskCompleted(task);
         const now = new Date().toISOString();
@@ -2757,7 +2756,7 @@ export const useStore = create<StoreState>()(
               ? 90
               : t.completionPercentage;
 
-          const returningForRevision = nextStatus === 'In Progress' && ['Waiting Approval', 'Approved', 'Completed'].includes(t.status);
+          const returningForRevision = ['In Progress', 'Revision'].includes(nextStatus) && ['Waiting Approval', 'Approved', 'Completed'].includes(t.status);
           const clientApprovalStatus = returningForRevision ? 'Rejected' : isReadyForClientReview
             ? isCompleted ? (nextStatus !== t.status ? 'Approved' : t.clientApprovalStatus) : 'Pending'
             : t.clientApprovalStatus === 'Approved' || wasCompleted
@@ -2930,6 +2929,8 @@ export const useStore = create<StoreState>()(
           return state;
         }
 
+        const transitionError = taskTransitionError(state.currentUser, task, { ...task, attachmentLink: validatedLink || undefined, attachmentName: attachmentName?.trim().slice(0, 200) || undefined }, state.rolePermissions);
+        if (transitionError) { result = { ok: false, error: transitionError }; return state; }
         useToastStore.getState().addToast(msg('task.attachmentUpdated'), 'success');
 
         result = { ok: true };
@@ -3145,9 +3146,10 @@ export const useStore = create<StoreState>()(
         if (assignmentChanged && !['Completed', 'Cancelled'].includes(task.status) && (data.status === undefined || data.status === task.status)) {
           updatedTask.status = 'Pending'; updatedTask.clientApprovalStatus = 'Pending';
         }
-        if (updatedTask.status === 'In Progress' && ['Waiting Approval', 'Approved', 'Completed'].includes(task.status)) {
+        if (['In Progress', 'Revision'].includes(updatedTask.status) && ['Waiting Approval', 'Approved', 'Completed'].includes(task.status)) {
           updatedTask.clientApprovalStatus = 'Rejected'; updatedTask.revisionCount = task.revisionCount + 1;
         }
+        if (state.backend.mode === 'local' && updatedTask.status === 'Waiting Approval' && task.status !== updatedTask.status && !getDepartmentReviewers(state.users, updatedTask, state.rolePermissions).length) return { ok: false, error: TASK_HOD_REQUIRED };
         const evidenceError = taskEvidenceError(task, updatedTask, state.deliverables);
         if (evidenceError) return { ok: false, error: evidenceError };
         const transitionError = taskTransitionError(currentUser, task, updatedTask, state.rolePermissions);
@@ -3305,7 +3307,10 @@ export const useStore = create<StoreState>()(
         return {
           tasks: newTasks,
           notifications: [...notifications, ...(state.notifications || [])],
-          ...deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles),
+          // Clients receive projected task records rather than the internal
+          // required-task chain. The server derives service progress from the
+          // complete canonical task set after the approval command persists.
+          ...(currentUser.role === 'Client' ? {} : deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles)),
         };
         });
         return result;
@@ -3424,6 +3429,7 @@ export const useStore = create<StoreState>()(
         if (!isValidIsoDate(startDate) || (dueDate && !isValidIsoDate(dueDate))) return '';
         if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) return '';
 
+        if (state.backend.mode === 'local' && status === 'Waiting Approval' && !getDepartmentReviewers(state.users, taskData, state.rolePermissions).length) { useToastStore.getState().addToast(TASK_HOD_REQUIRED, 'warning'); return ''; }
         const taskId = nowId('T');
         const transitionError = taskTransitionError(currentUser, undefined, { ...taskData, status, isCompleted: status === 'Completed' }, state.rolePermissions);
         if (transitionError) { useToastStore.getState().addToast(transitionError, 'warning'); return ''; }
@@ -3473,6 +3479,7 @@ export const useStore = create<StoreState>()(
             tasks,
             ...deriveServiceProgress(tasks, deliverables, state.serviceCycles),
             notifications: [
+              ...(state.backend.mode === 'local' ? localHodReviewNotifications(state.users, state.rolePermissions, undefined, newTask, currentUser.id) : []),
               ...(['Staff', 'HOD'].includes(currentUser.role)
                 ? taskUpdateNotifications(
                     resolveTaskUpdateRecipientIds(state.users, newTask, state.clients, state.projects)

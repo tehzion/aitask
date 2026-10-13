@@ -6,10 +6,11 @@ import { serializeClientProjectedTask } from '../lib/secureWorkspace';
 
 const initial = useStore.getState();
 const staff: User = { id: 'staff-work', name: 'Staff', role: 'Staff', department: 'Designer', departments: ['Designer'] };
+const hod: User = { id: 'hod-work', name: 'HOD', role: 'HOD', department: 'Designer', departments: ['Designer'] };
 const owner: User = { id: 'owner-work', name: 'Owner', role: 'Project Manager', department: 'Designer', departments: ['Designer'], isSuperAdmin: true };
 const task: Task = { id: 'work-task', title: 'Artwork', description: '', clientId: 'company', clientName: 'Company', serviceType: 'Design', department: 'Designer', createdBy: owner.id, assignedBy: owner.id, assignedTo: staff.id, startDate: '2026-10-01', dueDate: '', priority: 'Medium', status: 'Pending', isCompleted: false, completionPercentage: 0, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false };
 const output = { id: 'output', clientId: 'company', cycleId: 'cycle', taskIds: [task.id], attachments: [], status: 'Planned' } as unknown as Deliverable;
-beforeEach(() => useStore.setState({ ...initial, currentUser: staff, users: [staff, owner], tasks: [structuredClone(task)], clients: [], projects: [], deliverables: [], serviceCycles: [], rolePermissions: [], notifications: [], backend: { ...initial.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } }, true));
+beforeEach(() => useStore.setState({ ...initial, currentUser: staff, users: [staff, owner, hod], tasks: [structuredClone(task)], clients: [], projects: [], deliverables: [], serviceCycles: [], rolePermissions: [], notifications: [], backend: { ...initial.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } }, true));
 afterEach(() => useStore.setState(initial, true));
 describe('staff work lifecycle', () => {
   it('requires evidence through quick status and Full edit, including reverse deliverable links', () => {

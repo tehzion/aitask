@@ -17,7 +17,7 @@ export const hasTaskEvidence = (task: Task, deliverables: readonly Deliverable[]
 };
 
 export const taskEvidenceError = (before: Task | undefined, after: Task, deliverables: readonly Deliverable[]) => {
-  const enteringReady = ['Waiting Approval', 'Completed'].includes(after.status) && before?.status !== after.status;
+  const enteringReady = ['Waiting Approval', 'Approved', 'Completed'].includes(after.status) && before?.status !== after.status;
   const newlyCompleted = after.isCompleted && !before?.isCompleted;
   return (enteringReady || newlyCompleted) && isTaskLinkedToDeliverable(after, deliverables) && !hasTaskEvidence(after, deliverables)
     ? TASK_EVIDENCE_REQUIRED : undefined;

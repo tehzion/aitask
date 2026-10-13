@@ -133,3 +133,19 @@ describe('unavailable task dependencies', () => {
     expect(getUnavailableTaskDependencyCount(task({}), visible)).toBe(0);
   });
 });
+
+describe('approved work ownership', () => {
+  it('keeps HOD-approved work in the waiting bucket and out of the Staff action queue', () => {
+    const approved = task({ status: 'Approved', completionPercentage: 80 });
+    const queue = buildStaffWorkQueue([approved], '2026-08-26');
+    expect(queue.waiting).toEqual([approved]);
+    expect(queue.needs_action).toEqual([]);
+    expect(queue.up_next).toEqual([]);
+  });
+});
+
+describe('explicit revision action', () => {
+  it('guides returned work back to execution without pretending it is complete', () => {
+    expect(getStaffGuidedAction(task({ status: 'Revision', completionPercentage: 50 }), ['Pending', 'In Progress', 'Waiting Approval', 'Completed'])).toMatchObject({ label: 'Start revision', targetStatus: 'In Progress', disabled: false });
+  });
+});
