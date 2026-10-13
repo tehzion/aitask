@@ -51,8 +51,9 @@ persisted and journaled rather than disappearing as an unchanged status.
 
 ## Release status
 
-Migration `20261013035310_workflow_internal_review_gate.sql` is **pending production
-deployment**. It adds the private journal, workflow guards and scoped read endpoint,
+Migration `20261013035310_workflow_internal_review_gate.sql` was **applied to production
+on 13 October 2026** as connector version `20261013061241_workflow_internal_review_gate`.
+It adds the private journal, workflow guards and scoped read endpoint,
 updates existing progress/deletion predicates in place, and advertises backend
 schema version 5 with `workflowReviewGate` support. Existing function identities
 and grants are preserved. It does not backfill or approve existing business tasks.
@@ -68,7 +69,29 @@ also checked by the new database triggers.
 The earlier HOD deletion migration is already recorded in production as
 `20261013051554_hod_task_deletion_authority` (repository version
 `20261012165347`). The release manifest preserves that connector alias and lists
-only the new review migration as pending. Production history repair is unnecessary.
+the review connector alias as applied, with no production migrations pending.
+Production history repair is unnecessary.
+
+Production verification confirmed schema version 5 and authorized scoped context
+through authenticated SQL request scope. All seven deployed function bodies match
+commit `ae2688c`; both guards are enabled, the journal has RLS and denies direct
+browser/service-role writes, and all private helpers deny direct client execution.
+Unauthenticated context, missing predecessor and unsigned unresolved workflow
+probes were denied. Existing function OIDs were retained.
+
+The 1,853 business entities and 11 members retained identical counts and hashes
+before and after deployment. No existing generated workflow tasks or journal
+decisions were present. Hosted verification did not log in as a real account or
+mutate production tasks; the full Auth/REST workflow was verified locally.
+Frontend deployment provenance is outside this database rollout.
+
+Security and performance advisors returned no ERROR findings. The context RPC's
+[authenticated SECURITY DEFINER notice](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable),
+the private journal's [no-policy RLS notice](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy),
+and its [newly unused index notice](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index)
+reflect intentional guards and a newly empty audit table. The existing
+[leaked-password protection warning](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
+remains unchanged.
 
 This work is isolated on `codex/hod-review-gate`, starting from the earlier HOD
 commit plus the final delivery/privacy correction. Other chats' Staff work in

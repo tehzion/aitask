@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "production history verified through HOD connector 20261013051554; workflow review gate pending deployment",
+  "status": "workflow review gate applied and verified in production; connector 20261013061241",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
     "verifiedAt": "2026-10-13",
-    "historyThrough": "20261013051554_hod_task_deletion_authority (repository 20261012165347); connector aliases preserved",
+    "historyThrough": "20261013061241_workflow_internal_review_gate (repository 20261013035310); connector aliases preserved",
     "historyAligned": false,
     "historyAlignmentNote": "The connector stored deployment IDs 20260919065513, 20260919065609, 20260919065620, 20260919065648, and 20260919072524 for the five matching repository migrations. Names and live SQL are verified; timestamp repair is intentionally prohibited.",
     "clientOwnershipRollout": {
@@ -174,6 +174,10 @@
         {
           "repository": "20261012165347_hod_task_deletion_authority",
           "production": "20261013051554_hod_task_deletion_authority"
+        },
+        {
+          "repository": "20261013035310_workflow_internal_review_gate",
+          "production": "20261013061241_workflow_internal_review_gate"
         }
       ]
     },
@@ -450,6 +454,48 @@
         "clientApprovalPathVerified": true,
         "reverseCompanyDerivationVerified": true
       }
+    },
+    "workflowInternalReviewRollout": {
+      "appliedAt": "2026-10-13",
+      "repositoryMigration": "20261013035310_workflow_internal_review_gate",
+      "productionVersion": "20261013061241",
+      "method": "Supabase connector apply_migration; generated timestamp retained",
+      "sourceCommit": "ae2688c",
+      "verification": {
+        "backendSchemaVersion": 5,
+        "workflowReviewGate": true,
+        "authenticatedCapabilityProbePassed": true,
+        "authenticatedContextProbePassed": true,
+        "deployedFunctionBodiesMatchCommittedSource": 7,
+        "guardTriggersEnabled": 2,
+        "privateJournalRlsEnabled": true,
+        "directJournalAccessDenied": true,
+        "privateHelperExecuteDenied": true,
+        "unauthenticatedContextDenied": true,
+        "missingDependencyDenied": true,
+        "unsignedUnresolvedWorkflowDenied": true,
+        "entityCountBefore": 1853,
+        "entityCountAfter": 1853,
+        "entityHashBefore": "4aafa765aaadfdd2815403b4296466d1",
+        "entityHashAfter": "4aafa765aaadfdd2815403b4296466d1",
+        "memberCountBefore": 11,
+        "memberCountAfter": 11,
+        "memberHashBefore": "3bcb3760af682e2eef96ac6094b74920",
+        "memberHashAfter": "3bcb3760af682e2eef96ac6094b74920",
+        "existingFunctionOidsPreserved": true,
+        "productionWorkflowTasksBefore": 0,
+        "journalRowsAfter": 0,
+        "securityAdvisorErrors": 0,
+        "performanceAdvisorErrors": 0,
+        "localDatabaseAssertions": 650,
+        "localFrontendTests": 561,
+        "browserChecks": 20
+      },
+      "advisors": "The guarded authenticated SECURITY DEFINER context endpoint, private no-policy RLS journal and newly unused index are intentional. Existing leaked-password protection warning remains.",
+      "limitations": [
+        "Hosted probes used SQL request scope; no real production account login or task mutation was performed.",
+        "Frontend deployment provenance was not verified as part of this database rollout."
+      ]
     }
   },
   "schemaEquivalence": {
@@ -672,7 +718,5 @@
     "20261012165347_hod_task_deletion_authority",
     "20261013035310_workflow_internal_review_gate"
   ],
-  "pendingProductionMigrations": [
-    "20261013035310_workflow_internal_review_gate"
-  ]
+  "pendingProductionMigrations": []
 }

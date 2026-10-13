@@ -75,7 +75,8 @@ An enforced review feature needs an explicit reviewer/cover model, a decision
 bound to the reviewed output version, server-enforced review/dependency gates,
 and invalidation after revisions. Boss/PM overrides must be explicit and audited.
 These guarantees are supplied by the follow-up review migration and frontend;
-they require deployment of that migration.
+that migration was subsequently applied on 13 October 2026 as connector version
+`20261013061241`.
 
 ## Verification and rollout
 
@@ -97,7 +98,8 @@ editable built-in templates and the deletion boundary.
 
 At the time of the original commit, the frontend and deletion migration had not
 been deployed. The deletion migration was subsequently applied as production
-connector `20261013051554`; the new review gate remains pending. Existing delivery/privacy work
+connector `20261013051554`; the review gate followed as `20261013061241`.
+Existing delivery/privacy work
 in this shared checkout was preserved; no unrelated files were committed,
 no staging deployment was performed and no production business records changed.
 
