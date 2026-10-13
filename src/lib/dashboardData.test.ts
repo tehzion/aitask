@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ServiceCycle, Deliverable, Task } from '../types';
-import { getContractDaysRemaining, getCurrentPlanCycle, getPlanDeliverySummary, getCompanyTaskActivity, getDeliveryReviewRecords } from './dashboardData';
+import { getContractDaysRemaining, getCurrentPlanCycle, getPlanDeliverySummary, getCompanyTaskActivity, getDeliveryReviewRecords, hasInvalidDeliveryLink, isAwaitingPublication } from './dashboardData';
 
 const now = new Date(2026, 9, 7, 14);
 const plan = { id: 'active-plan', clientId: 'client-1' };
@@ -154,6 +154,31 @@ describe('company task activity', () => {
 
 
 describe('delivery records needing review', () => {
+  it('flags dangling, cross-company, cycle-mismatched and conflicting links without treating them as unlinked', () => {
+    const output = { id: 'd', clientId: plan.clientId, cycleId: 'october', taskIds: [] } as Deliverable;
+    const task = { id: 't', clientId: plan.clientId, deliverableId: 'd', serviceCycleId: 'october', status: 'Completed' } as Task;
+    expect(hasInvalidDeliveryLink(task, [output])).toBe(false);
+    expect(hasInvalidDeliveryLink(task, [{ ...output, taskIds: undefined } as unknown as Deliverable])).toBe(false);
+    expect(getDeliveryReviewRecords([{ ...task, deliverableId: undefined }], [], [{ ...output, taskIds: undefined } as unknown as Deliverable], now).unlinkedTasks).toHaveLength(1);
+    for (const outputs of [[], [{ ...output, clientId: 'other' }], [{ ...output, cycleId: 'other' }], [output, { ...output, id: 'other', taskIds: [task.id] }]]) {
+      const result = getDeliveryReviewRecords([task], [], outputs, now);
+      expect(result.invalidLinkedTasks).toEqual([task]);
+      expect(result.unlinkedTasks).toEqual([]);
+    }
+  });
+  it('keeps expired drafts in a separate backlog without adding them to current progress', () => {
+    const old = cycle({ id: 'old', status: 'Draft', periodStart: '2026-09-01', periodEnd: '2026-09-30' });
+    const result = getDeliveryReviewRecords([], [old, cycle({ status: 'Draft' })], [], now);
+    expect(result.expiredDraftCycles).toEqual([old]);
+    expect(result.draftCycles.map(item => item.id)).toEqual(['october']);
+    expect(getCurrentPlanCycle(plan, [old], now)).toBeUndefined();
+  });
+  it('does not infer awaiting publication from an active plan alone', () => {
+    expect(isAwaitingPublication(undefined, plan, [], now)).toBe(false);
+    expect(isAwaitingPublication(undefined, plan, [cycle({ status: 'Draft' })], now)).toBe(true);
+    expect(isAwaitingPublication(undefined, plan, [cycle({ status: 'Draft', periodEnd: '2026-09-30' })], now)).toBe(false);
+    expect(isAwaitingPublication({ awaitingPublication: true } as never, plan, [], now)).toBe(true);
+  });
   it('recognizes forward and reverse task links and only reviews visible completed tasks', () => {
     const tasks = [
       { id: 'unlinked', clientId: plan.clientId, status: 'Completed' },

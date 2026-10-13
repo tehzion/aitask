@@ -1534,6 +1534,7 @@ describe('secure workspace baseline', () => {
         projects: [],
         clients: [],
         contacts: [{ id: internalMember.id, name: internalMember.name, avatar: null }],
+        serviceCycles: [{ id: 'public-cycle', clientId: 'public-company', clientName: clientMember.client_name, planId: 'public-plan', status: 'Published', serviceItems: [], periodStart: '2026-08-01', periodEnd: '2026-08-31' }],
       },
       error: null,
     });
@@ -1548,9 +1549,8 @@ describe('secure workspace baseline', () => {
       clientProjection: true,
     });
     expect(loaded.state.tasks[0].notes).toBeUndefined();
-    expect(loaded.state.users.map(user => user.id)).toEqual(['client-1', 'staff-private']);
-    expect(loaded.state.users[1]).toMatchObject({ name: 'Private Staff', directoryOnly: true });
-    expect(loaded.state.users[1].email).toBeUndefined();
+    expect(loaded.state.users.map(user => user.id)).toEqual(['client-1']);
+    expect(JSON.stringify(loaded.state.users)).not.toContain('Private Staff');
     expect(rpc).toHaveBeenCalledWith('aitask_read_client_portal', { p_workspace_id: 'aitask-main' });
   });
 });

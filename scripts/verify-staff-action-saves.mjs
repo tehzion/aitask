@@ -29,14 +29,14 @@ try {
   // This fixed workspace is required by the real frontend module. Refuse to
   // replace existing data even inside the isolated validation container.
   assert.equal(sql("select count(*) from public.aitask_members where workspace_id='aitask-main';").trim().split('\n').map(x => x.trim()).includes('0'), true, 'validation workspace must have no existing members');
-  for (const [id, role, department, isBoss] of [['boss', 'Project Manager', 'Management', true], ['pm', 'Project Manager', 'Management', false], ['hod', 'HOD', 'Designer', false], ['staff', 'Staff', 'Designer', false], ['other', 'Staff', 'Designer', false]]) {
+  for (const [id, role, department, isBoss] of [['boss', 'Project Manager', 'Management', true], ['pm', 'Project Manager', 'Management', false], ['hod', 'HOD', 'Designer', false], ['staff', 'Staff', 'Designer', false], ['other', 'Staff', 'Designer', false], ['customer', 'Client', 'Client', false]]) {
     const email = `${id}-${suffix}@aitask.local`;
     const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
     assert.ifError(created.error);
     accounts.push({ id, role, department, isBoss, email, authId: created.data.user.id });
   }
   sql("insert into public.aitask_workspaces(id,name) values('aitask-main','Isolated Staff save QA') on conflict (id) do nothing;");
-  for (const account of accounts) sql(`insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,department,departments,is_super_admin) values('${account.id}','aitask-main','${account.authId}','${account.id}','${account.email}','${account.role}','${account.department}',array['${account.department}'],${account.isBoss});`);
+  for (const account of accounts) sql(`insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,department,departments,is_super_admin,client_name) values('${account.id}','aitask-main','${account.authId}','${account.id}','${account.email}','${account.role}','${account.department}',array['${account.department}'],${account.isBoss},${account.id === 'customer' ? "'Save QA'" : 'null'});`);
   const insert = (type, data) => sql(`insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values('aitask-main','${type}','${data.id}','${JSON.stringify(data).replaceAll("'", "''")}'::jsonb);`);
   for (const status of ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled']) insert('task_status', { id: status, status });
   insert('client', { id: 'client', clientName: 'Save QA', createdBy: 'pm', createdAt: '2026-10-01', updatedAt: '2026-10-01' });
@@ -68,6 +68,7 @@ try {
   const save = async (label, result, type) => {
     assert.equal(result.ok, true, `${label}: local action rejected: ${result.error}`);
     const saved = await secure.saveSecureWorkspace(snapshot(), type, undefined, { actorMemberId: useStore.getState().currentUser.id, excludeSuperAdminEntities: true });
+    if (!saved.ok && saved.conflict) console.log('[staff-saves] Conflict diagnostic:', JSON.stringify({ label, entityType: saved.conflict.entityType, entityId: saved.conflict.entityId, expected: saved.conflict.expectedVersion, actual: saved.conflict.actualVersion }));
     assert.equal(saved.ok, true, `${label}: save rejected: ${saved.code} ${saved.error}`);
   };
   await login('staff');
@@ -128,6 +129,51 @@ try {
   await login('hod');
   assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').status, 'Delivered');
   console.log('[staff-saves] Reverse-linked assigned HOD delivery persisted through real authenticated REST.');
+
+  // Model the legacy cross-company task link without changing production data.
+  // The destination deliverable remains a valid record in its original company.
+  insert('client', { id: 'repair-client', clientName: 'Repair QA', createdBy: 'boss', createdAt: '2026-10-01', updatedAt: '2026-10-01' });
+  insert('task', { ...baseTask, id: 'repair-task', clientId: 'repair-client', clientName: 'Repair QA', deliverableId: 'deliverable', serviceCycleId: 'cycle', status: 'Completed', isCompleted: true });
+  sql("update public.aitask_entities set data=data || '{\"taskIds\":[\"task\",\"repair-task\"]}'::jsonb where workspace_id='aitask-main' and entity_type='deliverable' and entity_id='deliverable';");
+  await login('boss');
+  await save('Explicit invalid-link removal', useStore.getState().unlinkInvalidTaskDelivery('repair-task'), 'task.update');
+  await login('boss');
+  assert.equal(useStore.getState().tasks.find(task => task.id === 'repair-task').deliverableId, undefined);
+  assert.equal(useStore.getState().tasks.find(task => task.id === 'repair-task').isCompleted, true);
+  assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').taskIds.includes('repair-task'), false);
+  assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').status, 'Delivered');
+  console.log('[staff-saves] Explicit legacy cross-company link repair persisted through real authenticated REST without moving or deleting the task.');
+
+  sql("update public.aitask_entities set data=data || '{\"visibility\":\"client-visible\",\"status\":\"Waiting Approval\",\"isCompleted\":true,\"clientApprovalStatus\":\"Pending\"}'::jsonb where workspace_id='aitask-main' and entity_type='task' and entity_id='task';");
+  await login('customer');
+  assert.deepEqual(useStore.getState().users.map(user => user.id), ['customer']);
+  await save('Client feedback without staff directory', useStore.getState().addComment('task', 'Private contact metadata is not needed to share feedback.'), 'comment.add');
+  await login('customer');
+  assert.equal(useStore.getState().tasks.find(task => task.id === 'task').comments.some(comment => comment.text === 'Private contact metadata is not needed to share feedback.'), true);
+  await save('Client approval without staff directory', useStore.getState().reviewClientApproval('task', 'Approved', 'Approved after privacy update.'), 'approval.review');
+  await login('customer');
+  assert.equal(useStore.getState().tasks.find(task => task.id === 'task').clientApprovalStatus, 'Approved');
+  // Counters, assignments and unknown historical completion dates stay server-owned.
+  sql("update public.aitask_entities set data=(data - 'completedAt') || '{\"status\":\"Waiting Approval\",\"isCompleted\":true,\"completionPercentage\":100,\"clientApprovalStatus\":\"Pending\",\"revisionCount\":7}'::jsonb where workspace_id='aitask-main' and entity_type='task' and entity_id='task';");
+  await login('customer');
+  await save('Client rejection without internal counter', useStore.getState().reviewClientApproval('task', 'Rejected', 'Please revise.'), 'approval.review');
+  await login('boss');
+  const rejectedTask = useStore.getState().tasks.find(task => task.id === 'task');
+  assert.equal(rejectedTask.revisionCount, 8);
+  assert.equal(rejectedTask.assignedTo, 'hod');
+  assert.equal(rejectedTask.completedAt, undefined);
+  assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').status, 'In Progress');
+  // Seed a historical undated task only inside this disposable validation DB.
+  sql("begin; alter table public.aitask_entities disable trigger aitask_enforce_task_completed_at; update public.aitask_entities set data=(data - 'completedAt') || '{\"status\":\"Waiting Approval\",\"isCompleted\":true,\"completionPercentage\":100,\"clientApprovalStatus\":\"Pending\"}'::jsonb where workspace_id='aitask-main' and entity_type='task' and entity_id='task'; alter table public.aitask_entities enable trigger aitask_enforce_task_completed_at; commit;");
+  await login('customer');
+  await save('Client approval preserves unknown completion date', useStore.getState().reviewClientApproval('task', 'Approved', 'Approved.'), 'approval.review');
+  await login('boss');
+  const approvedTask = useStore.getState().tasks.find(task => task.id === 'task');
+  assert.equal(approvedTask.revisionCount, 8);
+  assert.equal(approvedTask.assignedTo, 'hod');
+  assert.equal(approvedTask.completedAt, undefined);
+  assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').status, 'Ready');
+  console.log('[staff-saves] Client feedback, approval and rejection persisted through real Auth/REST without an internal staff directory; canonical assignments/counters and unknown completion dates were preserved.');
 
   console.log('[staff-saves] Actual frontend actions persisted through authenticated REST: creation/deletion, edits, status, priority, dates, comments, derived delivery/reopening, HOD delegation, reload and lost-confirmation retry.');
 } finally {

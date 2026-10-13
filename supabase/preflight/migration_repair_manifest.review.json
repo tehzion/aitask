@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "migration_validated_and_applied_through_20261007173905; production connector 20261009024458 verified",
+  "status": "migration_validated_and_applied_through_20261012165347; production connector 20261013051554 verified",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
-    "verifiedAt": "2026-10-09",
-    "historyThrough": "20261009024458_reliable_member_onboarding (repository 20261007173905); connector aliases preserved",
+    "verifiedAt": "2026-10-13",
+    "historyThrough": "20261013051554_hod_task_deletion_authority (repository 20261012165347); connector aliases preserved",
     "historyAligned": false,
     "historyAlignmentNote": "The connector stored deployment IDs 20260919065513, 20260919065609, 20260919065620, 20260919065648, and 20260919072524 for the five matching repository migrations. Names and live SQL are verified; timestamp repair is intentionally prohibited.",
     "clientOwnershipRollout": {
@@ -162,6 +162,18 @@
         {
           "repository": "20261007173905_reliable_member_onboarding",
           "production": "20261009024458_reliable_member_onboarding"
+        },
+        {
+          "repository": "20261012162419_client_portal_review_privacy",
+          "production": "20261012172315_client_portal_review_privacy"
+        },
+        {
+          "repository": "20261012164407_delivery_link_derivation",
+          "production": "20261012172326_delivery_link_derivation"
+        },
+        {
+          "repository": "20261012165347_hod_task_deletion_authority",
+          "production": "20261013051554_hod_task_deletion_authority"
         }
       ]
     },
@@ -423,6 +435,35 @@
         "Frontend deployment is outside this Supabase rollout.",
         "Leaked-password protection remains disabled; existing plan limitation persists."
       ]
+    },
+    "deliveryReviewPrivacyRollout": {
+      "appliedAt": "2026-10-13",
+      "method": "Supabase deployment connector; function definitions only, no business backfill",
+      "liveVerification": {
+        "entityCountBefore": 1769,
+        "entityCountAfter": 1769,
+        "entityHashBefore": "a5441f09c456d958b876b89d39e20b32",
+        "entityHashAfter": "a5441f09c456d958b876b89d39e20b32",
+        "authorizationFunctionOidPreserved": true,
+        "authorizationFunctionGrantsPreserved": true,
+        "clientTaskAssignmentHidden": true,
+        "clientApprovalPathVerified": true,
+        "reverseCompanyDerivationVerified": true
+      }
+    },
+    "hodDeletionAuthorityRollout": {
+      "appliedAt": "2026-10-13",
+      "method": "Supabase deployment connector; private authorization function changes only",
+      "liveVerification": {
+        "entityCountBefore": 1831,
+        "entityCountAfter": 1831,
+        "entityHashBefore": "49a5a607933893da5682a96e7b64f68d",
+        "entityHashAfter": "49a5a607933893da5682a96e7b64f68d",
+        "hodDeletionBranchVerified": true,
+        "clientApprovalBranchPreserved": true,
+        "anonymousHelperExecution": false,
+        "authenticatedHelperExecution": false
+      }
     }
   },
   "schemaEquivalence": {
@@ -639,7 +680,10 @@
     "20260930154013_initialize_deadline_reminder_claim",
     "20261002065644_hod_permission_parity_followups",
     "20261002101435_universal_notification_audience_guard",
-    "20261007173905_reliable_member_onboarding"
+    "20261007173905_reliable_member_onboarding",
+    "20261012162419_client_portal_review_privacy",
+    "20261012164407_delivery_link_derivation",
+    "20261012165347_hod_task_deletion_authority"
   ],
   "pendingProductionMigrations": []
 }

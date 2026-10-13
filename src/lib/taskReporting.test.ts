@@ -8,6 +8,7 @@ import {
   getRecentCompletionTasks,
   getTeamMemberTaskGroups,
   getTeamWorkloadSummaries,
+  getDepartmentWorkloadSummaries,
   getTrackedWeeklyCompletions,
   isTaskOverdue,
 } from './taskReporting';
@@ -41,6 +42,26 @@ const users: User[] = [
 
 describe('Boss operations reporting', () => {
   const now = new Date(2026, 6, 31, 12, 0, 0);
+
+  it('counts multi-department work by task department without duplicating person totals', () => {
+    const member: User = { ...users[0], departments: ['Video Shooting', 'Video Editor'] };
+    const tasks = [
+      makeTask({ id: 'shoot', department: 'Video Shooting' }),
+      makeTask({ id: 'edit', department: 'Editor' as Task['department'], dueDate: '2026-07-30' }),
+      makeTask({ id: 'design', department: 'Designer', status: 'Waiting Approval' }),
+      makeTask({ id: 'done', department: 'Video Editor', status: 'Completed', isCompleted: true, completedAt: now.toISOString() }),
+      makeTask({ id: 'unassigned', assignedTo: '' }),
+      makeTask({ id: 'hidden-member', assignedTo: 'missing' }),
+      makeTask({ id: 'client-task', assignedTo: 'client-1' }),
+    ];
+    const groups = getDepartmentWorkloadSummaries(tasks, [member, users[2]], 'week', now);
+    expect(groups.find(group => group.department === 'Video Shooting')).toMatchObject({ open: 1, overdue: 0 });
+    expect(groups.find(group => group.department === 'Video Editor')).toMatchObject({ open: 1, overdue: 1, completedThisWeek: 1 });
+    expect(groups.find(group => group.department === 'Designer')).toMatchObject({ open: 1, waitingApproval: 1, members: 1 });
+    expect(groups.reduce((sum, group) => sum + group.open, 0)).toBe(3);
+    expect(getTeamWorkloadSummaries(tasks, [member], 'week', now)[0].open).toBe(3);
+    expect(getDepartmentWorkloadSummaries(tasks, [{ ...member, departments: [...member.departments].reverse() }], 'week', now)).toEqual(groups);
+  });
 
   it('keeps overdue links consistent for completed, cancelled, invalid and due-today tasks', () => {
     expect(isTaskOverdue(makeTask({ dueDate: '2026-07-30' }), now)).toBe(true);

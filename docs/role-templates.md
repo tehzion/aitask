@@ -25,7 +25,7 @@ for every non-super-admin and preserves HOD's department boundary.
 ## Protected (Boss Koo only) keys
 
 `editTasks` · `manageUsers` · `approveRegistrations` · `deleteUsers` ·
-`viewProductionReports`
+`viewProductionReports` · `viewApprovals`
 
 These are hidden from the role/member editors, stripped on save (frontend),
 and rejected by the database guards. They are **not delegable**.
@@ -35,7 +35,7 @@ and rejected by the database guards. They are **not delegable**.
 | Capability | Boss Koo | Project Manager | HOD | Staff | Client |
 |---|---|---|---|---|---|
 | Page access (Dashboard/Tasks/Calendar/Companies/Reports/Settings) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Approvals page (`viewApprovals`) | ✓ | ✓ | – | – | – |
+| Approvals page (`viewApprovals`) | ✓ | – | – | – | – |
 | Task / client visibility | ✓ | portfolio-scoped | dept-scoped | assigned/created | own company |
 | Create tasks | ✓ | ✓ | ✓ | ✓ | – |
 | Manage created tasks | ✓ | ✓ | ✓ | – | – |
@@ -47,8 +47,8 @@ and rejected by the database guards. They are **not delegable**.
 | Protected keys | ✓ | – | – | – | – |
 
 ### Project Manager
-Full **operational** access to the PM's portfolio: service operations, companies
-they own or can reach through visible work, and the Approvals page. Project
+Full **operational** access to the PM's portfolio: service operations and companies
+they own or can reach through visible work. Project
 Managers do not receive workspace-wide task/client visibility, account/role
 administration, or workspace-wide task editing; those remain with Boss Koo.
 
@@ -57,6 +57,12 @@ A Staff-based department lead. Sees and edits work in **their departments**
 (tasks and any project carrying those tasks), manages the tasks they create, and
 can add/delete companies. It does **not** get workspace-wide visibility or
 service-administration rights.
+
+Department oversight grants task editing and commenting. Task deletion requires
+the task to be in the HOD's departments, `manageCreatedTasks`, and either creator
+ownership or current assignment to the HOD. This matches delegation authority;
+past delegation alone does not authorize deletion. The same rule applies to
+department-scoped Staff custom roles. Boss Koo retains unrestricted deletion.
 
 ### Staff
 Standard employee access: assigned or created work only. No elevation over
@@ -70,8 +76,8 @@ Per-member overrides layer on top of the chosen role.
 
 ## Member role assignment
 
-The Approvals page shows the built-in **default roles** (Project Manager, HOD, Staff,
-Client) as read-only templates, and the member list assigns any of them in one
+The Approvals page lets Boss Koo edit the built-in **default roles** (Project Manager, HOD, Staff,
+Client), and the member list assigns any of them in one
 step via `aitask_update_member_role`:
 
 - **Project Manager** / **Staff** / **HOD** — sets the canonical base role and
@@ -94,13 +100,16 @@ Role changes are Boss-Koo-only, reset the member's departments (Client uses
 - `public.aitask_update_member_permissions` persists any non-protected key,
   including `createClients`/`deleteClients`.
 - `private.aitask_guard_custom_role_scope` blocks delegation of protected keys
-  and preserves the HOD identity (`baseRole=Staff`, `name=HOD`,
-  `manageCreatedTasks=true`).
+  and preserves the built-in HOD identity and department scope. HOD is a canonical
+  `HOD` base role; permission normalization retains its operational boundaries.
+- `private.aitask_can_delete_task` separates destructive authority from task editing.
+  The shared mutation validator applies it to command and direct-table delete paths.
 
 ## Change log of role-template fixes
 
-- Project Manager: added `viewApprovals` and server parity for `createClients` /
-  `deleteClients`; Project Managers retain portfolio-scoped project control.
+- Project Manager: server parity for `createClients` / `deleteClients`;
+  Project Managers retain portfolio-scoped project control. Approvals access is
+  reserved for Boss Koo in the current role model.
 - HOD: department-scoped task visibility and editing.
 - Custom roles: optional `departmentScoped` flag; member overrides can persist
   `createClients` / `deleteClients`; overrides now layer on the custom role.
