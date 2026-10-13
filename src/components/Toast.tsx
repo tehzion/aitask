@@ -1,4 +1,5 @@
 import React from 'react';
+import SystemMessage from './SystemMessage';
 import { useToastStore, Toast as ToastType } from '../store/useToastStore';
 import { CheckCircle2, AlertTriangle, XCircle, Info, X } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -33,7 +34,7 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
       )}
     >
       {iconMap[toast.type]}
-      <p className="min-w-0 flex-1 break-words pr-2 text-sm font-semibold leading-5">{typeof toast.message === 'string' ? t(toast.message) : t(toast.message)}</p>
+      <p className="min-w-0 flex-1 break-words pr-2 text-sm font-semibold leading-5">{toast.type === 'error' || toast.type === 'warning' ? <SystemMessage message={toast.message} /> : t(toast.message)}</p>
       <button
         onClick={() => removeToast(toast.id)}
         className="text-slate-400 hover:text-slate-600 p-0.5 rounded-lg hover:bg-slate-100 transition-colors"

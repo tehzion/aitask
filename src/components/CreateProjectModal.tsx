@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import { getTodayInputDate } from '../lib/utils';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import DraftRecoveryNotice from './DraftRecoveryNotice';
@@ -474,7 +475,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
               </div>
 
               {customError && (
-                <p className="text-xs text-red-500 mt-1.5">{customError}</p>
+                <p className="text-xs text-red-500 mt-1.5"><SystemMessage message={customError} /></p>
               )}
 
               {!customError && customInput && (
@@ -492,7 +493,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
             </fieldset>
             {(formError || pendingResolution) && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
-                <p>{formError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+                <p><SystemMessage message={formError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
                 {pendingResolution && <BackendFreshness compact className="mt-3" />}
               </div>
             )}

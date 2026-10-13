@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import { mergeDraft, type DraftConflict } from '../lib/draftMerge';
 import { readRecoveredDraft, writeRecoveredDraft, removeRecoveredDraft } from '../lib/draftRecovery';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -167,9 +168,9 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
     </div>
     {recovery && <div className="border-b border-line bg-inset px-5 py-4" role="status"><p>{t('A recoverable draft is available on this device.')}</p><div className="mt-3 flex gap-2"><Button variant="secondary" onClick={restoreRecovery}>{t('Restore recovered draft')}</Button><Button variant="secondary" onClick={() => { removeRecoveredDraft(account, recoveryKey, recovery?.storageKey); setRecovery(null); }}>{t('Discard recovered draft')}</Button></div></div>}
     {conflict && <div className="border-b border-line bg-inset px-5 py-4" role="alert">
-      <p className="text-sm text-ink">{t('This revision changed elsewhere. Review the latest version before saving.')}</p>
-      <div className="mt-3 flex gap-2"><Button variant="secondary" onClick={reloadLatest}>{t('Reload latest')}</Button><Button variant="secondary" onClick={keepDraft}>{t('Keep my draft')}</Button></div>
-      {mergeConflicts.map(item => <div key={item.path} className="mt-3 rounded-lg border border-line p-3"><p className="text-sm">{t('Both versions changed this field. Choose which value to keep.')}</p><p data-i18n-skip className="mt-1 break-all font-mono text-xs">{item.path}</p><div className="mt-2 grid gap-2 sm:grid-cols-2"><div><pre data-i18n-skip className="max-h-32 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(item.local, null, 2) ?? t('Removed')}</pre><Button variant="secondary" onClick={() => chooseConflict(item.path, 'local')}>{t('Use my value')}</Button></div><div><pre data-i18n-skip className="max-h-32 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(item.remote, null, 2) ?? t('Removed')}</pre><Button variant="secondary" onClick={() => chooseConflict(item.path, 'remote')}>{t('Use latest value')}</Button></div></div></div>)}
+      <p className="text-sm text-ink">{t('This revision changed elsewhere. Review the saved revision before saving.')}</p>
+      <div className="mt-3 flex gap-2"><Button variant="secondary" onClick={reloadLatest}>{t('Reload saved data')}</Button><Button variant="secondary" onClick={keepDraft}>{t('Keep my draft')}</Button></div>
+      {mergeConflicts.map(item => <div key={item.path} className="mt-3 rounded-lg border border-line p-3"><p className="text-sm">{t('This field was also changed elsewhere. Choose which value to keep.')}</p><p data-i18n-skip className="mt-1 break-all font-mono text-xs">{item.path}</p><div className="mt-2 grid gap-2 sm:grid-cols-2"><div><pre data-i18n-skip className="max-h-32 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(item.local, null, 2) ?? t('Removed')}</pre><Button variant="secondary" onClick={() => chooseConflict(item.path, 'local')}>{t('Use my value')}</Button></div><div><pre data-i18n-skip className="max-h-32 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(item.remote, null, 2) ?? t('Removed')}</pre><Button variant="secondary" onClick={() => chooseConflict(item.path, 'remote')}>{t('Use saved value')}</Button></div></div></div>)}
     </div>}
     <fieldset disabled={mergeConflicts.length > 0} className="contents"><div className="grid gap-4 border-b border-slate-100 p-5 md:grid-cols-2">
       <label className="text-sm font-semibold text-slate-700">{t('Plan name')}<input data-i18n-skip className={cn(inputBase, 'mt-1 px-3 py-2')} value={name} onChange={event => { markDirty(); setName(event.target.value); }} /></label>
@@ -190,7 +191,7 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
       <label className="text-sm font-semibold text-slate-700">{t('Tax rate (%)')}<input type="number" min="0" max="100" step="0.01" className={cn(inputBase, 'mt-1 px-3 py-2')} value={taxRateBps / 100} onChange={event => { markDirty(); setTaxRateBps(Math.round(Number(event.target.value) * 100)); }} /></label>
     </div>
     </fieldset>
-    {message && <p className="border-t border-slate-100 px-5 py-3 text-sm font-medium text-blue-800" role="status">{message}</p>}
+    {message && <p className="border-t border-slate-100 px-5 py-3 text-sm font-medium text-blue-800" role="status"><SystemMessage message={message} /></p>}
   </section>;
 };
 

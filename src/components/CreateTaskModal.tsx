@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import DraftRecoveryNotice from './DraftRecoveryNotice';
@@ -606,7 +607,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                   </div>
                   {assignmentError && (
-                    <p className="text-xs text-red-500 mt-1">{assignmentError}</p>
+                    <p className="text-xs text-red-500 mt-1"><SystemMessage message={assignmentError} /></p>
                   )}
                 </div>
               </div>
@@ -647,7 +648,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     </div>
                   )}
                   {customServiceError && (
-                    <p className="text-xs text-red-500 mt-1">{customServiceError}</p>
+                    <p className="text-xs text-red-500 mt-1"><SystemMessage message={customServiceError} /></p>
                   )}
                 </div>
                 <div>
@@ -745,7 +746,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             </fieldset>
             {(formError || pendingResolution) && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
-                <p>{formError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+                <p><SystemMessage message={formError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
                 {pendingResolution && <BackendFreshness compact className="mt-3" />}
               </div>
             )}

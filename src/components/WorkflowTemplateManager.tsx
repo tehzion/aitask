@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import React from 'react';
 import { ArrowDown, ArrowUp, Plus, Save, Trash2, Workflow } from 'lucide-react';
 import { useStore } from '../store';
@@ -127,7 +128,7 @@ const WorkflowTemplateManager = () => {
             <Button variant="secondary" onClick={() => setDraft(current => ({ ...current, steps: [...current.steps, blankStep(current.steps.length + 1)] }))}><Plus className="h-4 w-4" />{t('Add step')}</Button>
             <Button onClick={() => void save()} disabled={saving}><Save className="h-4 w-4" />{saving ? t('Saving...') : hasPending ? t('Retry save') : t('Save workflow')}</Button>
           </div>
-          {message && <p className="text-sm font-medium text-blue-700" role="status">{message}</p>}
+          {message && <p className="text-sm font-medium text-blue-700" role="status"><SystemMessage message={message} /></p>}
         </div>
       </div>
       {templateToDelete && (

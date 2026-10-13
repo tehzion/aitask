@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import ModalShell from './ModalShell';
@@ -36,7 +37,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       <div className="min-w-0">
         <h2 id={labelledBy} className="text-base font-semibold text-ink">{title}</h2>
         <p className="mt-1 text-sm leading-6 text-muted">{description}</p>
-        {error && <p className="mt-2 text-sm font-semibold text-red-700" role="alert" aria-live="polite">{error}</p>}
+        {error && <p className="mt-2 text-sm font-semibold text-red-700" role="alert" aria-live="polite"><SystemMessage message={error} /></p>}
       </div>
     </div>
     <div className="flex justify-end gap-3 px-5 py-4">

@@ -1,3 +1,4 @@
+import SystemMessage from '../components/SystemMessage';
 import React, { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, UserPlus, ChevronDown, ChevronUp, Mail, Moon, Sun } from 'lucide-react';
@@ -278,7 +279,7 @@ const Login: React.FC = () => {
                     onChange={event => setRecoveryIdentifier(event.target.value)}
                   />
                 </div>
-                {recoveryError && <p className="text-sm text-red-600" role="alert" aria-live="assertive">{recoveryError}</p>}
+                {recoveryError && <p className="text-sm text-red-600" role="alert" aria-live="assertive"><SystemMessage message={recoveryError} /></p>}
                 <Button type="submit" className="w-full py-3" disabled={isRequestingRecovery}>
                   <Mail className="h-4 w-4" />
                   {isRequestingRecovery ? t('Requesting email...') : t('Send recovery email')}
@@ -337,7 +338,7 @@ const Login: React.FC = () => {
                       {t('Forgot password?')}
                     </button>
                   )}
-                  {loginError && <p className="mt-2 text-sm text-red-600" role="alert" aria-live="polite">{loginError}</p>}
+                  {loginError && <p className="mt-2 text-sm text-red-600" role="alert" aria-live="polite"><SystemMessage message={loginError} /></p>}
                 </div>
 
                 <Button type="submit" className="w-full py-3" disabled={isLoggingIn}>
@@ -476,7 +477,7 @@ const Login: React.FC = () => {
                       </div>
                     </>
                   )}
-                  {regError && <p className="text-sm font-medium text-red-600" role="alert" aria-live="polite">{regError}</p>}
+                  {regError && <p className="text-sm font-medium text-red-600" role="alert" aria-live="polite"><SystemMessage message={regError} /></p>}
                   <Button type="submit" className="w-full py-3" disabled={isSubmittingRegistration}>
                     {isSubmittingRegistration ? t('Submitting...') : t('Submit Staff Registration')}
                   </Button>

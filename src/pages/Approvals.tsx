@@ -1,3 +1,4 @@
+import SystemMessage from '../components/SystemMessage';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
@@ -128,7 +129,7 @@ const RegistrationReviewPanel: React.FC<RegistrationReviewPanelProps> = ({
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
           {error && (
             <div id={errorId} className="mb-5 rounded-control border border-red-200 bg-red-50 px-3 py-3 text-sm leading-6 text-red-800" role="alert" aria-live="assertive">
-              {error}
+              <SystemMessage message={error} />
             </div>
           )}
 
@@ -1163,7 +1164,7 @@ const Approvals: React.FC = () => {
 
       {actionError && (
         <div className="rounded-panel border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700" role="alert" aria-live="assertive">
-          {actionError}
+          <SystemMessage message={actionError} />
         </div>
       )}
 
@@ -1580,7 +1581,7 @@ const Approvals: React.FC = () => {
             </fieldset>
             {roleError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
-                {roleError}
+                <SystemMessage message={roleError} />
               </div>
             )}
 
@@ -1727,7 +1728,7 @@ const Approvals: React.FC = () => {
         </div>
         {assignmentError && (
           <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {assignmentError}
+            <SystemMessage message={assignmentError} />
           </div>
         )}
         <div className="flex flex-col gap-2 border-b border-line/80 bg-inset/60 px-4 py-3 sm:flex-row sm:px-5">
@@ -2023,7 +2024,7 @@ const Approvals: React.FC = () => {
             <DepartmentMultiSelect value={memberDepartments} onChange={setMemberDepartments} disabled={isActionSaving} />
             {memberDepartmentsError && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
-                {memberDepartmentsError}
+                <SystemMessage message={memberDepartmentsError} />
               </div>
             )}
             <div className="flex justify-end gap-3 pt-2">
@@ -2124,7 +2125,7 @@ const Approvals: React.FC = () => {
               ))}
             </fieldset>
 
-            {memberPermissionsError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{memberPermissionsError}</div>}
+            {memberPermissionsError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert"><SystemMessage message={memberPermissionsError} /></div>}
             <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-4">
               {retainedMemberMutation?.kind === 'permissions' && retainedMemberMutation.memberId === memberPermissionsUser.id && (
                 <Button
@@ -2293,7 +2294,7 @@ const Approvals: React.FC = () => {
               </fieldset>
               {addUserError && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert" aria-live="assertive">
-                  {addUserError}
+                  <SystemMessage message={addUserError} />
                 </div>
               )}
 
@@ -2370,7 +2371,7 @@ const Approvals: React.FC = () => {
               </p>
               {deleteUserError && (
                 <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
-                  {deleteUserError}
+                  <SystemMessage message={deleteUserError} />
                 </div>
               )}
             </div>

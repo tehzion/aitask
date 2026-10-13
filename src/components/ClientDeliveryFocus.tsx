@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import { getTaskProgress } from '../lib/taskProgress';
 import React from 'react';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -260,15 +261,15 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
               aria-invalid={decisionError ? 'true' : undefined}
               aria-describedby={decisionError ? decisionErrorId : undefined}
             />
-            {decisionError && <p id={decisionErrorId} role="alert" className="mt-2 text-sm font-medium text-red-700 dark:text-red-200">{decisionError}</p>}
+            {decisionError && <p id={decisionErrorId} role="alert" className="mt-2 text-sm font-medium text-red-700 dark:text-red-200"><SystemMessage message={decisionError} /></p>}
           </section>
         )}
 
         {(error || pendingResolution || pendingSave?.failed) && (
           <div role="alert" aria-live="assertive" className="rounded-control border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
-            <p>{error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+            <p><SystemMessage message={error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
             {pendingResolution && <BackendFreshness compact className="mt-3" onRetry={async () => { if (pendingSave && !isSaving) await performSave(pendingSave, true); else await useStore.getState().retryPendingSave(); }} onDiscard={() => { if (!isSaving && window.confirm(t('Discard unsaved changes?'))) void discardPending(); }} />}
-            {pendingSave?.failed && !pendingResolution && <div className="mt-3 flex gap-2"><Button variant="secondary" disabled={isSaving} onClick={() => void performSave(pendingSave, true)}>{t('Retry save')}</Button><Button variant="secondary" disabled={isSaving} onClick={() => { if (window.confirm(t('Discard unsaved changes?'))) void discardPending(); }}>{t('Use latest')}</Button></div>}
+            {pendingSave?.failed && !pendingResolution && <div className="mt-3 flex gap-2"><Button variant="secondary" disabled={isSaving} onClick={() => void performSave(pendingSave, true)}>{t('Retry save')}</Button><Button variant="secondary" disabled={isSaving} onClick={() => { if (window.confirm(t('Discard unsaved changes?'))) void discardPending(); }}>{t('Restore saved data')}</Button></div>}
           </div>
         )}
 

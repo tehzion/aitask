@@ -14,6 +14,13 @@ interface BackendFreshnessProps {
   onDiscard?: () => void;
 }
 
+const conflictFieldLabels: Record<string, string> = {
+  title: 'Title', name: 'Name', clientName: 'Company name', description: 'Description', notes: 'Notes',
+  startDate: 'Start date', dueDate: 'Due date', assignedTo: 'Assignee', department: 'Department', status: 'Status',
+  priority: 'Priority', attachmentLink: 'Output link', contactPerson: 'Contact person', email: 'Email', phone: 'Phone',
+  clientApprovalStatus: 'Client approval', serviceItems: 'Service items', workState: 'Work ownership',
+};
+
 const formatSyncTime = (value: string | undefined, locale: AppLocale) => {
   if (!value) return locale === 'zh' ? '从未' : 'Never';
   const date = new Date(value);
@@ -62,6 +69,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
         : Cloud;
   const lastChecked = backend.lastPulledAt || backend.lastSavedAt || backend.lastSyncedAt || backend.remoteUpdatedAt;
   const showRefresh = !isLocal && !needsResolution && (backend.upgradeRequired || backend.hasRemoteUpdate || backend.error || !compact);
+  const changedFields = [...new Set((backend.conflict?.changedFields || []).flatMap(field => conflictFieldLabels[field] ? [t(conflictFieldLabels[field])] : []))];
 
   return (
     <div className={cn('flex flex-wrap items-center gap-2', className)} aria-live="polite">
@@ -118,8 +126,8 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
       )}
       {!compact && backend.conflict && (
         <span className="basis-full text-xs text-amber-700">
-          {t('shell.changedRemotely', { entityType: backend.conflict.entityType, entityId: backend.conflict.entityId })}
-          {backend.conflict.changedFields?.length ? `: ${backend.conflict.changedFields.join(', ')}` : '.'}
+          {t('The saved record changed elsewhere. Review it before retrying.')}
+          {changedFields.length > 0 && <> {t('Changed fields')}: {changedFields.join(', ')}.</>}
         </span>
       )}
     </div>

@@ -34,13 +34,13 @@ import {
 import { parseWorkspaceSnapshot } from './security';
 import { supabase } from './supabaseClient';
 import { stripServiceItemPrices } from './serviceManagement';
-import { msg } from './messages';
+import { enMessages, msg } from './messages';
 import { useToastStore } from '../store/useToastStore';
 
 export const SECURE_WORKSPACE_ID = 'aitask-main';
 export const SECURE_SYNC_PROTOCOL_VERSION = 1;
 export const SECURE_BACKEND_SCHEMA_VERSION = 4;
-export const BACKEND_UPGRADE_REQUIRED_MESSAGE = 'AiTask is completing a system update. Your workspace is read-only for a moment; no changes have been submitted.';
+export const BACKEND_UPGRADE_REQUIRED_MESSAGE = enMessages['errors.workspaceUpgrade'];
 const SYNC_REQUEST_TIMEOUT_MS = 20_000;
 const WORKSPACE_PAGE_SIZE = 500;
 const PENDING_COMMAND_STORAGE_VERSION = 1;

@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import { DeliveryProgress } from './DeliveryProgress';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getCurrentPlanCycle } from '../lib/dashboardData';
@@ -117,7 +118,7 @@ const ClientServiceWorkspace = () => {
       <div className="sticky top-[4.5rem] z-20 border-b border-line/80 bg-canvas/95 py-3 backdrop-blur-md">
         <SegmentedTabs<ClientWorkspaceTab> items={tabs} value={tab} onChange={setTab} label={t('Client service workspace')} idPrefix={TABS_ID} />
       </div>
-      {message && <p role="alert" className="rounded-control border border-[rgb(var(--calm-danger)/.35)] bg-[rgb(var(--calm-danger-soft))] px-4 py-3 text-sm text-[rgb(var(--calm-danger))]">{message}</p>}
+      {message && <p role="alert" className="rounded-control border border-[rgb(var(--calm-danger)/.35)] bg-[rgb(var(--calm-danger-soft))] px-4 py-3 text-sm text-[rgb(var(--calm-danger))]"><SystemMessage message={message} /></p>}
 
       {tab === 'overview' && (
         <div id={`${TABS_ID}-panel-overview`} role="tabpanel" aria-labelledby={`${TABS_ID}-tab-overview`} tabIndex={0} className="grid scroll-mt-36 gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,.75fr)]">

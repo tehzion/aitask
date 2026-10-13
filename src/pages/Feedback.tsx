@@ -1,3 +1,4 @@
+import SystemMessage from '../components/SystemMessage';
 import React from 'react';
 import { CheckCircle2, ClipboardCheck, Languages, Send } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -232,7 +233,7 @@ const Feedback: React.FC = () => {
 
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           <label className="flex items-start gap-3 text-sm leading-6 text-slate-700"><input required type="checkbox" className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={consent} onChange={event => setConsent(event.target.checked)} />{t.consent}</label>
-          {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert" aria-live="assertive">{error}</p>}
+          {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert" aria-live="assertive"><SystemMessage message={error} /></p>}
           <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Link to="/feedback/results" className="text-center text-sm font-medium text-slate-500 hover:text-blue-700">{t.results}</Link>
             <Button type="submit" className="min-h-12 px-6" disabled={isSubmitting}><Send className="h-4 w-4" />{isSubmitting ? t.submitting : t.submit}</Button>

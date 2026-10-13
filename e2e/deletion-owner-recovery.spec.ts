@@ -91,7 +91,7 @@ test('task deletion use latest preserves a newer canonical task', async ({ page 
   });
   await deleteTask(page);
   await expect(dialog.getByText('Injected uncertain deletion', { exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: 'Use latest', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Restore saved data', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Newer canonical task', exact: true })).toBeVisible();
   expect(await page.evaluate(async () => {
     const task = (await import('/src/store/index.ts')).useStore.getState().tasks[0];
@@ -116,7 +116,7 @@ test('task deletion refuses a false retry acknowledgement when the task reappear
   await deleteTask(page);
   await expect(dialog.getByText('Injected uncertain deletion', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Retry my changes', exact: true }).click();
-  await expect(dialog.getByText('The task is still available. Use latest before deleting it again.', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('The task is still available. Restore saved data before deleting it again.', { exact: true })).toBeVisible();
   expect(await successToasts(page)).toEqual([]);
 });
 

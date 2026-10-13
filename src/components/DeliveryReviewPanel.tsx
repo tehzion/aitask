@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store';
@@ -58,7 +59,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   return <section className="mt-5 rounded-control border border-line p-4" aria-label={t('Delivery records need review')}>
     <h3 className="font-semibold text-ink">{t('Delivery records need review')}</h3>
     <p className="mt-1 text-xs text-muted">{t('Review links and publication before confirming delivery.')}</p>
-    {message && <p className="mt-3 text-sm" role="status">{message}</p>}
+    {message && <p className="mt-3 text-sm" role="status"><SystemMessage message={message} /></p>}
     {pending && <Button className="mt-3" disabled={busy} onClick={() => save(() => ({ ok: true }), pending.command)}>{t('Retry pending save')}</Button>}
     <div className="mt-3 space-y-4">
       {records.draftCycles.map(cycle => <div key={cycle.id} className="flex flex-wrap items-center justify-between gap-3 text-sm">

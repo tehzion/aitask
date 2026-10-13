@@ -1,3 +1,4 @@
+import SystemMessage from '../components/SystemMessage';
 import React from 'react';
 import { CheckCircle2, KeyRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -127,7 +128,7 @@ const AccountPassword: React.FC = () => {
                 onChange={event => setConfirmPassword(event.target.value)}
               />
             </div>
-            {error && <p className="text-sm font-medium text-red-600" role="alert" aria-live="assertive">{error}</p>}
+            {error && <p className="text-sm font-medium text-red-600" role="alert" aria-live="assertive"><SystemMessage message={error} /></p>}
             <Button type="submit" className="w-full py-3" disabled={isSaving}>
               {isSaving ? t('auth.savingPassword') : t('auth.setPassword')}
             </Button>

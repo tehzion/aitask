@@ -223,7 +223,7 @@ function AppContent() {
         >
           <RefreshCw className="h-5 w-5 shrink-0 text-blue-600" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">{t('Update available')}</p>
+            <p className="text-sm font-semibold">{t('App update available')}</p>
             <p className="mt-0.5 text-xs leading-5 text-slate-500">{hasDrafts ? t('Save or discard your changes before updating.') : t('Refresh to use the latest AiTask fixes.')}</p>
           </div>
           <button

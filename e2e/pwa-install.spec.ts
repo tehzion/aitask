@@ -111,7 +111,7 @@ test('a real service-worker replacement preserves a dirty form and enables refre
       const changed = new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
       await registration.update(); await changed;
     });
-    await expect(page.getByText('Update available', { exact: true })).toBeVisible();
+    await expect(page.getByText('App update available', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Refresh now' })).toBeDisabled();
     await expect(name).toHaveValue('PWA protected draft');
     expect(await page.evaluate(() => window.__auditPageMarker)).toBe(marker);

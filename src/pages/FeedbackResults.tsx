@@ -1,3 +1,4 @@
+import SystemMessage from '../components/SystemMessage';
 import { createCsvBlob } from '../lib/csv';
 import React from 'react';
 import { Download, LockKeyhole, LogOut, RefreshCw, ShieldCheck } from 'lucide-react';
@@ -115,8 +116,8 @@ const FeedbackResults: React.FC = () => {
           <h1 className="mt-4 text-2xl font-semibold text-slate-950">{t('feedback.reviewerLogin')}</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">{t('feedback.reviewerDescription')}</p>
           {!hasSession && <form className="mt-6 space-y-4" onSubmit={requestLink}><label className="block text-sm font-medium text-slate-700">{t('feedback.reviewerEmail')}<input required type="email" className={cn(inputBase, 'mt-2 px-3 py-2.5')} value={email} onChange={event => setEmail(event.target.value)} /></label><Button type="submit" className="w-full">{t('feedback.sendLink')}</Button></form>}
-          {message && <p className="mt-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700" role="status">{message}</p>}
-          {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{error}</p>}
+          {message && <p className="mt-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700" role="status"><SystemMessage message={message} /></p>}
+          {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert"><SystemMessage message={error} /></p>}
           {hasSession && <div className="mt-5 flex gap-3"><Button onClick={() => void loadResults()}><RefreshCw className="h-4 w-4" />{t('feedback.retry')}</Button><Button variant="secondary" onClick={async () => { await supabase.auth.signOut({ scope: 'local' }); setHasSession(false); setError(''); }}><LogOut className="h-4 w-4" />{t('feedback.signOut')}</Button></div>}
           <Link to="/feedback" className="mt-6 block text-sm font-medium text-blue-600">{t('feedback.returnToForm')}</Link>
         </section>

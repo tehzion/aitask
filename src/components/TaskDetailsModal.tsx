@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
 import { canApproveTaskInternally, canRequestTaskRevision, getTaskStatusOptions } from '../lib/taskWorkflowAccess';
@@ -328,7 +329,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
       if (!result.ok) { setMutationError(result.error || 'The task deletion is waiting to be saved.'); return; }
       if (action === 'retry') {
         if (useStore.getState().tasks.some(item => item.id === submitted.task.id)) {
-          setMutationError(t('The task is still available. Use latest before deleting it again.'));
+          setMutationError(t('The task is still available. Restore saved data before deleting it again.'));
           return;
         }
         useToastStore.getState().addToast(msg('task.deleted', { title: submitted.task.title }), 'success');
@@ -470,7 +471,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
       return;
     }
     if (useStore.getState().tasks.some(item => item.id === task.id)) {
-      setMutationError(t('The task is still available. Use latest before deleting it again.'));
+      setMutationError(t('The task is still available. Restore saved data before deleting it again.'));
       return;
     }
     useToastStore.getState().addToast(msg('task.deleted', { title: task.title }), 'success');
@@ -563,7 +564,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
 
         {(mutationError || pendingResolution || isDeletingTask) && (
           <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm font-medium text-amber-800" role="alert" aria-live="assertive">
-            <p>{mutationError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+            <p><SystemMessage message={mutationError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
             {(pendingResolution || isDeletingTask) && (
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
@@ -582,7 +583,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <X className="h-3.5 w-3.5" />
-                  {t('Use latest')}
+                  {t('Restore saved data')}
                 </button>
               </div>
             )}
@@ -809,7 +810,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   </div>
                   {editError && (
                     <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700" role="alert" aria-live="polite">
-                      {editError}
+                      <SystemMessage message={editError} />
                     </div>
                   )}
                   <div className="flex justify-end">

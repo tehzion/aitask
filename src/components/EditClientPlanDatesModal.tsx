@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { cyclePeriodEnd, nextBillingDate } from '../lib/serviceManagement';
 import React from 'react';
@@ -140,7 +141,7 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
         </label>
         {(error || pendingResolution) && (
           <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
-            <p>{error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+            <p><SystemMessage message={error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
             {pendingResolution && <BackendFreshness compact className="mt-3" />}
           </div>
         )}

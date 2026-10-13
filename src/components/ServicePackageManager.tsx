@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import React from 'react';
 import { PackagePlus, Plus, Save, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
@@ -123,7 +124,7 @@ const ServicePackageManager = () => {
             <Button variant="secondary" onClick={() => setDraft(current => ({ ...current, serviceItems: [...current.serviceItems, blankItem()] }))}><Plus className="h-4 w-4" />{t('Add service')}</Button>
             <div className="text-right"><p className="text-xs text-slate-500">{t('Monthly subtotal')}</p><p className="font-semibold text-slate-950">{formatMoney(draft.serviceItems.reduce((sum, item) => sum + item.quantity * item.unitPriceMinor, 0), draft.currency, locale)}</p></div>
           </div>
-          {message && <p className="text-sm font-medium text-blue-700" role="status">{message}</p>}
+          {message && <p className="text-sm font-medium text-blue-700" role="status"><SystemMessage message={message} /></p>}
           <div className="sticky bottom-0 -mx-5 -mb-5 flex justify-end border-t border-line bg-surface/95 px-5 py-4 backdrop-blur sm:-mx-6 sm:-mb-6 sm:px-6"><Button onClick={save} disabled={saving}><Save className="h-4 w-4" />{saving ? t('Saving...') : hasPending ? t('Retry save') : t('Save package')}</Button></div>
         </div>
       </div>

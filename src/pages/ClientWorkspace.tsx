@@ -1,3 +1,4 @@
+import SystemMessage from '../components/SystemMessage';
 import { DeliveryProgress } from '../components/DeliveryProgress';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
@@ -493,7 +494,7 @@ const OperationsClientWorkspace = () => {
           role="status"
           aria-live="polite"
         >
-          {message}
+          <SystemMessage message={message} />
         </p>
       )}
 
@@ -982,7 +983,7 @@ const OperationsClientWorkspace = () => {
         footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setAddonSheetOpen(false)} disabled={addonSaving}>{t("Cancel")}</Button><Button type="submit" form="add-addon-form" disabled={addonSaving}><Plus className="h-4 w-4" />{addonSaving ? t("Saving…") : pendingAddon.current ? t("Retry save") : t("Add add-on")}</Button></div>}
       >
         <form id="add-addon-form" onSubmit={addAddon} className="space-y-5">
-          {message && <p role="alert">{message}</p>}
+          {message && <p role="alert"><SystemMessage message={message} /></p>}
           <fieldset disabled={addonSaving || Boolean(pendingAddon.current)} className="min-w-0 border-0 p-0 space-y-5">
           <label className="block text-sm font-medium text-ink">{t("Add-on name")}<input data-i18n-skip required className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.name} onChange={(e) => setAddon({ ...addon, name: e.target.value })} /></label>
           <label className="block text-sm font-medium text-ink">{t("Platforms")}<input data-i18n-skip placeholder={t("Instagram, TikTok")} className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.platforms} onChange={(e) => setAddon({ ...addon, platforms: e.target.value })} /></label>
@@ -1022,7 +1023,7 @@ const OperationsClientWorkspace = () => {
               aria-live={activityFeedback.tone === "error" ? "assertive" : "polite"}
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="min-w-0 flex-1">{activityFeedback.text}</p>
+                <p className="min-w-0 flex-1"><SystemMessage message={activityFeedback.text} /></p>
                 {activityFeedback.action === "upload" && (
                   <Button
                     type="button"

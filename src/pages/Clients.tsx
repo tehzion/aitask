@@ -1,3 +1,4 @@
+import SystemMessage from '../components/SystemMessage';
 import React from 'react';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { createPortal } from 'react-dom';
@@ -1075,7 +1076,7 @@ const Clients: React.FC = () => {
               )}
               {(profileError || renameError) && (
                 <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700" role="alert" aria-live="polite">
-                  {profileError || renameError}
+                  <SystemMessage message={profileError || renameError} />
                 </div>
               )}
               {isRenamingClient && (

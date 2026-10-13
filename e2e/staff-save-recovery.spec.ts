@@ -104,14 +104,14 @@ test('retrying an unchanged comment clears the submitted draft and prevents a du
   expect(await savedComments(page)).toEqual(['Do not duplicate']);
 });
 
-for (const status of ['In Progress', 'Completed']) {
+for (const status of ['In Progress', 'Waiting Approval']) {
   test(`Staff rejected ${status} save does not emit success or completion toasts`, async ({ page }) => {
     await seedStaff(page);
     await page.evaluate(async () => {
       const { useStore } = await import('/src/store/index.ts');
       const { useToastStore } = await import('/src/store/useToastStore.ts');
       useToastStore.setState({ toasts: [] });
-      useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Status was not confirmed.' }), retryPendingSave: async () => ({ ok: true }) });
+      useStore.setState({ users: [...useStore.getState().users, { id: 'status-recovery-hod', name: 'Review HOD', role: 'HOD', department: 'Designer', departments: ['Designer'] }], commitPendingMutation: async () => ({ ok: false, error: 'Status was not confirmed.' }), retryPendingSave: async () => ({ ok: true }) });
     });
     const sheet = page.getByRole('dialog', { name: titleA });
     await sheet.getByRole('combobox', { name: 'All task statuses' }).selectOption(status);
@@ -308,7 +308,7 @@ test('Use latest still resolves a workspace operation started outside the Staff 
     }));
   });
   const sheet = page.getByRole('dialog', { name: titleA });
-  await sheet.getByRole('button', { name: 'Use latest', exact: true }).click();
+  await sheet.getByRole('button', { name: 'Restore saved data', exact: true }).click();
   expect(await page.evaluate(() => (window as unknown as { externalDiscardCalls: number }).externalDiscardCalls)).toBe(1);
   await expect(sheet.getByRole('alert')).toHaveCount(0);
 });

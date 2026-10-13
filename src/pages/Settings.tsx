@@ -1,3 +1,4 @@
+import SystemMessage from '../components/SystemMessage';
 import { useSaveAction } from '../hooks/useSaveAction';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
 import UploadRecoveryPanel from '../components/UploadRecoveryPanel';
@@ -633,7 +634,7 @@ const Settings: React.FC = () => {
                     'text-xs font-medium leading-5',
                     avatarUploadMessage.tone === 'success' ? 'text-[rgb(var(--calm-success))]' : 'text-[rgb(var(--calm-danger))]'
                   )} id="profile-avatar-feedback" role={avatarUploadMessage.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
-                    {avatarUploadMessage.text}
+                    <SystemMessage message={avatarUploadMessage.text} />
                   </p>
                 )}
               </div>
@@ -745,7 +746,7 @@ const Settings: React.FC = () => {
               <div className="min-h-5 text-sm">
                 {profileMessage && (
                   <p className={profileMessage.tone === 'success' ? 'text-[rgb(var(--calm-success))]' : 'text-[rgb(var(--calm-danger))]'} role={profileMessage.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
-                    {profileMessage.text}
+                    <SystemMessage message={profileMessage.text} />
                   </p>
                 )}
                 {!profileMessage && profileChanged && <p className="text-muted">{t('Unsaved profile changes')}</p>}
@@ -765,7 +766,7 @@ const Settings: React.FC = () => {
                 )}
                 {profileMessage?.tone === 'error' && (
                   <Button type="button" variant="secondary" onClick={() => void discardPendingProfileChange()} disabled={isProfileSaving}>
-                    {t('Use latest')}
+                    {t('Restore saved data')}
                   </Button>
                 )}
               </div>
@@ -835,7 +836,7 @@ const Settings: React.FC = () => {
               <div className="min-h-5 text-sm">
                 {passwordMessage && (
                   <p className={passwordMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-600'} role={passwordMessage.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
-                    {passwordMessage.text}
+                    <SystemMessage message={passwordMessage.text} />
                   </p>
                 )}
               </div>
@@ -866,7 +867,7 @@ const Settings: React.FC = () => {
               {t('Reset sample workspace')}
             </Button>
           </div>
-          {localDemoMessage && <p className={cn('border-t border-line px-5 py-3 text-sm font-medium', localDemoMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-700')} role={localDemoMessage.tone === 'error' ? 'alert' : 'status'}>{localDemoMessage.text}</p>}
+          {localDemoMessage && <p className={cn('border-t border-line px-5 py-3 text-sm font-medium', localDemoMessage.tone === 'success' ? 'text-emerald-700' : 'text-red-700')} role={localDemoMessage.tone === 'error' ? 'alert' : 'status'}><SystemMessage message={localDemoMessage.text} /></p>}
         </section>
       )}
 
@@ -1055,7 +1056,7 @@ const Settings: React.FC = () => {
                   </Button>
                 </form>
                 {statusError && (
-                  <p className="mt-2 text-xs text-red-600" role="alert" aria-live="polite">{statusError}</p>
+                  <p className="mt-2 text-xs text-red-600" role="alert" aria-live="polite"><SystemMessage message={statusError} /></p>
                 )}
               </div>
             </div>
@@ -1115,7 +1116,7 @@ const Settings: React.FC = () => {
               <p className="mt-1 font-semibold text-slate-900">
                 {backend.status === 'loading' ? t('settings.checkingWorkspace') : backend.status === 'saving' ? t('settings.savingChanges') : t(backend.message)}
               </p>
-              {backend.error && <p className="mt-2 text-red-600" role="alert" aria-live="polite">{backend.error}</p>}
+              {backend.error && <p className="mt-2 text-red-600" role="alert" aria-live="polite"><SystemMessage message={backend.error} /></p>}
             </div>
             <div>
               <p className="text-xs font-semibold text-slate-400">{t('Supabase Table')}</p>
@@ -1161,7 +1162,7 @@ const Settings: React.FC = () => {
               {backend.error ? (
                 <div className="flex items-start gap-2 text-sm text-amber-700 lg:max-w-md">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{backend.error}</span>
+                  <span><SystemMessage message={backend.error} /></span>
                 </div>
               ) : null}
             </div>

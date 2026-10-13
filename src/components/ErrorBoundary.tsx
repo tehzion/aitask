@@ -53,14 +53,8 @@ class ErrorBoundaryImpl extends React.Component<LocalizedErrorBoundaryProps, Err
         >
           <h1 className="text-xl font-semibold text-ink">{this.props.t('errors.unexpected')}</h1>
           <p className="mt-2 text-sm leading-6 text-muted">
-            {this.props.label && <><span data-i18n-skip>{this.props.label}</span> {this.props.t('hit an unexpected error.')} </>}
-            {this.props.t('Reload the app to continue. Your saved workspace data is safe.')}
+            {this.props.t('This page could not be displayed. Reload to try again. Changes that were not saved may need to be re-entered.')}
           </p>
-          {this.state.errorMessage && (
-            <p className="mt-3 truncate rounded-panel bg-inset px-3 py-2 font-mono text-xs text-muted">
-              <span data-i18n-skip>{this.state.errorMessage}</span>
-            </p>
-          )}
           <button
             type="button"
             onClick={() => window.location.reload()}

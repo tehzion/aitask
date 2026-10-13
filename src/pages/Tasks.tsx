@@ -1,3 +1,4 @@
+import SystemMessage from '../components/SystemMessage';
 import { getTaskProgress } from '../lib/taskProgress';
 import { getTaskStatusOptions } from '../lib/taskWorkflowAccess';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -495,7 +496,7 @@ const TasksWorkspace: React.FC = () => {
 
       {quickSyncError && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800" role="alert">
-          {quickSyncError}
+          <SystemMessage message={quickSyncError} />
         </div>
       )}
 

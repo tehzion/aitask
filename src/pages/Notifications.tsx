@@ -1,3 +1,4 @@
+import SystemMessage from '../components/SystemMessage';
 import '../lib/staffWorkflowCopy';
 import React from 'react';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
@@ -289,7 +290,7 @@ const Notifications: React.FC = () => {
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">{t('Notifications could not be refreshed')}</p>
-              <p className="mt-0.5 text-sm">{error}</p>
+              <p className="mt-0.5 text-sm"><SystemMessage message={error} /></p>
             </div>
             <button type="button" onClick={() => setRefreshToken(value => value + 1)} className="rounded-md p-1.5 hover:bg-red-100" aria-label={t('Retry loading notifications')}>
               <RefreshCw className="h-4 w-4" />

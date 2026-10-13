@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import DraftRecoveryNotice from './DraftRecoveryNotice';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -166,7 +167,7 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
           </div>
           {(error || pendingResolution) && (
             <div className="mt-5 rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
-              <p>{error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')}</p>
+              <p><SystemMessage message={error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
               {pendingResolution && <BackendFreshness compact className="mt-3" />}
             </div>
           )}

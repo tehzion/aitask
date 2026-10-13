@@ -1,3 +1,4 @@
+import SystemMessage from './SystemMessage';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
@@ -226,11 +227,11 @@ const Layout: React.FC = () => {
   const pendingResolution = isPendingMutationResolution(backend);
   const syncNeedsAttention = hostedLocalBuild || missingSupabaseConfig || upgradeRequired || Boolean(backend.error) || backend.hasRemoteUpdate || pendingResolution;
   const syncBannerTitle = hostedLocalBuild
-    ? t('Sync is local on this deployed build')
+    ? t('Shared workspace is unavailable')
     : missingSupabaseConfig
-      ? t('Supabase sync is not configured')
+      ? t('Shared workspace is unavailable')
       : upgradeRequired
-        ? t('System update in progress')
+        ? t('Workspace update required')
         : backend.status === 'conflict'
         ? t('Sync conflict needs review')
         : backend.status === 'retry_required'
@@ -238,17 +239,14 @@ const Layout: React.FC = () => {
           : backend.status === 'offline'
             ? t('AiTask is offline')
       : backend.hasRemoteUpdate
-        ? t('Workspace update available')
-        : t('Supabase sync issue');
+        ? t('New saved data available')
+        : t('Workspace connection needs attention');
   const syncBannerMessage = hostedLocalBuild
-    ? 'This browser is using local storage only. Set the Supabase environment variables in Vercel and redeploy before clients use the app.'
+    ? 'This build saves changes only in this browser. Ask your workspace administrator to enable shared workspace data.'
     : missingSupabaseConfig
-      ? `Missing ${backendStatus.missing.join(', ')}. Changes will not sync between users until Vercel is rebuilt with Supabase env.`
+      ? 'Workspace sharing is not configured. Changes cannot sync between users. Ask your workspace administrator to finish setup.'
       : backend.error || backend.message;
-  const conflictEntityLabel = backend.conflict
-    ? ` (${backend.conflict.entityType} ${backend.conflict.entityId})`
-    : '';
-  const syncBannerDetail = conflictEntityLabel ? `${syncBannerMessage || ''}${conflictEntityLabel}`.trim() : syncBannerMessage;
+  const syncBannerDetail = syncBannerMessage;
 
   return (
     <div className="app-frame relative flex h-[100dvh] overflow-hidden bg-canvas font-sans text-ink">
@@ -277,7 +275,7 @@ const Layout: React.FC = () => {
                 <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">{syncBannerTitle}</p>
-                  <p className="mt-0.5 text-sm leading-5 text-amber-800">{syncBannerDetail}</p>
+                  <p className="mt-0.5 text-sm leading-5 text-amber-800"><SystemMessage message={syncBannerDetail} /></p>
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
@@ -310,7 +308,7 @@ const Layout: React.FC = () => {
                       className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <X className="h-4 w-4" />
-                      {t('Use latest')}
+                      {t('Restore saved data')}
                     </button>
                   </>
                 )}

@@ -182,7 +182,7 @@ test('a failed save does not mistake its own optimistic draft for a remote confl
   await page.getByLabel('Plan name', { exact: true }).fill('Pending own draft');
   await page.getByRole('button', { name: 'Save revision' }).click();
   await expect(page.getByText('The revision is waiting to be saved.', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Reload latest' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Reload saved data' })).toHaveCount(0);
   await expect(page.getByLabel('Plan name', { exact: true })).toHaveValue('Pending own draft');
 });
 
