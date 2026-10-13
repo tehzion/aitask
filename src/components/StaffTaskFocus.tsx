@@ -89,7 +89,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   const finishSave = React.useCallback((submitted: NonNullable<typeof pendingSave>) => {
     if (currentTaskId.current !== submitted.taskId) return;
     if (submitted.text !== undefined) setComment(current => current === submitted.text ? '' : current);
-    if (submitted.status) announceTaskStatusSaved(submitted.status);
+    if (submitted.status) announceTaskStatusSaved(submitted.status, submitted.taskId);
     setPendingSave(null);
     setError('');
     observedResolution.current = false;

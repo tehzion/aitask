@@ -118,8 +118,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
       )}
       {!compact && backend.conflict && (
         <span className="basis-full text-xs text-amber-700">
-          {t('shell.changedRemotely', { entityType: backend.conflict.entityType, entityId: backend.conflict.entityId })}
-          {backend.conflict.changedFields?.length ? `: ${backend.conflict.changedFields.join(', ')}` : '.'}
+          {t('shell.changedRemotely')}
         </span>
       )}
     </div>

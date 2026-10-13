@@ -14,7 +14,7 @@ import type { User } from '../types';
 import { getMemberDepartments } from '../lib/departments';
 import { Badge, Button, MetricCard, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
-import { canManageServiceCatalog, canManageTaskTemplates, getDefaultAccessiblePath, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, getVisibleProjects, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
+import { canManageServiceCatalog, canManageTaskTemplates, getDefaultAccessiblePath, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, getVisibleClientNames, getVisibleTasks, isNotificationReadByUser, isNotificationVisible, permissionLabels, isBossKoo } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { cn } from '../lib/utils';
 import { formatLocalizedDateTime } from '../lib/i18n';
@@ -228,7 +228,7 @@ const Settings: React.FC = () => {
 
   const backendStatus = getBackendStatus();
   const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { clients: clientProfiles, projects });
-  const visibleProjects = getVisibleProjects(currentUser, projects, tasks, rolePermissions, { clients: clientProfiles, projects });
+  const visibleCompanies = getVisibleClientNames(currentUser, tasks, projects, rolePermissions, { clients: clientProfiles, projects });
   const effectivePermissions = getEffectivePermissions(currentUser, rolePermissions);
   const effectiveRoleName = getEffectiveRoleName(currentUser, rolePermissions);
   const enabledPermissions = Object.entries(effectivePermissions)
@@ -890,7 +890,7 @@ const Settings: React.FC = () => {
                 </div>
                 <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                   <p className="text-xs font-semibold text-slate-400">{t('Companies')}</p>
-                  <p className="mt-1 text-xl font-bold text-slate-900">{visibleProjects.length}</p>
+                  <p className="mt-1 text-xl font-bold text-slate-900">{visibleCompanies.length}</p>
                 </div>
               </div>
               <p className="leading-6">
@@ -1189,7 +1189,7 @@ const Settings: React.FC = () => {
       {!isClientUser && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 xl:col-span-3">
           <MetricCard title={t('Visible Tasks')} value={visibleTasks.length} icon={Database} tone="indigo" />
-          <MetricCard title={t('Visible Companies')} value={visibleProjects.length} icon={Database} tone="emerald" />
+          <MetricCard title={t('Visible Companies')} value={visibleCompanies.length} icon={Database} tone="emerald" />
           <MetricCard title={t('Unread Notices')} value={unreadCount} icon={Bell} tone="amber" />
           {isSuperAdmin && (
             <MetricCard

@@ -77,6 +77,9 @@ const TasksWorkspace: React.FC = () => {
   const [activeQuickEdit, setActiveQuickEdit] = useState<{ taskId: string; x: number; y: number } | null>(null);
   const [quickSyncError, setQuickSyncError] = useState('');
   const pendingResolution = isPendingMutationResolution(backend);
+  useEffect(() => {
+    if (backend.status === 'live' && !backend.hasLocalChanges && !backend.error) setQuickSyncError('');
+  }, [backend.status, backend.hasLocalChanges, backend.error]);
 
   const persistQuickChange = async (previousTask: Task) => {
     const session = captureWorkspaceSession();
@@ -89,7 +92,7 @@ const TasksWorkspace: React.FC = () => {
     if (result.ok) {
       const saved = useStore.getState().tasks.find(task => task.id === previousTask.id);
       if (saved && submittedTask && submittedTask.status !== previousTask.status
-        && saved.status === submittedTask.status) announceTaskStatusSaved(saved.status);
+        && saved.status === submittedTask.status) announceTaskStatusSaved(saved.status, saved.id);
       setQuickSyncError('');
       return true;
     }

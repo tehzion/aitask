@@ -1293,7 +1293,7 @@ const executeCommand = async (
       error: offline
         ? 'You are offline. Reconnect before retrying this change.'
         : error instanceof SyncRequestTimeoutError
-          ? 'Save confirmation timed out. Your change is retained; retrying with the same command will not duplicate it.'
+          ? 'Save confirmation timed out. Your changes are kept. Retry saving.'
           : 'Supabase could not be reached. Your change is retained for retry.',
     };
   }
@@ -1333,7 +1333,7 @@ const executeCommand = async (
     return {
       ok: false,
       code: response.code || 'RETRY_REQUIRED',
-      error: response.error || 'The command was not applied.',
+      error: response.error === 'The command contains invalid data.' ? 'Use latest, then review your changes.' : response.error || 'Your changes could not be saved. Please retry.',
       conflict,
     };
   }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useToastStore, Toast as ToastType } from '../store/useToastStore';
 import { CheckCircle2, AlertTriangle, XCircle, Info, X } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -33,10 +34,10 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
       )}
     >
       {iconMap[toast.type]}
-      <p className="min-w-0 flex-1 break-words pr-2 text-sm font-semibold leading-5">{typeof toast.message === 'string' ? t(toast.message) : t(toast.message)}</p>
+      <p className="min-w-0 flex-1 break-words pr-2 text-sm font-semibold leading-5">{t(toast.message)}</p>
       <button
         onClick={() => removeToast(toast.id)}
-        className="text-slate-400 hover:text-slate-600 p-0.5 rounded-lg hover:bg-slate-100 transition-colors"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
         aria-label={t('common.closeNotification')}
       >
         <X className="w-4 h-4" />
@@ -48,11 +49,11 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
 export const ToastContainer: React.FC = () => {
   const toasts = useToastStore((state) => state.toasts);
 
-  return (
-    <div className="pointer-events-none fixed left-4 right-4 top-[calc(5rem+env(safe-area-inset-top))] z-[70] flex select-none flex-col items-end gap-2.5 md:bottom-5 md:left-auto md:right-5 md:top-auto">
+  return createPortal(
+    <div className="pointer-events-none fixed left-4 right-4 top-[calc(5rem+env(safe-area-inset-top))] z-[150] flex select-none flex-col items-end gap-2.5 md:bottom-5 md:left-auto md:right-5 md:top-auto">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} />
       ))}
-    </div>
+    </div>, document.getElementById('i18n-portals') || document.body,
   );
 };

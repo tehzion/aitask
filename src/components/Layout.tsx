@@ -245,10 +245,7 @@ const Layout: React.FC = () => {
     : missingSupabaseConfig
       ? `Missing ${backendStatus.missing.join(', ')}. Changes will not sync between users until Vercel is rebuilt with Supabase env.`
       : backend.error || backend.message;
-  const conflictEntityLabel = backend.conflict
-    ? ` (${backend.conflict.entityType} ${backend.conflict.entityId})`
-    : '';
-  const syncBannerDetail = conflictEntityLabel ? `${syncBannerMessage || ''}${conflictEntityLabel}`.trim() : syncBannerMessage;
+  const syncBannerDetail = backend.conflict ? t('shell.changedRemotely') : syncBannerMessage;
 
   return (
     <div className="app-frame relative flex h-[100dvh] overflow-hidden bg-canvas font-sans text-ink">

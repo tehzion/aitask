@@ -6,7 +6,7 @@ import { msg } from '../lib/messages';
 import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
 import { getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
 import { getTeamWorkloadSummaries } from '../lib/taskReporting';
-import { canApproveInternalReview, getWorkflowStepKind, INTERNAL_REVIEW_PERMISSION_MESSAGE, isWorkflowTaskSatisfied, workflowTransitionError } from '../lib/workflowReview';
+import { canApproveInternalReview, getWorkflowStepKind, INTERNAL_REVIEW_PERMISSION_MESSAGE, isWorkflowTask, isWorkflowTaskSatisfied, workflowTransitionError } from '../lib/workflowReview';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React, { useEffect, useState } from 'react';
 import { isPendingMutationResolution, useStore } from '../store';
@@ -579,7 +579,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                                   setMutationError(String(t(localResult.error || 'Unable to update the task status.')));
                                   return;
                                 }
-                                if (await confirmPendingMutation()) announceTaskStatusSaved(nextStatus);
+                                if (await confirmPendingMutation()) announceTaskStatusSaved(nextStatus, task.id);
                               },
                             });
                             return;
@@ -589,7 +589,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                             setMutationError(String(t(localResult.error || 'Unable to update the task status.')));
                             return;
                           }
-                          if (await confirmPendingMutation()) announceTaskStatusSaved(nextStatus);
+                          if (await confirmPendingMutation()) announceTaskStatusSaved(nextStatus, task.id);
                         }}
                       >
                         {taskStatuses.map(status => (
@@ -619,7 +619,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   if (isSubmitting) return;
                   const result = updateTaskStatus(task.id, 'Completed');
                   if (!result.ok) { setMutationError(t(result.error || 'Unable to update the task status.')); return; }
-                  if (await confirmPendingMutation()) announceTaskStatusSaved('Completed');
+                  if (await confirmPendingMutation()) announceTaskStatusSaved('Completed', task.id);
                 }} className="mt-3 min-h-11 rounded-control bg-accent px-4 py-2 font-semibold text-white disabled:opacity-50">{t('Approve internal review')}</button>}
                 {!task.internalReview && <p className="mt-2 text-muted">{t(transitionError('Completed') || INTERNAL_REVIEW_PERMISSION_MESSAGE)}</p>}
               </section>}
@@ -655,7 +655,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                       <input
                         type="text"
                         value={editForm.clientName}
-                        disabled={!canAssignOthers}
+                        disabled={!canAssignOthers || isWorkflowTask(task)}
                         onChange={(e) => setEditForm({ ...editForm, clientName: e.target.value })}
                         className={cn(inputBase, 'px-2.5 py-2.5')}
                       />
@@ -675,7 +675,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                       <span className="relative block">
                         <select
                           value={editForm.department}
-                          disabled={!canAssignOthers}
+                          disabled={!canAssignOthers || isWorkflowTask(task)}
                           onChange={(e) => {
                             const nextDepartment = e.target.value as Department;
                             const firstUser = users.find(user => user.role !== 'Client' && isMemberInDepartment(user, nextDepartment));
@@ -692,6 +692,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
                       </span>
                     </label>
+                    {isWorkflowTask(task) && <p className="text-sm text-muted sm:col-span-2">{t('Company and department are set by the service workflow.')}</p>}
                     <label className="block">
                       <span className={fieldLabel}>{t('Assignee')}</span>
                       <span className="relative block">

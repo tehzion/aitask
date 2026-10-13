@@ -4,6 +4,8 @@ import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSession
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { useToastStore } from './useToastStore';
+import type { ToastMessage } from './useToastStore';
+import { acknowledgeMutationFeedback, clearMutationFeedback, confirmMutationFeedback, stageMutationFeedback } from '../lib/mutationFeedback';
 import { hasInvalidDeliveryLink } from '../lib/deliveryLinks';
 import {
   User,
@@ -393,6 +395,7 @@ interface StoreState {
 
 const nowId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const pendingMutationMessage = 'Changes are temporarily unavailable while AiTask resolves a pending save or completes a system update.';
+const announceMutationFeedback = (message: ToastMessage) => stageMutationFeedback(message, useStore.getState().backend.mode === 'supabase');
 export const isPendingMutationResolution = (backend: {
   status: SyncStatus;
   upgradeRequired?: boolean;
@@ -1474,6 +1477,7 @@ export const useStore = create<StoreState>()(
             );
             if (!isWorkspaceSessionCurrent(sessionToken)) return;
             if (result.ok === false) {
+              if (isTerminalMemberMutationError(result.code)) clearMutationFeedback();
               const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
               apply((state) => ({
                 backend: {
@@ -1500,6 +1504,7 @@ export const useStore = create<StoreState>()(
             }
             const syncedAt = new Date().toISOString();
             const hasChangesAfterSave = !workspaceStatesEqual(savedWorkspace, selectPersistedWorkspaceState(get()));
+            if (!hasChangesAfterSave) confirmMutationFeedback();
             apply((state) => ({
               backend: {
                 ...state.backend,
@@ -1559,7 +1564,7 @@ export const useStore = create<StoreState>()(
               }));
               isApplyingRemoteSnapshot = false;
 
-              useToastStore.getState().addToast(msg('errors.syncMerged'), 'success');
+              announceMutationFeedback(msg('errors.syncMerged'));
 
               setTimeout(() => {
                 get().syncBackendNow();
@@ -1581,6 +1586,7 @@ export const useStore = create<StoreState>()(
           }
 
           const syncedAt = new Date().toISOString();
+          confirmMutationFeedback();
           apply((state) => ({
             backend: {
               ...state.backend,
@@ -1786,7 +1792,7 @@ export const useStore = create<StoreState>()(
             }));
             isApplyingRemoteSnapshot = false;
 
-            useToastStore.getState().addToast(msg('errors.syncMerged'), 'success');
+            announceMutationFeedback(msg('errors.syncMerged'));
 
             setTimeout(() => {
               get().syncBackendNow();
@@ -1892,11 +1898,9 @@ export const useStore = create<StoreState>()(
             message: 'Reapplying your change on the latest workspace.',
           },
         }));
+        announceMutationFeedback(msg('task.reapplied'));
         const result = await get().retryMutation({ reapplyWorkspaceConflict: false });
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
-        if (result.ok) {
-          useToastStore.getState().addToast(msg('task.reapplied'), 'success');
-        }
         return result;
       },
 
@@ -2059,6 +2063,7 @@ export const useStore = create<StoreState>()(
         });
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         if (result.ok === false) {
+          if (isTerminalMemberMutationError(result.code)) clearMutationFeedback();
           const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
           apply((state) => ({
             backend: {
@@ -2086,6 +2091,7 @@ export const useStore = create<StoreState>()(
 
         const savedAt = new Date().toISOString();
         const hasNewerChanges = !workspaceStatesEqual(workspaceBeforeRetry, selectPersistedWorkspaceState(get()));
+        if (!hasNewerChanges) confirmMutationFeedback();
         apply((state) => ({
           backend: {
             ...state.backend,
@@ -2114,6 +2120,7 @@ export const useStore = create<StoreState>()(
 
       discardMutation: async (options = {}) => {
         const sessionToken = captureWorkspaceSession();
+        clearMutationFeedback();
         const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
 
         const discardedCommandId = getRetainedSecureCommand()?.id;
@@ -2794,7 +2801,7 @@ export const useStore = create<StoreState>()(
           return { ...t, priority, updatedAt: new Date().toISOString() };
         });
 
-        useToastStore.getState().addToast(msg('task.priorityUpdated', { priority }), 'success');
+        announceMutationFeedback(msg('task.priorityUpdated', { priority }));
 
         result = { ok: true };
         return { tasks: newTasks };
@@ -2853,7 +2860,7 @@ export const useStore = create<StoreState>()(
           });
         }
 
-        useToastStore.getState().addToast(assigneeUser ? msg('task.assignedTo', { name: assigneeUser.name }) : msg('task.unassigned'), 'success');
+        announceMutationFeedback(assigneeUser ? msg('task.assignedTo', { name: assigneeUser.name }) : msg('task.unassigned'));
 
         result = { ok: true };
         return {
@@ -2886,7 +2893,7 @@ export const useStore = create<StoreState>()(
           return state;
         }
 
-        useToastStore.getState().addToast(msg('task.attachmentUpdated'), 'success');
+        announceMutationFeedback(msg('task.attachmentUpdated'));
 
         result = { ok: true };
         const tasks = state.tasks.map(task =>
@@ -2931,7 +2938,7 @@ export const useStore = create<StoreState>()(
           return state;
         }
 
-        useToastStore.getState().addToast(nextDueDate ? `Due date updated to ${nextDueDate}` : 'Due date cleared', 'success');
+        announceMutationFeedback(nextDueDate ? `Due date updated to ${nextDueDate}` : 'Due date cleared');
 
         result = { ok: true };
         return {
@@ -3132,7 +3139,7 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        useToastStore.getState().addToast(msg('task.updated', { title: updatedTask.title }), 'success');
+        announceMutationFeedback(msg('task.updated', { title: updatedTask.title }));
         return { ok: true };
       },
 
@@ -3294,7 +3301,7 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        useToastStore.getState().addToast(msg('task.revisionRequested'), 'warning');
+        announceMutationFeedback(msg('task.revisionRequested'));
 
         const revisionNotification = makeNotification({
           targetUserId: task.assignedTo,
@@ -3437,7 +3444,7 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        useToastStore.getState().addToast(msg('task.created', { title: taskData.title }), 'success');
+        announceMutationFeedback(msg('task.created', { title: taskData.title }));
         return taskId;
       },
 
@@ -3486,7 +3493,7 @@ export const useStore = create<StoreState>()(
           updatedAt: new Date().toISOString(),
         };
         set((state) => ({ projects: [...state.projects, newProject] }));
-        useToastStore.getState().addToast(msg('project.created', { name: projectName }), 'success');
+        announceMutationFeedback(msg('project.created', { name: projectName }));
         return newProject.id;
       },
 
@@ -3570,7 +3577,7 @@ export const useStore = create<StoreState>()(
             )
             : current.tasks,
         }));
-        useToastStore.getState().addToast(msg('project.updated', { name: projectName }), 'success');
+        announceMutationFeedback(msg('project.updated', { name: projectName }));
         return { ok: true };
       },
 
@@ -3600,7 +3607,7 @@ export const useStore = create<StoreState>()(
             : task
           ),
         }));
-        useToastStore.getState().addToast(msg('project.deleted', { name: project.projectName }), 'success');
+        announceMutationFeedback(msg('project.deleted', { name: project.projectName }));
         return { ok: true };
       },
 
@@ -3648,7 +3655,7 @@ export const useStore = create<StoreState>()(
           updatedAt: now,
         };
         set(current => ({ clients: [...current.clients, client] }));
-        useToastStore.getState().addToast(msg('client.companyAdded', { name }), 'success');
+        announceMutationFeedback(msg('client.companyAdded', { name }));
         return { ok: true, id: client.id };
       },
 
@@ -4049,7 +4056,7 @@ export const useStore = create<StoreState>()(
           clientPlans: [...current.clientPlans, plan],
           servicePricingSnapshots: [...current.servicePricingSnapshots, pricing],
         }));
-        useToastStore.getState().addToast(msg('plan.draftCreated', { name: clientName }), 'success');
+        announceMutationFeedback(msg('plan.draftCreated', { name: clientName }));
         return { ok: true, clientId, planId };
       },
 
@@ -4108,7 +4115,7 @@ export const useStore = create<StoreState>()(
           clientPlans: [...current.clientPlans, plan],
           servicePricingSnapshots: [...current.servicePricingSnapshots, pricing],
         }));
-        useToastStore.getState().addToast(msg('plan.createdForClient', { name: client.clientName }), 'success');
+        announceMutationFeedback(msg('plan.createdForClient', { name: client.clientName }));
         return { ok: true, planId };
       },
 
@@ -4267,7 +4274,7 @@ export const useStore = create<StoreState>()(
           deliverables: records ? [...current.deliverables, ...records.deliverables] : current.deliverables,
           servicePricingSnapshots: cyclePricing ? [...current.servicePricingSnapshots, cyclePricing] : current.servicePricingSnapshots,
         }));
-        useToastStore.getState().addToast(msg('plan.activated', { name: plan.name }), 'success');
+        announceMutationFeedback(msg('plan.activated', { name: plan.name }));
         return { ok: true, cycleId: existing?.id || records?.cycle.id };
       },
 
@@ -6010,6 +6017,8 @@ useStore.subscribe((state, previous) => {
   if (previous.currentUser && (state.currentUser?.id !== previous.currentUser.id || state.currentUser?.authUserId !== previous.currentUser.authUserId)) {
     clearRecoveredDrafts(previous.currentUser.authUserId || previous.currentUser.id);
     invalidateWorkspaceSession();
+  } else if (state.backend.mode === 'supabase' && state.backend.status === 'live' && !state.backend.hasLocalChanges) {
+    acknowledgeMutationFeedback();
   }
 });
 
