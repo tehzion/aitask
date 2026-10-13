@@ -1,3 +1,4 @@
+import '../lib/staffWorkflowCopy';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import type { WorkspaceSessionToken } from '../lib/workspaceSession';
 import { useSaveAction } from '../hooks/useSaveAction';
@@ -7,6 +8,9 @@ import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
 import { getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
 import { getTeamWorkloadSummaries } from '../lib/taskReporting';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useRecoverableForm } from '../hooks/useRecoverableForm';
+import { mergeDraft } from '../lib/draftMerge';
+import DraftRecoveryNotice from './DraftRecoveryNotice';
 import React, { useEffect, useState } from 'react';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
@@ -155,6 +159,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   });
 
   const editBaseline = React.useRef(editForm);
+  const attachmentBaseline = React.useRef({ link: '', name: '' });
   const editFormRef = React.useRef(editForm);
   editFormRef.current = editForm;
   const pendingDetails = React.useRef<{ taskId: string; values: typeof editForm; persisted: Task } | null>(null);
@@ -167,16 +172,29 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     || (isEditingDetails && JSON.stringify(editForm) !== JSON.stringify(editBaseline.current))
     || (delegationAssignee && delegationAssignee !== requestedTask.assignedTo)));
   const markPristine = useUnsavedChanges(formDirty);
+  const [draftContext, setDraftContext] = useState('');
+  const draftReady = draftContext === `${currentUser?.id}:${requestedTaskId}`;
+  const recovery = useRecoverableForm(`staff-full-edit:${requestedTaskId || ''}`, {
+    comment: commentText, pendingComment: pendingComment.current, details: isEditingDetails ? editForm : undefined,
+    baseline: editBaseline.current, attachmentLink, attachmentName, attachmentBaseline: attachmentBaseline.current,
+  }, draftReady && formDirty && !isDeletingTask, draftReady && isOpen && Boolean(requestedTask && currentUser?.role !== 'Client'));
+  const hadDraft = React.useRef(false);
+  useEffect(() => {
+    if (!draftReady) { hadDraft.current = false; return; }
+    if (formDirty) hadDraft.current = true;
+    else if (hadDraft.current) { recovery.clear(); hadDraft.current = false; }
+  }, [draftReady, formDirty, recovery]);
   const requestClose = () => {
     if (isSubmitting || (formDirty && !window.confirm(t('Discard unsaved changes?')))) return;
     if (isDeletingTask) { void resolvePendingMutation('latest', true); return; }
-    markPristine(); onClose();
+    recovery.clear(); markPristine(); onClose();
   };
 
   useEffect(() => {
     const draftTask = requestedTaskRef.current;
     setAttachmentLink(draftTask?.attachmentLink || '');
     setAttachmentName(draftTask?.attachmentName || '');
+    attachmentBaseline.current = { link: draftTask?.attachmentLink || '', name: draftTask?.attachmentName || '' };
     setApprovalNote('');
     setRevisionNote('');
     setEditError('');
@@ -190,6 +208,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     mutationGeneration.current++;
     setIsSubmitting(false);
     setDelegationAssignee('');
+    setDraftContext(`${currentUser?.id}:${requestedTaskId}`);
     if (draftTask) {
       const initialEdit = {
         title: draftTask.title,
@@ -393,7 +412,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
       setEditError(String(t(localResult.error || 'Unable to update the task attachment.')));
       return;
     }
-    await confirmPendingMutation();
+    const submittedAttachment = { link: safeHttpsUrl(attachmentLink) || '', name: attachmentName.trim() };
+    if (await confirmPendingMutation()) attachmentBaseline.current = submittedAttachment;
   };
 
   const handleClientReview = async (status: 'Approved' | 'Rejected') => {
@@ -476,6 +496,28 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
       panelClassName="max-w-4xl max-sm:max-h-none max-sm:rounded-none"
     >
         <p id={descriptionId} className="sr-only">{t('Task details, status, dates, links and comments for')} <span data-i18n-skip>{task.title}</span>.</p>
+        {recovery.available && !formDirty && <DraftRecoveryNotice onDiscard={recovery.clear} onRestore={() => {
+          const recovered = recovery.draft;
+          if (!recovered) return;
+          const latest = { title: task.title, description: task.description || '', clientName: task.clientName, serviceType: task.serviceType, department: task.department, assignedTo: task.assignedTo, priority: task.priority, startDate: task.startDate, dueDate: task.dueDate, notes: task.notes || '' };
+          let restoredDetails: typeof editForm | undefined;
+          let restoredAttachment: { link: string; name: string } | undefined;
+          let hasConflicts = false;
+          if (recovered.details && recovered.baseline && Object.keys(latest).every(key => typeof recovered.details?.[key as keyof typeof latest] === 'string' && typeof recovered.baseline[key as keyof typeof latest] === 'string')) {
+            const merged = mergeDraft(recovered.baseline, recovered.details, latest);
+            restoredDetails = merged.value; hasConflicts ||= merged.conflicts.length > 0;
+          }
+          if (recovered.attachmentBaseline && typeof recovered.attachmentLink === 'string' && typeof recovered.attachmentName === 'string') {
+            const merged = mergeDraft(recovered.attachmentBaseline, { link: recovered.attachmentLink, name: recovered.attachmentName }, { link: task.attachmentLink || '', name: task.attachmentName || '' });
+            restoredAttachment = merged.value; hasConflicts ||= merged.conflicts.length > 0;
+          }
+          if (hasConflicts && !window.confirm(t('This recovered draft overlaps newer task changes. Restore your draft values for the conflicting fields?'))) return;
+          if (restoredDetails) { editBaseline.current = latest; setEditForm(restoredDetails); setIsEditingDetails(true); }
+          if (restoredAttachment) { attachmentBaseline.current = { link: task.attachmentLink || '', name: task.attachmentName || '' }; setAttachmentLink(restoredAttachment.link); setAttachmentName(restoredAttachment.name); }
+          const pending = recovered.pendingComment;
+          if (typeof recovered.comment === 'string' && !(pending && recovered.comment === pending.text && task.comments?.some(item => item.id === pending.id))) setCommentText(recovered.comment);
+          recovery.restore(); recovery.clear();
+        }} />}
         <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 bg-slate-50/50 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">

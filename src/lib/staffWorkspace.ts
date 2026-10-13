@@ -52,6 +52,7 @@ const isWaiting = (task: Task) => !isTerminal(task) && task.status === 'Waiting 
 
 const urgencyRank = (task: Task, today: string) => {
   if (task.revisionCount > 0) return 0;
+  if (task.workState?.blocker) return 0;
   if (task.dueDate && task.dueDate < today) return 1;
   if (task.dueDate === today) return 2;
   if (task.status === 'In Progress') return 3;
@@ -88,6 +89,7 @@ export const buildStaffWorkQueue = (tasks: Task[], today: string): StaffWorkQueu
     }
     if (
       task.revisionCount > 0
+      || Boolean(task.workState?.blocker)
       || task.status === 'In Progress'
       || Boolean(task.dueDate && task.dueDate <= today)
     ) {

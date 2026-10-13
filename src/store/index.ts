@@ -4,6 +4,8 @@ import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSession
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { useToastStore } from './useToastStore';
+import { isTaskOpen } from '../lib/taskReporting';
+import { applyTaskWorkIntent, recordTaskWorkTransition, taskEvidenceError, type TaskWorkIntent } from '../lib/staffWorkflow';
 import {
   User,
   ClientProfile,
@@ -329,6 +331,7 @@ interface StoreState {
   updateCurrentUserEmail: (email: string, currentPassword: string) => Promise<{ ok: boolean; error?: string }>;
   updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
   updateTaskStatus: (taskId: string, status: TaskStatus) => MutationActionResult;
+  updateTaskWork: (taskId: string, intent: TaskWorkIntent) => MutationActionResult;
   updateTaskPriority: (taskId: string, priority: Priority) => MutationActionResult;
   updateTaskAssignee: (taskId: string, assignedTo: string) => MutationActionResult;
   updateTaskDueDate: (taskId: string, newDueDate: string) => MutationActionResult;
@@ -2674,6 +2677,27 @@ export const useStore = create<StoreState>()(
         isApplyingNotificationRead = false;
       },
 
+      updateTaskWork: (taskId, intent) => {
+        const state = get();
+        const task = state.tasks.find(item => item.id === taskId);
+        const actor = state.currentUser;
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        if (!actor || actor.role === 'Client' || !task || !canEditTask(actor, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return { ok: false, error: 'You do not have permission to edit this task.' };
+        if (!isTaskOpen(task)) return { ok: false, error: 'Only open tasks can accept work or request help.' };
+        if (intent.kind === 'accept' && task.assignedTo !== actor.id) return { ok: false, error: 'Only the current assignee can accept this task.' };
+        if (intent.kind === 'block' && (!intent.reason?.trim() || intent.reason.trim().length > 2000)) return { ok: false, error: 'Describe the blocker in 1–2000 characters.' };
+        if (!['accept', 'block', 'unblock'].includes(intent.kind)) return { ok: false, error: 'Choose a valid work action.' };
+        if (intent.kind === 'accept' && task.workState?.acceptedBy === actor.id) return { ok: true };
+        if (intent.kind === 'unblock' && !task.workState?.blocker) return { ok: true };
+        const updated = applyTaskWorkIntent(task, intent, actor.id);
+        const notices = taskUpdateNotifications(resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects), {
+          title: 'Task Status Updated', message: `"${task.title}": ${intent.kind === 'accept' ? 'assignment accepted' : intent.kind === 'block' ? 'help requested' : 'blocker cleared'} by ${actor.name}.`,
+          route: { page: 'tasks', entityId: taskId }, iconType: 'alert',
+        }, actor.id);
+        set({ tasks: state.tasks.map(item => item.id === taskId ? updated : item), notifications: [...notices, ...state.notifications] });
+        return { ok: true };
+      },
+
       updateTaskStatus: (taskId, status) => {
         let result: MutationActionResult = { ok: false, error: 'Unable to update the task status.' };
         set((state) => {
@@ -2697,6 +2721,8 @@ export const useStore = create<StoreState>()(
         }
 
         const isCompleted = nextStatus === 'Completed';
+        const evidenceError = taskEvidenceError(task, { ...task, status: nextStatus, isCompleted }, state.deliverables);
+        if (evidenceError) { result = { ok: false, error: evidenceError }; return state; }
         const isWaitingApproval = nextStatus === 'Waiting Approval';
         const isReadyForClientReview = isCompleted || isWaitingApproval;
         const wasCompleted = isTaskCompleted(task);
@@ -2717,7 +2743,7 @@ export const useStore = create<StoreState>()(
               ? 'Pending'
               : t.clientApprovalStatus;
 
-          return {
+          return recordTaskWorkTransition(t, {
             ...t,
             status: nextStatus,
             isCompleted,
@@ -2725,7 +2751,7 @@ export const useStore = create<StoreState>()(
             completionPercentage,
             clientApprovalStatus,
             updatedAt: now,
-          };
+          }, currentUser!.id, now);
         });
 
         const newNotifs: AppNotification[] = taskUpdateNotifications(
@@ -2781,7 +2807,7 @@ export const useStore = create<StoreState>()(
 
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
-          return { ...t, priority, updatedAt: new Date().toISOString() };
+          return recordTaskWorkTransition(t, { ...t, priority, updatedAt: new Date().toISOString() }, currentUser!.id);
         });
 
         useToastStore.getState().addToast(msg('task.priorityUpdated', { priority }), 'success');
@@ -2829,7 +2855,7 @@ export const useStore = create<StoreState>()(
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
           const now = new Date().toISOString();
-          return { ...t, assignedTo, assignedBy: currentUser?.id || t.assignedBy, assignedAt: now, updatedAt: now };
+          return recordTaskWorkTransition(t, { ...t, assignedTo, assignedBy: currentUser?.id || t.assignedBy, assignedAt: now, updatedAt: now }, currentUser!.id, now);
         });
 
         const newNotifs: AppNotification[] = [];
@@ -2882,12 +2908,12 @@ export const useStore = create<StoreState>()(
         return {
           tasks: state.tasks.map(task =>
             task.id === taskId
-              ? {
+              ? recordTaskWorkTransition(task, {
                   ...task,
                   attachmentLink: validatedLink || undefined,
                   attachmentName: attachmentName?.trim().slice(0, 200) || undefined,
                   updatedAt: new Date().toISOString()
-                }
+                }, state.currentUser!.id)
               : task
           )
         };
@@ -2927,7 +2953,7 @@ export const useStore = create<StoreState>()(
         result = { ok: true };
         return {
           tasks: state.tasks.map(t =>
-            t.id === taskId ? { ...t, dueDate: nextDueDate, dueReminderSent: false, updatedAt: new Date().toISOString() } : t
+            t.id === taskId ? recordTaskWorkTransition(t, { ...t, dueDate: nextDueDate, dueReminderSent: false, updatedAt: new Date().toISOString() }, state.currentUser!.id) : t
           ),
         };
         });
@@ -3042,7 +3068,7 @@ export const useStore = create<StoreState>()(
         const isCompleted = statusChanged ? status === 'Completed' : task.isCompleted;
         const isReadyForClientReview = status === 'Completed' || status === 'Waiting Approval';
         const now = new Date().toISOString();
-        const updatedTask: Task = {
+        let updatedTask: Task = {
           ...task,
           ...data,
           projectId: requestedProjectId,
@@ -3088,6 +3114,9 @@ export const useStore = create<StoreState>()(
           updatedAt: now,
         };
 
+        const evidenceError = taskEvidenceError(task, updatedTask, state.deliverables);
+        if (evidenceError) return { ok: false, error: evidenceError };
+        updatedTask = recordTaskWorkTransition(task, updatedTask, currentUser.id, now);
         const notifications: AppNotification[] = [];
         if (updatedTask.assignedTo && updatedTask.assignedTo !== task.assignedTo) {
           appendNotification(notifications, {
@@ -3350,6 +3379,10 @@ export const useStore = create<StoreState>()(
         if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) return '';
 
         const taskId = nowId('T');
+        if (taskEvidenceError(undefined, { ...taskData, id: taskId, status, isCompleted: status === 'Completed', revisionCount: 0, clientApprovalStatus: 'Pending' }, state.deliverables)) {
+          useToastStore.getState().addToast(msg('staff.evidenceRequired'), 'warning');
+          return '';
+        }
         set((state) => {
           if (!canCreateTasks(state.currentUser, state.rolePermissions)) return state;
 
@@ -3376,6 +3409,8 @@ export const useStore = create<StoreState>()(
             visibility: taskData.visibility || 'client-visible',
             dueReminderSent: false,
             approvalHistory: [],
+            workHistory: [],
+            workState: status === 'Waiting Approval' ? { reviewRequestedBy: currentUser.id, reviewRequestedAt: now } : {},
             updatedAt: now,
           };
 

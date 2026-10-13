@@ -80,6 +80,17 @@ try {
   await login('staff');
   await save('Staff comment', useStore.getState().addComment('task', 'Progress update'), 'comment.add');
   await login('staff');
+  assert.equal(useStore.getState().updateTaskStatus('task', 'Completed').ok, false, 'linked work needs evidence');
+  await save('Staff output evidence', useStore.getState().updateTaskAttachment('task', 'https://example.com/confirmed-artwork.pdf', 'Artwork'), 'task.update');
+  await login('staff');
+  await save('Staff assignment acceptance', useStore.getState().updateTaskWork('task', { kind: 'accept' }), 'task.update');
+  await login('staff');
+  assert.equal(useStore.getState().tasks.find(item => item.id === 'task').workState.acceptedBy, 'staff');
+  await save('Staff help request', useStore.getState().updateTaskWork('task', { kind: 'block', reason: 'Need final client assets' }), 'task.update');
+  await login('staff');
+  assert.equal(useStore.getState().tasks.find(item => item.id === 'task').workState.blocker.reason, 'Need final client assets');
+  await save('Staff blocker resolution', useStore.getState().updateTaskWork('task', { kind: 'unblock' }), 'task.update');
+  await login('staff');
   await save('Staff completion and derived progress', useStore.getState().updateTaskStatus('task', 'Completed'), 'task.update');
   await login('staff');
   await save('Staff deliverable completion', useStore.getState().updateDeliverableStatus('deliverable', 'Delivered'), 'deliverable.manage');

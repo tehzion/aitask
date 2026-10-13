@@ -640,9 +640,11 @@
     "20261002065644_hod_permission_parity_followups",
     "20261002101435_universal_notification_audience_guard",
     "20261007173905_reliable_member_onboarding",
-    "20261012165347_hod_task_deletion_authority"
+    "20261012165347_hod_task_deletion_authority",
+    "20261013035142_staff_workflow_recovery"
   ],
   "pendingProductionMigrations": [
-    "20261012165347_hod_task_deletion_authority"
+    "20261012165347_hod_task_deletion_authority",
+    "20261013035142_staff_workflow_recovery"
   ]
 }

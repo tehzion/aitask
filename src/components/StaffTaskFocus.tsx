@@ -1,3 +1,4 @@
+import '../lib/staffWorkflowCopy';
 import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock3, ExternalLink, FileText, History, MessageSquare, Send, UsersRound } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -17,6 +18,10 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from './ConfirmDialog';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
+import { useRecoverableForm } from '../hooks/useRecoverableForm';
+import DraftRecoveryNotice from './DraftRecoveryNotice';
+import { hasTaskEvidence, isTaskLinkedToDeliverable, taskWorkContactId, type TaskWorkIntent } from '../lib/staffWorkflow';
+import { isTaskOpen } from '../lib/taskReporting';
 
 interface StaffTaskFocusProps {
   isOpen: boolean;
@@ -25,7 +30,7 @@ interface StaffTaskFocusProps {
   onOpenFullEditor?: () => void;
 }
 
-const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, onOpenFullEditor }) => {
+const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, onOpenFullEditor }) => {
   const { locale, t } = useI18n();
   const {
     tasks,
@@ -38,6 +43,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
     taskStatuses,
     backend,
     updateTaskStatus,
+    updateTaskWork,
     addComment,
     commitPendingMutation,
     rolePermissions,
@@ -52,6 +58,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
     taskStatuses: state.taskStatuses,
     backend: state.backend,
     updateTaskStatus: state.updateTaskStatus,
+    updateTaskWork: state.updateTaskWork,
     addComment: state.addComment,
     commitPendingMutation: state.commitPendingMutation,
     rolePermissions: state.rolePermissions,
@@ -60,7 +67,12 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   const [isSaving, setIsSaving] = React.useState(false);
   const [error, setError] = React.useState('');
   const [pendingStatus, setPendingStatus] = React.useState<TaskStatus | null>(null);
-  const [pendingSave, setPendingSave] = React.useState<{ taskId: string; commentId?: string; text?: string; status?: TaskStatus; failed?: boolean } | null>(null);
+  const [pendingSave, setPendingSave] = React.useState<{ taskId: string; commentId?: string; text?: string; status?: TaskStatus; workIntent?: TaskWorkIntent; failed?: boolean } | null>(null);
+  const [helpReason, setHelpReason] = React.useState('');
+  const [helpOpen, setHelpOpen] = React.useState(false);
+  const commentRef = React.useRef(comment); commentRef.current = comment;
+  const helpRef = React.useRef(helpReason); helpRef.current = helpReason;
+  const recovery = useRecoverableForm(`staff-task:${task?.id || ''}`, { text: comment, helpReason, pendingCommentId: pendingSave?.commentId, pendingText: pendingSave?.text }, Boolean(comment.trim() || helpReason.trim()), isOpen && Boolean(task && currentUser));
   const [exitAction, setExitAction] = React.useState<(() => void) | null>(null);
   const [isDiscarding, setIsDiscarding] = React.useState(false);
   const discardTitleId = React.useId();
@@ -70,7 +82,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   pendingSaveRef.current = pendingSave;
   const observedResolution = React.useRef(false);
   const operationGeneration = React.useRef(0);
-  const clearUnsaved = useUnsavedChanges(isOpen && Boolean(comment.trim() || isSaving || pendingSave));
+  const clearUnsaved = useUnsavedChanges(isOpen && Boolean(comment.trim() || helpReason.trim() || isSaving || pendingSave));
   const statusPickerRef = React.useRef<HTMLSelectElement>(null);
   const liveTask = task ? tasks.find(item => item.id === task.id) || null : null;
 
@@ -84,27 +96,32 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
     setIsDiscarding(false);
     operationGeneration.current++;
   }, [task?.id]);
+  React.useEffect(() => () => { operationGeneration.current++; }, []);
 
   const finishSave = React.useCallback((submitted: NonNullable<typeof pendingSave>) => {
     if (currentTaskId.current !== submitted.taskId) return;
     if (submitted.text !== undefined) setComment(current => current === submitted.text ? '' : current);
+    if (submitted.workIntent?.kind === 'block' && helpRef.current === submitted.workIntent.reason) { setHelpReason(''); setHelpOpen(false); }
+    if ((submitted.text === undefined || commentRef.current === submitted.text) && (!helpRef.current.trim() || helpRef.current === submitted.workIntent?.reason)) recovery.clear();
     if (submitted.status) announceTaskStatusSaved(submitted.status);
     setPendingSave(null);
     setError('');
     observedResolution.current = false;
-  }, []);
+  }, [recovery]);
 
   React.useEffect(() => {
     if (!pendingSave?.failed || isSaving) return;
     if (isPendingMutationResolution(backend)) { observedResolution.current = true; return; }
     if (!observedResolution.current || backend.status !== 'live' || backend.hasLocalChanges || backend.pendingMutations || backend.isSaving || backend.isPulling) return;
     const savedTask = tasks.find(item => item.id === pendingSave.taskId);
-    const acknowledged = pendingSave.commentId
+    const acknowledged = pendingSave.workIntent
+      ? workIntentApplied(savedTask, pendingSave.workIntent, currentUser?.id)
+      : pendingSave.commentId
       ? savedTask?.comments?.some(item => item.id === pendingSave.commentId)
       : savedTask?.status === pendingSave.status;
     if (acknowledged) finishSave(pendingSave);
     else { setPendingSave(null); setError(''); observedResolution.current = false; }
-  }, [backend, finishSave, isSaving, pendingSave, tasks]);
+  }, [backend, currentUser?.id, finishSave, isSaving, pendingSave, tasks]);
 
   if (!liveTask) return null;
 
@@ -122,6 +139,9 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   if (!taskAccess.canView) return null;
   const canEdit = taskAccess.canEdit;
   const canComment = taskAccess.canComment;
+  const contact = users.find(member => member.id === taskWorkContactId(liveTask));
+  const linkedOutput = isTaskLinkedToDeliverable(liveTask, deliverables);
+  const evidenceAvailable = hasTaskEvidence(liveTask, deliverables);
 
   const performSave = async (submitted: NonNullable<typeof pendingSave>, retry = false) => {
     const session = captureWorkspaceSession();
@@ -133,7 +153,10 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
     try {
       const result = retry ? await useStore.getState().retryPendingSave() : await commitPendingMutation(submitted.commentId ? 'comment.add' : 'task.update');
       if (!isCurrent()) return;
-      if (result.ok) finishSave(submitted);
+      const saved = useStore.getState().tasks.find(item => item.id === submitted.taskId);
+      const applied = saved && (submitted.workIntent ? workIntentApplied(saved, submitted.workIntent, currentUser?.id)
+        : submitted.commentId ? saved.comments?.some(item => item.id === submitted.commentId) : saved.status === submitted.status);
+      if (result.ok && applied) finishSave(submitted);
       else {
         setPendingSave({ ...submitted, failed: true });
         observedResolution.current = isPendingMutationResolution(useStore.getState().backend);
@@ -151,7 +174,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
 
   const requestExit = (action: () => void) => {
     if (isSaving) return;
-    if (comment.trim() || pendingSave) setExitAction(() => action);
+    if (comment.trim() || helpReason.trim() || pendingSave) setExitAction(() => action);
     else { clearUnsaved(); action(); }
   };
 
@@ -169,6 +192,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
       if (!isWorkspaceSessionCurrent(session) || currentTaskId.current !== taskId) return;
       operationGeneration.current++;
       setComment(''); setPendingSave(null); setError('');
+      setHelpReason(''); recovery.clear();
       observedResolution.current = false;
       clearUnsaved();
       exitAction();
@@ -196,6 +220,13 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
     const localResult = addComment(liveTask.id, text);
     if (!localResult.ok || !localResult.id) { setError(localResult.error || t('You do not have permission to comment on this task.')); return; }
     await performSave({ taskId: liveTask.id, commentId: localResult.id, text });
+  };
+
+  const saveWork = async (intent: TaskWorkIntent) => {
+    if (isSaving || pendingSave || mutationLocked || !canEdit) return;
+    const result = updateTaskWork(liveTask.id, intent);
+    if (!result.ok) { setError(t(result.error || 'Unable to update the task status.')); return; }
+    await performSave({ taskId: liveTask.id, workIntent: intent });
   };
 
   const footer = canEdit ? (
@@ -243,6 +274,15 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
       footer={footer}
     >
       <div className="space-y-6 pb-2">
+        {recovery.available && !comment.trim() && !helpReason.trim() && <DraftRecoveryNotice onRestore={() => {
+          const recovered = recovery.restore();
+          if (!recovered) return;
+          const alreadyPresent = recovered.text === recovered.pendingText && recovered.pendingCommentId && liveTask.comments?.some(item => item.id === recovered.pendingCommentId);
+          if (alreadyPresent) setError(t('This recovered update already appears in the task. Check save confirmation before sending it again.'));
+          else if (typeof recovered.text === 'string') setComment(recovered.text);
+          if (typeof recovered.helpReason === 'string') { setHelpReason(recovered.helpReason); setHelpOpen(Boolean(recovered.helpReason)); }
+          recovery.clear();
+        }} onDiscard={recovery.clear} />}
         {pendingStatus && (
           <section role="alertdialog" aria-labelledby="staff-dependency-confirm-title" aria-describedby="staff-dependency-confirm-description" className="rounded-panel border border-amber-200 bg-amber-50 p-4 text-amber-950 shadow-sm dark:bg-[#31240f] dark:text-[#fff2c2] dark:ring-1 dark:ring-[#765d22]">
             <div className="flex gap-3">
@@ -309,6 +349,32 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
           </div>
         </section>
 
+        <section aria-labelledby="staff-work-ownership" className="rounded-panel bg-inset p-4 text-sm">
+          <h3 id="staff-work-ownership" className="font-semibold text-ink">{t('Work ownership')}</h3>
+          {pendingSave?.workIntent && <p className="mt-2 text-muted" role="status">{t('Awaiting save confirmation')}</p>}
+          <p className="mt-2 text-muted">{t('Assigned')}: <span data-i18n-skip>{users.find(member => member.id === liveTask.assignedTo)?.name || t('Unassigned')}</span></p>
+          <p className="mt-1 text-muted">{t('Task contact')}: <span data-i18n-skip>{contact?.name || t('No task contact is recorded. Confirm with your team lead.')}</span></p>
+          {liveTask.workState?.acceptedBy === liveTask.assignedTo ? <p className="mt-2 text-ink">{t('Assignment accepted')}{liveTask.workState.acceptedAt && <> · {formatLocalizedDistanceToNow(new Date(liveTask.workState.acceptedAt), locale)}</>}</p>
+            : isTaskOpen(liveTask) && <p className="mt-2 text-muted">{t('Assignment acceptance is not recorded.')}</p>}
+          {liveTask.status === 'Waiting Approval' && <div className="mt-3 border-t border-line pt-3">
+            <p className="font-medium text-ink">{t('Waiting for review')}</p>
+            <p className="mt-1 text-muted">{liveTask.workState?.reviewRequestedAt ? <>{t('Sent for review')} · {formatLocalizedDistanceToNow(new Date(liveTask.workState.reviewRequestedAt), locale)}</> : t('Review submission time is not recorded.')}</p>
+            <p className="mt-1 text-muted">{t('Ask the task contact for a review update. Completion and client approval are tracked separately.')}</p>
+          </div>}
+          {liveTask.workState?.blocker && <div className="mt-3 border-t border-line pt-3" role="status"><p className="font-semibold text-ink">{t('Help requested')}</p><p data-i18n-skip className="mt-1 whitespace-pre-wrap text-ink">{liveTask.workState.blocker.reason}</p><p className="mt-1 text-muted">{formatLocalizedDistanceToNow(new Date(liveTask.workState.blocker.openedAt), locale)}</p></div>}
+          {canEdit && isTaskOpen(liveTask) && <div className="mt-3 flex flex-wrap gap-2">
+            {liveTask.assignedTo === currentUser?.id && liveTask.workState?.acceptedBy !== currentUser.id && <Button variant="secondary" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => void saveWork({ kind: 'accept' })}>{t('Accept assignment')}</Button>}
+            <Button variant="secondary" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => setHelpOpen(true)}>{t(liveTask.status === 'Waiting Approval' ? 'Request review update' : 'Request help or handover')}</Button>
+            {liveTask.workState?.blocker && <Button variant="secondary" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => void saveWork({ kind: 'unblock' })}>{t('Clear blocker')}</Button>}
+          </div>}
+          {helpOpen && canEdit && <form className="mt-3" onSubmit={event => { event.preventDefault(); void saveWork({ kind: 'block', reason: helpReason }); }}>
+            <label className="block font-medium text-ink">{t('What do you need to continue?')}<textarea value={helpReason} onChange={event => setHelpReason(event.target.value)} maxLength={2000} rows={3} className={`${inputBase} mt-2 px-3 py-2`} /></label>
+            <p className="mt-2 text-xs text-muted">{t('Describe missing assets, unclear instructions, workload, or handover needs. The task team will be notified.')}</p>
+            <Button className="mt-3" type="submit" disabled={!helpReason.trim() || isSaving || Boolean(pendingSave) || mutationLocked}>{t('Send help request')}</Button>
+          </form>}
+        </section>
+        {linkedOutput && <p className="rounded-control bg-inset px-4 py-3 text-sm text-muted">{t(evidenceAvailable ? 'Output evidence is attached. Client approval is tracked separately from task completion.' : 'This linked task needs an output link or deliverable file before review or completion. Add it through Full edit or the delivery workspace.')}</p>}
+
         <section aria-labelledby="staff-delivery-context">
           <h3 id="staff-delivery-context" className="flex items-center gap-2 font-semibold text-ink"><UsersRound className="h-4 w-4 text-accent" />{t('Delivery context')}</h3>
           <dl className="mt-3 grid gap-3 rounded-panel bg-inset p-4 text-sm sm:grid-cols-2">
@@ -332,7 +398,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
           <div className="mt-3 space-y-3">
             {(liveTask.comments || []).map(item => {
               const author = users.find(user => user.id === item.userId);
-              return <article key={item.id} className="rounded-panel bg-inset p-4"><div className="flex items-baseline justify-between gap-3"><p className="text-sm font-semibold text-ink">{author?.name ? <span data-i18n-skip>{author.name}</span> : t('Team member')}</p><time className="shrink-0 text-xs text-muted">{formatLocalizedDistanceToNow(new Date(item.createdAt), locale)}</time></div><p data-i18n-skip className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink">{item.text}</p></article>;
+              return <article key={item.id} className="rounded-panel bg-inset p-4"><div className="flex items-baseline justify-between gap-3"><p className="text-sm font-semibold text-ink">{author?.name ? <span data-i18n-skip>{author.name}</span> : t('Team member')}</p><time className="shrink-0 text-xs text-muted">{formatLocalizedDistanceToNow(new Date(item.createdAt), locale)}</time></div><p data-i18n-skip className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink">{item.text}</p>{pendingSave?.commentId === item.id && <p className="mt-2 text-xs font-medium text-muted" role="status">{t('Awaiting save confirmation')}</p>}</article>;
             })}
             {(liveTask.comments || []).length === 0 && <p className="rounded-panel bg-inset px-4 py-8 text-center text-sm text-muted">{t('No updates yet. Add the first work note below.')}</p>}
           </div>
@@ -348,6 +414,7 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
         <section aria-labelledby="staff-task-history">
           <h3 id="staff-task-history" className="flex items-center gap-2 font-semibold text-ink"><History className="h-4 w-4 text-accent" />{t('History')}</h3>
           <div className="mt-3 space-y-3 border-l border-line pl-4">
+            {[...(liveTask.workHistory || [])].reverse().map(event => <article key={event.id} className="text-sm"><p className="text-ink"><span data-i18n-skip className="font-semibold">{users.find(member => member.id === event.userId)?.name || t('Team member')}</span> · {event.fields.map(field => t(workFieldLabels[field] || 'Task updated')).join(', ')}</p><time className="mt-1 block text-xs text-muted">{formatLocalizedDistanceToNow(new Date(event.createdAt), locale)}</time></article>)}
             {[...(liveTask.approvalHistory || [])].reverse().map(event => {
               const author = users.find(user => user.id === event.userId);
               return (
@@ -381,4 +448,10 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   );
 };
 
+const workFieldLabels: Record<string, string> = { title: 'Title changed', description: 'Brief changed', notes: 'Notes changed', dueDate: 'Deadline changed', startDate: 'Start date changed', assignedTo: 'Assignee changed', department: 'Department changed', status: 'Status changed', priority: 'Priority changed', attachmentLink: 'Output link changed', acceptedBy: 'Assignment acceptance changed', blocker: 'Help request changed' };
+const workIntentApplied = (task: Task | undefined, intent: TaskWorkIntent, actorId?: string) => Boolean(task && (intent.kind === 'accept' ? task.workState?.acceptedBy === actorId : intent.kind === 'block' ? task.workState?.blocker?.reason === intent.reason?.trim() : !task.workState?.blocker));
+const StaffTaskFocus: React.FC<StaffTaskFocusProps> = props => {
+  const account = useStore(state => state.currentUser?.id);
+  return <StaffTaskFocusContent key={`${account}:${props.task?.id}`} {...props} />;
+};
 export default StaffTaskFocus;

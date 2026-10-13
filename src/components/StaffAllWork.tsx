@@ -1,3 +1,4 @@
+import '../lib/staffWorkflowCopy';
 import React from 'react';
 import { Filter, ListFilter, Search, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
@@ -17,6 +18,7 @@ import TaskDetailsModal from './TaskDetailsModal';
 import { canEditTask } from '../lib/access';
 import { useI18n } from './I18nProvider';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
+import { isTaskOpen } from '../lib/taskReporting';
 
 type StaffAllWorkBucket = 'all' | StaffWorkBucketKey;
 const buckets: StaffAllWorkBucket[] = ['all', 'needs_action', 'up_next', 'waiting', 'done'];
@@ -45,6 +47,8 @@ const StaffAllWork: React.FC = () => {
   };
   const setBucket = (value: StaffAllWorkBucket) => setParam('queue', value, 'all');
   const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const helpOnly = searchParams.get('help') === '1';
+  const unacceptedOnly = searchParams.get('unaccepted') === '1';
   const client = (searchParams.get('client') || 'All');
   const setClient = (value: string) => setParam('client', value);
   const project = (searchParams.get('project') || 'All');
@@ -101,6 +105,8 @@ const StaffAllWork: React.FC = () => {
   const filteredTasks = React.useMemo(() => orderedTasks.filter(task => {
     const searchable = [task.title, task.description, task.clientName, task.projectName, task.serviceType, task.department].filter(Boolean).join(' ').toLowerCase();
     return (!normalizedSearch || searchable.includes(normalizedSearch))
+      && (!helpOnly || Boolean(isTaskOpen(task) && task.workState?.blocker))
+      && (!unacceptedOnly || Boolean(isTaskOpen(task) && task.assignedTo && task.workState?.acceptedBy !== task.assignedTo))
       && (client === 'All' || task.clientName === client)
       && (project === 'All' || task.projectName === project)
       && (assignee === 'All' || task.assignedTo === assignee)
@@ -110,11 +116,11 @@ const StaffAllWork: React.FC = () => {
       && (priority === 'All' || task.priority === priority)
       && (!dueFrom || Boolean(task.dueDate && task.dueDate >= dueFrom))
       && (!dueTo || Boolean(task.dueDate && task.dueDate <= dueTo));
-  }), [assignee, client, creator, department, dueFrom, dueTo, normalizedSearch, orderedTasks, priority, project, status]);
+  }), [assignee, client, creator, department, dueFrom, dueTo, helpOnly, unacceptedOnly, normalizedSearch, orderedTasks, priority, project, status]);
   const taskId = searchParams.get('taskId');
   // List filters and scope must not dismiss authorized details after delegation.
   const selectedTask = taskId ? visibleTasks.find(task => task.id === taskId) || null : null;
-  const activeFilterCount = [Boolean(searchInput.value.trim()), client !== 'All', project !== 'All', assignee !== 'All', department !== 'All', creator !== 'All', status !== 'All', priority !== 'All', Boolean(dueFrom), Boolean(dueTo)].filter(Boolean).length;
+  const activeFilterCount = [helpOnly, unacceptedOnly, Boolean(searchInput.value.trim()), client !== 'All', project !== 'All', assignee !== 'All', department !== 'All', creator !== 'All', status !== 'All', priority !== 'All', Boolean(dueFrom), Boolean(dueTo)].filter(Boolean).length;
 
   const setTaskId = (taskIdValue?: string) => {
     setSearchParams(previous => {
@@ -129,7 +135,7 @@ const StaffAllWork: React.FC = () => {
     searchInput.commit('');
     setSearchParams(previous => {
       const next = new URLSearchParams(previous);
-      ['search', 'client', 'project', 'assignee', 'department', 'creator', 'status', 'priority', 'dueFrom', 'dueTo'].forEach(key => next.delete(key));
+      ['search', 'client', 'project', 'assignee', 'department', 'creator', 'status', 'priority', 'dueFrom', 'dueTo', 'help', 'unaccepted'].forEach(key => next.delete(key));
       return next;
     }, { replace: true });
   };
@@ -214,6 +220,8 @@ const StaffAllWork: React.FC = () => {
         footer={<div className="flex gap-2"><Button variant="secondary" className="flex-1" onClick={clearFilters}>{t('Clear')}</Button><Button className="flex-1" onClick={() => setFiltersOpen(false)}>{t('Show')} {filteredTasks.length}</Button></div>}
       >
         <div className="space-y-5">
+          <label className="flex min-h-11 items-center gap-3 text-sm font-medium text-ink"><input type="checkbox" checked={helpOnly} onChange={event => setParam('help', event.target.checked ? '1' : '', '')} />{t('Help requested')}</label>
+          <label className="flex min-h-11 items-center gap-3 text-sm font-medium text-ink"><input type="checkbox" checked={unacceptedOnly} onChange={event => setParam('unaccepted', event.target.checked ? '1' : '', '')} />{t('Awaiting acceptance')}</label>
           <label className="block text-sm font-medium text-ink">{t('Client')}<select aria-label={t('Filter by client')} value={client} onChange={event => setClient(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{clients.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
           <label className="block text-sm font-medium text-ink">{t('Project')}<select aria-label={t('Filter by project')} value={project} onChange={event => setProject(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{projectsForFilter.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
           <label className="block text-sm font-medium text-ink">{t('Assignee')}<select aria-label={t('Filter by assignee')} value={assignee} onChange={event => setAssignee(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{assignees.map(user => <option data-i18n-skip key={user.id} value={user.id}>{user.name}</option>)}</select></label>

@@ -90,6 +90,8 @@ export default defineConfig(({ mode }) => {
   },
   build: {
     manifest: true,
+    minify: 'terser',
+    terserOptions: { compress: { passes: 2 } },
     // Never emit source maps in production — they expose internal logic & file paths
     sourcemap: false,
     rollupOptions: {

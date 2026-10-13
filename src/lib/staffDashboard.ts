@@ -40,7 +40,7 @@ export const getStaffDashboardMetrics = (
     return plan.status === 'Active' && key !== undefined && clientKeys.has(key);
   });
   return {
-    blockedCount: tasks.filter(task => getTaskBlockers(task, visibleTasks).length > 0).length,
+    blockedCount: tasks.filter(task => getTaskBlockers(task, visibleTasks).length > 0 || (isTaskOpen(task) && task.workState?.blocker)).length,
     unavailableDependencyTaskCount: tasks.filter(task => getUnavailableTaskDependencyCount(task, visibleTasks) > 0).length,
     assignedClientCount: clientKeys.size,
     activePlanCount: activePlans.length,

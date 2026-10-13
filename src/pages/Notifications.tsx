@@ -1,3 +1,4 @@
+import '../lib/staffWorkflowCopy';
 import React from 'react';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
@@ -20,7 +21,8 @@ import {
 import { Badge, Button, PageHeader } from '../components/ui';
 import type { LayoutOutletContext } from '../components/Layout';
 import { cardBase, inputBase, pageShell } from '../components/uiTokens';
-import { isNotificationReadByUser } from '../lib/access';
+import { getVisibleTasks, isNotificationReadByUser } from '../lib/access';
+import { isTaskOpen } from '../lib/taskReporting';
 import {
   groupNotifications,
   mergeNotificationPages,
@@ -89,6 +91,13 @@ const Notifications: React.FC = () => {
   const previewNotifications = useStore(state => state.notifications);
   const notificationUnreadCount = useStore(state => state.notificationUnreadCount);
   const workspaceVersion = useStore(state => state.backend.workspaceVersion);
+  const tasks = useStore(state => state.tasks);
+  const clients = useStore(state => state.clients);
+  const projects = useStore(state => state.projects);
+  const permissions = useStore(state => state.rolePermissions);
+  const [openWorkOnly, setOpenWorkOnly] = React.useState(false);
+  const visibleTasks = React.useMemo(() => getVisibleTasks(currentUser, tasks, permissions, { clients, projects }), [currentUser, tasks, permissions, clients, projects]);
+  const taskMap = React.useMemo(() => new Map(visibleTasks.map(task => [task.id, task])), [visibleTasks]);
   const [tab, setTab] = React.useState<NotificationTab>('all');
   const [category, setCategory] = React.useState<NotificationCategory | ''>('');
   const [searchParams] = useSearchParams();
@@ -147,7 +156,7 @@ const Notifications: React.FC = () => {
 
   if (!currentUser) return null;
 
-  const groups = groupNotifications(items, currentUser);
+  const groups = groupNotifications(openWorkOnly ? items.filter(item => item.route.page === 'tasks' && item.route.entityId && taskMap.has(item.route.entityId) && isTaskOpen(taskMap.get(item.route.entityId)!)) : items, currentUser);
   const sections = sectionNotificationGroups(groups);
   const displayedUnreadCount = notificationUnreadCount;
 
@@ -254,6 +263,7 @@ const Notifications: React.FC = () => {
               ))}
             </div>
 
+            <label className="inline-flex min-h-11 items-center gap-2 text-sm font-medium"><input type="checkbox" checked={openWorkOnly} onChange={event => setOpenWorkOnly(event.target.checked)} />{t('Open work only')}</label>
             <select
               value={category}
               onChange={event => setCategory(event.target.value as NotificationCategory | '')}
@@ -267,6 +277,8 @@ const Notifications: React.FC = () => {
             </select>
           </div>
         </div>
+
+        <p className="border-b border-line px-4 py-3 text-sm text-muted">{t('Read marks an update as seen. It does not complete the linked task.')}{openWorkOnly && <> {t('Showing open tasks from loaded updates. Load more to check older work.')}</>}</p>
 
         <div aria-live="polite" className="sr-only">
           {isLoading ? t('Loading notifications.') : t('{count} notification groups loaded.', { count: groups.length })}
@@ -326,6 +338,7 @@ const Notifications: React.FC = () => {
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className={cn('text-sm text-slate-950', allRead ? 'font-medium' : 'font-semibold')}>{group.latest.title}</h3>
                               <Badge tone="slate">{notificationCategoryLabels[group.category]}</Badge>
+                              {group.latest.route.page === 'tasks' && <Badge tone="slate">{t(group.latest.route.entityId && taskMap.has(group.latest.route.entityId) ? isTaskOpen(taskMap.get(group.latest.route.entityId)!) ? 'Open work' : 'Closed work' : 'Work unavailable')}</Badge>}
                               {group.notifications.length > 1 && <Badge tone="blue">{t('{count} updates', { count: group.notifications.length })}</Badge>}
                               {group.unreadCount > 0 && <span className="text-xs font-semibold text-blue-700">{t('{count} unread', { count: group.unreadCount })}</span>}
                             </div>

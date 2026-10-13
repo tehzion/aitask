@@ -389,6 +389,20 @@ export const parseTask = (value: unknown): Task | null => {
     dueReminderSent: value.dueReminderSent === true,
     comments: Array.isArray(value.comments) ? value.comments.map(parseComment).filter((item): item is TaskComment => Boolean(item)) : [],
     approvalHistory: Array.isArray(value.approvalHistory) ? value.approvalHistory.map(parseApprovalEvent).filter((item): item is TaskApprovalEvent => Boolean(item)) : [],
+    workState: isRecord(value.workState) ? {
+      acceptedBy: optionalText(value.workState.acceptedBy, 160),
+      acceptedAt: safeIsoTimestamp(value.workState.acceptedAt),
+      reviewRequestedBy: optionalText(value.workState.reviewRequestedBy, 160),
+      reviewRequestedAt: safeIsoTimestamp(value.workState.reviewRequestedAt),
+      blocker: isRecord(value.workState.blocker) && cleanText(value.workState.blocker.reason, 2000) && safeIsoTimestamp(value.workState.blocker.openedAt) ? {
+        reason: cleanText(value.workState.blocker.reason, 2000), openedBy: cleanText(value.workState.blocker.openedBy, 160), openedAt: safeIsoTimestamp(value.workState.blocker.openedAt)!,
+      } : undefined,
+    } : undefined,
+    workHistory: Array.isArray(value.workHistory) ? value.workHistory.filter(isRecord).slice(-50).flatMap(event => {
+      const createdAt = safeIsoTimestamp(event.createdAt);
+      const id = cleanText(event.id, 160);
+      return createdAt && id ? [{ id, userId: cleanText(event.userId, 160), createdAt, fields: safeStringArray(event.fields, 15, 80) }] : [];
+    }) : [],
     updatedAt: safeIsoTimestamp(value.updatedAt),
   };
 };

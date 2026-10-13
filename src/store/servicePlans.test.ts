@@ -127,7 +127,10 @@ describe('client service plan store', () => {
     expect(useStore.getState().tasks.filter(task => task.visibility === 'client-visible')).toHaveLength(3);
     expect(useStore.getState().tasks[1].predecessorTaskIds).toEqual([useStore.getState().tasks[0].id]);
 
-    useStore.getState().tasks.forEach(task => useStore.getState().updateTaskStatus(task.id, 'Completed'));
+    useStore.getState().tasks.forEach(task => {
+      expect(useStore.getState().updateTaskAttachment(task.id, `https://example.com/output/${task.id}`).ok).toBe(true);
+      expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
+    });
     expect(useStore.getState().deliverables[0].status).toBe('Ready');
     useStore.getState().updateDeliverableStatus(deliverableId, 'Delivered');
     expect(useStore.getState().serviceCycles[0].status).toBe('Completed');

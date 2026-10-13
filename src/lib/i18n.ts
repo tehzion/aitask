@@ -11,6 +11,11 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  'Restore saved dates': '恢复已保存日期',
+  'Retry will attempt to save': '重试将尝试保存',
+  'Restoring saved dates will discard this attempt.': '恢复已保存日期将放弃此次修改。',
+  'Your account cannot save this change. Ask the task owner to check your access before retrying, or restore the saved dates.': '您的账户无权保存此更改。请先让任务负责人检查您的权限后再重试，或恢复已保存日期。',
+  'You do not have permission to make this change.': '您没有进行此更改的权限。',
   'The pending project change is no longer available. Review your draft before saving again.': '待保存的项目更改已不存在，请检查草稿后再保存。',
   'The pending role is no longer available. Review your draft before saving again.': '待保存的角色已不可用。请检查草稿后再次保存。',
   'The pending member is no longer available. Review your draft before saving again.': '待保存的成员已不可用。请检查草稿后再次保存。',
@@ -63,7 +68,7 @@ const zhCopy: Record<string, string> = {
   'Keep my draft': '保留我的草稿',
   'Manage members': '管理成员',
   'Page not found': '找不到页面',
-  'Reload latest': '重新加载最新版本',
+  'Reload latest': '重新加载已保存数据',
   'Return to workspace': '返回工作区',
   'Save or discard your changes before updating.': '更新前请保存或放弃您的更改。',
   'This page may have moved or the link may be incorrect.': '此页面可能已移至其他位置，或链接有误。',
@@ -596,7 +601,7 @@ const zhCopyExtras: Record<string, string> = {
   'more tasks': '个更多任务',
   'on': '在',
   'with no due date': '且没有截止日期',
-  'Use latest will discard this attempt.': '使用最新版本将放弃此次尝试。',
+  'Use latest will discard this attempt.': '恢复已保存数据将放弃此次尝试。',
   'Resolve the current sync issue with Retry or Discard before changing these dates.': '更改日期前，请先使用“重试”或“放弃”解决当前同步问题。',
   'Resolve the current sync issue with Retry or Discard before changing company details.': '更改公司资料前，请先使用“重试”或“放弃”解决当前同步问题。',
   'Created by': '创建者',
@@ -662,7 +667,7 @@ const zhCopyExtras: Record<string, string> = {
   'Refresh sync status': '刷新同步状态',
   'Sync issue': '同步问题',
   'Supabase sync issue': 'Supabase 同步问题',
-  'Workspace update available': '有可用的工作区更新',
+  'Workspace update available': '有新的已保存工作数据',
   'Sync conflict needs review': '同步冲突需要检查',
   'A change needs to be retried': '有一项更改需要重试',
   'AiTask is offline': 'AiTask 当前离线',
@@ -1059,9 +1064,9 @@ const zhCopyAdditions: Record<string, string> = {
   'Vercel configuration required': '需要配置 Vercel',
   'Never': '从未',
   'Retry my pending changes': '重试我的待保存更改',
-  'Discard pending changes and load the latest saved version': '放弃待保存更改并加载最新保存的版本',
+  'Discard pending changes and load the latest saved version': '放弃待保存更改并加载已保存数据',
   'Retry my changes': '重试我的更改',
-  'Use latest': '使用最新版本',
+  'Use latest': '恢复已保存数据',
   'Sync is local on this deployed build': '此部署版本的同步仅在本机生效',
   'Supabase sync is not configured': '尚未配置 Supabase 同步',
   // Sync state messages
@@ -1080,7 +1085,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Sign in to load your secure workspace.': '请登录以加载您的安全工作区。',
   'Offline. A local change is waiting for your retry.': '已离线。有一个本地更改等待重试。',
   'Offline. Live sync will resume when you reconnect.': '已离线。重新联网后将恢复实时同步。',
-  'A newer workspace update is available. Resolve the pending change first.': '有更新的工作区版本可用，请先处理待保存的更改。',
+  'A newer workspace update is available. Resolve the pending change first.': '工作区中有新的已保存数据，请先处理待保存的更改。',
   'You made changes during the refresh. Review and retry your pending change.': '您在刷新期间进行了更改。请检查并重试待保存的更改。',
   'Review the latest record before retrying.': '请在重试前查看最新记录。',
   'Retry the previous notification update before starting another one.': '请先重试上一个通知更新，再开始新的更新。',
@@ -1094,7 +1099,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Save was not confirmed. Your pending change is retained for retry.': '未能确认保存。您的更改已保留以供重试。',
   'Browser storage is full. The pending change survives in this tab only until it is saved.': '浏览器存储空间不足。待保存的更改仅保留在当前标签页中，保存前请勿关闭。',
   'This change touches too many records. Save it in smaller steps.': '此更改涉及的记录过多，请分批保存。',
-  'An earlier change is still waiting to sync. Use “Retry my changes” or “Use latest” in the banner above this dialog, then save this draft again.': '较早的更改仍在等待同步。请使用此对话框上方横幅中的“重试我的更改”或“使用最新版本”，然后重新保存此草稿。',
+  'An earlier change is still waiting to sync. Use “Retry my changes” or “Use latest” in the banner above this dialog, then save this draft again.': '较早的更改仍在等待同步。请使用此对话框上方横幅中的“重试我的更改”或“恢复已保存数据”，然后重新保存此草稿。',
   'Service name': '服务名称',
   'Unit': '单位',
   'Price': '价格',
@@ -1747,7 +1752,7 @@ const zhSystemCopy: Record<string, string> = {
   'The file could not be downloaded.': '无法下载文件。',
   'Created a new Supabase snapshot from the current workspace.': '已根据当前工作区创建新的 Supabase 快照。',
   'Supabase is not configured.': '尚未配置 Supabase。',
-  'A newer workspace update is available. Refresh before saving.': '有更新的工作区版本可用，请刷新后再保存。',
+  'A newer workspace update is available. Refresh before saving.': '工作区中有新的已保存数据，请刷新后再保存。',
   'Unable to set your password.': '无法设置您的密码。',
   'Unable to save role.': '无法保存角色。',
   'Unable to delete role.': '无法删除角色。',
@@ -2938,3 +2943,6 @@ export const getInitialLocale = (): AppLocale => {
   }
   return window.navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
 };
+
+/** Register copy with the lazy route that owns it, keeping optional workflow text out of startup. */
+export const registerUiTranslations = (copy: Record<string, string>) => { Object.assign(zhCopy, copy); };

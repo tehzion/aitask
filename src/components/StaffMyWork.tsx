@@ -1,3 +1,4 @@
+import '../lib/staffWorkflowCopy';
 import React from 'react';
 import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, Clock3, ListChecks, RotateCcw } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -94,6 +95,12 @@ const StaffMyWork: React.FC = () => {
         </div>
         <BackendFreshness />
       </header>
+
+      <div className="grid grid-cols-3 gap-3 text-xs text-muted sm:max-w-xl" aria-label={t('Assignment overview')}>
+        <div><strong className="calm-number block text-xl text-ink">{tasks.filter(isTaskOpen).length}</strong><span className="mt-1 block">{t('Active tasks')}</span></div>
+        <Link className="min-h-11 font-medium hover:text-accent hover:underline" to={`/tasks?help=1${isHod ? `&scope=${scope}` : ''}`}><strong className="calm-number block text-xl text-ink">{tasks.filter(task => isTaskOpen(task) && task.workState?.blocker).length}</strong><span className="mt-1 block">{t('Help requested')}</span></Link>
+        <Link className="min-h-11 font-medium hover:text-accent hover:underline" to={`/tasks?unaccepted=1${isHod ? `&scope=${scope}` : ''}`}><strong className="calm-number block text-xl text-ink">{tasks.filter(task => isTaskOpen(task) && task.assignedTo && task.workState?.acceptedBy !== task.assignedTo).length}</strong><span className="mt-1 block">{t('Assignment acceptance is not recorded.')}</span></Link>
+      </div>
 
       {isHod && <SegmentedTabs<HodWorkScope>
         items={[

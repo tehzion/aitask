@@ -55,6 +55,7 @@ const StaffWorkItem: React.FC<StaffWorkItemProps> = ({ task, allTasks, users = [
           {incompletePredecessors.length > 0 && <span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle className="h-3.5 w-3.5" />{incompletePredecessors.length} {t(incompletePredecessors.length === 1 ? 'blocker' : 'blockers')}</span>}
           {unavailablePredecessorCount > 0 && <span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />{t('Dependency status unavailable')}</span>}
           {task.attachmentLink && <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" />{t('File')}</span>}
+          {!task.isCompleted && !['Completed', 'Cancelled'].includes(task.status) && task.workState?.blocker && <span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />{t('Help requested')}</span>}
         </span>
         {task.status === 'In Progress' && (
           <ProgressBar className="mt-3 max-w-64" label={t('Task progress')} value={task.completionPercentage} />

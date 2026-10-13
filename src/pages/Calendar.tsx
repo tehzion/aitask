@@ -86,6 +86,7 @@ interface PendingDateAttempt {
   attempted: DateEditorDraft;
   source: 'editor' | 'drag';
   lastPulledAt?: string;
+  permissionDenied?: boolean;
 }
 
 const taskDateLabel = (
@@ -378,7 +379,7 @@ const Calendar: React.FC = () => {
         return { ok: false, error };
       }
       optimisticVersion = useStore.getState().tasks.find(item => item.id === taskId)?.updatedAt;
-      let result: { ok: boolean; error?: string };
+      let result: { ok: boolean; error?: string; code?: string };
       try { result = await commitPendingMutation('task.update'); }
       catch (failure) { result = { ok: false, error: failure instanceof Error ? failure.message : 'Unable to update the task dates.' }; }
       if (!isCurrent()) return { ok: false, stale: true };
@@ -388,7 +389,8 @@ const Calendar: React.FC = () => {
         useStore.setState(state => ({ tasks: state.tasks.map(item => item.id === taskId
           && item.updatedAt === optimisticVersion && item.startDate === nextDates.startDate && item.dueDate === nextDates.dueDate
           ? { ...item, ...previous } : item) }));
-        setPendingDateAttempt({ taskId, original: previous, attempted: nextDates, source, lastPulledAt: useStore.getState().backend.lastPulledAt });
+        const permissionDenied = result.code === 'FORBIDDEN' || /do not have permission|permission denied/i.test(error);
+        setPendingDateAttempt({ taskId, original: previous, attempted: nextDates, source, permissionDenied, lastPulledAt: useStore.getState().backend.lastPulledAt });
         dateBaseline.current = previous;
         setEditingTaskId(taskId); setDateDraft(nextDates); setDateDraftError(error); setSyncError(error);
         return { ok: false, error };
@@ -1425,12 +1427,13 @@ const Calendar: React.FC = () => {
                 <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900" role="alert">
                   <p className="font-semibold">{t('Attempted range retained')}</p>
                   <p className="mt-1 leading-5">
-                    {t('Retry will save')} {editingPendingAttempt.attempted.startDate}
+                    {t('Retry will attempt to save')} {editingPendingAttempt.attempted.startDate}
                     {editingPendingAttempt.attempted.dueDate
                       ? ` ${t('to')} ${editingPendingAttempt.attempted.dueDate}`
                       : ` ${t('with no due date')}`}
-                    . {t('Use latest will discard this attempt.')}
+                    . {t('Restoring saved dates will discard this attempt.')}
                   </p>
+                  {editingPendingAttempt.permissionDenied && <p className="mt-2 leading-5">{t('Your account cannot save this change. Ask the task owner to check your access before retrying, or restore the saved dates.')}</p>}
                 </div>
               ) : hasBlockedMutation && (
                 <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800" role="alert">
@@ -1460,7 +1463,7 @@ const Calendar: React.FC = () => {
                       onClick={event => { event.preventDefault(); void handleUseLatestDates(); }}
                       disabled={savingTaskId === editingTask.id || backend.status === 'offline'}
                     >
-                      {t('Use latest')}
+                      {t('Restore saved dates')}
                     </Button>
                     <Button
                       type="button"

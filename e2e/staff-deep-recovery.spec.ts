@@ -153,10 +153,10 @@ test('Staff date recovery catches retry and reload exceptions and can use latest
   await dialog.getByRole('button', { name: 'Save dates', exact: true }).click();
   await dialog.getByRole('button', { name: 'Retry dates', exact: true }).click();
   await expect(dialog.getByRole('alert').first()).toContainText('Retry interrupted.');
-  await dialog.getByRole('button', { name: 'Use latest', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Restore saved dates', exact: true }).click();
   await expect(dialog.getByRole('alert').first()).toContainText('Reload interrupted.');
   await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.setState({ discardMutation: async () => undefined }));
-  await dialog.getByRole('button', { name: 'Use latest', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Restore saved dates', exact: true }).click();
   await expect(dialog.locator('input[type=date]').last()).toHaveValue(original);
   await expect(dialog.getByRole('button', { name: 'Save dates', exact: true })).toBeEnabled();
 });
@@ -214,3 +214,25 @@ test('Staff Full edit retry preserves a draft whose original command was discard
   await expect(page.getByRole('alert')).toContainText('The pending task update is no longer available.');
   await expect(page.getByLabel('Task Title', { exact: true })).toHaveValue('Submitted but discarded title');
 });
+
+for (const locale of ['en', 'zh'] as const) {
+  test(`Calendar ${locale} recovery describes saved dates and explains a permission rejection`, async ({ page }) => {
+    await seed(page);
+    await page.evaluate(value => localStorage.setItem('aitask:locale', value), locale);
+    await page.reload();
+    await page.getByRole('button', { name: `${locale === 'zh' ? '编辑日期：' : 'Edit dates for'} ${title}`, exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: locale === 'zh' ? '编辑任务日期' : 'Edit task dates' });
+    const original = await dialog.locator('input[type=date]').last().inputValue();
+    await page.evaluate(async () => {
+      const { useStore } = await import('/src/store/index.ts');
+      useStore.setState({ commitPendingMutation: async () => ({ ok: false, code: 'FORBIDDEN', error: 'You do not have permission to make this change.' }), discardMutation: async () => undefined });
+    });
+    await dialog.locator('input[type=date]').last().fill('2026-12-20');
+    await dialog.getByRole('button', { name: locale === 'zh' ? '保存日期' : 'Save dates', exact: true }).click();
+    await expect(dialog.getByRole('alert').first()).toContainText(locale === 'zh' ? '您没有进行此更改的权限。' : 'You do not have permission to make this change.');
+    await expect(dialog.getByRole('alert').last()).toContainText(locale === 'zh' ? '请先让任务负责人检查您的权限' : 'Ask the task owner to check your access before retrying');
+    await expect(dialog.getByRole('button', { name: '使用最新版本', exact: true })).toHaveCount(0);
+    await dialog.getByRole('button', { name: locale === 'zh' ? '恢复已保存日期' : 'Restore saved dates', exact: true }).click();
+    await expect(dialog.locator('input[type=date]').last()).toHaveValue(original);
+  });
+}

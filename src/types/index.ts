@@ -421,6 +421,21 @@ export interface Project {
   updatedAt?: string;
 }
 
+export interface TaskWorkState {
+  acceptedBy?: string;
+  acceptedAt?: string;
+  reviewRequestedBy?: string;
+  reviewRequestedAt?: string;
+  blocker?: { reason: string; openedBy: string; openedAt: string };
+}
+
+export interface TaskWorkEvent {
+  id: string;
+  userId: string;
+  createdAt: string;
+  fields: string[];
+}
+
 export interface Task {
   id: string;
   version?: number;
@@ -468,6 +483,8 @@ export interface Task {
   dueReminderSent?: boolean;
   comments?: TaskComment[];
   approvalHistory?: TaskApprovalEvent[];
+  workState?: TaskWorkState;
+  workHistory?: TaskWorkEvent[];
   updatedAt?: string;
   clientProjection?: boolean; // Runtime-only marker for the redacted Client portal shape
 }

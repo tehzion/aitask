@@ -10,16 +10,18 @@ export function useRecoverableForm<T>(form: string, value: T, dirty: boolean, en
   const currentValue = useRef(value); currentValue.current = value;
   const [available, setAvailable] = useState(() => account && enabled ? readRecoveredDraft<T>(account, form) : null);
   const previousKey = useRef(`${account}:${form}`);
+  const previouslyEnabled = useRef(enabled);
   const serialized = JSON.stringify(value);
   const lastValue = useRef(serialized);
   const clearedValue = useRef<string | null>(null);
   useEffect(() => {
     const key = `${account}:${form}`;
-    if (key !== previousKey.current) {
+    if (key !== previousKey.current || (enabled && !previouslyEnabled.current)) {
       previousKey.current = key; baseline.current = currentValue.current;
       setAvailable(account && enabled ? readRecoveredDraft<T>(account, form) : null);
       clearedValue.current = null;
     }
+    previouslyEnabled.current = enabled;
     lastValue.current = serialized;
     if (enabled && dirty && account && clearedValue.current !== serialized) {
       const actor = useStore.getState().currentUser;
@@ -32,5 +34,5 @@ export function useRecoverableForm<T>(form: string, value: T, dirty: boolean, en
     setAvailable(null);
     return draft;
   };
-  return { available: Boolean(available), clear, restore };
+  return { available: Boolean(available), draft: available?.value, clear, restore };
 }

@@ -77,6 +77,13 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   expect(taskFocusAxe.violations, `Staff task focus: ${taskFocusAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
 
   await page.getByRole('button', { name: 'Send for review' }).click();
+  await expect(page.getByRole('alert')).toContainText('Add an output link');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const task = useStore.getState().tasks.find(item => item.title === '6. Video Editing')!;
+    useStore.getState().updateTaskAttachment(task.id, 'https://example.com/staff-final-video');
+  });
+  await page.getByRole('button', { name: 'Send for review' }).click();
   await expect(page.getByRole('alertdialog', { name: 'Start with an incomplete earlier step?' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Waiting for review' })).toBeDisabled();
 });
