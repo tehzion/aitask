@@ -8,6 +8,8 @@ number remain uniquely identifiable.
 
 ### Fixed
 
+- Plan revision save labels stay readable during selection and saving, and saved
+  feedback uses the theme’s high-contrast text color.
 - Client dashboards use generic team labels and the portal payload excludes staff
   contacts and assignments. Publication messages require an actual current draft.
 - Company review selections survive switching workspace tabs. Expired drafts and

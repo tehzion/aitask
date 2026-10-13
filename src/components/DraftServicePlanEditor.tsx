@@ -163,7 +163,7 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
   return <section className={cn(cardBase, 'overflow-hidden border-blue-200')}>
     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-blue-100 bg-blue-50 px-5 py-4">
       <div><div className="flex items-center gap-2"><h2 className="font-semibold text-blue-950">{t('Scheduled revision')} {plan.revision}</h2><Badge tone="amber">{t('Draft')}</Badge></div><p className="mt-1 text-sm text-blue-800">{t('Takes effect on')} {plan.effectiveFromCycleStart}. {t('Existing cycles remain unchanged.')}</p></div>
-      <Button onClick={() => void save()} disabled={saving || conflict}><Save className="h-4 w-4" />{saving ? t('Saving…') : t('Save revision')}</Button>
+      <Button className="disabled:bg-inset disabled:!text-muted disabled:opacity-100" onClick={() => void save()} disabled={saving || conflict}><Save className="h-4 w-4" aria-hidden="true" />{saving ? t('Saving…') : t('Save revision')}</Button>
     </div>
     {recovery && <div className="border-b border-line bg-inset px-5 py-4" role="status"><p>{t('A recoverable draft is available on this device.')}</p><div className="mt-3 flex gap-2"><Button variant="secondary" onClick={restoreRecovery}>{t('Restore recovered draft')}</Button><Button variant="secondary" onClick={() => { removeRecoveredDraft(account, recoveryKey, recovery?.storageKey); setRecovery(null); }}>{t('Discard recovered draft')}</Button></div></div>}
     {conflict && <div className="border-b border-line bg-inset px-5 py-4" role="alert">
@@ -190,7 +190,7 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
       <label className="text-sm font-semibold text-slate-700">{t('Tax rate (%)')}<input type="number" min="0" max="100" step="0.01" className={cn(inputBase, 'mt-1 px-3 py-2')} value={taxRateBps / 100} onChange={event => { markDirty(); setTaxRateBps(Math.round(Number(event.target.value) * 100)); }} /></label>
     </div>
     </fieldset>
-    {message && <p className="border-t border-slate-100 px-5 py-3 text-sm font-medium text-blue-800" role="status">{message}</p>}
+    {message && <p className="border-t border-slate-100 px-5 py-3 text-sm font-medium text-ink" role="status">{message}</p>}
   </section>;
 };
 

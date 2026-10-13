@@ -14,7 +14,7 @@ export const inputBase = [
   'disabled:cursor-not-allowed disabled:bg-inset disabled:text-muted/60',
 ].join(' ');
 export const buttonBase = [
-  'inline-flex items-center justify-center gap-2 rounded-control text-sm font-semibold leading-5',
+  'inline-flex select-none items-center justify-center gap-2 rounded-control text-sm font-semibold leading-5',
   'transition-[transform,background-color,border-color,color,box-shadow] duration-160 active:translate-y-px active:scale-[0.985]',
   'focus:outline-none focus:ring-2 focus:ring-accent/35 focus:ring-offset-2 focus:ring-offset-canvas',
   'disabled:cursor-not-allowed disabled:opacity-50',
