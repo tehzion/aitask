@@ -21,8 +21,9 @@ describe('staff work lifecycle', () => {
     expect(useStore.getState().tasks[0].workState).toMatchObject({ reviewRequestedBy: staff.id });
     expect(useStore.getState().tasks[0].workState?.reviewRequestedAt).toBeTruthy();
   });
-  it('keeps administrative tasks flexible and legacy completed edits available', () => {
-    expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
+  it('keeps administrative submissions flexible and legacy completed edits available', () => {
+    expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(true);
+    useStore.setState({ tasks: [{ ...task, status: 'Completed', isCompleted: true }] });
     useStore.setState({ deliverables: [output] });
     expect(useStore.getState().updateTask(task.id, { notes: 'Handover instructions' }).ok).toBe(true);
   });
@@ -31,9 +32,9 @@ describe('staff work lifecycle', () => {
     expect(useStore.getState().updateTask(task.id, { status: 'Completed', attachmentLink: 'javascript:alert(1)' }).ok).toBe(false);
     expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(false);
   });
-  it('accepts valid linked deliverable files as evidence', () => {
+  it('accepts valid linked deliverable files as evidence for submission', () => {
     useStore.setState({ deliverables: [{ ...output, attachments: [{ id: 'file', bucket: 'client-service-files', path: 'company/file' } as never] }] });
-    expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
+    expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(true);
   });
   it('only the assignee accepts work, while the owner can manage a help request', () => {
     useStore.setState({ currentUser: owner });
@@ -71,7 +72,9 @@ describe('staff work lifecycle', () => {
   it('blocks help actions on closed work and requires nonempty bounded reasons', () => {
     expect(useStore.getState().updateTaskWork(task.id, { kind: 'block', reason: ' ' }).ok).toBe(false);
     expect(useStore.getState().updateTaskWork(task.id, { kind: 'block', reason: 'x'.repeat(2001) }).ok).toBe(false);
-    useStore.getState().updateTaskStatus(task.id, 'Completed');
+    useStore.setState({ currentUser: owner });
+    expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
+    useStore.setState({ currentUser: staff });
     expect(useStore.getState().updateTaskWork(task.id, { kind: 'accept' }).ok).toBe(false);
   });
 });

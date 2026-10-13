@@ -23,9 +23,9 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
       startDate: '2026-08-20',
       dueDate: '2026-08-26',
       priority: 'Urgent' as const,
-      status: 'Waiting Approval',
-      completionPercentage: 100,
-      isCompleted: true,
+      status: 'Approved',
+      completionPercentage: 80,
+      isCompleted: false,
       revisionCount: 0,
       clientApprovalStatus: 'Pending' as const,
       isRecurring: false,
@@ -108,12 +108,12 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
   await expect(approvalFocus.getByLabel('Decision note')).toHaveValue('Recover my approval note.');
   await approvalFocus.getByLabel('Decision note').fill('Approved for launch.');
   await approvalFocus.getByRole('button', { name: 'Approve delivery' }).click();
-  await expect(approvalFocus.getByText('This delivery is approved.')).toBeVisible();
+  await expect(approvalFocus.getByText('Client approved. Awaiting PM final completion.')).toBeVisible();
   await expect(approvalFocus.getByText('approved the delivery', { exact: false })).toBeVisible();
   await expect(approvalFocus.getByText('Approved for launch.')).toBeVisible();
   await page.reload();
   const persistedApproval = page.getByRole('dialog', { name: 'Delivery details' });
-  await expect(persistedApproval.getByText('This delivery is approved.')).toBeVisible();
+  await expect(persistedApproval.getByText('Client approved. Awaiting PM final completion.')).toBeVisible();
   await expect(persistedApproval.getByText('approved the delivery', { exact: false })).toHaveCount(1);
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -136,7 +136,7 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
 
   await page.goto('/clients?period=all&taskId=client-v2-approve');
   const trackerFocus = page.getByRole('dialog', { name: 'Delivery details' });
-  await expect(trackerFocus.getByText('This delivery is approved.')).toBeVisible();
+  await expect(trackerFocus.getByText('Client approved. Awaiting PM final completion.')).toBeVisible();
   await expect(trackerFocus.getByText('Approved for launch.')).toBeVisible();
   await trackerFocus.getByRole('button', { name: 'Close', exact: true }).click();
 
@@ -168,7 +168,7 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
   await expect(page.getByRole('link', { name: '全部交付内容' })).toBeVisible();
   if (seeded.clientId) {
     await page.getByRole('tab', { name: '概览' }).click();
-    await expect(page.getByText('需要您审阅', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('等待 PM 确认完成', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Needs your review', { exact: true })).toHaveCount(0);
   }
   const axe = await new AxeBuilder({ page }).include('main').analyze();
@@ -203,7 +203,7 @@ test('Client tracker statistics reconcile approvals, cancellations and filtered 
   await page.goto('/clients?period=all');
   const summary = page.getByLabel('Delivery tracker summary');
   await expect(summary.locator('strong')).toHaveText(['1', '0', '1', '0']);
-  await expect(page.getByRole('progressbar', { name: 'Client completion' })).toHaveAttribute('aria-valuenow', '50');
+  await expect(page.getByRole('progressbar', { name: 'Work progress' })).toHaveAttribute('aria-valuenow', '80');
   await page.getByRole('button', { name: 'View work', exact: true }).click();
   await expect(page.getByText('Needs your review', { exact: true })).toBeVisible();
   await expect(page.getByText('Stats private', { exact: true })).toHaveCount(0);
@@ -211,7 +211,7 @@ test('Client tracker statistics reconcile approvals, cancellations and filtered 
   await page.getByRole('searchbox', { name: 'Search delivery tracker' }).fill('Stats approved');
   await expect(page.getByText('Stats awaiting review', { exact: true })).toHaveCount(0);
   await expect(summary.locator('strong')).toHaveText(['0', '0', '1', '0']);
-  await expect(page.getByRole('progressbar', { name: 'Client completion' })).toHaveAttribute('aria-valuenow', '100');
+  await expect(page.getByRole('progressbar', { name: 'Work progress' })).toHaveAttribute('aria-valuenow', '100');
   await page.getByRole('searchbox', { name: 'Search delivery tracker' }).fill('no such work');
   await expect(summary.locator('strong')).toHaveText(['0', '0', '0', '0']);
 });

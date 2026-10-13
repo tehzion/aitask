@@ -53,7 +53,7 @@ describe('Client portal reporting', () => {
   it('counts only client-approved work as approved', () => {
     const tasks = [
       makeTask({ id: 'active' }),
-      makeTask({ id: 'review', status: 'Waiting Approval' }),
+      makeTask({ id: 'review', status: 'Approved' }),
       makeTask({ id: 'completed', status: 'Completed', isCompleted: true }),
       makeTask({ id: 'approved', status: 'Completed', isCompleted: true, clientApprovalStatus: 'Approved' }),
       makeTask({ id: 'cancelled', status: 'Cancelled' }),
@@ -64,9 +64,9 @@ describe('Client portal reporting', () => {
 
   it('orders review-ready work by due date and keeps missing dates last', () => {
     const tasks = [
-      makeTask({ id: 'missing', status: 'Waiting Approval', dueDate: '' }),
+      makeTask({ id: 'missing', status: 'Approved', dueDate: '' }),
       makeTask({ id: 'later', status: 'Completed', isCompleted: true, dueDate: '2026-08-10' }),
-      makeTask({ id: 'first', status: 'Waiting Approval', dueDate: '2026-08-04' }),
+      makeTask({ id: 'first', status: 'Approved', dueDate: '2026-08-04' }),
     ];
 
     expect(getClientReviewReadyTasks(tasks).map(task => task.id)).toEqual(['first', 'later', 'missing']);
@@ -77,8 +77,8 @@ describe('Client portal reporting', () => {
       makeTask({ id: 'later', dueDate: '2026-08-10' }),
       makeTask({ id: 'first', dueDate: '2026-08-04' }),
       makeTask({ id: 'undated', dueDate: '' }),
-      makeTask({ id: 'review', dueDate: '2026-08-03', status: 'Waiting Approval' }),
-      makeTask({ id: 'approved', dueDate: '2026-08-02', clientApprovalStatus: 'Approved' }),
+      makeTask({ id: 'review', dueDate: '2026-08-03', status: 'Approved' }),
+      makeTask({ id: 'approved', dueDate: '2026-08-02', status: 'Completed', isCompleted: true, clientApprovalStatus: 'Approved' }),
       makeTask({ id: 'cancelled', dueDate: '2026-08-01', status: 'Cancelled' }),
     ];
 
@@ -97,11 +97,11 @@ describe('Client portal reporting', () => {
 
   it('derives client delivery stages without exposing internal task statuses', () => {
     const now = new Date(2026, 7, 10, 12);
-    expect(getClientDeliveryStage(makeTask({ status: 'Waiting Approval' }), now)).toBe('needs_review');
+    expect(getClientDeliveryStage(makeTask({ status: 'Approved' }), now)).toBe('needs_review');
     expect(getClientDeliveryStage(makeTask({ status: 'In Progress' }), now)).toBe('timing_changed');
     expect(getClientDeliveryStage(makeTask({ status: 'In Progress', dueDate: '2026-08-12' }), now)).toBe('in_delivery');
     expect(getClientDeliveryStage(makeTask({ status: 'Pending', dueDate: '2026-08-12' }), now)).toBe('scheduled');
-    expect(getClientDeliveryStage(makeTask({ clientApprovalStatus: 'Approved' }), now)).toBe('delivered');
+    expect(getClientDeliveryStage(makeTask({ status: 'Completed', isCompleted: true, clientApprovalStatus: 'Approved' }), now)).toBe('delivered');
     expect(getClientDeliveryStage(makeTask({ status: 'Cancelled' }), now)).toBe('cancelled');
     expect(getClientDeliveryStageLabel(makeTask({ status: 'Custom production', dueDate: '2026-08-12' }), now)).toBe('In delivery');
   });
@@ -109,7 +109,7 @@ describe('Client portal reporting', () => {
   it('uses client-stage colors for tracker badges', () => {
     const now = new Date(2026, 7, 10, 12);
     expect(getClientDeliveryStageTone(makeTask({ status: 'Completed', isCompleted: true }), now)).toBe('amber');
-    expect(getClientDeliveryStageTone(makeTask({ clientApprovalStatus: 'Approved' }), now)).toBe('emerald');
+    expect(getClientDeliveryStageTone(makeTask({ status: 'Completed', isCompleted: true, clientApprovalStatus: 'Approved' }), now)).toBe('emerald');
     expect(getClientDeliveryStageTone(makeTask({ status: 'Pending', dueDate: '2026-08-12' }), now)).toBe('slate');
   });
 
@@ -117,11 +117,11 @@ describe('Client portal reporting', () => {
     const now = new Date(2026, 7, 1, 12);
     const tasks = [
       makeTask({ id: 'delivery', dueDate: '2026-08-02' }),
-      makeTask({ id: 'review-older', status: 'Waiting Approval', dueDate: '2026-08-05', updatedAt: '2026-08-01T09:00:00.000Z' }),
-      makeTask({ id: 'review-newer', status: 'Waiting Approval', dueDate: '2026-08-05', updatedAt: '2026-08-01T11:00:00.000Z' }),
+      makeTask({ id: 'review-older', status: 'Approved', dueDate: '2026-08-05', updatedAt: '2026-08-01T09:00:00.000Z' }),
+      makeTask({ id: 'review-newer', status: 'Approved', dueDate: '2026-08-05', updatedAt: '2026-08-01T11:00:00.000Z' }),
     ];
     expect(getClientFocusTask(tasks, now)?.id).toBe('review-newer');
-    expect(getClientFocusTask(tasks.filter(task => task.status !== 'Waiting Approval'), now)?.id).toBe('delivery');
+    expect(getClientFocusTask(tasks.filter(task => task.status !== 'Approved'), now)?.id).toBe('delivery');
   });
 
   it('groups timing changes separately from scheduled and active delivery work', () => {
@@ -206,7 +206,7 @@ describe('recorded client approval timing', () => {
     expect(getClientApprovalDate(approved)?.toISOString()).toBe('2026-10-03T12:00:00.000Z');
   });
   it('keeps missing history unknown and does not reuse approval from a reopened delivery', () => {
-    expect(getClientApprovalDate(makeTask({ clientApprovalStatus: 'Approved' }))).toBeNull();
+    expect(getClientApprovalDate(makeTask({ status: 'Completed', isCompleted: true, clientApprovalStatus: 'Approved' }))).toBeNull();
     expect(getClientApprovalDate(makeTask({ clientApprovalStatus: 'Rejected', approvalHistory: [
       { id: 'old', userId: 'client', status: 'Approved', createdAt: '2026-10-02T12:00:00Z' },
     ] }))).toBeNull();

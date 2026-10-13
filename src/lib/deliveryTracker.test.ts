@@ -110,7 +110,7 @@ describe('delivery tracker periods', () => {
       today: new Date(2026, 8, 10),
     });
 
-    expect(summaries[0]).toMatchObject({ open: 1, inProgress: 1, completed: 1, included: 2, delivered: 1, remaining: 1, progress: 50 });
+    expect(summaries[0]).toMatchObject({ open: 1, inProgress: 1, completed: 1, included: 2, delivered: 1, remaining: 1, progress: 58 });
     expect(summaries[0].assigneeIds).toEqual(['staff-1']);
   });
 
@@ -172,14 +172,14 @@ describe('client-facing statistic reconciliation', () => {
     const tasks = [
       task({ id: 'ready', clientName: 'Acme', status: 'Completed', isCompleted: true }),
       task({ id: 'waiting', clientName: 'Acme', status: 'Waiting Approval', isCompleted: true }),
-      task({ id: 'approved', clientName: 'Acme', clientApprovalStatus: 'Approved' }),
+      task({ id: 'approved', clientName: 'Acme', status: 'Completed', isCompleted: true, clientApprovalStatus: 'Approved' }),
       task({ id: 'active', clientName: 'Acme', status: 'In Progress' }),
       task({ id: 'cancelled', clientName: 'Acme', status: 'Cancelled', isCompleted: true }),
     ];
     const [summary] = buildClientDeliverySummaries({ ...input, tasks, clientView: true });
-    expect(summary).toMatchObject({ open: 3, review: 2, completed: 1, overdue: 1, inProgress: 1, progress: 25 });
+    expect(summary).toMatchObject({ open: 3, review: 2, completed: 1, overdue: 1, inProgress: 1, progress: 63 });
     expect(summary.open + summary.completed).toBe(tasks.filter(item => item.status !== 'Cancelled').length);
-    expect(buildClientDeliverySummaries({ ...input, tasks })[0].completed).toBe(2);
+    expect(buildClientDeliverySummaries({ ...input, tasks })[0].completed).toBe(3);
   });
 
   it('does not lower task progress because cancelled work remains in history', () => {
@@ -214,6 +214,23 @@ describe('client-facing statistic reconciliation', () => {
 });
 
 describe('matching tracker records', () => {
+  it('advances company progress before all tasks finish, and requires final completion for 100%', () => {
+    const done = Array.from({ length: 3 }, (_, i) => task({ id: `done-${i}`, clientName: 'Acme', status: 'Completed', isCompleted: true }));
+    const input = { clientNames: ['Acme'], users, cycles: [], deliverables: [], period: 'all' as const, range: getDeliveryPeriodRange('all', new Date()) };
+    const progress = (status: string, clientApprovalStatus: Task['clientApprovalStatus'] = 'Pending') => buildClientDeliverySummaries({ ...input, tasks: [...done, task({ id: 'remaining', clientName: 'Acme', status, clientApprovalStatus })] })[0].progress;
+    expect(progress('Pending')).toBe(80);
+    expect(progress('Waiting Approval')).toBe(90);
+    expect(progress('In Progress', 'Rejected')).toBe(88);
+    expect(progress('Approved')).toBe(95);
+    expect(progress('Completed')).toBe(100);
+  });
+  it('does not hide unfinished linked work behind a delivered output count', () => {
+    const output = deliverable({ id: 'output', status: 'Delivered', taskIds: ['work'] });
+    const [summary] = buildClientDeliverySummaries({ clientNames: ['Acme'], users, cycles: [cycle], deliverables: [output],
+      period: 'all', range: getDeliveryPeriodRange('all', new Date()),
+      tasks: [task({ id: 'work', clientName: 'Acme', clientId: output.clientId, status: 'Waiting Approval' })] });
+    expect(summary).toMatchObject({ progress: 60, delivered: 1, included: 1, completed: 0 });
+  });
   it('recomputes task statistics and hides unrelated rows for a task search', () => {
     const [summary] = buildClientDeliverySummaries({ clientNames: ['Acme'], users, cycles: [], deliverables: [],
       period: 'all', range: getDeliveryPeriodRange('all', new Date()), searchQuery: 'campaign',

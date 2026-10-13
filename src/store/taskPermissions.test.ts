@@ -346,6 +346,8 @@ describe('task store authorization', () => {
   });
 
   it('records completion, preserves it during edits, and clears it when reopened', () => {
+    const finalizer = { ...otherStaff, role: 'Project Manager' as const, isSuperAdmin: true };
+    useStore.setState({ currentUser: finalizer, users: [staff, otherStaff, finalizer] });
     useStore.getState().updateTaskStatus(ownTask.id, 'Completed');
     const completedAt = useStore.getState().tasks.find(task => task.id === ownTask.id)?.completedAt;
     expect(completedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);

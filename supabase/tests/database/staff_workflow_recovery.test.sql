@@ -33,7 +33,7 @@ select is((select data->'workState'->'blocker'->>'openedBy' from public.aitask_e
 select is((select jsonb_array_length(data->'workHistory') from public.aitask_entities where entity_id='workflow-task'),2,'provided history cannot erase server events');
 select is((pg_temp.work_update('workflow-task','{"status":"Waiting Approval","attachmentLink":"https://example.com/artwork"}')->>'ok')::boolean,true,'evidence permits review');
 select is((select data->'workState'->>'reviewRequestedBy' from public.aitask_entities where entity_id='workflow-task'),'workflow-staff','review submission has authenticated actor');
-select is((pg_temp.work_update('workflow-admin-task','{"status":"Completed","isCompleted":true}')->>'ok')::boolean,true,'administrative completion remains flexible');
+select is((pg_temp.work_update('workflow-admin-task','{"status":"Completed","isCompleted":true}')->>'ok')::boolean,false,'Staff administrative work still requires final PM completion');
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001302',true);
 set local role authenticated;
@@ -43,6 +43,7 @@ select is((pg_temp.work_update('workflow-admin-task','{"workState":{"acceptedBy"
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001302',true);
 update public.aitask_entities set data=data || '{"visibility":"client-visible","status":"Waiting Approval","clientApprovalStatus":"Pending","revisionCount":3,"completionPercentage":100}'::jsonb where workspace_id='staff-workflow-test' and entity_id='workflow-task';
+update public.aitask_entities set data=data || '{"status":"Approved","isCompleted":false,"completionPercentage":80}'::jsonb where workspace_id='staff-workflow-test' and entity_id='workflow-task';
 select set_config('aitask.test_task_version',(select version::text from public.aitask_entities where entity_id='workflow-task'),true);
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001303',true);
 set local role authenticated;
@@ -56,6 +57,6 @@ select is((select (result->>'ok')::boolean from client_review_result),true,'proj
 select diag(result::text) from client_review_result where result->>'ok' <> 'true';
 reset role;
 select is((select data->>'revisionCount' from public.aitask_entities where entity_id='workflow-task'),'3','client approval preserves canonical revision count');
-select ok((select data->>'completedAt' is not null and jsonb_array_length(data->'workHistory') > 2 from public.aitask_entities where entity_id='workflow-task'),'approval records completion time and preserves internal history');
+select ok((select data->>'completedAt' is null and data->>'completionPercentage'='80' and jsonb_array_length(data->'workHistory') > 2 from public.aitask_entities where entity_id='workflow-task'),'customer acceptance remains 80 percent and preserves internal history');
 select * from finish();
 rollback;

@@ -5,7 +5,7 @@ import { useToastStore } from './useToastStore';
 import type { Task, User } from '../types';
 const initial = useStore.getState();
 const client: User = { id: 'feedback-client', name: 'Customer', role: 'Client', companyName: 'Customer Co', department: 'Client', departments: ['Client'] };
-const task: Task = { id: 'feedback-task', clientName: 'Customer Co', title: 'Review delivery', description: '', serviceType: 'Design', department: 'Designer', assignedTo: 'staff', createdBy: 'pm', startDate: '2026-10-01', dueDate: '2026-10-08', status: 'Waiting Approval', priority: 'Medium', isCompleted: false, completionPercentage: 100, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false, visibility: 'client-visible' };
+const task: Task = { id: 'feedback-task', clientName: 'Customer Co', title: 'Review delivery', description: '', serviceType: 'Design', department: 'Designer', assignedTo: 'staff', createdBy: 'pm', startDate: '2026-10-01', dueDate: '2026-10-08', status: 'Approved', priority: 'Medium', isCompleted: false, completionPercentage: 80, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false, visibility: 'client-visible' };
 beforeEach(() => { useStore.setState({ ...initial, currentUser: client, users: [client], clients: [], projects: [], tasks: [task], notifications: [], rolePermissions: [], backend: { ...initial.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } }, true); useToastStore.setState({ toasts: [] }); });
 describe('Customer approval persistence feedback', () => {
   it.each(['Approved', 'Rejected'] as const)('does not announce an optimistic %s decision as persisted', status => {

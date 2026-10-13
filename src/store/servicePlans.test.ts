@@ -127,8 +127,15 @@ describe('client service plan store', () => {
     expect(useStore.getState().tasks.filter(task => task.visibility === 'client-visible')).toHaveLength(3);
     expect(useStore.getState().tasks[1].predecessorTaskIds).toEqual([useStore.getState().tasks[0].id]);
 
+    const reviewer: User = { id: 'video-hod', name: 'Video HOD', role: 'HOD', departments: ['Operation', 'Video Shooting', 'Video Editor'] };
+    useStore.setState({ users: [admin, reviewer] });
     useStore.getState().tasks.forEach(task => {
+      useStore.setState({ currentUser: admin });
       expect(useStore.getState().updateTaskAttachment(task.id, `https://example.com/output/${task.id}`).ok).toBe(true);
+      expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(true);
+      useStore.setState({ currentUser: reviewer });
+      expect(useStore.getState().updateTaskStatus(task.id, 'Approved').ok).toBe(true);
+      useStore.setState({ currentUser: admin });
       expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
     });
     expect(useStore.getState().deliverables[0].status).toBe('Ready');

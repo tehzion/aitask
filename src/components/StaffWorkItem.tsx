@@ -1,5 +1,6 @@
 import { getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
 import React from 'react';
+import { getTaskProgress } from '../lib/taskProgress';
 import { AlertTriangle, ArrowRight, Paperclip, RotateCcw } from 'lucide-react';
 import type { Task, User } from '../types';
 import { getRelativeDueDateString } from '../lib/utils';
@@ -57,8 +58,8 @@ const StaffWorkItem: React.FC<StaffWorkItemProps> = ({ task, allTasks, users = [
           {task.attachmentLink && <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" />{t('File')}</span>}
           {!task.isCompleted && !['Completed', 'Cancelled'].includes(task.status) && task.workState?.blocker && <span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />{t('Help requested')}</span>}
         </span>
-        {task.status === 'In Progress' && (
-          <ProgressBar className="mt-3 max-w-64" label={t('Task progress')} value={task.completionPercentage} />
+        {task.status !== 'Cancelled' && (
+          <ProgressBar className="mt-3 max-w-64" label={t('Task progress')} value={getTaskProgress(task, users)} />
         )}
       </span>
       <ArrowRight className="mt-2 h-4 w-4 shrink-0 text-muted transition-transform duration-160 group-hover:translate-x-0.5 group-hover:text-accent" />

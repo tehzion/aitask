@@ -62,7 +62,7 @@ try {
     const signed = await supabase.auth.signInWithPassword({ email: account.email, password });
     assert.ifError(signed.error);
     loaded = await secure.loadSecureWorkspace(signed.data.user);
-    useStore.setState({ ...initial, ...loaded.state, currentUser: loaded.state.users.find(user => user.id === id), backend: { ...initial.backend, mode: 'local', status: 'local', pendingMutations: 0 } }, true);
+    useStore.setState({ ...initial, ...loaded.state, currentUser: loaded.state.users.find(user => user.id === id), backend: { ...initial.backend, mode: 'supabase', status: 'live', pendingMutations: 0 } }, true);
   };
   const snapshot = () => Object.fromEntries(Object.keys(loaded.state).map(key => [key, useStore.getState()[key]]));
   const save = async (label, result, type) => {
@@ -91,15 +91,22 @@ try {
   assert.equal(useStore.getState().tasks.find(item => item.id === 'task').workState.blocker.reason, 'Need final client assets');
   await save('Staff blocker resolution', useStore.getState().updateTaskWork('task', { kind: 'unblock' }), 'task.update');
   await login('staff');
-  await save('Staff completion and derived progress', useStore.getState().updateTaskStatus('task', 'Completed'), 'task.update');
+  assert.equal(useStore.getState().updateTaskStatus('task', 'Completed').ok, false, 'Staff cannot bypass review and PM completion');
+  await save('Staff review submission', useStore.getState().updateTaskStatus('task', 'Waiting Approval'), 'task.update');
+  await login('hod');
+  assert.equal(useStore.getState().tasks.find(item => item.id === 'task').completionPercentage, 60);
+  await save('HOD approval', useStore.getState().updateTaskStatus('task', 'Approved'), 'task.update');
+  await login('pm');
+  assert.equal(useStore.getState().tasks.find(item => item.id === 'task').completionPercentage, 80);
+  await save('PM final completion and derived progress', useStore.getState().updateTaskStatus('task', 'Completed'), 'task.update');
   await login('staff');
   await save('Staff deliverable completion', useStore.getState().updateDeliverableStatus('deliverable', 'Delivered'), 'deliverable.manage');
   await login('staff');
   assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').status, 'Delivered');
   assert.equal(useStore.getState().serviceCycles.find(item => item.id === 'cycle').status, 'Completed');
   await save('Staff cycle comment', useStore.getState().addCycleComment('cycle', 'Delivered for review', 'internal'), 'cycle_comment.manage');
-  await login('staff');
-  await save('Staff reopen and derived cycle', useStore.getState().updateTaskStatus('task', 'In Progress'), 'task.update');
+  await login('pm');
+  await save('PM revision and derived cycle', useStore.getState().updateTaskStatus('task', 'In Progress'), 'task.update');
   await login('staff');
   assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').status, 'In Progress');
   assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').deliveredAt, undefined);

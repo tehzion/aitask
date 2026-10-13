@@ -1,4 +1,6 @@
 import '../lib/staffWorkflowCopy';
+import { getTaskProgress } from '../lib/taskProgress';
+import { getTaskStatusOptions } from '../lib/taskWorkflowAccess';
 import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock3, ExternalLink, FileText, History, MessageSquare, Send, UsersRound } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -128,7 +130,9 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects });
   const incompletePredecessors = getTaskBlockers(liveTask, visibleTasks);
   const unavailablePredecessorCount = getUnavailableTaskDependencyCount(liveTask, visibleTasks);
-  const guidedAction = getStaffGuidedAction(liveTask, taskStatuses);
+  const guidedAction = getStaffGuidedAction(liveTask, taskStatuses, currentUser, rolePermissions);
+  const statusOptions = getTaskStatusOptions(currentUser, liveTask, taskStatuses, rolePermissions);
+  const taskProgress = getTaskProgress(liveTask, users);
   const deliverable = deliverables.find(item => item.id === liveTask.deliverableId);
   const cycle = serviceCycles.find(item => item.id === liveTask.serviceCycleId);
   const dueDate = parseOptionalDate(liveTask.dueDate);
@@ -242,7 +246,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           onChange={event => void persistStatus(event.target.value)}
           className={`${inputBase} min-h-11 appearance-none px-3 pr-9`}
         >
-          {taskStatuses.map(status => <option key={status} value={status}>{t(status)}</option>)}
+          {statusOptions.map(status => <option key={status} value={status}>{t(status)}</option>)}
         </select>
         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
       </label>
@@ -316,11 +320,11 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
               </div>
             </div>
             <div className="text-right">
-              <p className="calm-number text-2xl font-semibold text-ink">{liveTask.completionPercentage}%</p>
+              <p className="calm-number text-2xl font-semibold text-ink">{taskProgress}%</p>
               <p className="text-xs text-muted">{t('progress')}</p>
             </div>
           </div>
-          <ProgressBar className="mt-4" label={t('Task progress')} value={liveTask.completionPercentage} />
+          <ProgressBar className="mt-4" label={t('Task progress')} value={taskProgress} />
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-muted">
             <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{getRelativeDueDateString(liveTask.dueDate, liveTask.isCompleted, liveTask.status, locale)}</span>
             {liveTask.revisionCount > 0 && <span className="text-amber-700">{t('Revision')} {liveTask.revisionCount}</span>}

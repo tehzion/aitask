@@ -1,3 +1,4 @@
+import { getTaskProgress } from '../lib/taskProgress';
 import React from 'react';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
@@ -199,7 +200,7 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
     </div>
   ) : (
     <div className="flex items-center justify-between gap-4">
-      <p className="text-sm text-muted">{pendingSave?.command === 'approval.review' ? t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.') : stage === 'delivered' ? t('This delivery is approved.') : stage === 'cancelled' ? t('This delivery was cancelled.') : t('Review actions will appear when the delivery is ready.')}</p>
+      <p className="text-sm text-muted">{pendingSave?.command === 'approval.review' ? t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.') : task.status === 'Approved' && task.clientApprovalStatus === 'Approved' ? t('Client approved. Awaiting PM final completion.') : stage === 'delivered' ? t('This delivery is approved.') : stage === 'cancelled' ? t('This delivery was cancelled.') : t('Review actions will appear when the delivery is ready.')}</p>
       <Button variant="secondary" disabled={isSaving} onClick={() => void requestClose()}>{t('Close')}</Button>
     </div>
   );
@@ -229,9 +230,9 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
           <div className="grid gap-4 sm:grid-cols-3">
             <div><p className="text-xs font-medium text-muted">{t('Expected date')}</p><p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><CalendarDays className="h-4 w-4 text-accent" />{dueDate ? formatLocalizedDate(dueDate, locale) : t('To be confirmed')}</p></div>
             <div><p className="text-xs font-medium text-muted">{t('Agency contact')}</p><p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-ink"><UserRound className="h-4 w-4 text-accent" />{contact?.name ? <span data-i18n-skip>{contact.name}</span> : t('Agency team')}</p></div>
-            <div><p className="text-xs font-medium text-muted">{t('Progress')}</p><p className="calm-number mt-1 text-sm font-semibold text-ink">{task.completionPercentage}%</p></div>
+            <div><p className="text-xs font-medium text-muted">{t('Progress')}</p><p className="calm-number mt-1 text-sm font-semibold text-ink">{getTaskProgress(task, [], true)}%</p></div>
           </div>
-          <ProgressBar className="mt-4" value={task.completionPercentage} max={100} label={t('Delivery progress')} />
+          <ProgressBar className="mt-4" value={getTaskProgress(task, [], true)} max={100} label={t('Delivery progress')} />
           {stage === 'timing_changed' && <div className="mt-4 rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm leading-6 text-amber-900 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100"><p className="font-semibold">{t('Expected timing has changed')}</p><p className="mt-1">{t('The date above is the latest shared date. Contact the agency team through the conversation below if you need more context.')}</p></div>}
         </section>
 

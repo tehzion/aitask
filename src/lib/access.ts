@@ -563,7 +563,7 @@ export const canReviewTaskAsClient = (user: User | null | undefined, task: Task,
   task.visibility !== 'internal' &&
   hasPermission(user, 'clientReview', customRoles) &&
   getClientKey(user.companyName) === getClientKey(task.clientName) &&
-  (task.isCompleted || task.status === 'Waiting Approval') &&
+  (task.isCompleted || task.status === 'Completed' || task.status === 'Approved') &&
   task.clientApprovalStatus !== 'Approved'
 );
 export const canCommentOnTask = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = [], scope: VisibilityScope = {}) => (

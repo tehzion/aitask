@@ -1,4 +1,5 @@
 import '../lib/staffWorkflowCopy';
+import { getTaskProgress } from '../lib/taskProgress';
 import React from 'react';
 import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, Clock3, ListChecks, RotateCcw } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -133,8 +134,8 @@ const StaffMyWork: React.FC = () => {
               </div>
               {focusTask.status === 'In Progress' && (
                 <div className="mt-5 max-w-md">
-                  <div className="flex items-center justify-between text-xs font-medium text-muted"><span>{t('Task progress')}</span><span className="calm-number text-ink">{focusTask.completionPercentage}%</span></div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-inset ring-1 ring-line/60"><div className="h-full rounded-full bg-accent" style={{ width: `${focusTask.completionPercentage}%` }} /></div>
+                  <div className="flex items-center justify-between text-xs font-medium text-muted"><span>{t('Task progress')}</span><span className="calm-number text-ink">{getTaskProgress(focusTask, users)}%</span></div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-inset ring-1 ring-line/60"><div className="h-full rounded-full bg-accent" style={{ width: `${getTaskProgress(focusTask, users)}%` }} /></div>
                 </div>
               )}
             </div>

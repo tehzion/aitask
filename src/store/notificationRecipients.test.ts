@@ -67,11 +67,15 @@ describe('task update notification recipients', () => {
   });
 
   it('creates client notices consistently for status and full-edit paths only when visible', () => {
-    useStore.setState({ tasks: [{ ...task, visibility: 'client-visible' }] });
-    useStore.getState().updateTaskStatus(task.id, 'Waiting Approval');
+    const hod: User = { ...staff, id: 'notify-hod', role: 'HOD' };
+    useStore.setState({ currentUser: staff, users: [boss, pmA, pmB, staff, hod], tasks: [{ ...task, visibility: 'client-visible' }] });
+    expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(true);
+    expect(useStore.getState().notifications.filter(notification => notification.targetClient === 'Acme')).toHaveLength(0);
+    useStore.setState({ currentUser: hod });
+    expect(useStore.getState().updateTaskStatus(task.id, 'Approved').ok).toBe(true);
     expect(useStore.getState().notifications.filter(notification => notification.targetClient === 'Acme')).toHaveLength(1);
-    useStore.setState({ notifications: [], tasks: [{ ...task, visibility: 'client-visible' }] });
-    expect(useStore.getState().updateTask(task.id, { status: 'Completed' })).toMatchObject({ ok: true });
+    useStore.setState({ notifications: [], tasks: [{ ...task, status: 'Waiting Approval', visibility: 'client-visible' }] });
+    expect(useStore.getState().updateTask(task.id, { status: 'Approved' })).toMatchObject({ ok: true });
     expect(useStore.getState().notifications.filter(notification => notification.targetClient === 'Acme')).toHaveLength(1);
   });
 });

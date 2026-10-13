@@ -1,3 +1,5 @@
+import { getTaskProgress } from '../lib/taskProgress';
+import { getTaskStatusOptions } from '../lib/taskWorkflowAccess';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useI18n } from '../components/I18nProvider';
@@ -380,7 +382,7 @@ const TasksWorkspace: React.FC = () => {
   );
   const isClientReviewReady = (task: Task) => (
     task.clientApprovalStatus !== 'Approved'
-    && (task.status === 'Waiting Approval' || task.status === 'Completed' || task.isCompleted)
+    && (task.status === 'Approved' || task.status === 'Completed' || task.isCompleted)
   );
   const clientTaskAction = (task: Task) => isClientReviewReady(task)
     ? 'Review task'
@@ -442,7 +444,7 @@ const TasksWorkspace: React.FC = () => {
   const clientStatusLabel = (task: Task) => {
     if (task.status === 'Cancelled') return 'Cancelled';
     if (task.clientApprovalStatus === 'Approved') return 'Approved';
-    if (task.status === 'Waiting Approval' || task.status === 'Completed' || task.isCompleted) return 'Awaiting your review';
+    if (task.status === 'Approved' || task.status === 'Completed' || task.isCompleted) return 'Awaiting your review';
     return 'In progress';
   };
 
@@ -463,7 +465,7 @@ const TasksWorkspace: React.FC = () => {
             await persistQuickChange(task);
           }}
         >
-        {taskStatuses.map(status => (
+        {getTaskStatusOptions(currentUser, task, taskStatuses, rolePermissions).map(status => (
             <option key={status} value={status} className="bg-white text-slate-900">{getLocalizedStatus(status, locale)}</option>
           ))}
         </select>
@@ -808,7 +810,7 @@ const TasksWorkspace: React.FC = () => {
             {!isClientUser && <div className="relative">
               <select aria-label={t('Filter by status')} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">{t('All statuses')}</option>
-                {taskStatuses.map(status => <option key={status} value={status}>{getLocalizedStatus(status, locale)}</option>)}
+                {[...new Set([...taskStatuses, 'Approved'])].map(status => <option key={status} value={status}>{getLocalizedStatus(status, locale)}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>}
@@ -888,9 +890,9 @@ const TasksWorkspace: React.FC = () => {
                           <td className="px-3 py-3">
                             <div className="flex items-center justify-center gap-2">
                               <div className="w-16 bg-slate-200 rounded-full h-2 overflow-hidden">
-                                <div className="bg-accent h-2 rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
+                                <div className="bg-accent h-2 rounded-full" style={{ width: `${getTaskProgress(task, users, isClientUser)}%` }}></div>
                               </div>
-                              <span className="text-xs font-semibold text-slate-700 w-8">{task.completionPercentage}%</span>
+                              <span className="text-xs font-semibold text-slate-700 w-8">{getTaskProgress(task, users, isClientUser)}%</span>
                             </div>
                           </td>
                           <td className="px-3 py-3 text-slate-400">
@@ -1004,9 +1006,9 @@ const TasksWorkspace: React.FC = () => {
                         <div>{renderStatusControl(task)}</div>
                         <div className="flex items-center gap-2">
                           <div className="w-20 bg-slate-200 rounded-full h-2 overflow-hidden">
-                            <div className="bg-accent h-2 rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
+                            <div className="bg-accent h-2 rounded-full" style={{ width: `${getTaskProgress(task, users, isClientUser)}%` }}></div>
                           </div>
-                          <span className="text-xs font-semibold text-slate-700">{task.completionPercentage}%</span>
+                          <span className="text-xs font-semibold text-slate-700">{getTaskProgress(task, users, isClientUser)}%</span>
                         </div>
                       </div>
                     </article>
@@ -1123,9 +1125,9 @@ const TasksWorkspace: React.FC = () => {
                               {/* Progress bar */}
 	                              <div className="mt-2.5 flex items-center gap-1.5">
                                 <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-200/40">
-                                  <div className="bg-accent h-full rounded-full" style={{ width: `${task.completionPercentage}%` }}></div>
+                                  <div className="bg-accent h-full rounded-full" style={{ width: `${getTaskProgress(task, users, isClientUser)}%` }}></div>
 	                              </div>
-                                <span className="text-[9px] font-bold text-slate-600 shrink-0">{task.completionPercentage}%</span>
+                                <span className="text-[9px] font-bold text-slate-600 shrink-0">{getTaskProgress(task, users, isClientUser)}%</span>
                               </div>
 
                               {isClientUser && (
@@ -1226,7 +1228,7 @@ const TasksWorkspace: React.FC = () => {
                       setActiveQuickEdit(null);
                     }}
                   >
-                    {taskStatuses.map(status => (
+                    {getTaskStatusOptions(currentUser, currentTask, taskStatuses, rolePermissions).map(status => (
                       <option key={status} value={status}>{getLocalizedStatus(status, locale)}</option>
                     ))}
                   </select>

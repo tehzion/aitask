@@ -256,8 +256,10 @@ const DeliveryTracker: React.FC = () => {
                     <p className="mt-2 text-xs text-muted">{summary.inProgress} {t('in progress')} · {summary.review} {t('in review')}</p>
                   </div>
                   <div>
-                    <ProgressBar value={summary.progress} label={t('Client completion')} />
-                    <p className="mt-2 text-xs text-muted">{summary.delivered}/{summary.included} {t('deliverables completed')}</p>
+                    <ProgressBar value={summary.progress} label={t('Work progress')} />
+                    <p className="mt-2 text-xs text-muted">{summary.included > 0
+                      ? <>{summary.delivered}/{summary.included} {t('deliverables completed')}</>
+                      : <>{summary.completed}/{summary.open + summary.completed} {t('tasks completed')}</>}</p>
                   </div>
                   <div className="min-w-0">
                     <p className="inline-flex items-center gap-1.5 text-sm font-medium text-ink"><CalendarDays className="h-4 w-4 text-accent" />{readableDate(summary.nextDeadline, locale)}</p>

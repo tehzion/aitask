@@ -1,4 +1,6 @@
 import '../lib/staffWorkflowCopy';
+import { getTaskProgress } from '../lib/taskProgress';
+import { canApproveTaskInternally, canRequestTaskRevision, getTaskStatusOptions } from '../lib/taskWorkflowAccess';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import type { WorkspaceSessionToken } from '../lib/workspaceSession';
 import { useSaveAction } from '../hooks/useSaveAction';
@@ -26,7 +28,7 @@ import ModalShell from './ModalShell';
 import ConfirmDialog from './ConfirmDialog';
 import { useI18n } from './I18nProvider';
 import { formatLocalizedDate, formatLocalizedDistanceToNow } from '../lib/i18n';
-import { ProgressBar } from './ui';
+import { Button, ProgressBar } from './ui';
 import { fieldLabel, inputBase } from './uiTokens';
 
 interface Props {
@@ -241,6 +243,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const canAddComment = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canComment;
   const canClientReview = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canView && canReviewTaskAsClient(currentUser, task, rolePermissions);
   const isClientTaskViewer = currentUser?.role === 'Client';
+  const taskProgress = getTaskProgress(task, users, isClientTaskViewer);
+  const statusOptions = getTaskStatusOptions(currentUser, task, taskStatuses, rolePermissions);
   const canAssignOthers = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canAssign;
   const canDelegateAssignedTask = Boolean(
     canAssignOthers
@@ -630,7 +634,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                           if (await confirmPendingMutation()) announceTaskStatusSaved(nextStatus);
                         }}
                       >
-                        {taskStatuses.map(status => (
+                        {statusOptions.map(status => (
                           <option key={status} value={status} className="bg-white text-slate-900">{t(status)}</option>
                         ))}
                       </select>
@@ -642,14 +646,28 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   <label className="block text-xs font-medium text-slate-500 mb-1">{t(isClientTaskViewer ? 'Progress' : 'Priority')}</label>
                   {isClientTaskViewer ? (
                     <div className="flex items-center justify-end gap-2">
-                      <ProgressBar className="w-24" label={t('Task progress')} value={task.completionPercentage} max={100} />
-                      <span className="text-sm font-bold text-slate-800">{task.completionPercentage}%</span>
+                      <ProgressBar className="w-24" label={t('Task progress')} value={taskProgress} max={100} />
+                      <span className="text-sm font-bold text-slate-800">{taskProgress}%</span>
                     </div>
                   ) : (
                     <span className="text-sm font-bold text-slate-800">{t(task.priority)}</span>
                   )}
                 </div>
               </div>
+
+              {!isClientTaskViewer && <div className="space-y-3">
+                <ProgressBar label={t('Task progress')} value={taskProgress} />
+                {canEditTask && (canApproveTaskInternally(currentUser, task, rolePermissions, { clients, projects })
+                  || (task.status === 'Approved' && statusOptions.includes('Completed'))) && <Button
+                  type="button" disabled={isSubmitting}
+                  onClick={async () => {
+                    const status = task.status === 'Waiting Approval' ? 'Approved' : 'Completed';
+                    const result = updateTaskStatus(task.id, status);
+                    if (!result.ok) { setMutationError(t(result.error || 'Unable to update the task status.')); return; }
+                    if (await confirmPendingMutation('task.update')) announceTaskStatusSaved(status);
+                  }}
+                ><CheckCircle2 className="h-4 w-4" />{t(task.status === 'Waiting Approval' ? 'Approve' : 'Confirm completion')}</Button>}
+              </div>}
 
               {incompletePredecessors.length > 0 && !isClientTaskViewer && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -994,7 +1012,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </div>
               )}
 
-              {canEditTask && (
+              {canEditTask && canRequestTaskRevision(currentUser, task, rolePermissions) && (
                 <form onSubmit={handleRevisionRequest} className="pt-4 border-t border-slate-100 space-y-2">
                   <label className="block text-xs font-medium text-slate-500">{t('Revision Control')}</label>
                   <textarea

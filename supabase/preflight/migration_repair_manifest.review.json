@@ -641,10 +641,14 @@
     "20261002101435_universal_notification_audience_guard",
     "20261007173905_reliable_member_onboarding",
     "20261012165347_hod_task_deletion_authority",
-    "20261013035142_staff_workflow_recovery"
+    "20261013035142_staff_workflow_recovery",
+    "20261013053636_hod_review_handoff",
+    "20261013055051_task_stage_progress"
   ],
   "pendingProductionMigrations": [
     "20261012165347_hod_task_deletion_authority",
-    "20261013035142_staff_workflow_recovery"
+    "20261013035142_staff_workflow_recovery",
+    "20261013053636_hod_review_handoff",
+    "20261013055051_task_stage_progress"
   ]
 }

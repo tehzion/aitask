@@ -24,8 +24,9 @@ export const CLIENT_DELIVERY_STAGE_LABELS: Record<ClientDeliveryStage, string> =
 
 export const getClientTaskStage = (task: Task): ClientTaskStage => {
   if (task.status === 'Cancelled') return 'cancelled';
-  if (task.clientApprovalStatus === 'Approved') return 'approved';
-  if (task.status === 'Waiting Approval' || task.status === 'Completed' || task.isCompleted) {
+  if (task.status === 'Approved') return task.clientApprovalStatus === 'Approved' ? 'active' : 'awaiting_review';
+  if (task.clientApprovalStatus === 'Approved' && (task.status === 'Completed' || task.isCompleted)) return 'approved';
+  if (task.status === 'Completed' || task.isCompleted) {
     return 'awaiting_review';
   }
   return 'active';
@@ -68,8 +69,9 @@ const compareClientDeliveryTasks = (left: Task, right: Task) => (
 
 export const getClientDeliveryStage = (task: Task, now = new Date()): ClientDeliveryStage => {
   if (task.status === 'Cancelled') return 'cancelled';
-  if (task.clientApprovalStatus === 'Approved') return 'delivered';
-  if (task.status === 'Waiting Approval' || task.status === 'Completed' || task.isCompleted) return 'needs_review';
+  if (task.status === 'Approved') return task.clientApprovalStatus === 'Approved' ? 'in_delivery' : 'needs_review';
+  if (task.clientApprovalStatus === 'Approved' && (task.status === 'Completed' || task.isCompleted)) return 'delivered';
+  if (task.status === 'Completed' || task.isCompleted) return 'needs_review';
   const dueDate = parseOptionalDate(task.dueDate);
   if (dueDate && localDateKey(dueDate) < localDateKey(now)) return 'timing_changed';
   if (task.status === 'Pending') return 'scheduled';
@@ -86,9 +88,8 @@ export const getClientDeliveryStageTone = (task: Task, now = new Date()): Client
   return 'slate';
 };
 
-export const getClientDeliveryStageLabel = (task: Task, now = new Date()) => (
-  CLIENT_DELIVERY_STAGE_LABELS[getClientDeliveryStage(task, now)]
-);
+export const getClientDeliveryStageLabel = (task: Task, now = new Date()) => task.status === 'Approved' && task.clientApprovalStatus === 'Approved'
+  ? 'Awaiting final completion' : CLIENT_DELIVERY_STAGE_LABELS[getClientDeliveryStage(task, now)];
 
 export const groupClientDeliveries = (tasks: Task[], now = new Date()) => {
   const groups = CLIENT_DELIVERY_STAGE_ORDER.reduce((result, stage) => ({ ...result, [stage]: [] as Task[] }), {} as Record<ClientDeliveryStage, Task[]>);
@@ -152,7 +153,7 @@ export const getClientServicePlan = (plans: ClientServicePlan[], clientId: strin
 };
 
 export const getClientApprovalDate = (task: Task): Date | null => {
-  if (getClientTaskStage(task) !== 'approved') return null;
+  if (task.status === 'Cancelled' || task.clientApprovalStatus !== 'Approved') return null;
   const dates = (task.approvalHistory || [])
     .filter(event => event.status === 'Approved')
     .map(event => parseOptionalDate(event.createdAt))

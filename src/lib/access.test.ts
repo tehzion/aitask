@@ -744,7 +744,7 @@ describe('client isolation and feedback', () => {
 
   it('allows feedback on owned tasks and review only when ready', () => {
     const owned = tasks[0];
-    const ready = makeTask({ status: 'Waiting Approval' });
+    const ready = makeTask({ status: 'Approved' });
     expect(canCommentOnTask(acmeClient, owned)).toBe(true);
     expect(canCommentOnTask(acmeClient, tasks[1])).toBe(false);
     expect(canReviewTaskAsClient(acmeClient, owned)).toBe(false);

@@ -11,6 +11,7 @@ import {
 } from 'date-fns';
 import type { Deliverable, ServiceCycle, Task, User } from '../types';
 import { getClientTaskStage } from './clientPortal';
+import { averageTaskProgress } from './taskProgress';
 import { getWorkWeekRange } from './workWeek';
 import { formatLocalizedDate, formatLocalizedMonth, type AppLocale } from './i18n';
 
@@ -189,8 +190,21 @@ export const buildClientDeliverySummaries = ({
     }).length;
     const delivered = clientDeliverables.filter(item => item.status === 'Delivered').length;
     const included = clientDeliverables.length;
-    const totalForProgress = included || clientTasks.filter(task => !isTaskCancelled(task)).length;
-    const completeForProgress = included ? delivered : completed;
+    // Each delivery is one work unit; its linked tasks contribute their stage
+    // progress. Independent tasks remain visible without being counted twice.
+    const linkedIds = new Set<string>();
+    const unitProgress = clientDeliverables.map(item => {
+      const linked = clientTasks.filter(task => (!task.clientId || task.clientId === item.clientId) && (task.deliverableId === item.id
+        || (item.taskIds || []).includes(task.id) || item.primaryTaskId === task.id));
+      linked.forEach(task => linkedIds.add(task.id));
+      const required = linked.filter(task => task.workflowStepRequired !== false && task.status !== 'Cancelled');
+      if (required.length) return averageTaskProgress(required, users, clientView);
+      if (item.status === 'Delivered') return 100;
+      return item.status === 'Ready' ? 80 : item.status === 'In Progress' ? 30 : 0;
+    });
+    const independent = clientTasks.filter(task => !linkedIds.has(task.id) && !isTaskCancelled(task));
+    independent.forEach(task => unitProgress.push(averageTaskProgress([task], users, clientView)));
+    const progress = unitProgress.length ? Math.round(unitProgress.reduce((sum, value) => sum + value, 0) / unitProgress.length) : 0;
     const nextDeadline = openTasks
       .map(task => ({ raw: task.dueDate, parsed: dateValue(task.dueDate) }))
       .filter((value): value is { raw: string; parsed: Date } => Boolean(value.raw && value.parsed))
@@ -209,7 +223,7 @@ export const buildClientDeliverySummaries = ({
       included,
       delivered,
       remaining: Math.max(0, included - delivered),
-      progress: totalForProgress ? Math.round((completeForProgress / totalForProgress) * 100) : 0,
+      progress: unitProgress.every(value => value === 100) ? progress : Math.min(99, progress),
       nextDeadline,
       assigneeIds: Array.from(new Set(clientTasks.map(task => task.assignedTo).filter(id => userIds.has(id)))),
     };

@@ -1,4 +1,6 @@
 import { recordDiagnostic } from '../lib/diagnostics';
+import { getTaskProgress } from '../lib/taskProgress';
+import { canRequestTaskRevision, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { clearRecoveredDrafts } from '../lib/draftRecovery';
 import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { create } from 'zustand';
@@ -89,6 +91,7 @@ import {
   isNotificationVisible,
   isBossKoo,
   isHodRole,
+  isHodUser,
   sanitizeRolePermissions,
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
@@ -479,7 +482,8 @@ const cleanAccountEmail = (value?: string) => value?.trim().toLowerCase().slice(
 const resolveTaskStatus = (status: string, statuses: string[]) => {
   const trimmed = status.trim();
   if (!trimmed) return '';
-  return statuses.find(item => item.toLowerCase() === trimmed.toLowerCase()) || '';
+  if (trimmed.toLowerCase() === 'approved') return 'Approved';
+  return [...statuses, 'Approved'].find(item => item.toLowerCase() === trimmed.toLowerCase()) || '';
 };
 
 export const stripSensitiveWorkspaceFields = (value: unknown): unknown => {
@@ -543,7 +547,7 @@ export const shouldNotifyClientForTask = (
   task: Pick<Task, 'visibility' | 'clientName'>,
   nextStatus: string,
 ) => (
-  (nextStatus === 'Completed' || nextStatus === 'Waiting Approval')
+  (nextStatus === 'Completed' || nextStatus === 'Approved')
   && task.visibility === 'client-visible'
   && normalizeClientKey(task.clientName).length > 0
 );
@@ -614,6 +618,19 @@ const taskUpdateNotifications = (
   .filter(recipientId => recipientId !== excludeUserId)
   .map(targetUserId => makeNotification({ ...data, targetUserId }))
   .filter((notification): notification is AppNotification => Boolean(notification));
+
+// Hosted review handoffs are generated atomically by the database. Mirror them
+// only in local workspaces, so cached clients and the full editor behave alike.
+const localHodReviewNotifications = (users: User[], roles: CustomRole[], before: Task, after: Task, actorId: string) => {
+  if (after.status !== 'Waiting Approval' || before.status === after.status) return [];
+  return taskUpdateNotifications(users.filter(user => ['HOD', 'Staff'].includes(user.role) && isHodUser(user, roles)
+    && isMemberInDepartment(user, after.department)).map(user => user.id), {
+    title: 'Task Ready for Approval',
+    message: `"${after.title}" is ready for department review.`,
+    route: { page: 'tasks', entityId: after.id },
+    iconType: 'status',
+  }, actorId);
+};
 
 const getNotificationReadReceipts = (
   notification: AppNotification,
@@ -2690,6 +2707,7 @@ export const useStore = create<StoreState>()(
         if (intent.kind === 'accept' && task.workState?.acceptedBy === actor.id) return { ok: true };
         if (intent.kind === 'unblock' && !task.workState?.blocker) return { ok: true };
         const updated = applyTaskWorkIntent(task, intent, actor.id);
+        updated.completionPercentage = getTaskProgress(updated, state.users);
         const notices = taskUpdateNotifications(resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects), {
           title: 'Task Status Updated', message: `"${task.title}": ${intent.kind === 'accept' ? 'assignment accepted' : intent.kind === 'block' ? 'help requested' : 'blocker cleared'} by ${actor.name}.`,
           route: { page: 'tasks', entityId: taskId }, iconType: 'alert',
@@ -2721,6 +2739,8 @@ export const useStore = create<StoreState>()(
         }
 
         const isCompleted = nextStatus === 'Completed';
+        const transitionError = taskTransitionError(currentUser, task, { ...task, status: nextStatus, isCompleted }, state.rolePermissions);
+        if (transitionError) { result = { ok: false, error: transitionError }; return state; }
         const evidenceError = taskEvidenceError(task, { ...task, status: nextStatus, isCompleted }, state.deliverables);
         if (evidenceError) { result = { ok: false, error: evidenceError }; return state; }
         const isWaitingApproval = nextStatus === 'Waiting Approval';
@@ -2737,21 +2757,24 @@ export const useStore = create<StoreState>()(
               ? 90
               : t.completionPercentage;
 
-          const clientApprovalStatus = isReadyForClientReview
-            ? 'Pending'
+          const returningForRevision = nextStatus === 'In Progress' && ['Waiting Approval', 'Approved', 'Completed'].includes(t.status);
+          const clientApprovalStatus = returningForRevision ? 'Rejected' : isReadyForClientReview
+            ? isCompleted ? (nextStatus !== t.status ? 'Approved' : t.clientApprovalStatus) : 'Pending'
             : t.clientApprovalStatus === 'Approved' || wasCompleted
               ? 'Pending'
               : t.clientApprovalStatus;
 
-          return recordTaskWorkTransition(t, {
+          const updated = recordTaskWorkTransition(t, {
             ...t,
             status: nextStatus,
             isCompleted,
             completedAt: resolveTaskCompletedAt(t, isCompleted, now),
             completionPercentage,
             clientApprovalStatus,
+            revisionCount: returningForRevision ? t.revisionCount + 1 : t.revisionCount,
             updatedAt: now,
           }, currentUser!.id, now);
+          return { ...updated, completionPercentage: getTaskProgress(updated, state.users) };
         });
 
         const newNotifs: AppNotification[] = taskUpdateNotifications(
@@ -2764,6 +2787,10 @@ export const useStore = create<StoreState>()(
           },
           currentUser?.id,
         );
+
+        if (state.backend.mode === 'local') newNotifs.push(...localHodReviewNotifications(
+          state.users, state.rolePermissions, task, newTasks.find(item => item.id === taskId)!, currentUser!.id,
+        ));
 
         if (shouldNotifyClientForTask(task, nextStatus)) {
           appendNotification(newNotifs, {
@@ -2855,7 +2882,8 @@ export const useStore = create<StoreState>()(
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
           const now = new Date().toISOString();
-          return recordTaskWorkTransition(t, { ...t, assignedTo, assignedBy: currentUser?.id || t.assignedBy, assignedAt: now, updatedAt: now }, currentUser!.id, now);
+          const updated = recordTaskWorkTransition(t, { ...t, assignedTo, status: ['Completed', 'Cancelled'].includes(t.status) ? t.status : 'Pending', clientApprovalStatus: ['Completed', 'Cancelled'].includes(t.status) ? t.clientApprovalStatus : 'Pending', assignedBy: currentUser?.id || t.assignedBy, assignedAt: now, updatedAt: now }, currentUser!.id, now);
+          return { ...updated, completionPercentage: getTaskProgress(updated, state.users) };
         });
 
         const newNotifs: AppNotification[] = [];
@@ -3103,7 +3131,7 @@ export const useStore = create<StoreState>()(
                 : task.completionPercentage,
           clientApprovalStatus: statusChanged
             ? isReadyForClientReview
-              ? 'Pending'
+              ? isCompleted ? (status !== task.status ? 'Approved' : task.clientApprovalStatus) : 'Pending'
               : task.clientApprovalStatus === 'Approved' || wasCompleted
                 ? 'Pending'
                 : task.clientApprovalStatus
@@ -3114,10 +3142,28 @@ export const useStore = create<StoreState>()(
           updatedAt: now,
         };
 
+        if (assignmentChanged && !['Completed', 'Cancelled'].includes(task.status) && (data.status === undefined || data.status === task.status)) {
+          updatedTask.status = 'Pending'; updatedTask.clientApprovalStatus = 'Pending';
+        }
+        if (updatedTask.status === 'In Progress' && ['Waiting Approval', 'Approved', 'Completed'].includes(task.status)) {
+          updatedTask.clientApprovalStatus = 'Rejected'; updatedTask.revisionCount = task.revisionCount + 1;
+        }
         const evidenceError = taskEvidenceError(task, updatedTask, state.deliverables);
         if (evidenceError) return { ok: false, error: evidenceError };
+        const transitionError = taskTransitionError(currentUser, task, updatedTask, state.rolePermissions);
+        if (transitionError) return { ok: false, error: transitionError };
         updatedTask = recordTaskWorkTransition(task, updatedTask, currentUser.id, now);
+        updatedTask.completionPercentage = getTaskProgress(updatedTask, state.users);
         const notifications: AppNotification[] = [];
+        if (state.backend.mode === 'local') notifications.push(...localHodReviewNotifications(
+          state.users, state.rolePermissions, task, updatedTask, currentUser.id,
+        ));
+        if (task.status !== updatedTask.status && updatedTask.status === 'Approved') notifications.push(...taskUpdateNotifications(
+          resolveTaskUpdateRecipientIds(state.users, updatedTask, state.clients, state.projects), {
+            title: 'Task Status Updated', message: `"${updatedTask.title}" was approved by ${currentUser.name}.`,
+            route: { page: 'tasks', entityId: taskId }, iconType: 'status',
+          }, currentUser.id,
+        ));
         if (updatedTask.assignedTo && updatedTask.assignedTo !== task.assignedTo) {
           appendNotification(notifications, {
             targetUserId: updatedTask.assignedTo,
@@ -3226,10 +3272,10 @@ export const useStore = create<StoreState>()(
           return {
             ...t,
             clientApprovalStatus: status,
-            status: status === 'Approved' ? 'Completed' as TaskStatus : 'In Progress' as TaskStatus,
-            isCompleted: status === 'Approved',
-            completedAt: resolveTaskCompletedAt(t, status === 'Approved', now),
-            completionPercentage: status === 'Approved' ? 100 : Math.min(t.completionPercentage, 90),
+            status: status === 'Approved' ? 'Approved' as TaskStatus : 'In Progress' as TaskStatus,
+            isCompleted: false,
+            completedAt: undefined,
+            completionPercentage: status === 'Approved' ? 80 : 50,
             revisionCount: status === 'Rejected' ? t.revisionCount + 1 : t.revisionCount,
             approvalHistory: [...(t.approvalHistory || []), event],
             updatedAt: now,
@@ -3275,7 +3321,7 @@ export const useStore = create<StoreState>()(
         }
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+        if (!currentUser || !task || !canRequestTaskRevision(currentUser, task, state.rolePermissions) || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
           result = { ok: false, error: 'You do not have permission to request a revision.' };
           return state;
         }
@@ -3299,7 +3345,7 @@ export const useStore = create<StoreState>()(
             status: 'In Progress' as TaskStatus,
             isCompleted: false,
             completedAt: undefined,
-            completionPercentage: Math.min(t.completionPercentage, 90),
+            completionPercentage: 50,
             comments: revisionComment ? [...(t.comments || []), revisionComment] : t.comments,
             updatedAt: new Date().toISOString(),
           };
@@ -3379,6 +3425,8 @@ export const useStore = create<StoreState>()(
         if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) return '';
 
         const taskId = nowId('T');
+        const transitionError = taskTransitionError(currentUser, undefined, { ...taskData, status, isCompleted: status === 'Completed' }, state.rolePermissions);
+        if (transitionError) { useToastStore.getState().addToast(transitionError, 'warning'); return ''; }
         if (taskEvidenceError(undefined, { ...taskData, id: taskId, status, isCompleted: status === 'Completed', revisionCount: 0, clientApprovalStatus: 'Pending' }, state.deliverables)) {
           useToastStore.getState().addToast(msg('staff.evidenceRequired'), 'warning');
           return '';
@@ -3413,6 +3461,7 @@ export const useStore = create<StoreState>()(
             workState: status === 'Waiting Approval' ? { reviewRequestedBy: currentUser.id, reviewRequestedAt: now } : {},
             updatedAt: now,
           };
+          newTask.completionPercentage = getTaskProgress(newTask, state.users);
 
           const tasks = [...state.tasks, newTask];
           const deliverables = taskData.deliverableId
