@@ -113,3 +113,17 @@ the parallel wrapper, so its migrations remain outside this commit. The isolated
 staged frontend passed 74 relevant unit tests and TypeScript checks.
 The exact staged migration set passed all 597 database assertions across 42
 files, schema lint and security-advisor error gates in a separate disposable run.
+
+## Combined release verification
+
+The HOD commit is integrated with the current delivery/privacy and revision-save
+UI fixes. Combined local validation passed 553 unit tests, 610 pgTAP assertions,
+real Auth/REST and Storage/onboarding recovery, 53 targeted browser regressions,
+TypeScript, lint, strict translations, production build and PWA/bundle checks.
+
+Production migration 20261012165347 is recorded by the connector as
+20261013051554_hod_task_deletion_authority. The before/after entity count was
+1,831 and its business-data hash remained 49a5a607933893da5682a96e7b64f68d.
+The narrow Client approval branch remained intact; the private deletion helper
+is not executable by anonymous or authenticated browser roles. No business data
+was backfilled or deleted by installation. Hosted staging remains access-blocked.
