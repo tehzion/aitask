@@ -349,7 +349,7 @@ select is(
   false,
   'task project data and command parent must agree'
 );
-select is((public.aitask_get_backend_capabilities('pgtap-hod-authorization') ->> 'schemaVersion')::integer, 4, 'the HOD authorization contract requires backend schema version 4');
+select is((public.aitask_get_backend_capabilities('pgtap-hod-authorization') ->> 'schemaVersion')::integer, 5, 'workflow review gates require backend schema version 5');
 
 reset role;
 select * from finish();

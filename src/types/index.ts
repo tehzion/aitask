@@ -437,6 +437,15 @@ export interface Task {
   workflowStepId?: string;
   workflowStepOrder?: number;
   workflowStepRequired?: boolean;
+  workflowStepKind?: WorkflowStepKind;
+  workflowOutputVersion?: number;
+  workflowDependenciesReady?: boolean; // Read-only summary of canonical dependencies
+  internalReview?: {
+    decisionId?: string; // Server-created decision; omitted for optimistic local drafts
+    reviewedBy: string;
+    reviewedAt: string;
+    inputVersions: { taskId: string; outputVersion: number }[];
+  };
   predecessorTaskIds?: string[];
   generatedFromDeliverable?: boolean;
   workflowGeneratedAt?: string;

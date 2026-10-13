@@ -540,6 +540,7 @@ export const canDeleteTask = (
   customRoles: CustomRole[] = [],
   scope: VisibilityScope = {},
 ) => canEditTask(user, task, customRoles, scope)
+  && !(task.generatedFromDeliverable || task.workflowStepId)
   && (isBossKoo(user) || !isDepartmentScopedUser(user, customRoles)
     || canAssignTasksToOthers(user, customRoles, task, scope));
 export const isProjectParticipant = (user: User | null | undefined, project: Project, tasks: Task[] = []) => {

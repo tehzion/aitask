@@ -137,6 +137,7 @@ import {
   normalizeMemberDepartments,
 } from '../lib/departments';
 import { isTaskCompleted, resolveTaskCompletedAt } from '../lib/taskCompletion';
+import { isWorkflowTask, prepareWorkflowTasks, workflowTransitionError } from '../lib/workflowReview';
 import { enrichNotificationMetadata } from '../lib/notificationCenter';
 import {
   addDaysClamped,
@@ -746,6 +747,8 @@ const isLocalItemWorthRecovering = <T extends { id: string; updatedAt?: string }
 };
 
 const deriveServiceProgress = (tasks: Task[], deliverables: Deliverable[], cycles: ServiceCycle[]) => {
+  const state = useStore.getState();
+  tasks = prepareWorkflowTasks(tasks, state.tasks, state.currentUser, cycles, deliverables, state.backend.mode !== 'supabase', state.rolePermissions, { clients: state.clients, projects: state.projects });
   const now = new Date().toISOString();
   const nextDeliverables = deliverables.map(deliverable => {
     const status = resolveDeliverableStatus(deliverable, tasks);
@@ -764,7 +767,7 @@ const deriveServiceProgress = (tasks: Task[], deliverables: Deliverable[], cycle
     const status: ServiceCycleStatus = completed ? 'Completed' : cycle.status === 'Completed' ? 'Published' : cycle.status;
     return status === cycle.status ? cycle : { ...cycle, status, updatedAt: now };
   });
-  return { deliverables: nextDeliverables, serviceCycles: nextCycles };
+  return { tasks, deliverables: nextDeliverables, serviceCycles: nextCycles };
 };
 
 const hasRecoverableLocalWorkspaceContent = (
@@ -1520,7 +1523,10 @@ export const useStore = create<StoreState>()(
             if (hasChangesAfterSave) queueMicrotask(() => { if (isWorkspaceSessionCurrent(sessionToken)) void get().syncBackendNow(pendingCommandType); });
             else {
 
-              if (hadRemoteUpdate) await get().pullBackendNow({ force: true, silent: true });
+              if (hadRemoteUpdate || (savedWorkspace.tasks.some(isWorkflowTask)
+                && ['task.update', 'approval.review', 'approval.revision', 'deliverable.workflow.generate'].includes(pendingCommandType || ''))) {
+                await get().pullBackendNow({ force: true, silent: true });
+              }
             }
             return;
           }
@@ -2699,6 +2705,8 @@ export const useStore = create<StoreState>()(
         }
 
         const isCompleted = nextStatus === 'Completed';
+        const workflowError = workflowTransitionError(task, { ...task, status: nextStatus, isCompleted }, currentUser, state.tasks, state.serviceCycles, state.deliverables, state.rolePermissions, { clients: state.clients, projects: state.projects });
+        if (workflowError) { result = { ok: false, error: workflowError }; return state; }
         const isWaitingApproval = nextStatus === 'Waiting Approval';
         const isReadyForClientReview = isCompleted || isWaitingApproval;
         const wasCompleted = isTaskCompleted(task);
@@ -2881,8 +2889,7 @@ export const useStore = create<StoreState>()(
         useToastStore.getState().addToast(msg('task.attachmentUpdated'), 'success');
 
         result = { ok: true };
-        return {
-          tasks: state.tasks.map(task =>
+        const tasks = state.tasks.map(task =>
             task.id === taskId
               ? {
                   ...task,
@@ -2891,8 +2898,8 @@ export const useStore = create<StoreState>()(
                   updatedAt: new Date().toISOString()
                 }
               : task
-          )
-        };
+          );
+        return deriveServiceProgress(tasks, state.deliverables, state.serviceCycles);
         });
         return result;
       },
@@ -2949,6 +2956,9 @@ export const useStore = create<StoreState>()(
         if (requestedCreatorId !== undefined && requestedCreatorId !== task.createdBy) {
           return { ok: false, error: 'Task ownership cannot be changed.' };
         }
+        const workflowKeys = ['workflowStepKind', 'workflowStepId', 'workflowStepOrder', 'workflowStepRequired', 'workflowTemplateId', 'workflowTemplateRevision', 'generatedFromDeliverable', 'predecessorTaskIds', 'workflowOutputVersion', 'workflowDependenciesReady', 'internalReview'];
+        if (workflowKeys.some(key => Object.prototype.hasOwnProperty.call(data, key))) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
+        if (isWorkflowTask(task) && (['deliverableId', 'serviceCycleId', 'clientId', 'department', 'visibility'] as const).some(key => data[key] !== undefined && data[key] !== task[key])) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
 
         const canAssignOthers = canAssignTasksToOthers(currentUser, state.rolePermissions, task, { clients: state.clients, projects: state.projects });
         const nextAssigneeId = data.assignedTo ?? task.assignedTo;
@@ -3089,6 +3099,9 @@ export const useStore = create<StoreState>()(
           notes: data.notes !== undefined ? data.notes.trim() || undefined : task.notes,
           updatedAt: now,
         };
+
+        const workflowError = workflowTransitionError(task, updatedTask, currentUser, state.tasks, state.serviceCycles, state.deliverables, state.rolePermissions, { clients: state.clients, projects: state.projects });
+        if (workflowError) return { ok: false, error: workflowError };
 
         const notifications: AppNotification[] = [];
         if (updatedTask.assignedTo && updatedTask.assignedTo !== task.assignedTo) {
@@ -4366,6 +4379,8 @@ export const useStore = create<StoreState>()(
           workflowStepId: step.id,
           workflowStepOrder: step.order,
           workflowStepRequired: step.required,
+          workflowStepKind: step.kind,
+          workflowOutputVersion: 1,
           predecessorTaskIds: index === 0 ? [] : [taskIds[index - 1]],
           generatedFromDeliverable: true,
           workflowGeneratedAt: now,

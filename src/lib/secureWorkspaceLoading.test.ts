@@ -31,12 +31,44 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 describe('consistent cancellable workspace paging', () => {
+  it('hydrates canonical review context without staging server-owned metadata', async () => {
+    const data = entities[0].data as Record<string, unknown>;
+    data.generatedFromDeliverable = true;
+    data.workflowStepId = 'review-step';
+    try {
+      mocks.rpc.mockImplementation(async (name: string) => ({ data: name === 'aitask_get_workflow_task_context' ? { ok: true, tasks: [{ id: entities[0].entity_id, workflowStepKind: 'internal_review', workflowOutputVersion: 4, workflowDependenciesReady: true, internalReview: { decisionId: 'canonical-decision', reviewedBy: member.id, reviewedAt: '2026-10-13T01:00:00Z', inputVersions: [{ taskId: 'hidden-task', outputVersion: 5 }] } }] } : { ok: true, memberId: member.id, items: [], unreadCount: 0 }, error: null }));
+      const loaded = await loadSecureWorkspace({ id: authId } as never);
+      expect(loaded.state.tasks[0]).toMatchObject({ workflowStepKind: 'internal_review', workflowOutputVersion: 4, workflowDependenciesReady: true, internalReview: { reviewedBy: member.id } });
+      expect(buildOperations(loaded.state)).toEqual([]);
+      const approvalDraft = { ...loaded.state, tasks: loaded.state.tasks.map((task, index) => index ? task : { ...task, internalReview: { ...task.internalReview!, decisionId: undefined } }) };
+      const signOff = buildOperations(approvalDraft);
+      expect(signOff).toHaveLength(1);
+      expect(signOff[0]).toMatchObject({ action: 'update', entityId: entities[0].entity_id });
+      expect(signOff[0].data).not.toHaveProperty('internalReview');
+      const changed = { ...loaded.state, tasks: loaded.state.tasks.map((task, index) => index ? task : { ...task, status: 'Completed', isCompleted: true }) };
+      const operation = buildOperations(changed).find(item => item.entityId === entities[0].entity_id)!;
+      expect(operation.data).not.toHaveProperty('internalReview');
+      expect(operation.data).not.toHaveProperty('workflowStepKind');
+      expect(operation.data).not.toHaveProperty('workflowOutputVersion');
+      expect(operation.data).not.toHaveProperty('workflowDependenciesReady');
+    } finally { delete data.generatedFromDeliverable; delete data.workflowStepId; }
+  });
   it('loads more than one page without dropping or duplicating rows', async () => {
     const loaded = await loadSecureWorkspace({ id: authId } as never);
     expect(loaded.state.tasks).toHaveLength(501);
     expect(new Set(loaded.state.tasks.map(task => task.id)).size).toBe(501);
     expect(reads).toBe(2);
     expect(buildOperations(loaded.state)).toEqual([]);
+  });
+  it('rejects missing canonical context rather than trusting old review metadata', async () => {
+    const data = entities[0].data as Record<string, unknown>;
+    data.generatedFromDeliverable = true;
+    data.workflowStepId = 'review-step';
+    data.internalReview = { reviewedBy: member.id, reviewedAt: '2026-10-13T01:00:00Z', inputVersions: [] };
+    mocks.rpc.mockImplementation(async (name: string) => ({ data: name === 'aitask_get_workflow_task_context' ? { ok: true, tasks: [] } : { ok: true, memberId: member.id, items: [], unreadCount: 0 }, error: null }));
+    try {
+      await expect(loadSecureWorkspace({ id: authId } as never)).rejects.toThrow('Your workspace is read-only');
+    } finally { delete data.generatedFromDeliverable; delete data.workflowStepId; delete data.internalReview; }
   });
   it('retries a workspace whose revision changed during reading', async () => {
     revisions = [1, 1, 2, 2, 2, 2];

@@ -6,6 +6,7 @@ import { msg } from '../lib/messages';
 import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
 import { getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
 import { getTeamWorkloadSummaries } from '../lib/taskReporting';
+import { canApproveInternalReview, getWorkflowStepKind, INTERNAL_REVIEW_PERMISSION_MESSAGE, isWorkflowTaskSatisfied, workflowTransitionError } from '../lib/workflowReview';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React, { useEffect, useState } from 'react';
 import { isPendingMutationResolution, useStore } from '../store';
@@ -72,6 +73,7 @@ const ExternalTaskLink: React.FC<{ value: string; label: string; invalidLabel: s
 
 const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onClose, task: routedTask }) => {
   const { locale, t } = useI18n();
+  const workflow = useStore(useShallow(state => ({ cycles: state.serviceCycles, deliverables: state.deliverables })));
   const {
     users,
     tasks,
@@ -231,6 +233,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects });
   const incompletePredecessors = getTaskBlockers(task, visibleTasks);
   const unavailablePredecessorCount = getUnavailableTaskDependencyCount(task, visibleTasks);
+  const workflowKind = getWorkflowStepKind(task, workflow.cycles, workflow.deliverables);
+  const transitionError = (status: TaskStatus) => workflowTransitionError(task, { ...task, status, isCompleted: status === 'Completed' }, currentUser, visibleTasks, workflow.cycles, workflow.deliverables, rolePermissions, { clients, projects });
   const assigneeOptions = canAssignOthers
     ? users.filter(user => user.role !== 'Client' && isMemberInDepartment(user, editForm.department))
     : users.filter(user => user.id === editForm.assignedTo);
@@ -589,7 +593,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                         }}
                       >
                         {taskStatuses.map(status => (
-                          <option key={status} value={status} className="bg-white text-slate-900">{t(status)}</option>
+                          <option key={status} value={status} disabled={Boolean(transitionError(status))} className="bg-white text-slate-900">{t(status)}</option>
                         ))}
                       </select>
                       <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 text-current" />
@@ -608,6 +612,17 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   )}
                 </div>
               </div>
+              {workflowKind === 'internal_review' && <section className="mt-4 border-t border-line pt-4 text-sm" aria-label={t('Internal review')}>
+                <p className="font-semibold text-ink">{t('Internal review')}</p>
+                <p className="mt-1 text-muted">{task.internalReview ? t('Reviewed by {name}', { name: users.find(user => user.id === task.internalReview?.reviewedBy)?.name || t('Team member') }) : t('Waiting for review')}</p>
+                {!isWorkflowTaskSatisfied(task, tasks) && canApproveInternalReview(currentUser, task, rolePermissions, { clients, projects }) && <button type="button" disabled={isSubmitting || !canEditTask || Boolean(transitionError('Completed'))} onClick={async () => {
+                  if (isSubmitting) return;
+                  const result = updateTaskStatus(task.id, 'Completed');
+                  if (!result.ok) { setMutationError(t(result.error || 'Unable to update the task status.')); return; }
+                  if (await confirmPendingMutation()) announceTaskStatusSaved('Completed');
+                }} className="mt-3 min-h-11 rounded-control bg-accent px-4 py-2 font-semibold text-white disabled:opacity-50">{t('Approve internal review')}</button>}
+                {!task.internalReview && <p className="mt-2 text-muted">{t(transitionError('Completed') || INTERNAL_REVIEW_PERMISSION_MESSAGE)}</p>}
+              </section>}
 
               {incompletePredecessors.length > 0 && !isClientTaskViewer && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -617,7 +632,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
 
               {unavailablePredecessorCount > 0 && !isClientTaskViewer && (
                 <section className="rounded-panel border border-line bg-inset p-4 text-sm text-muted" aria-label={t('Dependency status unavailable')}>
-                  {t(`Dependency status for ${unavailablePredecessorCount} earlier step${unavailablePredecessorCount === 1 ? '' : 's'} is unavailable. Confirm with the task owner before starting.`)}
+                  {task.workflowDependenciesReady === true ? t('Earlier steps are complete; their details are outside your access.') : t(`Dependency status for ${unavailablePredecessorCount} earlier step${unavailablePredecessorCount === 1 ? '' : 's'} is unavailable. Confirm with the task owner before starting.`)}
                 </section>
               )}
 

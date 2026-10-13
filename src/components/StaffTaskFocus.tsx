@@ -17,6 +17,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from './ConfirmDialog';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
+import { canApproveInternalReview, getWorkflowStepKind, INTERNAL_REVIEW_PERMISSION_MESSAGE, isWorkflowTaskSatisfied, workflowTransitionError } from '../lib/workflowReview';
 
 interface StaffTaskFocusProps {
   isOpen: boolean;
@@ -112,6 +113,9 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   const incompletePredecessors = getTaskBlockers(liveTask, visibleTasks);
   const unavailablePredecessorCount = getUnavailableTaskDependencyCount(liveTask, visibleTasks);
   const guidedAction = getStaffGuidedAction(liveTask, taskStatuses);
+  const workflowKind = getWorkflowStepKind(liveTask, serviceCycles, deliverables);
+  const transitionError = (status: TaskStatus) => workflowTransitionError(liveTask, { ...liveTask, status, isCompleted: status === 'Completed' }, currentUser, visibleTasks, serviceCycles, deliverables, rolePermissions, { clients, projects });
+  const reviewAction = workflowKind === 'internal_review' && canApproveInternalReview(currentUser, liveTask, rolePermissions, { clients, projects }) && !isWorkflowTaskSatisfied(liveTask, tasks);
   const deliverable = deliverables.find(item => item.id === liveTask.deliverableId);
   const cycle = serviceCycles.find(item => item.id === liveTask.serviceCycleId);
   const dueDate = parseOptionalDate(liveTask.dueDate);
@@ -181,7 +185,9 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
   };
 
   const persistStatus = async (status: TaskStatus, skipDependencyPrompt = false) => {
-    if (isSaving || pendingSave || mutationLocked || !canEdit || status === liveTask.status) return;
+    if (isSaving || pendingSave || mutationLocked || !canEdit || (status === liveTask.status && !reviewAction)) return;
+    const gateError = transitionError(status);
+    if (gateError) { setError(t(gateError)); return; }
     if (!skipDependencyPrompt && incompletePredecessors.length > 0 && !['Pending', 'Cancelled'].includes(status)) { setPendingStatus(status); return; }
     const localResult = updateTaskStatus(liveTask.id, status);
     if (!localResult.ok) { setError(String(t(localResult.error || 'Unable to update the task status.'))); return; }
@@ -211,20 +217,21 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
           onChange={event => void persistStatus(event.target.value)}
           className={`${inputBase} min-h-11 appearance-none px-3 pr-9`}
         >
-          {taskStatuses.map(status => <option key={status} value={status}>{t(status)}</option>)}
+          {taskStatuses.map(status => <option key={status} value={status} disabled={Boolean(transitionError(status))}>{t(status)}</option>)}
         </select>
         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
       </label>
       <Button
         className="sm:min-w-44"
-        disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || guidedAction.disabled || pendingStatus !== null}
+        disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || (reviewAction ? Boolean(transitionError('Completed')) : guidedAction.disabled || Boolean(guidedAction.targetStatus && transitionError(guidedAction.targetStatus))) || pendingStatus !== null}
         onClick={() => {
-          if (guidedAction.kind === 'advance' && guidedAction.targetStatus) void persistStatus(guidedAction.targetStatus);
+          if (reviewAction) void persistStatus('Completed');
+          else if (guidedAction.kind === 'advance' && guidedAction.targetStatus) void persistStatus(guidedAction.targetStatus);
           else statusPickerRef.current?.focus();
         }}
       >
         {guidedAction.kind === 'waiting' ? <Clock3 className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-        {isSaving ? t('Saving…') : t(guidedAction.label)}
+        {isSaving ? t('Saving…') : t(reviewAction ? 'Approve internal review' : guidedAction.label)}
       </Button>
     </div>
   ) : null;
@@ -297,10 +304,15 @@ const StaffTaskFocus: React.FC<StaffTaskFocusProps> = ({ isOpen, task, onClose, 
         )}
         {unavailablePredecessorCount > 0 && (
           <section className="rounded-panel bg-slate-50 p-4 text-sm text-muted ring-1 ring-line" aria-label={t('Dependency status unavailable')}>
-            {t(`Dependency status for ${unavailablePredecessorCount} earlier step${unavailablePredecessorCount === 1 ? '' : 's'} is unavailable. Confirm with the task owner before starting.`)}
+            {liveTask.workflowDependenciesReady === true ? t('Earlier steps are complete; their details are outside your access.') : t(`Dependency status for ${unavailablePredecessorCount} earlier step${unavailablePredecessorCount === 1 ? '' : 's'} is unavailable. Confirm with the task owner before starting.`)}
           </section>
         )}
 
+        {workflowKind === 'internal_review' && <section className="border-b border-line pb-4 text-sm" aria-label={t('Internal review')}>
+          <p className="font-semibold text-ink">{t('Internal review')}</p>
+          <p className="mt-1 text-muted">{liveTask.internalReview ? t('Reviewed by {name}', { name: users.find(user => user.id === liveTask.internalReview?.reviewedBy)?.name || t('Team member') }) : t('Waiting for review')}</p>
+          {!liveTask.internalReview && <p className="mt-2 text-muted">{t(transitionError('Completed') || INTERNAL_REVIEW_PERMISSION_MESSAGE)}</p>}
+        </section>}
         <section aria-labelledby="staff-task-brief">
           <h3 id="staff-task-brief" className="flex items-center gap-2 font-semibold text-ink"><FileText className="h-4 w-4 text-accent" />{t('Brief')}</h3>
           <div className="mt-3 rounded-panel bg-inset p-4 text-sm leading-6 text-ink">

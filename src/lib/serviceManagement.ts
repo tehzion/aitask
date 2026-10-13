@@ -10,6 +10,7 @@ import type {
   Task,
 } from '../types';
 import type { AppLocale } from './i18n';
+import { isWorkflowTaskSatisfied } from './workflowReview';
 
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 const utcDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
@@ -147,7 +148,7 @@ export const resolveDeliverableStatus = (
   const linked = tasks.filter(task => task.clientId === deliverable.clientId && (task.deliverableId === deliverable.id || deliverable.taskIds.includes(task.id)));
   if (!linked.length) return deliverable.status === 'Delivered' ? 'Delivered' : 'Planned';
   const required = linked.filter(task => task.workflowStepRequired !== false);
-  const allRequiredComplete = required.length > 0 && required.every(task => task.isCompleted || task.status === 'Completed');
+  const allRequiredComplete = required.length > 0 && required.every(task => isWorkflowTaskSatisfied(task, linked));
   if (allRequiredComplete) return deliverable.status === 'Delivered' ? 'Delivered' : 'Ready';
   const anyStarted = linked.some(task => task.status !== 'Pending' || task.completionPercentage > 0 || task.revisionCount > 0);
   return anyStarted ? 'In Progress' : 'Planned';
