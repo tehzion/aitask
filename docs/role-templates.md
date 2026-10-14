@@ -68,9 +68,11 @@ remain protected from individual deletion for every role while their cycle is ac
 
 HOD sign-off happens on the internal review task. It requires completed
 predecessors and the current review department. Staff assignment or HOD
-assignment outside that department does not grant sign-off. Boss Koo and the
-responsible service Project Manager provide cover; the server records each
-decision against the reviewed output versions. Revisions reopen later steps.
+assignment outside that department does not grant sign-off. Boss Koo retains workspace oversight. Responsible portfolio PMs provide temporary
+review cover only for Designer tasks with no configured Designer HOD; other
+departments retain HOD review. Approval is 80%, followed by separate PM completion
+at 100%. The server binds each decision to the reviewed output versions.
+Revisions reopen later steps.
 See [the review-gate rollout](workflow-review-gate-2026-10-13.md) for deployment status.
 
 ### Staff
