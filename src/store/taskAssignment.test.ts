@@ -76,6 +76,18 @@ describe('task assignment attribution', () => {
     useStore.setState(initialState, true);
   });
 
+  it('supports a Management PM assignee while retaining Staff department boundaries', () => {
+    const manager = { ...pm, departments: ['Management'], department: 'Management' } as User;
+    const foreignStaff = { ...staffTwo, departments: ['Video Editor'], department: 'Video Editor' } as User;
+    useStore.setState({ currentUser: manager, users: [manager, staff, foreignStaff] });
+    expect(useStore.getState().updateTaskAssignee(task.id, manager.id).ok).toBe(true);
+    expect(findTask().assignedTo).toBe(manager.id);
+    expect(useStore.getState().updateTaskAssignee(task.id, foreignStaff.id).ok).toBe(false);
+    expect(findTask().assignedTo).toBe(manager.id);
+    expect(useStore.getState().updateTask(task.id, { assignedTo: staff.id }).ok).toBe(true);
+    expect(useStore.getState().updateTask(task.id, { assignedTo: manager.id }).ok).toBe(true);
+  });
+
   it('stamps assignedBy and assignedAt when a task is reassigned', () => {
     useStore.getState().updateTaskAssignee(task.id, staffTwo.id);
 

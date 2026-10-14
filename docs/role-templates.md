@@ -44,7 +44,7 @@ and rejected by the database guards. They are **not delegable**.
 | Service administration (catalog, templates, plans, cycles, prices) | ✓ | ✓ | – | – | – |
 | Assigned service clients | ✓ | ✓ | ✓ | ✓ | own company |
 | Client review actions | – | – | – | – | ✓ |
-| Internal workflow review sign-off | ✓ | Designer portfolio only, while no Designer HOD is configured | own department | – | – |
+| Internal workflow review sign-off | ✓ | responsible portfolio, only where no HOD is configured | own department | – | – |
 | Protected keys | ✓ | – | – | – | – |
 
 ### Project Manager
@@ -69,10 +69,16 @@ remain protected from individual deletion for every role while their cycle is ac
 HOD sign-off happens on the internal review task. It requires completed
 predecessors and the current review department. Staff assignment or HOD
 assignment outside that department does not grant sign-off. Boss Koo retains workspace oversight. Responsible portfolio PMs provide temporary
-review cover only for Designer tasks with no configured Designer HOD; other
-departments retain HOD review. Approval is 80%, followed by separate PM completion
+review cover in any department without a configured HOD. Departments with an
+HOD keep their HOD reviewer. Approval is 80%, followed by separate PM completion
 at 100%. The server binds each decision to the reviewed output versions.
-Revisions reopen later steps.
+Revisions reopen later steps. Skipping an optional step cannot bypass unfinished
+required earlier steps. PM assignments do not require department membership, while
+Staff and HOD assignments retain their department boundaries. Authorized reviewers can read files attached to the
+reviewed task’s deliverable from the task panel without a service-client assignment.
+Frozen internal-review tasks also show completed input output links to their
+assigned worker and authorized reviewer without exposing the earlier private brief.
+This grants no pricing, upload, replacement, deletion, or service-management rights.
 See [the review-gate rollout](workflow-review-gate-2026-10-13.md) for deployment status.
 
 ### Staff

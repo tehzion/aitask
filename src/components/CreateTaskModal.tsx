@@ -15,7 +15,7 @@ import { getServiceOptions, hasChoice } from '../lib/choiceOptions';
 import { canAssignTasksToOthers, canCreateTasks, canManageProjects, getAssignableProjects, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
-import { getMemberDepartments, isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
+import { getMemberDepartments, isEligibleTaskAssignee, STAFF_DEPARTMENTS } from '../lib/departments';
 import ModalShell from './ModalShell';
 import BackendFreshness from './BackendFreshness';
 import { modalFooter } from './uiTokens';
@@ -108,8 +108,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   );
   const filteredUsers = department
     ? users.filter(user => (
-        user.role !== 'Client'
-        && isMemberInDepartment(user, department)
+        isEligibleTaskAssignee(user, department)
         && (canAssignOthers || user.id === currentUser?.id)
       ))
     : [];

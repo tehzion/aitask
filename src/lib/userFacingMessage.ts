@@ -8,6 +8,8 @@ export const userFacingMessage = (value: unknown): string | MessageDescriptor =>
   if (typeof value !== 'string') return msg('errors.requestFailed');
   const text = value.trim();
   if (!text) return '';
+  if (/^Complete every required predecessor before/.test(text)) return 'Complete the earlier workflow steps first.';
+  if (/^Workflow details are unavailable\./.test(text)) return 'Workflow details are unavailable. Refresh this task and try again.';
   if (/^FORBIDDEN:/i.test(text)) return msg('errors.permissionDenied');
   if (/^CONFLICT:/i.test(text)) return 'This work changed elsewhere. Review the saved data before retrying.';
   if (/^NOT_FOUND:/i.test(text)) return msg('feedback.unavailable');

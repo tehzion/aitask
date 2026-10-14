@@ -134,6 +134,7 @@ import {
   DEPARTMENTS,
   getLegacyDepartmentMirror,
   isMemberInDepartment,
+  isEligibleTaskAssignee,
   normalizeMemberDepartments,
 } from '../lib/departments';
 import { isTaskCompleted, resolveTaskCompletedAt } from '../lib/taskCompletion';
@@ -2463,7 +2464,7 @@ export const useStore = create<StoreState>()(
         const isCompleted = nextStatus === 'Completed';
         const transitionError = taskTransitionError(currentUser, task, { ...task, status: nextStatus, isCompleted }, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (transitionError) { result = { ok: false, error: transitionError }; return state; }
-        const evidenceError = taskEvidenceError(task, { ...task, status: nextStatus, isCompleted }, state.deliverables);
+        const evidenceError = taskEvidenceError(task, { ...task, status: nextStatus, isCompleted }, state.deliverables, state.tasks);
         if (evidenceError) { result = { ok: false, error: evidenceError }; return state; }
         const workflowError = workflowTransitionError(task, { ...task, status: nextStatus, isCompleted }, currentUser, state.tasks, state.serviceCycles, state.deliverables, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (workflowError) { result = { ok: false, error: workflowError }; return state; }
@@ -2600,7 +2601,7 @@ export const useStore = create<StoreState>()(
           result = { ok: false, error: 'Choose a valid internal assignee.' };
           return state;
         }
-        if (assigneeUser && !isMemberInDepartment(assigneeUser, task.department)) {
+        if (assigneeUser && !isEligibleTaskAssignee(assigneeUser, task.department)) {
           useToastStore.getState().addToast(msg('errors.assigneeDepartment', { name: assigneeUser.name, department: task.department }), 'warning');
           result = { ok: false, error: `${assigneeUser.name} is not in the ${task.department} department.` };
           return state;
@@ -2729,7 +2730,7 @@ export const useStore = create<StoreState>()(
         if (requestedCreatorId !== undefined && requestedCreatorId !== task.createdBy) {
           return { ok: false, error: 'Task ownership cannot be changed.' };
         }
-        const workflowKeys = ['reviewAccess', 'workflowStepKind', 'workflowStepId', 'workflowStepOrder', 'workflowStepRequired', 'workflowTemplateId', 'workflowTemplateRevision', 'generatedFromDeliverable', 'predecessorTaskIds', 'workflowOutputVersion', 'workflowDependenciesReady', 'internalReview'];
+        const workflowKeys = ['reviewEvidence', 'reviewAccess', 'workflowStepKind', 'workflowStepId', 'workflowStepOrder', 'workflowStepRequired', 'workflowTemplateId', 'workflowTemplateRevision', 'generatedFromDeliverable', 'predecessorTaskIds', 'workflowOutputVersion', 'workflowDependenciesReady', 'internalReview'];
         if (workflowKeys.some(key => Object.prototype.hasOwnProperty.call(data, key))) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
         if (isWorkflowTask(task) && (['deliverableId', 'serviceCycleId', 'clientId', 'department', 'visibility'] as const).some(key => data[key] !== undefined && data[key] !== task[key])) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
 
@@ -2758,7 +2759,7 @@ export const useStore = create<StoreState>()(
         const assignee = nextAssigneeId ? state.users.find(user => user.id === nextAssigneeId && user.role !== 'Client') : undefined;
         if (nextAssigneeId && !assignee) return { ok: false, error: 'Choose a valid internal assignee.' };
         const assignmentChanged = nextAssigneeId !== task.assignedTo || nextDepartment !== task.department;
-        if (assignmentChanged && assignee && !isMemberInDepartment(assignee, nextDepartment)) {
+        if (assignmentChanged && assignee && !isEligibleTaskAssignee(assignee, nextDepartment)) {
           return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
         }
 
@@ -2880,7 +2881,7 @@ export const useStore = create<StoreState>()(
           updatedTask.clientApprovalStatus = 'Rejected'; updatedTask.revisionCount = task.revisionCount + 1;
         }
         if (state.backend.mode === 'local' && updatedTask.status === 'Waiting Approval' && task.status !== updatedTask.status && !getDepartmentReviewers(state.users, updatedTask, state.rolePermissions, { clients: state.clients, projects: state.projects }).length) return { ok: false, error: TASK_HOD_REQUIRED };
-        const evidenceError = taskEvidenceError(task, updatedTask, state.deliverables);
+        const evidenceError = taskEvidenceError(task, updatedTask, state.deliverables, state.tasks);
         if (evidenceError) return { ok: false, error: evidenceError };
         const transitionError = taskTransitionError(currentUser, task, updatedTask, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (transitionError) return { ok: false, error: transitionError };
@@ -3124,7 +3125,7 @@ export const useStore = create<StoreState>()(
         const assignee = taskData.assignedTo ? state.users.find(user => user.id === taskData.assignedTo && user.role !== 'Client') : undefined;
         if (taskData.assignedTo && !assignee) return '';
         if (assignee && !canAssignTasksToOthers(currentUser, state.rolePermissions, undefined, { users: state.users, clients: state.clients, projects: state.projects }) && assignee.id !== currentUser.id) return '';
-        if (assignee && !isMemberInDepartment(assignee, taskData.department)) return '';
+        if (assignee && !isEligibleTaskAssignee(assignee, taskData.department)) return '';
 
         const project = taskData.projectId
           ? state.projects.find(item => item.id === taskData.projectId)

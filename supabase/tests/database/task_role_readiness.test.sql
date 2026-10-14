@@ -21,15 +21,17 @@ create function pg_temp.stage_update(p_patch jsonb) returns jsonb language sql a
  'data',(select data from public.aitask_entities where workspace_id='stage-readiness-test' and entity_id='stage-task' and entity_type='task') || p_patch)))
 $$;
 
+update public.aitask_entities set data=jsonb_set(data,'{createdBy}','"stage-staff"') where workspace_id='stage-readiness-test' and entity_id='stage-task';
 update public.aitask_members set departments=array['Video Editor'] where workspace_id='stage-readiness-test' and id='stage-hod';
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005503',true);
 set local role authenticated;
-select is((pg_temp.stage_update('{"status":"Waiting Approval"}')->>'ok')::boolean,false,'missing HOD rejects submission rather than silently saving an orphan');
+select is((pg_temp.stage_update('{"status":"Waiting Approval"}')->>'ok')::boolean,false,'missing HOD and responsible PM reject an orphan submission');
 select is((select data->>'status' from public.aitask_entities where entity_id='stage-task'),'Pending','failed handoff leaves status unchanged');
 reset role;
 select is((select count(*)::integer from public.aitask_entities where workspace_id='stage-readiness-test' and entity_type='notification'),0,'failed submission is atomic');
 select set_config('request.jwt.claim.sub','',true);
+update public.aitask_entities set data=jsonb_set(data,'{createdBy}','"stage-pm"') where workspace_id='stage-readiness-test' and entity_id='stage-task';
 update public.aitask_members set departments=array['Video Shooting'] where workspace_id='stage-readiness-test' and id='stage-hod';
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005503',true);
 set local role authenticated;

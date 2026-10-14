@@ -86,7 +86,7 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
     useStore.getState().updateTaskAttachment(task.id, 'https://example.com/staff-final-video');
   });
   await expect(page.getByRole('button', { name: 'Send for review' })).toBeDisabled();
-  await expect(page.getByRole('alertdialog', { name: 'Start with an incomplete earlier step?' })).toHaveCount(0);
+  await expect(page.getByRole('alertdialog', { name: 'Earlier steps are unfinished' })).toHaveCount(0);
 });
 
 test('staff mobile keeps focus, task actions and secondary creation reachable', async ({ page }) => {

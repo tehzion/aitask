@@ -4,7 +4,7 @@ import { isMemberInDepartment } from './departments';
 
 export const canReviewTaskInternally = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => Boolean(user
   && (isBossKoo(user) || (isHodUser(user, roles) && isMemberInDepartment(user, task.department))
-    || (user.role === 'Project Manager' && task.department === 'Designer'
+    || (user.role === 'Project Manager'
       && (task.reviewAccess ? task.reviewAccess.actorId === user.id && task.reviewAccess.canApprove
         : Boolean(scope.users && getDepartmentReviewers(scope.users, task, roles, scope).some(reviewer => reviewer.id === user.id))))));
 
@@ -37,6 +37,6 @@ export const canApproveTaskInternally = (user: User | null | undefined, task: Ta
 export const TASK_HOD_REQUIRED = 'No reviewer is configured for this task. Ask your project manager to configure a reviewer before submitting.';
 export const getDepartmentReviewers = (users: readonly User[], task: Pick<Task, 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
   const hods = users.filter(user => isHodUser(user, roles) && isMemberInDepartment(user, task.department));
-  if (hods.length || task.department !== 'Designer') return hods;
+  if (hods.length) return hods;
   return users.filter(user => user.role === 'Project Manager' && canEditTask(user, task as Task, roles, scope));
 };

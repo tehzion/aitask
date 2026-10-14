@@ -44,7 +44,7 @@ for (const locale of ['en', 'zh'] as const) {
   }
 
   for (const failure of ['network', 'permission'] as const) {
-    test(`Calendar ${locale}: ${failure} failure explains recovery and preserves attempted dates`, async ({ page }) => {
+    test(`Calendar ${locale}: ${failure} failure explains recovery and preserves attempted dates`, async ({ page }, testInfo) => {
       await seed(page, 'Staff', locale);
       await page.goto('/calendar');
       await page.getByRole('button', { name: `${locale === 'zh' ? '编辑日期：' : 'Edit dates for'} Message audit artwork`, exact: false }).first().click();
@@ -66,7 +66,7 @@ for (const locale of ['en', 'zh'] as const) {
       await expect(dialog.getByRole('button', { name: locale === 'zh' ? '恢复已保存日期' : 'Restore saved dates', exact: true })).toBeEnabled();
       await expect(dialog).not.toContainText(locale === 'zh' ? '使用最新版本' : 'Use latest');
       if (failure === 'permission') await expect(dialog).toContainText(locale === 'zh' ? '任务负责人检查您的权限' : 'task owner to check your access');
-      await page.screenshot({ path: `/private/tmp/aitask-ui-calendar-${locale}-${failure}.png`, fullPage: true });
+      await page.screenshot({ path: testInfo.outputPath(`calendar-${locale}-${failure}.png`), fullPage: true });
     });
   }
 

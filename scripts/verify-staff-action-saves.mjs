@@ -16,6 +16,7 @@ let server;
 let supabase;
 const originalFetch = globalThis.fetch;
 let loseConfirmation = false;
+const evidencePath = 'aitask-main/file-client/file-cycle/department-output.pdf';
 globalThis.fetch = async (...args) => {
   const response = await originalFetch(...args);
   if (loseConfirmation && String(args[0]).includes('/rpc/aitask_execute_command')) {
@@ -196,11 +197,34 @@ try {
   assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').status, 'In Progress');
   console.log('[staff-saves] Client feedback, approval and rejection persisted through real Auth/REST without an internal staff directory; canonical assignments/counters and unknown completion dates were preserved.');
 
+  // File-only review through the real frontend store, with the HOD having
+  // department oversight but no service-client assignment.
+  insert('client', { id: 'file-client', clientName: 'File Review QA', createdBy: 'pm', createdAt: '2026-10-01', updatedAt: '2026-10-01' });
+  insert('service_cycle', { id: 'file-cycle', clientId: 'file-client', clientName: 'File Review QA', planId: 'file-plan', status: 'Published', periodStart: '2026-10-01', periodEnd: '2026-10-31', serviceItems: [], createdAt: '2026-10-01', updatedAt: '2026-10-01' });
+  assert.ifError((await admin.storage.from('client-service-files').upload(evidencePath, Buffer.from('%PDF-1.4\nReviewer output\n%%EOF'), { contentType: 'application/pdf' })).error);
+  const fileRef = { id: 'department-output', bucket: 'client-service-files', path: evidencePath, fileName: 'department-output.pdf', mimeType: 'application/pdf', sizeBytes: 32, uploadedBy: 'staff', uploadedAt: new Date().toISOString() };
+  insert('deliverable', { id: 'file-output', clientId: 'file-client', clientName: 'File Review QA', cycleId: 'file-cycle', planId: 'file-plan', serviceItemId: 'file-service', title: 'File-only output', sequence: 1, status: 'In Progress', taskIds: ['file-review'], attachments: [fileRef], createdAt: '2026-10-01', updatedAt: '2026-10-01' });
+  insert('task', { ...baseTask, id: 'file-review', clientId: 'file-client', clientName: 'File Review QA', serviceCycleId: 'file-cycle', deliverableId: 'file-output', status: 'Waiting Approval', completionPercentage: 60 });
+  await login('hod');
+  const fileTask = useStore.getState().tasks.find(task => task.id === 'file-review');
+  assert.equal(useStore.getState().deliverables.some(item => item.id === 'file-output'), false, 'HOD does not acquire general service access');
+  assert.equal(fileTask.reviewEvidence.actorId, 'hod');
+  assert.deepEqual(fileTask.reviewEvidence.attachments, [fileRef]);
+  assert.ifError((await supabase.storage.from('client-service-files').download(evidencePath)).error);
+  await save('File-only department HOD approval', useStore.getState().updateTaskStatus('file-review', 'Approved'), 'task.update');
+  await login('pm');
+  assert.equal(useStore.getState().tasks.find(task => task.id === 'file-review').completionPercentage, 80);
+  await save('PM completion after file-only HOD review', useStore.getState().updateTaskStatus('file-review', 'Completed'), 'task.update');
+  await login('boss');
+  assert.equal(useStore.getState().tasks.find(task => task.id === 'file-review').completionPercentage, 100);
+  console.log('[staff-saves] File-only HOD oversight review, actual private download and PM completion passed through the real frontend store and native saves.');
+
   console.log('[staff-saves] Actual frontend actions persisted through authenticated REST: creation/deletion, edits, status, priority, dates, comments, derived delivery/reopening, HOD delegation, reload and lost-confirmation retry.');
 } finally {
   globalThis.fetch = originalFetch;
   if (supabase) await supabase.auth.signOut();
   if (server) await server.close();
   if (accounts.length) sql("delete from public.aitask_entities where workspace_id='aitask-main' and entity_type <> 'custom_role'; delete from public.aitask_members where workspace_id='aitask-main';");
+  await admin.storage.from('client-service-files').remove([evidencePath]);
   for (const account of accounts) await admin.auth.admin.deleteUser(account.authId);
 }

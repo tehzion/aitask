@@ -107,7 +107,7 @@ const commandErrorCode = (error: { code?: string; message?: string }): MutationE
   // PostgreSQL reports trigger check violations as 23514. Permission failures
   // are permanent until an administrator changes access, so retaining and
   // retrying the exact same task command only traps the user in retry mode.
-  if (error.code === '42501' || /permission|required|not permitted|forbidden/i.test(message)) {
+  if (error.code === '42501' || /permission|(?:workspace membership|authentication|authorization)(?: is)? required|not permitted|forbidden/i.test(message)) {
     return 'FORBIDDEN';
   }
   if (error.code === '23514' || error.code === '23503' || error.code === '23505') {
@@ -740,6 +740,7 @@ const stateToRows = (state: PersistedWorkspaceState) => {
   state.tasks.forEach(item => {
     const { comments = [], approvalHistory = [], ...task } = item;
     delete task.reviewAccess;
+    delete task.reviewEvidence;
     delete task.workflowStepKind;
     delete task.workflowOutputVersion;
     delete task.workflowDependenciesReady;

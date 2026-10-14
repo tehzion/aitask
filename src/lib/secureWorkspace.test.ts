@@ -522,6 +522,17 @@ describe('secure command retry identity', () => {
     expect(getRetainedSecureCommand()?.operations.some(operation => operation.entityType === 'client' && operation.entityId === 'client-1')).toBe(true);
   });
 
+  it.each([
+    ['Task title is required.', 'VALIDATION'],
+    ['Complete every required predecessor before completing this step.', 'VALIDATION'],
+    ['Workspace membership required.', 'FORBIDDEN'],
+  ])('classifies a database requirement correctly: %s', async (message, code) => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: '23514', message } });
+    const result = await saveSecureWorkspace(stateWithUser('requirement-classification'), 'task.create');
+    expect(result).toMatchObject({ ok: false, code, error: message });
+    expect(getRetainedSecureCommand()).toBeNull();
+  });
+
   it('does not retain a task command rejected by a database permission rule', async () => {
     rpc.mockResolvedValueOnce({
       data: null,
@@ -1684,5 +1695,15 @@ describe('minimal Client service projection', () => {
     state.users[0].role = 'Client';
     state.serviceCycles = [{ id: 'cycle', clientId: 'company', planId: 'plan', serviceItems: [] } as unknown as NonNullable<PersistedWorkspaceState['serviceCycles']>[number]];
     expect(() => buildOperations(state)).not.toThrow();
+  });
+});
+
+describe('review evidence command boundary', () => {
+  it('keeps canonical file evidence and reviewer access out of task mutations', () => {
+    const state = { ...stateWithUser('evidence-reader'), tasks: [{ id: 'runtime-evidence-task', title: 'Reviewed output', clientName: 'Company', reviewAccess: { actorId: 'evidence-reader', canApprove: true }, reviewEvidence: { actorId: 'evidence-reader', attachments: [{ id: 'file', bucket: 'client-service-files', path: 'aitask-main/client/cycle/output.pdf' }] } } as Task] };
+    const operation = buildOperations(state).find(item => item.entityType === 'task');
+    expect(operation?.data).toHaveProperty('title', 'Reviewed output');
+    expect(operation?.data).not.toHaveProperty('reviewAccess');
+    expect(operation?.data).not.toHaveProperty('reviewEvidence');
   });
 });

@@ -22,7 +22,7 @@ values
  ('gate-client','pgtap-review-gate','00000000-0000-0000-0000-000000000985','Client','review-client@aitask.local','Client','Client',array['Client'],false,'Gate Company');
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
  ('pgtap-review-gate','client','gate-company','{"id":"gate-company","clientName":"Gate Company","createdBy":"gate-pm"}'),
- ('pgtap-review-gate','service_cycle','gate-cycle','{"id":"gate-cycle","clientId":"gate-company","clientName":"Gate Company","planId":"gate-plan","status":"Published","periodStart":"2026-10-01","periodEnd":"2026-10-31","serviceItems":[{"id":"gate-service","name":"Design","quantity":1,"unitPriceMinor":0,"workflow":{"templateId":"gate-template","templateRevision":1,"steps":[{"id":"work-step","order":1,"department":"Designer","kind":"work","required":true,"clientVisible":false},{"id":"review-step","order":2,"department":"Video Editor","kind":"internal_review","required":true,"clientVisible":false},{"id":"publish-step","order":3,"department":"Designer","kind":"publishing","required":true,"clientVisible":true}]}}]}'),
+ ('pgtap-review-gate','service_cycle','gate-cycle','{"id":"gate-cycle","clientId":"gate-company","clientName":"Gate Company","planId":"gate-plan","status":"Published","periodStart":"2026-10-01","periodEnd":"2026-10-31","serviceItems":[{"id":"gate-service","name":"Design","quantity":1,"unitPriceMinor":0,"workflow":{"templateId":"gate-template","templateRevision":1,"steps":[{"id":"work-step","order":1,"department":"Designer","kind":"work","required":true,"clientVisible":false},{"id":"review-step","order":2,"department":"Video Editor","kind":"internal_review","required":true,"clientVisible":false},{"id":"optional-step","order":3,"department":"Designer","kind":"work","required":false,"clientVisible":false},{"id":"publish-step","order":4,"department":"Designer","kind":"publishing","required":true,"clientVisible":true}]}}]}'),
  ('pgtap-review-gate','deliverable','gate-output','{"id":"gate-output","clientId":"gate-company","clientName":"Gate Company","planId":"gate-plan","cycleId":"gate-cycle","serviceItemId":"gate-service","status":"Planned","taskIds":[]}');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000981',true);
 select set_config('request.jwt.claim.role','authenticated',true);
@@ -33,12 +33,13 @@ set local role authenticated;
 select is((public.aitask_generate_deliverable_task_chain('pgtap-review-gate',gen_random_uuid(),(
  select jsonb_agg(jsonb_build_object('kind','entity','action','insert','entityType','task','entityId',id,'expectedVersion',0,'data',jsonb_build_object(
   'id',id,'clientId','gate-company','clientName','Gate Company','serviceType','Design','title',title,'department',department,
-  'createdBy','gate-boss','assignedTo','','attachmentLink','https://example.com/output.pdf','serviceCycleId','gate-cycle','deliverableId','gate-output','generatedFromDeliverable',true,
-  'workflowTemplateId','gate-template','workflowTemplateRevision',1,'workflowStepId',step,'workflowStepOrder',ordering,'workflowStepRequired',true,
+  'createdBy','gate-boss','assignedTo','','attachmentLink',case when step='review-step' then '' else 'https://example.com/output.pdf' end,'serviceCycleId','gate-cycle','deliverableId','gate-output','generatedFromDeliverable',true,
+  'workflowTemplateId','gate-template','workflowTemplateRevision',1,'workflowStepId',step,'workflowStepOrder',ordering,'workflowStepRequired',step<>'optional-step',
   'predecessorTaskIds',dependencies,'visibility',visibility,'status','Pending','isCompleted',false,'completionPercentage',0,'revisionCount',0,'clientApprovalStatus','Pending')) order by ordering)
  from (values ('gate-work','Hidden predecessor title','Designer','work-step',1,'[]'::jsonb,'internal'),
   ('gate-review','Internal review','Video Editor','review-step',2,'["gate-work"]'::jsonb,'internal'),
-  ('gate-publish','Publish','Designer','publish-step',3,'["gate-review"]'::jsonb,'client-visible')) fixtures(id,title,department,step,ordering,dependencies,visibility)
+  ('gate-optional','Optional revision','Designer','optional-step',3,'["gate-review"]'::jsonb,'internal'),
+  ('gate-publish','Publish','Designer','publish-step',4,'["gate-optional"]'::jsonb,'client-visible')) fixtures(id,title,department,step,ordering,dependencies,visibility)
 ))->>'ok')::boolean,true,'canonical workflow generation succeeds');
 reset role;
 update public.aitask_entities set data=data||'{"assignedTo":"gate-worker"}'::jsonb where workspace_id='pgtap-review-gate' and entity_type='task';
@@ -51,6 +52,10 @@ begin
   'kind','entity','action','update','entityType','task','entityId',p_id,'expectedVersion',record.version,'data',record.data||p_patch)));
 end; $$;
 
+select is((pg_temp.patch_task('gate-optional','{"status":"Cancelled"}')->>'ok')::boolean,true,'optional revision can be skipped');
+reset role;
+select ok(not private.aitask_workflow_task_satisfied('pgtap-review-gate',(select data from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_id='gate-optional')),'skipping revision cannot bypass unfinished required review');
+set local role authenticated;
 select ok(not has_function_privilege('anon','public.aitask_get_workflow_task_context(text)','EXECUTE'),'anonymous workflow summaries are denied');
 select ok(not has_function_privilege('authenticated','private.aitask_workflow_dependencies_ready(text,jsonb)','EXECUTE'),'canonical dependency helper stays private');
 select ok(not has_table_privilege('authenticated','private.aitask_internal_review_decisions','SELECT'),'browser cannot read the approval journal directly');
@@ -111,6 +116,7 @@ select is((select count(*)::integer from public.aitask_entities where workspace_
 select is(jsonb_array_length(public.aitask_get_workflow_task_context('pgtap-review-gate')->'tasks'),1,'summary includes only HOD-visible workflow tasks');
 select is((public.aitask_get_workflow_task_context('pgtap-review-gate')->'tasks'->0->>'workflowDependenciesReady')::boolean,true,'summary safely confirms hidden dependency completion');
 select ok(public.aitask_get_workflow_task_context('pgtap-review-gate')::text not like '%Hidden predecessor title%','summary does not expose hidden task details');
+select is(public.aitask_get_workflow_task_context('pgtap-review-gate')->'tasks'->0->'reviewEvidence'->'links'->0->>'url','https://example.com/output.pdf','HOD can open completed input output without reading its private task');
 select is((pg_temp.patch_task('gate-review','{"status":"Approved","isCompleted":false,"completionPercentage":80}')->>'ok')::boolean,true,'department HOD can sign off the completed predecessor');
 select is((select data->'internalReview'->>'reviewedBy' from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_id='gate-review'),'gate-hod','server records the real reviewer');
 reset role;

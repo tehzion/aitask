@@ -455,7 +455,8 @@ export interface Task {
   workflowStepKind?: WorkflowStepKind;
   workflowOutputVersion?: number;
   workflowDependenciesReady?: boolean; // Read-only summary of canonical dependencies
-  reviewAccess?: { actorId: string; canApprove: boolean }; // Server-owned, actor-bound review permission
+  reviewEvidence?: { actorId: string; attachments: AttachmentRef[]; links?: { taskId: string; url: string; name: string; outputVersion: number }[] }; // Canonical read-only projection
+  reviewAccess?: { actorId: string; canApprove: boolean; canReadInputs?: boolean }; // Server-owned, actor-bound review permission
   internalReview?: {
     decisionId?: string; // Server-created decision; omitted for optimistic local drafts
     reviewedBy: string;

@@ -1,3 +1,4 @@
+import TaskOutputFiles from './TaskOutputFiles';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
 import { acknowledgeActionFeedback, dismissActionFeedback, queueActionFeedback } from '../lib/actionFeedback';
 import { msg } from '../lib/messages';
@@ -155,7 +156,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const canComment = taskAccess.canComment;
   const contact = users.find(member => member.id === taskWorkContactId(liveTask));
   const linkedOutput = isTaskLinkedToDeliverable(liveTask, deliverables);
-  const evidenceAvailable = hasTaskEvidence(liveTask, deliverables);
+  const evidenceAvailable = hasTaskEvidence(liveTask, deliverables, tasks);
 
   const performSave = async (submitted: NonNullable<typeof pendingSave>, retry = false) => {
     const session = captureWorkspaceSession();
@@ -321,8 +322,8 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
             <div className="flex gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
               <div className="min-w-0">
-                <h3 id="staff-dependency-confirm-title" className="font-semibold">{t('Start with an incomplete earlier step?')}</h3>
-                <p id="staff-dependency-confirm-description" className="mt-1 text-sm leading-6">{t('This task still has {count} incomplete predecessor task(s). Confirm before moving it to {status}.', { count: incompletePredecessors.length, status: t(pendingStatus) })}</p>
+                <h3 id="staff-dependency-confirm-title" className="font-semibold">{t('Earlier steps are unfinished')}</h3>
+                <p id="staff-dependency-confirm-description" className="mt-1 text-sm leading-6">{t('Unfinished earlier steps: {count}. Change this task to {status}?', { count: incompletePredecessors.length, status: getLocalizedTaskStatus(pendingStatus, locale) })}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button type="button" variant="secondary" onClick={() => setPendingStatus(null)}>{t('common.cancel')}</Button>
                   <Button type="button" onClick={() => { const nextStatus = pendingStatus; setPendingStatus(null); void persistStatus(nextStatus, true); }}>{t('Continue')}</Button>
@@ -364,7 +365,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           <section className="rounded-panel bg-amber-50 p-4 text-[#6b3f00] ring-1 ring-amber-200 dark:bg-[#31240f] dark:text-[#fff2c2] dark:ring-[#765d22]" aria-labelledby="staff-task-blockers">
             <div className="flex gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-              <div><h3 id="staff-task-blockers" className="font-semibold">{t('Check the earlier step')}</h3><p className="mt-1 text-sm leading-6">{t('You can continue after confirming, but these predecessor tasks are incomplete.')}</p><ul className="mt-2 space-y-1 text-sm">{incompletePredecessors.map(item => <li key={item.id}><span aria-hidden="true">• </span><span data-i18n-skip>{item.title}</span></li>)}</ul></div>
+              <div><h3 id="staff-task-blockers" className="font-semibold">{t('Earlier workflow steps')}</h3><p className="mt-1 text-sm leading-6">{t('These earlier workflow steps are unfinished.')}</p><ul className="mt-2 space-y-1 text-sm">{incompletePredecessors.map(item => <li key={item.id}><span aria-hidden="true">• </span><span data-i18n-skip>{item.title}</span></li>)}</ul></div>
             </div>
           </section>
         )}
@@ -412,6 +413,8 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           </form>}
         </section>
         {linkedOutput && <p className="rounded-control bg-inset px-4 py-3 text-sm text-muted">{t(evidenceAvailable ? 'Output evidence is attached. Client approval is tracked separately from task completion.' : 'This linked task needs an output link or deliverable file before review or completion. Add it through Full edit or the delivery workspace.')}</p>}
+
+        <TaskOutputFiles task={liveTask} />
 
         <section aria-labelledby="staff-delivery-context">
           <h3 id="staff-delivery-context" className="flex items-center gap-2 font-semibold text-ink"><UsersRound className="h-4 w-4 text-accent" />{t('Delivery context')}</h3>

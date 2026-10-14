@@ -1,4 +1,5 @@
 import type { Deliverable, Task, TaskWorkState } from '../types';
+import { isWorkflowTaskSatisfied } from './workflowReview';
 import { safeHttpsUrl } from './security';
 
 export const TASK_EVIDENCE_REQUIRED = 'Add an output link or upload a deliverable file before sending this linked task for review or completing it.';
@@ -7,8 +8,19 @@ export const TASK_HISTORY_FIELDS = ['title', 'description', 'notes', 'dueDate', 
 export const isTaskLinkedToDeliverable = (task: Pick<Task, 'id' | 'deliverableId'>, deliverables: readonly Deliverable[]) =>
   Boolean(task.deliverableId || deliverables.some(item => item.taskIds.includes(task.id)));
 
-export const hasTaskEvidence = (task: Task, deliverables: readonly Deliverable[]) => {
+export const hasTaskEvidence = (task: Task, deliverables: readonly Deliverable[], tasks: Task[] = []) => {
   if (safeHttpsUrl(task.attachmentLink)) return true;
+  if (task.reviewAccess?.canApprove && task.reviewAccess.actorId === task.reviewEvidence?.actorId && task.reviewEvidence.attachments.length) return true;
+  if (task.workflowStepKind === 'internal_review') {
+    if (task.reviewEvidence?.actorId === task.reviewAccess?.actorId
+      && (task.reviewAccess?.canReadInputs === true || task.reviewAccess?.canApprove || task.assignedTo === task.reviewEvidence?.actorId)
+      && task.reviewEvidence?.links?.some(link => safeHttpsUrl(link.url))) return true;
+    if ((task.predecessorTaskIds || []).some(id => {
+      const input = tasks.find(item => item.id === id);
+      return input && input.clientId === task.clientId && input.deliverableId === task.deliverableId && input.serviceCycleId === task.serviceCycleId
+        && isWorkflowTaskSatisfied(input, tasks) && safeHttpsUrl(input.attachmentLink);
+    })) return true;
+  }
   const links = deliverables.filter(item => item.id === task.deliverableId || item.taskIds.includes(task.id));
   if ((task.deliverableId && !links.some(item => item.id === task.deliverableId)) || links.length !== 1) return false;
   const linked = links[0];
@@ -16,10 +28,10 @@ export const hasTaskEvidence = (task: Task, deliverables: readonly Deliverable[]
     && linked.attachments.some(file => file.bucket === 'client-service-files' && Boolean(file.path?.trim()) && Boolean(file.id));
 };
 
-export const taskEvidenceError = (before: Task | undefined, after: Task, deliverables: readonly Deliverable[]) => {
+export const taskEvidenceError = (before: Task | undefined, after: Task, deliverables: readonly Deliverable[], tasks: Task[] = []) => {
   const enteringReady = ['Waiting Approval', 'Approved', 'Completed'].includes(after.status) && before?.status !== after.status;
   const newlyCompleted = after.isCompleted && !before?.isCompleted;
-  return (enteringReady || newlyCompleted) && isTaskLinkedToDeliverable(after, deliverables) && !hasTaskEvidence(after, deliverables)
+  return (enteringReady || newlyCompleted) && isTaskLinkedToDeliverable(after, deliverables) && !hasTaskEvidence(after, deliverables, tasks)
     ? TASK_EVIDENCE_REQUIRED : undefined;
 };
 

@@ -28,9 +28,18 @@ const hasCurrentInternalReview = (task: Task, tasks: Task[]) => {
   });
 };
 
-export const isWorkflowTaskSatisfied = (task: Task, tasks: Task[]) => {
-  if (task.status === 'Cancelled' && task.workflowStepRequired === false) return true;
-  return isTaskCompleted(task) && (task.workflowStepKind !== 'internal_review' || hasCurrentInternalReview(task, tasks));
+export const isWorkflowTaskSatisfied = (task: Task, tasks: Task[], visited = new Set<string>()): boolean => {
+  if (visited.has(task.id)) return false;
+  const satisfied = task.status === 'Cancelled' && task.workflowStepRequired === false
+    || isTaskCompleted(task) && (task.workflowStepKind !== 'internal_review' || hasCurrentInternalReview(task, tasks));
+  if (!satisfied || !isWorkflowTask(task)) return satisfied;
+  const path = new Set(visited).add(task.id);
+  return [...new Set(task.predecessorTaskIds || [])].every(id => {
+    const input = tasks.find(item => item.id === id);
+    return input ? input.clientId === task.clientId && input.deliverableId === task.deliverableId
+      && input.serviceCycleId === task.serviceCycleId && isWorkflowTaskSatisfied(input, tasks, path)
+      : task.workflowDependenciesReady === true;
+  });
 };
 
 const outputFields = ['title', 'description', 'notes', 'attachmentLink', 'attachmentName', 'status', 'isCompleted', 'revisionCount'] as const;
@@ -43,12 +52,12 @@ const outputChanged = (before: Task, after: Task) => outputFields.some(key => {
 export const workflowTransitionError = (task: Task, next: Task, user: User | null | undefined, tasks: Task[], cycles: ServiceCycle[] = [], deliverables: Deliverable[] = [], roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
   if (!isWorkflowTask(task) || !(isTaskCompleted(next) || next.status === 'Approved' || next.status === 'Waiting Approval')) return null;
   const kind = getWorkflowStepKind(task, cycles, deliverables);
-  if (!kind) return 'Workflow details are unavailable. Refresh before completing this step.';
+  if (!kind) return 'Workflow details are unavailable. Refresh this task and try again.';
   if (task.workflowDependenciesReady === false
     || [...new Set(task.predecessorTaskIds || [])].some(id => {
       const predecessor = tasks.find(item => item.id === id);
       return predecessor ? !isWorkflowTaskSatisfied(predecessor, tasks) : task.workflowDependenciesReady !== true;
-    })) return 'Complete every required predecessor before submitting or completing this step.';
+    })) return 'Complete the earlier workflow steps first.';
   if (kind === 'internal_review' && (isTaskCompleted(next) || next.status === 'Approved')
     && (!hasCurrentInternalReview(task, tasks) || outputChanged(task, next))
     && !canApproveInternalReview(user, task, roles, scope)) {

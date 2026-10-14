@@ -1,3 +1,4 @@
+import TaskOutputFiles from './TaskOutputFiles';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
 import { acknowledgeActionFeedback, dismissActionFeedback } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
@@ -25,7 +26,7 @@ import { Department, Priority, Task, TaskStatus } from '../types';
 import { canViewTask, getVisibleTasks, getTaskAccess, canReviewTaskAsClient, isDepartmentScopedUser } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate, parseOptionalDate, cn } from '../lib/utils';
-import { isMemberInDepartment, STAFF_DEPARTMENTS } from '../lib/departments';
+import { isMemberInDepartment, isEligibleTaskAssignee, STAFF_DEPARTMENTS } from '../lib/departments';
 import type { SecureCommandType } from '../lib/secureWorkspace';
 import ClientDeliveryFocus from './ClientDeliveryFocus';
 import ModalShell from './ModalShell';
@@ -242,6 +243,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const task = tasks.find(item => item.id === requestedTask.id) || (isDeletingTask ? ownedDeletion?.task : null);
   if (!task) return null;
 
+  const outputLocked = task.status === 'Approved' || task.status === 'Completed';
   const assignee = users.find(u => u.id === task.assignedTo);
   const creator = users.find(u => u.id === task.createdBy);
   const assignedByMember = users.find(u => u.id === task.assignedBy);
@@ -267,7 +269,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const workflowKind = getWorkflowStepKind(task, workflow.cycles, workflow.deliverables);
   const transitionError = (status: TaskStatus) => workflowTransitionError(task, { ...task, status, isCompleted: status === 'Completed' }, currentUser, visibleTasks, workflow.cycles, workflow.deliverables, rolePermissions, { users, clients, projects });
   const assigneeOptions = canAssignOthers
-    ? users.filter(user => user.role !== 'Client' && isMemberInDepartment(user, editForm.department))
+    ? users.filter(user => isEligibleTaskAssignee(user, editForm.department))
     : users.filter(user => user.id === editForm.assignedTo);
   const delegationOptions = users.filter(user => (
     user.role !== 'Client'
@@ -626,8 +628,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                           const nextStatus = e.target.value as TaskStatus;
                           if (incompletePredecessors.length > 0 && nextStatus !== 'Pending' && nextStatus !== 'Cancelled') {
                             setConfirmation({
-                              title: t('Start with an incomplete earlier step?'),
-                              description: t(`This step still has ${incompletePredecessors.length} incomplete predecessor task(s). Start it anyway?`),
+                              title: t('Earlier steps are unfinished'),
+                              description: t('Unfinished earlier steps: {count}. Change this task to {status}?', { count: incompletePredecessors.length, status: getLocalizedTaskStatus(nextStatus, locale) }),
                               confirmLabel: t('Continue'),
                               tone: 'primary',
                               action: async () => {
@@ -697,7 +699,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
 
               {incompletePredecessors.length > 0 && !isClientTaskViewer && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                  <div className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{t('Soft dependency warning')}</p><p className="mt-1 text-amber-800">{t('This task may start early after confirmation, but the following predecessor steps remain incomplete:')}</p><ul className="mt-2 list-disc space-y-1 pl-5">{incompletePredecessors.map(item => <li key={item.id} data-i18n-skip>{item.title}</li>)}</ul></div></div>
+                  <div className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{t('Earlier steps are unfinished')}</p><p className="mt-1 text-amber-800">{t('Check these earlier steps before starting this task:')}</p><ul className="mt-2 list-disc space-y-1 pl-5">{incompletePredecessors.map(item => <li key={item.id} data-i18n-skip>{item.title}</li>)}</ul></div></div>
                 </div>
               )}
 
@@ -715,6 +717,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                         <span className={fieldLabel}>{t('Task Title')}</span>
                         <input
                           type="text"
+                          readOnly={outputLocked}
                           value={editForm.title}
                           onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                           className={cn(inputBase, 'px-2.5 py-2.5')}
@@ -749,7 +752,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                           disabled={!canAssignOthers}
                           onChange={(e) => {
                             const nextDepartment = e.target.value as Department;
-                            const firstUser = users.find(user => user.role !== 'Client' && isMemberInDepartment(user, nextDepartment));
+                            const firstUser = users.find(user => user.role !== 'Client' && isMemberInDepartment(user, nextDepartment))
+                              || users.find(user => isEligibleTaskAssignee(user, nextDepartment));
                             setEditForm({
                               ...editForm,
                               department: nextDepartment,
@@ -815,6 +819,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                         <span className={fieldLabel}>{t('Description')}</span>
                         <textarea
                           rows={3}
+                          readOnly={outputLocked}
                           value={editForm.description}
                           onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                           className={cn(inputBase, 'px-2.5 py-2.5')}
@@ -826,6 +831,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                         <span className={fieldLabel}>{t('Internal Notes')}</span>
                         <textarea
                           rows={2}
+                          readOnly={task.status === 'Approved'}
                           value={editForm.notes}
                           onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                           className={cn(inputBase, 'px-2.5 py-2.5')}
@@ -992,6 +998,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </form>
               )}
 
+              <TaskOutputFiles task={task} />
+
               {(task.facebookPage || task.website || task.attachmentLink || canEditTask) && (
                 <div className="pt-4 border-t border-slate-100">
                   <label className="block text-xs font-medium text-slate-500 mb-2">{isClientTaskViewer ? t('Deliverables & Links') : t('Links & attachment links')}</label>
@@ -1012,24 +1020,26 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                       <input
                         id={`${titleId}-attachment-url`}
                         type="url"
+                        readOnly={outputLocked}
                         value={attachmentLink}
                         onChange={(e) => setAttachmentLink(e.target.value)}
                         placeholder="https://drive.google.com/..."
                         aria-describedby={`${titleId}-attachment-help`}
                         className={inputBase}
                       />
-                      <p id={`${titleId}-attachment-help`} className="text-xs leading-5 text-muted">{t('Task attachments are shared as secure HTTPS links, not uploaded files.')}</p>
+                      <p id={`${titleId}-attachment-help`} className="text-xs leading-5 text-muted">{t(outputLocked ? 'Ask the HOD or project manager to return approved work for revision.' : 'Task attachments are shared as secure HTTPS links, not uploaded files.')}</p>
                       <div className="flex gap-2">
                         <label htmlFor={`${titleId}-attachment-label`} className="sr-only">{t('Attachment label')}</label>
                         <input
                           id={`${titleId}-attachment-label`}
                           type="text"
+                          readOnly={outputLocked}
                           value={attachmentName}
                           onChange={(e) => setAttachmentName(e.target.value)}
                           placeholder={t('Attachment label')}
                           className={cn(inputBase, 'flex-1')}
                         />
-                        <button type="submit" className="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-accent/35 focus:ring-offset-2 focus:ring-offset-canvas">
+                        <button type="submit" disabled={outputLocked || isSubmitting} className="disabled:opacity-60 inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-accent/35 focus:ring-offset-2 focus:ring-offset-canvas">
                           {t('Save')}
                         </button>
                       </div>

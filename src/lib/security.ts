@@ -360,7 +360,7 @@ export const parseTask = (value: unknown): Task | null => {
     workflowStepKind: ['work', 'internal_review', 'client_approval', 'publishing'].includes(String(value.workflowStepKind)) ? value.workflowStepKind as Task['workflowStepKind'] : undefined,
     workflowOutputVersion: value.workflowOutputVersion === undefined ? undefined : Math.max(1, Math.trunc(Number(value.workflowOutputVersion) || 1)),
     workflowDependenciesReady: typeof value.workflowDependenciesReady === 'boolean' ? value.workflowDependenciesReady : undefined,
-    reviewAccess: isRecord(value.reviewAccess) && cleanText(value.reviewAccess.actorId, 160) && typeof value.reviewAccess.canApprove === 'boolean' ? { actorId: cleanText(value.reviewAccess.actorId, 160), canApprove: value.reviewAccess.canApprove } : undefined,
+    reviewAccess: isRecord(value.reviewAccess) && cleanText(value.reviewAccess.actorId, 160) && typeof value.reviewAccess.canApprove === 'boolean' ? { actorId: cleanText(value.reviewAccess.actorId, 160), canApprove: value.reviewAccess.canApprove, ...(typeof value.reviewAccess.canReadInputs === 'boolean' ? { canReadInputs: value.reviewAccess.canReadInputs } : {}) } : undefined,
     internalReview: isRecord(value.internalReview) && cleanText(value.internalReview.reviewedBy, 160) && safeIsoTimestamp(value.internalReview.reviewedAt) ? {
       decisionId: optionalText(value.internalReview.decisionId, 160),
       reviewedBy: cleanText(value.internalReview.reviewedBy, 160),

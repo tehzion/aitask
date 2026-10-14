@@ -62,7 +62,7 @@ try {
   await save('Workflow generation', generated, 'deliverable.workflow.generate');
   for (const id of [workId, reviewId, publishId]) {
     await save('Assignment', useStore.getState().updateTaskAssignee(id, 'review-worker'));
-    await save('Output evidence', useStore.getState().updateTaskAttachment(id, 'https://example.com/output.pdf'));
+    if (id !== reviewId) await save('Output evidence', useStore.getState().updateTaskAttachment(id, 'https://example.com/output.pdf'));
   }
   await login('review-worker');
   assert.equal(useStore.getState().updateTaskStatus(reviewId, 'Completed').ok, false);
@@ -79,6 +79,7 @@ try {
   assert.equal(forged.data?.ok, false, 'canonical SQL must reject a crafted browser request');
   await save('Review submission', useStore.getState().updateTaskStatus(reviewId, 'Waiting Approval'));
   await login('review-hod');
+  assert.equal(useStore.getState().tasks.find(item => item.id === reviewId).reviewEvidence.links[0].url, 'https://example.com/output.pdf');
   assert.equal(useStore.getState().tasks.some(item => item.id === workId), false, 'hidden predecessor must stay outside HOD scope');
   assert.equal(useStore.getState().tasks.find(item => item.id === reviewId).workflowDependenciesReady, true);
   await save('HOD approval', useStore.getState().updateTaskStatus(reviewId, 'Approved'));

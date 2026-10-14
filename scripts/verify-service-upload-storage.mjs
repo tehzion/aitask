@@ -12,6 +12,8 @@ const options = { auth: { persistSession: false, autoRefreshToken: false } };
 const admin = createClient(url, process.env.AITASK_LOCAL_TEST_SECRET, options);
 const client = createClient(url, process.env.AITASK_LOCAL_TEST_PUBLIC, options);
 const other = createClient(url, process.env.AITASK_LOCAL_TEST_PUBLIC, options);
+const hod = createClient(url, process.env.AITASK_LOCAL_TEST_PUBLIC, options);
+const foreignHod = createClient(url, process.env.AITASK_LOCAL_TEST_PUBLIC, options);
 const suffix = randomUUID();
 const workspace = `upload-storage-${suffix}`;
 const paths = ['saved.pdf', 'abandoned.pdf', 'retry.pdf'].map(name => `${workspace}/client/cycle/${name}`);
@@ -25,23 +27,59 @@ const unreliable = createClient(url, process.env.AITASK_LOCAL_TEST_PUBLIC, { ...
 } } });
 try {
   const password = `Local-${randomUUID()}!`;
-  for (const label of ['owner', 'other']) {
+  for (const label of ['owner', 'other', 'hod', 'foreign-hod']) {
     const email = `${label}-${suffix}@aitask.local`;
     const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
     assert.ifError(created.error); authIds.push(created.data.user.id);
-    const signed = await (label === 'owner' ? client : other).auth.signInWithPassword({ email, password }); assert.ifError(signed.error);
+    const signed = await ({ owner: client, other, hod, 'foreign-hod': foreignHod }[label]).auth.signInWithPassword({ email, password }); assert.ifError(signed.error);
     if (label === 'owner') assert.ifError((await unreliable.auth.signInWithPassword({ email, password })).error);
   }
   sql(`insert into public.aitask_workspaces(id,name) values('${workspace}','Isolated upload storage QA');
     insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,department,departments,is_super_admin) values
     ('owner','${workspace}','${authIds[0]}','Owner','owner-${suffix}@aitask.local','Project Manager','Management',array['Management'],true),
-    ('other','${workspace}','${authIds[1]}','Other','other-${suffix}@aitask.local','Project Manager','Management',array['Management'],true);
+    ('other','${workspace}','${authIds[1]}','Other','other-${suffix}@aitask.local','Project Manager','Management',array['Management'],true),
+    ('hod','${workspace}','${authIds[2]}','HOD','hod-${suffix}@aitask.local','HOD','Designer',array['Designer'],false),
+    ('foreign-hod','${workspace}','${authIds[3]}','Foreign HOD','foreign-hod-${suffix}@aitask.local','HOD','Video Editor',array['Video Editor'],false),
+    ('worker','${workspace}',null,'Worker','worker-${suffix}@aitask.local','Staff','Designer',array['Designer'],false);
     insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
     ('${workspace}','client','client','{"id":"client","clientName":"Storage QA","createdBy":"owner"}'),
     ('${workspace}','service_cycle','cycle','{"id":"cycle","clientId":"client","clientName":"Storage QA","planId":"plan","status":"Published","periodStart":"2026-09-01","periodEnd":"2026-09-30","serviceItems":[]}');`);
   for (const path of paths) assert.ifError((await client.storage.from('client-service-files').upload(path, Buffer.from('%PDF-1.4\nIsolated QA\n%%EOF'), { contentType: 'application/pdf' })).error);
   const command = randomUUID();
   const attachment = { id: 'saved-file', bucket: 'client-service-files', path: paths[0], uploadedBy: 'owner', fileName: 'saved.pdf', mimeType: 'application/pdf', sizeBytes: 32, uploadedAt: new Date().toISOString() };
+  // A department reviewer has no service-client assignment. Only the linked
+  // deliverable file is readable; management and unrelated files stay denied.
+  sql(`insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
+    ('${workspace}','deliverable','review-output','${JSON.stringify({ id: 'review-output', clientId: 'client', clientName: 'Storage QA', cycleId: 'cycle', title: 'Review output', status: 'In Progress', taskIds: ['review-task'], attachments: [{ ...attachment, internalPriceMinor: 99000, privateNote: 'Not part of the evidence projection' }] })}'::jsonb),
+    ('${workspace}','task','review-task','${JSON.stringify({ id: 'review-task', clientId: 'client', clientName: 'Storage QA', deliverableId: 'review-output', serviceCycleId: 'cycle', title: 'Department review', department: 'Designer', assignedTo: 'worker', createdBy: 'owner', status: 'Waiting Approval', isCompleted: false, visibility: 'internal' })}'::jsonb);`);
+  const reviewContext = await hod.rpc('aitask_get_workflow_task_context', { p_workspace_id: workspace });
+  assert.ifError(reviewContext.error);
+  const projected = reviewContext.data.tasks.find(task => task.id === 'review-task');
+  assert.equal(projected.reviewAccess.canApprove, true);
+  assert.equal(projected.reviewEvidence.actorId, 'hod');
+  assert.deepEqual(projected.reviewEvidence.attachments, [attachment]);
+  assert.deepEqual((await hod.from('aitask_entities').select('entity_id').eq('workspace_id', workspace).in('entity_type', ['service_cycle', 'deliverable', 'service_pricing_snapshot'])).data, []);
+  const hiddenOutput = (await client.from('aitask_entities').select('data,version').eq('workspace_id', workspace).eq('entity_type', 'deliverable').eq('entity_id', 'review-output').single()).data;
+  const forbiddenServiceWrite = await hod.rpc('aitask_execute_service_command', { p_workspace_id: workspace, p_command_id: randomUUID(), p_command_type: 'deliverable.manage', p_expected_workspace_version: null, p_operations: [{ kind: 'entity', action: 'update', entityType: 'deliverable', entityId: 'review-output', expectedVersion: hiddenOutput.version, data: { ...hiddenOutput.data, status: 'Delivered' } }] });
+  assert.ifError(forbiddenServiceWrite.error); assert.equal(forbiddenServiceWrite.data.ok, false, 'read-only reviewer cannot mutate the service deliverable');
+  const downloaded = await hod.storage.from('client-service-files').download(paths[0]); assert.ifError(downloaded.error);
+  assert.match(await downloaded.data.text(), /^%PDF-1.4/);
+  assert((await hod.storage.from('client-service-files').download(paths[1])).error, 'unlinked file is private');
+  assert((await foreignHod.storage.from('client-service-files').download(paths[0])).error, 'another department cannot read the evidence');
+  assert((await hod.storage.from('client-service-files').upload(`${workspace}/client/cycle/hod-forged.pdf`, Buffer.from('forged'))).error, 'reviewer cannot upload without a service assignment');
+  assert((await hod.storage.from('client-service-files').update(paths[0], Buffer.from('forged'), { contentType: 'application/pdf' })).error, 'reviewer cannot replace the output');
+  await hod.storage.from('client-service-files').remove([paths[0]]);
+  assert.ifError((await client.storage.from('client-service-files').download(paths[0])).error);
+  const canonical = (await client.from('aitask_entities').select('data,version').eq('workspace_id', workspace).eq('entity_type', 'task').eq('entity_id', 'review-task').single()).data;
+  const reviewed = await hod.rpc('aitask_execute_command', { p_workspace_id: workspace, p_command_id: randomUUID(), p_command_type: 'task.update', p_operations: [{ kind: 'entity', action: 'update', entityType: 'task', entityId: 'review-task', expectedVersion: canonical.version, data: { ...canonical.data, status: 'Approved' } }] });
+  assert.ifError(reviewed.error); assert.equal(reviewed.data.ok, true, 'HOD can approve the inspected file-only output');
+  const forged = await hod.rpc('aitask_execute_command', { p_workspace_id: workspace, p_command_id: randomUUID(), p_command_type: 'task.update', p_operations: [{ kind: 'entity', action: 'update', entityType: 'task', entityId: 'review-task', expectedVersion: canonical.version + 1, data: { ...canonical.data, status: 'Approved', reviewEvidence: projected.reviewEvidence } }] });
+  assert.ifError(forged.error); assert.equal(forged.data.ok, false, 'evidence cannot be injected into task command fields');
+  sql(`update public.aitask_members set department='Video Editor',departments=array['Video Editor'] where workspace_id='${workspace}' and id='hod';`);
+  assert((await hod.storage.from('client-service-files').download(paths[0])).error, 'canonical department revocation removes download access immediately');
+  const revoked = await hod.rpc('aitask_get_workflow_task_context', { p_workspace_id: workspace }); assert.ifError(revoked.error);
+  assert(!revoked.data.tasks.some(task => task.id === 'review-task'), 'revoked department task leaves scoped context');
+  console.log('[storage] Canonical HOD evidence projection, actual downloads, unrelated-file denial, immutable output, command forgery rejection and department revocation passed.');
   loseConfirmation = true;
   const saved = await unreliable.rpc('aitask_execute_service_command', { p_workspace_id: workspace, p_command_id: command, p_command_type: 'cycle_comment.manage', p_expected_workspace_version: null, p_operations: [{ kind: 'entity', action: 'insert', entityType: 'cycle_comment', entityId: 'saved-comment', expectedVersion: 0, data: { id: 'saved-comment', clientId: 'client', clientName: 'Storage QA', cycleId: 'cycle', authorId: 'owner', visibility: 'internal', message: 'QA attachment', attachments: [attachment] } }] });
   assert(saved.error, 'the browser must observe an uncertain confirmation');

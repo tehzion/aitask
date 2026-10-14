@@ -88,3 +88,9 @@ export const getLegacyDepartmentMirror = (role: Role, departments: unknown): Dep
   if (role === 'Project Manager' && normalizeMemberDepartments(role, departments).length === 0) return 'Management';
   return normalizeMemberDepartments(role, departments)[0] || 'Designer';
 };
+
+/** Assignment eligibility is separate from department review authority. */
+export const isEligibleTaskAssignee = (
+  member: Pick<WorkspaceMember, 'role' | 'departments' | 'department'>,
+  department: Department,
+) => member.role !== 'Client' && (member.role === 'Project Manager' || isMemberInDepartment(member, department));

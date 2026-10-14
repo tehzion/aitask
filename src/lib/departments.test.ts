@@ -3,6 +3,7 @@ import type { User } from '../types';
 import {
   getMemberDepartments,
   isMemberInDepartment,
+  isEligibleTaskAssignee,
   normalizeDepartments,
   normalizeMemberDepartments,
 } from './departments';
@@ -36,4 +37,12 @@ describe('member departments', () => {
     expect(isMemberInDepartment(member, 'Editor')).toBe(true);
     expect(isMemberInDepartment(member, 'Operation')).toBe(false);
   });
+});
+
+it('allows department-independent PM assignments without giving PMs department membership', () => {
+  const pm = { id: 'pm', name: 'PM', role: 'Project Manager', departments: [] } as User;
+  expect(isEligibleTaskAssignee(pm, 'Operation')).toBe(true);
+  expect(isMemberInDepartment(pm, 'Operation')).toBe(false);
+  expect(isEligibleTaskAssignee({ ...pm, role: 'Staff', departments: ['Designer'] }, 'Operation')).toBe(false);
+  expect(isEligibleTaskAssignee({ ...pm, role: 'Client' }, 'Operation')).toBe(false);
 });

@@ -3,8 +3,8 @@
 Generated workflow tasks require completed predecessors before submission or
 completion. Staff submits work at 60%; the review department's HOD approves at
 80%; the responsible PM separately confirms completion at 100%. Boss Koo retains
-workspace oversight. Until a Designer HOD is configured, responsible portfolio
-PMs review Designer work. Other departments keep HOD review. Assignment alone
+workspace oversight. Responsible portfolio PMs review work in any department without a configured
+HOD. Departments with an HOD keep HOD review. Assignment alone
 does not give Staff or an HOD from another department approval authority.
 
 ## Approval and revision behavior
@@ -34,12 +34,16 @@ Generated step identity, predecessor links, department, visibility and frozen
 workflow definitions are protected. Individual active workflow steps cannot be
 deleted to skip review. Server cleanup remains possible for cancelled cycles.
 Final delivery checks that every frozen required step exists and is satisfied.
+A cancelled optional revision also requires satisfied ancestors, so it cannot
+let later publication skip earlier review or client approval. Missing, cyclic or
+cross-deliverable dependencies fail closed.
 
 ## Scope and save consistency
 
 The scoped workflow-context endpoint returns only visible task IDs, frozen kind,
 output version, dependency readiness and the current valid review. It exposes
-no hidden predecessor titles or content. Clients cannot use this internal
+no hidden predecessor titles, briefs, notes or pricing. Authorized internal reviewers
+and the assigned reviewer can open only the completed predecessor output links. Clients cannot use this internal
 endpoint. A HOD can approve an authorized review using canonical readiness
 without acquiring access to an earlier department's task.
 
@@ -54,11 +58,13 @@ persisted and journaled rather than disappearing as an unchanged status.
 
 ## Release status
 
-**14 October follow-up:** The original review gate below is deployed. Four
+**14 October follow-up:** The original review gate below is deployed. Six
 additional migrations remain pending explicit production approval: masked Client
 approval compatibility (`20261014045216`), Designer PM fallback and signed context
 at 80% (`20261014045911`), completed private-note compatibility (`20261014050918`),
-and Staff review-stage deletion protection (`20261014065237`). The current repair
+Staff review-stage deletion protection (`20261014065237`), and read-only reviewer
+evidence access (`20261014071022`), and all-department PM fallback, completed input
+links and optional-step dependency protection (`20261014111759`). The current repair
 manifest records that pending tail; the earlier no-pending statement describes
 only the original 13 October rollout. Frontend code has reached master and
 production, so these backend changes are still required for full activation.
