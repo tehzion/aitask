@@ -128,3 +128,19 @@ test('responsible PM receives Designer review without a Designer HOD and approve
   await page.getByRole('button', { name: 'Confirm completion', exact: true }).click();
   await expect(page.getByRole('progressbar', { name: 'Task progress', exact: true })).toHaveAttribute('aria-valuenow', '100');
 });
+
+for (const status of ['Waiting Approval', 'Approved', 'Completed']) {
+  test(`Staff cannot delete ${status} work while the portfolio PM retains management`, async ({ page }) => {
+    await seed(page);
+    await page.evaluate(async status => {
+      const { useStore } = await import('/src/store/index.ts');
+      useStore.setState({ tasks: useStore.getState().tasks.map(task => ({ ...task, assignedTo: 'stage-staff', status, isCompleted: status === 'Completed' })) });
+    }, status);
+    await openAs(page, 'stage-staff');
+    await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Stage artwork', exact: true }).getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+    await openAs(page, 'stage-pm');
+    await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Stage artwork', exact: true }).getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
+  });
+}

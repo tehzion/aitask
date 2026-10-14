@@ -54,6 +54,16 @@ persisted and journaled rather than disappearing as an unchanged status.
 
 ## Release status
 
+**14 October follow-up:** The original review gate below is deployed. Four
+additional migrations remain pending explicit production approval: masked Client
+approval compatibility (`20261014045216`), Designer PM fallback and signed context
+at 80% (`20261014045911`), completed private-note compatibility (`20261014050918`),
+and Staff review-stage deletion protection (`20261014065237`). The current repair
+manifest records that pending tail; the earlier no-pending statement describes
+only the original 13 October rollout. Frontend code has reached master and
+production, so these backend changes are still required for full activation.
+
+
 Migration `20261013035310_workflow_internal_review_gate.sql` was **applied to production
 on 13 October 2026** as connector version `20261013061241_workflow_internal_review_gate`.
 It adds the private journal, workflow guards and scoped read endpoint,
@@ -61,10 +71,11 @@ updates existing progress/deletion predicates in place, and advertises backend
 schema version 5 with `workflowReviewGate` support. Existing function identities
 and grants are preserved. It does not backfill or approve existing business tasks.
 
-Apply this migration before releasing this frontend. The new frontend keeps
-writes disabled when the backend lacks schema version 5 or review support.
-The existing version 4 frontend also becomes read-only once the backend version
-changes, so coordinate a short database/frontend cutover.
+The original 13 October frontend required schema version 5 before release.
+The audited combined frontend accepts secure schema version 4, or version 5 with
+review support; unavailable canonical context for generated workflow tasks still
+fails closed. Coordinate database/frontend changes so trusted approvals at 80%
+remain visible to the responsible PM before finalization.
 Existing unsigned Completed reviews require an explicit authorized approval;
 there is no automatic historical sign-off. Old frontend completion requests are
 also checked by the new database triggers.

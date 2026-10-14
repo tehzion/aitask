@@ -44,7 +44,7 @@ and rejected by the database guards. They are **not delegable**.
 | Service administration (catalog, templates, plans, cycles, prices) | ✓ | ✓ | – | – | – |
 | Assigned service clients | ✓ | ✓ | ✓ | ✓ | own company |
 | Client review actions | – | – | – | – | ✓ |
-| Internal workflow review sign-off | ✓ | responsible portfolio | own department | – | – |
+| Internal workflow review sign-off | ✓ | Designer portfolio only, while no Designer HOD is configured | own department | – | – |
 | Protected keys | ✓ | – | – | – | – |
 
 ### Project Manager
@@ -77,7 +77,9 @@ See [the review-gate rollout](workflow-review-gate-2026-10-13.md) for deployment
 
 ### Staff
 Standard employee access: assigned or created work only. No elevation over
-other members' work.
+other members' work. Staff cannot delete submitted, approved, or completed tasks;
+this prevents deleting work to bypass review. Existing deletion access for ordinary
+work before submission or returned for revision is preserved.
 
 ### Custom roles
 Boss Koo may create roles with any **non-protected** key. A custom role may opt

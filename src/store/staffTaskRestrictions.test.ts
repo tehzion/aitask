@@ -72,6 +72,13 @@ describe('staff task restrictions', () => {
     expect(useStore.getState().tasks.find(item => item.id === task.id)?.status).toBe('In Progress');
   });
 
+  it.each(['Waiting Approval', 'Approved', 'Completed'] as const)('prevents Staff deleting %s work to bypass its review lifecycle', status => {
+    useStore.setState({ tasks: [{ ...task, status, isCompleted: status === 'Completed' }], notifications: [], backend: { ...initialState.backend, mode: 'local', status: 'local', pendingMutations: 0, hasLocalChanges: false } });
+    expect(useStore.getState().deleteTask(task.id).ok).toBe(false);
+    expect(useStore.getState().tasks).toHaveLength(1);
+    expect(useStore.getState().notifications).toEqual([]);
+  });
+
   it('blocks Staff from changing the task department', () => {
     const result = useStore.getState().updateTask(task.id, { department: 'Video Editor' });
     expect(result.ok).toBe(false);

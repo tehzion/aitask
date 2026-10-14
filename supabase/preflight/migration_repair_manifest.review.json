@@ -782,11 +782,13 @@
     "20261013160804_task_dependency_review_invalidation",
     "20261014045216_client_approval_masked_assignment_compatibility",
     "20261014045911_designer_pm_review_fallback",
-    "20261014050918_preserve_completed_review_notes"
+    "20261014050918_preserve_completed_review_notes",
+    "20261014065237_protect_staff_submitted_task_deletion"
   ],
   "pendingProductionMigrations": [
     "20261014045216_client_approval_masked_assignment_compatibility",
     "20261014045911_designer_pm_review_fallback",
-    "20261014050918_preserve_completed_review_notes"
+    "20261014050918_preserve_completed_review_notes",
+    "20261014065237_protect_staff_submitted_task_deletion"
   ]
 }
