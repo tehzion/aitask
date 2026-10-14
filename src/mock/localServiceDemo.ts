@@ -478,7 +478,7 @@ export const createLocalServiceDemoFixture = (
       priority: step.order === 4 ? 'High' : 'Medium',
       status: completed ? 'Completed' : clientApproval ? 'Waiting Approval' : revision ? 'In Progress' : 'Pending',
       completionPercentage: completed ? 100 : clientApproval ? 60 : revision ? 35 : 0,
-      notes: revision ? 'Revision requested after the internal review. This remains a soft dependency demonstration.' : undefined,
+      notes: revision ? 'Revision requested after the internal review. Earlier workflow steps must be completed before resubmission.' : undefined,
       isCompleted: completed,
       completedAt: completed ? `${dateWithinCycle(addDays(workflowStart, step.order), currentEnd)}T10:00:00.000Z` : undefined,
       revisionCount: revision ? 1 : 0,

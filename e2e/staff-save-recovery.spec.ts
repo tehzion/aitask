@@ -17,7 +17,7 @@ const seedStaff = async (page: Page, service = false) => {
     const assigned = state.tasks.find(task => task.assignedTo === staff.id && task.clientId && task.serviceCycleId)!;
     useStore.setState({ currentUser: { ...staff, mustResetPassword: false }, backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
     if (keepServices) return assigned.clientId;
-    const template = { ...(assigned || state.tasks[0]), clientName: 'Staff save company', projectId: undefined, projectName: undefined,
+    const template = { ...(assigned || state.tasks[0]), generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined, internalReview: undefined, reviewAccess: undefined, clientName: 'Staff save company', projectId: undefined, projectName: undefined,
       clientId: undefined, department: staff.department, assignedTo: staff.id, createdBy: state.users.find(user => user.isSuperAdmin)!.id,
       status: 'Pending', priority: 'Medium', completionPercentage: 0, isCompleted: false, comments: [], approvalHistory: [],
       predecessorTaskIds: [], serviceCycleId: undefined, deliverableId: undefined, dueDate: '2026-10-30' };

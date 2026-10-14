@@ -76,18 +76,17 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   const taskFocusAxe = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
   expect(taskFocusAxe.violations, `Staff task focus: ${taskFocusAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
 
-  await page.getByRole('button', { name: 'Send for review' }).click();
-  await expect(page.getByRole('alert')).toContainText('Add an output link');
+  // This frozen demo has unresolved predecessors. Evidence alone must not
+  // bypass the dependency gate; ordinary evidence submission is covered in
+  // staff-workflow-gaps and the signed review lifecycle has its own suite.
+  await expect(page.getByRole('button', { name: 'Send for review' })).toBeDisabled();
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const task = useStore.getState().tasks.find(item => item.title === '6. Video Editing')!;
-    const state = useStore.getState();
-    useStore.setState({ users: [...state.users, { id: 'visual-review-hod', name: 'Review HOD', role: 'HOD', department: task.department, departments: [task.department] }] });
     useStore.getState().updateTaskAttachment(task.id, 'https://example.com/staff-final-video');
   });
-  await page.getByRole('button', { name: 'Send for review' }).click();
+  await expect(page.getByRole('button', { name: 'Send for review' })).toBeDisabled();
   await expect(page.getByRole('alertdialog', { name: 'Start with an incomplete earlier step?' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Waiting for review' })).toBeDisabled();
 });
 
 test('staff mobile keeps focus, task actions and secondary creation reachable', async ({ page }) => {

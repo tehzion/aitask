@@ -89,7 +89,7 @@ const openTask = async (page: Page, task: ReturnType<typeof makeTask>, ownedClie
 };
 
 test.describe('task detail authorization matrix', () => {
-  test('Boss Koo keeps full controls while PM portfolio tasks are read-only', async ({ page }) => {
+  test('Boss Koo keeps full controls and responsible PMs can manage their portfolio tasks', async ({ page }) => {
     const bossTask = makeTask({
       id: 'e2e-boss-unrelated',
       title: 'Boss unrestricted task',
@@ -110,17 +110,19 @@ test.describe('task detail authorization matrix', () => {
     await signIn(page, 'Project Manager Demo');
     const portfolioTask = makeTask({
       id: 'e2e-pm-portfolio',
-      title: 'PM portfolio read-only task',
+      title: 'PM portfolio task',
       clientName: 'Owned Portfolio Co',
       assignedTo: 'u-staff-demo-local',
       createdBy: 'u-staff-demo-local',
       department: 'Designer',
     });
-    const portfolioDialog = await openTask(page, portfolioTask, ['Owned Portfolio Co']);
-    await expect(portfolioDialog.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
-    await expect(portfolioDialog.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
-    await expect(portfolioDialog.getByPlaceholder('Write a comment or update...')).toHaveCount(0);
-    await expect(portfolioDialog.getByText('PM portfolio read-only task', { exact: true })).toBeVisible();
+    const portfolioFocus = await openTask(page, portfolioTask, ['Owned Portfolio Co']);
+    await portfolioFocus.getByRole('button', { name: 'Full edit', exact: true }).click();
+    const portfolioDialog = page.getByRole('dialog', { name: portfolioTask.title });
+    await expect(portfolioDialog.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+    await expect(portfolioDialog.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
+    await expect(portfolioDialog.getByPlaceholder('Write a comment or update...')).toBeVisible();
+    await expect(portfolioDialog.getByRole('heading', { name: 'PM portfolio task', exact: true })).toBeVisible();
   });
 
   test('PM owned work, HOD department work, and Staff assignments expose matching actions', async ({ page }) => {

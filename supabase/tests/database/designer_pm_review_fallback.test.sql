@@ -5,7 +5,7 @@ insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_co
 select '00000000-0000-0000-0000-000000000000',('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,'authenticated','authenticated','fallback-'||n||'@aitask.local','',now(),'{}','{}',now(),now() from generate_series(1401,1404) n;
 insert into public.aitask_workspaces(id,name) values('pgtap-pm-fallback','PM fallback');
 insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,department,departments)
-select id,'pgtap-pm-fallback',('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,id,'fallback-'||n||'@aitask.local',role,department,case when id='fallback-worker' then array['Designer','Video Editor'] else array[department] end
+select id,'pgtap-pm-fallback',('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,id,'fallback-'||n||'@aitask.local',role,case when id='fallback-worker' then 'Video Editor' else department end,case when id='fallback-worker' then array['Video Editor','Designer'] else array[department] end
 from (values ('fallback-worker',1401,'Staff','Designer'),('fallback-pm',1402,'Project Manager','Management'),('fallback-other',1403,'Project Manager','Management'),('fallback-hod',1404,'HOD','Video Editor')) fixtures(id,n,role,department);
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
 ('pgtap-pm-fallback','client','fallback-client','{"id":"fallback-client","clientName":"Fallback Co","createdBy":"fallback-pm"}'),
@@ -69,7 +69,7 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001401'
 set local role authenticated;
 select is((pg_temp.patch_task('fallback-task','{"status":"Waiting Approval"}')->>'ok')::boolean,true,'Staff resubmits after HOD configuration');
 reset role;
-select is((select count(*)::integer from public.aitask_entities where workspace_id='pgtap-pm-fallback' and entity_type='notification' and data->>'targetUserId'='fallback-hod'),1,'configured HOD receives the next handoff');
+select is((select count(*)::integer from public.aitask_entities where workspace_id='pgtap-pm-fallback' and entity_type='notification' and parent_id='fallback-task' and data->>'targetUserId'='fallback-hod'),1,'configured HOD receives the next handoff');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001402',true);
 set local role authenticated;
 select is((pg_temp.patch_task('fallback-task','{"status":"Approved"}')->>'ok')::boolean,false,'PM fallback stops when a Designer HOD is configured');
