@@ -1,7 +1,7 @@
 import SystemMessage from './SystemMessage';
 import { DeliveryProgress } from './DeliveryProgress';
 import { useLocalToday } from '../hooks/useLocalToday';
-import { getCurrentPlanCycle } from '../lib/dashboardData';
+import { getCurrentPlanCycle, isAwaitingPublication } from '../lib/dashboardData';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import React from 'react';
 import { ArrowRight, CalendarDays, CheckCircle2, Download, FileText, MessageSquareText, PackageCheck } from 'lucide-react';
@@ -124,7 +124,7 @@ const ClientServiceWorkspace = () => {
         <div id={`${TABS_ID}-panel-overview`} role="tabpanel" aria-labelledby={`${TABS_ID}-tab-overview`} tabIndex={0} className="grid scroll-mt-36 gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,.75fr)]">
           <Surface variant="inset" className="p-6 sm:p-8">
             <p className="calm-eyebrow">{t('Delivery progress')}</p>
-          <DeliveryProgress published={Boolean(currentCycle)} total={currentDeliverables.length} delivered={deliveredCount} draft={Boolean(activePlan)} />
+          <DeliveryProgress published={Boolean(currentCycle)} total={currentDeliverables.length} delivered={deliveredCount} draft={isAwaitingPublication(client, activePlan, store.serviceCycles, today)} />
           </Surface>
           <Surface className="p-6">
             <p className="calm-eyebrow">{t('What needs attention')}</p>
@@ -147,7 +147,7 @@ const ClientServiceWorkspace = () => {
         <div id={`${TABS_ID}-panel-activity`} role="tabpanel" aria-labelledby={`${TABS_ID}-tab-activity`} tabIndex={0} className="scroll-mt-36 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           <section className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80">
             <header className="border-b border-line/70 px-4 py-4 sm:px-5"><div className="flex items-center gap-2"><MessageSquareText className="h-4 w-4 text-accent" aria-hidden="true" /><h2 className="font-semibold text-ink">{t('Files and team updates')}</h2></div><p className="mt-1 text-sm text-muted">{t('Only updates explicitly shared with your company appear here.')}</p></header>
-            <div className="divide-y divide-line/70">{comments.map(item => { const author = store.users.find(user => user.id === item.userId); return <article key={item.id} className="px-4 py-4 sm:px-5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{author?.name ? <span data-i18n-skip>{author.name}</span> : t('Agency team')}</p><time className="text-xs text-muted">{formatLocalizedDate(new Date(item.updatedAt), locale)}</time></div><p data-i18n-skip className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted">{item.text}</p>{item.attachments.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{item.attachments.map(attachment => <button key={attachment.id} data-i18n-skip type="button" disabled={Boolean(downloadingFileId)} aria-busy={downloadingFileId === attachment.id} onClick={() => void download(attachment)} className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 disabled:cursor-wait disabled:opacity-60"><Download className="h-4 w-4 text-accent" aria-hidden="true" />{attachment.fileName}</button>)}</div>}</article>; })}{comments.length === 0 && <EmptyState title={t('No shared updates yet')} description={t('Client-visible notes and files from the team will appear here.')} className="m-4" />}</div>
+            <div className="divide-y divide-line/70">{comments.map(item => { const author = item.userId === store.currentUser?.id ? store.currentUser : undefined; return <article key={item.id} className="px-4 py-4 sm:px-5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-ink">{author?.name ? <span data-i18n-skip>{author.name}</span> : t('Agency team')}</p><time className="text-xs text-muted">{formatLocalizedDate(new Date(item.updatedAt), locale)}</time></div><p data-i18n-skip className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted">{item.text}</p>{item.attachments.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{item.attachments.map(attachment => <button key={attachment.id} data-i18n-skip type="button" disabled={Boolean(downloadingFileId)} aria-busy={downloadingFileId === attachment.id} onClick={() => void download(attachment)} className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 disabled:cursor-wait disabled:opacity-60"><Download className="h-4 w-4 text-accent" aria-hidden="true" />{attachment.fileName}</button>)}</div>}</article>; })}{comments.length === 0 && <EmptyState title={t('No shared updates yet')} description={t('Client-visible notes and files from the team will appear here.')} className="m-4" />}</div>
           </section>
         </div>
       )}

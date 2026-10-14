@@ -9,6 +9,24 @@ const deliverable = { id: 'd', clientId: 'client', cycleId: 'cycle', status: 'Pl
 beforeEach(() => useStore.setState({ ...initial, currentUser: actor, users: [actor], rolePermissions: [], tasks: [structuredClone(task)], deliverables: [structuredClone(deliverable)], serviceCycles: [structuredClone(cycle)], backend: { ...initial.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } }, true));
 afterEach(() => useStore.setState(initial, true));
 describe('explicit delivery task links', () => {
+  it('requires an explicit permitted removal before repairing a cross-company link', () => {
+    useStore.setState({ tasks: [{ ...task, deliverableId: 'd', serviceCycleId: 'cycle' }], deliverables: [{ ...deliverable, clientId: 'wrong-company', taskIds: [task.id] }] });
+    expect(useStore.getState().unlinkInvalidTaskDelivery(task.id).ok).toBe(true);
+    expect(useStore.getState().tasks[0]).toMatchObject({ id: task.id, status: 'Completed' });
+    expect(useStore.getState().tasks[0].deliverableId).toBeUndefined();
+    expect(useStore.getState().deliverables[0].taskIds).toEqual([]);
+    useStore.setState({ deliverables: [deliverable] });
+    expect(useStore.getState().linkTaskToDeliverable(task.id, cycle.id, deliverable.id).ok).toBe(true);
+    expect(useStore.getState().deliverables[0].status).toBe('Ready');
+  });
+  it('rejects removal of valid links and refuses unauthorized repairs', () => {
+    useStore.setState({ tasks: [{ ...task, deliverableId: 'd' }] });
+    expect(useStore.getState().unlinkInvalidTaskDelivery(task.id).ok).toBe(false);
+    useStore.setState({ currentUser: { id: 'worker', role: 'Staff', name: 'Worker', departments: [] }, deliverables: [{ ...deliverable, clientId: 'wrong-company' }] });
+    const before = structuredClone(useStore.getState().tasks);
+    expect(useStore.getState().unlinkInvalidTaskDelivery(task.id).ok).toBe(false);
+    expect(useStore.getState().tasks).toEqual(before);
+  });
   it('links completed work as Ready without confirming delivery', () => {
     expect(useStore.getState().linkTaskToDeliverable(task.id, cycle.id, deliverable.id).ok).toBe(true);
     expect(useStore.getState().tasks[0].deliverableId).toBe('d');

@@ -25,7 +25,8 @@ create function pg_temp.signed_role_flow() returns setof text language plpgsql a
 declare task_id text:='frozen-review'; payload jsonb; result jsonb; first_decision text; first_version text;
 begin
  if to_regprocedure('private.aitask_guard_workflow_task()') is null then
-  return query select * from skip('Optional signed frozen-workflow gate is not installed on this database.'); return;
+  -- Preserve the seven signed-role assertions in the declared TAP plan.
+  return query select * from skip('Optional signed frozen-workflow gate is not installed on this database.', 7); return;
  end if;
  perform set_config('request.jwt.claim.role','authenticated',true);
  perform set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005501',true);

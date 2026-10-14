@@ -188,6 +188,8 @@ export interface ClientProfile {
   clientSince?: string;
   /** Runtime-only marker for a client created from a work-record name. Never persisted. */
   discovered?: boolean;
+  /** Read-only publication state returned by the customer portal projection. */
+  awaitingPublication?: boolean;
   contactPerson?: string;
   email?: string;
   phone?: string;

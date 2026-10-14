@@ -508,8 +508,8 @@ const OperationsClientWorkspace = () => {
         </p>
       )}
 
-      {tab === "overview" && (
-        <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-overview`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-overview`} tabIndex={0} className="grid scroll-mt-36 gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
+      {(
+        <div hidden={tab !== 'overview'} style={tab !== 'overview' ? { display: 'none' } : undefined} id={`${CLIENT_WORKSPACE_TABS_ID}-panel-overview`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-overview`} tabIndex={0} className="grid scroll-mt-36 gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
           <Surface variant="inset" className="border-l-2 border-accent p-6 sm:p-8">
             <p className="calm-eyebrow">{t('Delivery progress')}</p>
             <DeliveryProgress published={Boolean(currentCycle)} total={currentCycleDeliverables.length} delivered={currentDelivered}

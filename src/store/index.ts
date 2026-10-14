@@ -7,6 +7,7 @@ import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSession
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { useToastStore } from './useToastStore';
+import { hasInvalidDeliveryLink } from '../lib/deliveryLinks';
 import { isTaskOpen } from '../lib/taskReporting';
 import { applyTaskWorkIntent, recordTaskWorkTransition, taskEvidenceError, type TaskWorkIntent } from '../lib/staffWorkflow';
 import {
@@ -366,6 +367,7 @@ interface StoreState {
   setServiceCycleStatus: (cycleId: string, status: ServiceCycleStatus) => { ok: boolean; error?: string };
   updateDeliverableStatus: (deliverableId: string, status: DeliverableStatus) => { ok: boolean; error?: string };
   linkTaskToDeliverable: (taskId: string, cycleId?: string, deliverableId?: string) => { ok: boolean; error?: string };
+  unlinkInvalidTaskDelivery: (taskId: string) => { ok: boolean; error?: string };
   generateDeliverableTaskChain: (deliverableId: string) => { ok: boolean; taskIds?: string[]; error?: string };
   addCycleComment: (cycleId: string, text: string, visibility: CommentVisibility) => { ok: boolean; id?: string; error?: string };
   addCycleCommentAttachment: (commentId: string, attachment: AttachmentRef) => { ok: boolean; error?: string };
@@ -3336,10 +3338,9 @@ export const useStore = create<StoreState>()(
         return {
           tasks: newTasks,
           notifications: [...notifications, ...(state.notifications || [])],
-          // Clients receive projected task records rather than the internal
-          // required-task chain. The server derives service progress from the
-          // complete canonical task set after the approval command persists.
-          ...(currentUser.role === 'Client' ? {} : deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles)),
+          // Hosted clients receive projected tasks; the server derives progress
+          // from the complete task chain. Local workspaces derive it here.
+          ...(currentUser.role === 'Client' && shouldUseSecureSupabase() ? {} : deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles)),
         };
         });
         return result;
@@ -4419,6 +4420,13 @@ export const useStore = create<StoreState>()(
           return derived;
         });
         return { ok: true };
+      },
+
+      unlinkInvalidTaskDelivery: (taskId) => {
+        const state = get();
+        const task = state.tasks.find(item => item.id === taskId);
+        if (!task || !hasInvalidDeliveryLink(task, state.deliverables)) return { ok: false, error: 'Only invalid delivery links can be removed here.' };
+        return get().linkTaskToDeliverable(taskId);
       },
 
       linkTaskToDeliverable: (taskId, cycleId, deliverableId) => {

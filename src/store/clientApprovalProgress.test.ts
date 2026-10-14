@@ -1,0 +1,74 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Deliverable, ServiceCycle, Task, User } from '../types';
+
+const backend = vi.hoisted(() => ({ secure: false }));
+vi.mock('../lib/supabaseClient', () => ({
+  supabase: {},
+  shouldUseSecureSupabase: () => backend.secure,
+  resolveAuthEmail: (value: string) => value,
+}));
+import { useStore } from './index';
+
+const initial = useStore.getState();
+const timestamp = '2026-10-01T00:00:00Z';
+const client: User = { id: 'progress-client', name: 'Customer', role: 'Client', companyName: 'Progress Co', departments: ['Client'] };
+const task: Task = {
+  id: 'progress-task', clientId: 'progress-company', clientName: 'Progress Co', title: 'Historical delivery awaiting acceptance',
+  description: '', serviceType: 'Design', department: 'Designer', assignedTo: 'staff', createdBy: 'pm',
+  startDate: '2026-10-01', dueDate: '', status: 'Completed', isCompleted: true, completedAt: timestamp,
+  priority: 'Medium', completionPercentage: 100, clientApprovalStatus: 'Pending', revisionCount: 0,
+  visibility: 'client-visible', deliverableId: 'progress-output', serviceCycleId: 'progress-cycle', isRecurring: false,
+};
+const deliverable: Deliverable = {
+  id: 'progress-output', clientId: task.clientId!, clientName: task.clientName, planId: 'progress-plan',
+  cycleId: task.serviceCycleId!, serviceItemId: 'design', sequence: 1, title: 'Artwork', status: 'Ready',
+  taskIds: [task.id], attachments: [], createdAt: timestamp, updatedAt: timestamp,
+};
+const cycle: ServiceCycle = {
+  id: task.serviceCycleId!, clientId: task.clientId!, clientName: task.clientName, planId: 'progress-plan', planRevision: 1,
+  periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Published', currency: 'MYR',
+  serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0,
+  publishedAt: timestamp, createdAt: timestamp, updatedAt: timestamp,
+};
+beforeEach(() => {
+  backend.secure = false;
+  useStore.setState({
+    ...initial, currentUser: client, users: [client], clients: [], projects: [], rolePermissions: [], notifications: [],
+    tasks: [structuredClone(task)], deliverables: [structuredClone(deliverable)], serviceCycles: [structuredClone(cycle)],
+    backend: { ...initial.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
+  }, true);
+});
+afterEach(() => { backend.secure = false; useStore.setState(initial, true); });
+
+describe('client decisions and derived delivery progress', () => {
+  it.each(['Ready', 'Delivered'] as const)('reopens a local %s delivery when the customer requests changes', status => {
+    useStore.setState({
+      deliverables: [{ ...deliverable, status, deliveredAt: status === 'Delivered' ? timestamp : undefined }],
+      serviceCycles: [{ ...cycle, status: status === 'Delivered' ? 'Completed' : 'Published' }],
+    });
+    expect(useStore.getState().reviewClientApproval(task.id, 'Rejected', 'Please revise the artwork').ok).toBe(true);
+    const state = useStore.getState();
+    expect(state.tasks[0]).toMatchObject({ status: 'In Progress', isCompleted: false, completionPercentage: 50, revisionCount: 1 });
+    expect(state.deliverables[0]).toMatchObject({ status: 'In Progress', deliveredAt: undefined });
+    expect(state.serviceCycles[0].status).toBe('Published');
+  });
+
+  it('keeps local customer acceptance at 80 percent until PM finalization', () => {
+    expect(useStore.getState().reviewClientApproval(task.id, 'Approved').ok).toBe(true);
+    const state = useStore.getState();
+    expect(state.tasks[0]).toMatchObject({ status: 'Approved', clientApprovalStatus: 'Approved', isCompleted: false, completionPercentage: 80 });
+    expect(state.deliverables[0].status).toBe('In Progress');
+    expect(state.serviceCycles[0].status).toBe('Published');
+  });
+
+  it.each(['Approved', 'Rejected'] as const)('leaves hosted delivery and cycle derivation to the server after a %s decision', decision => {
+    backend.secure = true;
+    useStore.setState({ backend: { ...initial.backend, mode: 'supabase', status: 'live', hasLocalChanges: false, pendingMutations: 0 } });
+    const beforeDeliverables = structuredClone(useStore.getState().deliverables);
+    const beforeCycles = structuredClone(useStore.getState().serviceCycles);
+    expect(useStore.getState().reviewClientApproval(task.id, decision, 'Customer feedback').ok).toBe(true);
+    expect(useStore.getState().tasks[0].clientApprovalStatus).toBe(decision);
+    expect(useStore.getState().deliverables).toEqual(beforeDeliverables);
+    expect(useStore.getState().serviceCycles).toEqual(beforeCycles);
+  });
+});

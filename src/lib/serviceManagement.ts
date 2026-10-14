@@ -144,7 +144,7 @@ export const resolveDeliverableStatus = (
   deliverable: Deliverable,
   tasks: Task[],
 ): Deliverable['status'] => {
-  const linked = tasks.filter(task => task.deliverableId === deliverable.id || deliverable.taskIds.includes(task.id));
+  const linked = tasks.filter(task => task.clientId === deliverable.clientId && (task.deliverableId === deliverable.id || deliverable.taskIds.includes(task.id)));
   if (!linked.length) return deliverable.status === 'Delivered' ? 'Delivered' : 'Planned';
   const required = linked.filter(task => task.workflowStepRequired !== false);
   const allRequiredComplete = required.length > 0 && required.every(task => task.isCompleted || task.status === 'Completed');

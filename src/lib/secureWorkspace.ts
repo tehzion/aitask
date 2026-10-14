@@ -732,7 +732,11 @@ const stateToRows = (state: PersistedWorkspaceState) => {
   // Clients discovered from work records exist only in the local view. Skipping
   // them here keeps them out of the command diff so a save never tries to insert
   // a placeholder that collides with a company another member owns.
-  state.clients?.filter(item => !item.discovered).forEach(item => push('entity', 'client', item.id, item as unknown as Record<string, unknown>, item.version));
+  state.clients?.filter(item => !item.discovered).forEach(item => {
+    const data = { ...item };
+    delete data.awaitingPublication;
+    push('entity', 'client', item.id, data as unknown as Record<string, unknown>, item.version);
+  });
   state.projects.forEach(item => push('entity', 'project', item.id, item as unknown as Record<string, unknown>, item.version));
   state.tasks.forEach(item => {
     const { comments = [], approvalHistory = [], ...task } = item;

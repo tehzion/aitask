@@ -164,6 +164,14 @@
           "production": "20261009024458_reliable_member_onboarding"
         },
         {
+          "repository": "20261012162419_client_portal_review_privacy",
+          "production": "20261012172315_client_portal_review_privacy"
+        },
+        {
+          "repository": "20261012164407_delivery_link_derivation",
+          "production": "20261012172326_delivery_link_derivation"
+        },
+        {
           "repository": "20261012165347_hod_task_deletion_authority",
           "production": "20261013051554_hod_task_deletion_authority"
         },
@@ -702,6 +710,8 @@
     "20261002065644_hod_permission_parity_followups",
     "20261002101435_universal_notification_audience_guard",
     "20261007173905_reliable_member_onboarding",
+    "20261012162419_client_portal_review_privacy",
+    "20261012164407_delivery_link_derivation",
     "20261012165347_hod_task_deletion_authority",
     "20261013035142_staff_workflow_recovery",
     "20261013053636_hod_review_handoff",

@@ -1,6 +1,7 @@
 # Staff workflow and recovery fixes — 13 October 2026
 
-Implemented locally. Production deployment and migration application have not been performed.
+The committed Staff recovery migration was deployed to production on 13 October.
+See [the verified Supabase rollout](supabase-staff-rollout-2026-10-13.md).
 
 ## Behavior
 
@@ -34,6 +35,10 @@ Browser recovery tests use controlled transport responses; the separate backend 
 
 ## Rollout
 
-Apply `20261013035142_staff_workflow_recovery` with its preceding pending migrations before deploying the corresponding frontend. The release manifest records it as pending production work. Complete hosted authenticated Staff/Client QA before promoting the release.
+Production recorded `20261013102204_staff_workflow_recovery` for repository
+migration `20261013035142_staff_workflow_recovery`. Its preceding privacy,
+delivery-link and HOD deletion fixes were already present. Preserve these actual
+connector aliases when reconciling the release manifest. Complete hosted
+authenticated Staff/Client browser QA before promoting further frontend changes.
 
 The build pins the already-cached Terser 5.48.0 minifier to stay within the existing startup budget; optional staff copy is registered with its lazy routes. Other ongoing workspace changes were preserved.

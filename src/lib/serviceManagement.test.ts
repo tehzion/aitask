@@ -63,6 +63,9 @@ describe('service management calculations', () => {
       workflowStepRequired: required,
     });
     expect(resolveDeliverableStatus(deliverable, [task('task-1', true), task('task-2', false, false)])).toBe('Ready');
+    expect(resolveDeliverableStatus(deliverable, [{ ...task('task-1', false), clientId: 'other-company' }])).toBe('Planned');
+    expect(resolveDeliverableStatus({ ...deliverable, status: 'Delivered' }, [{ ...task('task-1', false), clientId: 'other-company' }])).toBe('Delivered');
+    expect(resolveDeliverableStatus(deliverable, [{ ...task('task-1', true), deliverableId: undefined }])).toBe('Ready');
     const cycle = {
       id: 'cycle-1', clientId: 'client-1', clientName: 'Acme', planId: 'plan-1', planRevision: 1,
       periodStart: '2026-08-15', periodEnd: '2026-09-14', status: 'Published' as const, currency: 'MYR' as const,
