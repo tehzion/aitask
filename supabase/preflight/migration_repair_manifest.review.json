@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "migration_validated_and_applied_through_20261013160804; production connector 20261013164548 verified",
+  "status": "migration_validated_and_applied_through_20261014111759; production connector 20261014125353 verified",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
     "verifiedAt": "2026-10-14",
-    "historyThrough": "20261013164548_task_dependency_review_invalidation (repository 20261013160804); connector aliases preserved",
+    "historyThrough": "20261014125353_pm_review_fallback_and_workflow_inputs (repository 20261014111759); connector aliases preserved",
     "historyAligned": false,
     "historyAlignmentNote": "The connector stored deployment IDs 20260919065513, 20260919065609, 20260919065620, 20260919065648, and 20260919072524 for the five matching repository migrations. Names and live SQL are verified; timestamp repair is intentionally prohibited.",
     "clientOwnershipRollout": {
@@ -198,6 +198,30 @@
         {
           "repository": "20261013160804_task_dependency_review_invalidation",
           "production": "20261013164548_task_dependency_review_invalidation"
+        },
+        {
+          "repository": "20261014045216_client_approval_masked_assignment_compatibility",
+          "production": "20261014125330_client_approval_masked_assignment_compatibility"
+        },
+        {
+          "repository": "20261014045911_designer_pm_review_fallback",
+          "production": "20261014125342_designer_pm_review_fallback"
+        },
+        {
+          "repository": "20261014050918_preserve_completed_review_notes",
+          "production": "20261014125344_preserve_completed_review_notes"
+        },
+        {
+          "repository": "20261014065237_protect_staff_submitted_task_deletion",
+          "production": "20261014125347_protect_staff_submitted_task_deletion"
+        },
+        {
+          "repository": "20261014071022_reviewer_output_evidence_access",
+          "production": "20261014125350_reviewer_output_evidence_access"
+        },
+        {
+          "repository": "20261014111759_pm_review_fallback_and_workflow_inputs",
+          "production": "20261014125353_pm_review_fallback_and_workflow_inputs"
         }
       ]
     },
@@ -554,6 +578,47 @@
         "Hosted probes used SQL request scope; no real production account login or task mutation was performed.",
         "Frontend deployment provenance was not verified as part of this database rollout."
       ]
+    },
+    "roleReadinessRollout": {
+      "appliedAt": "2026-10-14",
+      "method": "Supabase connector apply_migration; all six exact files explicitly approved by the user",
+      "sourceCommit": "fa2d4bfecd5846e3e9e29dc7f8df3b17d6f0d35e",
+      "testedFrontendCommit": "24acbc7c45d62f79cdf75a31c579d64e61342674",
+      "repositoryMigrations": [
+        "20261014045216_client_approval_masked_assignment_compatibility",
+        "20261014045911_designer_pm_review_fallback",
+        "20261014050918_preserve_completed_review_notes",
+        "20261014065237_protect_staff_submitted_task_deletion",
+        "20261014071022_reviewer_output_evidence_access",
+        "20261014111759_pm_review_fallback_and_workflow_inputs"
+      ],
+      "connectorVersions": [
+        "20261014125330_client_approval_masked_assignment_compatibility",
+        "20261014125342_designer_pm_review_fallback",
+        "20261014125344_preserve_completed_review_notes",
+        "20261014125347_protect_staff_submitted_task_deletion",
+        "20261014125350_reviewer_output_evidence_access",
+        "20261014125353_pm_review_fallback_and_workflow_inputs"
+      ],
+      "liveVerification": {
+        "taskCountBefore": 189,
+        "taskCountAfter": 189,
+        "taskJsonChecksumBeforeAndAfter": "c2128ff6a6846e1519d579383090b14c",
+        "taskDecisionsAndAssignmentsUnchanged": true,
+        "designerWaitingTasksRoutedToBossKoo": 2,
+        "videoWaitingTasksRetainMabelHodReview": 8,
+        "bossReviewNotificationsVerified": 2,
+        "actorBoundContextsVerified": [
+          "Boss Koo",
+          "Project Manager",
+          "HOD",
+          "Staff"
+        ],
+        "anonymousWorkflowContextAllowed": false,
+        "privateReviewHelpersBrowserExecutable": false,
+        "taskEvidenceGuardActive": true,
+        "actorContextProbeMethod": "Read-only production SQL request scope using existing member Auth identities; no real-account logins or business writes."
+      }
     }
   },
   "schemaEquivalence": {
@@ -787,12 +852,5 @@
     "20261014071022_reviewer_output_evidence_access",
     "20261014111759_pm_review_fallback_and_workflow_inputs"
   ],
-  "pendingProductionMigrations": [
-    "20261014045216_client_approval_masked_assignment_compatibility",
-    "20261014045911_designer_pm_review_fallback",
-    "20261014050918_preserve_completed_review_notes",
-    "20261014065237_protect_staff_submitted_task_deletion",
-    "20261014071022_reviewer_output_evidence_access",
-    "20261014111759_pm_review_fallback_and_workflow_inputs"
-  ]
+  "pendingProductionMigrations": []
 }

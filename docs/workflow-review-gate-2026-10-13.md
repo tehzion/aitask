@@ -58,17 +58,9 @@ persisted and journaled rather than disappearing as an unchanged status.
 
 ## Release status
 
-**14 October follow-up:** The original review gate below is deployed. Six
-additional migrations remain pending explicit production approval: masked Client
-approval compatibility (`20261014045216`), Designer PM fallback and signed context
-at 80% (`20261014045911`), completed private-note compatibility (`20261014050918`),
-Staff review-stage deletion protection (`20261014065237`), and read-only reviewer
-evidence access (`20261014071022`), and all-department PM fallback, completed input
-links and optional-step dependency protection (`20261014111759`). The current repair
-manifest records that pending tail; the earlier no-pending statement describes
-only the original 13 October rollout. Frontend code has reached master and
-production, so these backend changes are still required for full activation.
+**14 October follow-up deployed:** The user explicitly approved all six follow-up migrations. They are applied and verified in production: masked Client approvals (`20261014045216`), Designer PM fallback and signed context at 80% (`20261014045911`), completed private notes (`20261014050918`), Staff review-stage deletion protection (`20261014065237`), reviewer evidence access (`20261014071022`), and all-department PM fallback, completed input links and skipped-step protection (`20261014111759`). The repair manifest preserves the connector-generated versions `20261014125330` through `20261014125353`; no history repair was performed.
 
+Production role-context checks confirm Boss Koo can review the two waiting Designer tasks, an unrelated PM cannot access them, Mabel retains Video Shooting/Video Editor review, and assigned Staff cannot approve or delete waiting work. The two Designer handoff notifications are present. All 189 task JSON records have the same checksum before and after deployment; no task decision or assignment changed. The tested frontend commit `24acbc7` passed Linux CI: 661 unit tests, 828 database checks, 296 browser checks, three PWA checks and hosted login localization. Production build provenance confirms the same commit.
 
 Migration `20261013035310_workflow_internal_review_gate.sql` was **applied to production
 on 13 October 2026** as connector version `20261013061241_workflow_internal_review_gate`.
