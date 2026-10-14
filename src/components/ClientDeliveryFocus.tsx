@@ -1,4 +1,5 @@
 import SystemMessage from './SystemMessage';
+import TaskOutputFiles from './TaskOutputFiles';
 import { getTaskProgress } from '../lib/taskProgress';
 import React from 'react';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -242,7 +243,8 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
           <div className="mt-3 space-y-2">
             {attachmentUrl && <a href={attachmentUrl} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center justify-between gap-3 rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"><span className="truncate">{task.attachmentName ? <span data-i18n-skip>{task.attachmentName}</span> : t('Open delivery file')}</span><ExternalLink className="h-4 w-4 shrink-0 text-accent" /></a>}
             {task.website && safeHttpsUrl(task.website) && <a href={safeHttpsUrl(task.website)!} target="_blank" rel="noopener noreferrer" className="flex min-h-12 items-center justify-between gap-3 rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset">{t('Website reference')}<ExternalLink className="h-4 w-4 shrink-0 text-accent" /></a>}
-            {!attachmentUrl && !(task.website && safeHttpsUrl(task.website)) && <p className="rounded-control border border-dashed border-line px-4 py-6 text-sm text-muted">{t('No files have been shared for this delivery yet.')}</p>}
+            <TaskOutputFiles task={task} />
+            {!attachmentUrl && !task.outputAttachments?.length && !(task.website && safeHttpsUrl(task.website)) && <p className="rounded-control border border-dashed border-line px-4 py-6 text-sm text-muted">{t('No files have been shared for this delivery yet.')}</p>}
           </div>
         </section>
 

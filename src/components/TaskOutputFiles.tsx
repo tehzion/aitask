@@ -1,16 +1,43 @@
+import '../lib/hodReviewCopy';
 import React from 'react';
-import { Download } from 'lucide-react';
-import type { Task } from '../types';
+import { Download, Upload } from 'lucide-react';
+import type { AttachmentRef, Task } from '../types';
 import { useStore } from '../store';
 import { getTaskOutputAttachments, getTaskReviewInputLinks } from '../lib/taskOutputEvidence';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent, onWorkspaceSessionInvalidated } from '../lib/workspaceSession';
 import { safeHttpsUrl } from '../lib/security';
 import { useI18n } from './I18nProvider';
+import { getTaskAccess } from '../lib/access';
+import { canManageTaskReview } from '../lib/taskWorkflowAccess';
+import { useSaveAction } from '../hooks/useSaveAction';
+import { useShallow } from 'zustand/react/shallow';
+
+const TaskReviewSettings = React.lazy(() => import('./TaskReviewSettings'));
 
 export default function TaskOutputFiles({ task }: { task: Task }) {
   const { t } = useI18n();
   const deliverables = useStore(state => state.deliverables);
   const actorId = useStore(state => state.currentUser?.id);
+  const state = useStore(useShallow(s => ({ currentUser: s.currentUser, users: s.users, clients: s.clients, projects: s.projects, rolePermissions: s.rolePermissions, backend: s.backend })));
+  const access = getTaskAccess(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
+  const canUpload = access.canEdit && Boolean(task.clientId && task.serviceCycleId && (task.assignedTo === actorId || canManageTaskReview(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })))
+    && !['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status);
+  const { busy: uploading, run } = useSaveAction(`output:${task.id}`);
+  const input = React.useRef<HTMLInputElement>(null);
+  const [uploadError, setUploadError] = React.useState('');
+  const [uploadSaved, setUploadSaved] = React.useState(false);
+  const retained = React.useRef<{ file: File; attachment?: AttachmentRef } | null>(null);
+  React.useEffect(() => { retained.current = null; setUploadError(''); setUploadSaved(false); }, [task.id, actorId]);
+  const upload = async (file: File) => {
+    setUploadError(''); setUploadSaved(false);
+    retained.current = { file, attachment: retained.current?.file === file ? retained.current.attachment : undefined };
+    await run(async isCurrent => {
+      const { saveTaskOutputFile } = await import('../lib/taskOutputUpload');
+      const result = await saveTaskOutputFile(task, file, isCurrent, retained.current?.attachment);
+      if (isCurrent()) retained.current = result.ok ? null : { file, attachment: result.attachment };
+      return result;
+    }, result => { if (result.ok) { setUploadSaved(true); if (input.current) input.current.value = ''; } else setUploadError(result.error || t('The change is waiting to be saved.')); });
+  };
   const files = getTaskOutputAttachments(task, deliverables, actorId);
   const links = getTaskReviewInputLinks(task, actorId).filter(link => safeHttpsUrl(link.url));
   const [pending, setPending] = React.useState<string | null>(null);
@@ -67,8 +94,16 @@ export default function TaskOutputFiles({ task }: { task: Task }) {
     }
   };
 
-  if (!files.length && !links.length) return null;
-  return <>{files.length > 0 && <section aria-label={t('Output files')} className="space-y-2">
+  const canConfigure = canManageTaskReview(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
+  if (!files.length && !links.length && !canUpload && !canConfigure && !task.accountableLeadId) return null;
+  return <>{task.accountableLeadId && <p className="text-sm text-muted">{t('Accountable lead')}: <span data-i18n-skip>{state.users.find(user => user.id === task.accountableLeadId)?.name || t('Team member')}</span></p>}{canConfigure && <React.Suspense fallback={null}><TaskReviewSettings key={`${task.id}:${actorId}`} task={task} /></React.Suspense>}{canUpload && <section className="space-y-2" aria-label={t('Upload output')}>
+    <label className="block text-sm font-semibold text-ink">{t('Upload output')}<input ref={input} type="file" accept=".pdf,image/jpeg,image/png,image/webp,image/gif" disabled={uploading || state.backend.hasLocalChanges || state.backend.upgradeRequired || state.backend.mode !== 'supabase'}
+      onChange={event => { const file = event.target.files?.[0]; if (file) void upload(file); }} className="mt-2 block w-full text-sm text-muted file:mr-3 file:min-h-11 file:rounded-control file:border file:border-line file:bg-inset file:px-3 file:text-ink" /></label>
+    <p className="text-xs text-muted">{t(state.backend.mode === 'supabase' ? 'PDF or image, up to 100 MB. This file becomes task output for review.' : 'Private file uploads require the Supabase backend.')}</p>
+    {uploading && <p role="status" className="text-sm text-muted">{t('Uploading and saving output…')}</p>}
+    {uploadSaved && <p role="status" className="text-sm text-emerald-700">{t('Output file saved for review.')}</p>}
+    {uploadError && <div role="alert" className="space-y-2 text-sm text-red-700"><p>{t(uploadError)}</p>{retained.current && <button type="button" disabled={uploading || state.backend.isSaving || state.backend.isPulling} onClick={() => { if (retained.current) void upload(retained.current.file); }} className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line px-3"><Upload aria-hidden="true" className="h-4 w-4" />{t('Retry output save')}</button>}</div>}
+  </section>}{files.length > 0 && <section aria-label={t('Output files')} className="space-y-2">
     <h3 className="text-sm font-semibold text-ink">{t('Output files')}</h3>
     {files.map(file => <button key={`${file.bucket}:${file.path}`} type="button" disabled={pending !== null} aria-busy={pending === `${file.bucket}:${file.path}`}
       onClick={() => void download(file)} className="flex min-h-11 w-full items-center gap-3 rounded-control border border-line bg-inset px-3 py-2 text-left text-sm text-ink hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 disabled:opacity-60">

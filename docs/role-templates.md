@@ -44,7 +44,7 @@ and rejected by the database guards. They are **not delegable**.
 | Service administration (catalog, templates, plans, cycles, prices) | ✓ | ✓ | – | – | – |
 | Assigned service clients | ✓ | ✓ | ✓ | ✓ | own company |
 | Client review actions | – | – | – | – | ✓ |
-| Internal workflow review sign-off | ✓ | responsible portfolio, only where no HOD is configured | own department | – | – |
+| Internal workflow review sign-off | ✓ | independent portfolio fallback or temporary cover | own department | – | – |
 | Protected keys | ✓ | – | – | – | – |
 
 ### Project Manager
@@ -66,19 +66,27 @@ past delegation alone does not authorize deletion. The same rule applies to
 department-scoped Staff custom roles. Generated workflow steps additionally
 remain protected from individual deletion for every role while their cycle is active.
 
-HOD sign-off happens on the internal review task. It requires completed
-predecessors and the current review department. Staff assignment or HOD
-assignment outside that department does not grant sign-off. Boss Koo retains workspace oversight. Responsible portfolio PMs provide temporary
-review cover in any department without a configured HOD. Departments with an
-HOD keep their HOD reviewer. Approval is 80%, followed by separate PM completion
-at 100%. The server binds each decision to the reviewed output versions.
-Revisions reopen later steps. Skipping an optional step cannot bypass unfinished
-required earlier steps. PM assignments do not require department membership, while
-Staff and HOD assignments retain their department boundaries. Authorized reviewers can read files attached to the
-reviewed task’s deliverable from the task panel without a service-client assignment.
-Frozen internal-review tasks also show completed input output links to their
-assigned worker and authorized reviewer without exposing the earlier private brief.
-This grants no pricing, upload, replacement, deletion, or service-management rights.
+HOD sign-off requires the task's department and completed predecessors. Assigned
+work outside that department grants routine editing, but no reviewer revision or
+approval authority. Review excludes the assignee and the member who submitted the
+work. HOD accounts without a working login do not block an independent portfolio
+PM fallback. Boss Koo can override self-review only with a reason recorded by the
+server alongside the authenticated reviewer and timestamp.
+
+The responsible PM or Boss can set a named accountable lead and an independent,
+expiring reviewer cover (maximum 90 days). Active cover receives review handoff;
+after expiry, the department reviewer or independent PM fallback resumes. The
+accountable lead stays with the task when execution is reassigned.
+
+Approval is 80%, followed by separate PM completion at 100%. Decisions bind to
+reviewed output versions; revisions reopen later steps. Skipping optional work
+cannot bypass unfinished required earlier steps. Assigned workers and portfolio
+PMs can upload task output files before submission. Review freezes those files.
+Authorized reviewers can download task and deliverable files, plus completed
+frozen predecessor output, without gaining access to private predecessor briefs
+or pricing. Client-visible output files become downloadable to the client only
+after internal approval. Unchanged approved-status edits preserve customer acceptance.
+See [the HOD remediation](hod-review-remediation-2026-10-14.md) for pending rollout.
 See [the review-gate rollout](workflow-review-gate-2026-10-13.md) for deployment status.
 
 ### Staff

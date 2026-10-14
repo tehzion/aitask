@@ -23,7 +23,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'VITE_AITASK_BACKEND=local VITE_AITASK_SHOW_DEMO_LOGIN=true node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4180',
+    command: 'VITE_AITASK_BACKEND=local VITE_AITASK_SHOW_DEMO_LOGIN=true VITE_AITASK_ALLOW_PASSWORD_RESET_BYPASS=true VITE_AITASK_LOCAL_DEFAULT_PASSWORD=password123 node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4180',
     url: 'http://127.0.0.1:4180/login',
     reuseExistingServer: false,
     timeout: 120_000,

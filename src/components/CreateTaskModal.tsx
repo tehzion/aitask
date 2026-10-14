@@ -113,8 +113,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       ))
     : [];
   const assignableProjects = React.useMemo(
-    () => getAssignableProjects(currentUser, projects, tasks, rolePermissions, users),
-    [currentUser, projects, rolePermissions, tasks, users]
+    () => getAssignableProjects(currentUser, projects, tasks, rolePermissions, users, { clients, projects }),
+    [clients, currentUser, projects, rolePermissions, tasks, users]
   );
   const visibleTasksForChoices = React.useMemo(
     () => getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects }),

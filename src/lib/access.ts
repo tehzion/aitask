@@ -682,9 +682,10 @@ export const getAssignableProjects = (
   tasks: Task[] = [],
   customRoles: CustomRole[] = [],
   users: User[] = [],
+  scope: VisibilityScope = {},
 ) => {
   if (!user) return [];
-  if (!['Staff', 'HOD'].includes(user.role)) return getVisibleProjects(user, projects, tasks, customRoles);
+  if (!['Staff', 'HOD'].includes(user.role)) return getVisibleProjects(user, projects, tasks, customRoles, scope);
   return projects.filter(project => canLinkTaskToProject(user, project, tasks, customRoles, users));
 };
 
@@ -701,10 +702,11 @@ export const canLinkTaskToProject = (
   tasks: Task[] = [],
   customRoles: CustomRole[] = [],
   users: User[] = [],
+  scope: VisibilityScope = {},
 ) => {
   if (!user || user.role === 'Client') return false;
   if (isBossKoo(user)) return true;
-  if (user.role === 'Project Manager') return project.createdBy === user.id;
+  if (user.role === 'Project Manager') return getVisibleProjects(user, [project], tasks, customRoles, scope).length > 0;
   if (!['Staff', 'HOD'].includes(user.role)) return false;
   if (project.createdBy === user.id) return true;
 

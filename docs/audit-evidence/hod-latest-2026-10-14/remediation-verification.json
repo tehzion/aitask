@@ -1,0 +1,26 @@
+{
+  "status": "passed",
+  "scope": "local combined checkout; production rollout pending",
+  "unitTests": 676,
+  "unitFiles": 93,
+  "databaseAssertions": 880,
+  "databaseFiles": 54,
+  "targetedBrowserTests": 29,
+  "checks": [
+    "typecheck",
+    "lint",
+    "strict i18n",
+    "build",
+    "bundle budgets",
+    "database lint",
+    "database advisors",
+    "postflight",
+    "Auth/REST/Storage workflows",
+    "lost upload confirmation retry",
+    "desktop and mobile visual inspection"
+  ],
+  "eagerGzipKiB": 299.9,
+  "eagerGzipBudgetKiB": 300,
+  "migration": "20261014132839_hod_review_remediation",
+  "productionChanged": false
+}

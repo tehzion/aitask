@@ -117,6 +117,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Chromium for authenticated output workflow
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Docker diagnostics
         run: docker info
 

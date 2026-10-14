@@ -14,7 +14,7 @@ export const loadWorkflowContext = async (tasks: Task[], query: () => PromiseLik
     if (!item && (task.generatedFromDeliverable || task.workflowStepId)) throw new Error(upgradeMessage);
     const parsed = item ? parseTask({ ...task, workflowStepKind: item.workflowStepKind, workflowOutputVersion: item.workflowOutputVersion, workflowDependenciesReady: item.workflowDependenciesReady, internalReview: item.internalReview, reviewAccess: item.reviewAccess || (actorId ? { actorId, canApprove: false } : undefined) }) || task : { ...task, reviewAccess: actorId ? { actorId, canApprove: false } : undefined };
     const evidence = item?.reviewEvidence;
-    const attachments = actorId && evidence?.actorId === actorId && item?.reviewAccess?.actorId === actorId && item.reviewAccess.canApprove && Array.isArray(evidence.attachments)
+    const attachments = actorId && evidence?.actorId === actorId && item?.reviewAccess?.actorId === actorId && (item.reviewAccess.canApprove || item.reviewAccess.canReadInputs) && Array.isArray(evidence.attachments)
       ? evidence.attachments.filter(file => file && file.bucket === 'client-service-files' && typeof file.id === 'string' && file.id.length > 0
         && typeof file.path === 'string' && file.path.length < 2048 && !file.path.includes('\\') && !file.path.split('/').some(segment => segment === '.' || segment === '..')
         && file.path.split('/')[1] === task.clientId && (!task.serviceCycleId || file.path.split('/')[2] === task.serviceCycleId)

@@ -68,6 +68,10 @@ set local role authenticated;
 select is((pg_temp.patch_task('gate-review','{"status":"Completed","isCompleted":true}')->>'ok')::boolean,false,'Staff cannot complete a review with unfinished work');
 select is((pg_temp.patch_task('gate-review','{"status":"Waiting Approval","isCompleted":false}')->>'ok')::boolean,false,'unfinished predecessors block submission too');
 select is((pg_temp.patch_task('gate-work','{"status":"Completed","isCompleted":true,"completionPercentage":100}')->>'ok')::boolean,false,'assigned Staff cannot bypass HOD approval and PM finalization');
+reset role;
+insert into storage.objects(bucket_id,name,owner_id,metadata) values('client-service-files','pgtap-review-gate/gate-company/gate-cycle/work.pdf','00000000-0000-0000-0000-000000000982','{"mimetype":"application/pdf"}');
+set local role authenticated;
+select is((pg_temp.patch_task('gate-work','{"attachmentLink":"","outputAttachments":[{"id":"gate-file","bucket":"client-service-files","path":"pgtap-review-gate/gate-company/gate-cycle/work.pdf","fileName":"Private predecessor.pdf","uploadedBy":"gate-worker"}]}')->>'ok')::boolean,true,'Staff saves file-only frozen output before submission');
 select is((pg_temp.patch_task('gate-work','{"status":"Waiting Approval","isCompleted":false}')->>'ok')::boolean,true,'assigned Staff submits ordinary workflow work');
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000986',true);
@@ -113,10 +117,14 @@ select is((pg_temp.patch_task('gate-review','{"status":"Waiting Approval","isCom
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000983',true);
 set local role authenticated;
 select is((select count(*)::integer from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_id='gate-work'),0,'HOD cannot read the predecessor outside their department');
+reset role;
+select is(jsonb_array_length(private.aitask_task_review_input_files('pgtap-review-gate',(select data from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_id='gate-review'))),1,'authorized HOD sees completed hidden predecessor file without its private brief');
+set local role authenticated;
+
 select is(jsonb_array_length(public.aitask_get_workflow_task_context('pgtap-review-gate')->'tasks'),1,'summary includes only HOD-visible workflow tasks');
 select is((public.aitask_get_workflow_task_context('pgtap-review-gate')->'tasks'->0->>'workflowDependenciesReady')::boolean,true,'summary safely confirms hidden dependency completion');
 select ok(public.aitask_get_workflow_task_context('pgtap-review-gate')::text not like '%Hidden predecessor title%','summary does not expose hidden task details');
-select is(public.aitask_get_workflow_task_context('pgtap-review-gate')->'tasks'->0->'reviewEvidence'->'links'->0->>'url','https://example.com/output.pdf','HOD can open completed input output without reading its private task');
+select is(public.aitask_get_workflow_task_context('pgtap-review-gate')->'tasks'->0->'reviewEvidence'->'attachments'->0->>'path','pgtap-review-gate/gate-company/gate-cycle/work.pdf','HOD can open file-only completed input output without reading its private task');
 select is((pg_temp.patch_task('gate-review','{"status":"Approved","isCompleted":false,"completionPercentage":80}')->>'ok')::boolean,true,'department HOD can sign off the completed predecessor');
 select is((select data->'internalReview'->>'reviewedBy' from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_id='gate-review'),'gate-hod','server records the real reviewer');
 reset role;

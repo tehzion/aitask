@@ -13,6 +13,7 @@ import { formatLocalizedDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getPlanDeliverySummary, getCompanyTaskActivity } from '../lib/dashboardData';
+import { getPortfolioReviewQueues } from '../lib/pmDashboard';
 
 type WorkspaceTask = ReturnType<typeof useStore.getState>['tasks'][number];
 
@@ -118,6 +119,7 @@ const ServiceRoleDashboard = () => {
   const waitingClient = scopeTasks.filter(task => task.status === 'Waiting Approval' && task.visibility === 'client-visible');
   const revisions = scopeTasks.filter(task => task.revisionCount > 0 && isTaskOpen(task));
   const completed = scopeTasks.filter(isTaskCompleted);
+  const portfolioReviews = getPortfolioReviewQueues(scopeTasks);
   const renewalPlans = activePlans.filter(plan => plan.contractEndDate).sort((a, b) => (a.contractEndDate || '').localeCompare(b.contractEndDate || ''));
   const workers = store.users.filter(user => user.role === 'Staff' || user.role === 'HOD').map(user => ({
     user,
@@ -164,8 +166,13 @@ const ServiceRoleDashboard = () => {
 
   if (persona === 'projectManager') return <section className="space-y-5" aria-labelledby="portfolio-workbench-title">
     <WorkbenchHeader id="portfolio-workbench-title" title={t('Portfolio delivery')} description={t('Companies, deadlines, review work, and output in your portfolio.')} />
-    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label={t('Open delivery tasks')} value={scopeTasks.filter(isTaskOpen).length} icon={Clock3} detail={<>{dueToday.length} {t('Due today')} · {overdue.length} {t('overdue in your portfolio.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label={t('Overdue delivery')} value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label={t('Waiting review')} value={waitingInternal.length + waitingClient.length} icon={FileCheck2} tone="warning" /><CompactStat label={t('Active companies')} value={activePlans.length} icon={UsersRound} /></StatGroup></div>
-    <div className="grid gap-4 xl:grid-cols-2"><TaskQueue title={t('Due today / overdue')} tasks={[...overdue, ...dueToday].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty={t('No urgent portfolio delivery work.')} /><TaskQueue title={t('Waiting review')} tasks={[...waitingInternal, ...waitingClient]} empty={t('No portfolio review work is waiting.')} /></div>
+    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label={t('Open delivery tasks')} value={scopeTasks.filter(isTaskOpen).length} icon={Clock3} detail={<>{dueToday.length} {t('Due today')} · {overdue.length} {t('overdue in your portfolio.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label={t('Overdue delivery')} value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label={t('Waiting review')} value={portfolioReviews.waitingCount} icon={FileCheck2} tone="warning" /><CompactStat label={t('Active companies')} value={activePlans.length} icon={UsersRound} /></StatGroup></div>
+    <div className="grid gap-4 xl:grid-cols-2">
+      <TaskQueue title={t('Due today / overdue')} tasks={[...overdue, ...dueToday].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty={t('No urgent portfolio delivery work.')} />
+      <TaskQueue title={t('Internal review')} tasks={portfolioReviews.internal} empty={t('The internal review queue is clear.')} />
+      <TaskQueue title={t('Confirm completion')} tasks={portfolioReviews.completion} empty={t('No tasks awaiting final completion.')} />
+      <TaskQueue title={t('Client approval')} tasks={portfolioReviews.client} empty={t('No client approval is waiting.')} />
+    </div>
     <Surface className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
         <div><h3 className="font-semibold text-ink">{t('Monthly deliverables')}</h3><p className="mt-1 text-sm text-muted">{t('Current cycle delivery progress for each active company.')}</p></div>

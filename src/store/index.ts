@@ -198,6 +198,7 @@ type TaskUpdateInput = Partial<Pick<
   | 'completionPercentage'
   | 'attachmentLink'
   | 'attachmentName'
+  | 'reviewOverrideReason'
   | 'notes'
   | 'isRecurring'
   | 'recurrenceFrequency'
@@ -279,9 +280,9 @@ const ensureBuiltinRoleTemplate = (roles: CustomRole[] = []) => {
   return [...missing.map(makeBuiltinRole), ...normalized];
 };
 
-type MutationActionResult = { ok: boolean; error?: string | MessageDescriptor };
+export type MutationActionResult = { ok: boolean; error?: string | MessageDescriptor };
 
-interface StoreState {
+export interface StoreState {
   currentUser: User | null;
   users: User[];
   clients: ClientProfile[];
@@ -336,6 +337,8 @@ interface StoreState {
   updateTaskAssignee: (taskId: string, assignedTo: string) => MutationActionResult;
   updateTaskDueDate: (taskId: string, newDueDate: string) => MutationActionResult;
   updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => MutationActionResult;
+  attachTaskOutput: (taskId: string, attachment: AttachmentRef) => Promise<MutationActionResult>;
+  setTaskReviewConfig: (taskId: string, config: { cover?: Task['reviewCover'] | null; accountableLeadId?: string }) => Promise<MutationActionResult>;
   updateTask: (taskId: string, data: TaskUpdateInput) => { ok: boolean; error?: string };
   deleteTask: (taskId: string) => { ok: boolean; error?: string };
   reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => MutationActionResult;
@@ -411,7 +414,7 @@ const hasRetainedSecureMutation = () => (
   shouldUseSecureSupabase()
   && Boolean(getRetainedSecureCommand() || getRetainedSecureMemberMutation())
 );
-const isWorkspaceMutationLocked = (state: StoreState) => (
+export const isWorkspaceMutationLocked = (state: StoreState) => (
   shouldUseSecureSupabase()
   && (
     state.backend.upgradeRequired === true
@@ -540,6 +543,18 @@ const makeBackendRuntimeState = (): BackendRuntimeState => {
 };
 
 type NotificationDraft = Omit<AppNotification, 'id' | 'isRead' | 'createdAt'>;
+
+// Capabilities authorize an operation; PM ownership authorizes its target.
+// Recheck current scope at the mutation boundary, including after an owner transfer.
+const isServiceClientInScope = (state: StoreState, clientId: string) => {
+  const actor = state.currentUser;
+  if (!actor) return false;
+  if (isBossKoo(actor) || actor.role !== 'Project Manager') return true;
+  const client = state.clients.find(item => item.id === clientId);
+  return Boolean(client && canOpenServiceClient(actor, client.clientName, state.tasks, state.rolePermissions, state.clients, state.projects));
+};
+
+const serviceClientScopeError = 'This company is outside your portfolio.';
 
 export const shouldNotifyClientForTask = (
   task: Pick<Task, 'visibility' | 'clientName'>,
@@ -2461,6 +2476,8 @@ export const useStore = create<StoreState>()(
           return state;
         }
 
+        if (nextStatus === task.status && task.isCompleted === (nextStatus === 'Completed')) { result = { ok: true }; return state; }
+
         const isCompleted = nextStatus === 'Completed';
         const transitionError = taskTransitionError(currentUser, task, { ...task, status: nextStatus, isCompleted }, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (transitionError) { result = { ok: false, error: transitionError }; return state; }
@@ -2469,7 +2486,7 @@ export const useStore = create<StoreState>()(
         const workflowError = workflowTransitionError(task, { ...task, status: nextStatus, isCompleted }, currentUser, state.tasks, state.serviceCycles, state.deliverables, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (workflowError) { result = { ok: false, error: workflowError }; return state; }
         const isWaitingApproval = nextStatus === 'Waiting Approval';
-        if (state.backend.mode === 'local' && isWaitingApproval && task.status !== nextStatus && !getDepartmentReviewers(state.users, task, state.rolePermissions, { clients: state.clients, projects: state.projects }).length) { result = { ok: false, error: TASK_HOD_REQUIRED }; return state; }
+        if (state.backend.mode === 'local' && isWaitingApproval && task.status !== nextStatus && !getDepartmentReviewers(state.users, { ...task, workState: { ...task.workState, reviewRequestedBy: currentUser!.id } }, state.rolePermissions, { clients: state.clients, projects: state.projects }).length) { result = { ok: false, error: TASK_HOD_REQUIRED }; return state; }
         const isReadyForClientReview = isCompleted || isWaitingApproval;
         const wasCompleted = isTaskCompleted(task);
         const now = new Date().toISOString();
@@ -2717,6 +2734,19 @@ export const useStore = create<StoreState>()(
         return result;
       },
 
+      attachTaskOutput: async (taskId, attachment) => {
+        const session = captureWorkspaceSession();
+        const actions = await import('./taskReviewActions');
+        if (!isWorkspaceSessionCurrent(session)) return { ok: false, error: 'Your session changed. Sign in again.' };
+        return actions.attachTaskOutput(get(), set, pendingMutationMessage, taskId, attachment);
+      },
+      setTaskReviewConfig: async (taskId, config) => {
+        const session = captureWorkspaceSession();
+        const actions = await import('./taskReviewActions');
+        if (!isWorkspaceSessionCurrent(session)) return { ok: false, error: 'Your session changed. Sign in again.' };
+        return actions.setTaskReviewConfig(get(), set, pendingMutationMessage, taskUpdateNotifications, taskId, config);
+      },
+
       updateTask: (taskId, data) => {
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
@@ -2730,7 +2760,7 @@ export const useStore = create<StoreState>()(
         if (requestedCreatorId !== undefined && requestedCreatorId !== task.createdBy) {
           return { ok: false, error: 'Task ownership cannot be changed.' };
         }
-        const workflowKeys = ['reviewEvidence', 'reviewAccess', 'workflowStepKind', 'workflowStepId', 'workflowStepOrder', 'workflowStepRequired', 'workflowTemplateId', 'workflowTemplateRevision', 'generatedFromDeliverable', 'predecessorTaskIds', 'workflowOutputVersion', 'workflowDependenciesReady', 'internalReview'];
+        const workflowKeys = ['reviewEvidence', 'reviewAccess', 'reviewDecision', 'reviewCover', 'accountableLeadId', 'outputAttachments', 'workflowStepKind', 'workflowStepId', 'workflowStepOrder', 'workflowStepRequired', 'workflowTemplateId', 'workflowTemplateRevision', 'generatedFromDeliverable', 'predecessorTaskIds', 'workflowOutputVersion', 'workflowDependenciesReady', 'internalReview'];
         if (workflowKeys.some(key => Object.prototype.hasOwnProperty.call(data, key))) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
         if (isWorkflowTask(task) && (['deliverableId', 'serviceCycleId', 'clientId', 'department', 'visibility'] as const).some(key => data[key] !== undefined && data[key] !== task[key])) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
 
@@ -2775,7 +2805,7 @@ export const useStore = create<StoreState>()(
 
         if (requestedProjectId) {
           const assignableProjectIds = new Set(
-            getAssignableProjects(currentUser, state.projects, state.tasks, state.rolePermissions, state.users).map(item => item.id)
+            getAssignableProjects(currentUser, state.projects, state.tasks, state.rolePermissions, state.users, { clients: state.clients, projects: state.projects }).map(item => item.id)
           );
           if (!assignableProjectIds.has(requestedProjectId)) {
             return { ok: false, error: 'You can only link tasks to projects you can access.' };
@@ -2823,7 +2853,7 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'Links must be valid HTTPS URLs.' };
         }
 
-        const statusChanged = data.status !== undefined;
+        const statusChanged = data.status !== undefined && status !== task.status;
         const wasCompleted = isTaskCompleted(task);
         const isCompleted = statusChanged ? status === 'Completed' : task.isCompleted;
         const isReadyForClientReview = status === 'Completed' || status === 'Waiting Approval';
@@ -2880,7 +2910,7 @@ export const useStore = create<StoreState>()(
         if (['In Progress', 'Revision'].includes(updatedTask.status) && ['Waiting Approval', 'Approved', 'Completed'].includes(task.status)) {
           updatedTask.clientApprovalStatus = 'Rejected'; updatedTask.revisionCount = task.revisionCount + 1;
         }
-        if (state.backend.mode === 'local' && updatedTask.status === 'Waiting Approval' && task.status !== updatedTask.status && !getDepartmentReviewers(state.users, updatedTask, state.rolePermissions, { clients: state.clients, projects: state.projects }).length) return { ok: false, error: TASK_HOD_REQUIRED };
+        if (state.backend.mode === 'local' && updatedTask.status === 'Waiting Approval' && task.status !== updatedTask.status && !getDepartmentReviewers(state.users, { ...updatedTask, workState: { ...updatedTask.workState, reviewRequestedBy: currentUser.id } }, state.rolePermissions, { clients: state.clients, projects: state.projects }).length) return { ok: false, error: TASK_HOD_REQUIRED };
         const evidenceError = taskEvidenceError(task, updatedTask, state.deliverables, state.tasks);
         if (evidenceError) return { ok: false, error: evidenceError };
         const transitionError = taskTransitionError(currentUser, task, updatedTask, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
@@ -2889,6 +2919,7 @@ export const useStore = create<StoreState>()(
         updatedTask.completionPercentage = getTaskProgress(updatedTask, state.users);
         const workflowError = workflowTransitionError(task, updatedTask, currentUser, state.tasks, state.serviceCycles, state.deliverables, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (workflowError) return { ok: false, error: workflowError };
+        if (state.backend.mode === 'local') delete updatedTask.reviewOverrideReason;
 
         const notifications: AppNotification[] = [];
         if (state.backend.mode === 'local') notifications.push(...localHodReviewNotifications(
@@ -3009,6 +3040,7 @@ export const useStore = create<StoreState>()(
             ...t,
             clientApprovalStatus: status,
             status: status === 'Approved' ? 'Approved' as TaskStatus : 'In Progress' as TaskStatus,
+            reviewDecision: status === 'Approved' ? t.reviewDecision : undefined,
             isCompleted: false,
             completedAt: undefined,
             completionPercentage: status === 'Approved' ? 80 : 50,
@@ -3081,6 +3113,8 @@ export const useStore = create<StoreState>()(
             revisionCount: t.revisionCount + 1,
             clientApprovalStatus: 'Rejected' as ClientApprovalStatus,
             status: 'In Progress' as TaskStatus,
+            reviewDecision: undefined,
+            reviewOverrideReason: undefined,
             isCompleted: false,
             completedAt: undefined,
             completionPercentage: 50,
@@ -3133,7 +3167,7 @@ export const useStore = create<StoreState>()(
         if (taskData.projectId) {
           if (!project) return '';
           const assignableProjectIds = new Set(
-            getAssignableProjects(currentUser, state.projects, state.tasks, state.rolePermissions, state.users).map(item => item.id)
+            getAssignableProjects(currentUser, state.projects, state.tasks, state.rolePermissions, state.users, { clients: state.clients, projects: state.projects }).map(item => item.id)
           );
           if (!assignableProjectIds.has(taskData.projectId)) return '';
         }
@@ -3866,6 +3900,7 @@ export const useStore = create<StoreState>()(
         if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot create client plans.' };
         const client = state.clients.find(item => item.id === clientId);
         if (!client) return { ok: false, error: 'Choose an existing company before creating a plan.' };
+        if (!isServiceClientInScope(state, client.id)) return { ok: false, error: serviceClientScopeError };
 
         const serviceItems = data.serviceItems.map(item => ({
           ...item,
@@ -3924,6 +3959,7 @@ export const useStore = create<StoreState>()(
         if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot revise client plans.' };
         const source = state.clientPlans.find(item => item.id === planId);
         if (!source || source.status !== 'Active') return { ok: false, error: 'Only an active plan can be revised.' };
+        if (!isServiceClientInScope(state, source.clientId)) return { ok: false, error: serviceClientScopeError };
         const pending = state.clientPlans.find(item => item.supersedesPlanId === source.id && item.status === 'Draft');
         if (pending) return { ok: true, planId: pending.id };
         const now = new Date().toISOString();
@@ -3969,6 +4005,7 @@ export const useStore = create<StoreState>()(
         if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot edit client plans.' };
         const plan = state.clientPlans.find(item => item.id === planId);
         if (!plan || plan.status !== 'Draft') return { ok: false, error: 'Only draft plans can be edited.' };
+        if (!isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
         const serviceItems = (data.serviceItems || plan.serviceItems).map(item => ({
           ...item,
           name: item.name.trim().slice(0, 160),
@@ -4024,6 +4061,7 @@ export const useStore = create<StoreState>()(
         if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot edit client plans.' };
         const plan = state.clientPlans.find(item => item.id === planId);
         if (!plan) return { ok: false, error: 'Plan not found.' };
+        if (!isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
         if (plan.status !== 'Active' && plan.status !== 'Paused') return { ok: false, error: 'Only active or paused plans can be edited here.' };
         const nextBillingDay = data.billingDay !== undefined ? Math.min(31, Math.max(1, Math.trunc(data.billingDay))) : plan.billingDay;
         const nextContractEnd = data.contractEndDate !== undefined
@@ -4046,6 +4084,7 @@ export const useStore = create<StoreState>()(
         if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot activate client plans.' };
         const plan = state.clientPlans.find(item => item.id === planId);
         if (!plan) return { ok: false, error: 'Plan not found.' };
+        if (!isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
         if (plan.status !== 'Draft' && plan.status !== 'Paused') return { ok: false, error: 'Only draft or paused plans can be activated.' };
         if (plan.supersedesPlanId && state.clientPlans.some(item => item.id === plan.supersedesPlanId && item.status === 'Active')) {
           return { ok: true, error: `Revision ${plan.revision} is scheduled for ${plan.effectiveFromCycleStart}.` };
@@ -4084,6 +4123,7 @@ export const useStore = create<StoreState>()(
         if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot change plan status.' };
         const plan = state.clientPlans.find(item => item.id === planId);
         if (!plan) return { ok: false, error: 'Plan not found.' };
+        if (!isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
         if (status === 'Active') return { ok: false, error: 'Use Activate to start or resume this plan.' };
         if (plan.status === 'Ended') return { ok: false, error: 'Ended plans cannot be reopened.' };
         set(current => ({ clientPlans: current.clientPlans.map(item => item.id === planId ? { ...item, status, updatedAt: new Date().toISOString() } : item) }));
@@ -4096,6 +4136,7 @@ export const useStore = create<StoreState>()(
         const cycle = state.serviceCycles.find(item => item.id === cycleId);
         const actor = state.currentUser;
         if (!cycle || !actor) return { ok: false, error: 'Cycle not found.' };
+        if (!isServiceClientInScope(state, cycle.clientId)) return { ok: false, error: serviceClientScopeError };
         if (!canManageServiceCycles(actor, state.rolePermissions)) return { ok: false, error: 'You do not have permission to manage service cycles.' };
         const now = new Date().toISOString();
         set(current => ({ serviceCycles: current.serviceCycles.map(item => item.id === cycleId ? { ...item, status, publishedAt: status === 'Published' ? item.publishedAt || now : item.publishedAt, updatedAt: now } : item) }));
@@ -4108,6 +4149,7 @@ export const useStore = create<StoreState>()(
         const deliverable = state.deliverables.find(item => item.id === deliverableId);
         const actor = state.currentUser;
         if (!deliverable || !actor) return { ok: false, error: 'Deliverable not found.' };
+        if (!isServiceClientInScope(state, deliverable.clientId)) return { ok: false, error: serviceClientScopeError };
         const authorized = canManageServiceCycles(actor, state.rolePermissions) || (['Staff', 'HOD'].includes(actor.role) && state.tasks.some(task => (task.deliverableId === deliverable.id || deliverable.taskIds.includes(task.id)) && task.assignedTo === actor.id));
         if (!authorized || (!canManageServiceCycles(actor, state.rolePermissions) && !canOpenServiceClient(actor, deliverable.clientName, state.tasks, state.rolePermissions, state.clients))) return { ok: false, error: 'You do not have access to this deliverable.' };
         if (resolveDeliverableStatus({ ...deliverable, status }, state.tasks) !== status) return { ok: false, error: 'Deliverable status must match the progress of its required tasks.' };
@@ -4163,6 +4205,7 @@ export const useStore = create<StoreState>()(
         if (!actor || !canManageServiceCycles(actor, state.rolePermissions)) return { ok: false, error: 'Only authorized operations staff can generate task chains.' };
         const deliverable = state.deliverables.find(item => item.id === deliverableId);
         if (!deliverable) return { ok: false, error: 'Deliverable not found.' };
+        if (!isServiceClientInScope(state, deliverable.clientId)) return { ok: false, error: serviceClientScopeError };
         const cycle = state.serviceCycles.find(item => item.id === deliverable.cycleId);
         const serviceItem = cycle?.serviceItems.find(item => item.id === deliverable.serviceItemId);
         const workflow = serviceItem?.workflow;
@@ -4228,6 +4271,7 @@ export const useStore = create<StoreState>()(
         const cycle = state.serviceCycles.find(item => item.id === cycleId);
         const actor = state.currentUser;
         if (!cycle || !actor || actor.role === 'Client') return { ok: false, error: 'You cannot comment on this cycle.' };
+        if (!isServiceClientInScope(state, cycle.clientId)) return { ok: false, error: serviceClientScopeError };
         const authorized = canManageServiceCycles(actor, state.rolePermissions)
           || (canOpenServiceClient(actor, cycle.clientName, state.tasks, state.rolePermissions, state.clients) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
         const clean = text.trim().slice(0, 10_000);
@@ -4243,6 +4287,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const comment = state.cycleComments.find(item => item.id === commentId);
         if (!comment || comment.userId !== state.currentUser?.id) return { ok: false, error: 'You cannot attach a file to this comment.' };
+        if (!isServiceClientInScope(state, comment.clientId)) return { ok: false, error: serviceClientScopeError };
         if (!canManageServiceCycles(state.currentUser, state.rolePermissions)
           && !canOpenServiceClient(state.currentUser, comment.clientName, state.tasks, state.rolePermissions, state.clients)) return { ok: false, error: 'You do not have access to this cycle.' };
         set(current => ({ cycleComments: current.cycleComments.map(item => item.id === commentId ? { ...item, attachments: [...item.attachments, attachment], updatedAt: new Date().toISOString() } : item) }));
@@ -4255,9 +4300,11 @@ export const useStore = create<StoreState>()(
         const actor = state.currentUser;
         if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot manage add-ons.' };
         if (!state.clientPlans.some(plan => plan.id === data.planId && plan.clientId === data.clientId)) return { ok: false, error: 'Client plan not found.' };
+        if (!isServiceClientInScope(state, data.clientId)) return { ok: false, error: serviceClientScopeError };
         const name = data.name.trim().slice(0, 160);
         if (!name) return { ok: false, error: 'Add-on name is required.' };
         if (data.billingMode === 'one_off' && !data.targetCycleId) return { ok: false, error: 'Choose the cycle for this one-off add-on.' };
+        if (data.targetCycleId && !state.serviceCycles.some(cycle => cycle.id === data.targetCycleId && cycle.clientId === data.clientId && cycle.planId === data.planId)) return { ok: false, error: 'Choose a cycle from this client plan.' };
         if (!isValidIsoDate(data.effectiveFrom)) return { ok: false, error: 'Choose a valid effective date.' };
         const now = new Date().toISOString();
         const id = nowId('ADD');
@@ -4284,6 +4331,7 @@ export const useStore = create<StoreState>()(
         if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot manage add-ons.' };
         const addon = state.addons.find(item => item.id === addonId);
         if (!addon) return { ok: false, error: 'Add-on not found.' };
+        if (!isServiceClientInScope(state, addon.clientId)) return { ok: false, error: serviceClientScopeError };
         if (effectiveUntil && !isValidIsoDate(effectiveUntil)) return { ok: false, error: 'Choose a valid ending date.' };
         const now = new Date().toISOString();
         set(current => ({ addons: current.addons.map(item => item.id === addonId ? { ...item, isActive, effectiveUntil: isActive ? effectiveUntil : effectiveUntil || getTodayInputDate(), updatedAt: now } : item) }));

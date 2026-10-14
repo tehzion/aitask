@@ -75,6 +75,7 @@ export interface WorkspaceMember {
   id: string;
   version?: number;
   authUserId?: string;
+  hasLogin?: boolean; // Explicit false marks an unlinked directory member; demos omit it.
   workspaceId?: string;
   name: string;
   email?: string;
@@ -446,6 +447,11 @@ export interface Task {
   projectId?: string;
   serviceCycleId?: string;
   deliverableId?: string;
+  outputAttachments?: AttachmentRef[];
+  accountableLeadId?: string;
+  reviewCover?: { reviewerId: string; expiresAt: string; configuredBy?: string; configuredAt?: string } | null;
+  reviewOverrideReason?: string; // Submitted once; the server replaces it with decision provenance.
+  reviewDecision?: { reviewedBy: string; reviewedAt: string; overrideReason?: string };
   visibility?: TaskVisibility;
   workflowTemplateId?: string;
   workflowTemplateRevision?: number;
@@ -456,7 +462,7 @@ export interface Task {
   workflowOutputVersion?: number;
   workflowDependenciesReady?: boolean; // Read-only summary of canonical dependencies
   reviewEvidence?: { actorId: string; attachments: AttachmentRef[]; links?: { taskId: string; url: string; name: string; outputVersion: number }[] }; // Canonical read-only projection
-  reviewAccess?: { actorId: string; canApprove: boolean; canReadInputs?: boolean }; // Server-owned, actor-bound review permission
+  reviewAccess?: { actorId: string; canApprove: boolean; canReadInputs?: boolean; expiresAt?: string }; // Server-owned, actor-bound review permission
   internalReview?: {
     decisionId?: string; // Server-created decision; omitted for optimistic local drafts
     reviewedBy: string;

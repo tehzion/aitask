@@ -1,0 +1,31 @@
+{
+  "status": "passed",
+  "scope": "local combined checkout; production rollout pending",
+  "unitTests": 676,
+  "unitFiles": 93,
+  "databaseAssertions": 880,
+  "databaseFiles": 54,
+  "focusedBrowserTests": 28,
+  "browserAccounting": "Unique scenarios across focused runs; includes the three new PM cases and the corrected authorization matrix.",
+  "pmUnitTests": 6,
+  "pmDatabaseAssertions": 19,
+  "pmBrowserTests": 3,
+  "checks": [
+    "typecheck",
+    "lint",
+    "strict i18n",
+    "production build",
+    "bundle budgets",
+    "PWA verification",
+    "database lint",
+    "database advisors",
+    "postflight",
+    "Auth/REST/Storage workflows",
+    "authenticated output upload and PM finalization",
+    "mobile overflow and accessibility"
+  ],
+  "eagerGzipKiB": 299.9,
+  "eagerGzipBudgetKiB": 300,
+  "migration": "20261014135947_pm_portfolio_service_boundaries",
+  "productionChanged": false
+}

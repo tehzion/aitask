@@ -1,4 +1,5 @@
 import TaskOutputFiles from './TaskOutputFiles';
+import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
 import { acknowledgeActionFeedback, dismissActionFeedback } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
@@ -153,6 +154,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const requestedTaskRef = React.useRef(requestedTask);
   requestedTaskRef.current = requestedTask;
   const requestedTaskId = requestedTask?.id;
+  useReviewCoverExpiry(requestedTask?.reviewCover?.expiresAt);
   const [editForm, setEditForm] = useState({
     title: '',
     description: '',

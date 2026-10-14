@@ -42,11 +42,11 @@ export const isWorkflowTaskSatisfied = (task: Task, tasks: Task[], visited = new
   });
 };
 
-const outputFields = ['title', 'description', 'notes', 'attachmentLink', 'attachmentName', 'status', 'isCompleted', 'revisionCount'] as const;
+const outputFields = ['title', 'description', 'notes', 'attachmentLink', 'attachmentName', 'outputAttachments', 'status', 'isCompleted', 'revisionCount'] as const;
 const outputChanged = (before: Task, after: Task) => outputFields.some(key => {
   if (before.status === 'Approved' && after.status === 'Completed' && (key === 'status' || key === 'isCompleted')) return false;
   if (before.status === 'Completed' && after.status === 'Completed' && key === 'notes') return false;
-  return (before[key] ?? '') !== (after[key] ?? '');
+  return JSON.stringify(before[key] ?? '') !== JSON.stringify(after[key] ?? '');
 });
 
 export const workflowTransitionError = (task: Task, next: Task, user: User | null | undefined, tasks: Task[], cycles: ServiceCycle[] = [], deliverables: Deliverable[] = [], roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
@@ -60,7 +60,7 @@ export const workflowTransitionError = (task: Task, next: Task, user: User | nul
     })) return 'Complete the earlier workflow steps first.';
   if (kind === 'internal_review' && (isTaskCompleted(next) || next.status === 'Approved')
     && (!hasCurrentInternalReview(task, tasks) || outputChanged(task, next))
-    && !canApproveInternalReview(user, task, roles, scope)) {
+    && !canApproveInternalReview(user, task, roles, scope) && !(user?.isSuperAdmin && next.reviewOverrideReason?.trim())) {
     return INTERNAL_REVIEW_PERMISSION_MESSAGE;
   }
   return null;
@@ -77,7 +77,7 @@ export const prepareWorkflowTasks = (tasks: Task[], previous: Task[], user: User
     let review = task.internalReview;
     if (!isTaskCompleted(task) && task.status !== 'Approved') review = undefined;
     else if (kind === 'internal_review' && user && before !== task && (!before?.internalReview || changed)
-      && canApproveInternalReview(user, task, roles, scope)) {
+      && (canApproveInternalReview(user, task, roles, scope) || user.isSuperAdmin && task.reviewOverrideReason?.trim())) {
       review = { reviewedBy: user.id, reviewedAt: new Date().toISOString(), inputVersions: [...new Set(task.predecessorTaskIds || [])].map(id => ({ taskId: id, outputVersion: tasks.find(item => item.id === id)?.workflowOutputVersion || 1 })) };
     }
     const reviewChanged = before && review !== before.internalReview;
@@ -106,7 +106,7 @@ export const prepareWorkflowTasks = (tasks: Task[], previous: Task[], user: User
       });
       if (!affectedIds.has(task.id) && !staleReview && !blocked) return task;
       changed = true;
-      return { ...task, status: 'Pending', isCompleted: false, completedAt: undefined, clientApprovalStatus: 'Pending' as const, internalReview: undefined, completionPercentage: Math.min(task.completionPercentage, 90), workflowOutputVersion: (task.workflowOutputVersion || 1) + 1, updatedAt: new Date().toISOString() };
+      return { ...task, status: 'Pending', isCompleted: false, completedAt: undefined, clientApprovalStatus: 'Pending' as const, reviewDecision: undefined, internalReview: undefined, completionPercentage: Math.min(task.completionPercentage, 90), workflowOutputVersion: (task.workflowOutputVersion || 1) + 1, updatedAt: new Date().toISOString() };
     });
     if (!changed) break;
   }

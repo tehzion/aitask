@@ -1,0 +1,180 @@
+import {
+  appendFileSync,
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const projectRoot = '/Users/user/Downloads/aitask-master';
+const supabaseSource = join(projectRoot, 'supabase');
+const manifestPath = join(supabaseSource, 'preflight', 'migration_repair_manifest.review.json');
+const supabaseCli = join(projectRoot, 'node_modules', '.bin', 'supabase');
+const expectedProjectRef = 'ohjhwyiffgzyatcmmdql';
+
+const fail = (message) => {
+  console.error(`[rollout] ${message}`);
+  process.exit(1);
+};
+
+if (!process.versions.node.startsWith('22.')) {
+  fail(`Node 22 is required; found ${process.version}.`);
+}
+
+const pnpmAgent = process.env.npm_config_user_agent || '';
+if (pnpmAgent && !pnpmAgent.startsWith('pnpm/10.4.1 ')) {
+  fail('Run this command with the repository-pinned pnpm 10.4.1 runtime.');
+}
+
+if (!existsSync(supabaseCli)) {
+  fail('The repository-pinned Supabase CLI is missing. Run pnpm install --frozen-lockfile first.');
+}
+
+const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+if (manifest.projectRef !== expectedProjectRef) {
+  fail(`Manifest project ref ${manifest.projectRef || '(missing)'} does not match ${expectedProjectRef}.`);
+}
+
+const validatedMigrations = manifest.validatedMigrationTail;
+if (!Array.isArray(validatedMigrations) || validatedMigrations.length === 0) {
+  fail('The repair manifest must define at least one validated migration tail entry.');
+}
+
+const pendingProductionMigrations = manifest.pendingProductionMigrations;
+if (!Array.isArray(pendingProductionMigrations)) {
+  fail('The repair manifest must define pendingProductionMigrations as an array.');
+}
+if (pendingProductionMigrations.some((migration) => !validatedMigrations.includes(migration))) {
+  fail('Every pending production migration must be present in the validated migration tail.');
+}
+
+const migrationNames = readdirSync(join(supabaseSource, 'migrations'))
+  .filter((name) => name.endsWith('.sql'))
+  .map((name) => name.slice(0, -4))
+  .sort();
+const migrationTail = migrationNames.slice(-validatedMigrations.length);
+if (JSON.stringify(migrationTail) !== JSON.stringify(validatedMigrations)) {
+  fail(`Migration tail does not match the repair manifest. Found: ${migrationTail.join(', ')}`);
+}
+
+const run = (command, args, options = {}) => {
+  const result = spawnSync(command, args, {
+    cwd: options.cwd || projectRoot,
+    encoding: 'utf8',
+    stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : 'inherit',
+    env: options.env || process.env,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    if (options.capture) {
+      if (result.stdout && !options.suppressStdoutOnError) process.stdout.write(result.stdout);
+      if (result.stderr) process.stderr.write(result.stderr);
+    }
+    throw new Error(`${basename(command)} ${args.join(' ')} exited with ${result.status}.`);
+  }
+  return result;
+};
+
+run('docker', ['info', '--format', '{{.ServerVersion}}'], { capture: true });
+
+const validationRoot = mkdtempSync(join(tmpdir(), 'aitask-supabase-validation-'));
+const validationSupabase = join(validationRoot, 'supabase');
+const validationProjectId = basename(validationRoot);
+const databaseContainer = `supabase_db_${validationProjectId}`;
+const validationPortBase = 55000 + (process.pid % 500);
+let rolloutError;
+
+cpSync(supabaseSource, validationSupabase, {
+  recursive: true,
+  filter: (source) => {
+    const firstSegment = relative(supabaseSource, source).split(sep)[0];
+    return firstSegment !== '.temp' && firstSegment !== '.branches';
+  },
+});
+
+// The developer stack may already own Supabase's default local ports. Give the
+// disposable release gate an isolated port block so it never interrupts it.
+appendFileSync(join(validationSupabase, 'config.toml'), `
+
+[api]
+port = ${validationPortBase}
+
+[db]
+port = ${validationPortBase + 1}
+
+[studio]
+port = ${validationPortBase + 2}
+
+[inbucket]
+port = ${validationPortBase + 3}
+
+[analytics]
+port = ${validationPortBase + 4}
+vector_port = ${validationPortBase + 5}
+`);
+
+const supabase = (...args) => run(supabaseCli, ['--workdir', validationRoot, ...args], {
+  cwd: validationRoot,
+});
+
+try {
+  console.log(`[rollout] Validating ${validatedMigrations.join(', ')} in ${validationRoot}`);
+  run(supabaseCli, ['--workdir', validationRoot, 'start', '--exclude', 'realtime,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor'], {
+    cwd: validationRoot, capture: true, suppressStdoutOnError: true,
+  });
+  // Startup output includes disposable service keys; never retain it in CI artifacts.
+  console.log('[rollout] Disposable Supabase stack started.');
+  supabase('migration', 'list', '--local');
+  supabase('test', 'db', 'supabase/tests/database', '--local');
+  supabase('db', 'lint', '--local', '--level', 'warning', '--fail-on', 'error');
+  supabase('db', 'advisors', '--local', '--type', 'all', '--level', 'info', '--fail-on', 'error');
+
+  const postflightSource = join(validationSupabase, 'preflight', 'service_rollout_postflight.sql');
+  const postflightTarget = '/tmp/service_rollout_postflight.sql';
+  run('docker', ['cp', postflightSource, `${databaseContainer}:${postflightTarget}`]);
+  run('docker', [
+    'exec', databaseContainer, 'psql', '-v', 'ON_ERROR_STOP=1',
+    '-U', 'postgres', '-d', 'postgres', '-f', postflightTarget,
+  ]);
+
+  const statusOutput = run(supabaseCli, ['--workdir', validationRoot, 'status', '-o', 'json'], { capture: true }).stdout;
+  const status = JSON.parse(statusOutput);
+  run(process.execPath, [join(projectRoot, 'scripts', 'verify-service-upload-storage.mjs')], { env: {
+    ...process.env, AITASK_LOCAL_TEST_URL: status.API_URL, AITASK_LOCAL_TEST_PUBLIC: status.PUBLISHABLE_KEY || status.ANON_KEY,
+    AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
+  } });
+  run(process.execPath, [join(projectRoot, 'scripts', 'verify-staff-action-saves.mjs')], { env: {
+    ...process.env, AITASK_LOCAL_TEST_URL: status.API_URL, AITASK_LOCAL_TEST_PUBLIC: status.PUBLISHABLE_KEY || status.ANON_KEY,
+    AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
+  } });
+  run(process.execPath, [join(projectRoot, 'scripts', 'verify-onboarding-recovery.mjs')], { env: {
+    ...process.env, AITASK_LOCAL_TEST_URL: status.API_URL, AITASK_LOCAL_TEST_PUBLIC: status.PUBLISHABLE_KEY || status.ANON_KEY,
+    AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
+  } });
+  run('docker', ['exec', '-i', databaseContainer, 'psql', '-X', '-U', 'postgres', '-d', 'postgres', '-c', "do \$\$ declare f text; begin select pg_get_functiondef(oid) into f from pg_proc where proname='aitask_execute_command_with_lock_before_staff_context'; execute replace(f, '''The command contains invalid data.''', 'sqlerrm'); end \$\$;"]);
+  run(process.execPath, [join(projectRoot, 'scripts', 'verify-workflow-review-gate.mjs')], { env: {
+    ...process.env, AITASK_LOCAL_TEST_URL: status.API_URL, AITASK_LOCAL_TEST_PUBLIC: status.PUBLISHABLE_KEY || status.ANON_KEY,
+    AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
+  } });
+  console.log('[rollout] Local Supabase rollout validation passed.');
+} catch (error) {
+  rolloutError = error instanceof Error ? error.message : 'Local Supabase rollout validation failed.';
+} finally {
+  const stopResult = spawnSync(supabaseCli, ['--workdir', validationRoot, 'stop', '--no-backup'], {
+    cwd: validationRoot,
+    stdio: 'inherit',
+  });
+  if (stopResult.status === 0) {
+    rmSync(validationRoot, { recursive: true, force: true });
+  } else if (!rolloutError) {
+    rolloutError = `Failed to stop the disposable stack; retained ${validationRoot} for cleanup.`;
+  }
+}
+
+if (rolloutError) fail(rolloutError);

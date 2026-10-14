@@ -88,7 +88,7 @@ describe('client service plan store', () => {
   });
 
   it('creates a draft plan for an existing client without creating another client', () => {
-    const client = { id: 'existing-client-plan', clientName: 'Existing Company', createdAt: '2026-09-10', updatedAt: '2026-09-10' };
+    const client = { id: 'existing-client-plan', clientName: 'Existing Company', createdBy: admin.id, createdAt: '2026-09-10', updatedAt: '2026-09-10' };
     useStore.setState({ clients: [client] });
 
     const created = useStore.getState().createClientPlan(client.id, {

@@ -1,4 +1,5 @@
 import TaskOutputFiles from './TaskOutputFiles';
+import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
 import { acknowledgeActionFeedback, dismissActionFeedback, queueActionFeedback } from '../lib/actionFeedback';
 import { msg } from '../lib/messages';
@@ -93,6 +94,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const clearUnsaved = useUnsavedChanges(isOpen && Boolean(comment.trim() || helpReason.trim() || isSaving || pendingSave));
   const statusPickerRef = React.useRef<HTMLSelectElement>(null);
   const liveTask = task ? tasks.find(item => item.id === task.id) || null : null;
+  useReviewCoverExpiry(liveTask?.reviewCover?.expiresAt);
 
   React.useEffect(() => {
     setComment('');

@@ -1,0 +1,18 @@
+{
+  "fullEdit": {
+    "result": {
+      "ok": true
+    },
+    "beforeAcceptance": "Approved",
+    "afterAcceptance": "Pending",
+    "status": "Approved",
+    "priority": "High"
+  },
+  "foreignRevision": {
+    "result": {
+      "ok": false,
+      "error": "You do not have permission to request a revision."
+    },
+    "transitionError": "Ask the HOD or project manager to return approved work for revision."
+  }
+}

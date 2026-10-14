@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(18);
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000001301','authenticated','authenticated','staff-workflow@aitask.local','',now(),'{}','{}',now(),now()),
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000001302','authenticated','authenticated','owner-workflow@aitask.local','',now(),'{}','{}',now(),now()),
@@ -45,7 +45,8 @@ select is((pg_temp.work_update('workflow-admin-task','{"workState":{"acceptedBy"
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001302',true);
 update public.aitask_entities set data=data || '{"visibility":"client-visible","status":"Waiting Approval","clientApprovalStatus":"Pending","revisionCount":3,"completionPercentage":100}'::jsonb where workspace_id='staff-workflow-test' and entity_id='workflow-task';
-update public.aitask_entities set data=data || '{"status":"Approved","isCompleted":false,"completionPercentage":80}'::jsonb where workspace_id='staff-workflow-test' and entity_id='workflow-task';
+select is((pg_temp.work_update('workflow-task','{"status":"Approved"}')->>'ok')::boolean,false,'Boss self-review requires an explicit reason');
+update public.aitask_entities set data=data || '{"status":"Approved","isCompleted":false,"completionPercentage":80,"reviewOverrideReason":"Fixture explicit Boss review override"}'::jsonb where workspace_id='staff-workflow-test' and entity_id='workflow-task';
 select set_config('aitask.test_task_version',(select version::text from public.aitask_entities where entity_id='workflow-task'),true);
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001303',true);
 set local role authenticated;

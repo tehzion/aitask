@@ -25,7 +25,7 @@ const seed = async (page: Page, role: 'Staff' | 'HOD', ready = true, legacy = fa
     const ids = useStore.getState().generateDeliverableTaskChain(useStore.getState().deliverables[0].id).taskIds!;
     ids.forEach(id => { useStore.getState().updateTaskAssignee(id, worker.id); useStore.getState().updateTaskAttachment(id, 'https://example.com/output.pdf'); });
     if (ready) {
-      for (const status of ['Waiting Approval', 'Approved', 'Completed']) if (!useStore.getState().updateTaskStatus(ids[0], status).ok) throw new Error('Upstream preparation failed');
+      for (const [status, actor] of [['Waiting Approval', worker], ['Approved', designerHod], ['Completed', boss]] as const) { useStore.setState({ currentUser: actor }); if (!useStore.getState().updateTaskStatus(ids[0], status).ok) throw new Error('Upstream preparation failed'); }
       useStore.setState({ currentUser: worker });
       if (!useStore.getState().updateTaskStatus(ids[1], 'Waiting Approval').ok) throw new Error('Review submission failed');
     }
@@ -100,7 +100,8 @@ test('legacy completed review needs explicit approval and later revisions clear 
     const boss = useStore.getState().users.find(user => user.id === 'browser-review-boss')!;
     useStore.setState({ currentUser: boss });
     if (!useStore.getState().updateTaskStatus(fixture.reviewId, 'Completed').ok) throw new Error('PM review finalization failed');
-    for (const status of ['Waiting Approval', 'Approved', 'Completed']) if (!useStore.getState().updateTaskStatus(fixture.publishId, status).ok) throw new Error('Publication preparation failed');
+    const designerHod = useStore.getState().users.find(user => user.id === 'browser-designer-hod')!;
+    for (const [status, actor] of [['Waiting Approval', worker], ['Approved', designerHod], ['Completed', boss]] as const) { useStore.setState({ currentUser: actor }); if (!useStore.getState().updateTaskStatus(fixture.publishId, status).ok) throw new Error('Publication preparation failed'); }
     if (!useStore.getState().requestRevision(fixture.workId, 'Replace output').ok) throw new Error('Upstream revision failed');
     useStore.setState({ currentUser: worker });
     useStore.getState().updateTaskAttachment(fixture.workId, 'https://example.com/new-output.pdf');

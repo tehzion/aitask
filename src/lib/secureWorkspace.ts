@@ -244,6 +244,7 @@ export type SecureCommand = {
 
 export type SecureBackendCapabilities = {
   schemaVersion: number;
+  hodReviewRemediation?: boolean;
   workflowReviewGate?: boolean;
   workspaceOptimisticLock: boolean;
   serviceOperations: boolean;
@@ -664,6 +665,7 @@ const memberToUser = (row: MemberRow): WorkspaceMember => {
   return {
     id: row.id,
     authUserId: row.auth_user_id || undefined,
+    hasLogin: Boolean(row.auth_user_id),
     workspaceId: row.workspace_id,
     name: row.name,
     email: row.email || undefined,
@@ -741,6 +743,7 @@ const stateToRows = (state: PersistedWorkspaceState) => {
     const { comments = [], approvalHistory = [], ...task } = item;
     delete task.reviewAccess;
     delete task.reviewEvidence;
+    delete task.reviewDecision;
     delete task.workflowStepKind;
     delete task.workflowOutputVersion;
     delete task.workflowDependenciesReady;

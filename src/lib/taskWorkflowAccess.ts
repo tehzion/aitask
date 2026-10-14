@@ -2,24 +2,33 @@ import type { CustomRole, Task, User } from '../types';
 import { canEditTask, isBossKoo, isHodUser, type VisibilityScope } from './access';
 import { isMemberInDepartment } from './departments';
 
-export const canReviewTaskInternally = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => Boolean(user
-  && (isBossKoo(user) || (isHodUser(user, roles) && isMemberInDepartment(user, task.department))
-    || (user.role === 'Project Manager'
-      && (task.reviewAccess ? task.reviewAccess.actorId === user.id && task.reviewAccess.canApprove
-        : Boolean(scope.users && getDepartmentReviewers(scope.users, task, roles, scope).some(reviewer => reviewer.id === user.id))))));
+export const isIndependentTaskReviewer = (user: User, task: Partial<Task>) => user.id !== task.assignedTo && user.id !== task.workState?.reviewRequestedBy;
+export const canBeTaskReviewLead = (user: User, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => user.hasLogin !== false
+  && ((isHodUser(user, roles) && isMemberInDepartment(user, task.department)) || user.role === 'Project Manager' && canEditTask(user, task, roles, scope));
+export const canManageTaskReview = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => Boolean(user && (isBossKoo(user) || user.role === 'Project Manager') && canEditTask(user, task, roles, scope));
+export const canReviewTaskInternally = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
+  if (!user || user.hasLogin === false || !isIndependentTaskReviewer(user, task)) return false;
+  if (isBossKoo(user)) return true;
+  if (task.reviewAccess && (!task.reviewAccess.expiresAt || Date.parse(task.reviewAccess.expiresAt) > Date.now())) return task.reviewAccess.actorId === user.id && task.reviewAccess.canApprove;
+  const cover = task.reviewCover && Date.parse(task.reviewCover.expiresAt) > Date.now() ? task.reviewCover : undefined;
+  if (cover && scope.users?.some(member => member.id === cover.reviewerId && canBeTaskReviewLead(member, task, roles, scope) && isIndependentTaskReviewer(member, task))) return user.id === cover.reviewerId;
+  return isHodUser(user, roles) && isMemberInDepartment(user, task.department)
+    || Boolean(scope.users && getDepartmentReviewers(scope.users, task, roles, scope).some(reviewer => reviewer.id === user.id));
+};
 
 export const canRequestTaskRevision = (user: User | null | undefined, task: Task, roles: CustomRole[] = []) => Boolean(user
   && (user.role === 'Project Manager' || canReviewTaskInternally(user, task, roles)));
 
 export const taskTransitionError = (user: User | null | undefined, before: Task | undefined, after: Pick<Task, 'status' | 'isCompleted' | 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
-  const protectedOutput = before?.status === 'Approved' ? ['title', 'description', 'notes', 'attachmentLink', 'attachmentName'] as const
-    : before?.status === 'Completed' ? ['title', 'description', 'attachmentLink', 'attachmentName'] as const : [];
-  if (before && ['Approved', 'Completed'].includes(after.status) && protectedOutput.some(field => Object.prototype.hasOwnProperty.call(after, field) && (before[field] || '') !== (after[field] || ''))) return 'Ask the HOD or project manager to return approved work for revision.';
+  const protectedOutput = before?.status === 'Approved' ? ['title', 'description', 'notes', 'attachmentLink', 'attachmentName', 'outputAttachments'] as const
+    : before?.status === 'Completed' ? ['title', 'description', 'attachmentLink', 'attachmentName', 'outputAttachments'] as const : [];
+  if (before && ['Approved', 'Completed'].includes(after.status) && protectedOutput.some(field => Object.prototype.hasOwnProperty.call(after, field) && JSON.stringify(before[field] || '') !== JSON.stringify(after[field] || ''))) return 'Ask the HOD or project manager to return approved work for revision.';
   if (before && before.status !== after.status && ['Approved', 'Completed'].includes(after.status)
     && ['assignedTo', 'department'].some(field => Object.prototype.hasOwnProperty.call(after, field) && before[field as 'assignedTo' | 'department'] !== after[field as 'assignedTo' | 'department'])) return 'Reassign work before submitting it for review.';
   if (before?.status === after.status && before.isCompleted === after.isCompleted) return undefined;
+  const override = Boolean(user && isBossKoo(user) && after.reviewOverrideReason?.trim() && after.reviewOverrideReason.trim().length <= 2000);
   if (after.status === 'Approved' && (!before || before.status !== 'Waiting Approval'
-    || !canReviewTaskInternally(user, before, roles, scope))) return 'Only the department reviewer can approve submitted work.';
+    || (!canReviewTaskInternally(user, before, roles, scope) && !override))) return 'Only the department reviewer can approve submitted work.';
   if ((after.status === 'Completed' || after.isCompleted) && !isBossKoo(user)
     && (user?.role !== 'Project Manager' || before?.status !== 'Approved')) return 'Only a project manager can confirm completion after internal approval.';
   if (before && ['Waiting Approval', 'Approved', 'Completed'].includes(before.status) && !canRequestTaskRevision(user, before, roles)) return 'Ask the HOD or project manager to return approved work for revision.';
@@ -36,7 +45,11 @@ export const canApproveTaskInternally = (user: User | null | undefined, task: Ta
 
 export const TASK_HOD_REQUIRED = 'No reviewer is configured for this task. Ask your project manager to configure a reviewer before submitting.';
 export const getDepartmentReviewers = (users: readonly User[], task: Pick<Task, 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
-  const hods = users.filter(user => isHodUser(user, roles) && isMemberInDepartment(user, task.department));
+  const eligible = users.filter(user => user.hasLogin !== false && isIndependentTaskReviewer(user, task));
+  const cover = task.reviewCover && Date.parse(task.reviewCover.expiresAt) > Date.now() ? eligible.find(user => user.id === task.reviewCover?.reviewerId && canBeTaskReviewLead(user, task as Task, roles, scope)) : undefined;
+  if (cover) return [cover];
+  const hods = eligible.filter(user => isHodUser(user, roles) && isMemberInDepartment(user, task.department));
   if (hods.length) return hods;
-  return users.filter(user => user.role === 'Project Manager' && canEditTask(user, task as Task, roles, scope));
+  const pms = eligible.filter(user => user.role === 'Project Manager' && canEditTask(user, task as Task, roles, scope));
+  return pms.length ? pms : users.filter(user => user.hasLogin !== false && isBossKoo(user));
 };

@@ -103,15 +103,12 @@ export default defineConfig(({ mode }) => {
           // registry chunk pulls every lazy route's icons into startup.
           // Auth/data client is loaded on demand and should not inflate the offline shell.
           supabase: ['@supabase/supabase-js'],
-          // Keep the class-merging runtime out of the application entry chunk.
-          // Components still receive it through the normal static import.
-          tailwindMerge: ['tailwind-merge'],
           // Reports are lazy-loaded; keep the chart renderer isolated from the
           // authenticated shell and report tables.
           reportsCharts: ['recharts'],
-          // State and localization both load at startup. Share one chunk to
+          // State, localization, and class merging load at startup. Share one chunk to
           // reduce request and compression overhead in the eager graph.
-          workspaceRuntime: ['./src/store/index.ts', './src/lib/i18n.ts'],
+          workspaceRuntime: ['./src/store/index.ts', './src/lib/i18n.ts', 'tailwind-merge', 'clsx'],
         },
       },
     },

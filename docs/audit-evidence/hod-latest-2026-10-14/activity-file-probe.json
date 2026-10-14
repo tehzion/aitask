@@ -1,0 +1,15 @@
+{
+  "comment": {
+    "ok": true,
+    "id": "CC-1791984200103-pw5z3"
+  },
+  "attachResult": {
+    "ok": true
+  },
+  "activityFiles": 1,
+  "outputFiles": 0,
+  "submission": {
+    "ok": false,
+    "error": "Add an output link or upload a deliverable file before sending this linked task for review or completing it."
+  }
+}

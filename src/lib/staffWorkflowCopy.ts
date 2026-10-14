@@ -1,6 +1,10 @@
 import { registerUiTranslations } from './i18n';
 
 registerUiTranslations({
+  'Only the department HOD can approve submitted work.': '只有所属部门的 HOD 可以批准已送审的工作。',
+  'Only a project manager can confirm completion after HOD approval.': 'HOD 批准后，只有 PM 可以确认最终完成。',
+  'Ask the HOD or project manager to return approved work for revision.': '请由 HOD 或 PM 将已批准的工作退回修改。',
+
   "Add an output link or upload a deliverable file before sending this linked task for review or completing it.": "将关联任务送审或完成前，请添加产出链接或上传交付文件。",
   "Only open tasks can accept work or request help.": "只有未完成任务可以接受分配或请求协助。",
   "Only the current assignee can accept this task.": "只有当前负责人可以接受此任务。",

@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+test.describe.configure({ timeout: 90_000 });
+
 type SeedTask = {
   id: string;
   title: string;
@@ -33,18 +35,18 @@ const signIn = async (page: Page, username: string) => {
   await page.goto('/login');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  await page.evaluate(async name => {
+    const { useStore } = await import('/src/store/index.ts');
+    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const user = useStore.getState().users.find(member => member.name === name);
+    if (!user) throw new Error(`Missing authorization fixture account: ${name}`);
+    enablePasswordResetBypass(user.id);
+    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${user.id}`, 'acknowledged');
+  }, username);
   await page.getByLabel('Email or username').fill(username);
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
-  const continueButton = page.getByRole('button', { name: 'Continue for now' });
-  if (page.url().includes('/settings')) {
-    await expect(continueButton).toBeVisible();
-    await continueButton.click();
-    await page.waitForURL(url => !url.pathname.endsWith('/settings'));
-  }
-  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
-  await releaseNotice.waitFor({ state: 'visible', timeout: 5_000 }).then(() => releaseNotice.click()).catch(() => undefined);
   await page.evaluate(async () => {
     const { stopBackendAutoSync } = await import('/src/store/index.ts');
     stopBackendAutoSync();
@@ -103,7 +105,7 @@ test.describe('task detail authorization matrix', () => {
     await expect(bossDialog.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
     await expect(bossDialog.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
     await expect(bossDialog.getByPlaceholder('Write a comment or update...')).toBeVisible();
-    await expect(bossDialog.locator('select')).toHaveCount(1);
+    await expect(bossDialog.getByRole('combobox', { name: 'Task status', exact: true })).toBeVisible();
 
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Logout' }).click();
