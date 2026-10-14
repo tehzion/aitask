@@ -1,3 +1,5 @@
+import { getLocalizedTaskStatus } from '../lib/localeLabels';
+import { acknowledgeActionFeedback, dismissActionFeedback } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
@@ -167,9 +169,10 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   editFormRef.current = editForm;
   const pendingDetails = React.useRef<{ taskId: string; values: typeof editForm; persisted: Task } | null>(null);
   const mutationGeneration = React.useRef(0);
+  const ownsPendingMutation = React.useRef(false);
   const actorIdRef = React.useRef(currentUser?.id);
   actorIdRef.current = currentUser?.id;
-  useEffect(() => () => { mutationGeneration.current++; }, []);
+  useEffect(() => () => { mutationGeneration.current++; dismissActionFeedback(currentUser?.id, `task:${requestedTaskId}`); }, [currentUser?.id, requestedTaskId]);
   const formDirty = Boolean(isOpen && requestedTask && (commentText.trim() || approvalNote.trim() || revisionNote.trim() || isSubmitting || isDeletingTask
     || attachmentLink !== (requestedTask.attachmentLink || '') || attachmentName !== (requestedTask.attachmentName || '')
     || (isEditingDetails && JSON.stringify(editForm) !== JSON.stringify(editBaseline.current))
@@ -188,8 +191,12 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     else if (hadDraft.current) { recovery.clear(); hadDraft.current = false; }
   }, [draftReady, formDirty, recovery]);
   const requestClose = () => {
-    if (isSubmitting || (formDirty && !window.confirm(t('Discard unsaved changes?')))) return;
-    if (isDeletingTask) { void resolvePendingMutation('latest', true); return; }
+    if (isSubmitting) return;
+    if (ownsPendingMutation.current || isDeletingTask) {
+      if (!window.confirm(t('Discard pending changes and reload the latest saved workspace?'))) return;
+      void resolvePendingMutation('latest', true); return;
+    }
+    if (formDirty && !window.confirm(t('Discard unsaved changes?'))) return;
     recovery.clear(); markPristine(); onClose();
   };
 
@@ -205,7 +212,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     setIsEditingDetails(false);
     setCommentText('');
     pendingComment.current = null;
-    pendingDetails.current = null;
+    pendingDetails.current = null; ownsPendingMutation.current = false;
     setPendingDeletion(null);
     setConfirmation(null);
     mutationGeneration.current++;
@@ -299,11 +306,12 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     const generation = ++mutationGeneration.current;
     const isCurrent = () => isWorkspaceSessionCurrent(session) && requestedTaskRef.current?.id === taskId
       && actorIdRef.current === actorId && generation === mutationGeneration.current;
-    setIsSubmitting(true);
+    setIsSubmitting(true); ownsPendingMutation.current = true;
     try {
       const result = await commitPendingMutation(commandType);
       if (!isCurrent()) return false;
       if (!result.ok) { setMutationError(result.error || 'The change is waiting to be saved.'); return false; }
+      acknowledgeActionFeedback(useStore.getState()); ownsPendingMutation.current = false;
       setMutationError('');
       return true;
     } catch (failure) {
@@ -353,15 +361,16 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
         const result = await retryPendingSave();
         if (!isCurrent()) return;
         setMutationError(result.ok ? '' : result.error || 'The pending change could not be saved yet.');
-        if (result.ok) { acknowledgeComment(); acknowledgeDetails(); }
+        if (result.ok) { ownsPendingMutation.current = false; acknowledgeActionFeedback(useStore.getState()); acknowledgeComment(); acknowledgeDetails(); }
       } else {
         await discardMutation();
         if (!isCurrent()) return;
         const latest = useStore.getState().backend;
         if (latest.mode === 'supabase' && latest.status !== 'live') { setMutationError(latest.error || 'The change is waiting to be saved.'); return; }
         pendingComment.current = null;
-        pendingDetails.current = null;
+        pendingDetails.current = null; ownsPendingMutation.current = false;
         setMutationError('');
+        if (closeAfterDiscard) { recovery.clear(); markPristine(); onClose(); }
       }
     } catch (failure) {
       if (isCurrent()) setMutationError(failure instanceof Error ? failure.message : 'The change is waiting to be saved.');
@@ -501,6 +510,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
       panelClassName="max-w-4xl max-sm:max-h-none max-sm:rounded-none"
     >
         <p id={descriptionId} className="sr-only">{t('Task details, status, dates, links and comments for')} <span data-i18n-skip>{task.title}</span>.</p>
+        {recovery.storageFailed && <p role="alert" className="px-5 py-3 text-sm text-amber-800">{t('feedback.draftStorageFailed')}</p>}
         {recovery.available && !formDirty && <DraftRecoveryNotice onDiscard={recovery.clear} onRestore={() => {
           const recovered = recovery.draft;
           if (!recovered) return;
@@ -598,7 +608,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   <label className="block text-xs font-medium text-slate-500 mb-1">{t('Current Status')}</label>
                   {!canEditTask ? (
                     <span className={`text-sm px-3 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
-                      {t(task.status)}
+                      {currentUser?.role === 'Client' ? t(task.status) : getLocalizedTaskStatus(task.status, locale)}
                     </span>
                   ) : (
                     <div className="relative inline-block">
@@ -636,7 +646,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                         }}
                       >
                         {statusOptions.map(status => (
-                          <option key={status} value={status} className="bg-white text-slate-900">{t(status)}</option>
+                          <option key={status} value={status} className="bg-white text-slate-900">{currentUser?.role === 'Client' ? t(status) : getLocalizedTaskStatus(status, locale)}</option>
                         ))}
                       </select>
                       <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 text-current" />
@@ -851,7 +861,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                     <div>
                       <p className="font-semibold">{t('Your task status and feedback')}</p>
                       <p className="mt-1 leading-6 text-blue-800">
-                        {t('This task is currently')} <strong>{t(task.status)}</strong>. {t('You can leave feedback anytime in the comments panel.')}
+                        {t('This task is currently')} <strong>{currentUser?.role === 'Client' ? t(task.status) : getLocalizedTaskStatus(task.status, locale)}</strong>. {t('You can leave feedback anytime in the comments panel.')}
                         {canClientReview
                           ? ` ${t('Approval and revision actions are available below.')}`
                           : ` ${t('Approval actions appear when the task is completed or waiting for your review.')}`}

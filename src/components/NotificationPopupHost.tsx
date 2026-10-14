@@ -1,3 +1,7 @@
+import SystemMessage from './SystemMessage';
+import type { MessageDescriptor } from '../lib/messages';
+import { useSoundNotifications } from '../hooks/useSoundNotifications';
+import { presentNotification } from '../lib/notificationPresentation';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -29,6 +33,7 @@ interface NotificationPopupHostProps {
 interface NotificationPopupCardProps {
   notification: AppNotification;
   isReadUpdating: boolean;
+  readError?: MessageDescriptor | null;
   onDismiss: (notificationId: string) => void;
   onMarkRead: (notificationId: string) => Promise<boolean>;
   onView: (notification: AppNotification) => void;
@@ -63,48 +68,54 @@ const popupIconBackground = (iconType: AppNotification['iconType']) => {
 const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
   notification,
   isReadUpdating,
+  readError,
   onDismiss,
   onMarkRead,
   onView,
 }) => {
   const { locale, t } = useI18n();
   const [isMarkingRead, setIsMarkingRead] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const presentation = presentNotification(notification, locale);
 
   useEffect(() => {
+    if (hovered || focused || isMarkingRead || isReadUpdating || readError) return;
     const timeout = window.setTimeout(() => onDismiss(notification.id), 8000);
     return () => window.clearTimeout(timeout);
-  }, [notification.id, onDismiss]);
+  }, [notification.id, onDismiss, hovered, focused, isMarkingRead, isReadUpdating, readError]);
 
   const handleMarkRead = async () => {
     if (isMarkingRead || isReadUpdating) return;
     setIsMarkingRead(true);
-    const saved = await onMarkRead(notification.id);
-    if (!saved) setIsMarkingRead(false);
+    try { await onMarkRead(notification.id); } finally { setIsMarkingRead(false); }
   };
 
   return (
     <article
-      aria-label={t('notifications.newWithTitle', { title: notification.title })}
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false); }}
+      aria-label={t('notifications.newWithTitle', { title: presentation.title })}
       className="pointer-events-auto overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.14)] "
     >
       <div className="flex items-start gap-3 p-4">
         <div className={cn(
           'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
-          popupIconBackground(notification.iconType),
+          popupIconBackground(presentation.iconType),
         )}>
-          {popupIcon(notification.iconType)}
+          {popupIcon(presentation.iconType)}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-950">{notification.title}</p>
-              <p data-i18n-skip className="mt-1 line-clamp-3 text-sm leading-5 text-slate-600">{notification.message}</p>
+              <p className="truncate text-sm font-semibold text-slate-950">{presentation.title}</p>
+              <p data-i18n-skip className="mt-1 line-clamp-3 text-sm leading-5 text-slate-600">{presentation.message}</p>
             </div>
             <button
               type="button"
               onClick={() => onDismiss(notification.id)}
-              className="-mr-1 -mt-1 shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-              aria-label={t('notifications.dismissWithTitle', { title: notification.title })}
+              className="-mr-1 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              aria-label={t('notifications.dismissWithTitle', { title: presentation.title })}
             >
               <X className="h-4 w-4" />
             </button>
@@ -114,6 +125,7 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
           </p>
         </div>
       </div>
+      {readError && <p className="px-4 pb-3 text-sm text-red-700" role="alert"><SystemMessage message={readError} /></p>}
       <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/80 px-3 py-2.5">
         <button
           type="button"
@@ -145,6 +157,7 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
   readActions,
 }) => {
   const navigate = useNavigate();
+  useSoundNotifications(notifications, currentUser);
   const { t } = useI18n();
   const { hasBottomNotice } = useAppNoticeState();
   const tracker = useRef<{ userId?: string; initialized: boolean; seenIds: Set<string> }>({
@@ -214,7 +227,8 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
     navigate(notificationRouteToPath(notification.route));
   }, [dismiss, navigate, readActions]);
 
-  const visibleNotifications = queuedIds
+  const visibleNotifications = (readyUserId === currentUser?.id ? queuedIds : [])
+    .filter(id => unreadIds.has(id))
     .slice(0, 3)
     .map(notificationId => notificationsById.get(notificationId))
     .filter((notification): notification is AppNotification => Boolean(notification));
@@ -237,6 +251,7 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
           key={notification.id}
           notification={notification}
           isReadUpdating={readActions.isUpdating}
+          readError={readActions.errorIds?.includes(notification.id) ? readActions.error : null}
           onDismiss={dismiss}
           onMarkRead={readActions.markRead}
           onView={viewNotification}

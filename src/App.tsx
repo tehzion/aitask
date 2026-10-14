@@ -85,7 +85,7 @@ function AppContent() {
       const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
       if (!(anchor instanceof HTMLAnchorElement) || anchor.target === '_blank' || anchor.hasAttribute('download') || !hasUnsavedChanges()) return;
       if (anchor.href === window.location.href || new URL(anchor.href).origin === window.location.origin) return;
-      if (!window.confirm(t('Discard unsaved changes and leave this page?'))) { event.preventDefault(); event.stopPropagation(); }
+      if (!window.confirm(t('feedback.leaveUnsaved'))) { event.preventDefault(); event.stopPropagation(); }
     };
     window.addEventListener('beforeunload', beforeUnload);
     document.addEventListener('click', beforeNavigate, true);

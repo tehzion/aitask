@@ -37,6 +37,7 @@ const actionCategories = new Set<NotificationCategory>([
 export const classifyNotification = (
   notification: Pick<AppNotification, 'category' | 'title' | 'message' | 'route'>,
 ): NotificationCategory => {
+  if (notification.title === 'Task Status Updated' && /": help requested by /.test(notification.message)) return 'feedback';
   if (notification.category && NOTIFICATION_CATEGORIES.includes(notification.category)) {
     return notification.category;
   }
@@ -54,6 +55,7 @@ export const classifyNotification = (
 export const getNotificationImportance = (
   notification: Pick<AppNotification, 'importance' | 'category' | 'title' | 'message' | 'route'>,
 ): NotificationImportance => {
+  if (notification.title === 'Task Status Updated' && /": help requested by /.test(notification.message)) return 'action';
   if (notification.importance === 'action' || notification.importance === 'informational') {
     return notification.importance;
   }
@@ -165,4 +167,11 @@ export const mergeNotificationPages = (
     new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
     || right.id.localeCompare(left.id)
   ));
+};
+
+export const notificationIconType = (notification: AppNotification): AppNotification['iconType'] => {
+  if (notification.title !== 'Task Status Updated') return notification.iconType;
+  if (/": help requested by /.test(notification.message)) return 'alert';
+  if (/": (?:assignment accepted|blocker cleared) by /.test(notification.message)) return 'success';
+  return notification.iconType;
 };

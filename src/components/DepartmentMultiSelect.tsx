@@ -1,4 +1,6 @@
 import React from 'react';
+import { useI18n } from './I18nProvider';
+import { getLocalizedDepartment } from '../lib/localeLabels';
 import type { Department } from '../types';
 import { STAFF_DEPARTMENTS, normalizeDepartments } from '../lib/departments';
 import { cn } from '../lib/utils';
@@ -18,6 +20,7 @@ const DepartmentMultiSelect: React.FC<DepartmentMultiSelectProps> = ({
   label = 'Departments',
   description = 'Select every department this member can receive assignments from.',
 }) => {
+  const { locale, t } = useI18n();
   const descriptionId = React.useId();
   const selected = new Set(normalizeDepartments(value));
 
@@ -30,8 +33,8 @@ const DepartmentMultiSelect: React.FC<DepartmentMultiSelectProps> = ({
 
   return (
     <fieldset disabled={disabled} aria-describedby={descriptionId}>
-      <legend className="text-sm font-medium text-slate-700">{label}</legend>
-      <p id={descriptionId} className="mt-1 text-xs text-slate-500">{description}</p>
+      <legend className="text-sm font-medium text-slate-700">{t(label)}</legend>
+      <p id={descriptionId} className="mt-1 text-xs text-slate-500">{t(description)}</p>
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
         {STAFF_DEPARTMENTS.map(department => (
           <label
@@ -50,7 +53,7 @@ const DepartmentMultiSelect: React.FC<DepartmentMultiSelectProps> = ({
               checked={selected.has(department)}
               onChange={() => toggleDepartment(department)}
             />
-            <span className="font-medium">{department}</span>
+            <span className="font-medium">{getLocalizedDepartment(department, locale)}</span>
           </label>
         ))}
       </div>

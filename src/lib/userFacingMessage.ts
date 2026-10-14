@@ -8,6 +8,15 @@ export const userFacingMessage = (value: unknown): string | MessageDescriptor =>
   if (typeof value !== 'string') return msg('errors.requestFailed');
   const text = value.trim();
   if (!text) return '';
+  if (/^FORBIDDEN:/i.test(text)) return msg('errors.permissionDenied');
+  if (/^CONFLICT:/i.test(text)) return 'This work changed elsewhere. Review the saved data before retrying.';
+  if (/^NOT_FOUND:/i.test(text)) return msg('feedback.unavailable');
+  if (/^VALIDATION:/i.test(text)) return userFacingMessage(text.replace(/^VALIDATION:\s*/i, ''));
+  if (/^(?:Save confirmation timed out|Save was not confirmed|Supabase could not (?:be reached|confirm the save))/.test(text)) return /draft/.test(text) ? msg('errors.connectionUnavailable') : msg('feedback.saveUnconfirmed');
+  if (/^Private file (?:uploads|downloads|cleanup) require the Supabase backend\./.test(text)) return 'File sharing is unavailable in this workspace. Ask your workspace administrator to enable it.';
+  if (/^Upload (?:reconciliation|confirmation)/.test(text)) return 'The upload could not be confirmed. The file has been kept for another check.';
+  if (/^The password changed, but Supabase could not finalize account setup\./.test(text)) return 'Your password changed, but account setup could not finish. Sign in with the new password and try again.';
+  if (/^Supabase\b/.test(text)) return msg('errors.requestFailed');
   if (/^(?:TypeError:\s*)?(?:Failed to fetch|fetch failed|Load failed|NetworkError\b|Network request failed|The network connection was lost)/i.test(text)) return msg('errors.connectionUnavailable');
   if (/^(?:Invalid Refresh Token|Refresh Token (?:Not Found|Has Expired)|JWT (?:expired|is expired)|Auth session missing)/i.test(text)) return msg('errors.sessionExpired');
   if (/^(?:new row violates row-level security|permission denied for (?:table|schema|function|relation)|violates row-level security)/i.test(text)) return msg('errors.permissionDenied');

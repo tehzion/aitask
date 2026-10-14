@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import SystemMessage from './SystemMessage';
 import { useToastStore, Toast as ToastType } from '../store/useToastStore';
 import { CheckCircle2, AlertTriangle, XCircle, Info, X } from 'lucide-react';
@@ -37,7 +38,8 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
       <p className="min-w-0 flex-1 break-words pr-2 text-sm font-semibold leading-5">{toast.type === 'error' || toast.type === 'warning' ? <SystemMessage message={toast.message} /> : t(toast.message)}</p>
       <button
         onClick={() => removeToast(toast.id)}
-        className="text-slate-400 hover:text-slate-600 p-0.5 rounded-lg hover:bg-slate-100 transition-colors"
+        data-draft-navigation
+        className="flex h-11 w-11 shrink-0 items-center justify-center text-slate-400 hover:text-slate-600 p-0.5 rounded-lg hover:bg-slate-100 transition-colors"
         aria-label={t('common.closeNotification')}
       >
         <X className="w-4 h-4" />
@@ -46,14 +48,29 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
   );
 };
 
+const findFeedbackTarget = () => {
+  if (typeof document === 'undefined') return null;
+  const dialogs = document.querySelectorAll<HTMLElement>('[data-aitask-modal-portal] [role="dialog"]');
+  return dialogs[dialogs.length - 1] || document.getElementById('i18n-portals') || document.body;
+};
+
 export const ToastContainer: React.FC = () => {
   const toasts = useToastStore((state) => state.toasts);
+  const [target, setTarget] = React.useState<HTMLElement | null>(findFeedbackTarget);
+  React.useLayoutEffect(() => {
+    const update = () => setTarget(findFeedbackTarget());
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.getElementById('i18n-portals') || document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
 
-  return (
-    <div className="pointer-events-none fixed left-4 right-4 top-[calc(5rem+env(safe-area-inset-top))] z-[70] flex select-none flex-col items-end gap-2.5 md:bottom-5 md:left-auto md:right-5 md:top-auto">
+  if (!target) return null;
+  return createPortal(
+    <div className="pointer-events-none fixed left-4 right-4 top-[calc(5rem+env(safe-area-inset-top))] z-[130] flex select-none flex-col items-end gap-2.5 md:bottom-5 md:left-auto md:right-5 md:top-auto">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} />
       ))}
-    </div>
+    </div>, target,
   );
 };

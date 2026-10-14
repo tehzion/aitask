@@ -1,5 +1,6 @@
 import SystemMessage from './SystemMessage';
 import React from 'react';
+import { useI18n } from './I18nProvider';
 import { AlertTriangle } from 'lucide-react';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
@@ -28,7 +29,9 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onClose,
   busy = false,
-}) => (
+}) => {
+  const { t } = useI18n();
+  return (
   <ModalShell labelledBy={labelledBy} onClose={busy ? () => undefined : onClose} closeOnBackdrop={!busy} panelClassName="max-w-md">
     <div className="flex items-start gap-3 border-b border-line/70 px-5 py-4">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-red-50 text-red-700">
@@ -41,12 +44,13 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       </div>
     </div>
     <div className="flex justify-end gap-3 px-5 py-4">
-      <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>{cancelLabel}</Button>
+      <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>{t(cancelLabel)}</Button>
       <Button type="button" variant={tone === 'danger' ? 'danger' : 'primary'} onClick={() => void onConfirm()} disabled={busy}>
-        {busy ? 'Working…' : confirmLabel}
+        {busy ? t('feedback.working') : t(confirmLabel)}
       </Button>
     </div>
   </ModalShell>
-);
+  );
+};
 
 export default ConfirmDialog;

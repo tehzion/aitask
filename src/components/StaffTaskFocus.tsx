@@ -1,3 +1,6 @@
+import { getLocalizedTaskStatus } from '../lib/localeLabels';
+import { acknowledgeActionFeedback, dismissActionFeedback, queueActionFeedback } from '../lib/actionFeedback';
+import { msg } from '../lib/messages';
 import SystemMessage from './SystemMessage';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
@@ -20,7 +23,6 @@ import { getVisibleTasks, getTaskAccess } from '../lib/access';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from './ConfirmDialog';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
-import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import DraftRecoveryNotice from './DraftRecoveryNotice';
 import { hasTaskEvidence, isTaskLinkedToDeliverable, taskWorkContactId, type TaskWorkIntent } from '../lib/staffWorkflow';
@@ -70,12 +72,13 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const [isSaving, setIsSaving] = React.useState(false);
   const [error, setError] = React.useState('');
   const [pendingStatus, setPendingStatus] = React.useState<TaskStatus | null>(null);
-  const [pendingSave, setPendingSave] = React.useState<{ taskId: string; commentId?: string; text?: string; status?: TaskStatus; workIntent?: TaskWorkIntent; failed?: boolean } | null>(null);
+  const [pendingSave, setPendingSave] = React.useState<{ taskId: string; commentId?: string; text?: string; status?: TaskStatus; workIntent?: TaskWorkIntent; reviewUpdate?: boolean; failed?: boolean; rejected?: boolean } | null>(null);
   const [helpReason, setHelpReason] = React.useState('');
   const [helpOpen, setHelpOpen] = React.useState(false);
+  const [helpMode, setHelpMode] = React.useState<'help' | 'review'>('help');
   const commentRef = React.useRef(comment); commentRef.current = comment;
   const helpRef = React.useRef(helpReason); helpRef.current = helpReason;
-  const recovery = useRecoverableForm(`staff-task:${task?.id || ''}`, { text: comment, helpReason, pendingCommentId: pendingSave?.commentId, pendingText: pendingSave?.text }, Boolean(comment.trim() || helpReason.trim()), isOpen && Boolean(task && currentUser));
+  const recovery = useRecoverableForm(`staff-task:${task?.id || ''}`, { text: comment, helpReason, helpMode, pendingCommentId: pendingSave?.commentId, pendingText: pendingSave?.text }, Boolean(comment.trim() || helpReason.trim()), isOpen && Boolean(task && currentUser));
   const [exitAction, setExitAction] = React.useState<(() => void) | null>(null);
   const [isDiscarding, setIsDiscarding] = React.useState(false);
   const discardTitleId = React.useId();
@@ -97,16 +100,18 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
     setPendingSave(null);
     setExitAction(null);
     setIsDiscarding(false);
+    setHelpReason(''); setHelpOpen(false); setHelpMode('help');
     operationGeneration.current++;
-  }, [task?.id]);
-  React.useEffect(() => () => { operationGeneration.current++; }, []);
+  }, [task?.id, currentUser?.id]);
+  React.useEffect(() => () => { operationGeneration.current++; dismissActionFeedback(currentUser?.id, `task:${task?.id}`); }, [currentUser?.id, task?.id]);
 
   const finishSave = React.useCallback((submitted: NonNullable<typeof pendingSave>) => {
     if (currentTaskId.current !== submitted.taskId) return;
-    if (submitted.text !== undefined) setComment(current => current === submitted.text ? '' : current);
+    if (submitted.reviewUpdate && helpRef.current === submitted.text) { setHelpReason(''); setHelpOpen(false); recovery.clear(); }
+    if (submitted.text !== undefined && !submitted.reviewUpdate) setComment(current => current === submitted.text ? '' : current);
     if (submitted.workIntent?.kind === 'block' && helpRef.current === submitted.workIntent.reason) { setHelpReason(''); setHelpOpen(false); }
-    if ((submitted.text === undefined || commentRef.current === submitted.text) && (!helpRef.current.trim() || helpRef.current === submitted.workIntent?.reason)) recovery.clear();
-    if (submitted.status) announceTaskStatusSaved(submitted.status);
+    if ((submitted.reviewUpdate || submitted.text === undefined || commentRef.current === submitted.text) && (!helpRef.current.trim() || helpRef.current === submitted.workIntent?.reason)) recovery.clear();
+    acknowledgeActionFeedback(useStore.getState());
     setPendingSave(null);
     setError('');
     observedResolution.current = false;
@@ -123,8 +128,8 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
       ? savedTask?.comments?.some(item => item.id === pendingSave.commentId)
       : savedTask?.status === pendingSave.status;
     if (acknowledged) finishSave(pendingSave);
-    else { setPendingSave(null); setError(''); observedResolution.current = false; }
-  }, [backend, currentUser?.id, finishSave, isSaving, pendingSave, tasks]);
+    else { setPendingSave(null); setError(t('The pending update was not saved. Review your draft before sending it again.')); observedResolution.current = false; }
+  }, [backend, currentUser?.id, finishSave, isSaving, pendingSave, tasks, t]);
 
   if (!liveTask) return null;
 
@@ -163,9 +168,9 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
         : submitted.commentId ? saved.comments?.some(item => item.id === submitted.commentId) : saved.status === submitted.status);
       if (result.ok && applied) finishSave(submitted);
       else {
-        setPendingSave({ ...submitted, failed: true });
+        setPendingSave({ ...submitted, failed: true, rejected: ['FORBIDDEN', 'VALIDATION', 'NOT_FOUND'].includes(result.code || useStore.getState().backend.errorCode || '') });
         observedResolution.current = isPendingMutationResolution(useStore.getState().backend);
-        setError(result.error || t('This update is waiting to sync. Use the workspace retry controls to continue.'));
+        setError(result.error || 'This update is waiting to sync. Use the workspace retry controls to continue.');
       }
     } catch (failure) {
       if (isCurrent()) {
@@ -234,6 +239,18 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
     await performSave({ taskId: liveTask.id, workIntent: intent });
   };
 
+  const submitHelp = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (helpMode === 'help') { await saveWork({ kind: 'block', reason: helpReason }); return; }
+    if (!helpReason.trim() || isSaving || pendingSave || mutationLocked || !canComment || !currentUser) return;
+    const text = helpReason;
+    const result = addComment(liveTask.id, text);
+    if (!result.ok || !result.id) { setError(result.error || 'Unable to add the comment.'); return; }
+    const commentId = result.id;
+    queueActionFeedback(currentUser.id, `task:${liveTask.id}:comment:${commentId}`, msg('feedback.reviewUpdateRequested'), saved => saved.tasks.some(item => item.id === liveTask.id && item.comments?.some(comment => comment.id === commentId)));
+    await performSave({ taskId: liveTask.id, commentId, text, reviewUpdate: true });
+  };
+
   const footer = canEdit ? (
     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
       {canEdit && onOpenFullEditor && <Button variant="secondary" disabled={isSaving || Boolean(pendingSave)} onClick={() => requestExit(onOpenFullEditor)}>{t('Full edit')}</Button>}
@@ -247,7 +264,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           onChange={event => void persistStatus(event.target.value)}
           className={`${inputBase} min-h-11 appearance-none px-3 pr-9`}
         >
-          {statusOptions.map(status => <option key={status} value={status}>{t(status)}</option>)}
+          {statusOptions.map(status => <option key={status} value={status}>{getLocalizedTaskStatus(status, locale)}</option>)}
         </select>
         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
       </label>
@@ -279,13 +296,17 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
       footer={footer}
     >
       <div className="space-y-6 pb-2">
+        {!canEdit && <p role="status" className="text-sm text-muted">{t('You can view this task, but your account cannot edit it.')}</p>}
+        {recovery.storageFailed && <p role="alert" className="text-sm text-amber-800">{t('feedback.draftStorageFailed')}</p>}
+        {(backend.isSaving || backend.isPulling) && !isSaving && <p role="status" className="text-sm text-muted">{t('feedback.savingLocked')}</p>}
+        {backend.upgradeRequired && <p role="status" className="text-sm text-muted">{t('errors.workspaceUpgrade')}</p>}
         {recovery.available && !comment.trim() && !helpReason.trim() && <DraftRecoveryNotice onRestore={() => {
           const recovered = recovery.restore();
           if (!recovered) return;
           const alreadyPresent = recovered.text === recovered.pendingText && recovered.pendingCommentId && liveTask.comments?.some(item => item.id === recovered.pendingCommentId);
           if (alreadyPresent) setError(t('This recovered update already appears in the task. Check save confirmation before sending it again.'));
           else if (typeof recovered.text === 'string') setComment(recovered.text);
-          if (typeof recovered.helpReason === 'string') { setHelpReason(recovered.helpReason); setHelpOpen(Boolean(recovered.helpReason)); }
+          if (typeof recovered.helpReason === 'string') { setHelpReason(recovered.helpReason); setHelpOpen(Boolean(recovered.helpReason)); setHelpMode(recovered.helpMode === 'review' ? 'review' : 'help'); }
           recovery.clear();
         }} onDiscard={recovery.clear} />}
         {pendingStatus && (
@@ -307,7 +328,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           <div role="alert" aria-live="assertive" className="rounded-control bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200">
             <p><SystemMessage message={error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
             {pendingResolution && <BackendFreshness compact className="mt-3" onRetry={async () => { const submitted = pendingSaveRef.current; if (submitted && !isSaving) await performSave(submitted, true); else await useStore.getState().retryPendingSave(); }} onDiscard={pendingSave ? () => requestExit(() => undefined) : undefined} />}
-            {pendingSave?.failed && !pendingResolution && <Button variant="secondary" className="mt-3" disabled={isSaving} onClick={() => void performSave(pendingSave, true)}>{t('Retry save')}</Button>}
+            {pendingSave?.failed && !pendingSave.rejected && !pendingResolution && <Button variant="secondary" className="mt-3" disabled={isSaving} onClick={() => void performSave(pendingSave, true)}>{t('Retry save')}</Button>}
           </div>
         )}
 
@@ -316,7 +337,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
             <div>
               <p id="staff-task-state" className="calm-eyebrow">{t('Status')}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <StatusChip tone={liveTask.status === 'Waiting Approval' ? 'amber' : liveTask.isCompleted ? 'emerald' : 'blue'}>{t(liveTask.status)}</StatusChip>
+                <StatusChip tone={liveTask.status === 'Waiting Approval' ? 'amber' : liveTask.isCompleted ? 'emerald' : 'blue'}>{getLocalizedTaskStatus(liveTask.status, locale)}</StatusChip>
                 <span className="text-xs font-semibold text-muted">{t(liveTask.priority)} {t('priority')}</span>
               </div>
             </div>
@@ -369,13 +390,13 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           {liveTask.workState?.blocker && <div className="mt-3 border-t border-line pt-3" role="status"><p className="font-semibold text-ink">{t('Help requested')}</p><p data-i18n-skip className="mt-1 whitespace-pre-wrap text-ink">{liveTask.workState.blocker.reason}</p><p className="mt-1 text-muted">{formatLocalizedDistanceToNow(new Date(liveTask.workState.blocker.openedAt), locale)}</p></div>}
           {canEdit && isTaskOpen(liveTask) && <div className="mt-3 flex flex-wrap gap-2">
             {liveTask.assignedTo === currentUser?.id && liveTask.workState?.acceptedBy !== currentUser.id && <Button variant="secondary" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => void saveWork({ kind: 'accept' })}>{t('Accept assignment')}</Button>}
-            <Button variant="secondary" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => setHelpOpen(true)}>{t(liveTask.status === 'Waiting Approval' ? 'Request review update' : 'Request help or handover')}</Button>
+            <Button variant="secondary" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => { setHelpMode(liveTask.status === 'Waiting Approval' ? 'review' : 'help'); setHelpOpen(true); }}>{t(liveTask.status === 'Waiting Approval' ? 'Request review update' : 'Request help or handover')}</Button>
             {liveTask.workState?.blocker && <Button variant="secondary" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => void saveWork({ kind: 'unblock' })}>{t('Clear blocker')}</Button>}
           </div>}
-          {helpOpen && canEdit && <form className="mt-3" onSubmit={event => { event.preventDefault(); void saveWork({ kind: 'block', reason: helpReason }); }}>
-            <label className="block font-medium text-ink">{t('What do you need to continue?')}<textarea value={helpReason} onChange={event => setHelpReason(event.target.value)} maxLength={2000} rows={3} className={`${inputBase} mt-2 px-3 py-2`} /></label>
-            <p className="mt-2 text-xs text-muted">{t('Describe missing assets, unclear instructions, workload, or handover needs. The task team will be notified.')}</p>
-            <Button className="mt-3" type="submit" disabled={!helpReason.trim() || isSaving || Boolean(pendingSave) || mutationLocked}>{t('Send help request')}</Button>
+          {helpOpen && canEdit && <form className="mt-3" onSubmit={event => void submitHelp(event)}>
+            <label className="block font-medium text-ink">{t(helpMode === 'review' ? 'feedback.reviewPrompt' : 'What do you need to continue?')}<textarea value={helpReason} onChange={event => setHelpReason(event.target.value)} maxLength={2000} rows={3} className={`${inputBase} mt-2 px-3 py-2`} /></label>
+            <p className="mt-2 text-xs text-muted">{t(helpMode === 'review' ? 'feedback.reviewHelp' : 'feedback.helpPrompt')}</p>
+            <Button className="mt-3" type="submit" disabled={!helpReason.trim() || isSaving || Boolean(pendingSave) || mutationLocked}>{t(helpMode === 'review' ? 'Request review update' : 'Send help request')}</Button>
           </form>}
         </section>
         {linkedOutput && <p className="rounded-control bg-inset px-4 py-3 text-sm text-muted">{t(evidenceAvailable ? 'Output evidence is attached. Client approval is tracked separately from task completion.' : 'This linked task needs an output link or deliverable file before review or completion. Add it through Full edit or the delivery workspace.')}</p>}

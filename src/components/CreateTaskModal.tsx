@@ -1,3 +1,4 @@
+import { acknowledgeActionFeedback } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
@@ -292,7 +293,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     if (!result) return;
     if (!result.ok) {
       if (result.code === 'FORBIDDEN' || result.code === 'VALIDATION') {
-        const discarded = await runTask(async () => { await discardMutation({ reload: true, confirm: false }); return { ok: true, error: undefined }; });
+        const discarded = await runTask(async () => {
+          await discardMutation({ reload: true, confirm: false });
+          const latest = useStore.getState().backend;
+          return latest.mode === 'supabase' && latest.status !== 'live' ? { ok: false, error: latest.error || 'Unable to reload saved data. Try again.' } : { ok: true, error: undefined };
+        });
         if (!discarded) return;
         if (!discarded.ok) { setFormError(discarded.error); return; }
         pendingTaskRecord.current = null;
@@ -309,6 +314,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       setFormError(t('The pending task creation is no longer available. Review your draft before saving again.'));
       return;
     }
+      acknowledgeActionFeedback(useStore.getState());
     closeAndReset();
     navigate(`/tasks?taskId=${taskId}`);
   };
@@ -331,7 +337,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     const hasDeliverableContext = Boolean(createTaskInitialDeliverableId);
     if (isStaffTaskCreator && !projectId && !hasDeliverableContext) {
-      setFormError('Choose a company created by a Project Manager before creating this task.');
+      setFormError('Choose an available company or brand before creating this task.');
       return;
     }
 
@@ -421,7 +427,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
         onClose={requestClose}
         panelClassName="max-w-2xl"
       >
-      {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
+      {recovery.storageFailed && <p role="alert" className="px-5 py-3 text-sm text-amber-800">{t('feedback.draftStorageFailed')}</p>}
+        {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
         
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
@@ -471,7 +478,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     onChange={e => selectProject(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                   >
-                    <option value="">{t(isStaffTaskCreator ? 'Choose a Project Manager-created company' : 'No Company Link / Independent Task')}</option>
+                    <option value="">{t(isStaffTaskCreator ? 'Choose an available company or brand' : 'No Company Link / Independent Task')}</option>
                     {assignableProjects.map(p => (
                       <option key={p.id} data-i18n-skip value={p.id}>{p.projectName} ({p.clientName})</option>
                     ))}

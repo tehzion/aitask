@@ -10,7 +10,7 @@ import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseCl
 import { getRetainedSecureCommand } from '../lib/secureWorkspace';
 import { getMobileNavigation, getNavigationSections, type NavigationItem } from '../lib/navigation';
 import { useI18n } from './I18nProvider';
-import ConfirmDialog from './ConfirmDialog';
+const ConfirmDialog = React.lazy(() => import('./ConfirmDialog'));
 
 interface SidebarProps {
   isOpen: boolean;
@@ -326,6 +326,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
         document.body,
       )}
       {showLogoutConfirmation && (
+        <React.Suspense fallback={<p className="sr-only" role="status">{t('Loading…')}</p>}>
         <ConfirmDialog
           labelledBy={logoutConfirmationTitleId}
           title={t('Sign out with an unsaved change?')}
@@ -340,6 +341,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
             setShowLogoutConfirmation(false);
           }}
         />
+        </React.Suspense>
       )}
     </>
   );

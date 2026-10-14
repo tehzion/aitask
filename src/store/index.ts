@@ -1,3 +1,4 @@
+import { acknowledgeActionFeedback, clearActionFeedback, queueActionFeedback, taskStatusMessage } from '../lib/actionFeedback';
 import { recordDiagnostic } from '../lib/diagnostics';
 import { getTaskProgress } from '../lib/taskProgress';
 import { canRequestTaskRevision, getDepartmentReviewers, TASK_HOD_REQUIRED, taskTransitionError } from '../lib/taskWorkflowAccess';
@@ -325,7 +326,7 @@ interface StoreState {
   reapplyMutationOnLatestWorkspace: () => Promise<{ ok: boolean; error?: string }>;
   retryPendingSave: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode }>;
   discardMutation: (options?: { reload?: boolean; confirm?: boolean }) => Promise<void>;
-  commitPendingMutation: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string }>;
+  commitPendingMutation: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode }>;
   login: (name: string, password?: string) => Promise<LoginResult>;
   requestPasswordRecovery: (email: string) => Promise<{ ok: boolean; error?: string }>;
   completePasswordSetup: (data: { newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
@@ -1167,19 +1168,27 @@ const sanitizePersistedUsers = (users: User[]): User[] => (
   })
 );
 
+let browserPersistFailed = false;
 const safeStorageAdapter: StateStorage = {
   getItem: (name) => {
     try { return window.localStorage.getItem(name); } catch { return null; }
   },
   setItem: (name, value) => {
-    try { window.localStorage.setItem(name, value); }
+    try { window.localStorage.setItem(name, value); browserPersistFailed = false; }
     catch {
+      browserPersistFailed = true;
       useToastStore.getState().addToast(msg('errors.storageFull'), 'error');
     }
   },
   removeItem: (name) => {
     try { window.localStorage.removeItem(name); } catch { /* storage unavailable */ }
   },
+};
+
+const retryLocalPersistence = async () => {
+  if (typeof window === 'undefined' || !browserPersistFailed) return;
+  const options = useStore.persist.getOptions();
+  await options.storage?.setItem(options.name, { state: options.partialize ? options.partialize(useStore.getState()) : useStore.getState(), version: options.version });
 };
 
 const mergePersistedWorkspace = (persistedState: unknown, currentState: StoreState): StoreState => {
@@ -1533,6 +1542,7 @@ export const useStore = create<StoreState>()(
                 message: hasChangesAfterSave ? 'Saving newer changes.' : 'Saved.',
               },
             }));
+            acknowledgeActionFeedback(get(), { tasks: savedWorkspace.tasks, clients: savedWorkspace.clients || [] });
             if (hasChangesAfterSave) queueMicrotask(() => { if (isWorkspaceSessionCurrent(sessionToken)) void get().syncBackendNow(pendingCommandType); });
             else {
 
@@ -1569,7 +1579,7 @@ export const useStore = create<StoreState>()(
               }));
               isApplyingRemoteSnapshot = false;
 
-              useToastStore.getState().addToast(msg('errors.syncMerged'), 'success');
+
 
               setTimeout(() => {
                 get().syncBackendNow();
@@ -1609,6 +1619,8 @@ export const useStore = create<StoreState>()(
               message: result.message,
             }
           }));
+
+          acknowledgeActionFeedback(get(), stateToSave);
 
         } catch (error) {
           apply((state) => ({
@@ -1796,7 +1808,7 @@ export const useStore = create<StoreState>()(
             }));
             isApplyingRemoteSnapshot = false;
 
-            useToastStore.getState().addToast(msg('errors.syncMerged'), 'success');
+
 
             setTimeout(() => {
               get().syncBackendNow();
@@ -1904,9 +1916,7 @@ export const useStore = create<StoreState>()(
         }));
         const result = await get().retryMutation({ reapplyWorkspaceConflict: false });
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
-        if (result.ok) {
-          useToastStore.getState().addToast(msg('task.reapplied'), 'success');
-        }
+
         return result;
       },
 
@@ -1967,11 +1977,12 @@ export const useStore = create<StoreState>()(
                 pendingMutations: terminal ? 0 : Math.max(1, state.backend.pendingMutations),
                 pendingCommandType: terminal ? undefined : state.backend.pendingCommandType,
                 conflict: result.conflict,
+                errorCode: result.code,
                 error: result.error,
                 message: result.error,
               },
             }));
-            return { ok: false, error: result.error };
+            return { ok: false, code: result.code, error: result.error };
           }
 
           const updatedAt = result.data.member?.updated_at || new Date().toISOString();
@@ -2083,6 +2094,7 @@ export const useStore = create<StoreState>()(
               upgradeRequired,
               isSaving: false,
               conflict: result.conflict,
+              errorCode: result.code,
               error: result.error,
               message: result.error,
             },
@@ -2091,7 +2103,7 @@ export const useStore = create<StoreState>()(
             const reapplied = await get().reapplyMutationOnLatestWorkspace();
             if (reapplied.ok) return reapplied;
           }
-          return { ok: false, error: result.error };
+          return { ok: false, code: result.code, error: result.error };
         }
 
         const savedAt = new Date().toISOString();
@@ -2116,6 +2128,7 @@ export const useStore = create<StoreState>()(
           },
         }));
 
+        acknowledgeActionFeedback(get(), { tasks: workspaceBeforeRetry.tasks, clients: workspaceBeforeRetry.clients || [] });
         if (hasNewerChanges) queueMicrotask(() => { if (isWorkspaceSessionCurrent(sessionToken)) void get().syncBackendNow(); });
         else await get().pullBackendNow({ force: true, silent: true });
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
@@ -2123,6 +2136,7 @@ export const useStore = create<StoreState>()(
       },
 
       discardMutation: async (options = {}) => {
+        clearActionFeedback();
         const sessionToken = captureWorkspaceSession();
         const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
 
@@ -2158,7 +2172,12 @@ export const useStore = create<StoreState>()(
 
       retryPendingSave: async (commandType) => {
         const sessionToken = captureWorkspaceSession();
-        if (!shouldUseSupabase()) return { ok: true };
+        if (!shouldUseSupabase()) {
+          await retryLocalPersistence();
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
+          if (typeof window !== 'undefined' && browserPersistFailed) return { ok: false, error: 'This change could not be saved on this device. Keep this page open and try again.' };
+          acknowledgeActionFeedback(get()); return { ok: true };
+        }
         if (isSyncBusy(get())) {
           const idle = await waitForSyncIdle();
           if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
@@ -2185,7 +2204,12 @@ export const useStore = create<StoreState>()(
 
       commitPendingMutation: async (commandType) => {
         const sessionToken = captureWorkspaceSession();
-        if (!shouldUseSupabase()) return { ok: true };
+        if (!shouldUseSupabase()) {
+          await retryLocalPersistence();
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
+          if (typeof window !== 'undefined' && browserPersistFailed) return { ok: false, error: 'This change could not be saved on this device. Keep this page open and try again.' };
+          acknowledgeActionFeedback(get()); return { ok: true };
+        }
         const before = get().backend;
         if (before.status === 'upgrade_required') {
           return { ok: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE };
@@ -2205,9 +2229,10 @@ export const useStore = create<StoreState>()(
         await get().syncBackendNow(commandType);
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         const backend = get().backend;
-        if (!backend.hasLocalChanges && backend.status === 'live') return { ok: true };
+        if (!backend.hasLocalChanges && backend.status === 'live') { acknowledgeActionFeedback(get()); return { ok: true }; }
         return {
           ok: false,
+          code: backend.errorCode,
           error: backend.error || 'The change has not been saved yet.',
         };
       },
@@ -2708,8 +2733,10 @@ export const useStore = create<StoreState>()(
         updated.completionPercentage = getTaskProgress(updated, state.users);
         const notices = taskUpdateNotifications(resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects), {
           title: 'Task Status Updated', message: `"${task.title}": ${intent.kind === 'accept' ? 'assignment accepted' : intent.kind === 'block' ? 'help requested' : 'blocker cleared'} by ${actor.name}.`,
-          route: { page: 'tasks', entityId: taskId }, iconType: 'alert',
+          route: { page: 'tasks', entityId: taskId }, iconType: intent.kind === 'block' ? 'alert' : 'success',
+          category: intent.kind === 'block' ? 'feedback' : 'status', importance: intent.kind === 'block' ? 'action' : 'informational',
         }, actor.id);
+        queueActionFeedback(actor.id, `task:${taskId}:work`, msg(intent.kind === 'accept' ? 'feedback.assignmentAccepted' : intent.kind === 'block' ? 'feedback.helpRequested' : 'feedback.blockerCleared'), saved => saved.tasks.some(item => item.id === taskId && (intent.kind === 'accept' ? item.workState?.acceptedBy === actor.id : intent.kind === 'block' ? item.workState?.blocker?.reason === intent.reason?.trim() : !item.workState?.blocker)));
         set({ tasks: state.tasks.map(item => item.id === taskId ? updated : item), notifications: [...notices, ...state.notifications] });
         return { ok: true };
       },
@@ -2801,6 +2828,8 @@ export const useStore = create<StoreState>()(
           });
         }
 
+        queueActionFeedback(currentUser!.id, `task:${taskId}:status`, taskStatusMessage(nextStatus), saved => saved.tasks.some(item => item.id === taskId && item.status === nextStatus));
+
         result = { ok: true };
         return {
           tasks: newTasks,
@@ -2836,7 +2865,7 @@ export const useStore = create<StoreState>()(
           return recordTaskWorkTransition(t, { ...t, priority, updatedAt: new Date().toISOString() }, currentUser!.id);
         });
 
-        useToastStore.getState().addToast(msg('task.priorityUpdated', { priority }), 'success');
+        queueActionFeedback(state.currentUser!.id, `task:${taskId}:priority`, msg('task.priorityUpdated', { priority }), saved => saved.tasks.some(item => item.id === taskId && item.priority === priority));
 
         result = { ok: true };
         return { tasks: newTasks };
@@ -2896,7 +2925,7 @@ export const useStore = create<StoreState>()(
           });
         }
 
-        useToastStore.getState().addToast(assigneeUser ? msg('task.assignedTo', { name: assigneeUser.name }) : msg('task.unassigned'), 'success');
+        queueActionFeedback(currentUser!.id, `task:${taskId}:assignee`, assigneeUser ? msg('task.assignedTo', { name: assigneeUser.name }) : msg('task.unassigned'), saved => saved.tasks.some(item => item.id === taskId && item.assignedTo === assignedTo));
 
         result = { ok: true };
         return {
@@ -2931,7 +2960,7 @@ export const useStore = create<StoreState>()(
 
         const transitionError = taskTransitionError(state.currentUser, task, { ...task, attachmentLink: validatedLink || undefined, attachmentName: attachmentName?.trim().slice(0, 200) || undefined }, state.rolePermissions);
         if (transitionError) { result = { ok: false, error: transitionError }; return state; }
-        useToastStore.getState().addToast(msg('task.attachmentUpdated'), 'success');
+        queueActionFeedback(state.currentUser!.id, `task:${taskId}:attachment`, msg('task.attachmentUpdated'), saved => saved.tasks.some(item => item.id === taskId && (item.attachmentLink || '') === (validatedLink || '') && (item.attachmentName || '') === (attachmentName?.trim().slice(0, 200) || '')));
 
         result = { ok: true };
         return {
@@ -2977,7 +3006,7 @@ export const useStore = create<StoreState>()(
           return state;
         }
 
-        useToastStore.getState().addToast(nextDueDate ? `Due date updated to ${nextDueDate}` : 'Due date cleared', 'success');
+        queueActionFeedback(state.currentUser!.id, `task:${taskId}:dates`, msg('feedback.datesSaved'), saved => saved.tasks.some(item => item.id === taskId && (item.dueDate || '') === (nextDueDate || '')));
 
         result = { ok: true };
         return {
@@ -3194,7 +3223,7 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        useToastStore.getState().addToast(msg('task.updated', { title: updatedTask.title }), 'success');
+        queueActionFeedback(currentUser!.id, `task:${taskId}:details`, msg('task.updated', { title: updatedTask.title }), saved => saved.tasks.some(item => item.id === taskId && Object.keys(data).every(key => JSON.stringify(item[key as keyof Task] ?? '') === JSON.stringify(updatedTask[key as keyof Task] ?? ''))));
         return { ok: true };
       },
 
@@ -3356,7 +3385,7 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        useToastStore.getState().addToast(msg('task.revisionRequested'), 'warning');
+        queueActionFeedback(currentUser.id, `task:${taskId}:revision`, msg('task.revisionRequested'), saved => saved.tasks.some(item => item.id === taskId && item.revisionCount === task.revisionCount + 1 && item.status === 'In Progress'));
 
         const revisionNotification = makeNotification({
           targetUserId: task.assignedTo,
@@ -3510,7 +3539,7 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        useToastStore.getState().addToast(msg('task.created', { title: taskData.title }), 'success');
+        queueActionFeedback(currentUser!.id, `task:${taskId}:create`, msg('task.created', { title: taskData.title }), saved => saved.tasks.some(item => item.id === taskId && item.title === title && item.assignedTo === taskData.assignedTo));
         return taskId;
       },
 
@@ -3721,7 +3750,7 @@ export const useStore = create<StoreState>()(
           updatedAt: now,
         };
         set(current => ({ clients: [...current.clients, client] }));
-        useToastStore.getState().addToast(msg('client.companyAdded', { name }), 'success');
+        queueActionFeedback(currentUser.id, `company:${client.id}:create`, msg('client.companyAdded', { name }), saved => saved.clients.some(item => item.id === client.id && item.clientName === name));
         return { ok: true, id: client.id };
       },
 
@@ -4618,6 +4647,7 @@ export const useStore = create<StoreState>()(
           tasks: newTasks,
           notifications: [...newNotifs, ...(state.notifications || [])]
         });
+        if (currentUser.role !== 'Client') queueActionFeedback(currentUser.id, `task:${taskId}:comment:${newComment.id}`, msg('feedback.workUpdateAdded'), saved => saved.tasks.some(item => item.id === taskId && item.comments?.some(comment => comment.id === newComment.id)));
         return { ok: true, id: newComment.id };
       },
 
@@ -5172,7 +5202,7 @@ export const useStore = create<StoreState>()(
                 message: terminal ? current.backend.message : result.error,
               },
             }));
-            return { ok: false, error: result.error };
+            return { ok: false, code: result.code, error: result.error };
           }
 
           const updatedAt = result.data.member?.updated_at || new Date().toISOString();
@@ -5298,7 +5328,7 @@ export const useStore = create<StoreState>()(
                 message: terminal ? current.backend.message : result.error,
               },
             }));
-            return { ok: false, error: result.error };
+            return { ok: false, code: result.code, error: result.error };
           }
 
           const updatedAt = result.data.member?.updated_at || new Date().toISOString();
@@ -5405,7 +5435,7 @@ export const useStore = create<StoreState>()(
                 message: result.error,
               },
             }));
-            return { ok: false, error: result.error };
+            return { ok: false, code: result.code, error: result.error };
           }
 
           const updatedAt = result.data.member?.updated_at || new Date().toISOString();

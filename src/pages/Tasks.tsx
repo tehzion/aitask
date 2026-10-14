@@ -1,3 +1,4 @@
+import '../lib/actionFeedbackCopy';
 import SystemMessage from '../components/SystemMessage';
 import { getTaskProgress } from '../lib/taskProgress';
 import { getTaskStatusOptions } from '../lib/taskWorkflowAccess';
@@ -104,7 +105,7 @@ const TasksWorkspace: React.FC = () => {
         return { ...previousTask };
       }),
     }));
-    setQuickSyncError(result.error || 'The quick change was rolled back. Use Retry required to confirm it safely.');
+    setQuickSyncError(result.error || 'The quick change was rolled back. Use Retry my changes to confirm it safely.');
     return false;
   };
 

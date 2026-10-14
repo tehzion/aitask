@@ -1,3 +1,6 @@
+import '../lib/actionFeedbackCopy';
+import { msg } from '../lib/messages';
+import type { UiFeedback } from '../lib/actionFeedback';
 import SystemMessage from '../components/SystemMessage';
 import { useSaveAction } from '../hooks/useSaveAction';
 import DiagnosticsPanel from '../components/DiagnosticsPanel';
@@ -142,8 +145,8 @@ const Settings: React.FC = () => {
   const [profileEmail, setProfileEmail] = React.useState(currentUser?.email || '');
   const [profileCurrentPassword, setProfileCurrentPassword] = React.useState('');
   const [avatarUrl, setAvatarUrl] = React.useState(currentUser?.avatar || '');
-  const [profileMessage, setProfileMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
-  const [avatarUploadMessage, setAvatarUploadMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [profileMessage, setProfileMessage] = React.useState<{ tone: UiFeedback['tone']; text: UiFeedback['message'] } | null>(null);
+  const [avatarUploadMessage, setAvatarUploadMessage] = React.useState<{ tone: UiFeedback['tone']; text: UiFeedback['message'] } | null>(null);
   const { busy: isPreparingAvatar, run: runAvatar } = useSaveAction();
   const [avatarPreviewFailed, setAvatarPreviewFailed] = React.useState(false);
   const [profileRetryDraft, setProfileRetryDraft] = React.useState<Pick<User, 'name' | 'email' | 'avatar'> | null>(null);
@@ -360,16 +363,16 @@ const Settings: React.FC = () => {
     if (!saved) return;
     if (!saved.ok) {
       if (staged) setProfileRetryDraft(submitted);
-      setProfileMessage({ tone: 'error', text: saved.error || t('Profile is waiting to be saved. Use Retry required to try again.') });
+      setProfileMessage({ tone: 'error', text: saved.error || 'Profile not saved. Use Retry save to try again.' });
       return;
     }
     const latest = useStore.getState().currentUser;
     setProfileRetryDraft(null);
     if (!latest || latest.name !== submitted.name.trim() || (latest.email || '').toLowerCase() !== (submitted.email || '').trim().toLowerCase() || (latest.avatar || '') !== (submitted.avatar || '').trim()) {
-      setProfileMessage({ tone: 'error', text: t('The pending profile change is no longer available. Review your draft before saving again.') });
+      setProfileMessage({ tone: 'error', text: 'The pending profile change is no longer available. Review your draft before saving again.' });
       return;
     }
-    setProfileMessage({ tone: 'success', text: t('Profile updated.') });
+    setProfileMessage({ tone: 'success', text: msg('feedback.profileSaved') });
     setAvatarUploadMessage(null);
   };
 
@@ -381,7 +384,11 @@ const Settings: React.FC = () => {
   const retryProfileSave = () => { if (profileRetryDraft && !isProfileSaving) void saveProfileChanges(); };
 
   const discardPendingProfileChange = async () => {
-    const result = await runProfile(async () => { await discardMutation(); return { ok: true, error: undefined }; });
+    const result = await runProfile(async () => {
+      await discardMutation();
+      const latest = useStore.getState().backend;
+      return latest.mode === 'supabase' && latest.status !== 'live' ? { ok: false, error: latest.error || 'Unable to reload saved data. Try again.' } : { ok: true, error: undefined };
+    });
     if (!result) return;
     if (!result.ok) { setProfileMessage({ tone: 'error', text: result.error }); return; }
     resetProfileForm();
@@ -403,14 +410,14 @@ const Settings: React.FC = () => {
     setAvatarUrl(`https://i.pravatar.cc/150?u=${seed}`);
     setAvatarPreviewFailed(false);
     setProfileMessage(null);
-    setAvatarUploadMessage({ tone: 'success', text: t('Photo change ready. Save profile to apply it.') });
+    setAvatarUploadMessage({ tone: 'status', text: 'Photo change ready. Save profile to apply it.' });
   };
 
   const clearAvatar = () => {
     setAvatarUrl('');
     setAvatarPreviewFailed(false);
     setProfileMessage(null);
-    setAvatarUploadMessage({ tone: 'success', text: t('Photo removal ready. Save profile to apply it.') });
+    setAvatarUploadMessage({ tone: 'status', text: 'Photo removal ready. Save profile to apply it.' });
   };
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -441,12 +448,12 @@ const Settings: React.FC = () => {
     const prepared = await runAvatar(async () => ({ ok: true, error: undefined, avatar: await resizeAvatarImage(file) }));
     if (!prepared) return;
     if (!prepared.ok || !('avatar' in prepared)) {
-      setAvatarUploadMessage({ tone: 'error', text: t(prepared.error || 'Could not prepare that photo.') });
+      setAvatarUploadMessage({ tone: 'error', text: prepared.error || 'Could not prepare that photo.' });
       return;
     }
     setAvatarUrl(prepared.avatar);
     setAvatarPreviewFailed(false);
-    setAvatarUploadMessage({ tone: 'success', text: t('Photo ready. Save profile to apply it.') });
+    setAvatarUploadMessage({ tone: 'status', text: msg('feedback.notSavedPhoto') });
   };
 
   const updatePasswordField = (field: keyof typeof passwordForm, value: string) => {
@@ -586,7 +593,7 @@ const Settings: React.FC = () => {
                       className="h-full w-full object-cover"
                       onError={() => {
                         setAvatarPreviewFailed(true);
-                        setAvatarUploadMessage({ tone: 'error', text: t('That photo could not be previewed. Choose another photo or URL.') });
+                        setAvatarUploadMessage({ tone: 'error', text: 'That photo could not be previewed. Choose another photo or URL.' });
                       }}
                     />
                   ) : (
@@ -632,7 +639,7 @@ const Settings: React.FC = () => {
                 {avatarUploadMessage && (
                   <p className={cn(
                     'text-xs font-medium leading-5',
-                    avatarUploadMessage.tone === 'success' ? 'text-[rgb(var(--calm-success))]' : 'text-[rgb(var(--calm-danger))]'
+                    avatarUploadMessage.tone === 'error' ? 'text-[rgb(var(--calm-danger))]' : avatarUploadMessage.tone === 'success' ? 'text-[rgb(var(--calm-success))]' : 'text-muted'
                   )} id="profile-avatar-feedback" role={avatarUploadMessage.tone === 'error' ? 'alert' : 'status'} aria-live="polite">
                     <SystemMessage message={avatarUploadMessage.text} />
                   </p>
@@ -1106,7 +1113,7 @@ const Settings: React.FC = () => {
                 {t('Export workspace')}
               </Button>
               <Badge tone={backendStatus.ready ? 'emerald' : 'amber'}>
-                {backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
+                {backendStatus.mode === 'supabase' ? 'Supabase' : t('Local')}
               </Badge>
             </div>
           </div>
@@ -1195,7 +1202,7 @@ const Settings: React.FC = () => {
           {isSuperAdmin && (
             <MetricCard
               title={t('Backend')}
-              value={backendStatus.mode === 'supabase' ? 'Supabase' : 'Local'}
+              value={backendStatus.mode === 'supabase' ? 'Supabase' : t('Local')}
               icon={Cloud}
               tone={backendStatus.ready ? 'blue' : 'amber'}
               footer={backendStatus.ready ? t('Configured') : t('Needs env keys')}

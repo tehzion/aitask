@@ -1,3 +1,5 @@
+import SystemMessage from './SystemMessage';
+import { notificationIconType } from '../lib/notificationCenter';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
@@ -8,15 +10,15 @@ import { IconButton } from './ui';
 import { inputBase } from './uiTokens';
 import { cn } from '../lib/utils';
 import { getEffectiveRoleName, getUnreadNotifications, isBossKoo } from '../lib/access';
-import { useSoundNotifications } from '../hooks/useSoundNotifications';
 import { NotificationReadActions } from '../hooks/useNotificationReadActions';
 import { getSoundEnabled, setSoundEnabled, SOUND_PREF_EVENT } from '../lib/sounds';
 import { notificationRouteToPath } from '../lib/security';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import type { ResolvedTheme, ThemePreference } from '../lib/theme';
 import { LanguageSwitcher, useI18n } from './I18nProvider';
-import { formatLocalizedDistanceToNow } from '../lib/i18n';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
+
+const NotificationPreviewText = React.lazy(() => import('./NotificationPreviewText'));
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -66,7 +68,7 @@ const Navbar: React.FC<NavbarProps> = ({
   const mobileSearchRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
 
   useEffect(() => {
     const handleSoundPreference = (event: Event) => {
@@ -78,7 +80,6 @@ const Navbar: React.FC<NavbarProps> = ({
   }, []);
 
   // Play sound on new notifications
-  useSoundNotifications(notifications, currentUser);
 
   const handleToggleSound = () => {
     const next = !soundEnabled;
@@ -317,6 +318,7 @@ const Navbar: React.FC<NavbarProps> = ({
                   </span>
                 ) : null}
               </div>
+              {notificationReadActions.error && <p className="px-4 py-3 text-sm text-red-700" role="alert"><SystemMessage message={notificationReadActions.error} /></p>}
               <div className="max-h-80 overflow-y-auto custom-scrollbar">
                 {previewNotifications.length > 0 ? previewNotifications.map(notif => (
                   <Link
@@ -328,13 +330,13 @@ const Navbar: React.FC<NavbarProps> = ({
                     }}
                     className="flex items-start gap-3 border-b border-line/60 bg-surface px-4 py-3 transition-colors hover:bg-inset/70"
                   >
-                    <div className={`rounded-lg p-2 shrink-0 ${getBgColor(notif.iconType)}`}>
-                      {getIcon(notif.iconType)}
+                    <div className={`rounded-lg p-2 shrink-0 ${getBgColor(notificationIconType(notif))}`}>
+                      {getIcon(notificationIconType(notif))}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-medium text-slate-500">{notif.title}</p>
-                      <p data-i18n-skip className="mt-0.5 text-sm font-semibold leading-5 text-slate-950">{notif.message}</p>
-                      <p className="mt-1 text-xs text-slate-400">{formatLocalizedDistanceToNow(new Date(notif.createdAt), locale)}</p>
+                      <React.Suspense fallback={<span className="text-sm text-muted">{t('Loading notifications...')}</span>}>
+                        <NotificationPreviewText notification={notif} />
+                      </React.Suspense>
                     </div>
                     <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true"></div>
                   </Link>

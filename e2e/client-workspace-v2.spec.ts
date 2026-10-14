@@ -103,8 +103,8 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
   await page.keyboard.press('Escape');
   await expect(approvalFocus).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Restore recovered draft' })).toBeVisible();
-  await page.getByRole('button', { name: 'Restore recovered draft' }).click();
+  await expect(page.getByRole('button', { name: 'Restore draft' })).toBeVisible();
+  await page.getByRole('button', { name: 'Restore draft' }).click();
   await expect(approvalFocus.getByLabel('Decision note')).toHaveValue('Recover my approval note.');
   await approvalFocus.getByLabel('Decision note').fill('Approved for launch.');
   await approvalFocus.getByRole('button', { name: 'Approve delivery' }).click();

@@ -25,7 +25,7 @@ test('staff drafts survive reload and a successful send removes their recovery c
   await note.fill('Recover my unsent update');
   await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter(key => key.includes('staff-task')).length)).toBe(1);
   await page.reload();
-  await page.getByRole('button', { name: 'Restore recovered draft' }).click();
+  await page.getByRole('button', { name: 'Restore draft' }).click();
   await expect(note).toHaveValue('Recover my unsent update');
   await page.getByRole('button', { name: 'Send work update' }).click();
   await expect(note).toHaveValue('');
@@ -41,7 +41,7 @@ test('recovered newer input is preserved after a lost earlier acknowledgement', 
   await page.getByRole('button', { name: 'Send work update' }).click();
   await note.fill('Newer unsent update');
   await page.reload();
-  await page.getByRole('button', { name: 'Restore recovered draft' }).click();
+  await page.getByRole('button', { name: 'Restore draft' }).click();
   await expect(note).toHaveValue('Newer unsent update');
 });
 
@@ -51,7 +51,7 @@ test('recovering an already staged comment cannot offer a duplicate submission',
   await page.getByPlaceholder('Add a work update…').fill('Submitted once');
   await page.getByRole('button', { name: 'Send work update' }).click();
   await page.reload();
-  await page.getByRole('button', { name: 'Restore recovered draft' }).click();
+  await page.getByRole('button', { name: 'Restore draft' }).click();
   await expect(page.getByPlaceholder('Add a work update…')).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Send work update' })).toBeDisabled();
   await expect(page.getByRole('alert')).toContainText('already appears in the task');
@@ -104,7 +104,7 @@ test('discarded help retry retains the draft and cannot announce acknowledgement
   await expect(page.getByRole('alert')).toBeVisible();
 });
 
-for (const status of ['Waiting Approval', 'Completed']) test(`linked tasks need evidence before ${status}`, async ({ page }) => {
+for (const status of ['Waiting Approval']) test(`linked tasks need evidence before ${status}`, async ({ page }) => {
   await seed(page, true);
   const sheet = page.getByRole('dialog', { name: title });
   await sheet.getByRole('combobox', { name: 'All task statuses' }).selectOption(status);
@@ -146,7 +146,7 @@ test('read inbox updates remain discoverable while linked work is open', async (
   await page.getByRole('button', { name: 'Mark read', exact: true }).click();
   await expect(page.getByText('Assigned artwork', { exact: true })).toBeVisible();
   expect((await saved(page)).status).toBe('Pending');
-  await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().updateTaskStatus('workflow-artwork', 'Completed'));
+  await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().updateTaskStatus('workflow-artwork', 'Cancelled'));
   await expect(page.getByText('Assigned artwork', { exact: true })).toHaveCount(0);
 });
 
@@ -169,7 +169,7 @@ test('Full edit recovery merges newer untouched fields and confirms overlapping 
   await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.setState(s => ({ tasks: s.tasks.map(task => ({ ...task, notes: 'New manager instructions' })) })));
   await page.reload();
   await page.getByRole('button', { name: 'Full edit', exact: true }).click();
-  await page.getByRole('button', { name: 'Restore recovered draft' }).click();
+  await page.getByRole('button', { name: 'Restore draft' }).click();
   await expect(page.getByLabel('Task Title', { exact: true })).toHaveValue('Recovered artwork title');
   await expect(page.getByRole('textbox', { name: 'Internal Notes', exact: true })).toHaveValue('New manager instructions');
   await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
@@ -186,10 +186,24 @@ test('Full edit recovery requires a choice for overlapping manager changes', asy
   await page.reload();
   await page.getByRole('button', { name: 'Full edit', exact: true }).click();
   page.once('dialog', dialog => dialog.dismiss());
-  await page.getByRole('button', { name: 'Restore recovered draft' }).click();
+  await page.getByRole('button', { name: 'Restore draft' }).click();
   await expect(page.getByLabel('Task Title', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Restore recovered draft' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Restore draft' })).toBeVisible();
   page.once('dialog', dialog => dialog.accept());
-  await page.getByRole('button', { name: 'Restore recovered draft' }).click();
+  await page.getByRole('button', { name: 'Restore draft' }).click();
   await expect(page.getByLabel('Task Title', { exact: true })).toHaveValue('My recovered title');
+});
+
+
+test('Staff completion remains restricted even when linked output evidence exists', async ({ page }) => {
+  await seed(page, true);
+  const result = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.getState().updateTaskAttachment('workflow-artwork', 'https://example.com/output');
+    return useStore.getState().updateTaskStatus('workflow-artwork', 'Completed');
+  });
+  expect(result.ok).toBe(false);
+  expect(result.error).toContain('Only a project manager can confirm completion');
+  expect((await saved(page)).status).toBe('Pending');
+  await expect(page.getByRole('combobox', { name: 'All task statuses' }).locator('option[value="Completed"]')).toHaveCount(0);
 });

@@ -1,3 +1,4 @@
+import '../lib/actionFeedbackCopy';
 import SystemMessage from '../components/SystemMessage';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
@@ -517,7 +518,7 @@ const Approvals: React.FC = () => {
     setSelectedBulkRegIds(new Set());
     if (!saved.ok) {
       useStore.setState(state => ({ registrations: rollbackUnchangedRows(state.registrations, previousRegistrations, submitted.registrations) }));
-      setActionError(saved.error || 'The rejection was rolled back. Use Retry required to confirm it.');
+      setActionError(saved.error || 'The rejection was rolled back. Use Retry my changes to confirm it.');
     }
   };
 
@@ -584,7 +585,7 @@ const Approvals: React.FC = () => {
     if (!saved) return;
     if (!saved.ok) {
       useStore.setState(state => ({ registrations: rollbackUnchangedRows(state.registrations, previousRegistrations, submitted.registrations), users: rollbackUnchangedRows(state.users, previousUsers, submitted.users) }));
-      setActionError(saved.error || 'The approvals were rolled back. Use Retry required to confirm them.');
+      setActionError(saved.error || 'The approvals were rolled back. Use Retry my changes to confirm them.');
       return;
     }
     setSelectedBulkRegIds(new Set(failures.map(reg => reg.id)));
@@ -700,7 +701,7 @@ const Approvals: React.FC = () => {
     });
     if (!saved) return;
     if (!saved.ok) {
-      setActionError(saved.error || 'The approval is waiting to be saved. Use Retry required to continue.');
+      setActionError(saved.error || 'The approval is waiting to be saved. Use Retry my changes to continue.');
       return;
     }
     closeApprovalReview();
@@ -774,7 +775,7 @@ const Approvals: React.FC = () => {
       const saved = await runAction(() => secureAccounts ? retryMutation() : commitPendingMutation());
       if (!saved) return;
       if (!saved.ok) {
-        setRoleError(saved.error || 'The role is waiting to be saved. Use Retry required to continue.');
+        setRoleError(saved.error || 'The role is waiting to be saved. Use Retry my changes to continue.');
         return;
       }
       if (!confirmRoleRecord()) return;
@@ -812,7 +813,7 @@ const Approvals: React.FC = () => {
     if (!saved) return;
     if (!saved.ok) {
       setPendingRoleSave(true);
-      setRoleError(saved.error || 'The role is waiting to be saved. Use Retry required to continue.');
+      setRoleError(saved.error || 'The role is waiting to be saved. Use Retry my changes to continue.');
       return;
     }
 
@@ -850,7 +851,7 @@ const Approvals: React.FC = () => {
     if (!saved) return;
     if (!saved.ok) {
       useStore.setState(state => ({ rolePermissions: rollbackUnchangedRows(state.rolePermissions, previousRoles, submitted.rolePermissions), users: rollbackUnchangedRows(state.users, previousUsers, submitted.users), deletedRoleIds: state.deletedRoleIds === submitted.deletedRoleIds ? previousDeletedRoleIds : state.deletedRoleIds }));
-      setRoleError(saved.error || 'The role deletion was rolled back. Use Retry required to confirm it.');
+      setRoleError(saved.error || 'The role deletion was rolled back. Use Retry my changes to confirm it.');
       return;
     }
 
@@ -1044,7 +1045,7 @@ const Approvals: React.FC = () => {
     if (!saved) return;
     if (!saved.ok) {
       useStore.setState(state => ({ registrations: rollbackUnchangedRows(state.registrations, previousRegistrations, submitted.registrations) }));
-      setActionError(saved.error || 'The rejection was rolled back. Use Retry required to confirm it.');
+      setActionError(saved.error || 'The rejection was rolled back. Use Retry my changes to confirm it.');
     }
   };
 
@@ -1120,7 +1121,7 @@ const Approvals: React.FC = () => {
         notifications: rollbackUnchangedRows(state.notifications, previous.notifications, submitted.notifications),
         deletedUserIds: state.deletedUserIds === submitted.deletedUserIds ? previous.deletedUserIds : state.deletedUserIds,
       }));
-      setDeleteUserError(saved.error || 'The member deletion was rolled back. Use Retry required to confirm it.');
+      setDeleteUserError(saved.error || 'The member deletion was rolled back. Use Retry my changes to confirm it.');
       return;
     }
 
@@ -1312,7 +1313,7 @@ const Approvals: React.FC = () => {
                       <span className="rounded-md bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">{days}d</span>
                     )}
                     <span className="inline-flex px-2 py-1 rounded-md text-xs font-bold tracking-wide bg-accent-soft text-accent">
-                      {reg.requestedRole || 'Staff'}
+                      {reg.requestedRole || t('Staff')}
                     </span>
                   </div>
                 </div>
@@ -1404,7 +1405,7 @@ const Approvals: React.FC = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <span className="inline-flex px-2 py-1 rounded-md text-xs font-bold tracking-wide bg-accent-soft text-accent">
-                          {reg.requestedRole || 'Staff'}
+                          {reg.requestedRole || t('Staff')}
                         </span>
                         <span className="text-sm font-medium text-slate-600">
                           ({reg.jobPosition})
@@ -1690,7 +1691,7 @@ const Approvals: React.FC = () => {
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
                       <span>{reg.requestedRole}</span>
-                      <span>{reg.jobPosition || 'Position not specified'}</span>
+                      <span>{reg.jobPosition || t('Position not specified')}</span>
                       <span>{formatLocalizedDate(new Date(reg.createdAt), locale)}</span>
                     </div>
                   </article>

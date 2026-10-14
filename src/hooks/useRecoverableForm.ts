@@ -9,6 +9,7 @@ export function useRecoverableForm<T>(form: string, value: T, dirty: boolean, en
   const baseline = useRef(value);
   const currentValue = useRef(value); currentValue.current = value;
   const [available, setAvailable] = useState(() => account && enabled ? readRecoveredDraft<T>(account, form) : null);
+  const [storageFailed, setStorageFailed] = useState(false);
   const previousKey = useRef(`${account}:${form}`);
   const previouslyEnabled = useRef(enabled);
   const serialized = JSON.stringify(value);
@@ -19,20 +20,20 @@ export function useRecoverableForm<T>(form: string, value: T, dirty: boolean, en
     if (key !== previousKey.current || (enabled && !previouslyEnabled.current)) {
       previousKey.current = key; baseline.current = currentValue.current;
       setAvailable(account && enabled ? readRecoveredDraft<T>(account, form) : null);
-      clearedValue.current = null;
+      clearedValue.current = null; setStorageFailed(false);
     }
     previouslyEnabled.current = enabled;
     lastValue.current = serialized;
     if (enabled && dirty && account && clearedValue.current !== serialized) {
       const actor = useStore.getState().currentUser;
-      if ((actor?.authUserId || actor?.id) === account) writeRecoveredDraft(account, form, baseline.current, currentValue.current);
+      if ((actor?.authUserId || actor?.id) === account) setStorageFailed(!writeRecoveredDraft(account, form, baseline.current, currentValue.current));
     }
   }, [account, form, serialized, dirty, enabled]);
-  const clear = () => { clearedValue.current = lastValue.current; removeRecoveredDraft(account, form, available?.storageKey); setAvailable(null); };
+  const clear = () => { clearedValue.current = lastValue.current; removeRecoveredDraft(account, form, available?.storageKey); setAvailable(null); setStorageFailed(false); };
   const restore = () => {
     const draft = available?.value;
     setAvailable(null);
     return draft;
   };
-  return { available: Boolean(available), draft: available?.value, clear, restore };
+  return { available: Boolean(available), draft: available?.value, storageFailed, clear, restore };
 }

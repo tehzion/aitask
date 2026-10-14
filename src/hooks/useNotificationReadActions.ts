@@ -13,13 +13,15 @@ import {
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { useStore } from '../store';
 import { useToastStore } from '../store/useToastStore';
-import { msg } from '../lib/messages';
+import { msg, type MessageDescriptor } from '../lib/messages';
 
 export interface NotificationReadActions {
   markRead: (notificationIds: string | string[]) => Promise<boolean>;
   markUnread: (notificationIds: string | string[]) => Promise<boolean>;
   markAllRead: () => Promise<boolean>;
   isUpdating: boolean;
+  error?: MessageDescriptor | null;
+  errorIds?: string[];
 }
 
 const notificationMutationLock = createNotificationMutationLock();
@@ -31,6 +33,10 @@ export const useNotificationReadActions = (): NotificationReadActions => {
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [error, setError] = useState<MessageDescriptor | null>(null);
+  const [errorIds, setErrorIds] = useState<string[]>([]);
+  const actorId = useStore(state => state.currentUser?.id);
+  useEffect(() => { setError(null); setErrorIds([]); setIsUpdating(false); }, [actorId]);
   const markNotificationRead = useStore(state => state.markNotificationRead);
   const markNotificationUnread = useStore(state => state.markNotificationUnread);
   const markAllNotificationsRead = useStore(state => state.markAllNotificationsRead);
@@ -57,6 +63,7 @@ export const useNotificationReadActions = (): NotificationReadActions => {
       return false;
     }
 
+    setError(null); setErrorIds([]);
     const sessionToken = captureWorkspaceSession();
     const current = useStore.getState();
     const affectedIds = markAll && current.currentUser
@@ -89,12 +96,8 @@ export const useNotificationReadActions = (): NotificationReadActions => {
           notifications: restoreNotificationReadState(state.notifications, previousReadState),
           notificationUnreadCount: previousUnreadCount,
         }));
-        useToastStore.getState().addToast(
-          result.code === 'OFFLINE'
-            ? msg('errors.notificationsOffline')
-            : msg('errors.notificationsUpdate'),
-          'error',
-        );
+        setErrorIds(affectedIds);
+        setError(msg(result.code === 'OFFLINE' ? 'errors.notificationsOffline' : 'errors.notificationsUpdate'));
         return false;
       }
 
@@ -103,6 +106,13 @@ export const useNotificationReadActions = (): NotificationReadActions => {
         notificationUnreadCount: getUnreadNotifications(next.currentUser, next.notifications).length,
       });
       return true;
+    } catch {
+      if (isWorkspaceSessionCurrent(sessionToken) && mounted.current) {
+        useStore.setState(state => ({ notifications: restoreNotificationReadState(state.notifications, previousReadState), notificationUnreadCount: previousUnreadCount }));
+        setErrorIds(affectedIds);
+        setError(msg('errors.notificationsUpdate'));
+      }
+      return false;
     } finally {
       notificationMutationLock.release();
       if (mounted.current) setIsUpdating(false);
@@ -120,5 +130,6 @@ export const useNotificationReadActions = (): NotificationReadActions => {
     },
     markAllRead: () => persistChange([], true, true, markAllNotificationsRead),
     isUpdating: isUpdating || upgradeRequired,
-  }), [isUpdating, markAllNotificationsRead, markNotificationRead, markNotificationUnread, persistChange, upgradeRequired]);
+    error, errorIds,
+  }), [isUpdating, markAllNotificationsRead, markNotificationRead, markNotificationUnread, persistChange, upgradeRequired, error, errorIds]);
 };

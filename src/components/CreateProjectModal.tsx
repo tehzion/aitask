@@ -327,7 +327,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       onClose={requestClose}
       panelClassName="max-w-md"
     >
-      {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
+      {recovery.storageFailed && <p role="alert" className="px-5 py-3 text-sm text-amber-800">{t('feedback.draftStorageFailed')}</p>}
+        {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
 
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">

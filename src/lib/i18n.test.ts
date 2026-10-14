@@ -13,6 +13,7 @@ import {
 import { isMessageId } from './messages';
 // The whole-app audit includes copy that is registered by lazy workflow routes.
 import './staffWorkflowCopy';
+import './actionFeedbackCopy';
 
 describe('Chinese UI translations', () => {
   it('keeps English as the default and translates shared interface copy to Simplified Chinese', () => {

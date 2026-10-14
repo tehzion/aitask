@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { AppNotification } from '../types';
-import { isNotificationVisible } from '../lib/access';
+import { getIncomingUnreadNotificationIds, seedSeenNotificationIds } from '../lib/notificationPopups';
+import { notificationIconType } from '../lib/notificationCenter';
 import { playNotificationSound, resumeAudio } from '../lib/sounds';
 import { User } from '../types';
-import { isActionNotification } from '../lib/notificationCenter';
+
 
 /**
  * Watches the notifications list and plays a sound whenever a new
@@ -16,17 +17,7 @@ export const useSoundNotifications = (
   notifications: AppNotification[],
   currentUser: User | null
 ) => {
-  // Track seen notification IDs so we only play for genuinely new ones
-  const seenIds = useRef<Set<string>>(new Set());
-  const initialized = useRef(false);
-
-  // Seed seenIds on the first render with a non-empty list so notifications
-  // that arrive with (or just after) the initial load never trigger a sound.
-  useEffect(() => {
-    if (initialized.current || notifications.length === 0) return;
-    initialized.current = true;
-    notifications.forEach(n => seenIds.current.add(n.id));
-  }, [notifications]);
+  const tracker = useRef<{ userId?: string; seenIds: Set<string> }>({ seenIds: new Set() });
 
   // Resume AudioContext on any user interaction
   useEffect(() => {
@@ -40,18 +31,14 @@ export const useSoundNotifications = (
   }, []);
 
   useEffect(() => {
-    if (!initialized.current || !currentUser) return;
-
-    for (const notif of notifications) {
-      if (seenIds.current.has(notif.id)) continue;
-
-      seenIds.current.add(notif.id);
-
-      // Only play if this notification is visible to the current user
-      if (isNotificationVisible(currentUser, notif) && isActionNotification(notif)) {
-        playNotificationSound(notif.iconType);
-        break; // Play one sound per batch, avoid stacking
-      }
+    if (!currentUser) { tracker.current = { seenIds: new Set() }; return; }
+    if (tracker.current.userId !== currentUser.id) {
+      tracker.current = { userId: currentUser.id, seenIds: seedSeenNotificationIds(currentUser, notifications) };
+      return;
     }
+    const incoming = getIncomingUnreadNotificationIds(currentUser, notifications, tracker.current.seenIds);
+    tracker.current.seenIds = incoming.seenIds;
+    const latest = notifications.find(notification => notification.id === incoming.incomingIds[0]);
+    if (latest) playNotificationSound(notificationIconType(latest));
   }, [notifications, currentUser]);
 };

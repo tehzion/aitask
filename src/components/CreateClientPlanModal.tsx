@@ -213,7 +213,8 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
 
   return (
     <ModalShell labelledBy={titleId} onClose={requestClose} onEdit={() => setDirty(true)} panelClassName="h-[min(54rem,calc(100dvh-2rem))] max-w-[88rem]">
-      {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
+      {recovery.storageFailed && <p role="alert" className="px-5 py-3 text-sm text-amber-800">{t('feedback.draftStorageFailed')}</p>}
+        {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
       <header className="flex items-start justify-between gap-4 border-b border-line px-5 pb-5 pt-6 sm:px-6">
         <div><p className="calm-eyebrow">{t(client ? 'Service plan' : 'New client')} · {t('Step')} {step} {t('of')} 5</p><h2 id={titleId} className="mt-1 text-2xl font-semibold tracking-[-0.035em] text-ink">{t(client ? 'Create service plan' : 'Create client and service plan')}</h2><p className="mt-1 text-sm text-muted">{t(client ? 'Create a frozen Draft plan for this existing company.' : 'Save the client and a frozen Draft plan in one workflow.')}</p></div>
         <button type="button" aria-label={t('common.close')} onClick={requestClose} className="flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-5 w-5" /></button>

@@ -1,3 +1,4 @@
+import { notificationCategoryLabel, presentNotification } from '../lib/notificationPresentation';
 import SystemMessage from '../components/SystemMessage';
 import '../lib/staffWorkflowCopy';
 import React from 'react';
@@ -28,7 +29,6 @@ import {
   groupNotifications,
   mergeNotificationPages,
   NOTIFICATION_CATEGORIES,
-  notificationCategoryLabels,
   sectionNotificationGroups,
   type NotificationGroup,
 } from '../lib/notificationCenter';
@@ -273,7 +273,7 @@ const Notifications: React.FC = () => {
             >
               <option value="">{t('All categories')}</option>
               {NOTIFICATION_CATEGORIES.map(value => (
-                <option key={value} value={value}>{notificationCategoryLabels[value]}</option>
+                <option key={value} value={value}>{notificationCategoryLabel(value, locale)}</option>
               ))}
             </select>
           </div>
@@ -285,6 +285,7 @@ const Notifications: React.FC = () => {
           {isLoading ? t('Loading notifications.') : t('{count} notification groups loaded.', { count: groups.length })}
         </div>
 
+        {notificationReadActions.error && <p className="m-4 rounded-control bg-red-50 p-4 text-sm text-red-800" role="alert"><SystemMessage message={notificationReadActions.error} /></p>}
         {error && (
           <div className="m-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800" role="alert">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -337,13 +338,13 @@ const Notifications: React.FC = () => {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <h3 className={cn('text-sm text-slate-950', allRead ? 'font-medium' : 'font-semibold')}>{group.latest.title}</h3>
-                              <Badge tone="slate">{notificationCategoryLabels[group.category]}</Badge>
+                              <h3 className={cn('text-sm text-slate-950', allRead ? 'font-medium' : 'font-semibold')}>{presentNotification(group.latest, locale).title}</h3>
+                              <Badge tone="slate">{notificationCategoryLabel(group.category, locale)}</Badge>
                               {group.latest.route.page === 'tasks' && <Badge tone="slate">{t(group.latest.route.entityId && taskMap.has(group.latest.route.entityId) ? isTaskOpen(taskMap.get(group.latest.route.entityId)!) ? 'Open work' : 'Closed work' : 'Work unavailable')}</Badge>}
                               {group.notifications.length > 1 && <Badge tone="blue">{t('{count} updates', { count: group.notifications.length })}</Badge>}
                               {group.unreadCount > 0 && <span className="text-xs font-semibold text-blue-700">{t('{count} unread', { count: group.unreadCount })}</span>}
                             </div>
-                            <p className="mt-1 text-sm leading-6 text-slate-600">{group.latest.message}</p>
+                            <p className="mt-1 text-sm leading-6 text-slate-600">{presentNotification(group.latest, locale).message}</p>
                             <p className="mt-1.5 text-xs text-slate-400">{formatLocalizedDistanceToNow(new Date(group.latest.createdAt), locale)}</p>
                           </div>
                           <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
@@ -376,7 +377,7 @@ const Notifications: React.FC = () => {
                               return (
                                 <div key={notification.id} className="flex flex-col gap-2 border-b border-slate-200/70 py-3 last:border-b-0 sm:flex-row sm:items-center">
                                   <div className="min-w-0 flex-1">
-                                    <p data-i18n-skip className={cn('text-sm text-slate-700', !isRead && 'font-semibold text-slate-950')}>{notification.message}</p>
+                                    <p data-i18n-skip className={cn('text-sm text-slate-700', !isRead && 'font-semibold text-slate-950')}>{presentNotification(notification, locale).message}</p>
                                     <p className="mt-1 text-xs text-slate-400">{formatLocalizedDistanceToNow(new Date(notification.createdAt), locale)}</p>
                                   </div>
                                   <button

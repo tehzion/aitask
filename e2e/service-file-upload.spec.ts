@@ -28,6 +28,6 @@ test('service activity upload shows file context and preserves retry state when 
   await expect(sheet.getByText('20 B', { exact: true })).toBeVisible();
 
   await sheet.getByRole('button', { name: 'Add activity', exact: true }).click();
-  await expect(sheet.getByRole('alert')).toContainText('Private file uploads require the Supabase backend.');
+  await expect(sheet.getByRole('alert')).toContainText('File sharing is unavailable in this workspace. Ask your workspace administrator to enable it.');
   await expect(sheet.getByText('brief.pdf', { exact: true })).toBeVisible();
 });

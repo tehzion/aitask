@@ -275,7 +275,7 @@ export const reconcileServiceUpload = async (attachment: AttachmentRef, abandon 
   finally { if (timeout) clearTimeout(timeout); token.signal.removeEventListener('abort', abort); }
 };
 
-export const removeServiceFile = async (attachment: AttachmentRef, options: { abandonSubmitted?: boolean } = {}): Promise<{ ok: true; error?: undefined } | { ok: false; error: string }> => {
+export const removeServiceFile = async (attachment: AttachmentRef, options: { abandonSubmitted?: boolean } = {}): Promise<{ ok: true; error?: undefined; deleted?: boolean } | { ok: false; error: string }> => {
   hydratePendingServiceFiles();
   const token = captureWorkspaceSession();
   const key = pendingServiceFileKey(attachment);
@@ -285,53 +285,62 @@ export const removeServiceFile = async (attachment: AttachmentRef, options: { ab
   const status = await reconcileServiceUpload(attachment, true);
   if (!status.ok) return status;
   if (!isWorkspaceSessionCurrent(token)) return { ok: false as const, error: 'Your session changed. Sign in again.' };
-  if (status.status === 'referenced' || status.status === 'missing') { forgetPendingServiceFile(attachment); return { ok: true as const }; }
+  if (status.status === 'referenced' || status.status === 'missing') { forgetPendingServiceFile(attachment); return { ok: true as const, deleted: false }; }
   if (status.status !== 'abandoned') return { ok: false as const, error: 'Upload confirmation is unresolved. The file was retained to protect saved activity.' };
   try {
     const { error } = await supabase.storage.from(attachment.bucket).remove([attachment.path]);
     assertWorkspaceSession(token);
     if (error) return { ok: false as const, error: error.message || 'The uploaded file could not be removed.' };
-    forgetPendingServiceFile(attachment); return { ok: true as const };
+    forgetPendingServiceFile(attachment); return { ok: true as const, deleted: true };
   } catch (error) { return { ok: false as const, error: error instanceof Error ? error.message : 'The uploaded file could not be removed.' }; }
 };
 
 export const cleanupPendingServiceFiles = async (actorId?: string, options: { abandonSubmitted?: boolean; commandIds?: string[]; includeUnsubmitted?: boolean } = {}) => {
   const token = captureWorkspaceSession();
   const owned = (actorId ? listPendingServiceFiles(actorId) : []).filter(file => options.commandIds ? Boolean(file.commandId && options.commandIds.includes(file.commandId)) : options.includeUnsubmitted === false ? Boolean(file.commandId) : true);
-  let removed = 0;
+  let cleared = 0;
+  let deleted = 0;
+  let failed = 0;
   let error: string | undefined;
   for (const file of owned) {
-    if (!isWorkspaceSessionCurrent(token)) return { ok: false as const, removed, error: 'Your session changed. Sign in again.' };
+    if (!isWorkspaceSessionCurrent(token)) { error = 'Your session changed. Sign in again.'; break; }
     const result = await removeServiceFile(file, options);
-    if (result.ok) removed += 1; else error ||= result.error;
+    if (result.ok) { cleared++; if (result.deleted) deleted++; }
+    else { failed++; error ||= result.error; }
   }
-  return error ? { ok: false as const, removed, error } : { ok: true as const, removed };
+  const summary = { removed: cleared, cleared, deleted, failed, remaining: actorId ? listPendingServiceFiles(actorId).length : 0 };
+  return error ? { ok: false as const, ...summary, error } : { ok: true as const, ...summary, error: undefined };
 };
 
 export const refreshPendingServiceFiles = async (actorId: string) => {
   const token = captureWorkspaceSession();
   let error: string | undefined;
+  let cleared = 0;
+  let failed = 0;
   for (const file of listPendingServiceFiles(actorId)) {
-    if (!isWorkspaceSessionCurrent(token)) return { ok: false as const, error: 'Your session changed. Sign in again.' };
+    if (!isWorkspaceSessionCurrent(token)) { error = 'Your session changed. Sign in again.'; break; }
     const result = await reconcileServiceUpload(file);
-    if (result.ok && (result.status === 'referenced' || result.status === 'missing')) forgetPendingServiceFile(file);
-    else if (!result.ok) error ||= result.error;
+    if (result.ok && (result.status === 'referenced' || result.status === 'missing')) { forgetPendingServiceFile(file); cleared++; }
+    else if (!result.ok) { failed++; error ||= result.error; }
   }
-  return error ? { ok: false as const, error } : { ok: true as const };
+  const summary = { cleared, failed, deleted: 0, remaining: listPendingServiceFiles(actorId).length };
+  return error ? { ok: false as const, ...summary, error } : { ok: true as const, ...summary, error: undefined };
 };
 
-export const downloadServiceFile = async (attachment: AttachmentRef) => {
+export const downloadServiceFile = async (attachment: AttachmentRef, options: { isCurrent?: () => boolean } = {}) => {
   const token = captureWorkspaceSession();
   try {
     if (!shouldUseSecureSupabase()) {
       const localDemoFile = getLocalServiceDemoFile(attachment);
       if (!localDemoFile) return { ok: false as const, error: 'Private file downloads require the Supabase backend.' };
+      if (options.isCurrent && !options.isCurrent()) return { ok: false as const, error: 'The download was cancelled because the workspace changed.' };
       triggerBrowserDownload(new Blob([localDemoFile.content], { type: localDemoFile.mimeType }), attachment.fileName);
       return { ok: true as const };
     }
     const { data, error } = await supabase.storage.from(attachment.bucket).download(attachment.path);
     assertWorkspaceSession(token);
     if (error || !data) return { ok: false as const, error: error?.message || 'The file could not be downloaded.' };
+    if (options.isCurrent && !options.isCurrent()) return { ok: false as const, error: 'The download was cancelled because the workspace changed.' };
     triggerBrowserDownload(data, attachment.fileName);
     return { ok: true as const };
   } catch (error) {

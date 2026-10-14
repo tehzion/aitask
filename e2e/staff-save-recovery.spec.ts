@@ -122,7 +122,7 @@ for (const status of ['In Progress', 'Waiting Approval']) {
     });
     expect(await successIds()).toEqual([]);
     await sheet.getByRole('button', { name: 'Retry save', exact: true }).click();
-    expect(await successIds()).toContain('task.statusUpdated');
+    expect(await successIds()).toEqual([status === 'Waiting Approval' ? 'feedback.sentForReview' : 'task.statusUpdated']);
   });
 }
 

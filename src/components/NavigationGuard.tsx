@@ -18,7 +18,7 @@ export default function NavigationGuard() {
   ));
   useEffect(() => {
     if (blocker.state !== 'blocked') return;
-    if (window.confirm(t('Discard unsaved changes and leave this page?'))) blocker.proceed();
+    if (window.confirm(t('feedback.leaveUnsaved'))) blocker.proceed();
     else blocker.reset();
   }, [blocker, t]);
   return null;

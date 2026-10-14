@@ -524,7 +524,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await dateEditor.getByLabel(/Due Date/).fill(calendarDates.extendedDue);
   await dateEditor.getByRole('button', { name: 'Save dates' }).click();
   await expect(dateEditor).toBeHidden();
-  await expect(page.getByRole('status').filter({ hasText: 'Calendar Range QA · dates updated' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Dates saved.' })).toBeVisible();
   await page.getByRole('button', { name: /Edit dates for Calendar Range QA/ }).first().click();
   await expect(page.getByRole('dialog', { name: 'Edit task dates' }).getByLabel(/Due Date/)).toHaveValue(calendarDates.extendedDue);
   await page.keyboard.press('Escape');

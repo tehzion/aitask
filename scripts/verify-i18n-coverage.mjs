@@ -8,8 +8,8 @@ const ignoredFiles = new Set(['i18n.ts', 'i18n.test.ts']);
 const uiAttributes = new Set(['aria-label', 'aria-description', 'placeholder', 'title', 'alt']);
 const messageCalls = new Set(['t', 'msg', 'formatMessage']);
 const effectCalls = new Set(['addToast', 'setError', 'setStatusError', 'setErrorMessage', 'confirm', 'alert']);
-const intentionalRawUiText = new Set(['AT', 'AiTask', 'Facebook', 'Boss Koo']);
-const hasWords = value => /[A-Za-z]{2,}/.test(value) && !/^https?:\/\//.test(value);
+const intentionalRawUiText = new Set(['AT', 'AiTask', 'Facebook', 'Boss Koo', 'Supabase']);
+const hasWords = value => /[A-Za-z]{2,}/.test(value.replace(/\{value\}/g, '')) && !/^https?:\/\//.test(value);
 
 const filesIn = async directory => {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -49,12 +49,28 @@ const auditFile = (fileName, sourceText) => {
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const findings = [];
   const report = (node, kind, value) => {
-    if (!hasWords(value)) return;
+    if (!hasWords(value) || intentionalRawUiText.has(value.trim())) return;
     const position = source.getLineAndCharacterOfPosition(node.getStart(source));
     findings.push({ file: relative(new URL('../', import.meta.url).pathname, fileName), line: position.line + 1, kind, value: value.replace(/\s+/g, ' ').trim().slice(0, 140) });
   };
 
+  const auditDisplayExpression = expression => {
+    if (isMessageCall(expression)) return;
+    const value = literalText(expression);
+    if (value !== null) { report(expression, 'raw display expression', value); return; }
+    if (ts.isConditionalExpression(expression)) {
+      auditDisplayExpression(expression.whenTrue); auditDisplayExpression(expression.whenFalse);
+    } else if (ts.isBinaryExpression(expression) && [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(expression.operatorToken.kind)) {
+      auditDisplayExpression(expression.right);
+    } else if (ts.isParenthesizedExpression(expression)) auditDisplayExpression(expression.expression);
+  };
   const visit = node => {
+    if (ts.isJsxExpression(node) && node.expression && (ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent)) && !isSkipped(node)) auditDisplayExpression(node.expression);
+    if (ts.isBindingElement(node) && ts.isIdentifier(node.name) && /(?:label|title|description|placeholder)$/i.test(node.name.text) && node.initializer) {
+      const value = literalText(node.initializer);
+      const translatedUse = new RegExp(`\\bt\\(\\s*${node.name.text}\\s*\\)`).test(sourceText);
+      if (value && !translatedUse) report(node.initializer, 'raw shared default', value);
+    }
     if (ts.isJsxText(node)) {
       const value = node.getText(source);
       if (hasWords(value) && !intentionalRawUiText.has(value.trim())) report(node, isSkipped(node) ? 'mixed-or-skipped JSX text' : 'raw JSX text', value);

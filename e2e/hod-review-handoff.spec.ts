@@ -22,7 +22,7 @@ test('staff submission reaches the department HOD inbox and opens pending work',
     useStore.setState({ currentUser: useStore.getState().users.find(user => user.id === 'handoff-hod')! });
   });
   await page.goto('/notifications');
-  await expect(page.getByRole('heading', { name: 'Task Ready for Approval', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Ready for department review', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'View', exact: true }).click();
   await expect(page).toHaveURL(/taskId=handoff-task/);
   await expect(page.getByRole('dialog', { name: 'Artwork for HOD review' })).toBeVisible();

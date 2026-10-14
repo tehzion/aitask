@@ -1,3 +1,7 @@
+import '../lib/actionFeedbackCopy';
+import { useSaveAction } from '../hooks/useSaveAction';
+import { acknowledgeActionFeedback, canRetrySave } from '../lib/actionFeedback';
+import SystemMessage from './SystemMessage';
 import React from 'react';
 import { AlertCircle, Cloud, CloudOff, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { isPendingMutationResolution, useStore } from '../store';
@@ -37,6 +41,26 @@ const getFreshnessTone = (backend: ReturnType<typeof useStore.getState>['backend
 const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, className, onRetry, onDiscard }) => {
   const { locale, t } = useI18n();
   const { backend, pullBackendNow, retryPendingSave, discardMutation } = useStore();
+  const { busy, run } = useSaveAction();
+  const [actionError, setActionError] = React.useState('');
+  const actorId = useStore(state => state.currentUser?.id);
+  React.useEffect(() => { setActionError(''); }, [actorId]);
+  const resolve = async (kind: 'retry' | 'restore' | 'refresh') => {
+    setActionError('');
+    const result = await run(async () => {
+      if (kind === 'retry') {
+        if (onRetry) { await onRetry(); return { ok: true }; }
+        const saved = await retryPendingSave();
+        if (saved.ok) acknowledgeActionFeedback(useStore.getState());
+        return saved;
+      }
+      if (kind === 'restore' && onDiscard) { onDiscard(); return { ok: true }; }
+      if (kind === 'restore') await discardMutation(); else await pullBackendNow({ silent: false });
+      const latest = useStore.getState().backend;
+      return latest.mode === 'supabase' && (latest.status !== 'live' || latest.error) ? { ok: false, error: latest.error || 'Unable to reload saved data. Try again.' } : { ok: true };
+    });
+    if (result && !result.ok) setActionError(result.error || 'Unable to reload saved data. Try again.');
+  };
   const backendStatus = getBackendStatus();
   const isLocal = backendStatus.mode === 'local';
   const label = isLocal && backendStatus.isHostedRuntime
@@ -91,8 +115,8 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
       {showRefresh && (
         <Button
           variant="secondary"
-          onClick={() => pullBackendNow({ silent: false })}
-          disabled={backend.isPulling || backend.isSaving}
+          onClick={() => void resolve('refresh')}
+          disabled={busy || backend.isPulling || backend.isSaving}
           className="h-11 w-11 p-0 rounded-md flex items-center justify-center shrink-0 border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm"
           title={t('shell.refreshSyncStatus')}
           aria-label={t('shell.refreshSyncStatus')}
@@ -102,20 +126,20 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
       )}
       {needsResolution && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <Button
+          {canRetrySave(backend) && <Button
             variant="secondary"
-            onClick={() => void (onRetry ? onRetry() : retryPendingSave())}
-            disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
+            onClick={() => void resolve('retry')}
+            disabled={busy || backend.isPulling || backend.isSaving || backend.status === 'offline'}
             className="min-h-11 px-3 py-2 text-xs"
             title={t('shell.retryPendingChanges')}
           >
             <RotateCcw className="h-3 w-3" />
             {t('shell.retryMyChanges')}
-          </Button>
+          </Button>}
           <Button
             variant="secondary"
-            onClick={() => { if (onDiscard) onDiscard(); else void discardMutation(); }}
-            disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
+            onClick={() => void resolve('restore')}
+            disabled={busy || backend.isPulling || backend.isSaving || backend.status === 'offline'}
             className="min-h-11 px-3 py-2 text-xs"
             title={t('shell.discardPendingChanges')}
           >
@@ -124,6 +148,8 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           </Button>
         </div>
       )}
+      {actionError && actionError !== backend.error && <p className="basis-full text-sm text-red-700" role="alert"><SystemMessage message={actionError} /></p>}
+      {needsResolution && !canRetrySave(backend) && <p className="basis-full text-sm text-muted">{t('Restore saved data, correct the rejected change or check your access, then save again.')}</p>}
       {!compact && backend.conflict && (
         <span className="basis-full text-xs text-amber-700">
           {t('The saved record changed elsewhere. Review it before retrying.')}

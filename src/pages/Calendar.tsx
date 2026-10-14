@@ -1,3 +1,5 @@
+import { acknowledgeActionFeedback, queueActionFeedback } from '../lib/actionFeedback';
+import { msg, type MessageDescriptor } from '../lib/messages';
 import SystemMessage from '../components/SystemMessage';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -191,7 +193,7 @@ const Calendar: React.FC = () => {
   const [calendarFilter, setCalendarFilter] = useState<CalendarFilter>('all');
   const [dragState, setDragState] = useState<TaskDragState | null>(null);
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
-  const [dropSuccess, setDropSuccess] = useState<string | null>(null);
+  const [dropSuccess, setDropSuccess] = useState<MessageDescriptor | null>(null);
   const [syncError, setSyncError] = useState('');
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -340,8 +342,10 @@ const Calendar: React.FC = () => {
   );
 
   const showSavedMessage = (title: string) => {
+    if (!title) return;
     if (successTimer.current) window.clearTimeout(successTimer.current);
-    setDropSuccess(title);
+    acknowledgeActionFeedback(useStore.getState());
+    setDropSuccess(msg('feedback.datesSaved'));
     successTimer.current = window.setTimeout(() => setDropSuccess(null), 2500);
   };
 
@@ -379,6 +383,7 @@ const Calendar: React.FC = () => {
         }
         return { ok: false, error };
       }
+      queueActionFeedback(actorId!, `task:${taskId}:details`, msg('feedback.datesSaved'), saved => saved.tasks.some(item => item.id === taskId && item.startDate === nextDates.startDate && item.dueDate === nextDates.dueDate), false);
       optimisticVersion = useStore.getState().tasks.find(item => item.id === taskId)?.updatedAt;
       let result: { ok: boolean; error?: string; code?: string };
       try { result = await commitPendingMutation('task.update'); }
@@ -855,7 +860,7 @@ const Calendar: React.FC = () => {
           aria-live="polite"
         >
           <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span className="truncate">{dropSuccess}</span>
+          <span className="truncate">{t(dropSuccess)}</span>
         </div>
       )}
       {syncError && (

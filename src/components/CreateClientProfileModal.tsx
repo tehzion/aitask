@@ -1,3 +1,5 @@
+import { msg } from '../lib/messages';
+import { acknowledgeActionFeedback, queueActionFeedback } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import DraftRecoveryNotice from './DraftRecoveryNotice';
@@ -42,7 +44,7 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
   const markPristine = useUnsavedChanges(saving || formDirty);
   const recovery = useRecoverableForm('create-client-profile', form, formDirty, !createdClientId && !pendingClientId);
   const restoreDraft = () => { const value = recovery.restore(); if (value && typeof value.clientName === 'string') setForm(value); };
-  const requestClose = () => { if (!saving && (!formDirty || window.confirm(t('Discard unsaved changes?')))) { recovery.clear(); markPristine(); onClose(); } };
+  const requestClose = () => { if (pendingClientId) { void handleDiscard(); return; } if (!saving && (!formDirty || window.confirm(t('Discard unsaved changes?')))) { recovery.clear(); markPristine(); onClose(); } };
   const syncBusy = backend.isSaving || backend.isPulling;
   const busy = saving || syncBusy;
   const pendingResolution = isPendingMutationResolution(backend);
@@ -84,6 +86,8 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
           return;
         }
         clientId = result.id;
+        const createdId = clientId;
+        queueActionFeedback(actorId!, `company:${createdId}:create`, msg('client.companyAdded', { name: form.clientName.trim() }), saved => saved.clients.some(item => item.id === createdId && item.clientName === form.clientName.trim()), false);
         setPendingClientId(clientId);
       }
       const committed = await retryPendingSave();
@@ -97,6 +101,7 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
         setError(t('The pending company is no longer available. Review your draft before saving again.'));
         return;
       }
+      acknowledgeActionFeedback(useStore.getState());
       recovery.clear(); markPristine(); setPendingClientId('');
       setCreatedClientId(clientId);
       clearCompanySearch();
@@ -114,21 +119,29 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
   };
 
   const handleDiscard = async () => {
-    if (busy) return;
+    if (busy || !window.confirm(t('Discard pending changes and reload the latest saved workspace?'))) return;
+    const session = captureWorkspaceSession();
+    const actorId = useStore.getState().currentUser?.id;
     setSaving(true);
     try {
       await discardMutation();
+      if (!mounted.current || !isWorkspaceSessionCurrent(session) || useStore.getState().currentUser?.id !== actorId) return;
+      const latest = useStore.getState().backend;
+      if (latest.mode === 'supabase' && latest.status !== 'live') { setError(latest.error || 'Unable to reload saved company data. Try again.'); return; }
       setPendingClientId('');
       setError('');
-      onClose();
+      recovery.clear(); markPristine(); onClose();
+    } catch (failure) {
+      if (mounted.current && isWorkspaceSessionCurrent(session) && useStore.getState().currentUser?.id === actorId) setError(failure instanceof Error ? failure.message : 'Unable to reload saved company data. Try again.');
     } finally {
-      setSaving(false);
+      if (mounted.current && isWorkspaceSessionCurrent(session) && useStore.getState().currentUser?.id === actorId) setSaving(false);
     }
   };
 
   return (
     <ModalShell labelledBy={titleId} onClose={requestClose} panelClassName="max-w-2xl">
-      {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
+      {recovery.storageFailed && <p role="alert" className="px-5 py-3 text-sm text-amber-800">{t('feedback.draftStorageFailed')}</p>}
+        {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
       <header className="flex items-start justify-between gap-4 border-b border-line px-5 pb-5 pt-6 sm:px-6">
         <div>
           <p className="calm-eyebrow">{t('Companies · New client')}</p>

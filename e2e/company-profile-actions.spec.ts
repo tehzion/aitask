@@ -144,7 +144,7 @@ test('a rejected save keeps the company form open with the entered details and a
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Supabase did not confirm this save.' }) });
   });
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toHaveText('Supabase did not confirm this save.');
+  await expect(dialog.getByRole('alert')).toHaveText('This action could not be completed. Try again. If it keeps failing, contact your workspace administrator.');
   await expect(dialog.getByPlaceholder('e.g. John Doe')).toHaveValue('Unsaved contact');
   await expect(dialog.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
 });
@@ -228,7 +228,7 @@ for (const action of ['delete', 'rename'] as const) {
       await dialog.getByRole('button', { name: 'Delete company', exact: true }).click();
     }
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('alert')).toHaveText(`Supabase rejected company ${action}.`);
+    await expect(dialog.getByRole('alert')).toHaveText('This action could not be completed. Try again. If it keeps failing, contact your workspace administrator.');
     await expect(page.getByText(action === 'delete' ? `Company "${companyName}" deleted.` : 'Client renamed to "QA Renamed Company".', { exact: true })).toHaveCount(0);
     await dialog.getByRole('button', { name: action === 'delete' ? 'Delete company' : 'Rename', exact: true }).click();
     if (action === 'delete') await expect(dialog).toBeHidden();

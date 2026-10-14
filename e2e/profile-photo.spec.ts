@@ -43,6 +43,6 @@ test('profile photo upload validates, previews, saves, and remains usable on mob
   expect(uploadBox?.height).toBeGreaterThanOrEqual(44);
 
   await page.getByRole('button', { name: 'Save profile' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Profile updated.' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Profile saved.' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });

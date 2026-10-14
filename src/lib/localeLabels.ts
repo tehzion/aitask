@@ -17,8 +17,11 @@ const localizeBuiltIn = (value: string, locale: AppLocale, allowed: Set<string>)
 
 export const getLocalizedStatus = (value: string, locale: AppLocale) => localizeBuiltIn(value, locale, statuses);
 export const getLocalizedRole = (value: string, locale: AppLocale) => localizeBuiltIn(value, locale, roles);
-export const getLocalizedDepartment = (value: string, locale: AppLocale) => localizeBuiltIn(value, locale, departments);
+export const getLocalizedDepartment = (value: string, locale: AppLocale) => value === 'Account' && locale === 'zh' ? '客户管理' : localizeBuiltIn(value, locale, departments);
 export const getLocalizedPriority = (value: string, locale: AppLocale) => localizeBuiltIn(value, locale, priorities);
 export const getLocalizedDeliveryStage = (value: string, locale: AppLocale) => localizeBuiltIn(value, locale, deliveryStages);
 export const getLocalizedWorkflowKind = (value: string, locale: AppLocale) => localizeBuiltIn(value, locale, workflowKinds);
 export const getLocalizedDevice = (value: string, locale: AppLocale) => localizeBuiltIn(value, locale, devices);
+
+/** Task review is distinct from client approval; enum values remain unchanged. */
+export const getLocalizedTaskStatus = (value: string, locale: AppLocale) => value === 'Waiting Approval' ? (locale === 'zh' ? '待审核' : 'Waiting for review') : value === 'Approved' ? (locale === 'zh' ? '审核已通过' : 'Review approved') : getLocalizedStatus(value, locale);

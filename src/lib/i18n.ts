@@ -11,6 +11,8 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  "Unable to reload saved data. Try again.": "无法重新加载已保存数据，请重试。",
+
   'App update available': '应用有新版本',
   'This page could not be displayed. Reload to try again. Changes that were not saved may need to be re-entered.': '无法显示此页面。请重新加载后重试。未保存的更改可能需要重新填写。',
   'Shared workspace is unavailable': '共享工作区不可用',

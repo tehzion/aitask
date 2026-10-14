@@ -137,7 +137,7 @@ test('Staff date retry with no applied command never claims the dates were saved
   await dialog.getByRole('button', { name: 'Retry dates', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('The pending date change was not applied.');
   await expect(dialog.locator('input[type=date]').last()).not.toHaveValue('2026-12-20');
-  await expect(page.getByText(`${title} · dates updated`, { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Dates saved.', { exact: true })).toHaveCount(0);
 });
 
 test('Staff date recovery catches retry and reload exceptions and can use latest afterward', async ({ page }) => {

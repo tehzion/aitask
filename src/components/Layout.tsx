@@ -1,3 +1,5 @@
+import { useSaveAction } from '../hooks/useSaveAction';
+import { acknowledgeActionFeedback, canRetrySave } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
@@ -45,6 +47,20 @@ const Layout: React.FC = () => {
   const routerNavigate = useNavigate();
   const location = useLocation();
   const { t } = useI18n();
+  const { busy: resolvingSync, run: runSync } = useSaveAction();
+  const [syncActionError, setSyncActionError] = useState('');
+  const actorId = useStore(state => state.currentUser?.id);
+  useEffect(() => { setSyncActionError(''); }, [actorId]);
+  const resolveSync = async (retry: boolean) => {
+    setSyncActionError('');
+    const result = await runSync(async () => {
+      if (retry) { const saved = await useStore.getState().retryPendingSave(); if (saved.ok) acknowledgeActionFeedback(useStore.getState()); return saved; }
+      await useStore.getState().discardMutation();
+      const latest = useStore.getState().backend;
+      return latest.mode === 'supabase' && (latest.status !== 'live' || latest.error) ? { ok: false, error: latest.error || 'Unable to reload saved data. Try again.' } : { ok: true };
+    });
+    if (result && !result.ok) setSyncActionError(result.error || 'Unable to reload saved data. Try again.');
+  };
   const navigate = routerNavigate;
   const toastCount = useToastStore(state => state.toasts.length);
   const { preference, resolvedTheme, setPreference, toggleTheme } = useColorTheme();
@@ -57,8 +73,6 @@ const Layout: React.FC = () => {
     currentUser,
     backend,
     pullBackendNow,
-    retryPendingSave,
-    discardMutation,
     rolePermissions,
   } = useStore(useShallow(state => ({
     isCreateTaskModalOpen: state.isCreateTaskModalOpen,
@@ -68,8 +82,6 @@ const Layout: React.FC = () => {
     currentUser: state.currentUser,
     backend: state.backend,
     pullBackendNow: state.pullBackendNow,
-    retryPendingSave: state.retryPendingSave,
-    discardMutation: state.discardMutation,
     rolePermissions: state.rolePermissions,
   })));
   const notificationReadActions = useNotificationReadActions();
@@ -225,7 +237,7 @@ const Layout: React.FC = () => {
   const missingSupabaseConfig = backendStatus.mode === 'supabase' && !backendStatus.ready;
   const upgradeRequired = backend.upgradeRequired === true;
   const pendingResolution = isPendingMutationResolution(backend);
-  const syncNeedsAttention = hostedLocalBuild || missingSupabaseConfig || upgradeRequired || Boolean(backend.error) || backend.hasRemoteUpdate || pendingResolution;
+  const syncNeedsAttention = Boolean(syncActionError) || hostedLocalBuild || missingSupabaseConfig || upgradeRequired || Boolean(backend.error) || backend.hasRemoteUpdate || pendingResolution;
   const syncBannerTitle = hostedLocalBuild
     ? t('Shared workspace is unavailable')
     : missingSupabaseConfig
@@ -245,7 +257,7 @@ const Layout: React.FC = () => {
     ? 'This build saves changes only in this browser. Ask your workspace administrator to enable shared workspace data.'
     : missingSupabaseConfig
       ? 'Workspace sharing is not configured. Changes cannot sync between users. Ask your workspace administrator to finish setup.'
-      : backend.error || backend.message;
+      : syncActionError || backend.error || backend.message;
   const syncBannerDetail = syncBannerMessage;
 
   return (
@@ -283,7 +295,7 @@ const Layout: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => pullBackendNow({ silent: false })}
-                    disabled={backend.isPulling || backend.isSaving}
+                    disabled={resolvingSync || backend.isPulling || backend.isSaving}
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <RefreshCw className={cn('h-4 w-4', backend.isPulling && 'animate-spin')} />
@@ -292,19 +304,19 @@ const Layout: React.FC = () => {
                 )}
                 {pendingResolution && (
                   <>
-                    <button
+                    {canRetrySave(backend) && <button
                       type="button"
-                      onClick={() => void retryPendingSave()}
-                      disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
+                      onClick={() => void resolveSync(true)}
+                      disabled={resolvingSync || backend.isPulling || backend.isSaving || backend.status === 'offline'}
                       className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <RotateCcw className="h-4 w-4" />
                       {t('Retry my changes')}
-                    </button>
+                    </button>}
                     <button
                       type="button"
-                      onClick={() => void discardMutation()}
-                      disabled={backend.isPulling || backend.isSaving || backend.status === 'offline'}
+                      onClick={() => void resolveSync(false)}
+                      disabled={resolvingSync || backend.isPulling || backend.isSaving || backend.status === 'offline'}
                       className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <X className="h-4 w-4" />

@@ -1,3 +1,5 @@
+import { getLocalizedDepartment, getLocalizedTaskStatus } from '../lib/localeLabels';
+import UnavailableWork from './UnavailableWork';
 import '../lib/staffWorkflowCopy';
 import React from 'react';
 import { Filter, ListFilter, Search, X } from 'lucide-react';
@@ -25,7 +27,7 @@ const buckets: StaffAllWorkBucket[] = ['all', 'needs_action', 'up_next', 'waitin
 const priorities: Priority[] = ['Urgent', 'High', 'Medium', 'Low'];
 
 const StaffAllWork: React.FC = () => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser, tasks: allTasks, rolePermissions, taskStatuses, clients: clientProfiles, projects, users } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
@@ -103,7 +105,7 @@ const StaffAllWork: React.FC = () => {
   const deferredSearch = React.useDeferredValue(searchInput.value);
   const normalizedSearch = deferredSearch.trim().toLowerCase();
   const filteredTasks = React.useMemo(() => orderedTasks.filter(task => {
-    const searchable = [task.title, task.description, task.clientName, task.projectName, task.serviceType, task.department].filter(Boolean).join(' ').toLowerCase();
+    const searchable = [task.title, task.description, task.clientName, task.projectName, task.serviceType, task.department, getLocalizedDepartment(task.department, locale)].filter(Boolean).join(' ').toLowerCase();
     return (!normalizedSearch || searchable.includes(normalizedSearch))
       && (!helpOnly || Boolean(isTaskOpen(task) && task.workState?.blocker))
       && (!unacceptedOnly || Boolean(isTaskOpen(task) && task.assignedTo && task.workState?.acceptedBy !== task.assignedTo))
@@ -116,7 +118,7 @@ const StaffAllWork: React.FC = () => {
       && (priority === 'All' || task.priority === priority)
       && (!dueFrom || Boolean(task.dueDate && task.dueDate >= dueFrom))
       && (!dueTo || Boolean(task.dueDate && task.dueDate <= dueTo));
-  }), [assignee, client, creator, department, dueFrom, dueTo, helpOnly, unacceptedOnly, normalizedSearch, orderedTasks, priority, project, status]);
+  }), [assignee, client, creator, department, dueFrom, dueTo, helpOnly, unacceptedOnly, normalizedSearch, orderedTasks, priority, project, status, locale]);
   const taskId = searchParams.get('taskId');
   // List filters and scope must not dismiss authorized details after delegation.
   const selectedTask = taskId ? visibleTasks.find(task => task.id === taskId) || null : null;
@@ -206,9 +208,10 @@ const StaffAllWork: React.FC = () => {
           </div>
         )}
 
+        {taskId && !selectedTask && <UnavailableWork onDismiss={() => setTaskId()} />}
         <Surface id="all-work-panel" role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={visibleTasks} users={users} onOpen={item => setTaskId(item.id)} />)}
-          {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">{t('No visible work matches this view')}</p><p className="mt-1 text-sm text-muted">{t('Clear a filter or choose another queue.')}</p></div>}
+          {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">{t(activeFilterCount > 0 ? 'feedback.noMatches' : tasks.length === 0 ? 'feedback.noAssignments' : bucket === 'needs_action' ? 'feedback.noNeedsAction' : bucket === 'up_next' ? 'feedback.noUpNext' : bucket === 'waiting' ? 'feedback.noWaiting' : 'feedback.noDone')}</p><p className="mt-1 text-sm text-muted">{t('Clear a filter or choose another queue.')}</p></div>}
         </Surface>
       </section>
 
@@ -216,7 +219,7 @@ const StaffAllWork: React.FC = () => {
         isOpen={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         title={t('Filter visible work')}
-        description={t('Narrow your queue without manager-only controls.')}
+        description={t('Choose which work to show.')}
         footer={<div className="flex gap-2"><Button variant="secondary" className="flex-1" onClick={clearFilters}>{t('Clear')}</Button><Button className="flex-1" onClick={() => setFiltersOpen(false)}>{t('Show')} {filteredTasks.length}</Button></div>}
       >
         <div className="space-y-5">
@@ -225,9 +228,9 @@ const StaffAllWork: React.FC = () => {
           <label className="block text-sm font-medium text-ink">{t('Client')}<select aria-label={t('Filter by client')} value={client} onChange={event => setClient(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{clients.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
           <label className="block text-sm font-medium text-ink">{t('Project')}<select aria-label={t('Filter by project')} value={project} onChange={event => setProject(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{projectsForFilter.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
           <label className="block text-sm font-medium text-ink">{t('Assignee')}<select aria-label={t('Filter by assignee')} value={assignee} onChange={event => setAssignee(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{assignees.map(user => <option data-i18n-skip key={user.id} value={user.id}>{user.name}</option>)}</select></label>
-          <label className="block text-sm font-medium text-ink">{t('Department')}<select aria-label={t('Filter by department')} value={department} onChange={event => setDepartment(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{departments.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Department')}<select aria-label={t('Filter by department')} value={department} onChange={event => setDepartment(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{departments.map(name => <option data-i18n-skip key={name} value={name}>{getLocalizedDepartment(name, locale)}</option>)}</select></label>
           <label className="block text-sm font-medium text-ink">{t('Created by')}<select aria-label={t('Filter by creator')} value={creator} onChange={event => setCreator(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{creators.map(user => <option data-i18n-skip key={user.id} value={user.id}>{user.name}</option>)}</select></label>
-          <label className="block text-sm font-medium text-ink">{t('Status')}<select aria-label={t('Filter by status')} value={status} onChange={event => setStatus(event.target.value as TaskStatus)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{taskStatuses.map(name => <option key={name} value={name}>{t(name)}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Status')}<select aria-label={t('Filter by status')} value={status} onChange={event => setStatus(event.target.value as TaskStatus)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{taskStatuses.map(name => <option key={name} value={name}>{getLocalizedTaskStatus(name, locale)}</option>)}</select></label>
           <label className="block text-sm font-medium text-ink">{t('Priority')}<select aria-label={t('Filter by priority')} value={priority} onChange={event => setPriority(event.target.value as Priority | 'All')} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{priorities.map(name => <option key={name} value={name}>{t(name)}</option>)}</select></label>
           <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium text-ink">{t('Due from')}<input type="date" aria-label={t('Due from')} value={dueFrom} onChange={event => setDueFrom(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`} /></label><label className="block text-sm font-medium text-ink">{t('Due to')}<input type="date" aria-label={t('Due to')} value={dueTo} onChange={event => setDueTo(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`} /></label></div>
         </div>

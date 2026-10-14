@@ -217,6 +217,7 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
       footer={footer}
     >
       <div className="space-y-7">
+        {recovery.storageFailed && <p role="alert" className="px-5 py-3 text-sm text-amber-800">{t('feedback.draftStorageFailed')}</p>}
         {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
         <section aria-labelledby="delivery-outcome-title">
           <div className="flex flex-wrap items-center gap-2">
