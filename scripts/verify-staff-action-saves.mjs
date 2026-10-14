@@ -174,6 +174,27 @@ try {
   assert.equal(useStore.getState().tasks.find(task => task.id === 'task').completionPercentage, 80);
   assert.equal(useStore.getState().tasks.find(task => task.id === 'task').isCompleted, false);
   console.log('[staff-saves] Client feedback and approval persisted through real Auth/REST without an internal staff directory.');
+  // Counters, assignments and unknown historical completion dates stay server-owned.
+  sql("update public.aitask_entities set data=(data - 'completedAt') || '{\"status\":\"Approved\",\"isCompleted\":false,\"completionPercentage\":80,\"clientApprovalStatus\":\"Pending\",\"revisionCount\":7}'::jsonb where workspace_id='aitask-main' and entity_type='task' and entity_id='task';");
+  await login('customer');
+  await save('Client rejection without internal counter', useStore.getState().reviewClientApproval('task', 'Rejected', 'Please revise.'), 'approval.review');
+  await login('boss');
+  const rejectedTask = useStore.getState().tasks.find(task => task.id === 'task');
+  assert.equal(rejectedTask.revisionCount, 8);
+  assert.equal(rejectedTask.assignedTo, 'hod');
+  assert.equal(rejectedTask.completedAt, undefined);
+  assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').status, 'In Progress');
+  // Seed a historical undated task only inside this disposable validation DB.
+  sql("begin; alter table public.aitask_entities disable trigger aitask_enforce_task_completed_at; update public.aitask_entities set data=(data - 'completedAt') || '{\"status\":\"Approved\",\"isCompleted\":false,\"completionPercentage\":80,\"clientApprovalStatus\":\"Pending\"}'::jsonb where workspace_id='aitask-main' and entity_type='task' and entity_id='task'; alter table public.aitask_entities enable trigger aitask_enforce_task_completed_at; commit;");
+  await login('customer');
+  await save('Client approval preserves unknown completion date', useStore.getState().reviewClientApproval('task', 'Approved', 'Approved.'), 'approval.review');
+  await login('boss');
+  const approvedTask = useStore.getState().tasks.find(task => task.id === 'task');
+  assert.equal(approvedTask.revisionCount, 8);
+  assert.equal(approvedTask.assignedTo, 'hod');
+  assert.equal(approvedTask.completedAt, undefined);
+  assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').status, 'In Progress');
+  console.log('[staff-saves] Client feedback, approval and rejection persisted through real Auth/REST without an internal staff directory; canonical assignments/counters and unknown completion dates were preserved.');
 
   console.log('[staff-saves] Actual frontend actions persisted through authenticated REST: creation/deletion, edits, status, priority, dates, comments, derived delivery/reopening, HOD delegation, reload and lost-confirmation retry.');
 } finally {

@@ -1,5 +1,4 @@
 import { recordDiagnostic } from './diagnostics';
-import { bindPendingServiceFiles, acknowledgePendingServiceFiles } from './serviceFiles';
 import { assertWorkspaceSession, captureWorkspaceSession, isWorkspaceSessionCurrent, onWorkspaceSessionInvalidated } from './workspaceSession';
 import type { User } from '@supabase/supabase-js';
 import type {
@@ -740,6 +739,11 @@ const stateToRows = (state: PersistedWorkspaceState) => {
   state.projects.forEach(item => push('entity', 'project', item.id, item as unknown as Record<string, unknown>, item.version));
   state.tasks.forEach(item => {
     const { comments = [], approvalHistory = [], ...task } = item;
+    delete task.reviewAccess;
+    delete task.workflowStepKind;
+    delete task.workflowOutputVersion;
+    delete task.workflowDependenciesReady;
+    delete task.internalReview;
     push(
       'entity',
       'task',
@@ -864,6 +868,9 @@ export const buildOperations = (
   options: BuildOperationsOptions = {},
 ): WorkspaceOperation[] => {
   const nextRows = stateToRows(state);
+  // A local approval draft has no server decision ID. Send its task even when
+  // the status was already Completed, so PostgreSQL can journal the sign-off.
+  const reviewDrafts = new Set(state.tasks.filter(task => task.internalReview && !task.internalReview.decisionId).map(task => entityKey('task', task.id)));
   const nextKeys = new Set(nextRows.map(row => entityKey(row.entityType, row.entityId)));
   const excludedEntityTypes = new Set<string>(
     options.excludeSuperAdminEntities ? superAdminOnlyEntityTypes : [],
@@ -899,7 +906,7 @@ export const buildOperations = (
       });
       return;
     }
-    if (previous.serialized !== row.serialized) {
+    if (previous.serialized !== row.serialized || reviewDrafts.has(key)) {
       operations.push({
         kind: row.kind,
         action: 'update',
@@ -1252,6 +1259,8 @@ const executeCommand = async (
   }
 
   const sessionToken = captureWorkspaceSession();
+  const { bindPendingServiceFiles, acknowledgePendingServiceFiles } = await import('./serviceFiles');
+  assertWorkspaceSession(sessionToken);
   bindPendingServiceFiles(command.id, command.operations);
   const serviceCommand = serviceCommandTypes.has(command.type);
   const invoke = bindSessionRequest(() => command.type === 'deliverable.workflow.generate'
@@ -1349,41 +1358,10 @@ export const loadSecureBackendCapabilities = async (): Promise<SecureBackendComp
   const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_get_backend_capabilities', {
     p_workspace_id: SECURE_WORKSPACE_ID,
   })));
-  let result: Awaited<ReturnType<typeof invoke>>;
   try {
-    result = await invoke();
-    if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
-  } catch {
-    return { compatible: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE };
-  }
-
-  if (result.error) {
-    return {
-      compatible: false,
-      code: result.error.code,
-      error: BACKEND_UPGRADE_REQUIRED_MESSAGE,
-    };
-  }
-
-  const response = result.data as Partial<SecureBackendCapabilities> & { ok?: boolean };
-  const capabilities: SecureBackendCapabilities = {
-    schemaVersion: Number(response?.schemaVersion) || 0,
-    workflowReviewGate: response?.workflowReviewGate === true,
-    workspaceOptimisticLock: response?.workspaceOptimisticLock === true,
-    serviceOperations: response?.serviceOperations === true,
-    releaseNoticeAcknowledgements: response?.releaseNoticeAcknowledgements === true,
-    memberPermissionManagement: response?.memberPermissionManagement === true,
-  };
-  const compatible = response?.ok === true
-    && (capabilities.schemaVersion === SECURE_BACKEND_SCHEMA_VERSION
-      || (capabilities.schemaVersion === 5 && capabilities.workflowReviewGate === true))
-    && capabilities.workspaceOptimisticLock
-    && capabilities.serviceOperations
-    && capabilities.releaseNoticeAcknowledgements
-    && capabilities.memberPermissionManagement;
-  return compatible
-    ? { compatible: true, capabilities }
-    : { compatible: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE };
+    const { loadBackendCompatibility } = await import('./secureBackendCapabilities');
+    return loadBackendCompatibility(invoke, refreshSecureSession, isAuthError, SECURE_BACKEND_SCHEMA_VERSION, BACKEND_UPGRADE_REQUIRED_MESSAGE);
+  } catch { return { compatible: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE }; }
 };
 
 export const loadSecureWorkspaceRevision = async () => {
@@ -1527,95 +1505,21 @@ const releaseNoticeFailure = (
   error: string,
 ): ReleaseNoticeAcknowledgementResult => ({ ok: false, code, error });
 
-const readReleaseNoticeResponse = (
-  value: unknown,
-  noticeId: string,
-): ReleaseNoticeAcknowledgementResult => {
-  if (!isRecord(value) || value.ok !== true) {
-    return releaseNoticeFailure(
-      isRecord(value) && typeof value.code === 'string' && value.code === 'FORBIDDEN'
-        ? 'FORBIDDEN'
-        : 'RETRY_REQUIRED',
-      isRecord(value) && typeof value.error === 'string'
-        ? value.error
-        : 'Supabase returned an invalid release notice response.',
-    );
-  }
-  if (cleanPortalText(value.noticeId, 80) !== noticeId) {
-    return releaseNoticeFailure('VALIDATION', 'The release notice response did not match this update.');
-  }
-  return { ok: true, acknowledged: value.acknowledged === true };
-};
+const releaseNoticeRuntime = () => ({ cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, SyncRequestTimeoutError });
+export type SecureReleaseNoticeRuntime = ReturnType<typeof releaseNoticeRuntime>;
 
-export const getSecureReleaseNoticeAcknowledgement = async (
-  noticeId: string,
-): Promise<ReleaseNoticeAcknowledgementResult> => {
-  const normalizedNoticeId = cleanPortalText(noticeId, 80);
-  if (!normalizedNoticeId) return releaseNoticeFailure('VALIDATION', 'Choose a release notice.');
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return releaseNoticeFailure('OFFLINE', 'Reconnect before checking the release notice.');
-  }
-
-  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_get_release_notice_acknowledgement', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_notice_id: normalizedNoticeId,
-  })));
-
-  let result: Awaited<ReturnType<typeof invoke>>;
+const requestReleaseNotice = async (noticeId: string, acknowledge: boolean): Promise<ReleaseNoticeAcknowledgementResult> => {
+  const sessionToken = captureWorkspaceSession();
   try {
-    result = await invoke();
-    if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
-  } catch (error) {
-    return releaseNoticeFailure(
-      typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
-      error instanceof SyncRequestTimeoutError
-        ? 'Release notice verification timed out. It will be checked again next time.'
-        : 'Supabase could not verify the release notice.',
-    );
+    const module = await import('./secureReleaseNotices');
+    assertWorkspaceSession(sessionToken);
+    return module.requestReleaseNotice(noticeId, acknowledge, releaseNoticeRuntime());
+  } catch {
+    return releaseNoticeFailure('RETRY_REQUIRED', acknowledge ? 'Supabase could not save the release notice acknowledgement.' : 'Supabase could not verify the release notice.');
   }
-  if (result.error) {
-    return releaseNoticeFailure(
-      isAuthError(result.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
-      result.error.message || 'Supabase could not verify the release notice.',
-    );
-  }
-  return readReleaseNoticeResponse(result.data, normalizedNoticeId);
 };
-
-export const acknowledgeSecureReleaseNotice = async (
-  noticeId: string,
-): Promise<ReleaseNoticeAcknowledgementResult> => {
-  const normalizedNoticeId = cleanPortalText(noticeId, 80);
-  if (!normalizedNoticeId) return releaseNoticeFailure('VALIDATION', 'Choose a release notice.');
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    return releaseNoticeFailure('OFFLINE', 'Reconnect before saving the release notice acknowledgement.');
-  }
-
-  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_acknowledge_release_notice', {
-    p_workspace_id: SECURE_WORKSPACE_ID,
-    p_notice_id: normalizedNoticeId,
-  })));
-
-  let result: Awaited<ReturnType<typeof invoke>>;
-  try {
-    result = await invoke();
-    if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
-  } catch (error) {
-    return releaseNoticeFailure(
-      typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
-      error instanceof SyncRequestTimeoutError
-        ? 'Release notice acknowledgement timed out. It will be checked again next time.'
-        : 'Supabase could not save the release notice acknowledgement.',
-    );
-  }
-  if (result.error) {
-    return releaseNoticeFailure(
-      isAuthError(result.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
-      result.error.message || 'Supabase could not save the release notice acknowledgement.',
-    );
-  }
-  return readReleaseNoticeResponse(result.data, normalizedNoticeId);
-};
+export const getSecureReleaseNoticeAcknowledgement = (noticeId: string) => requestReleaseNotice(noticeId, false);
+export const acknowledgeSecureReleaseNotice = (noticeId: string) => requestReleaseNotice(noticeId, true);
 
 const notificationRuntime = () => ({
   get retryableNotificationMutation() { return retryableNotificationMutation; },
@@ -1859,6 +1763,14 @@ const loadSecureWorkspaceInternal = async (authUser: User, options: { preserveRe
     servicePricingSnapshots: dataFor<ServicePricingSnapshot>('service_pricing_snapshot'),
   };
   const state = parseWorkspaceSnapshot(raw);
+  if (currentUser.role !== 'Client' && state.tasks.length > 0) {
+    const query = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_get_workflow_task_context', { p_workspace_id: SECURE_WORKSPACE_ID })));
+    const { loadWorkflowContext } = await import('./workflowContext');
+    assertWorkspaceSession(sessionToken);
+    const tasks = await loadWorkflowContext(state.tasks, query, BACKEND_UPGRADE_REQUIRED_MESSAGE, currentUser.id);
+    assertWorkspaceSession(sessionToken);
+    state.tasks = tasks;
+  }
   if (currentUser.role === 'Client') {
     state.users = users;
     state.tasks = state.tasks.map(task => clientTaskIds.has(task.id)
@@ -1905,50 +1817,8 @@ export const completeSecurePasswordSetup = async (): Promise<MutationResult<Comm
     p_command_id: id,
   })));
 
-  let result: Awaited<ReturnType<typeof invoke>>;
-  try {
-    result = await invoke();
-  } catch {
-    return {
-      ok: false,
-      code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
-      error: 'The password changed, but Supabase could not finalize account setup. Sign in with the new password and retry.',
-    };
-  }
-  if (isAuthError(result.error) && await refreshSecureSession()) {
-    try {
-      result = await invoke();
-    } catch {
-      return {
-        ok: false,
-        code: 'RETRY_REQUIRED',
-        error: 'The password changed, but Supabase could not finalize account setup. Sign in with the new password and retry.',
-      };
-    }
-  }
-  if (result.error) {
-    return {
-      ok: false,
-      code: isAuthError(result.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
-      error: result.error.message || 'Account setup could not be finalized.',
-    };
-  }
-
-  const response = result.data as CommandResponse;
-  if (!response?.ok) {
-    return {
-      ok: false,
-      code: response?.code || 'RETRY_REQUIRED',
-      error: response?.error || 'Account setup could not be finalized.',
-    };
-  }
-
-  return {
-    ok: true,
-    data: response,
-    commandId: response.commandId || id,
-    workspaceVersion: Number(response.workspaceVersion) || 1,
-  };
+  const { finalizePasswordSetup } = await import('./securePasswordSetup');
+  return finalizePasswordSetup(invoke, id, isAuthError, refreshSecureSession);
 };
 
 export const saveSecureWorkspace = async (

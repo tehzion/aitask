@@ -9,11 +9,11 @@ insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_co
 insert into public.aitask_workspaces(id,name) values('stage-readiness-test','Stage progress test');
 insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,department,departments,is_super_admin,client_name) values
 ('stage-pm','stage-readiness-test','00000000-0000-0000-0000-000000005501','PM','stage-pm@aitask.local','Project Manager','Management',array['Management'],false,null),
-('stage-hod','stage-readiness-test','00000000-0000-0000-0000-000000005502','HOD','stage-hod@aitask.local','HOD','Designer',array['Designer'],false,null),
-('stage-staff','stage-readiness-test','00000000-0000-0000-0000-000000005503','Staff','stage-staff@aitask.local','Staff','Designer',array['Designer'],false,null),
+('stage-hod','stage-readiness-test','00000000-0000-0000-0000-000000005502','HOD','stage-hod@aitask.local','HOD','Video Shooting',array['Video Shooting'],false,null),
+('stage-staff','stage-readiness-test','00000000-0000-0000-0000-000000005503','Staff','stage-staff@aitask.local','Staff','Video Shooting',array['Video Shooting'],false,null),
 ('stage-client','stage-readiness-test','00000000-0000-0000-0000-000000005504','Client','stage-client@aitask.local','Client','Client',array['Client'],false,'Stage Company');
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
-('stage-readiness-test','task','stage-task','{"id":"stage-task","clientName":"Stage Company","title":"Artwork","department":"Designer","assignedTo":"stage-staff","createdBy":"stage-pm","assignedBy":"stage-pm","status":"Pending","isCompleted":false,"clientApprovalStatus":"Pending","visibility":"client-visible"}');
+('stage-readiness-test','task','stage-task','{"id":"stage-task","clientName":"Stage Company","title":"Artwork","department":"Video Shooting","assignedTo":"stage-staff","createdBy":"stage-pm","assignedBy":"stage-pm","status":"Pending","isCompleted":false,"clientApprovalStatus":"Pending","visibility":"client-visible"}');
 create function pg_temp.stage_update(p_patch jsonb) returns jsonb language sql as $$
  select public.aitask_execute_command('stage-readiness-test',gen_random_uuid(),'task.update',jsonb_build_array(jsonb_build_object(
  'kind','entity','action','update','entityType','task','entityId','stage-task',
@@ -30,7 +30,7 @@ select is((select data->>'status' from public.aitask_entities where entity_id='s
 reset role;
 select is((select count(*)::integer from public.aitask_entities where workspace_id='stage-readiness-test' and entity_type='notification'),0,'failed submission is atomic');
 select set_config('request.jwt.claim.sub','',true);
-update public.aitask_members set departments=array['Designer'] where workspace_id='stage-readiness-test' and id='stage-hod';
+update public.aitask_members set departments=array['Video Shooting'] where workspace_id='stage-readiness-test' and id='stage-hod';
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005503',true);
 set local role authenticated;
 select is((pg_temp.stage_update('{"workState":{"acceptedBy":"stage-staff"}}')->>'ok')::boolean,true,'Staff accepts work');
@@ -53,7 +53,7 @@ select is((select data->>'status' from public.aitask_entities where entity_id='s
 select is((select (data->>'completionPercentage')::integer from public.aitask_entities where entity_id='stage-task'),10,'reassignment to HOD is 10 percent');
 select ok((select not (data->'workState' ? 'acceptedBy') and not (data->'workState' ? 'reviewRequestedBy') from public.aitask_entities where entity_id='stage-task'),'reassignment clears acceptance and review metadata');
 select ok((select data->'workHistory'->-1->'fields' ? 'status' from public.aitask_entities where entity_id='stage-task'),'normalized reassignment is included in the attributed history');
-select is((public.aitask_execute_command('stage-readiness-test',gen_random_uuid(),'task.create',jsonb_build_array(jsonb_build_object('kind','entity','action','insert','entityType','task','entityId','created-review','expectedVersion',0,'data',jsonb_build_object('id','created-review','title','Immediate review','clientName','Stage Company','department','Designer','createdBy','stage-pm','assignedTo','stage-staff','status','Waiting Approval','visibility','internal','isCompleted',false,'clientApprovalStatus','Pending'))))->>'ok')::boolean,true,'a task created directly in review saves');
+select is((public.aitask_execute_command('stage-readiness-test',gen_random_uuid(),'task.create',jsonb_build_array(jsonb_build_object('kind','entity','action','insert','entityType','task','entityId','created-review','expectedVersion',0,'data',jsonb_build_object('id','created-review','title','Immediate review','clientName','Stage Company','department','Video Shooting','createdBy','stage-pm','assignedTo','stage-staff','status','Waiting Approval','visibility','internal','isCompleted',false,'clientApprovalStatus','Pending'))))->>'ok')::boolean,true,'a task created directly in review saves');
 reset role;
 select is((select count(*)::integer from public.aitask_entities where workspace_id='stage-readiness-test' and entity_type='notification' and data->'route'->>'entityId'='created-review' and data->>'targetUserId'='stage-hod'),1,'INSERT submission generates exactly one HOD handoff');
 select set_config('request.jwt.claim.sub','',true);
@@ -82,7 +82,7 @@ select is((pg_temp.stage_update('{"status":"Completed","title":"Unaudited replac
 select is((pg_temp.stage_update('{"dueDate":"2026-10-30"}')->>'ok')::boolean,true,'routine scheduling can change while output approval stays valid');
 reset role;
 select set_config('request.jwt.claim.sub','',true);
-insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values('stage-readiness-test','task','legacy-review','{"id":"legacy-review","title":"Historical submitted task","clientName":"Stage Company","department":"Designer","assignedTo":"stage-staff","createdBy":"stage-pm","status":"Waiting Approval","isCompleted":false,"visibility":"internal","clientApprovalStatus":"Pending"}');
+insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values('stage-readiness-test','task','legacy-review','{"id":"legacy-review","title":"Historical submitted task","clientName":"Stage Company","department":"Video Shooting","assignedTo":"stage-staff","createdBy":"stage-pm","status":"Waiting Approval","isCompleted":false,"visibility":"internal","clientApprovalStatus":"Pending"}');
 select is(private.aitask_backfill_pending_hod_reviews(),1,'rollout supplies the missing handoff for historical submissions');
 select is((select count(*)::integer from public.aitask_entities where workspace_id='stage-readiness-test' and entity_type='notification' and data->'route'->>'entityId'='legacy-review' and data->>'targetUserId'='stage-hod'),1,'historic review reaches its configured HOD');
 select is(private.aitask_backfill_pending_hod_reviews(),0,'review backfill is idempotent');

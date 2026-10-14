@@ -3,8 +3,8 @@
 Two corrections are implemented locally: destructive task authority is separate
 from editing, and Boss workload reporting supports equal department memberships.
 The third priority, reviewing HOD approval and handover ownership, confirmed an
-unenforced review gate. That finding is recorded below; this change does not
-introduce a new approval workflow.
+unenforced review gate. The follow-up implementation is documented in
+[Internal workflow review gate](workflow-review-gate-2026-10-13.md).
 
 ## Task deletion authority
 
@@ -47,7 +47,7 @@ Both new explanatory labels have Chinese translations.
 
 ## Review and handover audit
 
-**Confirmed unresolved finding:** an assigned Staff member can complete a frozen
+**Original confirmed finding, addressed by the follow-up gate:** an assigned Staff member could complete a frozen
 `internal_review` task while its predecessor remains Pending.
 
 A temporary diagnostic created a real client plan and generated the ten-step
@@ -67,14 +67,16 @@ task update was attempted.
 Handover checks confirm immutable task creation ownership, actor-stamped
 `assignedBy`/`assignedAt`, retained attribution on non-assignment edits, and
 continued appearance in the HOD's Delegated by me scope after delegation.
-There is no separate permanent accountable-lead or named internal-review decision
-record. Later reassignment can replace the last assigner, so that field should
+The review gate now records named, version-bound decisions. There is still no
+separate permanent accountable lead. Later reassignment can replace the last assigner, so that field should
 not be treated as permanent outcome ownership.
 
 An enforced review feature needs an explicit reviewer/cover model, a decision
 bound to the reviewed output version, server-enforced review/dependency gates,
 and invalidation after revisions. Boss/PM overrides must be explicit and audited.
-These are additional product changes, not guarantees supplied by this patch.
+These guarantees are supplied by the follow-up review migration and frontend;
+that migration was subsequently applied on 13 October 2026 as connector version
+`20261013061241`.
 
 ## Verification and rollout
 
@@ -94,8 +96,10 @@ These are additional product changes, not guarantees supplied by this patch.
 The role guide now accurately reserves Approvals for Boss Koo and describes
 editable built-in templates and the deletion boundary.
 
-The frontend and new deletion migration have not been deployed. The migration
-is recorded as pending in the release manifest. Existing delivery/privacy work
+At the time of the original commit, the frontend and deletion migration had not
+been deployed. The deletion migration was subsequently applied as production
+connector `20261013051554`; the review gate followed as `20261013061241`.
+Existing delivery/privacy work
 in this shared checkout was preserved; no unrelated files were committed,
 no staging deployment was performed and no production business records changed.
 
@@ -105,7 +109,7 @@ The commit stages only this chat's changes. Shared translation and release-manif
 files are staged selectively; the committed manifest lists only migrations
 present in the commit.
 
-The deletion migration also supports the parallel Client projection wrapper by
+The original compatibility investigation supported the parallel Client projection wrapper by
 updating its retained validator instead of replacing the wrapper. HOD deletion
 assertions passed with that wrapper in a disposable database. The combined
 snapshot failed five separate notification/direct-access checks introduced by
@@ -113,3 +117,8 @@ the parallel wrapper, so its migrations remain outside this commit. The isolated
 staged frontend passed 74 relevant unit tests and TypeScript checks.
 The exact staged migration set passed all 597 database assertions across 42
 files, schema lint and security-advisor error gates in a separate disposable run.
+
+The final delivery/privacy correction subsequently retained the original
+validator in place, replacing that wrapper approach. The isolated review-gate
+worktree includes this final correction; its complete combined Auth/REST gate
+passes, including Client approval without the Staff directory.

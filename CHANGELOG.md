@@ -8,6 +8,26 @@ number remain uniquely identifiable.
 
 ### Fixed
 
+- Designer tasks without a configured HOD route review to responsible portfolio
+  PMs. Review approval remains 80%, followed by separate PM completion at 100%.
+  Changing department or assignee during approval cannot bypass review authority.
+- Older masked Client approval payloads may include a blank assignee while the
+  canonical assignment remains unchanged. Completed private notes preserve signed
+  workflow decisions; canonical context exposes the valid signature at 80%.
+- Upload recovery and account-setup finalization load when needed, keeping the
+  startup bundle within its budget.
+
+- Client dashboards use generic team labels and the portal payload excludes staff
+  contacts and assignments. Publication messages require an actual current draft.
+- Company review selections survive switching workspace tabs. Expired drafts and
+  invalid delivery links remain visible for explicit, permission-checked review.
+- Client approval/rejection saves work with private assignment and revision fields
+  omitted. Server merges preserve canonical counters and unknown completion dates;
+  published cycles load without private add-on snapshots.
+- Server delivery progress recognizes both task-link forms and excludes tasks from
+  other companies. Invalid links can be removed explicitly without moving tasks,
+  deleting records or automatically confirming delivery.
+- Disposable database startup credentials are excluded from CI evidence logs.
 - Published cycles retain Included, Delivered and Remaining counters; draft and
   empty cycles show publication states without misleading zero percentages.
 - Browser assertions cover the current publication labels and midnight changes;

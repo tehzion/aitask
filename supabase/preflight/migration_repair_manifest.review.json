@@ -180,6 +180,10 @@
           "production": "20261013102204_staff_workflow_recovery"
         },
         {
+          "repository": "20261013035310_workflow_internal_review_gate",
+          "production": "20261013061241_workflow_internal_review_gate"
+        },
+        {
           "repository": "20261013053636_hod_review_handoff",
           "production": "20261013164424_hod_review_handoff"
         },
@@ -493,6 +497,63 @@
         "commit": "3933b3f90542510a8df5b9241b36adc839d341f4",
         "version": "3.0.0"
       }
+    },
+    "deliveryReviewPrivacyRollout": {
+      "appliedAt": "2026-10-13",
+      "method": "Supabase deployment connector; function definitions only, no business backfill",
+      "liveVerification": {
+        "entityCountBefore": 1769,
+        "entityCountAfter": 1769,
+        "entityHashBefore": "a5441f09c456d958b876b89d39e20b32",
+        "entityHashAfter": "a5441f09c456d958b876b89d39e20b32",
+        "authorizationFunctionOidPreserved": true,
+        "authorizationFunctionGrantsPreserved": true,
+        "clientTaskAssignmentHidden": true,
+        "clientApprovalPathVerified": true,
+        "reverseCompanyDerivationVerified": true
+      }
+    },
+    "workflowInternalReviewRollout": {
+      "appliedAt": "2026-10-13",
+      "repositoryMigration": "20261013035310_workflow_internal_review_gate",
+      "productionVersion": "20261013061241",
+      "method": "Supabase connector apply_migration; generated timestamp retained",
+      "sourceCommit": "ae2688c",
+      "verification": {
+        "backendSchemaVersion": 5,
+        "workflowReviewGate": true,
+        "authenticatedCapabilityProbePassed": true,
+        "authenticatedContextProbePassed": true,
+        "deployedFunctionBodiesMatchCommittedSource": 7,
+        "guardTriggersEnabled": 2,
+        "privateJournalRlsEnabled": true,
+        "directJournalAccessDenied": true,
+        "privateHelperExecuteDenied": true,
+        "unauthenticatedContextDenied": true,
+        "missingDependencyDenied": true,
+        "unsignedUnresolvedWorkflowDenied": true,
+        "entityCountBefore": 1853,
+        "entityCountAfter": 1853,
+        "entityHashBefore": "4aafa765aaadfdd2815403b4296466d1",
+        "entityHashAfter": "4aafa765aaadfdd2815403b4296466d1",
+        "memberCountBefore": 11,
+        "memberCountAfter": 11,
+        "memberHashBefore": "3bcb3760af682e2eef96ac6094b74920",
+        "memberHashAfter": "3bcb3760af682e2eef96ac6094b74920",
+        "existingFunctionOidsPreserved": true,
+        "productionWorkflowTasksBefore": 0,
+        "journalRowsAfter": 0,
+        "securityAdvisorErrors": 0,
+        "performanceAdvisorErrors": 0,
+        "localDatabaseAssertions": 650,
+        "localFrontendTests": 561,
+        "browserChecks": 20
+      },
+      "advisors": "The guarded authenticated SECURITY DEFINER context endpoint, private no-policy RLS journal and newly unused index are intentional. Existing leaked-password protection warning remains.",
+      "limitations": [
+        "Hosted probes used SQL request scope; no real production account login or task mutation was performed.",
+        "Frontend deployment provenance was not verified as part of this database rollout."
+      ]
     }
   },
   "schemaEquivalence": {
@@ -714,10 +775,18 @@
     "20261012164407_delivery_link_derivation",
     "20261012165347_hod_task_deletion_authority",
     "20261013035142_staff_workflow_recovery",
+    "20261013035310_workflow_internal_review_gate",
     "20261013053636_hod_review_handoff",
     "20261013055051_task_stage_progress",
     "20261013105534_task_role_readiness_hardening",
-    "20261013160804_task_dependency_review_invalidation"
+    "20261013160804_task_dependency_review_invalidation",
+    "20261014045216_client_approval_masked_assignment_compatibility",
+    "20261014045911_designer_pm_review_fallback",
+    "20261014050918_preserve_completed_review_notes"
   ],
-  "pendingProductionMigrations": []
+  "pendingProductionMigrations": [
+    "20261014045216_client_approval_masked_assignment_compatibility",
+    "20261014045911_designer_pm_review_fallback",
+    "20261014050918_preserve_completed_review_notes"
+  ]
 }

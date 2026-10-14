@@ -467,7 +467,7 @@ const TasksWorkspace: React.FC = () => {
             await persistQuickChange(task);
           }}
         >
-        {getTaskStatusOptions(currentUser, task, taskStatuses, rolePermissions).map(status => (
+        {getTaskStatusOptions(currentUser, task, taskStatuses, rolePermissions, { users, clients: clientProfiles, projects }).map(status => (
             <option key={status} value={status} className="bg-white text-slate-900">{getLocalizedStatus(status, locale)}</option>
           ))}
         </select>
@@ -1230,7 +1230,7 @@ const TasksWorkspace: React.FC = () => {
                       setActiveQuickEdit(null);
                     }}
                   >
-                    {getTaskStatusOptions(currentUser, currentTask, taskStatuses, rolePermissions).map(status => (
+                    {getTaskStatusOptions(currentUser, currentTask, taskStatuses, rolePermissions, { users, clients: clientProfiles, projects }).map(status => (
                       <option key={status} value={status}>{getLocalizedStatus(status, locale)}</option>
                     ))}
                   </select>

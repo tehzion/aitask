@@ -21,6 +21,7 @@ async function load(remoteDelivery = { ...delivery, status: 'In Progress' }) {
     return query;
   });
   rpc.mockResolvedValueOnce({ data: { ok: true, memberId: member.id, items: [], unreadCount: 0, nextCursor: null }, error: null });
+  rpc.mockResolvedValueOnce({ data: { ok: true, tasks: [] }, error: null });
   return (await loadSecureWorkspace({ id: member.auth_user_id } as never)).state;
 }
 
@@ -33,7 +34,7 @@ describe('task-derived delivery saves', () => {
     rpc.mockResolvedValueOnce({ data: { ok: true, workspaceVersion: 2, changed: [{ entityType: 'task', entityId: 'task', version: 2 }] }, error: null });
     const saved = await saveSecureWorkspace(next, 'task.update', undefined, { actorMemberId: 'staff', excludeSuperAdminEntities: true });
     expect(saved.ok).toBe(true);
-    expect(rpc).toHaveBeenCalledTimes(2); // Notification feed plus task command.
+    expect(rpc).toHaveBeenCalledTimes(3); // Canonical review context, notification feed and task command.
     expect(buildOperations(next, { actorMemberId: 'staff', excludeSuperAdminEntities: true })).toEqual([]);
   });
 

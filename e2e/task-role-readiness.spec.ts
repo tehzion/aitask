@@ -20,7 +20,7 @@ const seed = async (page: Page) => {
     const users = [member('stage-pm', 'Project Manager'), member('stage-hod', 'HOD'), member('stage-staff', 'Staff'), member('stage-client', 'Client')];
     for (const user of users) { enablePasswordResetBypass(user.id); localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${user.id}`, 'acknowledged'); }
     localStorage.setItem('aitask:locale', 'en');
-    useStore.setState({ currentUser: users[0], users, rolePermissions: [], projects: [], clientPlans: [], deliverables: [], serviceCycles: [], notifications: [], clients: [{ id: 'stage-company', clientName: 'Stage Company', createdBy: 'stage-pm', createdAt: '2026-10-01', updatedAt: '2026-10-01' }], tasks: [{ ...state.tasks[0], id: 'stage-task', title: 'Stage artwork', clientId: 'stage-company', clientName: 'Stage Company', projectId: undefined, deliverableId: undefined, serviceCycleId: undefined, department: 'Designer', assignedTo: '', assignedBy: 'stage-pm', createdBy: 'stage-pm', status: 'Pending', isCompleted: false, completionPercentage: 0, revisionCount: 0, clientApprovalStatus: 'Pending', visibility: 'client-visible', predecessorTaskIds: [], workState: {}, workHistory: [], comments: [], approvalHistory: [] }], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
+    useStore.setState({ currentUser: users[0], users, rolePermissions: [], projects: [], clientPlans: [], deliverables: [], serviceCycles: [], notifications: [], clients: [{ id: 'stage-company', clientName: 'Stage Company', createdBy: 'stage-pm', createdAt: '2026-10-01', updatedAt: '2026-10-01' }], tasks: [{ ...state.tasks[0], generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined, internalReview: undefined, id: 'stage-task', title: 'Stage artwork', clientId: 'stage-company', clientName: 'Stage Company', projectId: undefined, deliverableId: undefined, serviceCycleId: undefined, department: 'Designer', assignedTo: '', assignedBy: 'stage-pm', createdBy: 'stage-pm', status: 'Pending', isCompleted: false, completionPercentage: 0, revisionCount: 0, clientApprovalStatus: 'Pending', visibility: 'client-visible', predecessorTaskIds: [], workState: {}, workHistory: [], comments: [], approvalHistory: [] }], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
     if (!useStore.getState().updateTaskAssignee('stage-task', 'stage-hod').ok) throw new Error('PM assignment failed');
   });
 };
@@ -82,9 +82,49 @@ test('a missing department HOD shows an actionable error and does not claim a su
     const { getDepartmentReviewers } = await import('/src/lib/taskWorkflowAccess.ts');
     const state = useStore.getState();
     const reviewers = new Set(getDepartmentReviewers(state.users, state.tasks[0], state.rolePermissions).map(user => user.id));
-    useStore.setState({ users: state.users.filter(user => !reviewers.has(user.id)), backend: { ...state.backend, mode: 'local', status: 'local' } });
+    useStore.setState({ users: state.users.filter(user => !reviewers.has(user.id) && user.role !== 'Project Manager'), backend: { ...state.backend, mode: 'local', status: 'local' } });
   });
   await page.getByRole('button', { name: 'Send for review', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('No HOD is configured for this department.');
+  await expect(page.getByRole('alert')).toContainText('No reviewer is configured for this task.');
   await expect(page.getByRole('progressbar', { name: 'Task progress', exact: true })).toHaveAttribute('aria-valuenow', '30');
+});
+
+
+test('responsible PM receives Designer review without a Designer HOD and approves before finalizing', async ({ page }) => {
+  await seed(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    useStore.setState({ users: state.users.filter(user => user.id !== 'stage-hod'), tasks: state.tasks.map(task => ({ ...task, assignedTo: 'stage-staff', status: 'In Progress', completionPercentage: 30 })) });
+  });
+  await openAs(page, 'stage-staff');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const { getDepartmentReviewers } = await import('/src/lib/taskWorkflowAccess.ts');
+    const state = useStore.getState();
+    // Reloading a local demo restores its seed HOD; remove that demo reviewer
+    // as well so this fixture represents the production Designer configuration.
+    const hods = new Set(getDepartmentReviewers(state.users, state.tasks[0], state.rolePermissions).filter(user => user.role !== 'Project Manager').map(user => user.id));
+    useStore.setState({ users: state.users.filter(user => !hods.has(user.id)) });
+  });
+  await page.getByRole('button', { name: 'Send for review', exact: true }).click();
+  await expect(page.getByRole('progressbar', { name: 'Task progress', exact: true })).toHaveAttribute('aria-valuenow', '60');
+  expect(await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    return useStore.getState().notifications.some(n => n.targetUserId === 'stage-pm' && n.title === 'Task Ready for Approval');
+  })).toBe(true);
+  await openAs(page, 'stage-pm');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const { getDepartmentReviewers } = await import('/src/lib/taskWorkflowAccess.ts');
+    const state = useStore.getState();
+    // Reloading a local demo restores its seed HOD; remove that demo reviewer
+    // as well so this fixture represents the production Designer configuration.
+    const hods = new Set(getDepartmentReviewers(state.users, state.tasks[0], state.rolePermissions).filter(user => user.role !== 'Project Manager').map(user => user.id));
+    useStore.setState({ users: state.users.filter(user => !hods.has(user.id)) });
+  });
+  await page.getByRole('button', { name: 'Approve', exact: true }).click();
+  await expect(page.getByRole('progressbar', { name: 'Task progress', exact: true })).toHaveAttribute('aria-valuenow', '80');
+  await page.getByRole('button', { name: 'Confirm completion', exact: true }).click();
+  await expect(page.getByRole('progressbar', { name: 'Task progress', exact: true })).toHaveAttribute('aria-valuenow', '100');
 });

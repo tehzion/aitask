@@ -68,7 +68,7 @@ describe('role-controlled task milestones', () => {
 describe('role readiness at alternate entry points', () => {
   it('refuses an orphan review and saves it after a department HOD is configured', () => {
     actor(staff);
-    useStore.setState({ users: [pm, staff, client], tasks: [{ ...task, assignedTo: staff.id, status: 'In Progress' }] });
+    useStore.setState({ users: [pm, staff, client], clients: [], tasks: [{ ...task, createdBy: 'missing-owner', assignedTo: staff.id, status: 'In Progress' }] });
     expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval')).toEqual({ ok: false, error: TASK_HOD_REQUIRED });
     expect(useStore.getState().updateTask(task.id, { status: 'Waiting Approval' })).toEqual({ ok: false, error: TASK_HOD_REQUIRED });
     expect(current().status).toBe('In Progress');

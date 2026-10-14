@@ -142,6 +142,7 @@ import {
   normalizeMemberDepartments,
 } from '../lib/departments';
 import { isTaskCompleted, resolveTaskCompletedAt } from '../lib/taskCompletion';
+import { isWorkflowTask, prepareWorkflowTasks, workflowTransitionError } from '../lib/workflowReview';
 import { enrichNotificationMetadata } from '../lib/notificationCenter';
 import {
   addDaysClamped,
@@ -152,7 +153,6 @@ import {
   resolveDeliverableStatus,
   SHORT_VIDEO_WORKFLOW_TEMPLATE,
 } from '../lib/serviceManagement';
-import { cleanupPendingServiceFiles, reconcilePendingServiceFiles } from '../lib/serviceFiles';
 
 export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required' | 'upgrade_required';
 
@@ -623,9 +623,9 @@ const taskUpdateNotifications = (
 
 // Hosted review handoffs are generated atomically by the database. Mirror them
 // only in local workspaces, so cached clients and the full editor behave alike.
-const localHodReviewNotifications = (users: User[], roles: CustomRole[], before: Task | undefined, after: Task, actorId: string) => {
+const localHodReviewNotifications = (users: User[], roles: CustomRole[], before: Task | undefined, after: Task, actorId: string, scope: { clients: ClientProfile[]; projects: Project[] }) => {
   if (after.status !== 'Waiting Approval' || before?.status === after.status) return [];
-  return taskUpdateNotifications(getDepartmentReviewers(users, after, roles).map(user => user.id), {
+  return taskUpdateNotifications(getDepartmentReviewers(users, after, roles, scope).map(user => user.id), {
     title: 'Task Ready for Approval',
     message: `"${after.title}" is ready for department review.`,
     route: { page: 'tasks', entityId: after.id },
@@ -765,6 +765,8 @@ const isLocalItemWorthRecovering = <T extends { id: string; updatedAt?: string }
 };
 
 const deriveServiceProgress = (tasks: Task[], deliverables: Deliverable[], cycles: ServiceCycle[]) => {
+  const state = useStore.getState();
+  tasks = prepareWorkflowTasks(tasks, state.tasks, state.currentUser, cycles, deliverables, state.backend.mode !== 'supabase', state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
   const now = new Date().toISOString();
   const nextDeliverables = deliverables.map(deliverable => {
     const status = resolveDeliverableStatus(deliverable, tasks);
@@ -783,7 +785,7 @@ const deriveServiceProgress = (tasks: Task[], deliverables: Deliverable[], cycle
     const status: ServiceCycleStatus = completed ? 'Completed' : cycle.status === 'Completed' ? 'Published' : cycle.status;
     return status === cycle.status ? cycle : { ...cycle, status, updatedAt: now };
   });
-  return { deliverables: nextDeliverables, serviceCycles: nextCycles };
+  return { tasks, deliverables: nextDeliverables, serviceCycles: nextCycles };
 };
 
 const hasRecoverableLocalWorkspaceContent = (
@@ -1548,7 +1550,10 @@ export const useStore = create<StoreState>()(
             if (hasChangesAfterSave) queueMicrotask(() => { if (isWorkspaceSessionCurrent(sessionToken)) void get().syncBackendNow(pendingCommandType); });
             else {
 
-              if (hadRemoteUpdate) await get().pullBackendNow({ force: true, silent: true });
+              if (hadRemoteUpdate || (savedWorkspace.tasks.some(isWorkflowTask)
+                && ['task.update', 'approval.review', 'approval.revision', 'deliverable.workflow.generate'].includes(pendingCommandType || ''))) {
+                await get().pullBackendNow({ force: true, silent: true });
+              }
             }
             return;
           }
@@ -2167,6 +2172,8 @@ export const useStore = create<StoreState>()(
         }
         if (!isWorkspaceSessionCurrent(sessionToken) || !actorId) return;
         if (shouldUseSecureSupabase() && get().backend.status !== 'live') return;
+        const { cleanupPendingServiceFiles, reconcilePendingServiceFiles } = await import('../lib/serviceFiles');
+        if (!isWorkspaceSessionCurrent(sessionToken)) return;
         reconcilePendingServiceFiles(actorId, selectPersistedWorkspaceState(get()));
         const cleanup = await cleanupPendingServiceFiles(actorId, { abandonSubmitted: true, commandIds: discardedCommandId ? [discardedCommandId] : [], includeUnsubmitted: false });
         if (!cleanup.ok) apply(state => ({ backend: { ...state.backend, error: cleanup.error, message: cleanup.error } }));
@@ -2724,7 +2731,7 @@ export const useStore = create<StoreState>()(
         const task = state.tasks.find(item => item.id === taskId);
         const actor = state.currentUser;
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
-        if (!actor || actor.role === 'Client' || !task || !canEditTask(actor, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return { ok: false, error: 'You do not have permission to edit this task.' };
+        if (!actor || actor.role === 'Client' || !task || !canEditTask(actor, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'You do not have permission to edit this task.' };
         if (!isTaskOpen(task)) return { ok: false, error: 'Only open tasks can accept work or request help.' };
         if (intent.kind === 'accept' && task.assignedTo !== actor.id) return { ok: false, error: 'Only the current assignee can accept this task.' };
         if (intent.kind === 'block' && (!intent.reason?.trim() || intent.reason.trim().length > 2000)) return { ok: false, error: 'Describe the blocker in 1–2000 characters.' };
@@ -2753,7 +2760,7 @@ export const useStore = create<StoreState>()(
         }
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
-        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) {
           result = { ok: false, error: 'You do not have permission to edit this task.' };
           return state;
         }
@@ -2766,12 +2773,14 @@ export const useStore = create<StoreState>()(
         }
 
         const isCompleted = nextStatus === 'Completed';
-        const transitionError = taskTransitionError(currentUser, task, { ...task, status: nextStatus, isCompleted }, state.rolePermissions);
+        const transitionError = taskTransitionError(currentUser, task, { ...task, status: nextStatus, isCompleted }, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (transitionError) { result = { ok: false, error: transitionError }; return state; }
         const evidenceError = taskEvidenceError(task, { ...task, status: nextStatus, isCompleted }, state.deliverables);
         if (evidenceError) { result = { ok: false, error: evidenceError }; return state; }
+        const workflowError = workflowTransitionError(task, { ...task, status: nextStatus, isCompleted }, currentUser, state.tasks, state.serviceCycles, state.deliverables, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
+        if (workflowError) { result = { ok: false, error: workflowError }; return state; }
         const isWaitingApproval = nextStatus === 'Waiting Approval';
-        if (state.backend.mode === 'local' && isWaitingApproval && task.status !== nextStatus && !getDepartmentReviewers(state.users, task, state.rolePermissions).length) { result = { ok: false, error: TASK_HOD_REQUIRED }; return state; }
+        if (state.backend.mode === 'local' && isWaitingApproval && task.status !== nextStatus && !getDepartmentReviewers(state.users, task, state.rolePermissions, { clients: state.clients, projects: state.projects }).length) { result = { ok: false, error: TASK_HOD_REQUIRED }; return state; }
         const isReadyForClientReview = isCompleted || isWaitingApproval;
         const wasCompleted = isTaskCompleted(task);
         const now = new Date().toISOString();
@@ -2817,7 +2826,7 @@ export const useStore = create<StoreState>()(
         );
 
         if (state.backend.mode === 'local') newNotifs.push(...localHodReviewNotifications(
-          state.users, state.rolePermissions, task, newTasks.find(item => item.id === taskId)!, currentUser!.id,
+          state.users, state.rolePermissions, task, newTasks.find(item => item.id === taskId)!, currentUser!.id, { clients: state.clients, projects: state.projects },
         ));
 
         if (shouldNotifyClientForTask(task, nextStatus)) {
@@ -2852,7 +2861,7 @@ export const useStore = create<StoreState>()(
         }
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
-        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) {
           result = { ok: false, error: 'You do not have permission to edit this task.' };
           return state;
         }
@@ -2885,7 +2894,7 @@ export const useStore = create<StoreState>()(
         }
         const task = state.tasks.find(t => t.id === taskId);
         const currentUser = state.currentUser;
-        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+        if (!task || !canEditTask(currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) {
           result = { ok: false, error: 'You do not have permission to edit this task.' };
           return state;
         }
@@ -2893,7 +2902,7 @@ export const useStore = create<StoreState>()(
           result = { ok: true };
           return state;
         }
-        if (!canAssignTasksToOthers(currentUser, state.rolePermissions, task, { clients: state.clients, projects: state.projects })) {
+        if (!canAssignTasksToOthers(currentUser, state.rolePermissions, task, { users: state.users, clients: state.clients, projects: state.projects })) {
           result = { ok: false, error: 'You do not have permission to reassign this task.' };
           return state;
         }
@@ -2947,7 +2956,7 @@ export const useStore = create<StoreState>()(
           return state;
         }
         const task = state.tasks.find(t => t.id === taskId);
-        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) {
           result = { ok: false, error: 'You do not have permission to edit this task.' };
           return state;
         }
@@ -2960,13 +2969,12 @@ export const useStore = create<StoreState>()(
           return state;
         }
 
-        const transitionError = taskTransitionError(state.currentUser, task, { ...task, attachmentLink: validatedLink || undefined, attachmentName: attachmentName?.trim().slice(0, 200) || undefined }, state.rolePermissions);
+        const transitionError = taskTransitionError(state.currentUser, task, { ...task, attachmentLink: validatedLink || undefined, attachmentName: attachmentName?.trim().slice(0, 200) || undefined }, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (transitionError) { result = { ok: false, error: transitionError }; return state; }
         queueActionFeedback(state.currentUser!.id, `task:${taskId}:attachment`, msg('task.attachmentUpdated'), saved => saved.tasks.some(item => item.id === taskId && (item.attachmentLink || '') === (validatedLink || '') && (item.attachmentName || '') === (attachmentName?.trim().slice(0, 200) || '')));
 
         result = { ok: true };
-        return {
-          tasks: state.tasks.map(task =>
+        const tasks = state.tasks.map(task =>
             task.id === taskId
               ? recordTaskWorkTransition(task, {
                   ...task,
@@ -2975,8 +2983,8 @@ export const useStore = create<StoreState>()(
                   updatedAt: new Date().toISOString()
                 }, state.currentUser!.id)
               : task
-          )
-        };
+          );
+        return deriveServiceProgress(tasks, state.deliverables, state.serviceCycles);
         });
         return result;
       },
@@ -2990,7 +2998,7 @@ export const useStore = create<StoreState>()(
           return state;
         }
         const task = state.tasks.find(t => t.id === taskId);
-        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) {
           result = { ok: false, error: 'You do not have permission to edit this task.' };
           return state;
         }
@@ -3025,7 +3033,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+        if (!currentUser || !task || !canEditTask(currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) {
           return { ok: false, error: 'You do not have permission to edit this task.' };
         }
 
@@ -3033,8 +3041,11 @@ export const useStore = create<StoreState>()(
         if (requestedCreatorId !== undefined && requestedCreatorId !== task.createdBy) {
           return { ok: false, error: 'Task ownership cannot be changed.' };
         }
+        const workflowKeys = ['reviewAccess', 'workflowStepKind', 'workflowStepId', 'workflowStepOrder', 'workflowStepRequired', 'workflowTemplateId', 'workflowTemplateRevision', 'generatedFromDeliverable', 'predecessorTaskIds', 'workflowOutputVersion', 'workflowDependenciesReady', 'internalReview'];
+        if (workflowKeys.some(key => Object.prototype.hasOwnProperty.call(data, key))) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
+        if (isWorkflowTask(task) && (['deliverableId', 'serviceCycleId', 'clientId', 'department', 'visibility'] as const).some(key => data[key] !== undefined && data[key] !== task[key])) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
 
-        const canAssignOthers = canAssignTasksToOthers(currentUser, state.rolePermissions, task, { clients: state.clients, projects: state.projects });
+        const canAssignOthers = canAssignTasksToOthers(currentUser, state.rolePermissions, task, { users: state.users, clients: state.clients, projects: state.projects });
         const nextAssigneeId = data.assignedTo ?? task.assignedTo;
         if (!canAssignOthers && nextAssigneeId !== task.assignedTo) {
           return { ok: false, error: 'You do not have permission to reassign this task.' };
@@ -3180,16 +3191,19 @@ export const useStore = create<StoreState>()(
         if (['In Progress', 'Revision'].includes(updatedTask.status) && ['Waiting Approval', 'Approved', 'Completed'].includes(task.status)) {
           updatedTask.clientApprovalStatus = 'Rejected'; updatedTask.revisionCount = task.revisionCount + 1;
         }
-        if (state.backend.mode === 'local' && updatedTask.status === 'Waiting Approval' && task.status !== updatedTask.status && !getDepartmentReviewers(state.users, updatedTask, state.rolePermissions).length) return { ok: false, error: TASK_HOD_REQUIRED };
+        if (state.backend.mode === 'local' && updatedTask.status === 'Waiting Approval' && task.status !== updatedTask.status && !getDepartmentReviewers(state.users, updatedTask, state.rolePermissions, { clients: state.clients, projects: state.projects }).length) return { ok: false, error: TASK_HOD_REQUIRED };
         const evidenceError = taskEvidenceError(task, updatedTask, state.deliverables);
         if (evidenceError) return { ok: false, error: evidenceError };
-        const transitionError = taskTransitionError(currentUser, task, updatedTask, state.rolePermissions);
+        const transitionError = taskTransitionError(currentUser, task, updatedTask, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (transitionError) return { ok: false, error: transitionError };
         updatedTask = recordTaskWorkTransition(task, updatedTask, currentUser.id, now);
         updatedTask.completionPercentage = getTaskProgress(updatedTask, state.users);
+        const workflowError = workflowTransitionError(task, updatedTask, currentUser, state.tasks, state.serviceCycles, state.deliverables, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
+        if (workflowError) return { ok: false, error: workflowError };
+
         const notifications: AppNotification[] = [];
         if (state.backend.mode === 'local') notifications.push(...localHodReviewNotifications(
-          state.users, state.rolePermissions, task, updatedTask, currentUser.id,
+          state.users, state.rolePermissions, task, updatedTask, currentUser.id, { clients: state.clients, projects: state.projects },
         ));
         if (task.status !== updatedTask.status && updatedTask.status === 'Approved') notifications.push(...taskUpdateNotifications(
           resolveTaskUpdateRecipientIds(state.users, updatedTask, state.clients, state.projects), {
@@ -3234,7 +3248,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         const task = state.tasks.find(item => item.id === taskId);
-        if (!currentUser || !task || !canDeleteTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+        if (!currentUser || !task || !canDeleteTask(currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) {
           return { ok: false, error: 'You do not have permission to delete this task.' };
         }
 
@@ -3356,7 +3370,7 @@ export const useStore = create<StoreState>()(
         }
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canRequestTaskRevision(currentUser, task, state.rolePermissions) || !canEditTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+        if (!currentUser || !task || !canRequestTaskRevision(currentUser, task, state.rolePermissions) || !canEditTask(currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) {
           result = { ok: false, error: 'You do not have permission to request a revision.' };
           return state;
         }
@@ -3421,7 +3435,7 @@ export const useStore = create<StoreState>()(
         if (['Staff', 'HOD'].includes(currentUser.role) && !isMemberInDepartment(currentUser, taskData.department)) return '';
         const assignee = taskData.assignedTo ? state.users.find(user => user.id === taskData.assignedTo && user.role !== 'Client') : undefined;
         if (taskData.assignedTo && !assignee) return '';
-        if (assignee && !canAssignTasksToOthers(currentUser, state.rolePermissions, undefined, { clients: state.clients, projects: state.projects }) && assignee.id !== currentUser.id) return '';
+        if (assignee && !canAssignTasksToOthers(currentUser, state.rolePermissions, undefined, { users: state.users, clients: state.clients, projects: state.projects }) && assignee.id !== currentUser.id) return '';
         if (assignee && !isMemberInDepartment(assignee, taskData.department)) return '';
 
         const project = taskData.projectId
@@ -3459,9 +3473,9 @@ export const useStore = create<StoreState>()(
         if (!isValidIsoDate(startDate) || (dueDate && !isValidIsoDate(dueDate))) return '';
         if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) return '';
 
-        if (state.backend.mode === 'local' && status === 'Waiting Approval' && !getDepartmentReviewers(state.users, taskData, state.rolePermissions).length) { useToastStore.getState().addToast(TASK_HOD_REQUIRED, 'warning'); return ''; }
+        if (state.backend.mode === 'local' && status === 'Waiting Approval' && !getDepartmentReviewers(state.users, taskData, state.rolePermissions, { clients: state.clients, projects: state.projects }).length) { useToastStore.getState().addToast(TASK_HOD_REQUIRED, 'warning'); return ''; }
         const taskId = nowId('T');
-        const transitionError = taskTransitionError(currentUser, undefined, { ...taskData, status, isCompleted: status === 'Completed' }, state.rolePermissions);
+        const transitionError = taskTransitionError(currentUser, undefined, { ...taskData, status, isCompleted: status === 'Completed' }, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (transitionError) { useToastStore.getState().addToast(transitionError, 'warning'); return ''; }
         if (taskEvidenceError(undefined, { ...taskData, id: taskId, status, isCompleted: status === 'Completed', revisionCount: 0, clientApprovalStatus: 'Pending' }, state.deliverables)) {
           useToastStore.getState().addToast(msg('staff.evidenceRequired'), 'warning');
@@ -3509,7 +3523,7 @@ export const useStore = create<StoreState>()(
             tasks,
             ...deriveServiceProgress(tasks, deliverables, state.serviceCycles),
             notifications: [
-              ...(state.backend.mode === 'local' ? localHodReviewNotifications(state.users, state.rolePermissions, undefined, newTask, currentUser.id) : []),
+              ...(state.backend.mode === 'local' ? localHodReviewNotifications(state.users, state.rolePermissions, undefined, newTask, currentUser.id, { clients: state.clients, projects: state.projects }) : []),
               ...(['Staff', 'HOD'].includes(currentUser.role)
                 ? taskUpdateNotifications(
                     resolveTaskUpdateRecipientIds(state.users, newTask, state.clients, state.projects)
@@ -3566,7 +3580,7 @@ export const useStore = create<StoreState>()(
         if (deadline && (!isValidIsoDate(deadline) || new Date(deadline) < new Date(startDate))) return '';
         if (!projectData.clientId) return '';
         const client = state.clients.find(item => item.id === projectData.clientId && !item.discovered);
-        const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions, { clients: state.clients, projects: state.projects }).map(normalizeClientKey));
+        const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects }).map(normalizeClientKey));
         if (!client || normalizeClientKey(client.clientName) !== normalizeClientKey(clientName) || (!canViewAllClients(currentUser, state.rolePermissions) && !visibleClientKeys.has(normalizeClientKey(clientName)))) return '';
         if (state.projects.some(item => {
           const sameClient = projectData.clientId && item.clientId
@@ -3620,7 +3634,7 @@ export const useStore = create<StoreState>()(
         const nextClientId = data.clientId !== undefined ? data.clientId : project.clientId;
         if (nextClientId) {
           const client = state.clients.find(item => item.id === nextClientId && !item.discovered);
-          const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions, { clients: state.clients, projects: state.projects }).map(normalizeClientKey));
+          const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects }).map(normalizeClientKey));
           if (!client || normalizeClientKey(client.clientName) !== normalizeClientKey(clientName) || (!canViewAllClients(currentUser, state.rolePermissions) && !visibleClientKeys.has(normalizeClientKey(clientName)))) {
             return { ok: false, error: 'You can only link this project to a company you can access.' };
           }
@@ -4433,7 +4447,7 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const task = state.tasks.find(item => item.id === taskId);
-        if (!hasPermission(state.currentUser, 'editTasks', state.rolePermissions) || !task || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
+        if (!hasPermission(state.currentUser, 'editTasks', state.rolePermissions) || !task || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
         const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
         if (deliverableId && (!deliverable || deliverable.cycleId !== cycleId || deliverable.clientId !== task.clientId)) return { ok: false, error: 'The task and deliverable must belong to the same client and cycle.' };
         if (deliverable?.status === 'Delivered' && task.deliverableId !== deliverable.id && !deliverable.taskIds.includes(taskId)) return { ok: false, error: 'Reopen the delivery before adding task links.' };
@@ -4482,6 +4496,8 @@ export const useStore = create<StoreState>()(
           workflowStepId: step.id,
           workflowStepOrder: step.order,
           workflowStepRequired: step.required,
+          workflowStepKind: step.kind,
+          workflowOutputVersion: 1,
           predecessorTaskIds: index === 0 ? [] : [taskIds[index - 1]],
           generatedFromDeliverable: true,
           workflowGeneratedAt: now,
@@ -4590,7 +4606,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canCommentOnTask(currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })) {
+        if (!currentUser || !task || !canCommentOnTask(currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) {
           return { ok: false, error: 'You do not have permission to comment on this task.' };
         }
 
@@ -4672,7 +4688,7 @@ export const useStore = create<StoreState>()(
             task.isCompleted
             || task.status === 'Cancelled'
             || task.dueReminderSent
-            || !canEditTask(state.currentUser, task, state.rolePermissions, { clients: state.clients, projects: state.projects })
+            || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })
           ) return task;
           if (!task.dueDate || !isValidIsoDate(task.dueDate)) return task;
           const dueDate = new Date(`${task.dueDate}T00:00:00`);

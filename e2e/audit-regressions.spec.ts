@@ -214,7 +214,7 @@ test('recoverable drafts survive reload and reconcile against the latest baselin
   page.on('dialog', dialog => dialog.accept());
   await page.reload();
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
-  await page.getByRole('button', { name: 'Restore draft' }).click();
+  await page.getByRole('button', { name: 'Restore recovered draft' }).click();
   await expect(page.getByLabel('Plan name', { exact: true })).toHaveValue('Recovered draft');
   await expect(page.getByRole('button', { name: 'Save revision' })).toBeDisabled();
   await page.getByRole('button', { name: 'Keep my draft' }).click();

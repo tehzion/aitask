@@ -126,8 +126,9 @@ const supabase = (...args) => run(supabaseCli, ['--workdir', validationRoot, ...
 try {
   console.log(`[rollout] Validating ${validatedMigrations.join(', ')} in ${validationRoot}`);
   run(supabaseCli, ['--workdir', validationRoot, 'start', '--exclude', 'realtime,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor'], {
-    cwd: validationRoot,
+    cwd: validationRoot, capture: true, suppressStdoutOnError: true,
   });
+  // Startup output includes disposable service keys; never retain it in CI artifacts.
   console.log('[rollout] Disposable Supabase stack started.');
   supabase('migration', 'list', '--local');
   supabase('test', 'db', 'supabase/tests/database', '--local');
@@ -153,6 +154,10 @@ try {
     AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
   } });
   run(process.execPath, [join(projectRoot, 'scripts', 'verify-onboarding-recovery.mjs')], { env: {
+    ...process.env, AITASK_LOCAL_TEST_URL: status.API_URL, AITASK_LOCAL_TEST_PUBLIC: status.PUBLISHABLE_KEY || status.ANON_KEY,
+    AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
+  } });
+  run(process.execPath, [join(projectRoot, 'scripts', 'verify-workflow-review-gate.mjs')], { env: {
     ...process.env, AITASK_LOCAL_TEST_URL: status.API_URL, AITASK_LOCAL_TEST_PUBLIC: status.PUBLISHABLE_KEY || status.ANON_KEY,
     AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
   } });

@@ -12,6 +12,7 @@ import { msg } from '../lib/messages';
 import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
 import { getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
 import { getTeamWorkloadSummaries } from '../lib/taskReporting';
+import { canApproveInternalReview, getWorkflowStepKind, INTERNAL_REVIEW_PERMISSION_MESSAGE, isWorkflowTaskSatisfied, workflowTransitionError } from '../lib/workflowReview';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import { mergeDraft } from '../lib/draftMerge';
@@ -81,6 +82,7 @@ const ExternalTaskLink: React.FC<{ value: string; label: string; invalidLabel: s
 
 const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onClose, task: routedTask }) => {
   const { locale, t } = useI18n();
+  const workflow = useStore(useShallow(state => ({ cycles: state.serviceCycles, deliverables: state.deliverables })));
   const {
     users,
     tasks,
@@ -243,7 +245,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const assignee = users.find(u => u.id === task.assignedTo);
   const creator = users.find(u => u.id === task.createdBy);
   const assignedByMember = users.find(u => u.id === task.assignedBy);
-  const taskAccess = getTaskAccess(currentUser, task, rolePermissions, { clients, projects });
+  const taskAccess = getTaskAccess(currentUser, task, rolePermissions, { users, clients, projects });
   if (!taskAccess.canView) return null;
   const pendingResolution = isPendingMutationResolution(backend);
   const canEditTask = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canEdit;
@@ -252,16 +254,18 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const canClientReview = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canView && canReviewTaskAsClient(currentUser, task, rolePermissions);
   const isClientTaskViewer = currentUser?.role === 'Client';
   const taskProgress = getTaskProgress(task, users, isClientTaskViewer);
-  const statusOptions = getTaskStatusOptions(currentUser, task, taskStatuses, rolePermissions);
+  const statusOptions = getTaskStatusOptions(currentUser, task, taskStatuses, rolePermissions, { users, clients, projects });
   const canAssignOthers = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canAssign;
   const canDelegateAssignedTask = Boolean(
     canAssignOthers
     && isDepartmentScopedUser(currentUser, rolePermissions)
     && task.assignedTo === currentUser?.id
   );
-  const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects });
+  const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { users, clients, projects });
   const incompletePredecessors = getTaskBlockers(task, visibleTasks);
   const unavailablePredecessorCount = getUnavailableTaskDependencyCount(task, visibleTasks);
+  const workflowKind = getWorkflowStepKind(task, workflow.cycles, workflow.deliverables);
+  const transitionError = (status: TaskStatus) => workflowTransitionError(task, { ...task, status, isCompleted: status === 'Completed' }, currentUser, visibleTasks, workflow.cycles, workflow.deliverables, rolePermissions, { users, clients, projects });
   const assigneeOptions = canAssignOthers
     ? users.filter(user => user.role !== 'Client' && isMemberInDepartment(user, editForm.department))
     : users.filter(user => user.id === editForm.assignedTo);
@@ -646,7 +650,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                         }}
                       >
                         {statusOptions.map(status => (
-                          <option key={status} value={status} className="bg-white text-slate-900">{currentUser?.role === 'Client' ? t(status) : getLocalizedTaskStatus(status, locale)}</option>
+                          <option key={status} value={status} disabled={Boolean(transitionError(status))} className="bg-white text-slate-900">{currentUser?.role === 'Client' ? t(status) : getLocalizedTaskStatus(status, locale)}</option>
                         ))}
                       </select>
                       <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 text-current" />
@@ -665,10 +669,21 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   )}
                 </div>
               </div>
+              {workflowKind === 'internal_review' && <section className="mt-4 border-t border-line pt-4 text-sm" aria-label={t('Internal review')}>
+                <p className="font-semibold text-ink">{t('Internal review')}</p>
+                <p className="mt-1 text-muted">{task.internalReview ? t('Reviewed by {name}', { name: users.find(user => user.id === task.internalReview?.reviewedBy)?.name || t('Team member') }) : t('Waiting for review')}</p>
+                {task.status === 'Waiting Approval' && !isWorkflowTaskSatisfied(task, tasks) && canApproveInternalReview(currentUser, task, rolePermissions, { users, clients, projects }) && <button type="button" disabled={isSubmitting || !canEditTask || Boolean(transitionError('Approved'))} onClick={async () => {
+                  if (isSubmitting) return;
+                  const result = updateTaskStatus(task.id, 'Approved');
+                  if (!result.ok) { setMutationError(t(result.error || 'Unable to update the task status.')); return; }
+                  if (await confirmPendingMutation('task.update')) announceTaskStatusSaved('Approved');
+                }} className="mt-3 min-h-11 rounded-control bg-accent px-4 py-2 font-semibold text-white disabled:opacity-50">{t('Approve internal review')}</button>}
+                {!task.internalReview && <p className="mt-2 text-muted">{t(transitionError('Approved') || INTERNAL_REVIEW_PERMISSION_MESSAGE)}</p>}
+              </section>}
 
               {!isClientTaskViewer && <div className="space-y-3">
                 <ProgressBar label={t('Task progress')} value={taskProgress} />
-                {canEditTask && (canApproveTaskInternally(currentUser, task, rolePermissions, { clients, projects })
+                {canEditTask && (workflowKind !== 'internal_review' && canApproveTaskInternally(currentUser, task, rolePermissions, { users, clients, projects })
                   || (task.status === 'Approved' && statusOptions.includes('Completed'))) && <Button
                   type="button" disabled={isSubmitting}
                   onClick={async () => {
@@ -688,7 +703,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
 
               {unavailablePredecessorCount > 0 && !isClientTaskViewer && (
                 <section className="rounded-panel border border-line bg-inset p-4 text-sm text-muted" aria-label={t('Dependency status unavailable')}>
-                  {t(`Dependency status for ${unavailablePredecessorCount} earlier step${unavailablePredecessorCount === 1 ? '' : 's'} is unavailable. Confirm with the task owner before starting.`)}
+                  {task.workflowDependenciesReady === true ? t('Earlier steps are complete; their details are outside your access.') : t(`Dependency status for ${unavailablePredecessorCount} earlier step${unavailablePredecessorCount === 1 ? '' : 's'} is unavailable. Confirm with the task owner before starting.`)}
                 </section>
               )}
 

@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(9);
+select plan(16);
 
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 values ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000001301','authenticated','authenticated','review-client@aitask.local','','{}','{}',now(),now());
@@ -37,5 +37,26 @@ update public.aitask_entities set data=data||jsonb_build_object('periodStart',to
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001301',true);
 select is(public.aitask_read_client_portal('pgtap-review-privacy')->'clients'->0->'awaitingPublication','false'::jsonb,'Unrelated plan draft does not influence publication state');
 select throws_ok($$select public.aitask_read_client_portal('other-workspace')$$,'42501','Client workspace membership required.','Client cannot read another workspace');
+
+select set_config('request.jwt.claim.sub','',true);
+update public.aitask_entities set data=data||'{"status":"Approved","isCompleted":false,"revisionCount":7,"completionPercentage":80,"clientApprovalStatus":"Pending"}'::jsonb where workspace_id='pgtap-review-privacy' and entity_id='review-task';
+create function pg_temp.review_operations(overrides jsonb) returns jsonb language sql as $$
+  select jsonb_build_array(
+    jsonb_build_object('kind','entity','action','update','entityType','task','entityId','review-task','expectedVersion',version,'data',private.aitask_client_task_projection(data)||'{"status":"Approved","isCompleted":false,"completionPercentage":80,"clientApprovalStatus":"Approved"}'::jsonb||overrides),
+    jsonb_build_object('kind','entity','action','insert','entityType','approval','entityId','review-event','parentId','review-task','data','{"id":"review-event","taskId":"review-task","userId":"review-client","status":"Approved","note":"Approved"}'::jsonb))
+  from public.aitask_entities where workspace_id='pgtap-review-privacy' and entity_id='review-task';
+$$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001301',true);
+select ok(private.aitask_client_command_allowed('pgtap-review-privacy','approval.review',pg_temp.review_operations('{}')),'Projected approval can omit internal revision and assignment fields');
+select ok(private.aitask_client_command_allowed('pgtap-review-privacy','approval.review',pg_temp.review_operations('{"assignedTo":""}')),'Older masked clients may submit a blank assignee without changing canonical assignment');
+select ok(not private.aitask_client_command_allowed('pgtap-review-privacy','approval.review',pg_temp.review_operations('{"assignedTo":"attacker"}')),'Client cannot replace the canonical assignee');
+select ok(not private.aitask_client_command_allowed('pgtap-review-privacy','approval.review',pg_temp.review_operations('{"revisionCount":99}')),'Client cannot forge an internal revision count');
+
+select set_config('pgtap.review_operations',pg_temp.review_operations('{"assignedTo":""}')::text,true);
+set local role authenticated;
+select is((public.aitask_execute_command('pgtap-review-privacy',gen_random_uuid(),'approval.review',current_setting('pgtap.review_operations')::jsonb)->>'ok')::boolean,true,'Masked legacy approval saves through authenticated RPC');
+reset role;
+select is((select data->>'assignedTo' from public.aitask_entities where workspace_id='pgtap-review-privacy' and entity_id='review-task'),'review-staff','Masked approval preserves canonical Staff assignment');
+select is((select data->>'clientApprovalStatus' from public.aitask_entities where workspace_id='pgtap-review-privacy' and entity_id='review-task'),'Approved','Customer decision persists');
 select * from finish();
 rollback;

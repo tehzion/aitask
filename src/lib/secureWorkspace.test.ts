@@ -728,18 +728,18 @@ describe('secure backend compatibility', () => {
     rpc.mockResolvedValueOnce({
       data: {
         ok: true,
-        schemaVersion: 4,
+        schemaVersion: 5,
         workspaceOptimisticLock: true,
         serviceOperations: true,
         releaseNoticeAcknowledgements: true,
-        memberPermissionManagement: true,
+        memberPermissionManagement: true, workflowReviewGate: true,
       },
       error: null,
     });
 
     const result = await loadSecureBackendCapabilities();
 
-    expect(result).toMatchObject({ compatible: true, capabilities: { schemaVersion: 4, memberPermissionManagement: true } });
+    expect(result).toMatchObject({ compatible: true, capabilities: { schemaVersion: 5, memberPermissionManagement: true, workflowReviewGate: true } });
     expect(rpc).toHaveBeenCalledWith('aitask_get_backend_capabilities', { p_workspace_id: 'aitask-main' });
   });
 
@@ -757,6 +757,11 @@ describe('secure backend compatibility', () => {
       error: BACKEND_UPGRADE_REQUIRED_MESSAGE,
     });
     expect(JSON.stringify(result)).not.toContain('schema cache');
+  });
+
+  it.each([[3, true], [5, false]])('keeps writes disabled for schema %s with review support %s', async (schemaVersion, workflowReviewGate) => {
+    rpc.mockResolvedValueOnce({ data: { ok: true, schemaVersion, workflowReviewGate, workspaceOptimisticLock: true, serviceOperations: true, releaseNoticeAcknowledgements: true, memberPermissionManagement: true }, error: null });
+    expect(await loadSecureBackendCapabilities()).toEqual({ compatible: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE });
   });
 });
 
@@ -1130,6 +1135,8 @@ describe('secure workspace baseline', () => {
       data: { ok: true, memberId: member.id, items: [], unreadCount: 0, nextCursor: null },
       error: null,
     });
+
+    rpc.mockResolvedValueOnce({ data: { ok: true, tasks: [] }, error: null });
 
     const loaded = await loadSecureWorkspace({ id: member.auth_user_id } as never);
     rpc.mockClear();

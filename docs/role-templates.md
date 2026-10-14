@@ -44,6 +44,7 @@ and rejected by the database guards. They are **not delegable**.
 | Service administration (catalog, templates, plans, cycles, prices) | ✓ | ✓ | – | – | – |
 | Assigned service clients | ✓ | ✓ | ✓ | ✓ | own company |
 | Client review actions | – | – | – | – | ✓ |
+| Internal workflow review sign-off | ✓ | responsible portfolio | own department | – | – |
 | Protected keys | ✓ | – | – | – | – |
 
 ### Project Manager
@@ -62,7 +63,15 @@ Department oversight grants task editing and commenting. Task deletion requires
 the task to be in the HOD's departments, `manageCreatedTasks`, and either creator
 ownership or current assignment to the HOD. This matches delegation authority;
 past delegation alone does not authorize deletion. The same rule applies to
-department-scoped Staff custom roles. Boss Koo retains unrestricted deletion.
+department-scoped Staff custom roles. Generated workflow steps additionally
+remain protected from individual deletion for every role while their cycle is active.
+
+HOD sign-off happens on the internal review task. It requires completed
+predecessors and the current review department. Staff assignment or HOD
+assignment outside that department does not grant sign-off. Boss Koo and the
+responsible service Project Manager provide cover; the server records each
+decision against the reviewed output versions. Revisions reopen later steps.
+See [the review-gate rollout](workflow-review-gate-2026-10-13.md) for deployment status.
 
 ### Staff
 Standard employee access: assigned or created work only. No elevation over

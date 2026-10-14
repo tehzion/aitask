@@ -158,6 +158,8 @@ describe('delivery records needing review', () => {
     const output = { id: 'd', clientId: plan.clientId, cycleId: 'october', taskIds: [] } as Deliverable;
     const task = { id: 't', clientId: plan.clientId, deliverableId: 'd', serviceCycleId: 'october', status: 'Completed' } as Task;
     expect(hasInvalidDeliveryLink(task, [output])).toBe(false);
+    expect(hasInvalidDeliveryLink(task, [{ ...output, taskIds: undefined } as unknown as Deliverable])).toBe(false);
+    expect(getDeliveryReviewRecords([{ ...task, deliverableId: undefined }], [], [{ ...output, taskIds: undefined } as unknown as Deliverable], now).unlinkedTasks).toHaveLength(1);
     for (const outputs of [[], [{ ...output, clientId: 'other' }], [{ ...output, cycleId: 'other' }], [output, { ...output, id: 'other', taskIds: [task.id] }]]) {
       const result = getDeliveryReviewRecords([task], [], outputs, now);
       expect(result.invalidLinkedTasks).toEqual([task]);

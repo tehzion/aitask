@@ -9,6 +9,7 @@ export type DashboardPersona = 'boss' | 'projectManager' | 'operation' | 'accoun
  * companies they created. Boss Koo is never scoped.
  */
 export type VisibilityScope = {
+  users?: readonly User[];
   clients?: ClientProfile[];
   projects?: Project[];
 };
@@ -541,6 +542,7 @@ export const canDeleteTask = (
   customRoles: CustomRole[] = [],
   scope: VisibilityScope = {},
 ) => canEditTask(user, task, customRoles, scope)
+  && !(task.generatedFromDeliverable || task.workflowStepId)
   && (isBossKoo(user) || !isDepartmentScopedUser(user, customRoles)
     || canAssignTasksToOthers(user, customRoles, task, scope));
 export const isProjectParticipant = (user: User | null | undefined, project: Project, tasks: Task[] = []) => {

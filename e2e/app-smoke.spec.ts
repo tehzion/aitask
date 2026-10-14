@@ -529,6 +529,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByRole('dialog', { name: 'Edit task dates' }).getByLabel(/Due Date/)).toHaveValue(calendarDates.extendedDue);
   await page.keyboard.press('Escape');
 
+  await expect(page.getByRole('status').filter({ hasText: 'Dates saved.' })).toBeHidden();
   await page.getByRole('button', { name: /Edit dates for Calendar Range QA/ }).first().dragTo(
     page.locator(`[data-calendar-date="${calendarDates.moveTarget}"]`),
     {
@@ -536,30 +537,32 @@ test('first login reaches the app and critical responsive routes remain usable',
       targetPosition: { x: 24, y: 30 },
     },
   );
-  await expect(page.getByRole('status').filter({ hasText: 'date range moved' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Dates saved.' })).toBeVisible();
   await page.getByRole('button', { name: /Edit dates for Calendar Range QA/ }).first().click();
   await expect(page.getByRole('dialog', { name: 'Edit task dates' }).getByLabel('Start Date')).toHaveValue(calendarDates.moveTarget);
   await expect(page.getByRole('dialog', { name: 'Edit task dates' }).getByLabel(/Due Date/)).toHaveValue(calendarDates.movedDue);
   await page.keyboard.press('Escape');
 
+  await expect(page.getByRole('status').filter({ hasText: 'Dates saved.' })).toBeHidden();
   const resizedDueTarget = page.locator(`[data-calendar-date="${calendarDates.resizedDue}"]`);
   await resizedDueTarget.scrollIntoViewIfNeeded();
   await page.getByRole('button', { name: 'Adjust due date for Calendar Range QA' }).dragTo(
     resizedDueTarget,
     { targetPosition: { x: 24, y: 30 } },
   );
-  await expect(page.getByRole('status').filter({ hasText: 'due date adjusted' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Dates saved.' })).toBeVisible();
   await page.getByRole('button', { name: /Edit dates for Calendar Range QA/ }).first().click();
   await expect(page.getByRole('dialog', { name: 'Edit task dates' }).getByLabel(/Due Date/)).toHaveValue(calendarDates.resizedDue);
   await page.keyboard.press('Escape');
 
+  await expect(page.getByRole('status').filter({ hasText: 'Dates saved.' })).toBeHidden();
   const resizedStartTarget = page.locator(`[data-calendar-date="${calendarDates.resizedStart}"]`);
   await resizedStartTarget.scrollIntoViewIfNeeded();
   await page.getByRole('button', { name: 'Adjust start date for Calendar Range QA' }).dragTo(
     resizedStartTarget,
     { targetPosition: { x: 24, y: 30 } },
   );
-  await expect(page.getByRole('status').filter({ hasText: 'start date adjusted' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Dates saved.' })).toBeVisible();
   await page.getByRole('button', { name: /Edit dates for Calendar Range QA/ }).first().click();
   await expect(page.getByRole('dialog', { name: 'Edit task dates' }).getByLabel('Start Date')).toHaveValue(calendarDates.resizedStart);
   await page.keyboard.press('Escape');

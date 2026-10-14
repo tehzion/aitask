@@ -14,7 +14,7 @@ const seed = async (page: Page) => {
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false },
       users: [boss, { id: 'owner-qa-pm', name: 'Owner QA PM', role: 'Project Manager', department: 'Designer', departments: ['Designer'] }],
       clients: [{ id: 'recovery-qa-client', clientName: 'Recovery QA Company', createdAt: '2026-10-01', updatedAt: '2026-10-01' }],
-      projects: [], tasks: [{ ...state.tasks[0], id: 'recovery-qa-task', title: 'Recovery QA Task', assignedTo: boss.id, createdBy: boss.id,
+      projects: [], tasks: [{ ...state.tasks[0], generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined, internalReview: undefined, reviewAccess: undefined, id: 'recovery-qa-task', title: 'Recovery QA Task', assignedTo: boss.id, createdBy: boss.id,
         clientId: 'recovery-qa-client', clientName: 'Recovery QA Company', projectId: undefined, projectName: undefined,
         department: 'Designer', status: 'Pending', startDate: '2026-10-01', dueDate: '2026-10-30', comments: [], approvalHistory: [],
         serviceCycleId: undefined, deliverableId: undefined }],
@@ -130,7 +130,7 @@ test('closing a failed deletion confirms discard and closes after reloading save
   });
   await deleteTask(page);
   await expect(dialog.getByText('Injected uncertain deletion', { exact: true })).toBeVisible();
-  page.once('dialog', async prompt => { expect(prompt.message()).toBe('Discard unsaved changes?'); await prompt.accept(); });
+  page.once('dialog', async prompt => { expect(prompt.message()).toBe('Discard pending changes and reload the latest saved workspace?'); await prompt.accept(); });
   await dialog.getByRole('button', { name: /Close.*Recovery QA Task/ }).click();
   await expect(dialog).toBeHidden();
   expect(await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks[0].id)).toBe('recovery-qa-task');
