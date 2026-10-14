@@ -1559,34 +1559,6 @@ const loadClientPortalPayload = async (expectedClientName?: string): Promise<Cli
   return parseClientPortalPayload(result.data, SECURE_WORKSPACE_ID, expectedClientName);
 };
 
-const projectionToEntityRow = (
-  entityType: string,
-  item: Record<string, unknown>,
-  parentId?: string,
-): EntityRow => {
-  const { version, updatedAt, ...projection } = item;
-  const data = entityType === 'task'
-    ? {
-        ...projection,
-        department: 'Client',
-        priority: 'Medium',
-        createdBy: 'client-portal',
-        isRecurring: false,
-        recurrenceFrequency: 'None',
-        dueReminderSent: false,
-      }
-    : projection;
-  return {
-    workspace_id: SECURE_WORKSPACE_ID,
-    entity_type: entityType,
-    entity_id: cleanPortalText(item.id, 160),
-    parent_id: parentId || null,
-    data,
-    version: Math.max(1, Number(version) || 1),
-    updated_at: cleanPortalText(updatedAt, 80) || new Date(0).toISOString(),
-  };
-};
-
 export const WORKSPACE_LOAD_TIMEOUT_MS = 90000;
 export const loadSecureWorkspace = async (authUser: User, options: { preserveRetainedCommand?: boolean; consistencyAttempt?: number } = {}) => {
   const controller = new AbortController();
@@ -1667,43 +1639,17 @@ const loadSecureWorkspaceInternal = async (authUser: User, options: { preserveRe
   const currentUser = authenticatedMemberRow ? memberToUser(authenticatedMemberRow) : undefined;
   if (!currentUser) throw new Error('This authenticated account is not an AiTask workspace member.');
 
-  const clientPortal = currentUser.role === 'Client'
-    ? await loadClientPortalPayload(currentUser.companyName)
-    : null;
-  const clientContactUsers: WorkspaceMember[] = clientPortal?.contacts.map(contact => ({
-    id: contact.id,
-    name: contact.name,
-    avatar: contact.avatar,
-    role: 'Staff',
-    departments: [],
-    directoryOnly: true,
-  })) || [];
-  const users = currentUser.role === 'Client'
-    ? [currentUser, ...clientContactUsers.filter(contact => contact.id !== currentUser.id)]
-    : memberRows.map(memberToUser);
-  const clientTaskIds = new Set(clientPortal?.tasks.map(task => task.id) || []);
-  const clientCustomRoleId = authenticatedMemberRow?.custom_role_id;
-  const visibleEntityRows = currentUser.role === 'Client'
-    ? entityRows.filter(row => (
-        !['task', 'project', 'client', 'comment', 'approval', 'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon', 'service_package', 'service_workflow_template', 'service_pricing_snapshot', 'registration', 'task_status'].includes(row.entity_type)
-        && (row.entity_type !== 'custom_role' || row.entity_id === clientCustomRoleId)
-      ))
-    : entityRows;
-  const projectedEntityRows: EntityRow[] = currentUser.role === 'Client' && clientPortal
-    ? [
-        ...clientPortal.tasks.map(item => projectionToEntityRow(
-          'task',
-          item as unknown as Record<string, unknown>,
-          item.projectId,
-        )),
-        ...clientPortal.projects.map(item => projectionToEntityRow('project', item as unknown as Record<string, unknown>)),
-        ...clientPortal.clients.map(item => projectionToEntityRow('client', item as unknown as Record<string, unknown>)),
-        ...clientPortal.clientPlans.map(item => projectionToEntityRow('client_plan', item as unknown as Record<string, unknown>, item.clientId)),
-        ...clientPortal.serviceCycles.map(item => projectionToEntityRow('service_cycle', item as unknown as Record<string, unknown>, item.planId)),
-        ...clientPortal.deliverables.map(item => projectionToEntityRow('deliverable', item as unknown as Record<string, unknown>, item.cycleId)),
-        ...clientPortal.cycleComments.map(item => projectionToEntityRow('cycle_comment', item as unknown as Record<string, unknown>, item.cycleId)),
-      ]
-    : [];
+  let portalProjection: ReturnType<typeof import('./clientPortalPayload')['projectClientPortalWorkspace']> | null = null;
+  if (currentUser.role === 'Client') {
+    const clientPortal = await loadClientPortalPayload(currentUser.companyName);
+    const { projectClientPortalWorkspace } = await import('./clientPortalPayload');
+    assertWorkspaceSession(sessionToken);
+    portalProjection = projectClientPortalWorkspace(clientPortal, currentUser, entityRows, authenticatedMemberRow.custom_role_id, SECURE_WORKSPACE_ID);
+  }
+  const users = portalProjection?.users || memberRows.map(memberToUser);
+  const clientTaskIds = portalProjection?.clientTaskIds || new Set<string>();
+  const visibleEntityRows = portalProjection?.visibleEntityRows || entityRows;
+  const projectedEntityRows = portalProjection?.projectedEntityRows || [];
   const notificationRows: EntityRow[] = notificationFeed.items.map(notification => ({
     workspace_id: SECURE_WORKSPACE_ID,
     entity_type: 'notification',
@@ -1715,18 +1661,9 @@ const loadSecureWorkspaceInternal = async (authUser: User, options: { preserveRe
   }));
   const effectiveEntityRows = [...visibleEntityRows, ...projectedEntityRows, ...notificationRows];
 
-  const comments = new Map<string, Task['comments']>();
-  const approvals = new Map<string, Task['approvalHistory']>();
-  if (currentUser.role === 'Client' && clientPortal) {
-    clientPortal.taskComments.forEach(item => {
-      const { taskId, ...comment } = item;
-      comments.set(taskId, [...(comments.get(taskId) || []), comment as unknown as NonNullable<Task['comments']>[number]]);
-    });
-    clientPortal.taskApprovals.forEach(item => {
-      const { taskId, ...approval } = item;
-      approvals.set(taskId, [...(approvals.get(taskId) || []), approval as unknown as NonNullable<Task['approvalHistory']>[number]]);
-    });
-  } else {
+  const comments = portalProjection?.comments || new Map<string, Task['comments']>();
+  const approvals = portalProjection?.approvals || new Map<string, Task['approvalHistory']>();
+  if (!portalProjection) {
     visibleEntityRows.forEach(row => {
       if (!row.parent_id) return;
       if (row.entity_type === 'comment') {

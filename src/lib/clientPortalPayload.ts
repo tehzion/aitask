@@ -1,4 +1,5 @@
-import type { ClientContact, ClientPortalPayload } from '../types';
+import type { EntityRow } from './secureWorkspace';
+import type { ClientContact, ClientPortalPayload, Task, WorkspaceMember } from '../types';
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const cleanPortalText = (value: unknown, maxLength: number) => typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
@@ -56,4 +57,80 @@ export const parseClientPortalPayload = (value: unknown, expectedWorkspaceId: st
     .map(item => ({ ...item })) as unknown as ClientPortalPayload['taskApprovals'];
 
   return { workspaceId, clientName, tasks, projects, clients, contacts, clientPlans, serviceCycles, deliverables, cycleComments, taskComments, taskApprovals };
+};
+
+/** Client-only canonical projection, loaded with the portal payload. */
+export const projectClientPortalWorkspace = (clientPortal: ClientPortalPayload, currentUser: WorkspaceMember, entityRows: EntityRow[], customRoleId: string | null, SECURE_WORKSPACE_ID: string) => {
+const projectionToEntityRow = (
+  entityType: string,
+  item: Record<string, unknown>,
+  parentId?: string,
+): EntityRow => {
+  const { version, updatedAt, ...projection } = item;
+  const data = entityType === 'task'
+    ? {
+        ...projection,
+        department: 'Client',
+        priority: 'Medium',
+        createdBy: 'client-portal',
+        isRecurring: false,
+        recurrenceFrequency: 'None',
+        dueReminderSent: false,
+      }
+    : projection;
+  return {
+    workspace_id: SECURE_WORKSPACE_ID,
+    entity_type: entityType,
+    entity_id: cleanPortalText(item.id, 160),
+    parent_id: parentId || null,
+    data,
+    version: Math.max(1, Number(version) || 1),
+    updated_at: cleanPortalText(updatedAt, 80) || new Date(0).toISOString(),
+  };
+};
+
+  const clientContactUsers: WorkspaceMember[] = clientPortal?.contacts.map(contact => ({
+    id: contact.id,
+    name: contact.name,
+    avatar: contact.avatar,
+    role: 'Staff',
+    departments: [],
+    directoryOnly: true,
+  })) || [];
+  const users = [currentUser, ...clientContactUsers.filter(contact => contact.id !== currentUser.id)];
+  const clientTaskIds = new Set(clientPortal?.tasks.map(task => task.id) || []);
+  const clientCustomRoleId = customRoleId;
+  const visibleEntityRows = currentUser.role === 'Client'
+    ? entityRows.filter(row => (
+        !['task', 'project', 'client', 'comment', 'approval', 'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon', 'service_package', 'service_workflow_template', 'service_pricing_snapshot', 'registration', 'task_status'].includes(row.entity_type)
+        && (row.entity_type !== 'custom_role' || row.entity_id === clientCustomRoleId)
+      ))
+    : entityRows;
+  const projectedEntityRows: EntityRow[] = currentUser.role === 'Client' && clientPortal
+    ? [
+        ...clientPortal.tasks.map(item => projectionToEntityRow(
+          'task',
+          item as unknown as Record<string, unknown>,
+          item.projectId,
+        )),
+        ...clientPortal.projects.map(item => projectionToEntityRow('project', item as unknown as Record<string, unknown>)),
+        ...clientPortal.clients.map(item => projectionToEntityRow('client', item as unknown as Record<string, unknown>)),
+        ...clientPortal.clientPlans.map(item => projectionToEntityRow('client_plan', item as unknown as Record<string, unknown>, item.clientId)),
+        ...clientPortal.serviceCycles.map(item => projectionToEntityRow('service_cycle', item as unknown as Record<string, unknown>, item.planId)),
+        ...clientPortal.deliverables.map(item => projectionToEntityRow('deliverable', item as unknown as Record<string, unknown>, item.cycleId)),
+        ...clientPortal.cycleComments.map(item => projectionToEntityRow('cycle_comment', item as unknown as Record<string, unknown>, item.cycleId)),
+      ]
+    : [];
+  const comments = new Map<string, Task['comments']>();
+  const approvals = new Map<string, Task['approvalHistory']>();
+    clientPortal.taskComments.forEach(item => {
+      const { taskId, ...comment } = item;
+      comments.set(taskId, [...(comments.get(taskId) || []), comment as unknown as NonNullable<Task['comments']>[number]]);
+    });
+    clientPortal.taskApprovals.forEach(item => {
+      const { taskId, ...approval } = item;
+      approvals.set(taskId, [...(approvals.get(taskId) || []), approval as unknown as NonNullable<Task['approvalHistory']>[number]]);
+    });
+
+  return { users, clientTaskIds, visibleEntityRows, projectedEntityRows, comments, approvals };
 };
