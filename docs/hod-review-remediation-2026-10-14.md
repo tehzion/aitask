@@ -1,6 +1,6 @@
 # HOD review remediation — 14 October 2026
 
-This implements the four defects and review-ownership gaps in [the deep audit](hod-latest-deep-audit-2026-10-14.md). The HOD and PM production migrations were applied and verified on 15 October 2026. Frontend rollout is in progress under the user’s explicit authorization to deploy directly without staging/CI.
+This implements the four defects and review-ownership gaps in [the deep audit](hod-latest-deep-audit-2026-10-14.md). The HOD and PM production migrations were applied and verified on 15 October 2026. The frontend is live at https://aitask-virid.vercel.app under the user’s explicit authorization to deploy directly without staging/CI.
 
 - Department reviewer authority is enforced in both client and server transitions, including revisions on legacy out-of-department assignments.
 - Review selection ignores members without usable Auth accounts and excludes the assignee and review submitter. Independent portfolio PM fallback is available when needed.
@@ -30,4 +30,13 @@ Evidence: [desktop cover](audit-evidence/hod-latest-2026-10-14/review-cover-desk
 
 ## Production database rollout — 15 October 2026
 
-Applied connector migrations `20261015002054_hod_review_remediation` and `20261015002102_pm_portfolio_service_boundaries`. The preflight/postflight counts and data hashes match for every entity type and all 11 members; 189 tasks are preserved. The review capability, portfolio policy, and independent handoffs are active. Security advisors report no ERROR-level findings. Recovery function definitions are kept owner-readable outside Git. Frontend deployment and live build verification are in progress.
+Applied connector migrations `20261015002054_hod_review_remediation` and `20261015002102_pm_portfolio_service_boundaries`. The preflight/postflight counts and data hashes match for every entity type and all 11 members; 189 tasks are preserved. The review capability, portfolio policy, and independent handoffs are active. Security advisors report no ERROR-level findings. Recovery function definitions are kept owner-readable outside Git. Frontend deployment and live build verification passed.
+
+
+## Production frontend — 15 October 2026
+
+Production URL: https://aitask-virid.vercel.app. Vercel deployment `dpl_WxbTECDRFZZ2vQpX3PVixkeUVKEZ` is READY and owns the production alias. `/build-info.json` verifies v3.0.0 at source commit `7cafb1c78a9bcb7b8ee17e405f1a9278ed41a7cf`, built at `2026-10-15T00:23:58.385Z` (08:23 MYT).
+
+The user explicitly chose to skip hosted staging/CI and deploy directly. No branch protection or staging configuration was disabled. This is a direct deployment from `codex/delivery-review-blindspots`; `master` was not changed by this release. Future source integration must include this release branch to preserve these fixes.
+
+Read-only production checks confirm schema 5, the review capability, all four new triggers, restrictive PM portfolio policy, anonymous-access denial, private-helper denial, Boss self-review rejection without a reason, and explicit override eligibility. All preflight/postflight business-data and member hashes match. Fresh desktop (1440px) and mobile (390px) browser contexts load production login in English and Chinese with no runtime errors or horizontal overflow. These hosted smoke checks do not impersonate real users or alter their task records. Functional signed-review and file workflows were verified against the disposable Auth/REST/Storage stack before release.

@@ -43,3 +43,8 @@ See [verification metadata](audit-evidence/pm-2026-10-14/verification.json) for 
 The local browser tests explicitly configure demo credentials and password-setup bypass. The task-authorization fixture preconfigures the demo password gate and release acknowledgement while retaining the actual sign-in flow; it checks the named task-status control rather than counting every dropdown. The new authenticated output probe acknowledges the server-backed notice and selects the file input unambiguously. These changes isolate the workflow assertions from unrelated onboarding/UI overlays.
 
 The eager runtime shares its class-merging dependencies to reduce compression/request overhead and retain the existing bundle cap. The translation audit includes the lazily registered HOD review copy. No budget was increased. The disposable browser probe bounds embedded Vite shutdown, cleans its test records, and exits so the parent runner can remove the stack.
+
+
+## Production release — 15 October 2026
+
+Both HOD and PM migrations and the frontend are live. [The release record](hod-review-remediation-2026-10-14.md#production-frontend--15-october-2026) records the exact commit, migration aliases, user-authorized staging/CI exception, unchanged business data, and successful hosted smoke checks.

@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "scope": "local combined checkout; production rollout pending",
+  "scope": "released to production on 2026-10-15",
   "unitTests": 676,
   "unitFiles": 93,
   "databaseAssertions": 880,
@@ -22,5 +22,23 @@
   "eagerGzipKiB": 299.9,
   "eagerGzipBudgetKiB": 300,
   "migration": "20261014132839_hod_review_remediation",
-  "productionChanged": false
+  "productionChanged": true,
+  "productionSourceCommit": "7cafb1c78a9bcb7b8ee17e405f1a9278ed41a7cf",
+  "deploymentId": "dpl_WxbTECDRFZZ2vQpX3PVixkeUVKEZ",
+  "productionUrl": "https://aitask-virid.vercel.app",
+  "productionMigrationVersions": [
+    "20261015002054",
+    "20261015002102"
+  ],
+  "businessDataAndMembersUnchanged": true,
+  "hostedSmoke": [
+    "desktop login",
+    "mobile login",
+    "English and Chinese",
+    "runtime/overflow",
+    "build provenance",
+    "anonymous access denial",
+    "review capability and override policy"
+  ],
+  "hostedStagingCi": "waived explicitly by user"
 }

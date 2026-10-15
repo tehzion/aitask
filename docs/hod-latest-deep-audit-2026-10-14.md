@@ -87,4 +87,4 @@ Evidence is retained in [verification metadata](audit-evidence/hod-latest-2026-1
 
 ## Remediation follow-up
 
-All four code defects and the independent-review, temporary-cover, and accountable-lead gaps have been addressed in the local source. [The remediation report](hod-review-remediation-2026-10-14.md) records implementation and passing validation. The original findings above describe the audited deployed version; production migration and frontend rollout remain pending.
+All four code defects and the independent-review, temporary-cover, and accountable-lead gaps have been addressed in the local source. [The remediation report](hod-review-remediation-2026-10-14.md) records implementation and passing validation. The original findings above describe the audited deployed version; production migrations and frontend rollout completed on 15 October 2026.
