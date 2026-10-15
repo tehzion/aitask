@@ -38,7 +38,7 @@ const queue = (page: Page, title: string) => page.getByRole('heading', { name: t
 
 test('PM dashboard separates department, final completion, and customer review', async ({ page }) => {
   await seedPM(page);
-  await expect(queue(page, 'Awaiting HOD review').getByRole('link', { name: 'Department submission', exact: true })).toBeVisible();
+  await expect(queue(page, 'Awaiting internal review').getByRole('link', { name: 'Department submission', exact: true })).toBeVisible();
   await expect(queue(page, 'Client review (optional)').getByRole('link', { name: 'Department submission' })).toHaveCount(0);
   await expect(queue(page, 'Ready to finalize').getByRole('link', { name: 'Signed portfolio work' })).toBeVisible();
   await expect(queue(page, 'Client review (optional)').getByRole('link', { name: 'Customer acceptance pending' })).toBeVisible();

@@ -169,7 +169,7 @@ const ServiceRoleDashboard = () => {
     <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label={t('Open delivery tasks')} value={scopeTasks.filter(isTaskOpen).length} icon={Clock3} detail={<>{dueToday.length} {t('Due today')} · {overdue.length} {t('overdue in your portfolio.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label={t('Overdue delivery')} value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label={t('Needs attention')} value={portfolioReviews.waitingCount} icon={FileCheck2} tone="warning" /><CompactStat label={t('Active companies')} value={activePlans.length} icon={UsersRound} /></StatGroup></div>
     <div className="grid gap-4 xl:grid-cols-2">
       <TaskQueue title={t('Due today / overdue')} tasks={[...overdue, ...dueToday].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty={t('No urgent portfolio delivery work.')} />
-      <TaskQueue title={t('Awaiting HOD review')} tasks={portfolioReviews.internal} empty={t('No submitted work is waiting for its HOD.')} />
+      <TaskQueue title={t('Awaiting internal review')} tasks={portfolioReviews.internal} empty={t('No submitted work is waiting for internal review.')} />
       <TaskQueue title={t('Ready to finalize')} tasks={portfolioReviews.completion} empty={t('No tasks awaiting final completion.')} />
       <TaskQueue title={t('Client review (optional)')} tasks={portfolioReviews.client} empty={t('No client review is pending.')} />
     </div>

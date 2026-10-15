@@ -918,7 +918,7 @@ const Settings: React.FC = () => {
             </div>
             <div className="p-6 space-y-3 text-sm text-slate-600">
               <p><strong className="text-slate-800">{t('Boss Koo:')}</strong> {t('has super admin access to add members, manage users, approve registrations, companies, and all task workflows.')}</p>
-              <p><strong className="text-slate-800">{t('Project Manager:')}</strong> {t('can create and edit their own projects, companies, and tasks.')}</p>
+              <p><strong className="text-slate-800">{t('Project Manager:')}</strong> {t('manage their own portfolio of companies, projects, and tasks, and hand work to the department HOD before staff.')}</p>
               <p><strong className="text-slate-800">{t('HOD:')}</strong> {t('oversees their departments, delegates assigned work to staff, and approves or returns submitted work.')}</p>
               <p><strong className="text-slate-800">{t('Staff:')}</strong> {t('can create tasks for internal teammates, update tasks assigned to them, and see companies they created or participate in.')}</p>
               <p><strong className="text-slate-800">{t('Client:')}</strong> {t('can view company tasks, calendar, reports, and review completed or waiting-approval work.')}</p>

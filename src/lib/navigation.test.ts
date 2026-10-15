@@ -33,6 +33,17 @@ describe('delivery tracker navigation labels', () => {
     });
   });
 
+  it('labels the HOD primary destinations for department oversight', () => {
+    const hod = internalUsers.find(user => user.id === 'hod')!;
+    const staff = internalUsers.find(user => user.id === 'staff')!;
+    const hodSections = getNavigationSections(hod);
+    expect(hodSections.primary.find(entry => entry.path === '/')).toMatchObject({ label: 'Department work' });
+    expect([...hodSections.primary, ...hodSections.secondary].find(entry => entry.path === '/tasks')).toMatchObject({ label: 'Department tasks' });
+    const staffSections = getNavigationSections(staff);
+    expect(staffSections.primary.find(entry => entry.path === '/')).toMatchObject({ label: 'My work' });
+    expect(staffSections.secondary.find(entry => entry.path === '/tasks')).toMatchObject({ label: 'All work' });
+  });
+
   it('keeps the Client portal navigation label as Deliveries', () => {
     const client: User = { id: 'client', name: 'Client', role: 'Client', departments: ['Client'], department: 'Client', companyName: 'Acme' };
     const item = getNavigationSections(client).primary.find(entry => entry.path === '/clients');

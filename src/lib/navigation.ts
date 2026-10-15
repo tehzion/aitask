@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CustomRole, User } from '../types';
-import { canAccessPath, getVisibleNavigation } from './access';
+import { canAccessPath, getVisibleNavigation, isHodUser } from './access';
 
 export type NavigationItem = {
   path: string;
@@ -102,11 +102,22 @@ export const getNavigationSections = (
   const isClient = user?.role === 'Client';
 
   if (isStaff) {
+    // HODs oversee a department, so their primary destinations are labelled for
+    // that role instead of the plain Staff "My work" / "All work" wording.
+    const forHod = (items: NavigationItem[]) => (
+      isHodUser(user, rolePermissions)
+        ? items.map(item => item.path === '/'
+          ? { ...item, label: 'Department work' }
+          : item.path === '/tasks'
+            ? { ...item, label: 'Department tasks' }
+            : item)
+        : items
+    );
     return {
-      primary: filterVisible(user, rolePermissions, staffPrimary),
-      secondary: filterVisible(user, rolePermissions, staffSecondary),
+      primary: filterVisible(user, rolePermissions, forHod(staffPrimary)),
+      secondary: filterVisible(user, rolePermissions, forHod(staffSecondary)),
       footer: [],
-      mobilePrimary: filterVisible(user, rolePermissions, staffMobilePrimary),
+      mobilePrimary: filterVisible(user, rolePermissions, forHod(staffMobilePrimary)),
     };
   }
 
