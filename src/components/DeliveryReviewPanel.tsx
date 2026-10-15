@@ -60,6 +60,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   return <section className="mt-5 rounded-control border border-line p-4" aria-label={t('Delivery records need review')}>
     <h3 className="font-semibold text-ink">{t('Delivery records need review')}</h3>
     <p className="mt-1 text-xs text-muted">{t('Review links and publication before confirming delivery.')}</p>
+    {!canLink && <p className="mt-1 text-xs text-muted">{t('Only Boss Koo can relink or publish these records; this list is read-only for you.')}</p>}
     {message && <p className="mt-3 text-sm" role="status"><SystemMessage message={message} /></p>}
     {pending && <Button className="mt-3" disabled={busy} onClick={() => save(() => ({ ok: true }), pending.command)}>{t('Retry pending save')}</Button>}
     <div className="mt-3 space-y-4">

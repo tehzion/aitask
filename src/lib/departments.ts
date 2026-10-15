@@ -89,6 +89,20 @@ export const getLegacyDepartmentMirror = (role: Role, departments: unknown): Dep
   return normalizeMemberDepartments(role, departments)[0] || 'Designer';
 };
 
+/**
+ * Departments a member may pick when creating or editing a task. Department-scoped
+ * roles (Staff/HOD) are limited to their own departments; Project Managers and
+ * Boss Koo may choose any staff department.
+ */
+export const assignableDepartments = (
+  member: Pick<WorkspaceMember, 'role' | 'departments' | 'department'> | null | undefined,
+): Department[] => {
+  if (member && (member.role === 'Staff' || member.role === 'HOD')) {
+    return getMemberDepartments(member).filter(department => department !== 'Client');
+  }
+  return [...STAFF_DEPARTMENTS];
+};
+
 /** Assignment eligibility is separate from department review authority. */
 export const isEligibleTaskAssignee = (
   member: Pick<WorkspaceMember, 'role' | 'departments' | 'department'>,

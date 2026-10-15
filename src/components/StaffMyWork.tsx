@@ -2,11 +2,11 @@ import { getLocalizedTaskStatus } from '../lib/localeLabels';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
 import React from 'react';
-import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, Clock3, ListChecks, RotateCcw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, Clock3, ListChecks, Plus, RotateCcw } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
-import { getDashboardPersona, getVisibleTasks, isHodUser } from '../lib/access';
+import { canCreateTasks, getDashboardPersona, getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../lib/access';
 import { buildStaffWorkQueue, getHodScopeTasks, getTaskBlockers, getUnavailableTaskDependencyCount, type HodWorkScope, getStaffBucketLabel, getStaffFocusTask, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getMemberDepartments, isMemberInDepartment } from '../lib/departments';
 import { getTeamWorkloadSummaries, isTaskOpen } from '../lib/taskReporting';
@@ -27,7 +27,7 @@ const StaffMyWork: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const scope: HodWorkScope = searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'delegated' ? 'delegated' : 'department';
   const { locale, t } = useI18n();
-  const { currentUser, tasks: allTasks, clients, projects, users, rolePermissions, clientPlans } = useStore(useShallow(state => ({
+  const { currentUser, tasks: allTasks, clients, projects, users, rolePermissions, clientPlans, setCreateTaskModalOpen } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     tasks: state.tasks,
     clients: state.clients,
@@ -35,26 +35,31 @@ const StaffMyWork: React.FC = () => {
     users: state.users,
     rolePermissions: state.rolePermissions,
     clientPlans: state.clientPlans,
+    setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
+  const canCreateTask = canCreateTasks(currentUser, rolePermissions);
   const todayDate = useLocalToday();
   const today = getTodayInputDate(todayDate);
   const isHod = isHodUser(currentUser, rolePermissions);
+  // A department-scoped custom-role lead oversees their department just like an
+  // HOD, so they must see department work on the My work dashboard too.
+  const isDepartmentLead = isHod || isDepartmentScopedUser(currentUser, rolePermissions);
   const accessibleTasks = React.useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects }),
     [allTasks, clients, currentUser, projects, rolePermissions],
   );
   const visibleTasks = React.useMemo(
-    () => accessibleTasks.filter(task => isHod || task.assignedTo === currentUser?.id),
-    [accessibleTasks, currentUser?.id, isHod],
+    () => accessibleTasks.filter(task => isDepartmentLead || task.assignedTo === currentUser?.id),
+    [accessibleTasks, currentUser?.id, isDepartmentLead],
   );
   const tasks = React.useMemo(() => isHod ? getHodScopeTasks(visibleTasks, currentUser?.id, scope) : visibleTasks, [currentUser?.id, isHod, scope, visibleTasks]);
   const departmentTasks = React.useMemo(() => visibleTasks.filter(task => isMemberInDepartment(currentUser, task.department)), [currentUser, visibleTasks]);
   const workload = React.useMemo(() => {
-    if (!isHod || !currentUser) return [];
+    if (!isDepartmentLead || !currentUser) return [];
     const members = users.filter(member => getMemberDepartments(currentUser).some(department => isMemberInDepartment(member, department)));
     return getTeamWorkloadSummaries(departmentTasks, members, 'overall', todayDate)
       .sort((left, right) => right.overdue - left.overdue || right.open - left.open || left.member.name.localeCompare(right.member.name));
-  }, [currentUser, departmentTasks, isHod, todayDate, users]);
+  }, [currentUser, departmentTasks, isDepartmentLead, todayDate, users]);
   const queue = React.useMemo(() => buildStaffWorkQueue(tasks, today), [tasks, today]);
   const focusTask = getStaffFocusTask(queue);
   const defaultBucket = queue.needs_action.length > 0 ? 'needs_action' : queue.up_next.length > 0 ? 'up_next' : queue.waiting.length > 0 ? 'waiting' : 'done';
@@ -69,11 +74,11 @@ const StaffMyWork: React.FC = () => {
     () => getStaffDashboardMetrics(tasks, accessibleTasks, clientPlans, todayDate, clients),
     [accessibleTasks, clientPlans, clients, tasks, todayDate],
   );
-  const contextUnavailableDependencyTaskCount = isHod
+  const contextUnavailableDependencyTaskCount = isDepartmentLead
     ? departmentTasks.filter(task => getUnavailableTaskDependencyCount(task, accessibleTasks) > 0).length
     : unavailableDependencyTaskCount;
   const persona = getDashboardPersona(currentUser);
-  const roleInsight = isHod
+  const roleInsight = isDepartmentLead
     ? { title: t('Department context'), description: t('Department workload, delegated tasks, and review risk.'), values: [[t('Active tasks'), departmentTasks.filter(isTaskOpen).length], [t('Waiting review'), departmentTasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length], [t('Blocked steps'), departmentTasks.filter(task => getTaskBlockers(task, accessibleTasks).length > 0).length]] as const }
     : persona === 'operation'
     ? { title: t('Operation context'), description: t('Your assigned delivery and review queue.'), values: [[t('Due today'), dueToday], [t('Waiting review'), waitingReview], [t('Blocked steps'), blockedCount]] as const }
@@ -92,10 +97,13 @@ const StaffMyWork: React.FC = () => {
       <header className="flex items-start justify-between gap-4 border-b border-line/70 pb-4 sm:items-end">
         <div>
           <p className="calm-eyebrow">{formatLocalizedWeekdayDate(todayDate, locale)}</p>
-          <h1 className="mt-1 text-[1.8rem] font-semibold leading-9 tracking-[-0.045em] text-ink sm:text-4xl">{isHod ? t('Department work') : t('My work')}</h1>
-          <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">{isHod ? t('Start with what needs attention, then review delegated work across your departments.') : t('Start with what needs attention, then move through the rest of your assigned work.')}</p>
+          <h1 className="mt-1 text-[1.8rem] font-semibold leading-9 tracking-[-0.045em] text-ink sm:text-4xl">{isDepartmentLead ? t('Department work') : t('My work')}</h1>
+          <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">{isDepartmentLead ? t('Start with what needs attention, then review delegated work across your departments.') : t('Start with what needs attention, then move through the rest of your assigned work.')}</p>
         </div>
-        <BackendFreshness />
+        <div className="flex flex-col items-end gap-2">
+          {canCreateTask && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
+          <BackendFreshness />
+        </div>
       </header>
 
       <div className="grid grid-cols-3 gap-3 text-xs text-muted sm:max-w-xl" aria-label={t('Assignment overview')}>

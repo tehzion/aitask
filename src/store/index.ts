@@ -3717,7 +3717,7 @@ export const useStore = create<StoreState>()(
         const nextOwner = ownerId || undefined;
         if (nextOwner) {
           const owner = state.users.find(user => user.id === nextOwner);
-          if (!owner || !['Project Manager', 'HOD'].includes(owner.role)) {
+          if (!owner || (owner.role !== 'Project Manager' && !isHodUser(owner, state.rolePermissions))) {
             return { ok: false, error: 'Choose a Project Manager or HOD as the owner.' };
           }
         }

@@ -117,6 +117,25 @@ describe('client profile store authorization', () => {
     expect(useStore.getState().clients[0]?.createdBy).toBe(pm.id);
   });
 
+  it('treats a legacy Staff + built-in HOD member as an eligible company owner', () => {
+    const boss: User = { id: 'boss-owner-legacy', name: 'Boss Koo', role: 'Project Manager', isSuperAdmin: true, departments: ['Management'], department: 'Management' };
+    const legacyHod: User = { id: 'legacy-hod-owner', name: 'Legacy HOD', role: 'Staff', customRoleId: 'builtin-hod', departments: ['Designer'], department: 'Designer' };
+    const plainStaff: User = { id: 'plain-staff-owner', name: 'Plain Staff', role: 'Staff', departments: ['Designer'], department: 'Designer' };
+    useStore.setState({
+      ...initialState,
+      currentUser: boss,
+      users: [boss, legacyHod, plainStaff],
+      clients: [{ id: 'CL-owner-legacy', clientName: 'Legacy Owner Co', createdAt: '', updatedAt: '' }],
+      tasks: [],
+      projects: [],
+      rolePermissions: [],
+    }, true);
+
+    expect(useStore.getState().assignClientOwner('CL-owner-legacy', legacyHod.id)).toEqual({ ok: true });
+    expect(useStore.getState().clients[0]?.createdBy).toBe(legacyHod.id);
+    expect(useStore.getState().assignClientOwner('CL-owner-legacy', plainStaff.id).ok).toBe(false);
+  });
+
   it('keeps global rename Project Manager-only', () => {
     useStore.setState({ currentUser: makeStaff(true) });
     const result = useStore.getState().renameClient('Acme', 'Acme Global');

@@ -2,7 +2,7 @@ import { getLocalizedDepartment, getLocalizedTaskStatus } from '../lib/localeLab
 import UnavailableWork from './UnavailableWork';
 import '../lib/staffWorkflowCopy';
 import React from 'react';
-import { Filter, ListFilter, Search, X } from 'lucide-react';
+import { Filter, ListFilter, Plus, Search, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import type { Priority, TaskStatus } from '../types';
@@ -17,7 +17,7 @@ import SideSheet from './SideSheet';
 import StaffTaskFocus from './StaffTaskFocus';
 import StaffWorkItem from './StaffWorkItem';
 import TaskDetailsModal from './TaskDetailsModal';
-import { canEditTask } from '../lib/access';
+import { canCreateTasks, canEditTask } from '../lib/access';
 import { useI18n } from './I18nProvider';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import { useLocalToday } from '../hooks/useLocalToday';
@@ -30,7 +30,7 @@ const priorities: Priority[] = ['Urgent', 'High', 'Medium', 'Low'];
 const StaffAllWork: React.FC = () => {
   const { locale, t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, tasks: allTasks, rolePermissions, taskStatuses, clients: clientProfiles, projects, users } = useStore(useShallow(state => ({
+  const { currentUser, tasks: allTasks, rolePermissions, taskStatuses, clients: clientProfiles, projects, users, setCreateTaskModalOpen } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     tasks: state.tasks,
     rolePermissions: state.rolePermissions,
@@ -38,7 +38,9 @@ const StaffAllWork: React.FC = () => {
     clients: state.clients,
     projects: state.projects,
     users: state.users,
+    setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
+  const canCreateTask = canCreateTasks(currentUser, rolePermissions);
   const bucket: StaffAllWorkBucket = buckets.includes(searchParams.get('queue') as StaffAllWorkBucket) ? searchParams.get('queue') as StaffAllWorkBucket : 'all';
   const setParam = (key: string, value: string, defaultValue = 'All') => {
     setSearchParams(previous => {
@@ -150,7 +152,10 @@ const StaffAllWork: React.FC = () => {
         title={t(isProjectManager ? 'Portfolio work' : isHod ? 'Department work' : 'All work')}
         description={t(isProjectManager ? 'Your portfolio work, ordered by delivery risk and next action.' : isHod ? 'Department work, including delegated tasks and items that need review.' : 'All visible work, ordered by what needs attention first.')}
         meta={<span className="calm-number">{filteredTasks.length} {t(filteredTasks.length === 1 ? 'task' : 'tasks')}</span>}
-        action={<Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />{t('Filters')}{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>}
+        action={<div className="flex flex-wrap items-center gap-2">
+          {canCreateTask && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
+          <Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />{t('Filters')}{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>
+        </div>}
       />
 
       <div className="mt-5 flex items-center gap-2">

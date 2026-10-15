@@ -123,6 +123,13 @@ export const hodRestrictedPermissionKeys: RolePermissionKey[] = [
   'viewServicePrices',
 ];
 
+// Project Managers are always portfolio-scoped: the scoped visibility helpers
+// ignore these keys for PM, so never present them as granted.
+export const projectManagerRestrictedPermissionKeys: RolePermissionKey[] = [
+  'viewAllTasks',
+  'viewAllClients',
+];
+
 export const sanitizeNonSuperAdminPermissions = (permissions: RolePermissions): RolePermissions => {
   const sanitized = { ...permissions };
   nonSuperAdminOnlyPermissionKeys.forEach(key => {
@@ -133,11 +140,14 @@ export const sanitizeNonSuperAdminPermissions = (permissions: RolePermissions): 
 
 export const sanitizeRolePermissions = (permissions: RolePermissions, baseRole: Role): RolePermissions => {
   const sanitized = sanitizeNonSuperAdminPermissions(permissions);
-  if (baseRole === 'HOD') {
-    hodRestrictedPermissionKeys.forEach(key => {
-      sanitized[key] = false;
-    });
-  }
+  const restricted = baseRole === 'HOD'
+    ? hodRestrictedPermissionKeys
+    : baseRole === 'Project Manager'
+      ? projectManagerRestrictedPermissionKeys
+      : [];
+  restricted.forEach(key => {
+    sanitized[key] = false;
+  });
   return sanitized;
 };
 

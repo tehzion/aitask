@@ -166,12 +166,12 @@ const ServiceRoleDashboard = () => {
 
   if (persona === 'projectManager') return <section className="space-y-5" aria-labelledby="portfolio-workbench-title">
     <WorkbenchHeader id="portfolio-workbench-title" title={t('Portfolio delivery')} description={t('Companies, deadlines, review work, and output in your portfolio.')} />
-    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label={t('Open delivery tasks')} value={scopeTasks.filter(isTaskOpen).length} icon={Clock3} detail={<>{dueToday.length} {t('Due today')} · {overdue.length} {t('overdue in your portfolio.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label={t('Overdue delivery')} value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label={t('Waiting review')} value={portfolioReviews.waitingCount} icon={FileCheck2} tone="warning" /><CompactStat label={t('Active companies')} value={activePlans.length} icon={UsersRound} /></StatGroup></div>
+    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label={t('Open delivery tasks')} value={scopeTasks.filter(isTaskOpen).length} icon={Clock3} detail={<>{dueToday.length} {t('Due today')} · {overdue.length} {t('overdue in your portfolio.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label={t('Overdue delivery')} value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label={t('Needs attention')} value={portfolioReviews.waitingCount} icon={FileCheck2} tone="warning" /><CompactStat label={t('Active companies')} value={activePlans.length} icon={UsersRound} /></StatGroup></div>
     <div className="grid gap-4 xl:grid-cols-2">
       <TaskQueue title={t('Due today / overdue')} tasks={[...overdue, ...dueToday].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty={t('No urgent portfolio delivery work.')} />
-      <TaskQueue title={t('Internal review')} tasks={portfolioReviews.internal} empty={t('The internal review queue is clear.')} />
-      <TaskQueue title={t('Confirm completion')} tasks={portfolioReviews.completion} empty={t('No tasks awaiting final completion.')} />
-      <TaskQueue title={t('Client approval')} tasks={portfolioReviews.client} empty={t('No client approval is waiting.')} />
+      <TaskQueue title={t('Awaiting HOD review')} tasks={portfolioReviews.internal} empty={t('No submitted work is waiting for its HOD.')} />
+      <TaskQueue title={t('Ready to finalize')} tasks={portfolioReviews.completion} empty={t('No tasks awaiting final completion.')} />
+      <TaskQueue title={t('Client review (optional)')} tasks={portfolioReviews.client} empty={t('No client review is pending.')} />
     </div>
     <Surface className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
@@ -207,7 +207,7 @@ const ServiceRoleDashboard = () => {
         {activeCompanies.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">{t('No active companies yet.')}</p>}
       </div>
     </Surface>
-    <Surface variant="inset" className="flex flex-wrap items-center justify-between gap-3 p-5"><div><p className="calm-eyebrow">{t('Commercial summary')}</p><p className="mt-1 text-sm text-muted">{t('Active plan value in your visible portfolio.')}</p></div><p className="calm-number text-2xl font-semibold text-ink">{formatMoney(contractedMonthly, 'MYR', locale)}</p></Surface>
+    <Surface variant="inset" className="flex flex-wrap items-center justify-between gap-3 p-5"><div><p className="calm-eyebrow">{t('Commercial summary')}</p><p className="mt-1 text-sm text-muted">{t('Active plan value in your visible portfolio.')}</p></div><p className="calm-number text-2xl font-semibold text-ink">{canSeePrices ? formatMoney(contractedMonthly, 'MYR', locale) : t('Restricted')}</p></Surface>
     <React.Suspense fallback={null}><DeliveryReviewPanel /></React.Suspense>
   </section>;
 

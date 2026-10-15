@@ -881,7 +881,8 @@
     "20261015065635_deliverable_status_integrity",
     "20261015140049_monthly_plan_revision_scheduling",
     "20261015141803_optional_task_internal_approval",
-    "20261015152000_pm_hod_first_assignment"
+    "20261015152000_pm_hod_first_assignment",
+    "20261015160000_pm_project_service_scope"
   ],
   "pendingProductionMigrations": [
     "20261015014716_pm_task_company_boundaries",
@@ -890,6 +891,7 @@
     "20261015065635_deliverable_status_integrity",
     "20261015140049_monthly_plan_revision_scheduling",
     "20261015141803_optional_task_internal_approval",
-    "20261015152000_pm_hod_first_assignment"
+    "20261015152000_pm_hod_first_assignment",
+    "20261015160000_pm_project_service_scope"
   ]
 }

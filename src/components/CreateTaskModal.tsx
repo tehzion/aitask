@@ -15,7 +15,8 @@ import { getServiceOptions, hasChoice } from '../lib/choiceOptions';
 import { canAssignTasksToOthers, canCreateTasks, canManageProjects, getAssignableProjects, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
-import { getMemberDepartments, isEligibleTaskAssignee, STAFF_DEPARTMENTS } from '../lib/departments';
+import { assignableDepartments, getMemberDepartments } from '../lib/departments';
+import { assignableTaskAssignees } from '../lib/taskWorkflowAccess';
 import ModalShell from './ModalShell';
 import BackendFreshness from './BackendFreshness';
 import { modalFooter } from './uiTokens';
@@ -101,16 +102,12 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const isStaffTaskCreator = currentUser?.role === 'Staff' || currentUser?.role === 'HOD';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
   const departmentChoices = React.useMemo(
-    () => isStaffTaskCreator && currentUser
-      ? getMemberDepartments(currentUser).filter(item => item !== 'Client')
-      : [...STAFF_DEPARTMENTS],
-    [currentUser, isStaffTaskCreator],
+    () => assignableDepartments(currentUser),
+    [currentUser],
   );
   const filteredUsers = department
-    ? users.filter(user => (
-        isEligibleTaskAssignee(user, department)
-        && (canAssignOthers || user.id === currentUser?.id)
-      ))
+    ? assignableTaskAssignees(currentUser, department, users, rolePermissions)
+        .filter(user => canAssignOthers || user.id === currentUser?.id)
     : [];
   const assignableProjects = React.useMemo(
     () => getAssignableProjects(currentUser, projects, tasks, rolePermissions, users, { clients, projects }),

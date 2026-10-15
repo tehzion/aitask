@@ -38,12 +38,12 @@ const queue = (page: Page, title: string) => page.getByRole('heading', { name: t
 
 test('PM dashboard separates department, final completion, and customer review', async ({ page }) => {
   await seedPM(page);
-  await expect(queue(page, 'Internal review').getByRole('link', { name: 'Department submission', exact: true })).toBeVisible();
-  await expect(queue(page, 'Client approval').getByRole('link', { name: 'Department submission' })).toHaveCount(0);
-  await expect(queue(page, 'Confirm completion').getByRole('link', { name: 'Signed portfolio work' })).toBeVisible();
-  await expect(queue(page, 'Client approval').getByRole('link', { name: 'Customer acceptance pending' })).toBeVisible();
+  await expect(queue(page, 'Awaiting HOD review').getByRole('link', { name: 'Department submission', exact: true })).toBeVisible();
+  await expect(queue(page, 'Client review (optional)').getByRole('link', { name: 'Department submission' })).toHaveCount(0);
+  await expect(queue(page, 'Ready to finalize').getByRole('link', { name: 'Signed portfolio work' })).toBeVisible();
+  await expect(queue(page, 'Client review (optional)').getByRole('link', { name: 'Customer acceptance pending' })).toBeVisible();
   await expect(page.getByText('Hidden other portfolio', { exact: true })).toHaveCount(0);
-  const metric = page.getByText('Waiting review', { exact: true }).locator('..');
+  const metric = page.getByText('Needs attention', { exact: true }).locator('..');
   await expect(metric.getByText('3', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -53,7 +53,7 @@ test('PM dashboard separates department, final completion, and customer review',
 
 test('PM can follow signed portfolio work through final completion', async ({ page }) => {
   await seedPM(page);
-  await queue(page, 'Confirm completion').getByRole('link', { name: 'Signed portfolio work' }).click();
+  await queue(page, 'Ready to finalize').getByRole('link', { name: 'Signed portfolio work' }).click();
   const guided = page.getByRole('dialog', { name: 'Signed portfolio work' });
   await expect(guided).toBeVisible();
   await guided.getByRole('button', { name: 'Confirm completion', exact: true }).click();
@@ -63,8 +63,8 @@ test('PM can follow signed portfolio work through final completion', async ({ pa
     return { status: task?.status, progress: task?.completionPercentage };
   })).toEqual({ status: 'Completed', progress: 100 });
   await page.goto('/');
-  await expect(queue(page, 'Confirm completion').getByRole('link', { name: 'Signed portfolio work' })).toHaveCount(0);
-  await expect(queue(page, 'Client approval').getByRole('link', { name: 'Signed portfolio work' })).toHaveCount(0);
+  await expect(queue(page, 'Ready to finalize').getByRole('link', { name: 'Signed portfolio work' })).toHaveCount(0);
+  await expect(queue(page, 'Client review (optional)').getByRole('link', { name: 'Signed portfolio work' })).toHaveCount(0);
 });
 
 test('PM sees completion in both task views while review is pending', async ({ page }) => {

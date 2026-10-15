@@ -5,7 +5,7 @@ import { acknowledgeActionFeedback, canRetrySave, dismissActionFeedback } from '
 import SystemMessage from './SystemMessage';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
-import { canApproveTaskInternally, canCompleteWithoutInternalApproval, canRequestTaskRevision } from '../lib/taskWorkflowAccess';
+import { assignableTaskAssignees, canApproveTaskInternally, canCompleteWithoutInternalApproval, canRequestTaskRevision } from '../lib/taskWorkflowAccess';
 import { getTaskStatusControls } from '../lib/taskStatusControls';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import type { WorkspaceSessionToken } from '../lib/workspaceSession';
@@ -28,7 +28,7 @@ import { Department, Priority, Task, TaskStatus } from '../types';
 import { canViewTask, getVisibleTasks, getTaskAccess, canReviewTaskAsClient, isDepartmentScopedUser } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate, parseOptionalDate, cn } from '../lib/utils';
-import { isMemberInDepartment, isEligibleTaskAssignee, STAFF_DEPARTMENTS } from '../lib/departments';
+import { assignableDepartments, isMemberInDepartment, isEligibleTaskAssignee } from '../lib/departments';
 import type { SecureCommandType } from '../lib/secureWorkspace';
 import ClientDeliveryFocus from './ClientDeliveryFocus';
 import ModalShell from './ModalShell';
@@ -277,7 +277,13 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const workflowKind = getWorkflowStepKind(task, workflow.cycles, workflow.deliverables);
   const transitionError = (status: TaskStatus) => workflowTransitionError(task, { ...task, status, isCompleted: status === 'Completed' }, currentUser, visibleTasks, workflow.cycles, workflow.deliverables, rolePermissions, { users, clients, projects });
   const assigneeOptions = canAssignOthers
-    ? users.filter(user => isEligibleTaskAssignee(user, editForm.department))
+    ? (() => {
+        const options = assignableTaskAssignees(currentUser, editForm.department, users, rolePermissions);
+        const currentAssignee = editForm.assignedTo ? users.find(user => user.id === editForm.assignedTo) : undefined;
+        return currentAssignee && !options.some(user => user.id === currentAssignee.id)
+          ? [currentAssignee, ...options]
+          : options;
+      })()
     : users.filter(user => user.id === editForm.assignedTo);
   const delegationOptions = users.filter(user => (
     user.role !== 'Client'
@@ -775,7 +781,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                           }}
                           className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}
                         >
-                          {STAFF_DEPARTMENTS.map(department => <option key={department} value={department}>{t(department)}</option>)}
+                          {assignableDepartments(currentUser).map(department => <option key={department} value={department}>{t(department)}</option>)}
                         </select>
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
                       </span>

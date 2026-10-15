@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { Badge, Button, PageHeader, ProgressBar, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
-import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canEditProject, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
+import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canEditProject, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo, isHodUser } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { resolveClientAddedDate } from '../lib/clientDates';
 import { cn } from '../lib/utils';
@@ -1218,7 +1218,7 @@ const Clients: React.FC = () => {
                           onChange={event => void saveClientOwner(event.target.value || undefined)}
                         >
                           <option value="">{t('Unassigned')}</option>
-                          {users.filter(user => ['Project Manager', 'HOD'].includes(user.role)).sort((a, b) => a.name.localeCompare(b.name)).map(user => (
+                          {users.filter(user => user.role === 'Project Manager' || isHodUser(user, rolePermissions)).sort((a, b) => a.name.localeCompare(b.name)).map(user => (
                             <option key={user.id} value={user.id}>{user.name} · {t(getRoleDisplayName(user.role))}</option>
                           ))}
                         </select>

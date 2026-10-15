@@ -1,6 +1,6 @@
 import type { CustomRole, Department, Task, User } from '../types';
 import { canEditTask, isBossKoo, isHodUser, type VisibilityScope } from './access';
-import { isMemberInDepartment } from './departments';
+import { isEligibleTaskAssignee, isMemberInDepartment } from './departments';
 
 export const isIndependentTaskReviewer = (user: User, task: Partial<Task>) => user.id !== task.assignedTo && user.id !== task.workState?.reviewRequestedBy;
 export const canBeTaskReviewLead = (user: User, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => user.hasLogin !== false
@@ -75,6 +75,22 @@ export const taskAssignmentStageError = (
   if (isHodUser(nextAssignee, roles)) return undefined;
   if (nextAssignee.role === 'Project Manager') return undefined;
   return departmentHasHod(task?.department, users, roles) ? TASK_HOD_ASSIGNMENT_REQUIRED : undefined;
+};
+
+/**
+ * Assignee options for a task in a department, filtered by eligibility and the
+ * stage-1 HOD-first rule so the UI never offers a choice the store/DB rejects.
+ */
+export const assignableTaskAssignees = (
+  actor: User | null | undefined,
+  department: Department | undefined,
+  users: readonly User[],
+  roles: CustomRole[] = [],
+  options: { allowDirectStaff?: boolean } = {},
+): User[] => {
+  if (!department) return [];
+  return users.filter(user => isEligibleTaskAssignee(user, department)
+    && !taskAssignmentStageError(actor, { department }, user.id, users, roles, options));
 };
 export const getDepartmentReviewers = (users: readonly User[], task: Pick<Task, 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
   const eligible = users.filter(user => user.hasLogin !== false && isIndependentTaskReviewer(user, task));

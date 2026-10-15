@@ -18,6 +18,7 @@ import { canAssignTasksToOthers, canCreateTasks, canEditTask as canEditTaskByRol
 import { SkeletonTableRow, SkeletonMobileCard } from '../components/SkeletonCard';
 import { safeHttpsUrl } from '../lib/security';
 import { DEPARTMENTS } from '../lib/departments';
+import { assignableTaskAssignees } from '../lib/taskWorkflowAccess';
 import { getOperationsPeriod, isTaskOpen, isTaskOverdue, type TeamWorkloadPeriod } from '../lib/taskReporting';
 import { getClientTaskStage } from '../lib/clientPortal';
 import { getLocalizedDepartment, getLocalizedPriority, getLocalizedStatus } from '../lib/localeLabels';
@@ -1283,7 +1284,13 @@ const TasksWorkspace: React.FC = () => {
                       setActiveQuickEdit(null);
                     }}
                   >
-                    {(canAssignOthers ? users.filter(u => u.role !== 'Client') : users.filter(u => u.id === currentTask.assignedTo)).map(u => (
+                    {(canAssignOthers
+                      ? (() => {
+                          const options = assignableTaskAssignees(currentUser, currentTask.department, users, rolePermissions);
+                          const current = users.find(u => u.id === currentTask.assignedTo);
+                          return current && !options.some(u => u.id === current.id) ? [current, ...options] : options;
+                        })()
+                      : users.filter(u => u.id === currentTask.assignedTo)).map(u => (
                       <option key={u.id} data-i18n-skip value={u.id}>{u.name}</option>
                     ))}
                   </select>
