@@ -8,6 +8,9 @@ select '00000000-0000-0000-0000-000000000000'::uuid,
   'authenticated','authenticated','staff-contact-' || n || '@aitask.local','',now(),'{}'::jsonb,'{}'::jsonb,now(),now()
 from generate_series(1,7) n;
 insert into public.aitask_workspaces(id,name) values ('pgtap-staff-contact','Staff HOD contact notices');
+-- Build the historic Staff + built-in HOD contact with the role guard paused, the
+-- same way the other legacy-HOD fixtures do; normal assignments stay guarded.
+alter table public.aitask_members disable trigger aitask_00_guard_member_role_scope;
 insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,department,departments,custom_role_id)
 select id,'pgtap-staff-contact',('00000000-0000-0000-0000-' || lpad((7000+n)::text,12,'0'))::uuid,
   id,'staff-contact-' || n || '@aitask.local',role,department,array[department],custom_role_id
@@ -20,6 +23,7 @@ from (values
   (6,'contact-builtin','Staff','Designer','builtin-hod'),
   (7,'contact-creator','HOD','Video Editor',null)
 ) m(n,id,role,department,custom_role_id);
+alter table public.aitask_members enable trigger aitask_00_guard_member_role_scope;
 
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data)
 values ('pgtap-staff-contact','client','contact-company','{"id":"contact-company","clientName":"Contact Co","createdBy":"contact-pm"}');

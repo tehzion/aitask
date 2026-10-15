@@ -36,9 +36,9 @@ test('monthly plans roll over on their billing date and retain previous months a
   await expect(schedule.getByText('9 Nov 2026', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Cycles', exact: true }).click();
   await expect(page.getByRole('heading', { name: '2026-10-09 – 2026-11-08', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '2026-09-09 – 2026-10-08', exact: true })).toBeVisible();
-  await expect(page.getByText('Delivered 1/1', { exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Deliverable status: Ads Management Fee 1' }).first()).toHaveValue('Planned');
+  // The prior month remains retained and selectable from the billing-period picker.
+  await expect(page.getByRole('combobox', { name: 'Billing period' }).locator('option', { hasText: 'September 2026' })).toHaveCount(1);
 
   await page.reload();
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();

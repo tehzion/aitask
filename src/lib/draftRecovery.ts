@@ -1,3 +1,8 @@
+import type { ClientServicePlan } from '../types';
+
+/** Editable slice of a client plan revision, used for draft recovery snapshots. */
+export const revisionDraftOf = (plan: ClientServicePlan) => ({ name: plan.name, contractEndDate: plan.contractEndDate || '', serviceItems: structuredClone(plan.serviceItems), discountType: plan.discountType, discountValue: plan.discountValue, taxRateBps: plan.taxRateBps });
+
 const PREFIX = 'aitask:draft-recovery:v1:';
 const MAX_AGE = 24 * 60 * 60 * 1000;
 export type RecoveredDraft<T> = { baseline: T; value: T; updatedAt: number; storageKey?: string };

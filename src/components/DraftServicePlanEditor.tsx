@@ -10,7 +10,7 @@ import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/works
 import { canViewServicePrices } from '../lib/access';
 import { formatLocalizedDate } from '../lib/i18n';
 import { cn, parseOptionalDate } from '../lib/utils';
-import { revisionDraftOf } from './RevisionRecoveryNotice';
+import { revisionDraftOf } from '../lib/draftRecovery';
 import { useI18n } from './I18nProvider';
 import { Badge, Button } from './ui';
 import { cardBase, inputBase } from './uiTokens';

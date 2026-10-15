@@ -230,7 +230,8 @@ try {
   await save('PM moves work to an accessible company', useStore.getState().updateTask('pm-move', { clientName: 'Second PM QA' }), 'task.update');
   await login('pm');
   assert.equal(useStore.getState().tasks.find(task => task.id === 'pm-move').clientId, 'pm-second', 'company ID persists with the new name');
-  await save('Directly assigned PM delegates work', useStore.getState().updateTaskAssignee('pm-direct', 'staff'), 'task.update');
+  assert.equal(useStore.getState().updateTaskAssignee('pm-direct', 'staff').ok, false, 'PM hands work to the department HOD before staff');
+  await save('Directly assigned PM delegates work to the department HOD', useStore.getState().updateTaskAssignee('pm-direct', 'hod'), 'task.update');
   await login('pm');
   assert.equal(useStore.getState().tasks.some(task => task.id === 'pm-direct'), false, 'delegation does not retain unrelated task access');
   assert.equal(useStore.getState().clients.some(client => client.id === 'pm-assigned-company'), false, 'delegation does not retain unrelated company access');

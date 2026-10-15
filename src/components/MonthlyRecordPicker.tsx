@@ -1,13 +1,9 @@
 import React from 'react';
 import type { ServiceCycle } from '../types';
-import { formatLocalizedDate, formatLocalizedMonth } from '../lib/i18n';
-import { parseOptionalDate } from '../lib/utils';
+import { monthlyRecordLabel } from '../lib/monthlyRecords';
 import { useI18n } from './I18nProvider';
 import { Button } from './ui';
 import { inputBase } from './uiTokens';
-
-export const monthlyRecordLabel = (cycle: ServiceCycle, locale: Parameters<typeof formatLocalizedDate>[1]) =>
-  `${formatLocalizedMonth(parseOptionalDate(cycle.periodStart)!, locale)} · ${formatLocalizedDate(parseOptionalDate(cycle.periodStart)!, locale)} – ${formatLocalizedDate(parseOptionalDate(cycle.periodEnd)!, locale)}`;
 
 const MonthlyRecordPicker = ({ records, selected, current, unavailable, onChange }: {
   records: ServiceCycle[]; selected?: ServiceCycle; current?: ServiceCycle; unavailable: boolean;

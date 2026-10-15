@@ -1,12 +1,10 @@
 import React from 'react';
-import { readRecoveredDraft, removeRecoveredDraft, writeRecoveredDraft } from '../lib/draftRecovery';
+import { readRecoveredDraft, removeRecoveredDraft, revisionDraftOf, writeRecoveredDraft } from '../lib/draftRecovery';
 import type { ClientServicePlan } from '../types';
 import { useStore } from '../store';
 import { useI18n } from './I18nProvider';
 import { Button } from './ui';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
-
-export const revisionDraftOf = (plan: ClientServicePlan) => ({ name: plan.name, contractEndDate: plan.contractEndDate || '', serviceItems: structuredClone(plan.serviceItems), discountType: plan.discountType, discountValue: plan.discountValue, taxRateBps: plan.taxRateBps });
 
 const RevisionRecoveryNotice = ({ plans, activePlan }: { plans: ClientServicePlan[]; activePlan?: ClientServicePlan }) => {
   const { t } = useI18n();

@@ -64,6 +64,7 @@ describe('monthly service cycle rollover', () => {
     const oldCycle = structuredClone(useStore.getState().serviceCycles[0]);
     const revision = useStore.getState().createClientPlanRevision(id);
     useStore.getState().updateDraftClientPlan(revision.planId!, { name: 'New scope', serviceItems: [{ id: 'next-service', name: 'Video', quantity: 3, unit: 'video', platforms: [], unitPriceMinor: 100 }] });
+    expect(useStore.getState().scheduleClientPlanRevision(revision.planId!, '2026-10-09').ok).toBe(true);
     setDay(2026, 11, 9);
     useStore.getState().generateDueLocalServiceCycles();
     expect(useStore.getState().clientPlans.find(item => item.id === id)?.status).toBe('Ended');

@@ -1,4 +1,10 @@
 import type { ClientServicePlan, ServiceCycle, ServiceItem } from '../types';
+import { formatLocalizedDate, formatLocalizedMonth } from './i18n';
+import { parseOptionalDate } from './utils';
+
+/** Human-readable label for a monthly record (e.g. "September 2026 · 1 Sep – 30 Sep 2026"). */
+export const monthlyRecordLabel = (cycle: ServiceCycle, locale: Parameters<typeof formatLocalizedDate>[1]) =>
+  `${formatLocalizedMonth(parseOptionalDate(cycle.periodStart)!, locale)} · ${formatLocalizedDate(parseOptionalDate(cycle.periodStart)!, locale)} – ${formatLocalizedDate(parseOptionalDate(cycle.periodEnd)!, locale)}`;
 
 /** Service billing follows the workspace's Malaysian business calendar. */
 export const getBillingToday = (date = new Date()) => {

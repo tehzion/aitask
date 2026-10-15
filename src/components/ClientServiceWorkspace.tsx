@@ -4,7 +4,7 @@ import { useBillingToday } from '../hooks/useBillingToday';
 import { resolveMonthlyRecord } from '../lib/monthlyRecords';
 import MonthlyRecordPicker from './MonthlyRecordPicker';
 import { getTodayInputDate } from '../lib/utils';
-import { getCurrentPlanCycle, isAwaitingPublication } from '../lib/dashboardData';
+import { isAwaitingPublication } from '../lib/dashboardData';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import React from 'react';
 import { ArrowRight, CalendarDays, CheckCircle2, Download, FileText, MessageSquareText, PackageCheck } from 'lucide-react';

@@ -79,9 +79,9 @@ import CreateClientPlanModal from "../components/CreateClientPlanModal";
 import EditClientPlanDatesModal from "../components/EditClientPlanDatesModal";
 import { useBillingToday } from "../hooks/useBillingToday";
 import { resolveMonthlyRecord } from "../lib/monthlyRecords";
-import MonthlyRecordPicker, { monthlyRecordLabel } from "../components/MonthlyRecordPicker";
+import MonthlyRecordPicker from "../components/MonthlyRecordPicker";
+import { monthlyRecordLabel } from "../lib/monthlyRecords";
 import RevisionRecoveryNotice from "../components/RevisionRecoveryNotice";
-import { getCurrentPlanCycle } from "../lib/dashboardData";
 import ConfirmDialog from "../components/ConfirmDialog";
 import MonthlyPlanSchedule from "../components/MonthlyPlanSchedule";
 
