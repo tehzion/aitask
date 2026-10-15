@@ -1,12 +1,12 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "hod_review_remediation_prepared_for_local_validation; production remains through 20261014111759",
+  "status": "hod_pm_remediation_20261014135947_applied; production through 20261015002102; connector aliases verified",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
-    "verifiedAt": "2026-10-14",
-    "historyThrough": "20261014125353_pm_review_fallback_and_workflow_inputs (repository 20261014111759); connector aliases preserved",
+    "verifiedAt": "2026-10-15",
+    "historyThrough": "20261015002102_pm_portfolio_service_boundaries (repository 20261014135947); connector aliases preserved",
     "historyAligned": false,
     "historyAlignmentNote": "The connector stored deployment IDs 20260919065513, 20260919065609, 20260919065620, 20260919065648, and 20260919072524 for the five matching repository migrations. Names and live SQL are verified; timestamp repair is intentionally prohibited.",
     "clientOwnershipRollout": {
@@ -222,6 +222,14 @@
         {
           "repository": "20261014111759_pm_review_fallback_and_workflow_inputs",
           "production": "20261014125353_pm_review_fallback_and_workflow_inputs"
+        },
+        {
+          "repository": "20261014132839_hod_review_remediation",
+          "production": "20261015002054_hod_review_remediation"
+        },
+        {
+          "repository": "20261014135947_pm_portfolio_service_boundaries",
+          "production": "20261015002102_pm_portfolio_service_boundaries"
         }
       ]
     },
@@ -619,6 +627,20 @@
         "taskEvidenceGuardActive": true,
         "actorContextProbeMethod": "Read-only production SQL request scope using existing member Auth identities; no real-account logins or business writes."
       }
+    },
+    "hodPmRemediationRollout": {
+      "appliedAt": "2026-10-15",
+      "sourceCommit": "00c934c62698ec85bdd7853024a32e9aa69a92ed",
+      "method": "Supabase deployment connector",
+      "businessDataUnchanged": true,
+      "membersUnchanged": true,
+      "memberCount": 11,
+      "taskCount": 189,
+      "advertisedCapability": true,
+      "selfReviewHandoffs": 0,
+      "portfolioRestrictivePolicy": true,
+      "securityErrorCount": 0,
+      "releaseAuthorization": "User explicitly authorized direct production deployment without staging/CI."
     }
   },
   "schemaEquivalence": {
@@ -854,8 +876,5 @@
     "20261014132839_hod_review_remediation",
     "20261014135947_pm_portfolio_service_boundaries"
   ],
-  "pendingProductionMigrations": [
-    "20261014132839_hod_review_remediation",
-    "20261014135947_pm_portfolio_service_boundaries"
-  ]
+  "pendingProductionMigrations": []
 }

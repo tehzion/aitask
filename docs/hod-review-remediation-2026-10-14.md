@@ -1,6 +1,6 @@
 # HOD review remediation — 14 October 2026
 
-This implements the four defects and review-ownership gaps in [the deep audit](hod-latest-deep-audit-2026-10-14.md). Source changes and the migration are prepared locally; production rollout remains pending.
+This implements the four defects and review-ownership gaps in [the deep audit](hod-latest-deep-audit-2026-10-14.md). The HOD and PM production migrations were applied and verified on 15 October 2026. Frontend rollout is in progress under the user’s explicit authorization to deploy directly without staging/CI.
 
 - Department reviewer authority is enforced in both client and server transitions, including revisions on legacy out-of-department assignments.
 - Review selection ignores members without usable Auth accounts and excludes the assignee and review submitter. Independent portfolio PM fallback is available when needed.
@@ -26,3 +26,8 @@ The combined checkout includes separately authored PM portfolio fixes; those cha
 The first broad browser run was interrupted during local resource contention; all affected tests passed on an isolated rerun. A file-only SQL fixture's old link assertion and the real Client dialog-name assertion were corrected before the final passing gate. No production credentials, workspace data, roles, assignments, or deployments were changed.
 
 Evidence: [desktop cover](audit-evidence/hod-latest-2026-10-14/review-cover-desktop.png), [mobile override](audit-evidence/hod-latest-2026-10-14/review-override-mobile.png), [mobile file review](audit-evidence/hod-latest-2026-10-14/output-review-mobile.png), and [validation record](audit-evidence/hod-latest-2026-10-14/remediation-verification.json).
+
+
+## Production database rollout — 15 October 2026
+
+Applied connector migrations `20261015002054_hod_review_remediation` and `20261015002102_pm_portfolio_service_boundaries`. The preflight/postflight counts and data hashes match for every entity type and all 11 members; 189 tasks are preserved. The review capability, portfolio policy, and independent handoffs are active. Security advisors report no ERROR-level findings. Recovery function definitions are kept owner-readable outside Git. Frontend deployment and live build verification are in progress.
