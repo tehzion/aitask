@@ -42,6 +42,19 @@ export const cyclePeriodEnd = (periodStart: string, billingDay: number) => {
   return isoDate(next);
 };
 
+/** A revision changes future service scope, not the start of the contract. */
+export const getPlanContractStartDate = (plan: ClientServicePlan, plans: readonly ClientServicePlan[]) => {
+  let current = plan;
+  const visited = new Set([plan.id]);
+  while (current.supersedesPlanId && !visited.has(current.supersedesPlanId)) {
+    const previous = plans.find(item => item.id === current.supersedesPlanId && item.clientId === plan.clientId);
+    if (!previous) break;
+    visited.add(previous.id);
+    current = previous;
+  }
+  return current.startDate;
+};
+
 export const calculateServiceSubtotalMinor = (items: ServiceItem[]) => items.reduce(
   (sum, item) => sum + Math.max(0, Math.trunc(item.quantity)) * Math.max(0, Math.trunc(item.unitPriceMinor)),
   0,

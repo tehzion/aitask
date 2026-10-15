@@ -1,6 +1,6 @@
 import SystemMessage from './SystemMessage';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import { cyclePeriodEnd, nextBillingDate } from '../lib/serviceManagement';
+import { cyclePeriodEnd, getPlanContractStartDate, nextBillingDate } from '../lib/serviceManagement';
 import React from 'react';
 import { X } from 'lucide-react';
 import ModalShell from './ModalShell';
@@ -20,11 +20,12 @@ type Props = {
 };
 
 const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
-  const { updateDraftClientPlan, updateActivePlanDates, retryPendingSave, backend } = useStore(useShallow(state => ({
+  const { updateDraftClientPlan, updateActivePlanDates, retryPendingSave, backend, clientPlans } = useStore(useShallow(state => ({
     updateDraftClientPlan: state.updateDraftClientPlan,
     updateActivePlanDates: state.updateActivePlanDates,
     retryPendingSave: state.retryPendingSave,
     backend: state.backend,
+    clientPlans: state.clientPlans,
   })));
   const { t } = useI18n();
   const titleId = React.useId();
@@ -32,6 +33,7 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
   const [startDate, setStartDate] = React.useState(plan.startDate || '');
   const [billingDay, setBillingDay] = React.useState(String(plan.billingDay || 1));
   const [contractEndDate, setContractEndDate] = React.useState(plan.contractEndDate || '');
+  const contractStartDate = getPlanContractStartDate({ ...plan, startDate }, clientPlans);
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const mounted = React.useRef(false);
@@ -60,7 +62,7 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
       setError(t('Billing day must be a whole number from 1 to 31.'));
       return;
     }
-    if (contractEndDate && startDate && contractEndDate < startDate) {
+    if (contractEndDate && contractStartDate && contractEndDate < contractStartDate) {
       setError(t('Contract end date cannot be before the start date.'));
       return;
     }
@@ -132,13 +134,14 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
         <label className="block text-sm font-medium text-ink">{t('Contract end date (reminder only)')}
           <input
             type="date"
-            min={startDate || undefined}
+            min={contractStartDate || undefined}
             disabled={saving}
             className={`${inputBase} mt-1.5 px-3 py-2.5`}
             value={contractEndDate}
             onChange={event => setContractEndDate(event.target.value)}
           />
         </label>
+        {plan.supersedesPlanId && <p className="-mt-2 text-xs leading-5 text-muted">{t('Original contract start')}: <span data-i18n-skip>{contractStartDate}</span>. {t('This reminder does not change the revision start date.')}</p>}
         {(error || pendingResolution) && (
           <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
             <p><SystemMessage message={error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>

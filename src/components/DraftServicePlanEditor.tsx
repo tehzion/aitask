@@ -6,7 +6,7 @@ import React from 'react';
 import { Save } from 'lucide-react';
 import { useStore } from '../store';
 import type { ClientServicePlan, ServiceItem } from '../types';
-import { snapshotWorkflow } from '../lib/serviceManagement';
+import { getPlanContractStartDate, snapshotWorkflow } from '../lib/serviceManagement';
 import { Badge, Button } from './ui';
 import { cardBase, inputBase } from './uiTokens';
 import { cn } from '../lib/utils';
@@ -14,7 +14,9 @@ import { useI18n } from './I18nProvider';
 
 const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
   const { t } = useI18n();
-  const { serviceWorkflowTemplates, updateDraftClientPlan, commitPendingMutation } = useStore();
+  const { serviceWorkflowTemplates, clientPlans, updateDraftClientPlan, commitPendingMutation } = useStore();
+  const contractStartDate = getPlanContractStartDate(plan, clientPlans);
+  const contractDateHelpId = React.useId();
   const [name, setName] = React.useState(plan.name);
   const [contractEndDate, setContractEndDate] = React.useState(plan.contractEndDate || '');
   const [serviceItems, setServiceItems] = React.useState<ServiceItem[]>(() => structuredClone(plan.serviceItems));
@@ -174,7 +176,10 @@ const DraftServicePlanEditor = ({ plan }: { plan: ClientServicePlan }) => {
     </div>}
     <fieldset disabled={mergeConflicts.length > 0} className="contents"><div className="grid gap-4 border-b border-slate-100 p-5 md:grid-cols-2">
       <label className="text-sm font-semibold text-slate-700">{t('Plan name')}<input data-i18n-skip className={cn(inputBase, 'mt-1 px-3 py-2')} value={name} onChange={event => { markDirty(); setName(event.target.value); }} /></label>
-      <label className="text-sm font-semibold text-slate-700">{t('Contract end date')}<input type="date" className={cn(inputBase, 'mt-1 px-3 py-2')} value={contractEndDate} onChange={event => { markDirty(); setContractEndDate(event.target.value); }} /></label>
+      <div>
+        <label className="text-sm font-semibold text-slate-700">{t('Contract end date (reminder only)')}<input type="date" min={contractStartDate || undefined} aria-describedby={contractDateHelpId} className={cn(inputBase, 'mt-1 px-3 py-2')} value={contractEndDate} onChange={event => { markDirty(); setContractEndDate(event.target.value); }} /></label>
+        <p id={contractDateHelpId} className="mt-2 text-xs text-muted">{t('Original contract start')}: <span data-i18n-skip>{contractStartDate}</span>. {t('This reminder does not change the revision start date.')}</p>
+      </div>
     </div>
     <div className="divide-y divide-slate-100">{serviceItems.map(item => <div key={item.id} className="grid gap-3 p-5 md:grid-cols-12">
       <input aria-label={t('Service name')} data-i18n-skip className={cn(inputBase, 'px-3 py-2 md:col-span-3')} value={item.name} onChange={event => updateItem(item.id, { name: event.target.value })} />

@@ -148,6 +148,7 @@ import {
   nextBillingDate,
   resolveDeliverableStatus,
   canSetDeliverableStatus,
+  getPlanContractStartDate,
   SHORT_VIDEO_WORKFLOW_TEMPLATE,
 } from '../lib/serviceManagement';
 
@@ -4064,7 +4065,8 @@ export const useStore = create<StoreState>()(
         const nextContractEnd = data.contractEndDate !== undefined
           ? (data.contractEndDate && isValidIsoDate(data.contractEndDate) ? data.contractEndDate : undefined)
           : plan.contractEndDate;
-        if (nextContractEnd && nextContractEnd < nextStartDate) return { ok: false, error: 'Contract end date cannot be before the start date.' };
+        const contractStartDate = getPlanContractStartDate({ ...plan, startDate: nextStartDate }, state.clientPlans);
+        if (nextContractEnd && nextContractEnd < contractStartDate) return { ok: false, error: 'Contract end date cannot be before the start date.' };
         const now = new Date().toISOString();
         const next: ClientServicePlan = {
           ...plan,
@@ -4104,7 +4106,7 @@ export const useStore = create<StoreState>()(
         const nextContractEnd = data.contractEndDate !== undefined
           ? (data.contractEndDate && isValidIsoDate(data.contractEndDate) ? data.contractEndDate : undefined)
           : plan.contractEndDate;
-        if (nextContractEnd && nextContractEnd < plan.startDate) return { ok: false, error: 'Contract end date cannot be before the start date.' };
+        if (nextContractEnd && nextContractEnd < getPlanContractStartDate(plan, state.clientPlans)) return { ok: false, error: 'Contract end date cannot be before the start date.' };
         const now = new Date().toISOString();
         set(current => ({
           clientPlans: current.clientPlans.map(item => item.id === planId

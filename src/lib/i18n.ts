@@ -2615,6 +2615,8 @@ const zhCopyCoverage: Record<string, string> = {
   'Choose a valid start date.': '请选择有效的开始日期。',
   'Billing day must be a whole number from 1 to 31.': '结算日必须是 1 到 31 之间的整数。',
   'Contract end date cannot be before the start date.': '合同结束日期不能早于开始日期。',
+  'Original contract start': '原合同开始日期',
+  'This reminder does not change the revision start date.': '此提醒不会改变修订的开始日期。',
   'Tax rate must be between 0% and 100%.': '税率必须在 0% 到 100% 之间。',
   'Discount must be a valid non-negative amount.': '折扣必须是非负有效金额。',
   'Percentage discount cannot exceed 100%.': '百分比折扣不能超过 100%。',
