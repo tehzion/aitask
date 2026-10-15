@@ -68,7 +68,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expect(page.getByText('Included', { exact: true })).toBeVisible();
   await expect(page.getByRole('term').filter({ hasText: /^Delivered$/ })).toBeVisible();
   await expect(page.getByText('Remaining', { exact: true })).toBeVisible();
-  await expect(page.getByText('10 linked task(s)')).toBeVisible();
+  await expect(page.getByText('10 linked task(s) · Short Video Production', { exact: true })).toBeVisible();
   await expect(page.getByText('Invoice', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Outstanding', { exact: true })).toHaveCount(0);
 

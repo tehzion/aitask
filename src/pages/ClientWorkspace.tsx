@@ -50,6 +50,7 @@ import {
   calculatePlanTotalMinor,
   formatMoney,
   getCycleServiceProgress,
+  canSetDeliverableStatus,
 } from "../lib/serviceManagement";
 import {
   canManageClientPlans,
@@ -795,30 +796,37 @@ const OperationsClientWorkspace = () => {
                             {deliverable.status}
                           </Badge>
                         ) : (
-                          <select
-                            disabled={
-                              !canManageCycles &&
-                              !linkedTasks.some(
-                                (task) =>
-                                  task.assignedTo === store.currentUser?.id,
-                              )
-                            }
-                            className={cn(inputBase, "px-3 py-2")}
-                            value={deliverable.status}
-                            onChange={(e) =>
-                              void saveAndCommit(
-                                store.updateDeliverableStatus(
-                                  deliverable.id,
-                                  e.target.value as DeliverableStatus,
-                                ),
-                                "deliverable.manage",
-                              )
-                            }
-                          >
-                            {deliverableStatuses.map((value) => (
-                              <option key={value}>{value}</option>
-                            ))}
-                          </select>
+                          <div>
+                            <select
+                              aria-label={`${t('Deliverable status')}: ${deliverable.title}`}
+                              aria-describedby={`delivery-status-help-${deliverable.id}`}
+                              disabled={
+                                !canManageCycles &&
+                                !linkedTasks.some(
+                                  (task) =>
+                                    task.assignedTo === store.currentUser?.id,
+                                )
+                              }
+                              className={cn(inputBase, "px-3 py-2")}
+                              value={deliverable.status}
+                              onChange={(e) =>
+                                void saveAndCommit(
+                                  store.updateDeliverableStatus(
+                                    deliverable.id,
+                                    e.target.value as DeliverableStatus,
+                                  ),
+                                  "deliverable.manage",
+                                )
+                              }
+                            >
+                              {deliverableStatuses.map((value) => (
+                                <option key={value} value={value} disabled={!canSetDeliverableStatus(deliverable, value, store.tasks, store.serviceCycles, store.backend.mode === 'supabase')}>{t(value)}</option>
+                              ))}
+                            </select>
+                            <p id={`delivery-status-help-${deliverable.id}`} className="mt-2 text-xs text-muted">{t(linkedTasks.length || serviceItem?.workflow?.steps.some(step => step.required !== false)
+                              ? 'Available statuses follow required task progress.'
+                              : 'No linked tasks. Update this status manually.')}</p>
+                          </div>
                         )}
                         {!isClient && (
                           <div className="flex flex-wrap gap-2">

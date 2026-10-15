@@ -875,9 +875,13 @@
     "20261014111759_pm_review_fallback_and_workflow_inputs",
     "20261014132839_hod_review_remediation",
     "20261014135947_pm_portfolio_service_boundaries",
-    "20261015014716_pm_task_company_boundaries"
+    "20261015014716_pm_task_company_boundaries",
+    "20261015064701_manual_deliverable_progress",
+    "20261015065635_deliverable_status_integrity"
   ],
   "pendingProductionMigrations": [
-    "20261015014716_pm_task_company_boundaries"
+    "20261015014716_pm_task_company_boundaries",
+    "20261015064701_manual_deliverable_progress",
+    "20261015065635_deliverable_status_integrity"
   ]
 }

@@ -144,15 +144,32 @@ export const stripServiceItemPrices = (items: ServiceItem[]): ServiceItem[] => i
 export const resolveDeliverableStatus = (
   deliverable: Deliverable,
   tasks: Task[],
+  cycles: ServiceCycle[] = [],
 ): Deliverable['status'] => {
   const linked = tasks.filter(task => task.clientId === deliverable.clientId && (task.deliverableId === deliverable.id || deliverable.taskIds.includes(task.id)));
-  if (!linked.length) return deliverable.status === 'Delivered' ? 'Delivered' : 'Planned';
+  const workflow = cycles.find(cycle => cycle.id === deliverable.cycleId && cycle.clientId === deliverable.clientId)
+    ?.serviceItems?.find(item => item.id === deliverable.serviceItemId)?.workflow;
+  const workflowComplete = !workflow || workflow.steps.filter(step => step.required !== false).every(step => linked.some(task =>
+    task.deliverableId === deliverable.id && task.serviceCycleId === deliverable.cycleId
+    && task.workflowTemplateId === workflow.templateId && task.workflowTemplateRevision === workflow.templateRevision
+    && task.workflowStepId === step.id && isWorkflowTaskSatisfied({ ...task, workflowStepKind: step.kind, workflowStepRequired: step.required }, linked)));
+  // Task-free services (such as management fees) are tracked manually.
+  if (!linked.length) return !workflowComplete && ['Ready', 'Delivered'].includes(deliverable.status) ? 'Planned' : deliverable.status;
   const required = linked.filter(task => task.workflowStepRequired !== false);
-  const allRequiredComplete = required.length > 0 && required.every(task => isWorkflowTaskSatisfied(task, linked));
+  const allRequiredComplete = workflowComplete && required.every(task => isWorkflowTaskSatisfied(task, linked));
   if (allRequiredComplete) return deliverable.status === 'Delivered' ? 'Delivered' : 'Ready';
   const anyStarted = linked.some(task => task.status !== 'Pending' || task.completionPercentage > 0 || task.revisionCount > 0);
   return anyStarted ? 'In Progress' : 'Planned';
 };
+
+export const canSetDeliverableStatus = (
+  deliverable: Deliverable,
+  status: Deliverable['status'],
+  tasks: Task[],
+  cycles: ServiceCycle[] = [],
+  canonicalProgress = false,
+) => (canonicalProgress && ['Ready', 'Delivered'].includes(deliverable.status) && ['Ready', 'Delivered'].includes(status))
+  || resolveDeliverableStatus({ ...deliverable, status }, tasks, cycles) === status;
 
 export const getCycleServiceProgress = (cycle: ServiceCycle, deliverables: Deliverable[]) => cycle.serviceItems.map(item => {
   const slots = deliverables.filter(deliverable => deliverable.cycleId === cycle.id && deliverable.serviceItemId === item.id);

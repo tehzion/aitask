@@ -147,6 +147,7 @@ import {
   makePricingSnapshot,
   nextBillingDate,
   resolveDeliverableStatus,
+  canSetDeliverableStatus,
   SHORT_VIDEO_WORKFLOW_TEMPLATE,
 } from '../lib/serviceManagement';
 
@@ -770,9 +771,16 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
 const deriveServiceProgress = (tasks: Task[], deliverables: Deliverable[], cycles: ServiceCycle[]) => {
   const state = useStore.getState();
   tasks = prepareWorkflowTasks(tasks, state.tasks, state.currentUser, cycles, deliverables, state.backend.mode !== 'supabase', state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
+  // Keep canonical progress when this actor cannot see the complete task list.
+  // Complete snapshots still derive paired link/progress writes together.
+  const visibleTaskIds = new Set(tasks.map(task => task.id));
+  const partialDeliverables = new Set(state.backend.mode === 'supabase'
+    ? deliverables.filter(item => item.taskIds.some(id => !visibleTaskIds.has(id))).map(item => item.id)
+    : []);
   const now = new Date().toISOString();
   const nextDeliverables = deliverables.map(deliverable => {
-    const status = resolveDeliverableStatus(deliverable, tasks);
+    if (partialDeliverables.has(deliverable.id)) return deliverable;
+    const status = resolveDeliverableStatus(deliverable, tasks, cycles);
     if (status === deliverable.status) return deliverable;
     return {
       ...deliverable,
@@ -784,6 +792,7 @@ const deriveServiceProgress = (tasks: Task[], deliverables: Deliverable[], cycle
   const nextCycles = cycles.map(cycle => {
     if (!['Published', 'Completed'].includes(cycle.status)) return cycle;
     const cycleDeliverables = nextDeliverables.filter(item => item.cycleId === cycle.id);
+    if (cycleDeliverables.some(item => partialDeliverables.has(item.id))) return cycle;
     const completed = cycleDeliverables.length > 0 && cycleDeliverables.every(item => item.status === 'Delivered');
     const status: ServiceCycleStatus = completed ? 'Completed' : cycle.status === 'Completed' ? 'Published' : cycle.status;
     return status === cycle.status ? cycle : { ...cycle, status, updatedAt: now };
@@ -4180,7 +4189,7 @@ export const useStore = create<StoreState>()(
         if (!isServiceClientInScope(state, deliverable.clientId)) return { ok: false, error: serviceClientScopeError };
         const authorized = canManageServiceCycles(actor, state.rolePermissions) || (['Staff', 'HOD'].includes(actor.role) && state.tasks.some(task => (task.deliverableId === deliverable.id || deliverable.taskIds.includes(task.id)) && task.assignedTo === actor.id));
         if (!authorized || (!canManageServiceCycles(actor, state.rolePermissions) && !canOpenServiceClient(actor, deliverable.clientName, state.tasks, state.rolePermissions, state.clients))) return { ok: false, error: 'You do not have access to this deliverable.' };
-        if (resolveDeliverableStatus({ ...deliverable, status }, state.tasks) !== status) return { ok: false, error: 'Deliverable status must match the progress of its required tasks.' };
+        if (!canSetDeliverableStatus(deliverable, status, state.tasks, state.serviceCycles, state.backend.mode === 'supabase')) return { ok: false, error: 'Deliverable status must match the progress of its required tasks.' };
         set(current => {
           const now = new Date().toISOString();
           const deliverables = current.deliverables.map(item => item.id === deliverableId ? {
@@ -4207,6 +4216,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const task = state.tasks.find(item => item.id === taskId);
         if (!hasPermission(state.currentUser, 'editTasks', state.rolePermissions) || !task || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
+        if (isWorkflowTask(task) && (cycleId !== task.serviceCycleId || deliverableId !== task.deliverableId)) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
         const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
         if (deliverableId && (!deliverable || deliverable.cycleId !== cycleId || deliverable.clientId !== task.clientId)) return { ok: false, error: 'The task and deliverable must belong to the same client and cycle.' };
         if (deliverable?.status === 'Delivered' && task.deliverableId !== deliverable.id && !deliverable.taskIds.includes(taskId)) return { ok: false, error: 'Reopen the delivery before adding task links.' };

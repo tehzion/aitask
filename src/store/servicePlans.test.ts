@@ -35,6 +35,28 @@ describe('client service plan store', () => {
     expect(useStore.getState().serviceCycles).toHaveLength(1);
   });
 
+  it('tracks task-free management services manually and keeps progress based on delivery', () => {
+    const created = useStore.getState().createClientWithPlan({
+      clientName: 'Ads Client', planName: 'Ads Management', origin: 'custom',
+      serviceItems: [{ id: 'ads-fee', name: 'ADS Management Fee', platforms: [], unit: 'month', quantity: 1, unitPriceMinor: 10000 }],
+      startDate: '2026-10-01', billingDay: 1, discountType: 'none', discountValue: 0, taxRateBps: 0,
+    });
+    expect(created.ok).toBe(true);
+    const activated = useStore.getState().activateClientPlan(created.planId!);
+    expect(activated.ok).toBe(true);
+    const cycleId = activated.cycleId!;
+    expect(useStore.getState().setServiceCycleStatus(cycleId, 'Published').ok).toBe(true);
+    const deliverableId = useStore.getState().deliverables[0].id;
+
+    for (const status of ['In Progress', 'Ready', 'Planned', 'Delivered', 'In Progress'] as const) {
+      expect(useStore.getState().updateDeliverableStatus(deliverableId, status)).toEqual({ ok: true });
+      expect(useStore.getState().deliverables[0]).toMatchObject({
+        status, taskIds: [], deliveredAt: status === 'Delivered' ? expect.any(String) : undefined,
+      });
+      expect(useStore.getState().serviceCycles[0].status).toBe(status === 'Delivered' ? 'Completed' : 'Published');
+    }
+  });
+
   it('lets a Project Manager edit draft plan dates and active billing/contract dates', () => {
     const created = useStore.getState().createClientWithPlan({
       clientName: 'Dates Co', planName: 'Plan', origin: 'custom',

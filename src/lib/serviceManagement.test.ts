@@ -49,6 +49,13 @@ describe('service management calculations', () => {
     SHORT_VIDEO_WORKFLOW_TEMPLATE.steps[0].title = 'Content Idea';
   });
 
+  it.each(['Planned', 'In Progress', 'Ready', 'Delivered'] as const)('preserves manual %s status without linked tasks', status => {
+    const deliverable = { id: 'manual', clientId: 'client-1', status, taskIds: [] } as unknown as Deliverable;
+    expect(resolveDeliverableStatus(deliverable, [])).toBe(status);
+    expect(resolveDeliverableStatus(deliverable, [{ id: 'unrelated', clientId: 'client-1', deliverableId: 'other' } as Task])).toBe(status);
+    expect(resolveDeliverableStatus({ ...deliverable, taskIds: ['foreign-task'] }, [{ id: 'foreign-task', clientId: 'other-company' } as Task])).toBe(status);
+  });
+
   it('derives deliverable and monthly included/completed/remaining progress', () => {
     const deliverable: Deliverable = {
       id: 'deliverable-1', clientId: 'client-1', clientName: 'Acme', planId: 'plan-1', cycleId: 'cycle-1',

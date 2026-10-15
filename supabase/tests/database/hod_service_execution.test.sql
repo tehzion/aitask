@@ -57,6 +57,16 @@ select is(
   'scoped HOD can still update assigned deliverable progress'
 );
 
+-- Confirmed delivery requires completed required work, independently of role.
+reset role;
+select set_config('request.jwt.claim.sub','',true);
+select set_config('request.jwt.claim.role','',true);
+update public.aitask_entities set data=data||'{"status":"Completed","isCompleted":true,"attachmentLink":"https://example.com/completed-output.pdf"}'
+where workspace_id='pgtap-hod-service' and entity_type='task' and entity_id='pgtap-assigned-task';
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000929',true);
+select set_config('request.jwt.claim.role','authenticated',true);
+set local role authenticated;
+
 select is(
   (public.aitask_execute_service_command(
     'pgtap-hod-service', gen_random_uuid(), 'deliverable.manage',
