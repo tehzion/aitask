@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useStore } from './index';
 import type { Task, User } from '../types';
 import { snapshotWorkflow, SHORT_VIDEO_WORKFLOW_TEMPLATE } from '../lib/serviceManagement';
+import { defaultRolePermissions } from '../lib/access';
 
 const initial = useStore.getState();
 const pm: User = { id: 'audit-pm', name: 'PM', role: 'Project Manager', departments: [] };
@@ -12,6 +13,16 @@ beforeEach(() => useStore.setState({ ...initial, currentUser: other, users: [pm,
 afterEach(() => useStore.setState(initial, true));
 
 describe('PM portfolio mutation boundaries', () => {
+  it('rejects workflow generation when task creation has been revoked', () => {
+    const created = useStore.getState().createClientWithPlan({ ...input, clientName: 'Own company' });
+    expect(useStore.getState().activateClientPlan(created.planId!).ok).toBe(true);
+    useStore.setState({ currentUser: { ...other, permissions: { ...defaultRolePermissions['Project Manager'], createTasks: false } } });
+    const before = useStore.getState();
+    expect(before.generateDeliverableTaskChain(before.deliverables[0].id).ok).toBe(false);
+    expect(useStore.getState().tasks).toEqual(before.tasks);
+    expect(useStore.getState().deliverables).toEqual(before.deliverables);
+  });
+
   it('rejects every service action after company ownership is transferred away', () => {
     const created = useStore.getState().createClientWithPlan({ ...input, clientName: 'Foreign company' });
     expect(created.ok).toBe(true);
@@ -67,5 +78,33 @@ describe('PM portfolio mutation boundaries', () => {
     const { id: _id, ...draft } = task;
     void _id;
     expect(useStore.getState().addTask({ ...draft, createdBy: pm.id, title: 'New portfolio task' })).toBeTruthy();
+  });
+
+  it('rejects standalone task creation and company changes outside the current portfolio', () => {
+    const task: Task = { id: 'owned-task', title: 'Own work', clientId: 'own', clientName: 'Own company', serviceType: 'Design', description: '', department: 'Designer', createdBy: pm.id, assignedTo: '', status: 'Pending', startDate: '2026-10-01', dueDate: '', priority: 'Medium', completionPercentage: 0, isCompleted: false, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false };
+    useStore.setState({ currentUser: pm, clients: [
+      { id: 'own', clientName: 'Own company', createdBy: pm.id, createdAt: '', updatedAt: '' },
+      { id: 'foreign', clientName: 'Foreign company', createdBy: other.id, createdAt: '', updatedAt: '' },
+    ], tasks: [task] });
+    const { id: _id, ...draft } = task;
+    void _id;
+    const before = useStore.getState();
+    expect(before.addTask({ ...draft, clientId: 'foreign', clientName: 'Foreign company' })).toBe('');
+    expect(before.addTask({ ...draft, clientId: 'foreign' })).toBe('');
+    expect(before.updateTask(task.id, { clientId: 'foreign', clientName: 'Foreign company' }).ok).toBe(false);
+    expect(before.updateTask(task.id, { clientId: 'foreign' }).ok).toBe(false);
+    expect(useStore.getState().tasks).toEqual(before.tasks);
+    expect(useStore.getState().notifications).toEqual(before.notifications);
+    expect(before.addTask(draft)).toBeTruthy();
+  });
+
+  it('keeps canonical company identity when moving ordinary work between accessible companies', () => {
+    const task: Task = { id: 'move-task', title: 'Move work', clientId: 'own', clientName: 'Own company', serviceType: 'Design', description: '', department: 'Designer', createdBy: pm.id, assignedTo: '', status: 'Pending', startDate: '2026-10-01', dueDate: '', priority: 'Medium', completionPercentage: 0, isCompleted: false, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false };
+    useStore.setState({ currentUser: pm, clients: [
+      { id: 'own', clientName: 'Own company', createdBy: pm.id, createdAt: '', updatedAt: '' },
+      { id: 'second', clientName: 'Second company', createdBy: pm.id, createdAt: '', updatedAt: '' },
+    ], tasks: [task] });
+    expect(useStore.getState().updateTask(task.id, { clientName: 'Second company' }).ok).toBe(true);
+    expect(useStore.getState().tasks[0]).toMatchObject({ clientId: 'second', clientName: 'Second company' });
   });
 });

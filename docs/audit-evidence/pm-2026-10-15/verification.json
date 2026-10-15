@@ -1,0 +1,49 @@
+{
+  "status": "passed",
+  "date": "2026-10-15",
+  "baseCommit": "5a18955ea18b1d81d330af8590153f8139a66c6f",
+  "scope": "local source and disposable databases; production rollout pending",
+  "unitTests": 681,
+  "unitFiles": 93,
+  "databaseAssertions": 897,
+  "databaseFiles": 55,
+  "newDatabaseAssertions": 17,
+  "focusedBrowserTests": 8,
+  "productionOfflineShellTests": 1,
+  "checks": [
+    "pnpm test",
+    "pnpm check",
+    "pnpm lint",
+    "pnpm verify:i18n:strict",
+    "pnpm build",
+    "node scripts/verify-bundle-size.mjs",
+    "node scripts/verify-pwa.mjs",
+    "pnpm exec playwright test e2e/pm-portfolio.spec.ts e2e/task-detail-authorization.spec.ts",
+    "pnpm exec playwright test -c playwright.pwa.config.ts --grep 'production PWA installs'",
+    "pnpm verify:supabase:rollout",
+    "extended verify-staff-action-saves.mjs against a separate disposable Supabase stack",
+    "git diff --check"
+  ],
+  "rolloutChecks": [
+    "fresh migration application and migration listing",
+    "complete pgTAP suite",
+    "database lint and advisors",
+    "rollout postflight",
+    "authenticated Storage and output evidence checks",
+    "native frontend task save and retry workflows",
+    "member onboarding recovery",
+    "frozen workflow review and downstream reopening",
+    "real browser upload, HOD review, client isolation and PM finalization"
+  ],
+  "extendedPmSaveChecks": [
+    "local foreign-company destination rejection",
+    "accessible company name and ID persist through authenticated REST and reload",
+    "directly assigned PM delegates through the public store action and authenticated REST",
+    "fresh PM load loses delegated task and unrelated company access"
+  ],
+  "eagerGzipKiB": 283.1,
+  "eagerGzipBudgetKiB": 300,
+  "migration": "20261015014716_pm_task_company_boundaries",
+  "productionChanged": false,
+  "disposableStacksStopped": true
+}

@@ -4,7 +4,6 @@ import { configurePendingWork, hasUnsavedChanges, subscribeUnsavedChanges } from
 import React, { useEffect } from 'react';
 import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { clearWorkspaceSession, startBackendAutoSync, stopBackendAutoSync, useStore } from './store';
-import Layout from './components/Layout';
 import { canAccessPath } from './lib/access';
 import { hasPasswordResetBypass } from './lib/auth';
 import { RefreshCw, WifiOff } from 'lucide-react';
@@ -13,6 +12,7 @@ import { useAppNoticeState } from './hooks/useAppNoticeState';
 import { useI18n } from './components/I18nProvider';
 import { msg } from './lib/messages';
 
+const Layout = React.lazy(() => import('./components/Layout'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const AccessDenied = React.lazy(() => import('./components/AccessDenied'));
 const Login = React.lazy(() => import('./pages/Login'));

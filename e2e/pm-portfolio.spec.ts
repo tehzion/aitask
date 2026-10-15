@@ -82,3 +82,54 @@ test('PM saves a routine edit to a task in an inherited project', async ({ page 
   })).toBe('High');
   await expect(editor.getByRole('alert')).toHaveCount(0);
 });
+
+test('PM delegates directly assigned work through the full editor', async ({ page }) => {
+  await seedPM(page);
+  const workerId = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    const source = state.tasks.find(task => task.id === 'pm-edit')!;
+    useStore.setState({ tasks: [...state.tasks, { ...source, id: 'pm-direct', title: 'Directly assigned PM work', clientId: undefined, clientName: 'Assigned company', projectId: undefined, projectName: undefined, assignedTo: state.currentUser!.id }] });
+    return source.assignedTo;
+  });
+  await page.goto('/tasks?taskId=pm-direct');
+  let editor = page.getByRole('dialog', { name: 'Directly assigned PM work' });
+  await editor.getByRole('button', { name: 'Full edit', exact: true }).click();
+  editor = page.getByRole('dialog', { name: 'Directly assigned PM work' });
+  await editor.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(editor.getByRole('combobox', { name: 'Assignee', exact: true })).toBeEnabled();
+  await editor.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption(workerId);
+  await editor.getByRole('button', { name: 'Save Changes', exact: true }).click();
+  await expect.poll(() => page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    return useStore.getState().tasks.find(task => task.id === 'pm-direct')?.assignedTo;
+  })).toBe(workerId);
+  await page.goto('/');
+  await expect(page.getByText('Directly assigned PM work', { exact: true })).toHaveCount(0);
+});
+
+test('PM company edits reject foreign scope and save the accessible company ID', async ({ page }) => {
+  await seedPM(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    useStore.setState({
+      clients: [...state.clients, { id: 'pm-second', clientName: 'Second PM company', createdBy: state.currentUser!.id, createdAt: '', updatedAt: '' }],
+      tasks: state.tasks.map(task => task.id === 'pm-edit' ? { ...task, projectId: undefined, projectName: undefined } : task),
+    });
+  });
+  await page.goto('/tasks?taskId=pm-edit');
+  const editor = page.getByRole('dialog', { name: 'Inherited editable work' });
+  await editor.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await editor.getByRole('button', { name: 'Edit', exact: true }).click();
+  await editor.getByRole('textbox', { name: 'Client / Brand', exact: true }).fill('Foreign Company');
+  await editor.getByRole('button', { name: 'Save Changes', exact: true }).click();
+  await expect(editor.getByText('This company is outside your portfolio.', { exact: true })).toBeVisible();
+  await editor.getByRole('textbox', { name: 'Client / Brand', exact: true }).fill('Second PM company');
+  await editor.getByRole('button', { name: 'Save Changes', exact: true }).click();
+  await expect.poll(() => page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const task = useStore.getState().tasks.find(task => task.id === 'pm-edit');
+    return { id: task?.clientId, name: task?.clientName };
+  })).toEqual({ id: 'pm-second', name: 'Second PM company' });
+});

@@ -97,6 +97,17 @@ describe('task assignment attribution', () => {
     expect(updated.assignedAt).toBeTruthy();
   });
 
+  it.each(['quick', 'full'] as const)('lets a directly assigned PM delegate through the %s action without company ownership', action => {
+    useStore.setState({ tasks: [{ ...task, createdBy: staff.id, assignedTo: pm.id, accountableLeadId: pm.id }] });
+    const result = action === 'quick'
+      ? useStore.getState().updateTaskAssignee(task.id, staffTwo.id)
+      : useStore.getState().updateTask(task.id, { assignedTo: staffTwo.id });
+    expect(result.ok).toBe(true);
+    expect(findTask()).toMatchObject({ assignedTo: staffTwo.id, assignedBy: pm.id, accountableLeadId: pm.id });
+    // Delegation itself does not confer permanent access to the task.
+    expect(useStore.getState().updateTaskAssignee(task.id, pm.id).ok).toBe(false);
+  });
+
   it('keeps the existing assigner when only non-assignment fields change', () => {
     useStore.getState().updateTaskAssignee(task.id, staffTwo.id);
     const afterAssign = findTask();

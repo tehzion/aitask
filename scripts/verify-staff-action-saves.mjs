@@ -219,6 +219,23 @@ try {
   assert.equal(useStore.getState().tasks.find(task => task.id === 'file-review').completionPercentage, 100);
   console.log('[staff-saves] File-only HOD oversight review, actual private download and PM completion passed through the real frontend store and native saves.');
 
+  // PM task company edits and direct delegation use the same store/REST path.
+  insert('client', { id: 'pm-second', clientName: 'Second PM QA', createdBy: 'pm' });
+  insert('client', { id: 'pm-foreign', clientName: 'Foreign PM QA', createdBy: 'boss' });
+  insert('client', { id: 'pm-assigned-company', clientName: 'Assigned PM QA', createdBy: 'boss' });
+  insert('task', { ...baseTask, id: 'pm-move', serviceCycleId: undefined, deliverableId: undefined });
+  insert('task', { ...baseTask, id: 'pm-direct', clientId: 'pm-assigned-company', clientName: 'Assigned PM QA', createdBy: 'boss', assignedTo: 'pm', serviceCycleId: undefined, deliverableId: undefined });
+  await login('pm');
+  assert.equal(useStore.getState().updateTask('pm-move', { clientName: 'Foreign PM QA' }).ok, false, 'local PM action rejects a foreign destination');
+  await save('PM moves work to an accessible company', useStore.getState().updateTask('pm-move', { clientName: 'Second PM QA' }), 'task.update');
+  await login('pm');
+  assert.equal(useStore.getState().tasks.find(task => task.id === 'pm-move').clientId, 'pm-second', 'company ID persists with the new name');
+  await save('Directly assigned PM delegates work', useStore.getState().updateTaskAssignee('pm-direct', 'staff'), 'task.update');
+  await login('pm');
+  assert.equal(useStore.getState().tasks.some(task => task.id === 'pm-direct'), false, 'delegation does not retain unrelated task access');
+  assert.equal(useStore.getState().clients.some(client => client.id === 'pm-assigned-company'), false, 'delegation does not retain unrelated company access');
+  console.log('[staff-saves] PM company identity edits and directly assigned delegation persisted through authenticated REST and reload.');
+
   console.log('[staff-saves] Actual frontend actions persisted through authenticated REST: creation/deletion, edits, status, priority, dates, comments, derived delivery/reopening, HOD delegation, reload and lost-confirmation retry.');
 } finally {
   globalThis.fetch = originalFetch;

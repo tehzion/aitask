@@ -181,6 +181,7 @@ type TaskUpdateInput = Partial<Pick<
   | 'projectId'
   | 'serviceCycleId'
   | 'deliverableId'
+  | 'clientId'
   | 'clientName'
   | 'customerDetails'
   | 'facebookPage'
@@ -555,6 +556,18 @@ const isServiceClientInScope = (state: StoreState, clientId: string) => {
 };
 
 const serviceClientScopeError = 'This company is outside your portfolio.';
+
+// Check the destination before the new task relationship can grant access.
+// Unchanged legacy company links remain editable during routine task updates.
+const taskCompanyScopeError = (state: StoreState, clientName: string, clientId?: string) => {
+  const actor = state.currentUser;
+  if (!actor || isBossKoo(actor) || actor.role !== 'Project Manager') return undefined;
+  if (!canOpenServiceClient(actor, clientName, state.tasks, state.rolePermissions, state.clients, state.projects)) return serviceClientScopeError;
+  if (clientId && !state.clients.some(client => client.id === clientId && normalizeClientKey(client.clientName) === normalizeClientKey(clientName))) {
+    return 'Choose a company from the Companies database.';
+  }
+  return undefined;
+};
 
 export const shouldNotifyClientForTask = (
   task: Pick<Task, 'visibility' | 'clientName'>,
@@ -2818,6 +2831,17 @@ export const useStore = create<StoreState>()(
           : data.clientName !== undefined
             ? data.clientName.trim()
             : task.clientName;
+        const companyChanged = normalizeClientKey(clientName) !== normalizeClientKey(task.clientName)
+          || requestedProjectId !== task.projectId;
+        const clientId = data.clientId ?? (companyChanged
+          ? project?.clientId || state.clients.find(client => normalizeClientKey(client.clientName) === normalizeClientKey(clientName))?.id
+          : task.clientId);
+        if (companyChanged || clientId !== task.clientId) {
+          const companyError = taskCompanyScopeError(state, clientName, clientId);
+          if (companyError) return { ok: false, error: companyError };
+          if (project?.clientId && clientId !== project.clientId) return { ok: false, error: 'Choose a company from the Companies database.' };
+          if (isWorkflowTask(task) && clientId !== task.clientId) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
+        }
         const serviceType = data.serviceType !== undefined ? data.serviceType.trim() : task.serviceType;
         const startDate = data.startDate !== undefined ? normalizeRequiredStartDate(data.startDate) : normalizeRequiredStartDate(task.startDate);
         const dueDate = data.dueDate !== undefined ? normalizeOptionalIsoDate(data.dueDate) : task.dueDate;
@@ -2868,6 +2892,7 @@ export const useStore = create<StoreState>()(
               ? data.projectName.trim() || undefined
               : task.projectName,
           clientName,
+          clientId,
           serviceType,
           title,
           description: data.description !== undefined ? data.description.trim() : task.description,
@@ -3184,6 +3209,9 @@ export const useStore = create<StoreState>()(
 
         const title = taskData.title.trim();
         const clientName = project ? project.clientName : taskData.clientName.trim();
+        const clientId = project?.clientId || taskData.clientId || state.clients.find(client => normalizeClientKey(client.clientName) === normalizeClientKey(clientName))?.id;
+        if (taskCompanyScopeError(state, clientName, taskData.clientId || clientId)) return '';
+        if (project?.clientId && taskData.clientId && project.clientId !== taskData.clientId) return '';
         const serviceType = taskData.serviceType.trim();
         const startDate = normalizeRequiredStartDate(taskData.startDate);
         const dueDate = normalizeOptionalIsoDate(taskData.dueDate);
@@ -3215,7 +3243,7 @@ export const useStore = create<StoreState>()(
             createdBy: currentUser.id,
             assignedBy: currentUser.id,
             assignedAt: now,
-            clientId: project?.clientId || taskData.clientId || state.clients.find(client => normalizeClientKey(client.clientName) === normalizeClientKey(clientName))?.id,
+            clientId,
             title,
             clientName,
             projectName: project ? project.projectName : taskData.projectName,
@@ -4212,6 +4240,7 @@ export const useStore = create<StoreState>()(
         if (!cycle || !workflow?.steps.length) return { ok: false, error: 'This service item has no frozen task workflow.' };
         const existing = state.tasks.filter(task => task.deliverableId === deliverable.id && task.generatedFromDeliverable);
         if (existing.length) return { ok: true, taskIds: existing.sort((a, b) => (a.workflowStepOrder || 0) - (b.workflowStepOrder || 0)).map(task => task.id) };
+        if (!canCreateTasks(actor, state.rolePermissions)) return { ok: false, error: 'You do not have permission to create tasks.' };
         if (deliverable.status === 'Delivered') return { ok: false, error: 'Reopen the delivery before adding task links.' };
         const generationId = nowId('WFG');
         const now = new Date().toISOString();

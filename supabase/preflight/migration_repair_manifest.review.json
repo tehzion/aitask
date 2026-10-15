@@ -874,7 +874,10 @@
     "20261014071022_reviewer_output_evidence_access",
     "20261014111759_pm_review_fallback_and_workflow_inputs",
     "20261014132839_hod_review_remediation",
-    "20261014135947_pm_portfolio_service_boundaries"
+    "20261014135947_pm_portfolio_service_boundaries",
+    "20261015014716_pm_task_company_boundaries"
   ],
-  "pendingProductionMigrations": []
+  "pendingProductionMigrations": [
+    "20261015014716_pm_task_company_boundaries"
+  ]
 }

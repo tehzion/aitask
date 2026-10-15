@@ -660,7 +660,7 @@ describe('staff permission matrix', () => {
       canDelete: true,
       canAssign: true,
     });
-    expect(getTaskAccess(admin, pmAssignedTask)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: false });
+    expect(getTaskAccess(admin, pmAssignedTask)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: true });
     expect(getTaskAccess(admin, pmCreatedTask)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: true });
     expect(getTaskAccess(admin, pmUnrelatedTask)).toEqual({ canView: false, canEdit: false, canComment: false, canDelete: false, canAssign: false });
 
