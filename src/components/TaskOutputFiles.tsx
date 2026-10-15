@@ -10,11 +10,14 @@ import { useI18n } from './I18nProvider';
 import { getTaskAccess } from '../lib/access';
 import { canManageTaskReview } from '../lib/taskWorkflowAccess';
 import { useSaveAction } from '../hooks/useSaveAction';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useShallow } from 'zustand/react/shallow';
 
 const TaskReviewSettings = React.lazy(() => import('./TaskReviewSettings'));
 
-export default function TaskOutputFiles({ task }: { task: Task }) {
+export type OutputUploadState = { busy: boolean; pending: boolean };
+
+export default function TaskOutputFiles({ task, onUploadStateChange }: { task: Task; onUploadStateChange?: (state: OutputUploadState) => void }) {
   const { t } = useI18n();
   const deliverables = useStore(state => state.deliverables);
   const actorId = useStore(state => state.currentUser?.id);
@@ -27,6 +30,12 @@ export default function TaskOutputFiles({ task }: { task: Task }) {
   const [uploadError, setUploadError] = React.useState('');
   const [uploadSaved, setUploadSaved] = React.useState(false);
   const retained = React.useRef<{ file: File; attachment?: AttachmentRef } | null>(null);
+  const pendingUpload = Boolean(uploadError && retained.current);
+  useUnsavedChanges(uploading || pendingUpload, uploading);
+  React.useLayoutEffect(() => {
+    onUploadStateChange?.({ busy: uploading, pending: pendingUpload });
+    return () => onUploadStateChange?.({ busy: false, pending: false });
+  }, [onUploadStateChange, uploading, pendingUpload]);
   React.useEffect(() => { retained.current = null; setUploadError(''); setUploadSaved(false); }, [task.id, actorId]);
   const upload = async (file: File) => {
     setUploadError(''); setUploadSaved(false);

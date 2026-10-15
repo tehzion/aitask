@@ -1,7 +1,7 @@
 import { acknowledgeActionFeedback, clearActionFeedback, queueActionFeedback, taskStatusMessage } from '../lib/actionFeedback';
 import { recordDiagnostic } from '../lib/diagnostics';
 import { getTaskProgress } from '../lib/taskProgress';
-import { canRequestTaskRevision, getDepartmentReviewers, TASK_HOD_REQUIRED, taskTransitionError } from '../lib/taskWorkflowAccess';
+import { canRequestTaskRevision, getDepartmentReviewers, TASK_HOD_REQUIRED, taskAssignmentStageError, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { clearRecoveredDrafts } from '../lib/draftRecovery';
 import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { create } from 'zustand';
@@ -9,7 +9,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 import { useToastStore } from './useToastStore';
 import { hasInvalidDeliveryLink } from '../lib/deliveryLinks';
 import { isTaskOpen } from '../lib/taskReporting';
-import { applyTaskWorkIntent, recordTaskWorkTransition, taskEvidenceError, type TaskWorkIntent } from '../lib/staffWorkflow';
+import { applyTaskWorkIntent, recordTaskWorkTransition, taskEvidenceError, taskWorkContactId, type TaskWorkIntent } from '../lib/staffWorkflow';
 import {
   User,
   ClientProfile,
@@ -87,11 +87,14 @@ import {
   isNotificationReadByUser,
   isNotificationVisible,
   isBossKoo,
+  isHodUser,
+  canViewTask,
   isHodRole,
   sanitizeRolePermissions,
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
+import { getBillingToday, migrateLegacyPlanSchedules, validateRevisionItems } from '../lib/monthlyRecords';
 import { createAccessRefreshCoordinator } from '../lib/accessRefresh';
 import {
   BACKEND_UPGRADE_REQUIRED_MESSAGE,
@@ -341,7 +344,7 @@ export interface StoreState {
   updateTaskDueDate: (taskId: string, newDueDate: string) => MutationActionResult;
   updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => MutationActionResult;
   attachTaskOutput: (taskId: string, attachment: AttachmentRef) => Promise<MutationActionResult>;
-  setTaskReviewConfig: (taskId: string, config: { cover?: Task['reviewCover'] | null; accountableLeadId?: string }) => Promise<MutationActionResult>;
+  setTaskReviewConfig: (taskId: string, config: { cover?: Task['reviewCover'] | null; accountableLeadId?: string; requiresInternalApproval?: boolean }) => Promise<MutationActionResult>;
   updateTask: (taskId: string, data: TaskUpdateInput) => { ok: boolean; error?: string };
   deleteTask: (taskId: string) => { ok: boolean; error?: string };
   reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => MutationActionResult;
@@ -362,9 +365,12 @@ export interface StoreState {
   createClientWithPlan: (data: ClientPlanSetupInput) => { ok: boolean; clientId?: string; planId?: string; error?: string };
   createClientPlan: (clientId: string, data: ClientPlanInput) => { ok: boolean; planId?: string; error?: string };
   createClientPlanRevision: (planId: string) => { ok: boolean; planId?: string; error?: string };
+  scheduleClientPlanRevision: (planId: string, effectiveDate: string, expectedVersion?: number) => { ok: boolean; error?: string };
+  returnClientPlanRevisionToDraft: (planId: string, expectedVersion?: number) => { ok: boolean; error?: string };
   updateDraftClientPlan: (planId: string, data: Partial<Pick<ClientServicePlan, 'name' | 'serviceItems' | 'discountType' | 'discountValue' | 'taxRateBps' | 'startDate' | 'billingDay' | 'contractEndDate'>>) => { ok: boolean; error?: string };
   updateActivePlanDates: (planId: string, data: Partial<Pick<ClientServicePlan, 'billingDay' | 'contractEndDate'>>) => { ok: boolean; error?: string };
   activateClientPlan: (planId: string) => { ok: boolean; cycleId?: string; error?: string };
+  generateDueLocalServiceCycles: () => void;
   setClientPlanStatus: (planId: string, status: ClientServicePlan['status']) => { ok: boolean; error?: string };
   setServiceCycleStatus: (cycleId: string, status: ServiceCycleStatus) => { ok: boolean; error?: string };
   updateDeliverableStatus: (deliverableId: string, status: DeliverableStatus) => { ok: boolean; error?: string };
@@ -487,6 +493,7 @@ const resolveTaskStatus = (status: string, statuses: string[]) => {
   const trimmed = status.trim();
   if (!trimmed) return '';
   if (trimmed.toLowerCase() === 'approved') return 'Approved';
+  if (trimmed.toLowerCase() === 'completed') return 'Completed';
   return [...statuses, 'Approved'].find(item => item.toLowerCase() === trimmed.toLowerCase()) || '';
 };
 
@@ -610,12 +617,16 @@ const appendNotification = (notifications: AppNotification[], data: Notification
 // role-wide Project Manager fan-out: Boss Koo (super admin, oversight) plus the
 // PM who assigned it (assignedBy), falling back to the creator, then the owning
 // PM of the task's client or project. This keeps a Staff member who works for
-// several PMs notifying only the right one for each task.
+// several PMs notifying only the right one for each task. Include the displayed
+// HOD task contact when they can still view this task, without a department-wide
+// fan-out or dropping the responsible PM's oversight.
 const resolveTaskUpdateRecipientIds = (
   users: User[],
-  task: Pick<Task, 'assignedBy' | 'createdBy' | 'clientName' | 'projectId'>,
+  task: Task,
   clients: ClientProfile[],
   projects: Project[],
+  roles: CustomRole[],
+  includeHodContact = true,
 ): string[] => {
   const recipientIds = new Set<string>();
   users.forEach(user => {
@@ -635,6 +646,8 @@ const resolveTaskUpdateRecipientIds = (
     ownerPm = resolvePm(project?.createdBy);
   }
   if (ownerPm) recipientIds.add(ownerPm);
+  const contact = users.find(user => user.id === taskWorkContactId(task));
+  if (includeHodContact && contact && contact.hasLogin !== false && isHodUser(contact, roles) && canViewTask(contact, task, roles, { clients, projects })) recipientIds.add(contact.id);
   return [...recipientIds];
 };
 
@@ -1451,6 +1464,8 @@ export const useStore = create<StoreState>()(
                   remoteVersion: revision.version,
                   remoteUpdatedAt: revision.updatedAt,
                   hasRemoteUpdate: false,
+                  error: undefined,
+                  errorCode: undefined,
                   message: options.silent ? state.backend.message : 'Workspace is current.',
                 },
               }));
@@ -1499,8 +1514,10 @@ export const useStore = create<StoreState>()(
                 hasRemoteUpdate: false,
                 hasLocalChanges: false,
                 pendingMutations: 0,
+                pendingCommandType: undefined,
                 conflict: undefined,
                 error: undefined,
+                errorCode: undefined,
                 message: 'Secure workspace is current.',
               },
             }));
@@ -1765,6 +1782,7 @@ export const useStore = create<StoreState>()(
               lastSyncedAt: updatedAt,
               conflict: undefined,
               error: undefined,
+              errorCode: undefined,
               message: 'Saved.',
             },
           }));
@@ -1854,6 +1872,7 @@ export const useStore = create<StoreState>()(
             lastSyncedAt: savedAt,
             conflict: undefined,
             error: undefined,
+            errorCode: undefined,
             hasRemoteUpdate: false,
             hasLocalChanges: hasNewerChanges,
             pendingMutations: hasNewerChanges ? 1 : 0,
@@ -2467,7 +2486,7 @@ export const useStore = create<StoreState>()(
         if (intent.kind === 'unblock' && !task.workState?.blocker) return { ok: true };
         const updated = applyTaskWorkIntent(task, intent, actor.id);
         updated.completionPercentage = getTaskProgress(updated, state.users);
-        const notices = taskUpdateNotifications(resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects), {
+        const notices = taskUpdateNotifications(resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects, state.rolePermissions), {
           title: 'Task Status Updated', message: `"${task.title}": ${intent.kind === 'accept' ? 'assignment accepted' : intent.kind === 'block' ? 'help requested' : 'blocker cleared'} by ${actor.name}.`,
           route: { page: 'tasks', entityId: taskId }, iconType: intent.kind === 'block' ? 'alert' : 'success',
           category: intent.kind === 'block' ? 'feedback' : 'status', importance: intent.kind === 'block' ? 'action' : 'informational',
@@ -2544,7 +2563,8 @@ export const useStore = create<StoreState>()(
         });
 
         const newNotifs: AppNotification[] = taskUpdateNotifications(
-          resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects),
+          // Initial review submission already has its canonical reviewer handoff.
+          resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects, state.rolePermissions, nextStatus !== 'Waiting Approval'),
           {
             title: 'Task Status Updated',
             message: `"${task.title}" was moved to ${nextStatus} by ${currentUser?.name}.`,
@@ -2644,6 +2664,12 @@ export const useStore = create<StoreState>()(
         if (assigneeUser && !isEligibleTaskAssignee(assigneeUser, task.department)) {
           useToastStore.getState().addToast(msg('errors.assigneeDepartment', { name: assigneeUser.name, department: task.department }), 'warning');
           result = { ok: false, error: `${assigneeUser.name} is not in the ${task.department} department.` };
+          return state;
+        }
+        const stageError = taskAssignmentStageError(currentUser, task, assignedTo, state.users, state.rolePermissions);
+        if (stageError) {
+          useToastStore.getState().addToast(stageError, 'warning');
+          result = { ok: false, error: stageError };
           return state;
         }
 
@@ -2765,6 +2791,10 @@ export const useStore = create<StoreState>()(
       },
       setTaskReviewConfig: async (taskId, config) => {
         const session = captureWorkspaceSession();
+        if (get().backend.mode === 'supabase' && config.requiresInternalApproval !== undefined) {
+          const capability = await loadSecureBackendCapabilities();
+          if (!capability.compatible || !capability.capabilities.optionalTaskApproval) return { ok: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE };
+        }
         const actions = await import('./taskReviewActions');
         if (!isWorkspaceSessionCurrent(session)) return { ok: false, error: 'Your session changed. Sign in again.' };
         return actions.setTaskReviewConfig(get(), set, pendingMutationMessage, taskUpdateNotifications, taskId, config);
@@ -2783,7 +2813,7 @@ export const useStore = create<StoreState>()(
         if (requestedCreatorId !== undefined && requestedCreatorId !== task.createdBy) {
           return { ok: false, error: 'Task ownership cannot be changed.' };
         }
-        const workflowKeys = ['reviewEvidence', 'reviewAccess', 'reviewDecision', 'reviewCover', 'accountableLeadId', 'outputAttachments', 'workflowStepKind', 'workflowStepId', 'workflowStepOrder', 'workflowStepRequired', 'workflowTemplateId', 'workflowTemplateRevision', 'generatedFromDeliverable', 'predecessorTaskIds', 'workflowOutputVersion', 'workflowDependenciesReady', 'internalReview'];
+        const workflowKeys = ['reviewEvidence', 'reviewAccess', 'reviewDecision', 'reviewCover', 'accountableLeadId', 'requiresInternalApproval', 'outputAttachments', 'workflowStepKind', 'workflowStepId', 'workflowStepOrder', 'workflowStepRequired', 'workflowTemplateId', 'workflowTemplateRevision', 'generatedFromDeliverable', 'predecessorTaskIds', 'workflowOutputVersion', 'workflowDependenciesReady', 'internalReview'];
         if (workflowKeys.some(key => Object.prototype.hasOwnProperty.call(data, key))) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
         if (isWorkflowTask(task) && (['deliverableId', 'serviceCycleId', 'clientId', 'department', 'visibility'] as const).some(key => data[key] !== undefined && data[key] !== task[key])) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
 
@@ -2814,6 +2844,10 @@ export const useStore = create<StoreState>()(
         const assignmentChanged = nextAssigneeId !== task.assignedTo || nextDepartment !== task.department;
         if (assignmentChanged && assignee && !isEligibleTaskAssignee(assignee, nextDepartment)) {
           return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
+        }
+        if (nextAssigneeId !== task.assignedTo) {
+          const stageError = taskAssignmentStageError(currentUser, { department: nextDepartment }, nextAssigneeId, state.users, state.rolePermissions);
+          if (stageError) return { ok: false, error: stageError };
         }
 
         const hasProjectInput = Object.prototype.hasOwnProperty.call(data, 'projectId');
@@ -2961,7 +2995,7 @@ export const useStore = create<StoreState>()(
           state.users, state.rolePermissions, task, updatedTask, currentUser.id, { clients: state.clients, projects: state.projects },
         ));
         if (task.status !== updatedTask.status && updatedTask.status === 'Approved') notifications.push(...taskUpdateNotifications(
-          resolveTaskUpdateRecipientIds(state.users, updatedTask, state.clients, state.projects), {
+          resolveTaskUpdateRecipientIds(state.users, updatedTask, state.clients, state.projects, state.rolePermissions), {
             title: 'Task Status Updated', message: `"${updatedTask.title}" was approved by ${currentUser.name}.`,
             route: { page: 'tasks', entityId: taskId }, iconType: 'status',
           }, currentUser.id,
@@ -3011,7 +3045,7 @@ export const useStore = create<StoreState>()(
         const notifications = serverGeneratesStaffDeleteNotification
           ? []
           : taskUpdateNotifications(
-              resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects),
+              resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects, state.rolePermissions),
               {
                 title: 'Task Deleted',
                 message: `${currentUser.name} deleted "${task.title}".`,
@@ -3088,7 +3122,7 @@ export const useStore = create<StoreState>()(
         const notifications: AppNotification[] = [];
         if (!shouldUseSecureSupabase()) {
           const recipients = new Set([
-            ...resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects),
+            ...resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects, state.rolePermissions),
             task.assignedTo,
           ]);
           notifications.push(...taskUpdateNotifications(
@@ -3195,6 +3229,10 @@ export const useStore = create<StoreState>()(
         if (taskData.assignedTo && !assignee) return '';
         if (assignee && !canAssignTasksToOthers(currentUser, state.rolePermissions, undefined, { users: state.users, clients: state.clients, projects: state.projects }) && assignee.id !== currentUser.id) return '';
         if (assignee && !isEligibleTaskAssignee(assignee, taskData.department)) return '';
+        // Creating a task already submitted for review is the PM handing work to
+        // the reviewer directly, so the HOD-first assignment rule does not apply.
+        const stageError = taskAssignmentStageError(currentUser, taskData, taskData.assignedTo, state.users, state.rolePermissions, { allowDirectStaff: resolveTaskStatus(taskData.status, state.taskStatuses) === 'Waiting Approval' });
+        if (stageError) { useToastStore.getState().addToast(stageError, 'warning'); return ''; }
 
         const project = taskData.projectId
           ? state.projects.find(item => item.id === taskData.projectId)
@@ -3287,7 +3325,7 @@ export const useStore = create<StoreState>()(
               ...(state.backend.mode === 'local' ? localHodReviewNotifications(state.users, state.rolePermissions, undefined, newTask, currentUser.id, { clients: state.clients, projects: state.projects }) : []),
               ...(['Staff', 'HOD'].includes(currentUser.role)
                 ? taskUpdateNotifications(
-                    resolveTaskUpdateRecipientIds(state.users, newTask, state.clients, state.projects)
+                    resolveTaskUpdateRecipientIds(state.users, newTask, state.clients, state.projects, state.rolePermissions)
                       .filter(id => id !== taskData.assignedTo),
                     {
                       title: 'Task Created by Staff',
@@ -4003,7 +4041,7 @@ export const useStore = create<StoreState>()(
         const now = new Date().toISOString();
         const nextPlanId = nowId('PLN');
         const revision = Math.max(0, ...state.clientPlans.filter(item => item.clientId === source.clientId).map(item => item.revision)) + 1;
-        const effectiveFromCycleStart = source.nextCycleStart || nextBillingDate(getTodayInputDate(), source.billingDay);
+        const effectiveFromCycleStart = source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay);
         const nextPlan: ClientServicePlan = {
           ...source,
           id: nextPlanId,
@@ -4012,6 +4050,7 @@ export const useStore = create<StoreState>()(
           status: 'Draft',
           supersedesPlanId: source.id,
           effectiveFromCycleStart,
+          revisionScheduleStatus: 'draft',
           startDate: effectiveFromCycleStart,
           nextCycleStart: undefined,
           serviceItems: source.serviceItems.map(item => ({
@@ -4037,12 +4076,43 @@ export const useStore = create<StoreState>()(
         return { ok: true, planId: nextPlanId };
       },
 
+      scheduleClientPlanRevision: (planId, effectiveDate, expectedVersion) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const plan = state.clientPlans.find(item => item.id === planId);
+        if (!canManageClientPlans(state.currentUser, state.rolePermissions) || !plan || !isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
+        if (plan.status !== 'Draft' || !plan.supersedesPlanId) return { ok: false, error: 'Only a draft revision can be scheduled.' };
+        if (expectedVersion !== undefined && plan.version !== expectedVersion) return { ok: false, error: 'This revision changed elsewhere. Review the saved revision before saving.' };
+        const source = state.clientPlans.find(item => item.id === plan.supersedesPlanId && item.clientId === plan.clientId);
+        if (!source || source.status !== 'Active') return { ok: false, error: 'Resume the active plan before scheduling a revision.' };
+        const next = source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay);
+        if (next <= getBillingToday() || next !== effectiveDate) return { ok: false, error: 'The billing date changed. Refresh and review the next cycle before scheduling.' };
+        const error = validateRevisionItems(plan.serviceItems);
+        if (error) return { ok: false, error };
+        set({ clientPlans: state.clientPlans.map(item => item.id === plan.id ? { ...item, revisionScheduleStatus: 'scheduled', startDate: next, effectiveFromCycleStart: next, updatedAt: new Date().toISOString() } : item) });
+        return { ok: true };
+      },
+
+      returnClientPlanRevisionToDraft: (planId, expectedVersion) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const plan = state.clientPlans.find(item => item.id === planId);
+        if (!canManageClientPlans(state.currentUser, state.rolePermissions) || !plan || !isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
+        if (plan.status !== 'Draft' || !plan.supersedesPlanId) return { ok: false, error: 'This revision is already active. Create a new revision for the next cycle.' };
+        if (expectedVersion !== undefined && plan.version !== expectedVersion) return { ok: false, error: 'This revision changed elsewhere. Review the saved revision before saving.' };
+        set({ clientPlans: state.clientPlans.map(item => item.id === plan.id ? { ...item, revisionScheduleStatus: 'draft', updatedAt: new Date().toISOString() } : item) });
+        return { ok: true };
+      },
+
       updateDraftClientPlan: (planId, data) => {
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot edit client plans.' };
         const plan = state.clientPlans.find(item => item.id === planId);
         if (!plan || plan.status !== 'Draft') return { ok: false, error: 'Only draft plans can be edited.' };
+        if (plan.revisionScheduleStatus === 'scheduled') return { ok: false, error: 'Return this scheduled plan to draft before editing.' };
+        const itemError = validateRevisionItems(data.serviceItems || plan.serviceItems);
+        if (itemError) return { ok: false, error: itemError };
         if (!isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
         const serviceItems = (data.serviceItems || plan.serviceItems).map(item => ({
           ...item,
@@ -4125,13 +4195,11 @@ export const useStore = create<StoreState>()(
         if (!plan) return { ok: false, error: 'Plan not found.' };
         if (!isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
         if (plan.status !== 'Draft' && plan.status !== 'Paused') return { ok: false, error: 'Only draft or paused plans can be activated.' };
-        if (plan.supersedesPlanId && state.clientPlans.some(item => item.id === plan.supersedesPlanId && item.status === 'Active')) {
-          return { ok: true, error: `Revision ${plan.revision} is scheduled for ${plan.effectiveFromCycleStart}.` };
-        }
+        if (plan.status === 'Draft' && plan.supersedesPlanId) return { ok: false, error: 'Review and schedule this revision for the next billing cycle.' };
         if (state.clientPlans.some(item => item.clientId === plan.clientId && item.id !== plan.id && item.status === 'Active')) {
           return { ok: false, error: 'This client already has an active plan.' };
         }
-        const periodStart = plan.status === 'Paused' ? nextBillingDate(getTodayInputDate(), plan.billingDay) : plan.startDate;
+        const periodStart = plan.status === 'Paused' ? nextBillingDate(getBillingToday(), plan.billingDay) : plan.startDate;
         const existing = state.serviceCycles.find(cycle => cycle.planId === plan.id && cycle.periodStart === periodStart);
         const records = existing ? null : makeCycleRecords(plan, state.addons.filter(addon => addon.clientId === plan.clientId), periodStart, nowId);
         const now = new Date().toISOString();
@@ -4153,6 +4221,57 @@ export const useStore = create<StoreState>()(
         }));
         useToastStore.getState().addToast(msg('plan.activated', { name: plan.name }), 'success');
         return { ok: true, cycleId: existing?.id || records?.cycle.id };
+      },
+
+      generateDueLocalServiceCycles: () => {
+        const state = get();
+        // Shared workspaces use the database's scheduled, transactional generator.
+        if (state.backend.mode !== 'local' || state.backend.isLoading || isWorkspaceMutationLocked(state)
+          || !canManageClientPlans(state.currentUser, state.rolePermissions)) return;
+        const today = getBillingToday();
+        const now = new Date().toISOString();
+        const plans = [...state.clientPlans];
+        const cycles: ServiceCycle[] = [];
+        const deliverables: Deliverable[] = [];
+        const prices: ServicePricingSnapshot[] = [];
+        let changed = false;
+        for (const source of state.clientPlans.filter(plan => plan.status === 'Active' && isServiceClientInScope(state, plan.clientId))) {
+          let plan = source;
+          let start = plan.nextCycleStart || plan.startDate;
+          if (!isValidIsoDate(start)) continue;
+          while (start <= today) {
+            const revision = plans.filter(item => item.status === 'Draft' && item.revisionScheduleStatus === 'scheduled' && item.supersedesPlanId === plan.id
+              && item.effectiveFromCycleStart && item.effectiveFromCycleStart <= start)
+              .sort((a, b) => b.revision - a.revision)[0];
+            if (revision) {
+              plans[plans.findIndex(item => item.id === plan.id)] = { ...plan, status: 'Ended', updatedAt: now };
+              plan = { ...revision, status: 'Active', updatedAt: now };
+            }
+            if (!Number.isInteger(plan.billingDay) || plan.billingDay < 1 || plan.billingDay > 31) break;
+            // Match the database uniqueness rule: one cycle per client and start date.
+            if (![...state.serviceCycles, ...cycles].some(cycle => cycle.clientId === plan.clientId && cycle.periodStart === start)) {
+              const records = makeCycleRecords(plan, state.addons.filter(addon => addon.clientId === plan.clientId), start, nowId, now);
+              const price = makePricingSnapshot({
+                id: nowId('PRICE'), clientId: plan.clientId, parentType: 'service_cycle', parentId: records.cycle.id,
+                items: records.cycle.serviceItems, discountType: plan.discountType,
+                discountValue: plan.discountValue, taxRateBps: plan.taxRateBps, now,
+              });
+              records.cycle.pricingSnapshotId = price.id;
+              cycles.push(records.cycle); deliverables.push(...records.deliverables); prices.push(price);
+            }
+            start = nextBillingDate(start, plan.billingDay);
+            plan = { ...plan, nextCycleStart: start, updatedAt: now };
+            plans[plans.findIndex(item => item.id === plan.id)] = plan;
+            changed = true;
+          }
+        }
+        if (!changed) return;
+        set({
+          clientPlans: plans,
+          serviceCycles: [...state.serviceCycles, ...cycles],
+          deliverables: [...state.deliverables, ...deliverables],
+          servicePricingSnapshots: [...state.servicePricingSnapshots, ...prices],
+        });
       },
 
       setClientPlanStatus: (planId, status) => {
@@ -4413,7 +4532,7 @@ export const useStore = create<StoreState>()(
         const serverGeneratesClientNotifications = shouldUseSecureSupabase() && currentUser.role === 'Client';
         if (!serverGeneratesClientNotifications) {
           newNotifs.push(...taskUpdateNotifications(
-            resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects)
+            resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects, state.rolePermissions)
               .filter(id => id !== task.assignedTo),
             {
               title: currentUser.role === 'Client' ? 'Client Feedback' : 'New Comment',
@@ -4484,7 +4603,7 @@ export const useStore = create<StoreState>()(
             });
           }
           newNotifs.push(...taskUpdateNotifications(
-            resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects)
+            resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects, state.rolePermissions)
               .filter(id => id !== task.assignedTo),
             {
               title: 'Task Deadline Approaching',
@@ -5616,10 +5735,14 @@ export const useStore = create<StoreState>()(
     },
     {
       name: PERSIST_KEY,
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => safeStorageAdapter),
       merge: mergePersistedWorkspace,
-      migrate: (persistedState) => shouldUseSupabase() ? {} : persistedState as StoreState,
+      migrate: (persistedState, version) => {
+        if (shouldUseSupabase()) return {};
+        const saved = persistedState as StoreState;
+        return version < 5 ? { ...saved, clientPlans: migrateLegacyPlanSchedules(saved.clientPlans || []) } : saved;
+      },
       onRehydrateStorage: () => (_state, error) => {
         if (error) {
           safeStorageAdapter.removeItem(PERSIST_KEY);

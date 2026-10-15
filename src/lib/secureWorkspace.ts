@@ -245,6 +245,7 @@ export type SecureCommand = {
 export type SecureBackendCapabilities = {
   schemaVersion: number;
   hodReviewRemediation?: boolean;
+  optionalTaskApproval?: boolean;
   workflowReviewGate?: boolean;
   workspaceOptimisticLock: boolean;
   serviceOperations: boolean;

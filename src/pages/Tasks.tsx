@@ -1,7 +1,7 @@
 import '../lib/actionFeedbackCopy';
 import SystemMessage from '../components/SystemMessage';
 import { getTaskProgress } from '../lib/taskProgress';
-import { getTaskStatusOptions } from '../lib/taskWorkflowAccess';
+import { getTaskStatusControls } from '../lib/taskStatusControls';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useI18n } from '../components/I18nProvider';
@@ -61,11 +61,13 @@ const priorityColors: Record<Priority, string> = {
 const TasksWorkspace: React.FC = () => {
   const { locale, t } = useI18n();
   const today = useLocalToday();
-  const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore(useShallow(state => ({
+  const { tasks: allTasks, clients: clientProfiles, users, projects, serviceCycles, deliverables, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore(useShallow(state => ({
     tasks: state.tasks,
     clients: state.clients,
     users: state.users,
     projects: state.projects,
+    serviceCycles: state.serviceCycles,
+    deliverables: state.deliverables,
     updateTaskStatus: state.updateTaskStatus,
     updateTaskPriority: state.updateTaskPriority,
     updateTaskAssignee: state.updateTaskAssignee,
@@ -467,8 +469,8 @@ const TasksWorkspace: React.FC = () => {
             await persistQuickChange(task);
           }}
         >
-        {getTaskStatusOptions(currentUser, task, taskStatuses, rolePermissions, { users, clients: clientProfiles, projects }).map(status => (
-            <option key={status} value={status} className="bg-white text-slate-900">{getLocalizedStatus(status, locale)}</option>
+        {getTaskStatusControls(currentUser, task, taskStatuses, rolePermissions, { users, clients: clientProfiles, projects }, { tasks: allTasks, cycles: serviceCycles, deliverables }).map(({ status, disabledReason }) => (
+            <option key={status} value={status} disabled={Boolean(disabledReason)} title={disabledReason ? t(disabledReason) : undefined} className="bg-white text-slate-900">{getLocalizedStatus(status, locale)}</option>
           ))}
         </select>
         <ChevronDown className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 text-current" />
@@ -1230,8 +1232,8 @@ const TasksWorkspace: React.FC = () => {
                       setActiveQuickEdit(null);
                     }}
                   >
-                    {getTaskStatusOptions(currentUser, currentTask, taskStatuses, rolePermissions, { users, clients: clientProfiles, projects }).map(status => (
-                      <option key={status} value={status}>{getLocalizedStatus(status, locale)}</option>
+                    {getTaskStatusControls(currentUser, currentTask, taskStatuses, rolePermissions, { users, clients: clientProfiles, projects }, { tasks: allTasks, cycles: serviceCycles, deliverables }).map(({ status, disabledReason }) => (
+                      <option key={status} value={status} disabled={Boolean(disabledReason)} title={disabledReason ? t(disabledReason) : undefined}>{getLocalizedStatus(status, locale)}</option>
                     ))}
                   </select>
                   <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />

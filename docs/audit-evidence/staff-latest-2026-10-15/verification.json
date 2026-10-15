@@ -1,0 +1,52 @@
+{
+  "auditedProductionCommit": "7cafb1c78a9bcb7b8ee17e405f1a9278ed41a7cf",
+  "version": "3.0.0",
+  "builtAt": "2026-10-15T00:23:58.385Z",
+  "unitTests": 676,
+  "unitFiles": 93,
+  "baselineBrowserCases": 79,
+  "databaseAssertions": 880,
+  "databaseFiles": 54,
+  "productionTaskScope": {
+    "reachableStaffAccounts": 3,
+    "taskAccountCombinations": 567,
+    "viewMismatches": 0,
+    "editMismatches": 0,
+    "submittedDeleteViolations": 0,
+    "protectedAdminGrants": 0
+  },
+  "productionServiceScope": {
+    "companyAccountCombinations": 249,
+    "mismatches": 0,
+    "commercialAdminOrPriceGrants": 0
+  },
+  "unlinkedStaff": {
+    "accounts": 1,
+    "openAssignedWork": 0
+  },
+  "hodContactTasks": {
+    "total": 4,
+    "open": 0,
+    "waiting": 0
+  },
+  "confirmedFindings": [
+    "closing a task during an active output upload abandons canonical task attachment",
+    "Staff All work queue stays stale across local midnight",
+    "HOD task contacts receive no review-update comment notification"
+  ],
+  "diagnosticResults": {
+    "midnightExpectedNeedsAction": 1,
+    "midnightActualNeedsAction": 0,
+    "clockAfterBoundary": "2026-10-14T16:00:01.000Z",
+    "closedUploadStorageObjects": 1,
+    "closedUploadTaskFiles": 0,
+    "reviewEnquiryRecipients": [
+      "audit-pm"
+    ],
+    "missingContact": "audit-contact"
+  },
+  "productionChangedByAudit": false,
+  "applicationCodeChangedByAudit": false,
+  "fixtures": "fake accounts in a disposable local Auth/REST/Storage stack; stacks removed",
+  "scopeNote": "Snapshot matches deployed source. Concurrent PM edits in the shared checkout were excluded."
+}

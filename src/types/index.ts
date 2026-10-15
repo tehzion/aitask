@@ -294,6 +294,7 @@ export interface ClientServicePlan {
   contractEndDate?: string;
   supersedesPlanId?: string;
   effectiveFromCycleStart?: string;
+  revisionScheduleStatus?: 'draft' | 'scheduled';
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -449,6 +450,7 @@ export interface Task {
   deliverableId?: string;
   outputAttachments?: AttachmentRef[];
   accountableLeadId?: string;
+  requiresInternalApproval?: boolean; // Defaults to true; configured by the responsible PM.
   reviewCover?: { reviewerId: string; expiresAt: string; configuredBy?: string; configuredAt?: string } | null;
   reviewOverrideReason?: string; // Submitted once; the server replaces it with decision provenance.
   reviewDecision?: { reviewedBy: string; reviewedAt: string; overrideReason?: string };

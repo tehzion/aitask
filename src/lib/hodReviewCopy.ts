@@ -1,6 +1,11 @@
 import { registerUiTranslations } from './i18n';
 
 registerUiTranslations({
+  'Require internal approval': '需要内部审核批准',
+  'Turn off to let the responsible PM complete this task while it is waiting for review.': '关闭后，负责此任务的 PM 可在等待审核时直接完成任务。',
+  'Choose whether internal approval is required.': '请选择是否需要内部审核批准。',
+  'Reopen the task before changing its approval requirement.': '更改审核要求前，请先重新开启任务。',
+  'Internal review workflow steps always require approval.': '内部审核流程步骤必须经过批准。',
   "A task can contain at most 50 output files.": "每个任务最多可包含50个成果文件。",
   "Choose a department lead or responsible project manager.": "请选择部门主管或负责此任务的项目经理。",
   "Choose an independent reviewer and a cover expiry within 90 days.": "请选择独立审核人，并设置90天内的代审结束日期。",

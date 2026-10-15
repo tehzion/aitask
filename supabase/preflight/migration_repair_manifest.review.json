@@ -1,7 +1,7 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "hod_pm_remediation_20261014135947_applied; production through 20261015002102; connector aliases verified",
+  "status": "task_workflow_hod_first_and_optional_approval_prepared_20261015152000; production through 20261015002102; connector aliases verified",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "productionVerification": {
@@ -876,12 +876,20 @@
     "20261014132839_hod_review_remediation",
     "20261014135947_pm_portfolio_service_boundaries",
     "20261015014716_pm_task_company_boundaries",
+    "20261015015730_staff_task_contact_notifications",
     "20261015064701_manual_deliverable_progress",
-    "20261015065635_deliverable_status_integrity"
+    "20261015065635_deliverable_status_integrity",
+    "20261015140049_monthly_plan_revision_scheduling",
+    "20261015141803_optional_task_internal_approval",
+    "20261015152000_pm_hod_first_assignment"
   ],
   "pendingProductionMigrations": [
     "20261015014716_pm_task_company_boundaries",
+    "20261015015730_staff_task_contact_notifications",
     "20261015064701_manual_deliverable_progress",
-    "20261015065635_deliverable_status_integrity"
+    "20261015065635_deliverable_status_integrity",
+    "20261015140049_monthly_plan_revision_scheduling",
+    "20261015141803_optional_task_internal_approval",
+    "20261015152000_pm_hod_first_assignment"
   ]
 }

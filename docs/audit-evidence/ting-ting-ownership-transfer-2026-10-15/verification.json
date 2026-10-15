@@ -1,0 +1,142 @@
+{
+  "account": "Ting Ting",
+  "companies": [
+    {
+      "id": "CL-migrated-782b430ae93bf70f1903f569",
+      "company": "AirCare Cooling Singapore Services & Maintenance",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-892d50cdbb919677cd84cb08",
+      "company": "Bao Sheng Travel",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-aab5e7a3ed5b7806c5f2f2e4",
+      "company": "Bid Manager",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-e5a5e81d368e2c4b2b57e0a3",
+      "company": "Car Master",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-5f64c8045f78f8cba369003d",
+      "company": "Cece Beauty",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-ca0f5f90ef46343f4d2b8080",
+      "company": "Dr Cermin",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-c5039ad9c12a3cb569964081",
+      "company": "Eden Confinement Centre",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-8fab853443aa0f861ea3586a",
+      "company": "Eyseph Image Consultancy",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-4bdfcb624924c9d8ba55cb55",
+      "company": "Jean Yip",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-f0fd0686011d036206ca8402",
+      "company": "JW De Maison Bountique",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-ae560e357ef62b5819657b6d",
+      "company": "Luxe's Clinic",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-5b405651490d6366be87592a",
+      "company": "Mango Kim",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-359522d284a5390c46626234",
+      "company": "Melodies Homestay",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-70fc3eb646f2255c2b1b44eb",
+      "company": "Pmax",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-b54ea4eede9a954d1795e73c",
+      "company": "Poh Shun Motors",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-ffb238e303d7773396608ff7",
+      "company": "Prostyle Hair Studio",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-3119cb1dbc4835616f61a492",
+      "company": "安合中医",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    },
+    {
+      "id": "CL-migrated-e7e7eb037df321863a3fcaa1",
+      "company": "聚香阁美食中心",
+      "can_edit": true,
+      "can_view": true,
+      "can_delete": true
+    }
+  ],
+  "verified_at": "2026-10-15T14:12:11.083522+00:00",
+  "all_can_edit": true,
+  "all_can_view": true,
+  "audit_events": 18,
+  "operation_id": "be2b5e43-c6a1-4a5a-a9e5-b8685cf9de01",
+  "all_can_delete": true,
+  "owners_correct": true,
+  "context_correct": true,
+  "total_ting_owned": 36,
+  "transferred_count": 18,
+  "all_versions_incremented": true
+}

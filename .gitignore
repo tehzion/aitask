@@ -40,3 +40,6 @@ skills-lock.json
 *.njsproj
 *.sln
 *.sw?
+
+# Local scratch / test artifacts
+tmp/

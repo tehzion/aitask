@@ -31,7 +31,7 @@ try {
   insert('client', { id: 'output-company', clientName: 'Output QA', createdBy: 'output-pm', createdAt: '2026-10-01', updatedAt: '2026-10-01' });
   insert('service_cycle', { id: 'output-cycle', clientId: 'output-company', clientName: 'Output QA', planId: 'output-plan', planRevision: 1, status: 'Published', periodStart: '2026-10-01', periodEnd: '2026-10-31', currency: 'MYR', serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' });
   insert('deliverable', { id: 'output-delivery', clientId: 'output-company', clientName: 'Output QA', cycleId: 'output-cycle', planId: 'output-plan', serviceItemId: 'artwork', sequence: 1, title: 'File-only artwork', status: 'In Progress', taskIds: ['output-task'], attachments: [], createdAt: '2026-10-01', updatedAt: '2026-10-01' });
-  insert('task', { id: 'output-task', title: 'Upload artwork for review', description: 'File-only output', clientId: 'output-company', clientName: 'Output QA', serviceType: 'Design', serviceCycleId: 'output-cycle', deliverableId: 'output-delivery', visibility: 'client-visible', department: 'Designer', assignedTo: 'output-worker', createdBy: 'output-pm', accountableLeadId: 'output-pm', startDate: '2026-10-01', dueDate: '2026-10-31', priority: 'Medium', status: 'In Progress', isCompleted: false, completionPercentage: 30, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false });
+  insert('task', { id: 'output-task', title: 'Upload artwork for review', description: 'File-only output', clientId: 'output-company', clientName: 'Output QA', serviceType: 'Design', serviceCycleId: 'output-cycle', deliverableId: 'output-delivery', visibility: 'client-visible', department: 'Designer', assignedTo: 'output-worker', assignedBy: 'output-hod', createdBy: 'output-pm', accountableLeadId: 'output-pm', startDate: '2026-10-01', dueDate: '2026-10-31', priority: 'Medium', status: 'In Progress', isCompleted: false, completionPercentage: 30, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false });
   process.env.VITE_SUPABASE_URL = url;
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = process.env.AITASK_LOCAL_TEST_PUBLIC;
   process.env.VITE_AITASK_BACKEND = 'supabase';
@@ -73,19 +73,69 @@ try {
       await route.abort('failed');
     } else await route.continue();
   });
+  const holdUpload = async () => {
+    let release;
+    let started;
+    const held = new Promise(resolve => { release = resolve; });
+    const seen = new Promise(resolve => { started = resolve; });
+    await page.route('**/storage/v1/object/client-service-files/**', async route => {
+      if (route.request().method() === 'POST') { started(); await held; }
+      await route.continue();
+    });
+    return { release, seen };
+  };
+  const assertProtectedUpload = async () => {
+    await expect(page.getByText('Uploading and saving output…', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Close Upload artwork for review', exact: true })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Upload artwork for review' })).toBeVisible();
+    assert.equal(await page.evaluate(async () => (await import('/src/lib/unsavedChanges.ts')).hasBlockingUnsavedChanges()), true);
+    // Exercise the actual React Router link despite the modal's inert backdrop.
+    // This models a route change while the task output owner must stay mounted.
+    await page.evaluate(async () => {
+      const calendar = document.querySelector('a[href="/calendar"]');
+      if (!(calendar instanceof HTMLElement)) throw new Error('Calendar route link missing');
+      calendar.click();
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    });
+    await expect(page).toHaveURL(/\/tasks\?taskId=output-task$/);
+    await expect(page.getByRole('dialog', { name: 'Upload artwork for review' })).toBeVisible();
+  };
   const file = Buffer.from('%PDF-1.4\nReal worker output\n%%EOF');
+  const focusUpload = await holdUpload();
   await page.locator('input[type="file"]').setInputFiles({ name:'Artwork.pdf',mimeType:'application/pdf',buffer:file });
+  await focusUpload.seen;
+  await assertProtectedUpload();
+  await expect(page.getByRole('button', { name: 'Full edit', exact: true })).toBeDisabled();
+  focusUpload.release();
   await expect(page.getByRole('button',{name:'Retry output save',exact:true})).toBeVisible({ timeout:30000 });
   assert.equal(lostConfirmation,true);
   await page.getByRole('button',{name:'Retry output save',exact:true}).click();
   await expect(page.getByText('Output file saved for review.',{exact:true})).toBeVisible({ timeout:30000 });
+  await page.unroute('**/storage/v1/object/client-service-files/**');
   await page.unroute('**/rest/v1/rpc/aitask_execute_command');
+  await expect(page.getByRole('button', { name: 'Close Upload artwork for review', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  const fullUpload = await holdUpload();
+  await page.locator('input[type="file"]').setInputFiles({ name: 'Full-edit.pdf', mimeType: 'application/pdf', buffer: file });
+  await fullUpload.seen;
+  await assertProtectedUpload();
+  fullUpload.release();
+  await expect(page.getByText('Output file saved for review.', { exact: true })).toBeVisible({ timeout: 30000 });
+  await page.unroute('**/storage/v1/object/client-service-files/**');
+  await expect(page.getByRole('button', { name: 'Close Upload artwork for review', exact: true })).toBeEnabled();
+  assert.equal(await page.evaluate(async () => (await import('/src/lib/unsavedChanges.ts')).hasBlockingUnsavedChanges()), false);
   const stored = JSON.parse(sql("select coalesce(data->'outputAttachments','[]') from public.aitask_entities where workspace_id='aitask-main' and entity_id='output-task';").trim().split('\n').map(s=>s.trim()).find(s=>s.startsWith('[{')));
-  assert.equal(stored.length,1);
-  assert.match(sql("select count(*) from storage.objects where bucket_id='client-service-files' and name like 'aitask-main/output-company/output-cycle/%';"), /\n\s*1\s*\n/, 'lost confirmation must not duplicate the Storage object');
-  paths.push(stored[0].path);
+  assert.equal(stored.length,2);
+  assert.match(sql("select count(*) from storage.objects where bucket_id='client-service-files' and name like 'aitask-main/output-company/output-cycle/%';"), /\n\s*2\s*\n/, 'each upload must attach once and lost confirmation must not duplicate the Storage object');
+  paths.push(...stored.map(item => item.path));
+  await login('output-worker');
   await page.getByRole('button',{name:'Send for review',exact:true}).click();
   await expect(page.getByRole('button',{name:'Waiting for review',exact:true})).toBeDisabled();
+  await page.getByRole('button', { name: 'Request review update', exact: true }).click();
+  await page.getByLabel('What review update do you need?').fill('Please share a review update');
+  await page.getByRole('button', { name: 'Request review update', exact: true }).last().click();
+  await expect.poll(() => sql("select count(distinct data->>'targetUserId') from public.aitask_entities where workspace_id='aitask-main' and entity_type='notification' and data->>'title'='New Comment' and data->'route'->>'entityId'='output-task' and data->>'targetUserId' in ('output-hod','output-pm');")).toMatch(/\n\s*2\s*\n/);
   await login('output-client');
   await expect(page.getByRole('button',{name:/Artwork\.pdf/})).toHaveCount(0);
   await login('output-hod');
@@ -104,7 +154,7 @@ try {
   await login('output-pm');
   await page.getByRole('button',{name:'Confirm completion',exact:true}).click();
   await expect.poll(async () => sql("select data->>'status' from public.aitask_entities where workspace_id='aitask-main' and entity_id='output-task';")).toContain('Completed');
-  console.log('[hod-output-ui] Real browser/Auth/REST/Storage: worker upload, lost-confirmation retry without duplicate files, canonical file save, review submission, independent HOD private download/approval, pre-approval Client denial, post-approval Client download, and PM finalization passed.');
+  console.log('[hod-output-ui] Real browser/Auth/REST/Storage: focus/full-editor upload exit and route protection, lost-confirmation retry without duplicate files, canonical output saves, Staff review enquiry to HOD contact and PM, independent HOD download/approval, Client review privacy, and PM finalization passed.');
 } finally {
   if (browser) await browser.close();
   if (server) {

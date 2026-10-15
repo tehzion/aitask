@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Task, User } from '../types';
-import { getTaskStatusOptions, TASK_HOD_REQUIRED } from '../lib/taskWorkflowAccess';
+import { getTaskStatusOptions, TASK_HOD_ASSIGNMENT_REQUIRED, TASK_HOD_REQUIRED } from '../lib/taskWorkflowAccess';
 import { useStore } from './index';
 
 const initial = useStore.getState();
@@ -15,6 +15,16 @@ beforeEach(() => useStore.setState({ ...initial, currentUser: pm, users: [pm, ho
 afterEach(() => useStore.setState(initial, true));
 
 describe('role-controlled task milestones', () => {
+  it.each(['quick', 'full'])('PM final completion works through %s edits when custom statuses omit Completed', entry => {
+    useStore.setState({ taskStatuses: ['Pending', 'Waiting Approval'], tasks: [{ ...task, assignedTo: staff.id, status: 'Approved', completionPercentage: 80 }] });
+    const result = entry === 'quick'
+      ? useStore.getState().updateTaskStatus(task.id, 'Completed')
+      : useStore.getState().updateTask(task.id, { status: 'Completed' });
+    expect(result.ok).toBe(true);
+    expect(current()).toMatchObject({ status: 'Completed', isCompleted: true, completionPercentage: 100 });
+    expect(current().completedAt).toBeTruthy();
+  });
+
   it('persists the complete PM → HOD → Staff → HOD → PM lifecycle and revision rollback', () => {
     expect(useStore.getState().updateTaskAssignee(task.id, hod.id).ok).toBe(true);
     expect(current().completionPercentage).toBe(10);
@@ -76,9 +86,38 @@ describe('role readiness at alternate entry points', () => {
     expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(true);
     expect(useStore.getState().notifications.some(n => n.targetUserId === hod.id && n.title === 'Task Ready for Approval')).toBe(true);
   });
-  it('new tasks submitted immediately notify the HOD', () => {
-    const id = useStore.getState().addTask({ ...task, status: 'Waiting Approval', assignedTo: staff.id });
+  it('requires a Project Manager to hand work to the department HOD first', () => {
+    expect(useStore.getState().updateTaskAssignee(task.id, staff.id)).toEqual({ ok: false, error: TASK_HOD_ASSIGNMENT_REQUIRED });
+    expect(current().assignedTo).toBe('');
+    expect(useStore.getState().updateTaskAssignee(task.id, hod.id).ok).toBe(true);
+    expect(current().completionPercentage).toBe(10);
+    actor(hod);
+    expect(useStore.getState().updateTaskAssignee(task.id, staff.id).ok).toBe(true);
+    expect(current()).toMatchObject({ assignedTo: staff.id, completionPercentage: 20 });
+
+    actor(pm);
+    useStore.setState({ tasks: [{ ...task }] });
+    expect(useStore.getState().updateTask(task.id, { assignedTo: staff.id })).toEqual({ ok: false, error: TASK_HOD_ASSIGNMENT_REQUIRED });
+
+    // Departments without an HOD keep the project-manager fallback.
+    useStore.setState({ users: [pm, staff, client] });
+    expect(useStore.getState().updateTask(task.id, { assignedTo: staff.id }).ok).toBe(true);
+  });
+
+  it('lets a project manager finalize a waiting task when internal approval is optional', () => {
+    useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Waiting Approval', requiresInternalApproval: false }] });
+    actor(pm);
+    expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
+    expect(current()).toMatchObject({ completionPercentage: 100, isCompleted: true });
+  });
+
+  it('HOD-delegated tasks submitted for review notify the HOD reviewer', () => {
+    const id = useStore.getState().addTask({ ...task, assignedTo: hod.id });
     expect(id).toBeTruthy();
+    actor(hod);
+    expect(useStore.getState().updateTaskAssignee(id, staff.id).ok).toBe(true);
+    actor(staff);
+    expect(useStore.getState().updateTaskStatus(id, 'Waiting Approval').ok).toBe(true);
     expect(useStore.getState().notifications.some(n => n.targetUserId === hod.id && n.route?.entityId === id && n.title === 'Task Ready for Approval')).toBe(true);
   });
   it('reassignment clears review and acceptance metadata through quick and full edits', () => {

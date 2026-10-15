@@ -126,6 +126,11 @@ const EditClientPlanDatesModal: React.FC<Props> = ({ plan, onClose }) => {
             onChange={event => setBillingDay(event.target.value)}
           />
         </label>
+        <p className="-mt-2 text-xs leading-5 text-muted">{t('Each billing day starts a fresh monthly cycle with new deliverables. Shorter months use their last day.')}</p>
+        {isDraft && startDate && Number.isInteger(Number(billingDay)) && Number(billingDay) >= 1 && Number(billingDay) <= 31 && <div className="rounded-control border border-line bg-inset p-3 text-sm text-muted" role="status">
+          <p>{t('First cycle')}: <span data-i18n-skip>{startDate} – {cyclePeriodEnd(startDate, Number(billingDay))}</span></p>
+          <p>{t('Next monthly update')}: <span data-i18n-skip>{nextBillingDate(startDate, Number(billingDay))}</span></p>
+        </div>}
         {!isDraft && Number(billingDay) !== plan.billingDay && transitionEnd && <div className="rounded-control border border-line bg-inset p-3 text-sm text-muted" role="status">
           <p>{t('Existing cycle boundaries remain unchanged.')}</p>
           <p>{t('Transition cycle')}: <span data-i18n-skip>{transitionStart} – {transitionEnd}</span></p>

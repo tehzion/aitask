@@ -1,4 +1,4 @@
-import TaskOutputFiles from './TaskOutputFiles';
+import TaskOutputFiles, { type OutputUploadState } from './TaskOutputFiles';
 import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
 import { acknowledgeActionFeedback, dismissActionFeedback, queueActionFeedback } from '../lib/actionFeedback';
@@ -6,7 +6,7 @@ import { msg } from '../lib/messages';
 import SystemMessage from './SystemMessage';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
-import { getTaskStatusOptions } from '../lib/taskWorkflowAccess';
+import { getTaskStatusControls } from '../lib/taskStatusControls';
 import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock3, ExternalLink, FileText, History, MessageSquare, Send, UsersRound } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -73,6 +73,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   })));
   const [comment, setComment] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
+  const [outputUpload, setOutputUpload] = React.useState<OutputUploadState>({ busy: false, pending: false });
   const [error, setError] = React.useState('');
   const [pendingStatus, setPendingStatus] = React.useState<TaskStatus | null>(null);
   const [pendingSave, setPendingSave] = React.useState<{ taskId: string; commentId?: string; text?: string; status?: TaskStatus; workIntent?: TaskWorkIntent; reviewUpdate?: boolean; failed?: boolean; rejected?: boolean } | null>(null);
@@ -85,13 +86,14 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const [exitAction, setExitAction] = React.useState<(() => void) | null>(null);
   const [isDiscarding, setIsDiscarding] = React.useState(false);
   const discardTitleId = React.useId();
+  const completionHintId = React.useId();
   const currentTaskId = React.useRef(task?.id);
   currentTaskId.current = task?.id;
   const pendingSaveRef = React.useRef(pendingSave);
   pendingSaveRef.current = pendingSave;
   const observedResolution = React.useRef(false);
   const operationGeneration = React.useRef(0);
-  const clearUnsaved = useUnsavedChanges(isOpen && Boolean(comment.trim() || helpReason.trim() || isSaving || pendingSave));
+  const clearUnsaved = useUnsavedChanges(isOpen && Boolean(comment.trim() || helpReason.trim() || isSaving || pendingSave || outputUpload.busy || outputUpload.pending));
   const statusPickerRef = React.useRef<HTMLSelectElement>(null);
   const liveTask = task ? tasks.find(item => item.id === task.id) || null : null;
   useReviewCoverExpiry(liveTask?.reviewCover?.expiresAt);
@@ -141,7 +143,10 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const incompletePredecessors = getTaskBlockers(liveTask, visibleTasks);
   const unavailablePredecessorCount = getUnavailableTaskDependencyCount(liveTask, visibleTasks);
   const guidedAction = getStaffGuidedAction(liveTask, taskStatuses, currentUser, rolePermissions, { users, clients, projects });
-  const statusOptions = getTaskStatusOptions(currentUser, liveTask, taskStatuses, rolePermissions, { users, clients, projects });
+  const statusOptions = getTaskStatusControls(currentUser, liveTask, taskStatuses, rolePermissions, { users, clients, projects }, { tasks, cycles: serviceCycles, deliverables });
+  const completionError = currentUser?.role === 'Project Manager' && liveTask.status !== 'Completed'
+    ? statusOptions.find(option => option.status === 'Completed')?.disabledReason : undefined;
+  const guidedActionError = statusOptions.find(option => option.status === guidedAction.targetStatus)?.disabledReason;
   const taskProgress = getTaskProgress(liveTask, users);
   const workflowKind = getWorkflowStepKind(liveTask, serviceCycles, deliverables);
   const transitionError = (status: TaskStatus) => workflowTransitionError(liveTask, { ...liveTask, status, isCompleted: status === 'Completed' }, currentUser, visibleTasks, serviceCycles, deliverables, rolePermissions, { users, clients, projects });
@@ -151,7 +156,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const dueDate = parseOptionalDate(liveTask.dueDate);
   const attachment = safeHttpsUrl(liveTask.attachmentLink);
   const pendingResolution = isPendingMutationResolution(backend);
-  const mutationLocked = backend.upgradeRequired === true || pendingResolution || backend.isSaving || backend.isPulling;
+  const mutationLocked = backend.upgradeRequired === true || pendingResolution || backend.isSaving || backend.isPulling || outputUpload.busy;
   const taskAccess = getTaskAccess(currentUser, liveTask, rolePermissions, { users, clients, projects });
   if (!taskAccess.canView) return null;
   const canEdit = taskAccess.canEdit;
@@ -190,18 +195,18 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   };
 
   const requestExit = (action: () => void) => {
-    if (isSaving) return;
-    if (comment.trim() || helpReason.trim() || pendingSave) setExitAction(() => action);
+    if (isSaving || outputUpload.busy) return;
+    if (comment.trim() || helpReason.trim() || pendingSave || outputUpload.pending) setExitAction(() => action);
     else { clearUnsaved(); action(); }
   };
 
   const confirmExit = async () => {
-    if (!exitAction || isDiscarding) return;
+    if (!exitAction || isDiscarding || outputUpload.busy) return;
     const session = captureWorkspaceSession();
     const taskId = liveTask.id;
     setIsDiscarding(true);
     try {
-      if (pendingSave) {
+      if (pendingSave || (outputUpload.pending && useStore.getState().backend.hasLocalChanges)) {
         await useStore.getState().discardMutation();
         const current = useStore.getState().backend;
         if (current.mode === 'supabase' && current.status !== 'live') throw new Error(current.error || t('The change is waiting to be saved.'));
@@ -261,34 +266,39 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   };
 
   const footer = canEdit ? (
-    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
-      {canEdit && onOpenFullEditor && <Button variant="secondary" disabled={isSaving || Boolean(pendingSave)} onClick={() => requestExit(onOpenFullEditor)}>{t('Full edit')}</Button>}
-      <label className="relative min-w-0 flex-1">
-        <span className="sr-only">{t('All task statuses')}</span>
-        <select
-          ref={statusPickerRef}
-          aria-label={t('All task statuses')}
-          value={liveTask.status}
-          disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || pendingStatus !== null}
-          onChange={event => void persistStatus(event.target.value)}
-          className={`${inputBase} min-h-11 appearance-none px-3 pr-9`}
+    <div className="space-y-2">
+      {completionError && <p id={completionHintId} className="text-sm text-muted">{t(completionError)}</p>}
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+        {canEdit && onOpenFullEditor && <Button variant="secondary" disabled={isSaving || outputUpload.busy || Boolean(pendingSave)} onClick={() => requestExit(onOpenFullEditor)}>{t('Full edit')}</Button>}
+        <label className="relative min-w-0 flex-1">
+          <span className="sr-only">{t('All task statuses')}</span>
+          <select
+            ref={statusPickerRef}
+            aria-label={t('All task statuses')}
+            aria-describedby={completionError ? completionHintId : undefined}
+            value={liveTask.status}
+            disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || pendingStatus !== null}
+            onChange={event => void persistStatus(event.target.value)}
+            className={`${inputBase} min-h-11 appearance-none px-3 pr-9`}
+          >
+            {statusOptions.map(({ status, disabledReason }) => <option key={status} value={status} disabled={Boolean(disabledReason)}>{getLocalizedTaskStatus(status, locale)}</option>)}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+        </label>
+        <Button
+          className="sm:min-w-44"
+          disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || (reviewAction ? Boolean(transitionError('Approved')) : guidedAction.disabled || Boolean(guidedActionError)) || pendingStatus !== null}
+          aria-describedby={guidedAction.targetStatus === 'Completed' && completionError ? completionHintId : undefined}
+          onClick={() => {
+            if (reviewAction) void persistStatus('Approved');
+            else if (guidedAction.kind === 'advance' && guidedAction.targetStatus) void persistStatus(guidedAction.targetStatus);
+            else statusPickerRef.current?.focus();
+          }}
         >
-          {statusOptions.map(status => <option key={status} value={status} disabled={Boolean(transitionError(status))}>{getLocalizedTaskStatus(status, locale)}</option>)}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-      </label>
-      <Button
-        className="sm:min-w-44"
-        disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || (reviewAction ? Boolean(transitionError('Approved')) : guidedAction.disabled || Boolean(guidedAction.targetStatus && transitionError(guidedAction.targetStatus))) || pendingStatus !== null}
-        onClick={() => {
-          if (reviewAction) void persistStatus('Approved');
-          else if (guidedAction.kind === 'advance' && guidedAction.targetStatus) void persistStatus(guidedAction.targetStatus);
-          else statusPickerRef.current?.focus();
-        }}
-      >
-        {guidedAction.kind === 'waiting' ? <Clock3 className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-        {isSaving ? t('Saving…') : t(reviewAction ? 'Approve internal review' : guidedAction.label)}
-      </Button>
+          {guidedAction.kind === 'waiting' ? <Clock3 className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+          {isSaving ? t('Saving…') : t(reviewAction ? 'Approve internal review' : guidedAction.label)}
+        </Button>
+      </div>
     </div>
   ) : null;
 
@@ -297,7 +307,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
     <SideSheet
       isOpen={isOpen}
       onClose={() => requestExit(onClose)}
-      closeDisabled={isSaving || isDiscarding}
+      closeDisabled={isSaving || isDiscarding || outputUpload.busy}
       title={liveTask.title}
       description={`${liveTask.clientName} · ${liveTask.serviceType}`}
       titleIsUserContent
@@ -416,7 +426,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
         </section>
         {linkedOutput && <p className="rounded-control bg-inset px-4 py-3 text-sm text-muted">{t(evidenceAvailable ? 'Output evidence is attached. Client approval is tracked separately from task completion.' : 'This linked task needs an output link or deliverable file before review or completion. Add it through Full edit or the delivery workspace.')}</p>}
 
-        <TaskOutputFiles task={liveTask} />
+        <TaskOutputFiles task={liveTask} onUploadStateChange={setOutputUpload} />
 
         <section aria-labelledby="staff-delivery-context">
           <h3 id="staff-delivery-context" className="flex items-center gap-2 font-semibold text-ink"><UsersRound className="h-4 w-4 text-accent" />{t('Delivery context')}</h3>

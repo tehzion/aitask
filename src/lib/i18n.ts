@@ -11,6 +11,21 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  'Monthly update schedule': '每月更新安排',
+  'Monthly updates': '每月更新',
+  'Activate this plan to begin monthly cycles on the dates below.': '启用此计划后，将按以下日期开始每月周期。',
+  'Monthly updates are paused. Resume the plan to continue from the next billing day.': '每月更新已暂停。恢复计划后将从下一个账单日继续。',
+  'This plan has ended. Previous monthly cycles remain in history.': '此计划已结束。之前的每月周期将保留在历史记录中。',
+  'A fresh draft cycle and deliverables are created on each billing day. Previous months keep their own progress and files.': '每个账单日会创建新的草稿周期及交付项。之前月份的进度和文件会各自保留。',
+  'No cycle for this period': '本期暂无周期',
+  'First cycle starts': '首个周期开始日期',
+  'Next monthly update': '下次每月更新',
+  'Monthly update due': '每月更新已到期',
+  'Monthly update status': '每月更新状态',
+  'Shorter months use their last day, then return to your billing day the following month.': '较短的月份使用月末日期，下个月恢复到设定的账单日。',
+  'This revision takes over automatically at its scheduled cycle.': '此修订将在预定周期自动生效。',
+  'Each billing day starts a fresh monthly cycle with new deliverables. Shorter months use their last day.': '每个账单日将开始新的每月周期并创建新交付项。较短的月份使用月末日期。',
+  'First cycle': '首个周期',
   "Unable to reload saved data. Try again.": "无法重新加载已保存数据，请重试。",
 
   'App update available': '应用有新版本',
@@ -735,6 +750,7 @@ const zhCopyExtras: Record<string, string> = {
   'Only the department reviewer can approve submitted work.': '只有所属部门的审核人可以批准已送审的工作。',
   'Only a project manager can confirm completion after internal approval.': '内部审核批准后，只有 PM 可以确认最终完成。',
   'No reviewer is configured for this task. Ask your project manager to configure a reviewer before submitting.': '该任务尚未配置审核人，请联系项目经理配置审核人后再送审。',
+  'Assign this task to the department HOD first. The HOD then delegates it to staff.': '请先将此任务指派给部门主管，再由主管委派给员工。',
   'Only the authorized department reviewer or Boss Koo can approve internal review.': '只有所属部门的授权审核人或 Boss Koo 可以批准内部审核。',
   'Only the department HOD or Boss Koo can approve internal review.': '只有所属部门主管或 Boss Koo 可以批准内部审核。',
   'Workflow identity and review records cannot be edited directly.': '不能直接修改工作流程标识和审核记录。',

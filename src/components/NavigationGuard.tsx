@@ -2,7 +2,7 @@ import { recordDiagnostic } from '../lib/diagnostics';
 import { useEffect } from 'react';
 import { useBlocker, useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { hasUnsavedChanges } from '../lib/unsavedChanges';
+import { hasBlockingUnsavedChanges, hasUnsavedChanges } from '../lib/unsavedChanges';
 import { useI18n } from './I18nProvider';
 
 export default function NavigationGuard() {
@@ -18,6 +18,7 @@ export default function NavigationGuard() {
   ));
   useEffect(() => {
     if (blocker.state !== 'blocked') return;
+    if (hasBlockingUnsavedChanges()) { blocker.reset(); return; }
     if (window.confirm(t('feedback.leaveUnsaved'))) blocker.proceed();
     else blocker.reset();
   }, [blocker, t]);

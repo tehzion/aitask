@@ -1,11 +1,12 @@
-import TaskOutputFiles from './TaskOutputFiles';
+import TaskOutputFiles, { type OutputUploadState } from './TaskOutputFiles';
 import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
-import { acknowledgeActionFeedback, dismissActionFeedback } from '../lib/actionFeedback';
+import { acknowledgeActionFeedback, canRetrySave, dismissActionFeedback } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
-import { canApproveTaskInternally, canRequestTaskRevision, getTaskStatusOptions } from '../lib/taskWorkflowAccess';
+import { canApproveTaskInternally, canCompleteWithoutInternalApproval, canRequestTaskRevision } from '../lib/taskWorkflowAccess';
+import { getTaskStatusControls } from '../lib/taskStatusControls';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import type { WorkspaceSessionToken } from '../lib/workspaceSession';
 import { useSaveAction } from '../hooks/useSaveAction';
@@ -145,12 +146,14 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const [editError, setEditError] = useState('');
   const [mutationError, setMutationError] = useState('');
   const [isMutationSubmitting, setIsSubmitting] = useState(false);
-  const isSubmitting = isMutationSubmitting || isDeletionSaving;
+  const [outputUpload, setOutputUpload] = useState<OutputUploadState>({ busy: false, pending: false });
+  const isSubmitting = isMutationSubmitting || isDeletionSaving || outputUpload.busy;
   const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
   const [delegationAssignee, setDelegationAssignee] = useState('');
   const titleId = React.useId();
   const descriptionId = React.useId();
   const confirmationTitleId = React.useId();
+  const completionHintId = React.useId();
   const requestedTaskRef = React.useRef(requestedTask);
   requestedTaskRef.current = requestedTask;
   const requestedTaskId = requestedTask?.id;
@@ -178,7 +181,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const actorIdRef = React.useRef(currentUser?.id);
   actorIdRef.current = currentUser?.id;
   useEffect(() => () => { mutationGeneration.current++; dismissActionFeedback(currentUser?.id, `task:${requestedTaskId}`); }, [currentUser?.id, requestedTaskId]);
-  const formDirty = Boolean(isOpen && requestedTask && (commentText.trim() || approvalNote.trim() || revisionNote.trim() || isSubmitting || isDeletingTask
+  const formDirty = Boolean(isOpen && requestedTask && (commentText.trim() || approvalNote.trim() || revisionNote.trim() || isSubmitting || isDeletingTask || outputUpload.pending
     || attachmentLink !== (requestedTask.attachmentLink || '') || attachmentName !== (requestedTask.attachmentName || '')
     || (isEditingDetails && JSON.stringify(editForm) !== JSON.stringify(editBaseline.current))
     || (delegationAssignee && delegationAssignee !== requestedTask.assignedTo)));
@@ -197,7 +200,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   }, [draftReady, formDirty, recovery]);
   const requestClose = () => {
     if (isSubmitting) return;
-    if (ownsPendingMutation.current || isDeletingTask) {
+    if (ownsPendingMutation.current || isDeletingTask || (outputUpload.pending && backend.hasLocalChanges)) {
       if (!window.confirm(t('Discard pending changes and reload the latest saved workspace?'))) return;
       void resolvePendingMutation('latest', true); return;
     }
@@ -258,7 +261,10 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const canClientReview = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canView && canReviewTaskAsClient(currentUser, task, rolePermissions);
   const isClientTaskViewer = currentUser?.role === 'Client';
   const taskProgress = getTaskProgress(task, users, isClientTaskViewer);
-  const statusOptions = getTaskStatusOptions(currentUser, task, taskStatuses, rolePermissions, { users, clients, projects });
+  const statusOptions = getTaskStatusControls(currentUser, task, taskStatuses, rolePermissions, { users, clients, projects }, { tasks, cycles: workflow.cycles, deliverables: workflow.deliverables });
+  const completionError = currentUser?.role === 'Project Manager' && task.status !== 'Completed'
+    ? statusOptions.find(option => option.status === 'Completed')?.disabledReason : undefined;
+  const showCompletionAction = task.status === 'Approved' || canCompleteWithoutInternalApproval(task);
   const canAssignOthers = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canAssign;
   const canDelegateAssignedTask = Boolean(
     canAssignOthers
@@ -331,6 +337,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   };
 
   const resolvePendingMutation = async (action: 'retry' | 'latest', closeAfterDiscard = false) => {
+    if (action === 'retry' && !canRetrySave(useStore.getState().backend)) return;
     if (ownedDeletion) {
       const submitted = ownedDeletion;
       const result = await runDeletion(async () => {
@@ -574,7 +581,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   <Trash2 className="h-3.5 w-3.5" /> {t('Delete')}
                 </button>
             )}
-            <button onClick={requestClose} aria-label={t('task.closeDetails', { title: task.title })} title={t('common.close')} className="inline-flex h-11 w-11 items-center justify-center rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600">
+            <button disabled={isSubmitting} onClick={requestClose} aria-label={t('task.closeDetails', { title: task.title })} title={t('common.close')} className="inline-flex h-11 w-11 items-center justify-center rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -585,7 +592,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
             <p><SystemMessage message={mutationError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
             {(pendingResolution || isDeletingTask) && (
               <div className="mt-2 flex flex-wrap gap-2">
-                <button
+                {canRetrySave(backend) && <button
                   type="button"
                   onClick={() => void resolvePendingMutation('retry')}
                   disabled={isSubmitting || backend.isPulling || backend.isSaving || backend.status === 'offline'}
@@ -593,7 +600,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   {t('Retry my changes')}
-                </button>
+                </button>}
                 <button
                   type="button"
                   onClick={() => void resolvePendingMutation('latest')}
@@ -605,6 +612,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </button>
               </div>
             )}
+            {(pendingResolution || isDeletingTask) && !canRetrySave(backend) && <p className="mt-2 leading-5">{t('Restore saved data, correct the rejected change or check your access, then save again.')}</p>}
           </div>
         )}
 
@@ -622,6 +630,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                     <div className="relative inline-block">
                       <select
                         aria-label={t('Task status')}
+                        aria-describedby={completionError ? completionHintId : undefined}
                         disabled={isSubmitting}
                         className={`min-h-11 text-sm pl-3 pr-7 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none shadow-sm disabled:cursor-not-allowed disabled:opacity-60 ${getStatusColor(task.status)}`}
                         value={task.status}
@@ -653,8 +662,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                           if (await confirmPendingMutation()) announceTaskStatusSaved(nextStatus);
                         }}
                       >
-                        {statusOptions.map(status => (
-                          <option key={status} value={status} disabled={Boolean(transitionError(status))} className="bg-white text-slate-900">{currentUser?.role === 'Client' ? t(status) : getLocalizedTaskStatus(status, locale)}</option>
+                        {statusOptions.map(({ status, disabledReason }) => (
+                          <option key={status} value={status} disabled={Boolean(disabledReason)} className="bg-white text-slate-900">{currentUser?.role === 'Client' ? t(status) : getLocalizedTaskStatus(status, locale)}</option>
                         ))}
                       </select>
                       <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 text-current" />
@@ -673,6 +682,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   )}
                 </div>
               </div>
+              {canEditTask && completionError && <p id={completionHintId} className="text-sm text-muted">{t(completionError)}</p>}
               {workflowKind === 'internal_review' && <section className="mt-4 border-t border-line pt-4 text-sm" aria-label={t('Internal review')}>
                 <p className="font-semibold text-ink">{t('Internal review')}</p>
                 <p className="mt-1 text-muted">{task.internalReview ? t('Reviewed by {name}', { name: users.find(user => user.id === task.internalReview?.reviewedBy)?.name || t('Team member') }) : t('Waiting for review')}</p>
@@ -688,15 +698,16 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
               {!isClientTaskViewer && <div className="space-y-3">
                 <ProgressBar label={t('Task progress')} value={taskProgress} />
                 {canEditTask && (workflowKind !== 'internal_review' && canApproveTaskInternally(currentUser, task, rolePermissions, { users, clients, projects })
-                  || (task.status === 'Approved' && statusOptions.includes('Completed'))) && <Button
-                  type="button" disabled={isSubmitting}
+                  || (showCompletionAction && statusOptions.some(option => option.status === 'Completed'))) && <Button
+                  type="button" disabled={isSubmitting || Boolean(showCompletionAction ? completionError : transitionError('Approved'))}
+                  aria-describedby={showCompletionAction && completionError ? completionHintId : undefined}
                   onClick={async () => {
-                    const status = task.status === 'Waiting Approval' ? 'Approved' : 'Completed';
+                    const status = showCompletionAction ? 'Completed' : 'Approved';
                     const result = updateTaskStatus(task.id, status);
                     if (!result.ok) { setMutationError(t(result.error || 'Unable to update the task status.')); return; }
                     if (await confirmPendingMutation('task.update')) announceTaskStatusSaved(status);
                   }}
-                ><CheckCircle2 className="h-4 w-4" />{t(task.status === 'Waiting Approval' ? 'Approve' : 'Confirm completion')}</Button>}
+                ><CheckCircle2 className="h-4 w-4" />{t(showCompletionAction ? 'Confirm completion' : 'Approve')}</Button>}
               </div>}
 
               {incompletePredecessors.length > 0 && !isClientTaskViewer && (
@@ -1000,7 +1011,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </form>
               )}
 
-              <TaskOutputFiles task={task} />
+              <TaskOutputFiles task={task} onUploadStateChange={setOutputUpload} />
 
               {(task.facebookPage || task.website || task.attachmentLink || canEditTask) && (
                 <div className="pt-4 border-t border-slate-100">

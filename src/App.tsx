@@ -1,6 +1,6 @@
 import NavigationGuard from './components/NavigationGuard';
 import NotFound from './components/NotFound';
-import { configurePendingWork, hasUnsavedChanges, subscribeUnsavedChanges } from './lib/unsavedChanges';
+import { configurePendingWork, hasBlockingUnsavedChanges, hasUnsavedChanges, subscribeUnsavedChanges } from './lib/unsavedChanges';
 import React, { useEffect } from 'react';
 import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { clearWorkspaceSession, startBackendAutoSync, stopBackendAutoSync, useStore } from './store';
@@ -11,6 +11,7 @@ import { shouldUseSecureSupabase, supabase } from './lib/supabaseClient';
 import { useAppNoticeState } from './hooks/useAppNoticeState';
 import { useI18n } from './components/I18nProvider';
 import { msg } from './lib/messages';
+import { useMonthlyServiceCycles } from './hooks/useMonthlyServiceCycles';
 
 const Layout = React.lazy(() => import('./components/Layout'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
@@ -69,6 +70,7 @@ const RoleRoute: React.FC<{ path: string; children: React.ReactNode }> = ({ path
 };
 
 function AppContent() {
+  useMonthlyServiceCycles();
   const { t } = useI18n();
   const { isOnline, isUpdateReady } = useAppNoticeState();
   const [hasDrafts, setHasDrafts] = React.useState(hasUnsavedChanges);
@@ -85,7 +87,7 @@ function AppContent() {
       const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
       if (!(anchor instanceof HTMLAnchorElement) || anchor.target === '_blank' || anchor.hasAttribute('download') || !hasUnsavedChanges()) return;
       if (anchor.href === window.location.href || new URL(anchor.href).origin === window.location.origin) return;
-      if (!window.confirm(t('feedback.leaveUnsaved'))) { event.preventDefault(); event.stopPropagation(); }
+      if (hasBlockingUnsavedChanges() || !window.confirm(t('feedback.leaveUnsaved'))) { event.preventDefault(); event.stopPropagation(); }
     };
     window.addEventListener('beforeunload', beforeUnload);
     document.addEventListener('click', beforeNavigate, true);

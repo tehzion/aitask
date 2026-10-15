@@ -26,7 +26,7 @@ export const readRecoveredDraft = <T,>(account: string, form: string): Recovered
   } catch { return null; }
 };
 export const writeRecoveredDraft = <T,>(account: string, form: string, baseline: T, value: T) => {
-  try { localStorage.setItem(keyFor(account, form), JSON.stringify({ baseline, value, updatedAt: Date.now() })); return true; }
+  try { localStorage.setItem(keyFor(account, form), JSON.stringify({ baseline, value, updatedAt: Date.now() })); if (typeof window !== 'undefined') window.dispatchEvent(new Event('aitask:draft-recovery')); return true; }
   catch { return false; }
 };
 export const removeRecoveredDraft = (account: string, form: string, recoveredKey?: string) => {

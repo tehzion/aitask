@@ -28,6 +28,7 @@ const task: Task = {
   clientApprovalStatus: 'Pending',
   isRecurring: false,
   recurrenceFrequency: 'None',
+  visibility: 'internal',
 };
 
 describe('task update notification recipients', () => {
@@ -57,6 +58,35 @@ describe('task update notification recipients', () => {
     expect(recipients).toEqual([boss.id, pmA.id].sort());
     expect(recipients).not.toContain(pmB.id);
     expect(statusNotices.every(notification => !notification.targetRole)).toBe(true);
+  });
+
+  it.each(['HOD', 'Staff'] as const)('notifies an assigning %s HOD contact and retains PM oversight', role => {
+    const hod: User = { ...staff, id: 'contact-hod', role, customRoleId: role === 'Staff' ? 'builtin-hod' : undefined };
+    const unrelated: User = { ...hod, id: 'unrelated-hod' };
+    useStore.setState({ users: [boss, pmA, pmB, staff, hod, unrelated], tasks: [{ ...task, assignedBy: hod.id, createdBy: pmA.id, status: 'Waiting Approval' }] });
+    expect(useStore.getState().addComment(task.id, 'Please share a review update.').ok).toBe(true);
+    expect(useStore.getState().notifications.map(item => item.targetUserId).sort()).toEqual([boss.id, pmA.id, hod.id].sort());
+  });
+
+  it('notifies the HOD creator when there is no separate assigner contact', () => {
+    const hod: User = { ...staff, id: 'contact-creator', role: 'HOD' };
+    useStore.setState({ users: [boss, pmA, staff, hod], tasks: [{ ...task, assignedBy: staff.id, createdBy: hod.id }] });
+    expect(useStore.getState().updateTaskWork(task.id, { kind: 'block', reason: 'Need assets' }).ok).toBe(true);
+    expect(useStore.getState().notifications.map(item => item.targetUserId).sort()).toEqual([boss.id, pmA.id, hod.id].sort());
+  });
+
+  it('does not notify a former HOD contact that can no longer view the task', () => {
+    const hod: User = { ...staff, id: 'former-contact', role: 'HOD', department: 'Editor', departments: ['Editor'] };
+    useStore.setState({ users: [boss, pmA, staff, hod], tasks: [{ ...task, assignedBy: hod.id, createdBy: pmA.id }] });
+    expect(useStore.getState().addComment(task.id, 'Need a review update').ok).toBe(true);
+    expect(useStore.getState().notifications.map(item => item.targetUserId).sort()).toEqual([boss.id, pmA.id].sort());
+  });
+
+  it('does not send a contact notice to a HOD with no login account', () => {
+    const hod: User = { ...staff, id: 'unreachable-contact', role: 'HOD', hasLogin: false };
+    useStore.setState({ users: [boss, pmA, staff, hod], tasks: [{ ...task, assignedBy: hod.id, createdBy: pmA.id }] });
+    expect(useStore.getState().addComment(task.id, 'Need a review update').ok).toBe(true);
+    expect(useStore.getState().notifications.map(item => item.targetUserId).sort()).toEqual([boss.id, pmA.id].sort());
   });
 
   it('suppresses client notices for internal or malformed tasks', () => {

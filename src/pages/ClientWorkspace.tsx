@@ -25,7 +25,7 @@ import {
   StopCircle,
   X,
 } from "lucide-react";
-import { Link, Navigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { useStore } from "../store";
 import type {
   AddonBillingMode,
@@ -77,9 +77,13 @@ import SideSheet from "../components/SideSheet";
 import ClientServiceWorkspace from "../components/ClientServiceWorkspace";
 import CreateClientPlanModal from "../components/CreateClientPlanModal";
 import EditClientPlanDatesModal from "../components/EditClientPlanDatesModal";
-import { useLocalToday } from "../hooks/useLocalToday";
+import { useBillingToday } from "../hooks/useBillingToday";
+import { resolveMonthlyRecord } from "../lib/monthlyRecords";
+import MonthlyRecordPicker, { monthlyRecordLabel } from "../components/MonthlyRecordPicker";
+import RevisionRecoveryNotice from "../components/RevisionRecoveryNotice";
 import { getCurrentPlanCycle } from "../lib/dashboardData";
 import ConfirmDialog from "../components/ConfirmDialog";
+import MonthlyPlanSchedule from "../components/MonthlyPlanSchedule";
 
 type Tab = "overview" | "plan" | "cycles" | "addons" | "activity";
 const DeliveryReviewPanel = React.lazy(() => import('../components/DeliveryReviewPanel'));
@@ -106,13 +110,16 @@ const deliverableStatuses: DeliverableStatus[] = [
 
 const OperationsClientWorkspace = () => {
   const { locale, t } = useI18n();
-  const today = useLocalToday();
+  const today = useBillingToday();
   const { clientId = "" } = useParams();
   const store = useStore();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const client = store.clients.find((item) => item.id === clientId);
-  const [tab, setTab] = React.useState<Tab>(searchParams.get("tab") === "cycles" ? "cycles" : "overview");
-  React.useEffect(() => { if (searchParams.get("tab") === "cycles") setTab("cycles"); }, [searchParams]);
+  const tabParam = searchParams.get('tab');
+  const tab: Tab = ['overview', 'plan', 'cycles', 'addons', 'activity'].includes(tabParam || '') ? tabParam as Tab : 'overview';
+  const setTab = (next: Tab) => setSearchParams(current => { const query = new URLSearchParams(current); query.set('tab', next); return query; });
+  const [activityCycleId, setActivityCycleId] = React.useState<string | null>(null);
   const [planModalOpen, setPlanModalOpen] = React.useState(false);
   const [planDatesOpen, setPlanDatesOpen] = React.useState(false);
   const [comment, setComment] = React.useState("");
@@ -136,11 +143,11 @@ const OperationsClientWorkspace = () => {
   activityContext.current = { clientId, actorId: store.currentUser?.id };
   const activityDraft = React.useRef({ comment, file, visibility });
   activityDraft.current = { comment, file, visibility };
-  const pendingActivity = React.useRef<{ comment: string; commentId: string; file?: File; visibility: CommentVisibility; attachment?: AttachmentRef } | null>(null);
+  const pendingActivity = React.useRef<{ comment: string; commentId: string; cycleId: string; file?: File; visibility: CommentVisibility; attachment?: AttachmentRef } | null>(null);
   useUnsavedChanges(Boolean(comment.trim() || file || activitySaving));
   React.useEffect(() => {
     setComment(''); setFile(undefined); setActivitySaving(false); setActivityStage('idle');
-    setActivityFeedback(null); setActivitySheetOpen(false); pendingActivity.current = null;
+    setActivityFeedback(null); setActivitySheetOpen(false); pendingActivity.current = null; setActivityCycleId(null);
     if (activityFileInputRef.current) activityFileInputRef.current.value = '';
   }, [clientId, store.currentUser?.id]);
   const acknowledgeActivity = (submitted: NonNullable<typeof pendingActivity.current>) => {
@@ -228,13 +235,26 @@ const OperationsClientWorkspace = () => {
         (item) => item.status === "Published" || item.status === "Completed",
       )
     : allCycles;
+  let requestedCycle = searchParams.get('cycleId');
+  if (!requestedCycle && location.hash.startsWith('#cycle-')) {
+    try { requestedCycle = decodeURIComponent(location.hash.slice(7)); } catch { requestedCycle = location.hash; }
+  }
+  const monthly = resolveMonthlyRecord(cycles, client.id, getTodayInputDate(today), requestedCycle);
+  const selectedCycle = monthly.selected;
+  const capturedPlan = selectedCycle ? plans.find(plan => plan.id === selectedCycle.planId) : undefined;
+  const displayPlan = selectedCycle ? {
+    ...(capturedPlan || activePlan), id: selectedCycle.planId, name: capturedPlan?.name || `${t('Plan revision')} ${selectedCycle.planRevision}`,
+    revision: selectedCycle.planRevision, serviceItems: selectedCycle.serviceItems,
+    discountType: selectedCycle.discountType, discountValue: selectedCycle.discountValue, taxRateBps: selectedCycle.taxRateBps,
+  } : !monthly.unavailable && !monthly.available.length && activePlan?.status === 'Draft' && !activePlan.supersedesPlanId ? activePlan : undefined;
+  const selectMonth = (id: string | null) => setSearchParams(current => { const query = new URLSearchParams(current); if (id) query.set('cycleId', id); else query.delete('cycleId'); return query; });
   const deliverables = store.deliverables.filter(
     (item) => item.clientId === client.id,
   );
   const comments = store.cycleComments.filter(
     (item) =>
       item.clientId === client.id &&
-      (!isClient || item.visibility === "client-visible"),
+      (!isClient || item.visibility === "client-visible") && item.cycleId === selectedCycle?.id,
   );
   const addons = store.addons.filter((item) => item.clientId === client.id);
   const tasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }).filter(
@@ -242,17 +262,8 @@ const OperationsClientWorkspace = () => {
       item.clientId === client.id &&
       (!isClient || item.visibility !== "internal"),
   );
-  const planTotals = activePlan
-    ? calculatePlanTotalMinor(
-        activePlan.serviceItems,
-        activePlan.discountType,
-        activePlan.discountValue,
-        activePlan.taxRateBps,
-      )
-    : null;
-  const currentCycle = activePlan
-    ? getCurrentPlanCycle(activePlan, cycles, today)
-    : undefined;
+  const planTotals = displayPlan ? calculatePlanTotalMinor(displayPlan.serviceItems, displayPlan.discountType, displayPlan.discountValue, displayPlan.taxRateBps) : null;
+  const currentCycle = selectedCycle && ['Published', 'Completed'].includes(selectedCycle.status) ? selectedCycle : undefined;
   const currentCycleDeliverables = currentCycle
     ? deliverables.filter((item) => item.cycleId === currentCycle.id)
     : [];
@@ -289,14 +300,14 @@ const OperationsClientWorkspace = () => {
     event.preventDefault();
     if (activitySaving) return;
     if (pendingActivity.current) { await retryActivitySave(); return; }
-    const cycle = cycles[0];
+    const cycle = cycles.find(item => item.id === activityCycleId);
     if (!cycle)
       return setActivityFeedback({ tone: "error", text: canManageCycles ? "Create a service cycle before adding activity." : "No service cycle is available for this activity. Ask your project manager to publish one." });
     if (file && file.size > SERVICE_FILE_MAX_BYTES) {
       setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller."), action: pendingActivity.current ? "save" : undefined });
       return;
     }
-    const submitted = { comment, file, visibility };
+    const submitted = { comment, file, visibility, cycleId: cycle.id };
     const session = captureWorkspaceSession();
     const actorId = store.currentUser?.id;
     const requestClientId = clientId;
@@ -499,6 +510,8 @@ const OperationsClientWorkspace = () => {
           setTab(next);
         }} label={t("Client workspace")} idPrefix={CLIENT_WORKSPACE_TABS_ID} />
       </div>
+      <MonthlyRecordPicker records={monthly.available} selected={selectedCycle} current={monthly.current} unavailable={monthly.unavailable} onChange={selectMonth} />
+      {canManagePlans && <RevisionRecoveryNotice plans={plans} activePlan={activePlan} />}
       {message && !addonSheetOpen && (
         <p
           className="rounded-control border border-line bg-inset px-4 py-3 text-sm font-medium text-ink"
@@ -528,44 +541,44 @@ const OperationsClientWorkspace = () => {
 
       {tab === "plan" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-plan`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-plan`} tabIndex={0} className="scroll-mt-36 space-y-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} />}
           <section className={cn(cardBase, "overflow-hidden")}>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
               <div>
                 <h2 className="font-semibold text-ink">
-                  {activePlan?.name ? <span data-i18n-skip>{activePlan.name}</span> : t("No service plan")}
+                  {displayPlan?.name ? <span data-i18n-skip>{displayPlan.name}</span> : t("No service plan")}
                 </h2>
-                {activePlan && (
+                {displayPlan && (
                   <p className="mt-1 text-sm text-muted">
-                    {t('Revision')} {activePlan.revision} · <span data-i18n-skip>{activePlan.origin}</span> ·
-                    {t('billing day')} {activePlan.billingDay}
-                    {activePlan.contractEndDate
-                      ? <> · {t('contract reminder')} {activePlan.contractEndDate}</>
+                    {selectedCycle && <>{t(selectedCycle.id === monthly.current?.id ? 'This month’s record' : 'Historical record')} · </>}{t('Revision')} {displayPlan.revision} · {selectedCycle ? <span>{monthlyRecordLabel(selectedCycle, locale)}</span> : <><span data-i18n-skip>{displayPlan.origin}</span> · {t('billing day')} {displayPlan.billingDay}</>}
+                    {!selectedCycle && displayPlan.contractEndDate
+                      ? <> · {t('contract reminder')} {!selectedCycle && displayPlan.contractEndDate}</>
                       : ""}
                   </p>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {activePlan && (
+                {displayPlan && (
                   <Badge
                     tone={
-                      activePlan.status === "Active"
+                      displayPlan.status === "Active"
                         ? "emerald"
-                        : activePlan.status === "Draft"
+                        : displayPlan.status === "Draft"
                           ? "amber"
                           : "slate"
                     }
                   >
-                    {activePlan.status}
+                    {displayPlan.status}
                   </Badge>
                 )}
-                {activePlan && activePlan.status !== "Ended" && canManagePlans && (
+                {activePlan && !selectedCycle && activePlan.status === "Draft" && canManagePlans && (
                   <Button variant="secondary" onClick={() => setPlanDatesOpen(true)}>{t('Edit plan dates')}</Button>
                 )}
               </div>
             </div>
-            {activePlan ? (
+            {displayPlan ? (
               <div className="divide-y divide-line/70">
-                {activePlan.serviceItems.map((item) => (
+                {displayPlan.serviceItems.map((item) => (
                   <div
                     key={item.id}
                     className="grid gap-2 px-5 py-4 md:grid-cols-[1fr_180px_150px] md:items-center"
@@ -599,8 +612,8 @@ const OperationsClientWorkspace = () => {
               </div>
             ) : (
               <div className="space-y-4 p-8 text-center">
-                <p className="text-sm text-muted">{t("This company does not have a service plan yet.")}</p>
-                {canManagePlans && <Button onClick={() => setPlanModalOpen(true)}><Plus className="h-4 w-4" />{t("Add service plan")}</Button>}
+                <p className="text-sm text-muted">{t("No monthly plan record is available for this period.")}</p>
+                {canManagePlans && !activePlan && <Button onClick={() => setPlanModalOpen(true)}><Plus className="h-4 w-4" />{t("Add service plan")}</Button>}
               </div>
             )}
             {canSeePrices && planTotals && (
@@ -615,6 +628,8 @@ const OperationsClientWorkspace = () => {
                 </div>
               </div>
             )}
+            {selectedCycle && selectedCycle.addonSnapshots.length > 0 && <div className="border-t border-line px-5 py-4"><h3 className="text-sm font-semibold text-ink">{t('Add-ons in this period')}</h3>{selectedCycle.addonSnapshots.map(item => <p key={item.id} data-i18n-skip className="mt-2 text-sm text-muted">{item.name} · {item.quantity}{canSeePrices ? ` · ${formatMoney(item.unitPriceMinor, 'MYR', locale)}` : ''}</p>)}</div>}
+            {canManagePlans && activePlan && ['Active', 'Paused'].includes(activePlan.status) && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4"><p className="text-sm text-muted">{t('Plan settings apply to future billing cycles.')}</p><Button variant="secondary" onClick={() => setPlanDatesOpen(true)}>{t('Edit plan dates')}</Button></div>}
             {canManagePlans && activePlan?.status === "Active" && (
               <div className="flex flex-wrap justify-end gap-2 border-t p-4">
                 {!scheduledRevision && (
@@ -659,14 +674,15 @@ const OperationsClientWorkspace = () => {
             )}
           </section>
           {canManagePlans && scheduledRevision && (
-            <DraftServicePlanEditor plan={scheduledRevision} />
+            <DraftServicePlanEditor key={scheduledRevision.id} plan={scheduledRevision} source={activePlan!} />
           )}
         </div>
       )}
 
       {tab === "cycles" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-cycles`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-cycles`} tabIndex={0} className="scroll-mt-36 space-y-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {cycles.map((cycle) => {
+          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} />}
+          {(selectedCycle ? [selectedCycle] : []).map((cycle) => {
             const cycleDeliverables = deliverables.filter(
               (item) => item.cycleId === cycle.id,
             );
@@ -871,7 +887,7 @@ const OperationsClientWorkspace = () => {
               </section>
             );
           })}
-          {cycles.length === 0 && (
+          {!selectedCycle && (
             <p className="rounded-control border border-dashed border-line p-10 text-center text-sm text-muted">
               {t("No visible service cycles yet.")}
             </p>
@@ -952,7 +968,7 @@ const OperationsClientWorkspace = () => {
 
       {tab === "activity" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-activity`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-activity`} tabIndex={0} className="scroll-mt-36 space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {!isClient && <div className="flex justify-end"><Button onClick={() => { if (!pendingActivity.current) setActivityFeedback(null); setActivitySheetOpen(true); }}><MessageSquareText className="h-4 w-4" />{t("Add activity")}</Button></div>}
+          {!isClient && <div className="flex justify-end"><Button disabled={!selectedCycle && !activityCycleId} onClick={() => { if (!pendingActivity.current) setActivityFeedback(null); if (!activityCycleId || (!comment.trim() && !file && !pendingActivity.current)) setActivityCycleId(selectedCycle?.id || null); setActivitySheetOpen(true); }}><MessageSquareText className="h-4 w-4" />{t("Add activity")}</Button></div>}
           <section className={cn(cardBase, "divide-y divide-line/70")}>
             {comments.map((item) => (
               <article key={item.id} className="p-5">
@@ -1028,6 +1044,7 @@ const OperationsClientWorkspace = () => {
         footer={<div className="flex flex-col-reverse justify-end gap-2 sm:flex-row"><Button variant="secondary" onClick={() => setActivitySheetOpen(false)} disabled={activitySaving}>{t("Cancel")}</Button><Button type="submit" form="add-activity-form" disabled={activitySaving} aria-busy={activitySaving}><CheckCircle2 className="h-4 w-4" aria-hidden="true" />{activityStage === "uploading" ? t("Uploading…") : activityStage === "saving" ? t("Saving…") : activityFeedback?.action === "save" ? t("Retry save") : t("Add activity")}</Button></div>}
       >
         <form ref={activityFormRef} id="add-activity-form" noValidate={Boolean(pendingActivity.current)} onSubmit={activityFeedback?.action === "save" ? (event) => { event.preventDefault(); void retryActivitySave(); } : submitComment} className="space-y-5" aria-busy={activitySaving}>
+          <p className="rounded-control border border-line bg-inset p-3 text-sm text-ink">{t('Billing period')}: {cycles.find(item => item.id === activityCycleId) ? monthlyRecordLabel(cycles.find(item => item.id === activityCycleId)!, locale) : t('Monthly record unavailable')}</p>
           {activityFeedback && (
             <div
               id="activity-feedback"

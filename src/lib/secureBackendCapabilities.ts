@@ -17,6 +17,7 @@ export const loadBackendCompatibility = async (invoke: () => PromiseLike<RpcResp
     memberPermissionManagement: response?.memberPermissionManagement === true,
     workflowReviewGate: response?.workflowReviewGate === true,
     hodReviewRemediation: response?.hodReviewRemediation === true,
+    optionalTaskApproval: response?.optionalTaskApproval === true,
   };
   const supportedSchema = (capabilities.schemaVersion === expectedSchemaVersion && (expectedSchemaVersion !== 5 || capabilities.workflowReviewGate))
     || (expectedSchemaVersion === 4 && capabilities.schemaVersion === 5 && capabilities.workflowReviewGate);

@@ -27,6 +27,30 @@ const seed = () => useStore.setState({ ...initial, currentUser: actor, users: [a
 beforeEach(() => { vi.clearAllMocks(); seed(); mocks.retained.mockReturnValue(null); mocks.capabilities.mockResolvedValue({ compatible: true }); mocks.getUser.mockResolvedValue({ data: { user: { id: actor.authUserId } }, error: null }); });
 const input = { clientName: 'Integrity Client', planName: 'Integrity Plan', origin: 'custom' as const, serviceItems: [{ id: 'item', name: 'Design', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 100 }], startDate: '2026-09-01', billingDay: 1, discountType: 'none' as const, discountValue: 0, taxRateBps: 0 };
 describe('session and acknowledgement integrity', () => {
+  it('clears a rejected save code after loading canonical data', async () => {
+    mocks.load.mockResolvedValue({ currentUser: actor, state: { ...initial, users: [actor], tasks: [] }, revision: { version: 2 }, notificationFeed: { items: [], unreadCount: 0 } });
+    useStore.setState(state => ({ backend: { ...state.backend, status: 'retry_required', errorCode: 'FORBIDDEN', error: 'Rejected change.', pendingCommandType: 'task.update' } }));
+    await useStore.getState().pullBackendNow({ force: true });
+    expect(useStore.getState().backend).toMatchObject({ status: 'live', hasLocalChanges: false });
+    expect(useStore.getState().backend.errorCode).toBeUndefined();
+    expect(useStore.getState().backend.pendingCommandType).toBeUndefined();
+  });
+  it('clears a resolved retry code even when the follow-up refresh fails', async () => {
+    mocks.retained.mockReturnValue({ id: 'confirmed-command', type: 'task.update', operations: [] });
+    mocks.retry.mockResolvedValue({ ok: true, workspaceVersion: 2, commandId: 'confirmed-command' });
+    mocks.load.mockRejectedValueOnce(new Error('Refresh temporarily unavailable.'));
+    useStore.setState(state => ({ backend: { ...state.backend, status: 'conflict', hasLocalChanges: true, pendingMutations: 1, errorCode: 'CONFLICT' } }));
+    expect(await useStore.getState().retryMutation()).toEqual({ ok: true });
+    expect(useStore.getState().backend.hasLocalChanges).toBe(false);
+    expect(useStore.getState().backend.errorCode).toBeUndefined();
+  });
+  it('clears a stale rejection when a clean workspace revision is already current', async () => {
+    useStore.setState(state => ({ backend: { ...state.backend, workspaceVersion: 2, status: 'live', errorCode: 'FORBIDDEN', error: 'Old rejection.' } }));
+    await useStore.getState().pullBackendNow();
+    expect(useStore.getState().backend.status).toBe('live');
+    expect(useStore.getState().backend.errorCode).toBeUndefined();
+    expect(useStore.getState().backend.error).toBeUndefined();
+  });
   it('retries a newer workspace with original row versions instead of overwriting concurrent task edits', async () => {
     const localTask = { id: 'shared-task', title: 'My title', dueDate: '2026-10-10', version: 1 };
     const remoteTask = { ...localTask, title: 'Remote title', dueDate: '2026-10-20', version: 2 };

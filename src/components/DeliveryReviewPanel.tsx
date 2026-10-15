@@ -64,14 +64,14 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
     {pending && <Button className="mt-3" disabled={busy} onClick={() => save(() => ({ ok: true }), pending.command)}>{t('Retry pending save')}</Button>}
     <div className="mt-3 space-y-4">
       {records.draftCycles.map(cycle => <div key={cycle.id} className="flex flex-wrap items-center justify-between gap-3 text-sm">
-        <div><Link className="font-medium text-accent" to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=cycles#cycle-${encodeURIComponent(cycle.id)}`}><span data-i18n-skip>{cycle.clientName}</span></Link>
+        <div><Link className="font-medium text-accent" to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=cycles&cycleId=${encodeURIComponent(cycle.id)}#cycle-${encodeURIComponent(cycle.id)}`}><span data-i18n-skip>{cycle.clientName}</span></Link>
           <p className="text-xs text-muted">{t('Awaiting publication')} · {date(cycle.periodStart)} – {date(cycle.periodEnd)}</p></div>
         {canPublish && <Button disabled={busy || Boolean(pending)} onClick={() => save(() => useStore.getState().setServiceCycleStatus(cycle.id, 'Published'), 'service_cycle.manage')}>{t('Publish')}</Button>}
       </div>)}
       {records.expiredDraftCycles.length > 0 && <div>
         <Button variant="secondary" aria-expanded={showOlderDrafts} onClick={() => setShowOlderDrafts(value => !value)}>{t('Older unpublished cycles')} ({records.expiredDraftCycles.length})</Button>
         {showOlderDrafts && <div className="mt-3 space-y-3">{records.expiredDraftCycles.map(cycle => <div key={cycle.id} className="text-sm">
-          <Link className="font-medium text-accent" to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=cycles#cycle-${encodeURIComponent(cycle.id)}`}><span data-i18n-skip>{cycle.clientName}</span></Link>
+          <Link className="font-medium text-accent" to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=cycles&cycleId=${encodeURIComponent(cycle.id)}#cycle-${encodeURIComponent(cycle.id)}`}><span data-i18n-skip>{cycle.clientName}</span></Link>
           <p className="text-xs text-muted">{t('Expired unpublished cycle')} · {date(cycle.periodStart)} – {date(cycle.periodEnd)}</p>
         </div>)}</div>}
       </div>}

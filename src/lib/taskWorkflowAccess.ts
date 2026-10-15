@@ -1,4 +1,4 @@
-import type { CustomRole, Task, User } from '../types';
+import type { CustomRole, Department, Task, User } from '../types';
 import { canEditTask, isBossKoo, isHodUser, type VisibilityScope } from './access';
 import { isMemberInDepartment } from './departments';
 
@@ -19,6 +19,9 @@ export const canReviewTaskInternally = (user: User | null | undefined, task: Tas
 export const canRequestTaskRevision = (user: User | null | undefined, task: Task, roles: CustomRole[] = []) => Boolean(user
   && (user.role === 'Project Manager' || canReviewTaskInternally(user, task, roles)));
 
+export const canCompleteWithoutInternalApproval = (task: Partial<Task> | undefined) => task?.status === 'Waiting Approval'
+  && task.requiresInternalApproval === false && task.workflowStepKind !== 'internal_review';
+
 export const taskTransitionError = (user: User | null | undefined, before: Task | undefined, after: Pick<Task, 'status' | 'isCompleted' | 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
   const protectedOutput = before?.status === 'Approved' ? ['title', 'description', 'notes', 'attachmentLink', 'attachmentName', 'outputAttachments'] as const
     : before?.status === 'Completed' ? ['title', 'description', 'attachmentLink', 'attachmentName', 'outputAttachments'] as const : [];
@@ -30,13 +33,13 @@ export const taskTransitionError = (user: User | null | undefined, before: Task 
   if (after.status === 'Approved' && (!before || before.status !== 'Waiting Approval'
     || (!canReviewTaskInternally(user, before, roles, scope) && !override))) return 'Only the department reviewer can approve submitted work.';
   if ((after.status === 'Completed' || after.isCompleted) && !isBossKoo(user)
-    && (user?.role !== 'Project Manager' || before?.status !== 'Approved')) return 'Only a project manager can confirm completion after internal approval.';
+    && (user?.role !== 'Project Manager' || (before?.status !== 'Approved' && !canCompleteWithoutInternalApproval(before)))) return 'Only a project manager can confirm completion after internal approval.';
   if (before && ['Waiting Approval', 'Approved', 'Completed'].includes(before.status) && !canRequestTaskRevision(user, before, roles)) return 'Ask the HOD or project manager to return approved work for revision.';
   if (before && after.status === 'Revision' && !canRequestTaskRevision(user, before, roles)) return 'Ask the HOD or project manager to return approved work for revision.';
   return undefined;
 };
 
-export const getTaskStatusOptions = (user: User | null | undefined, task: Task, statuses: readonly string[], roles: CustomRole[] = [], scope: VisibilityScope = {}) => [...new Set([...statuses, 'Approved', task.status].map(status => status.toLowerCase() === 'approved' ? 'Approved' : status))]
+export const getTaskStatusOptions = (user: User | null | undefined, task: Task, statuses: readonly string[], roles: CustomRole[] = [], scope: VisibilityScope = {}) => [...new Set([...statuses, 'Approved', 'Completed', task.status].map(status => status.toLowerCase() === 'approved' ? 'Approved' : status.toLowerCase() === 'completed' ? 'Completed' : status))]
   .filter(status => status === task.status || !taskTransitionError(user, task, { status, isCompleted: status === 'Completed', department: task.department }, roles, scope));
 
 // Task access still applies at every store/database mutation boundary.
@@ -44,6 +47,35 @@ export const canApproveTaskInternally = (user: User | null | undefined, task: Ta
   task.status === 'Waiting Approval' && canReviewTaskInternally(user, task, roles, scope) && canEditTask(user, task, roles, scope);
 
 export const TASK_HOD_REQUIRED = 'No reviewer is configured for this task. Ask your project manager to configure a reviewer before submitting.';
+export const TASK_HOD_ASSIGNMENT_REQUIRED = 'Assign this task to the department HOD first. The HOD then delegates it to staff.';
+
+/** True when the task's department has at least one active HOD to delegate through. */
+export const departmentHasHod = (department: Department | undefined, users: readonly User[], roles: CustomRole[] = []) =>
+  Boolean(department) && users.some(user => user.hasLogin !== false && isHodUser(user, roles) && isMemberInDepartment(user, department!));
+
+/**
+ * Stage 1 of the workflow: a Project Manager hands work to the department HOD,
+ * who then delegates to staff (stage 2). When a department has an HOD, a PM may
+ * not assign its tasks straight to staff. Departments without an HOD keep the
+ * project-manager fallback and allow direct staff assignment. Boss Koo and
+ * non-PM actors are unaffected (HOD/Staff delegation rules apply elsewhere).
+ */
+export const taskAssignmentStageError = (
+  actor: User | null | undefined,
+  task: Pick<Task, 'department'> | undefined,
+  nextAssigneeId: string | undefined,
+  users: readonly User[],
+  roles: CustomRole[] = [],
+  options: { allowDirectStaff?: boolean } = {},
+): string | undefined => {
+  if (!actor || isBossKoo(actor) || actor.role !== 'Project Manager') return undefined;
+  if (options.allowDirectStaff) return undefined;
+  const nextAssignee = nextAssigneeId ? users.find(user => user.id === nextAssigneeId) : undefined;
+  if (!nextAssignee) return undefined;
+  if (isHodUser(nextAssignee, roles)) return undefined;
+  if (nextAssignee.role === 'Project Manager') return undefined;
+  return departmentHasHod(task?.department, users, roles) ? TASK_HOD_ASSIGNMENT_REQUIRED : undefined;
+};
 export const getDepartmentReviewers = (users: readonly User[], task: Pick<Task, 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
   const eligible = users.filter(user => user.hasLogin !== false && isIndependentTaskReviewer(user, task));
   const cover = task.reviewCover && Date.parse(task.reviewCover.expiresAt) > Date.now() ? eligible.find(user => user.id === task.reviewCover?.reviewerId && canBeTaskReviewLead(user, task as Task, roles, scope)) : undefined;

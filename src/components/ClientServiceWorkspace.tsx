@@ -1,11 +1,14 @@
 import SystemMessage from './SystemMessage';
 import { DeliveryProgress } from './DeliveryProgress';
-import { useLocalToday } from '../hooks/useLocalToday';
+import { useBillingToday } from '../hooks/useBillingToday';
+import { resolveMonthlyRecord } from '../lib/monthlyRecords';
+import MonthlyRecordPicker from './MonthlyRecordPicker';
+import { getTodayInputDate } from '../lib/utils';
 import { getCurrentPlanCycle, isAwaitingPublication } from '../lib/dashboardData';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import React from 'react';
 import { ArrowRight, CalendarDays, CheckCircle2, Download, FileText, MessageSquareText, PackageCheck } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useStore } from '../store';
 import { getVisibleTasks } from '../lib/access';
 import { getClientServicePlan, getClientDeliveryStageLabel, getClientFocusTask, groupClientDeliveries } from '../lib/clientPortal';
@@ -22,10 +25,13 @@ const TABS_ID = 'client-service-workspace-v2';
 
 const ClientServiceWorkspace = () => {
   const { locale, t } = useI18n();
-  const today = useLocalToday();
+  const today = useBillingToday();
   const { clientId = '' } = useParams();
   const store = useStore();
-  const [tab, setTab] = React.useState<ClientWorkspaceTab>('overview');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const tab: ClientWorkspaceTab = ['overview', 'deliveries', 'activity', 'services'].includes(requestedTab || '') ? requestedTab as ClientWorkspaceTab : 'overview';
+  const setTab = (next: ClientWorkspaceTab) => setSearchParams(current => { const query = new URLSearchParams(current); query.set('tab', next); return query; });
   const [message, setMessage] = React.useState('');
   const [downloadingFileId, setDownloadingFileId] = React.useState<string | null>(null);
   const context = React.useRef(clientId); context.current = clientId;
@@ -64,16 +70,18 @@ const ClientServiceWorkspace = () => {
         && start && end && start <= end;
     })
     .sort((left, right) => right.periodStart.localeCompare(left.periodStart));
-  const currentCycle = activePlan ? getCurrentPlanCycle(activePlan, cycles, today) : undefined;
+  const monthly = resolveMonthlyRecord(cycles, client.id, getTodayInputDate(today), searchParams.get('cycleId'));
+  const currentCycle = monthly.selected;
+  const selectMonth = (id: string | null) => setSearchParams(current => { const query = new URLSearchParams(current); if (id) query.set('cycleId', id); else query.delete('cycleId'); return query; });
   const deliverables = store.deliverables.filter(item => item.clientId === client.id);
   const currentDeliverables = currentCycle ? deliverables.filter(item => item.cycleId === currentCycle.id) : [];
   const deliveredCount = currentDeliverables.filter(item => item.status === 'Delivered').length;
   const contractEndDate = parseOptionalDate(activePlan?.contractEndDate);
-  const tasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions).filter(task => task.clientName.trim().toLowerCase() === client.clientName.trim().toLowerCase());
+  const tasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions).filter(task => task.clientName.trim().toLowerCase() === client.clientName.trim().toLowerCase() && Boolean(currentCycle) && (task.serviceCycleId === currentCycle?.id || currentDeliverables.some(item => item.taskIds.includes(task.id) || item.id === task.deliverableId)));
   const taskGroups = groupClientDeliveries(tasks, today);
   const focusTask = getClientFocusTask(tasks, today);
   const comments = [...store.cycleComments]
-    .filter(item => item.clientId === client.id && item.visibility === 'client-visible')
+    .filter(item => item.clientId === client.id && item.visibility === 'client-visible' && item.cycleId === currentCycle?.id)
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   const tabs = [
     { id: 'overview' as const, label: t('Overview') },
@@ -118,6 +126,7 @@ const ClientServiceWorkspace = () => {
       <div className="sticky top-[4.5rem] z-20 border-b border-line/80 bg-canvas/95 py-3 backdrop-blur-md">
         <SegmentedTabs<ClientWorkspaceTab> items={tabs} value={tab} onChange={setTab} label={t('Client service workspace')} idPrefix={TABS_ID} />
       </div>
+      <MonthlyRecordPicker records={monthly.available} selected={currentCycle} current={monthly.current} unavailable={monthly.unavailable} onChange={selectMonth} />
       {message && <p role="alert" className="rounded-control border border-[rgb(var(--calm-danger)/.35)] bg-[rgb(var(--calm-danger-soft))] px-4 py-3 text-sm text-[rgb(var(--calm-danger))]"><SystemMessage message={message} /></p>}
 
       {tab === 'overview' && (
@@ -135,11 +144,11 @@ const ClientServiceWorkspace = () => {
 
       {tab === 'deliveries' && (
         <div id={`${TABS_ID}-panel-deliveries`} role="tabpanel" aria-labelledby={`${TABS_ID}-tab-deliveries`} tabIndex={0} className="scroll-mt-36 space-y-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {cycles.map(cycle => {
+          {(currentCycle ? [currentCycle] : []).map(cycle => {
             const cycleDeliverables = deliverables.filter(item => item.cycleId === cycle.id);
             return <section key={cycle.id} className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-4 py-4 sm:px-5"><div><p className="text-sm font-semibold text-ink">{formatLocalizedMonth(parseOptionalDate(cycle.periodStart)!, locale)}</p><p className="mt-1 text-xs text-muted">{cycleDeliverables.filter(item => item.status === 'Delivered').length}/{cycleDeliverables.length} {t('delivered')}</p></div><StatusChip tone="emerald">{t(cycle.status)}</StatusChip></header><div className="divide-y divide-line/70">{cycleDeliverables.map(deliverable => { const task = taskForDeliverable(deliverable); const dueDate = task ? parseOptionalDate(task.dueDate) : null; return <article key={deliverable.id} className="grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{deliverable.title}</p><StatusChip tone={deliverable.status === 'Delivered' ? 'emerald' : deliverable.status === 'Ready' ? 'amber' : 'slate'}>{task ? getLocalizedDeliveryStage(getClientDeliveryStageLabel(task), locale) : t(deliverable.status)}</StatusChip></div><p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />{dueDate ? formatLocalizedDate(dueDate, locale) : t('Date to be confirmed')}</p></div>{task && <Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control px-3 text-sm font-semibold text-accent transition-colors duration-160 hover:bg-accent-soft">{t('View delivery')}<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>}</article>; })}{cycleDeliverables.length === 0 && <p className="px-5 py-8 text-sm text-muted">{t('No deliveries have been published for this period.')}</p>}</div></section>;
           })}
-          {cycles.length === 0 && <EmptyState title={t('No published deliveries yet')} description={t('Published service periods will appear here without exposing internal team details.')} />}
+          {!currentCycle && <EmptyState title={t('No published deliveries yet')} description={t('Published service periods will appear here without exposing internal team details.')} />}
         </div>
       )}
 
@@ -155,9 +164,9 @@ const ClientServiceWorkspace = () => {
       {tab === 'services' && (
         <div id={`${TABS_ID}-panel-services`} role="tabpanel" aria-labelledby={`${TABS_ID}-tab-services`} tabIndex={0} className="scroll-mt-36 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           <section className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80">
-            <header className="border-b border-line/70 px-4 py-4 sm:px-5"><div className="flex items-center gap-2"><PackageCheck className="h-4 w-4 text-accent" aria-hidden="true" /><h2 className="font-semibold text-ink">{activePlan?.name ? <span data-i18n-skip>{activePlan.name}</span> : t('Services')}</h2></div><p className="mt-1 text-sm text-muted">{t('Your included services and quantities. Internal team details and pricing stay private.')}</p></header>
-            {activePlan ? <div className="divide-y divide-line/70">{activePlan.serviceItems.map(item => <article key={item.id} className="grid gap-2 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"><div><p data-i18n-skip className="text-sm font-semibold text-ink">{item.name}</p><p className="mt-1 text-xs text-muted">{item.platforms.length > 0 ? <span data-i18n-skip>{item.platforms.join(', ')}</span> : t('No platform specified')}</p></div><p data-i18n-skip className="text-sm font-medium text-muted">{item.quantity} {item.unit}</p></article>)}</div> : <EmptyState title={t('No active services')} description={t('Your active service package will appear here when it is published.')} className="m-4" />}
-            {activePlan && <footer className="grid gap-3 border-t border-line/70 bg-inset/60 px-4 py-4 text-sm sm:grid-cols-2 sm:px-5"><p><span className="text-muted">{t('Billing day')}</span><span className="calm-number ml-2 font-semibold text-ink">{t('Day')} {activePlan.billingDay}</span></p>{contractEndDate && <p className="sm:text-right"><span className="text-muted">{t('Service reminder')}</span><span className="calm-number ml-2 font-semibold text-ink">{formatLocalizedDate(contractEndDate!, locale)}</span></p>}</footer>}
+            <header className="border-b border-line/70 px-4 py-4 sm:px-5"><div className="flex items-center gap-2"><PackageCheck className="h-4 w-4 text-accent" aria-hidden="true" /><h2 className="font-semibold text-ink">{t('Services')}{currentCycle && <> · {t('Revision')} {currentCycle.planRevision}</>}</h2></div><p className="mt-1 text-sm text-muted">{t('Your included services and quantities. Internal team details and pricing stay private.')}</p></header>
+            {currentCycle ? <div className="divide-y divide-line/70">{currentCycle.serviceItems.map(item => <article key={item.id} className="grid gap-2 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"><div><p data-i18n-skip className="text-sm font-semibold text-ink">{item.name}</p><p className="mt-1 text-xs text-muted">{item.platforms.length > 0 ? <span data-i18n-skip>{item.platforms.join(', ')}</span> : t('No platform specified')}</p></div><p data-i18n-skip className="text-sm font-medium text-muted">{item.quantity} {item.unit}</p></article>)}</div> : <EmptyState title={t('No active services')} description={t('Your active service package will appear here when it is published.')} className="m-4" />}
+            {currentCycle && <footer className="grid gap-3 border-t border-line/70 bg-inset/60 px-4 py-4 text-sm sm:grid-cols-2 sm:px-5"><p><span className="text-muted">{t('Billing period')}</span><span className="calm-number ml-2 font-semibold text-ink">{formatLocalizedDate(parseOptionalDate(currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(currentCycle.periodEnd)!, locale)}</span></p>{contractEndDate && currentCycle.id === monthly.current?.id && <p className="sm:text-right"><span className="text-muted">{t('Service reminder')}</span><span className="calm-number ml-2 font-semibold text-ink">{formatLocalizedDate(contractEndDate!, locale)}</span></p>}</footer>}
           </section>
         </div>
       )}

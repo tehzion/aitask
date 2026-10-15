@@ -67,6 +67,49 @@ test('PM can follow signed portfolio work through final completion', async ({ pa
   await expect(queue(page, 'Client approval').getByRole('link', { name: 'Signed portfolio work' })).toHaveCount(0);
 });
 
+test('PM sees completion in both task views while review is pending', async ({ page }) => {
+  await seedPM(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/tasks?taskId=pm-submit');
+  const dialog = page.getByRole('dialog', { name: 'Department submission' });
+  const explanation = 'Only a project manager can confirm completion after internal approval.';
+  const guidedStatus = dialog.getByRole('combobox', { name: 'All task statuses' });
+  await expect(guidedStatus.locator('option[value="Completed"]')).toHaveJSProperty('disabled', true);
+  await expect(guidedStatus).toHaveAccessibleDescription(explanation);
+  await expect(dialog.getByText(explanation, { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await dialog.getByRole('button', { name: 'Full edit', exact: true }).click();
+  const fullStatus = dialog.getByRole('combobox', { name: 'Task status', exact: true });
+  await expect(fullStatus.locator('option[value="Completed"]')).toHaveJSProperty('disabled', true);
+  await expect(fullStatus).toHaveAccessibleDescription(explanation);
+  const result = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    return useStore.getState().updateTaskStatus('pm-submit', 'Completed');
+  });
+  expect(result.ok).toBe(false);
+});
+
+test('PM completes approved work from the full status picker with a custom status list', async ({ page }) => {
+  await seedPM(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ taskStatuses: ['Pending', 'In Progress', 'Waiting Approval', 'Cancelled'] });
+  });
+  await page.goto('/tasks?taskId=pm-final');
+  const dialog = page.getByRole('dialog', { name: 'Signed portfolio work' });
+  await expect(dialog.getByRole('button', { name: 'Confirm completion', exact: true })).toBeEnabled();
+  await expect(dialog.getByRole('combobox', { name: 'All task statuses' }).locator('option[value="Completed"]')).toBeEnabled();
+  await dialog.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await dialog.getByRole('combobox', { name: 'Task status', exact: true }).selectOption('Completed');
+  await expect.poll(() => page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const task = useStore.getState().tasks.find(task => task.id === 'pm-final')!;
+    return { status: task.status, completed: task.isCompleted, progress: task.completionPercentage, timestamp: Boolean(task.completedAt) };
+  })).toEqual({ status: 'Completed', completed: true, progress: 100, timestamp: true });
+  await page.reload();
+  await expect(dialog.getByRole('combobox', { name: 'All task statuses' })).toHaveValue('Completed');
+});
+
 test('PM saves a routine edit to a task in an inherited project', async ({ page }) => {
   await seedPM(page);
   await page.goto('/tasks?taskId=pm-edit');
@@ -83,14 +126,14 @@ test('PM saves a routine edit to a task in an inherited project', async ({ page 
   await expect(editor.getByRole('alert')).toHaveCount(0);
 });
 
-test('PM delegates directly assigned work through the full editor', async ({ page }) => {
+test('PM delegates assigned work to the department HOD through the full editor', async ({ page }) => {
   await seedPM(page);
-  const workerId = await page.evaluate(async () => {
+  const hodId = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const source = state.tasks.find(task => task.id === 'pm-edit')!;
     useStore.setState({ tasks: [...state.tasks, { ...source, id: 'pm-direct', title: 'Directly assigned PM work', clientId: undefined, clientName: 'Assigned company', projectId: undefined, projectName: undefined, assignedTo: state.currentUser!.id }] });
-    return source.assignedTo;
+    return state.users.find(user => user.role === 'HOD')!.id;
   });
   await page.goto('/tasks?taskId=pm-direct');
   let editor = page.getByRole('dialog', { name: 'Directly assigned PM work' });
@@ -98,12 +141,12 @@ test('PM delegates directly assigned work through the full editor', async ({ pag
   editor = page.getByRole('dialog', { name: 'Directly assigned PM work' });
   await editor.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(editor.getByRole('combobox', { name: 'Assignee', exact: true })).toBeEnabled();
-  await editor.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption(workerId);
+  await editor.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption(hodId);
   await editor.getByRole('button', { name: 'Save Changes', exact: true }).click();
   await expect.poll(() => page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     return useStore.getState().tasks.find(task => task.id === 'pm-direct')?.assignedTo;
-  })).toBe(workerId);
+  })).toBe(hodId);
   await page.goto('/');
   await expect(page.getByText('Directly assigned PM work', { exact: true })).toHaveCount(0);
 });

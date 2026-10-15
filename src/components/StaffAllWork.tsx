@@ -20,6 +20,7 @@ import TaskDetailsModal from './TaskDetailsModal';
 import { canEditTask } from '../lib/access';
 import { useI18n } from './I18nProvider';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
+import { useLocalToday } from '../hooks/useLocalToday';
 import { isTaskOpen } from '../lib/taskReporting';
 
 type StaffAllWorkBucket = 'all' | StaffWorkBucketKey;
@@ -90,7 +91,7 @@ const StaffAllWork: React.FC = () => {
     }
     return visibleTasks;
   }, [currentUser, isHod, rolePermissions, scopeView, visibleTasks]);
-  const today = getTodayInputDate();
+  const today = getTodayInputDate(useLocalToday());
   const queue = React.useMemo(() => buildStaffWorkQueue(tasks, today), [tasks, today]);
   const orderedTasks = React.useMemo(() => (
     bucket === 'all'
