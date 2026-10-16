@@ -188,7 +188,10 @@ test('company operations keeps current draft planning separate from confirmed pr
 });
 
 test('company operations progresses to the next dated cycle at midnight', async ({ page }) => {
-  await seedBoss(page, '2026-10-31T16:59:50Z');
+  // 15:59:50Z is 23:59:50 in the workspace's Malaysian billing calendar while
+  // the browser clock (Asia/Jakarta) is still on 31 Oct, so the rollover below
+  // proves the workspace follows the business calendar, not the browser TZ.
+  await seedBoss(page, '2026-10-31T15:59:50Z');
   await seedCompanyCycles(page);
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');

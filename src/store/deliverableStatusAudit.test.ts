@@ -88,4 +88,22 @@ describe('delivery status audit regressions', () => {
     expect(useStore.getState().linkTaskToDeliverable(work.id, cycle.id, output.id).ok).toBe(true);
     expect(useStore.getState().deliverables[0]).toMatchObject({ status: 'Ready', taskIds: [work.id] });
   });
+
+  it('recomputes the linked deliverable when the assignee accepts work', () => {
+    const plainCycle = structuredClone(cycle);
+    plainCycle.serviceItems[0].workflow = undefined;
+    const pending = { ...work, status: 'Pending', isCompleted: false, completionPercentage: 0, generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined } as Task;
+    useStore.setState({ tasks: [pending], deliverables: [{ ...output, status: 'Planned', taskIds: [pending.id] }], serviceCycles: [plainCycle] });
+    expect(useStore.getState().updateTaskWork(pending.id, { kind: 'accept' }).ok).toBe(true);
+    expect(useStore.getState().deliverables[0].status).toBe('In Progress');
+  });
+
+  it('recomputes the linked deliverable back to Planned when work is unassigned', () => {
+    const plainCycle = structuredClone(cycle);
+    plainCycle.serviceItems[0].workflow = undefined;
+    const started = { ...work, status: 'Pending', isCompleted: false, completionPercentage: 30, generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined } as Task;
+    useStore.setState({ tasks: [started], deliverables: [{ ...output, status: 'In Progress', taskIds: [started.id] }], serviceCycles: [plainCycle] });
+    expect(useStore.getState().updateTaskAssignee(started.id, '').ok).toBe(true);
+    expect(useStore.getState().deliverables[0].status).toBe('Planned');
+  });
 });

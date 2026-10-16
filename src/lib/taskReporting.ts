@@ -136,8 +136,10 @@ export const getAgencyPulseMetrics = (tasks: Task[], now = new Date(), locale: A
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
   const period = getOperationsPeriod(now, locale);
-  const dueToday = tasks.filter(task => !isCancelled(task) && isInPeriod(task.dueDate, todayStart, todayEnd));
-  const dueThisWeek = tasks.filter(task => !isCancelled(task) && isInPeriod(task.dueDate, period.start, period.end));
+  // "Due" reports outstanding work only, so a task completed today is never
+  // counted as both Due and Completed.
+  const dueToday = tasks.filter(task => !isCancelled(task) && isTaskOpen(task) && isInPeriod(task.dueDate, todayStart, todayEnd));
+  const dueThisWeek = tasks.filter(task => !isCancelled(task) && isTaskOpen(task) && isInPeriod(task.dueDate, period.start, period.end));
 
   return {
     period,

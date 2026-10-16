@@ -243,7 +243,7 @@ const OperationsClientWorkspace = () => {
   if (!requestedCycle && location.hash.startsWith('#cycle-')) {
     try { requestedCycle = decodeURIComponent(location.hash.slice(7)); } catch { requestedCycle = location.hash; }
   }
-  const monthly = resolveMonthlyRecord(cycles, client.id, getTodayInputDate(today), requestedCycle);
+  const monthly = resolveMonthlyRecord(cycles, client.id, getTodayInputDate(today), requestedCycle, new Set(plans.map(plan => plan.id)));
   const selectedCycle = monthly.selected;
   const capturedPlan = selectedCycle ? plans.find(plan => plan.id === selectedCycle.planId) : undefined;
   const displayPlan = selectedCycle ? {

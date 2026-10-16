@@ -82,6 +82,10 @@ describe('service management calculations', () => {
     expect(getCycleServiceProgress(cycle, [{ ...deliverable, status: 'Delivered' }, { ...deliverable, id: 'deliverable-2', sequence: 2, status: 'Ready' }])).toEqual([
       { serviceItemId: 'item-1', name: 'Video', included: 2, completed: 1, remaining: 1 },
     ]);
+    expect(getCycleServiceProgress(cycle, [
+      { ...deliverable, status: 'Delivered' },
+      { ...deliverable, id: 'foreign', clientId: 'other-company', clientName: 'Other', status: 'Delivered' },
+    ])).toEqual([{ serviceItemId: 'item-1', name: 'Video', included: 1, completed: 1, remaining: 0 }]);
   });
 });
 

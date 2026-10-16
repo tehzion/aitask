@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { allPermissions, sanitizeRolePermissions } from './access';
+import type { ClientProfile, Project, User } from '../types';
+import { allPermissions, getOwnedPortfolioClientKeys, sanitizeRolePermissions } from './access';
 
 describe('sanitizeRolePermissions for project managers', () => {
   it('strips workspace-wide view permissions that scoping ignores for a Project Manager', () => {
@@ -18,5 +19,20 @@ describe('sanitizeRolePermissions for project managers', () => {
     const permissions = sanitizeRolePermissions(allPermissions, 'HOD');
     expect(permissions.viewAllTasks).toBe(false);
     expect(permissions.manageClientPlans).toBe(false);
+  });
+});
+
+describe('getOwnedPortfolioClientKeys', () => {
+  it('includes owned companies and owned-project clients but never merely-assigned companies', () => {
+    const pm = { id: 'pm', role: 'Project Manager' } as User;
+    const clients = [
+      { id: 'c1', clientName: 'Owned Co', createdBy: 'pm' },
+      { id: 'c2', clientName: 'Assigned Co', createdBy: 'other-pm' },
+    ] as ClientProfile[];
+    const projects = [
+      { id: 'p1', clientName: 'Project Co', createdBy: 'pm' },
+      { id: 'p2', clientName: 'Foreign Project Co', createdBy: 'other-pm' },
+    ] as Project[];
+    expect([...getOwnedPortfolioClientKeys(pm, { clients, projects })].sort()).toEqual(['owned co', 'project co']);
   });
 });

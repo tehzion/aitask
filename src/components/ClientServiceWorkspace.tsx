@@ -70,7 +70,7 @@ const ClientServiceWorkspace = () => {
         && start && end && start <= end;
     })
     .sort((left, right) => right.periodStart.localeCompare(left.periodStart));
-  const monthly = resolveMonthlyRecord(cycles, client.id, getTodayInputDate(today), searchParams.get('cycleId'));
+  const monthly = resolveMonthlyRecord(cycles, client.id, getTodayInputDate(today), searchParams.get('cycleId'), new Set(store.clientPlans.filter(plan => plan.clientId === client.id).map(plan => plan.id)));
   const currentCycle = monthly.selected;
   const selectMonth = (id: string | null) => setSearchParams(current => { const query = new URLSearchParams(current); if (id) query.set('cycleId', id); else query.delete('cycleId'); return query; });
   const deliverables = store.deliverables.filter(item => item.clientId === client.id);

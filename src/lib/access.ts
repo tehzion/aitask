@@ -34,10 +34,23 @@ const ownedProjectIds = (user: User, scope: VisibilityScope) => new Set(
     .map(project => project.id)
 );
 
-const isTaskInOwnedPortfolio = (user: User, task: Task, scope: VisibilityScope) => (
+export const isTaskInOwnedPortfolio = (user: User, task: Task, scope: VisibilityScope) => (
   ownedClientKeys(user, scope).has(task.clientName.trim().toLowerCase())
   || (Boolean(task.projectId) && ownedProjectIds(user, scope).has(task.projectId as string))
 );
+
+/**
+ * Client keys a user owns outright: their own company records plus the clients
+ * of their own projects. Deliberately excludes work they are merely assigned
+ * to, so commercial and plan cards never surface another owner's company.
+ */
+export const getOwnedPortfolioClientKeys = (user: User, scope: VisibilityScope = {}) => {
+  const keys = ownedClientKeys(user, scope);
+  (scope.projects || [])
+    .filter(project => project.createdBy === user.id)
+    .forEach(project => keys.add(project.clientName.trim().toLowerCase()));
+  return keys;
+};
 
 export type AppPath = '/' | '/tasks' | '/calendar' | '/clients' | '/projects' | '/reports' | '/approvals' | '/settings';
 

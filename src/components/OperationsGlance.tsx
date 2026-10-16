@@ -129,20 +129,18 @@ const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope
           <div className="flex items-center gap-2 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 sm:px-5">
             <CircleDot className="h-4 w-4 text-blue-600" aria-hidden="true" /> {t('Today')}
           </div>
-          <div className="grid grid-cols-3 divide-x divide-slate-100">
+          <div className="grid grid-cols-2 divide-x divide-slate-100">
             <PulseValue label={t('Completed')} value={pulse.today.completed} tone="success" />
-            <PulseValue label={t('Due')} value={pulse.today.due} />
-            <PulseValue label={t('Still open')} value={pulse.today.open} tone="warning" />
+            <PulseValue label={t('Due')} value={pulse.today.due} tone="warning" />
           </div>
         </div>
         <div className="grid border-b border-slate-100 lg:grid-cols-[10rem_1fr]">
           <div className="flex items-center gap-2 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 sm:px-5">
             <Clock3 className="h-4 w-4 text-blue-600" aria-hidden="true" /> {t('This week')}
           </div>
-          <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 sm:grid-cols-4 sm:divide-y-0">
+          <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 sm:grid-cols-3 sm:divide-y-0">
             <PulseValue label={t('Completed')} value={pulse.week.completed} tone="success" />
-            <PulseValue label={t('Due')} value={pulse.week.due} />
-            <PulseValue label={t('Remaining')} value={pulse.week.remaining} tone="warning" />
+            <PulseValue label={t('Due')} value={pulse.week.due} tone="warning" />
             <PulseValue label={t('Overdue now')} value={pulse.week.overdue} tone="danger" />
           </div>
         </div>

@@ -185,7 +185,7 @@ export const canSetDeliverableStatus = (
   || resolveDeliverableStatus({ ...deliverable, status }, tasks, cycles) === status;
 
 export const getCycleServiceProgress = (cycle: ServiceCycle, deliverables: Deliverable[]) => cycle.serviceItems.map(item => {
-  const slots = deliverables.filter(deliverable => deliverable.cycleId === cycle.id && deliverable.serviceItemId === item.id);
+  const slots = deliverables.filter(deliverable => deliverable.cycleId === cycle.id && deliverable.clientId === cycle.clientId && deliverable.serviceItemId === item.id);
   const completed = slots.filter(deliverable => deliverable.status === 'Delivered').length;
   return { serviceItemId: item.id, name: item.name, included: slots.length, completed, remaining: Math.max(0, slots.length - completed) };
 });

@@ -2492,7 +2492,8 @@ export const useStore = create<StoreState>()(
           category: intent.kind === 'block' ? 'feedback' : 'status', importance: intent.kind === 'block' ? 'action' : 'informational',
         }, actor.id);
         queueActionFeedback(actor.id, `task:${taskId}:work`, msg(intent.kind === 'accept' ? 'feedback.assignmentAccepted' : intent.kind === 'block' ? 'feedback.helpRequested' : 'feedback.blockerCleared'), saved => saved.tasks.some(item => item.id === taskId && (intent.kind === 'accept' ? item.workState?.acceptedBy === actor.id : intent.kind === 'block' ? item.workState?.blocker?.reason === intent.reason?.trim() : !item.workState?.blocker)));
-        set({ tasks: state.tasks.map(item => item.id === taskId ? updated : item), notifications: [...notices, ...state.notifications] });
+        const newTasks = state.tasks.map(item => item.id === taskId ? updated : item);
+        set({ tasks: newTasks, notifications: [...notices, ...state.notifications], ...deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles) });
         return { ok: true };
       },
 
@@ -2696,7 +2697,8 @@ export const useStore = create<StoreState>()(
         result = { ok: true };
         return {
           tasks: newTasks,
-          notifications: [...newNotifs, ...(state.notifications || [])]
+          notifications: [...newNotifs, ...(state.notifications || [])],
+          ...deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles),
         };
         });
         return result;

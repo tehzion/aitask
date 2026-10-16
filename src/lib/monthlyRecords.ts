@@ -13,8 +13,14 @@ export const getBillingToday = (date = new Date()) => {
   return `${part('year')}-${part('month')}-${part('day')}`;
 };
 
-export const resolveMonthlyRecord = (cycles: ServiceCycle[], clientId: string, today: string, requestedId?: string | null) => {
-  const available = cycles.filter(item => item.clientId === clientId && /^\d{4}-\d{2}-\d{2}$/.test(item.periodStart)
+export const resolveMonthlyRecord = (cycles: ServiceCycle[], clientId: string, today: string, requestedId?: string | null, planIds?: ReadonlySet<string>) => {
+  // When the caller knows the client's plan revisions, ignore cycles that do
+  // not belong to any of them so an orphan or foreign-plan cycle can never be
+  // presented as this client's current record.
+  const scopeToPlans = Boolean(planIds && planIds.size > 0);
+  const available = cycles.filter(item => item.clientId === clientId
+    && (!scopeToPlans || planIds!.has(item.planId))
+    && /^\d{4}-\d{2}-\d{2}$/.test(item.periodStart)
     && /^\d{4}-\d{2}-\d{2}$/.test(item.periodEnd) && item.periodStart <= item.periodEnd)
     .sort((a, b) => b.periodStart.localeCompare(a.periodStart));
   const current = available.find(item => item.periodStart <= today && today <= item.periodEnd);

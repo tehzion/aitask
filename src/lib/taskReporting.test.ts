@@ -138,7 +138,9 @@ describe('Boss operations reporting', () => {
     const cancelled = makeTask({ id: 'cancelled', status: 'Cancelled' });
     const metrics = getAgencyPulseMetrics([completedToday, completedEarlier, historical, overdue, waiting, cancelled], now);
 
-    expect(metrics.today).toEqual({ completed: 1, due: 2, open: 0 });
+    // "Due" counts outstanding work only, so the two tasks due today that were
+    // already completed are reported under Completed, not Due.
+    expect(metrics.today).toEqual({ completed: 1, due: 0, open: 0 });
     expect(metrics.week.completed).toBe(2);
     expect(metrics.week.overdue).toBe(1);
     expect(metrics.overall).toEqual({ open: 2, inProgress: 1, waitingApproval: 1, completed: 3 });

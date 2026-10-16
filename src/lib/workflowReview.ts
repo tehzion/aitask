@@ -2,6 +2,7 @@ import type { CustomRole, Deliverable, ServiceCycle, Task, User, WorkflowStepKin
 import { canEditTask, type VisibilityScope } from './access';
 import { canReviewTaskInternally } from './taskWorkflowAccess';
 import { isTaskCompleted } from './taskCompletion';
+import { getTaskProgress } from './taskProgress';
 
 export const INTERNAL_REVIEW_PERMISSION_MESSAGE = 'Only the authorized department reviewer or Boss Koo can approve internal review.';
 export const isWorkflowTask = (task: Task) => Boolean(task.generatedFromDeliverable || task.workflowStepId);
@@ -106,7 +107,14 @@ export const prepareWorkflowTasks = (tasks: Task[], previous: Task[], user: User
       });
       if (!affectedIds.has(task.id) && !staleReview && !blocked) return task;
       changed = true;
-      return { ...task, status: 'Pending', isCompleted: false, completedAt: undefined, clientApprovalStatus: 'Pending' as const, reviewDecision: undefined, internalReview: undefined, completionPercentage: Math.min(task.completionPercentage, 90), workflowOutputVersion: (task.workflowOutputVersion || 1) + 1, updatedAt: new Date().toISOString() };
+      // Reopening resets the task to its assigned stage, so drop stale
+      // acceptance and re-derive the canonical milestone instead of keeping a
+      // near-complete percentage on a now-Pending task.
+      const workState = { ...task.workState };
+      delete workState.acceptedBy;
+      delete workState.acceptedAt;
+      const reopened: Task = { ...task, status: 'Pending', isCompleted: false, completedAt: undefined, clientApprovalStatus: 'Pending', reviewDecision: undefined, internalReview: undefined, workflowOutputVersion: (task.workflowOutputVersion || 1) + 1, updatedAt: new Date().toISOString(), workState };
+      return { ...reopened, completionPercentage: getTaskProgress(reopened, scope.users || []) };
     });
     if (!changed) break;
   }

@@ -3,7 +3,7 @@ import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileCheck2, UsersRou
 import { Link } from 'react-router-dom';
 import { isBefore, isToday } from 'date-fns';
 import { useStore } from '../store';
-import { canViewServicePrices, getClientKey, getDashboardPersona, getVisibleClientNames, getVisibleTasks } from '../lib/access';
+import { canViewServicePrices, getClientKey, getDashboardPersona, getOwnedPortfolioClientKeys, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { formatMoney } from '../lib/serviceManagement';
 import { parseOptionalDate } from '../lib/utils';
 import { isTaskCompleted } from '../lib/taskCompletion';
@@ -100,6 +100,14 @@ const ServiceRoleDashboard = () => {
   const visibleClientKeys = React.useMemo(() => new Set(
     getVisibleClientNames(store.currentUser, store.tasks, store.projects, store.rolePermissions, { clients: store.clients, projects: store.projects }).map(getClientKey)
   ), [store.currentUser, store.projects, store.rolePermissions, store.tasks, store.clients]);
+  // Task queues may include work a PM is only assigned to, but plan, delivery,
+  // and commercial cards are limited to companies the PM actually owns.
+  const commercialClientKeys = React.useMemo(
+    () => persona === 'projectManager' && store.currentUser
+      ? getOwnedPortfolioClientKeys(store.currentUser, { clients: store.clients, projects: store.projects })
+      : visibleClientKeys,
+    [persona, store.currentUser, store.clients, store.projects, visibleClientKeys],
+  );
   const serviceTasks = visibleTasks.filter(task => Boolean(task.clientId));
   const myTasks = serviceTasks.filter(task => task.assignedTo === store.currentUser?.id);
   // Project Manager visibility already applies their portfolio boundary and
@@ -112,9 +120,9 @@ const ServiceRoleDashboard = () => {
       : serviceTasks;
   const overdue = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && isTaskOpen(task) && isBefore(due, now) && !isToday(due)); });
   const dueToday = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && isTaskOpen(task) && isToday(due)); });
-  const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && visibleClientKeys.has(getClientKey(plan.clientName)));
+  const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && commercialClientKeys.has(getClientKey(plan.clientName)));
   const contractedMonthly = canSeePrices ? activePlans.reduce((sum, plan) => sum + (store.servicePricingSnapshots.find(item => item.parentType === 'client_plan' && item.parentId === plan.id)?.totalMinor || 0), 0) : 0;
-  const delivered = store.deliverables.filter(item => item.status === 'Delivered' && visibleClientKeys.has(getClientKey(item.clientName)));
+  const delivered = store.deliverables.filter(item => item.status === 'Delivered' && commercialClientKeys.has(getClientKey(item.clientName)));
   const waitingInternal = scopeTasks.filter(task => task.status === 'Waiting Approval' && task.visibility !== 'client-visible');
   const waitingClient = scopeTasks.filter(task => task.status === 'Waiting Approval' && task.visibility === 'client-visible');
   const revisions = scopeTasks.filter(task => task.revisionCount > 0 && isTaskOpen(task));
