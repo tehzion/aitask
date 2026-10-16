@@ -35,7 +35,7 @@ Legend: **Pass** (executed unit test) · **Pass-S** (source-reviewed) · **NA** 
 | --- | --- | --- |
 | P1 | `pm_client_scope_and_ownership` migration **not applied** — a live PM cross-company injection remains in production | Deployment (approval + backup gate) |
 | P1 | `department_scoped_visibility_cleanup` migration **not applied** | Deployment |
-| P1 | Client-approval ordering policy reversal (`fca797f`) unconfirmed | Product decision |
+| P1 | ~~Client-approval ordering policy reversal unconfirmed~~ **SIGNED OFF** (2026-10-17) | Resolved |
 | P1 | 3 local commits unpushed | Git operation |
 
 ## 4. Conclusion
@@ -45,7 +45,7 @@ Legend: **Pass** (executed unit test) · **Pass-S** (source-reviewed) · **NA** 
 No release-blocking **code** defect remains: all four roles operate within their authorized scope, notifications are correct, dashboards are consistent, and the full local gate passes. The conditionality is operational, not code:
 
 1. Apply the 2 pending migrations (one is a P1 security fix) behind the preflight/backup gate and run their pgTAP.
-2. Product-owner sign-off on the client-approval ordering policy.
+2. ~~Product-owner sign-off on the client-approval ordering policy~~ **Done** (2026-10-17).
 3. Push the 3 local commits + PR, then run pgTAP/e2e and an independent live RLS/grants re-check in the deploy gate.
 
 Until those are done, a *responsible* production release is **NOT** appropriate, because a P1 security fix is unapplied and the DB-layer role enforcement is not freshly verified against live.

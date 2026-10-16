@@ -42,7 +42,7 @@
 
 ## 6. Product decision
 
-- [ ] **Confirm the client-approval ordering policy** (PM completes before client acceptance; see FIX_VERIFICATION_REPORT §3). This reverses the audit's B6/DBG-10 recommendation.
+- [x] **Client-approval ordering policy** — **SIGNED OFF** (2026-10-17): a responsible PM may complete client-visible work before client acceptance; customer acceptance remains available afterward as a separate, audited decision (`fca797f`). This reverses the audit's B6/DBG-10 recommendation and is accepted as the intended business rule.
 
 ## 7. Environment / secrets
 

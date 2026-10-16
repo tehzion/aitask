@@ -12,7 +12,7 @@ All items below are current as of this review. Priorities follow the P0–P3 sca
 | ID | Module | Gap | Impact | Evidence | Recommended action |
 | --- | --- | --- | --- | --- | --- |
 | SUP-I3 (residual) | DB / deploy | **2 pending production migrations**: `20261016160000_pm_client_scope_and_ownership`, `20261016170000_department_scoped_visibility_cleanup` | `pm_client_scope_and_ownership` closes a PM cross-company rename/edit/delete/re-own hole in the SECURITY DEFINER service RPC — **live exploit until deployed** | `migration_repair_manifest.review.json` `pendingProductionMigrations` | Apply behind the documented preflight/backup gate (`docs/production-rpc-mismatch-recovery.md`); run both pgTAP files |
-| — | Workflow | **Policy reversal not product-approved**: PM may complete client-visible work before client acceptance (B6/DBG-10/DA-01 reverted in `fca797f`) | Ordering of client acceptance changed; internally consistent (frontend+DB), but deviates from audit P1 recommendation | `taskWorkflowAccess.ts:40-50`; `taskStatusControls.test.ts:62-70` | Product owner sign-off, or restore approval-before-completion |
+| — | Workflow | ~~Policy reversal not product-approved~~ **SIGNED OFF 2026-10-17**: PM may complete client-visible work before client acceptance; client review remains a separate audited post-completion decision | Ordering of client acceptance changed; internally consistent (frontend+DB) | `taskWorkflowAccess.ts:40-50`; `taskStatusControls.test.ts:62-70` | ~~Product owner sign-off~~ Resolved |
 | — | Deploy | **3 local commits not pushed** (`7ac0b25`, `415fc4f`, `fca797f`) | Fixes not in origin/PR | `git status` ahead by 3 | Push + open PR (see handoff v2) |
 
 ## P2

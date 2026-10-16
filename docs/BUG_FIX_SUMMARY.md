@@ -29,7 +29,7 @@
 | Item | Why |
 | --- | --- |
 | Apply the 2 pending migrations | Requires deployment approval + preflight/backup gate |
-| Client-approval ordering policy (`fca797f`) | Business-rule decision; needs product-owner sign-off |
+| ~~Client-approval ordering policy (`fca797f`)~~ **SIGNED OFF 2026-10-17** | Resolved |
 | Push 3 local commits | Git operation; not performed without owner instruction |
 
 ## Regression safety
