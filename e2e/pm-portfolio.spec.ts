@@ -89,6 +89,29 @@ test('PM sees completion in both task views while review is pending', async ({ p
   expect(result.ok).toBe(false);
 });
 
+test('PM may make approval optional for one waiting task and complete it directly', async ({ page }) => {
+  await seedPM(page);
+  await page.goto('/tasks?taskId=pm-submit');
+  const dialog = page.getByRole('dialog', { name: 'Department submission' });
+  await dialog.getByRole('button', { name: 'Full edit', exact: true }).click();
+  const setting = dialog.getByRole('checkbox', { name: 'Require internal approval' });
+  await expect(setting).toBeChecked();
+  await setting.uncheck();
+  await dialog.getByRole('button', { name: 'Save review responsibility' }).click();
+  await expect(dialog.getByText('Review responsibility saved.', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true }).locator('option[value="Completed"]')).toHaveJSProperty('disabled', false);
+  await page.reload();
+  const reopened = page.getByRole('dialog', { name: 'Department submission' });
+  await reopened.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await expect(reopened.getByRole('checkbox', { name: 'Require internal approval' })).not.toBeChecked();
+  await reopened.getByRole('combobox', { name: 'Task status', exact: true }).selectOption('Completed');
+  await expect.poll(() => page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const task = useStore.getState().tasks.find(item => item.id === 'pm-submit');
+    return { status: task?.status, percent: task?.completionPercentage, completedAt: Boolean(task?.completedAt), signed: Boolean(task?.reviewDecision) };
+  })).toEqual({ status: 'Completed', percent: 100, completedAt: true, signed: false });
+});
+
 test('PM completes approved work from the full status picker with a custom status list', async ({ page }) => {
   await seedPM(page);
   await page.evaluate(async () => {

@@ -501,7 +501,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   );
 };
 
-const workFieldLabels: Record<string, string> = { title: 'Title changed', description: 'Brief changed', notes: 'Notes changed', dueDate: 'Deadline changed', startDate: 'Start date changed', assignedTo: 'Assignee changed', department: 'Department changed', status: 'Status changed', priority: 'Priority changed', attachmentLink: 'Output link changed', acceptedBy: 'Assignment acceptance changed', blocker: 'Help request changed' };
+const workFieldLabels: Record<string, string> = { title: 'Title changed', description: 'Brief changed', notes: 'Notes changed', dueDate: 'Deadline changed', startDate: 'Start date changed', assignedTo: 'Assignee changed', department: 'Department changed', status: 'Status changed', priority: 'Priority changed', attachmentLink: 'Output link changed', requiresInternalApproval: 'Approval requirement changed', acceptedBy: 'Assignment acceptance changed', blocker: 'Help request changed' };
 const workIntentApplied = (task: Task | undefined, intent: TaskWorkIntent, actorId?: string) => Boolean(task && (intent.kind === 'accept' ? task.workState?.acceptedBy === actorId : intent.kind === 'block' ? task.workState?.blocker?.reason === intent.reason?.trim() : !task.workState?.blocker));
 const StaffTaskFocus: React.FC<StaffTaskFocusProps> = props => {
   const account = useStore(state => state.currentUser?.id);

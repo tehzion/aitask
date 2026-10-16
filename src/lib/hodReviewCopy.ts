@@ -6,6 +6,8 @@ registerUiTranslations({
   'Choose whether internal approval is required.': '请选择是否需要内部审核批准。',
   'Reopen the task before changing its approval requirement.': '更改审核要求前，请先重新开启任务。',
   'Internal review workflow steps always require approval.': '内部审核流程步骤必须经过批准。',
+  'Review responsibility saved.': '审核责任设置已保存。',
+  'Approval requirement changed': '审核要求已更改',
   "A task can contain at most 50 output files.": "每个任务最多可包含50个成果文件。",
   "Choose a department lead or responsible project manager.": "请选择部门主管或负责此任务的项目经理。",
   "Choose an independent reviewer and a cover expiry within 90 days.": "请选择独立审核人，并设置90天内的代审结束日期。",

@@ -41,7 +41,7 @@ export default function TaskReviewSettings({ task }: { task: Task }) {
       const saved = await useStore.getState().commitPendingMutation('task.update');
       if (!saved.ok) return saved;
       return { ok: true };
-    }, result => { if (result.ok) { setMessage(t(isOverride ? 'Review override saved with your reason.' : 'Review cover and lead saved.')); setReason(''); } else setError(result.error || t('The change is waiting to be saved.')); });
+    }, result => { if (result.ok) { setMessage(t(isOverride ? 'Review override saved with your reason.' : requiresApproval !== (task.requiresInternalApproval !== false) ? 'Review responsibility saved.' : 'Review cover and lead saved.')); setReason(''); } else setError(result.error || t('The change is waiting to be saved.')); });
   };
   return <section aria-label={t('Review responsibility')} className="space-y-3 rounded-control border border-line p-4">
     <h3 className="text-sm font-semibold text-ink">{t('Review responsibility')}</h3>

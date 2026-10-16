@@ -31,6 +31,22 @@ describe('PM completion controls', () => {
     expect(getStaffGuidedAction(approved, ['Pending'], pm, [], scope)).toMatchObject({ label: 'Confirm completion', targetStatus: 'Completed', disabled: false });
   });
 
+  it('enables direct completion only for the responsible PM after they opt this task out of approval', () => {
+    const optional = { ...task, requiresInternalApproval: false };
+    expect(completion(pm, optional)).toEqual({ status: 'Completed', disabledReason: undefined });
+    expect(getStaffGuidedAction(optional, statuses, pm, [], scope)).toMatchObject({ label: 'Confirm completion', targetStatus: 'Completed', disabled: false });
+    expect(completion(staff, optional)).toBeUndefined();
+    expect(completion(hod, optional)).toBeUndefined();
+    expect(completion({ ...pm, id: 'foreign-pm' }, optional)).toBeUndefined();
+    expect(completion(pm, { ...optional, workflowStepKind: 'internal_review' })?.disabledReason).toBe('Only a project manager can confirm completion after internal approval.');
+  });
+
+  it('still requires earlier workflow steps and output evidence for opted-out tasks', () => {
+    const optional = { ...task, requiresInternalApproval: false, generatedFromDeliverable: true, workflowStepKind: 'work' as const, workflowDependenciesReady: false };
+    expect(completion(pm, optional)?.disabledReason).toBe('Complete the earlier workflow steps first.');
+    expect(completion(pm, { ...task, requiresInternalApproval: false, deliverableId: 'output' })?.disabledReason).toBe(TASK_EVIDENCE_REQUIRED);
+  });
+
   it('does not grant final completion to staff, HOD, or a foreign PM', () => {
     const approved = { ...task, status: 'Approved' };
     expect(completion(staff, approved)).toBeUndefined();

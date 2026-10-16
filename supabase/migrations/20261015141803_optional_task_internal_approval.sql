@@ -46,3 +46,54 @@ begin
   end if;
 end;
 $migration$;
+-- A responsible PM may opt an ordinary task out of internal approval. Missing
+-- values retain the historical requirement, including for cached clients.
+create or replace function private.aitask_guard_task_approval_requirement()
+returns trigger language plpgsql security definer set search_path='' as $$
+declare
+  v_old jsonb:=case when tg_op='UPDATE' then old.data else '{}'::jsonb end;
+  v_actor text:=private.aitask_member_id(new.workspace_id);
+  v_old_required boolean:=coalesce((v_old->>'requiresInternalApproval')::boolean,true);
+  v_new_required boolean;
+  v_step_kind text;
+begin
+  if new.entity_type<>'task' then return new; end if;
+  if tg_op='UPDATE' and not(new.data ? 'requiresInternalApproval') and v_old ? 'requiresInternalApproval' then
+    new.data:=new.data||jsonb_build_object('requiresInternalApproval',v_old->'requiresInternalApproval');
+  end if;
+  if new.data ? 'requiresInternalApproval' and jsonb_typeof(new.data->'requiresInternalApproval')<>'boolean' then
+    raise check_violation using message='Choose whether internal approval is required.';
+  end if;
+  v_new_required:=coalesce((new.data->>'requiresInternalApproval')::boolean,true);
+  if v_new_required is distinct from v_old_required then
+    if v_actor is not null and not(private.aitask_is_super_admin(new.workspace_id) or
+      (private.aitask_member_role(new.workspace_id)='Project Manager' and
+        (tg_op='INSERT' or private.aitask_can_edit_task(new.workspace_id,new.entity_id)))) then
+      raise check_violation using message='Only the responsible project manager can change the approval requirement.';
+    end if;
+    if tg_op='UPDATE' and v_old->>'status' in('Completed','Cancelled') then
+      raise check_violation using message='Reopen the task before changing its approval requirement.';
+    end if;
+  end if;
+  if not v_new_required then
+    v_step_kind:=coalesce(private.aitask_workflow_step(new.workspace_id,new.data)->>'kind',new.data->>'workflowStepKind');
+    if v_step_kind='internal_review' then
+      raise check_violation using message='Internal review workflow steps always require approval.';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function private.aitask_guard_task_approval_requirement() from public,anon,authenticated,service_role;
+create trigger aitask_00_guard_task_approval_requirement before insert or update of data on public.aitask_entities
+  for each row execute function private.aitask_guard_task_approval_requirement();
+
+do $migration$
+declare d text; a text;
+begin
+  d:=pg_get_functiondef('private.aitask_guard_task_workflow()'::regprocedure);
+  a:='''outputAttachments'',''reviewCover'',''accountableLeadId''';
+  if strpos(d,a)=0 then raise exception 'Expected review configuration history fields'; end if;
+  execute replace(d,a,a||',''requiresInternalApproval''');
+end;
+$migration$;

@@ -1,11 +1,13 @@
 import type { CustomRole, Department, Task, User } from '../types';
-import { canEditTask, isBossKoo, isHodUser, type VisibilityScope } from './access';
+import { canEditTask, isBossKoo, isHodUser, isTaskInOwnedPortfolio, type VisibilityScope } from './access';
 import { isEligibleTaskAssignee, isMemberInDepartment } from './departments';
 
 export const isIndependentTaskReviewer = (user: User, task: Partial<Task>) => user.id !== task.assignedTo && user.id !== task.workState?.reviewRequestedBy;
 export const canBeTaskReviewLead = (user: User, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => user.hasLogin !== false
   && ((isHodUser(user, roles) && isMemberInDepartment(user, task.department)) || user.role === 'Project Manager' && canEditTask(user, task, roles, scope));
-export const canManageTaskReview = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => Boolean(user && (isBossKoo(user) || user.role === 'Project Manager') && canEditTask(user, task, roles, scope));
+const isResponsibleProjectManager = (user: User | null | undefined, task: Task, scope: VisibilityScope) => Boolean(user && (isBossKoo(user) || user.role === 'Project Manager'
+  && (task.createdBy === user.id || task.assignedTo === user.id || isTaskInOwnedPortfolio(user, task, scope))));
+export const canManageTaskReview = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => Boolean(user && isResponsibleProjectManager(user, task, scope) && canEditTask(user, task, roles, scope));
 export const canReviewTaskInternally = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
   if (!user || user.hasLogin === false || !isIndependentTaskReviewer(user, task)) return false;
   if (isBossKoo(user)) return true;
@@ -33,7 +35,8 @@ export const taskTransitionError = (user: User | null | undefined, before: Task 
   if (after.status === 'Approved' && (!before || before.status !== 'Waiting Approval'
     || (!canReviewTaskInternally(user, before, roles, scope) && !override))) return 'Only the department reviewer can approve submitted work.';
   if ((after.status === 'Completed' || after.isCompleted) && !isBossKoo(user)
-    && (user?.role !== 'Project Manager' || (before?.status !== 'Approved' && !canCompleteWithoutInternalApproval(before)))) return 'Only a project manager can confirm completion after internal approval.';
+    && (user?.role !== 'Project Manager' || !before || !isResponsibleProjectManager(user, before, scope)
+      || (before.status !== 'Approved' && !canCompleteWithoutInternalApproval(before)))) return 'Only a project manager can confirm completion after internal approval.';
   if (before && ['Waiting Approval', 'Approved', 'Completed'].includes(before.status) && !canRequestTaskRevision(user, before, roles)) return 'Ask the HOD or project manager to return approved work for revision.';
   if (before && after.status === 'Revision' && !canRequestTaskRevision(user, before, roles)) return 'Ask the HOD or project manager to return approved work for revision.';
   return undefined;
