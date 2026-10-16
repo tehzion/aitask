@@ -49,7 +49,7 @@ export const getPlanDeliverySummary = (
   const completedUnlinked = visibleTasks.filter(task => task.clientId === plan.clientId
     && (task.isCompleted || task.status === 'Completed')
     && !task.deliverableId
-    && !deliverables.some(item => item.taskIds.includes(task.id))).length;
+    && !deliverables.some(item => item.taskIds?.includes(task.id))).length;
   const count = (status: Deliverable['status']) => cycleDeliverables.filter(item => item.status === status).length;
   return {
     currentCycle, draftCycle, completedUnlinked,

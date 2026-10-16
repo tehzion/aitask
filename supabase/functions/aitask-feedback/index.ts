@@ -1,13 +1,23 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.117.3';
 
-const allowedOrigins = new Set([
+const staticAllowedOrigins = new Set([
   'https://aitask-virid.vercel.app',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5178',
   'http://127.0.0.1:5181',
 ]);
+// Mirror invite-aitask-member: honour the configured public URL and any extra
+// origins so staging/preview deployments are not rejected by a hardcoded list.
+const isAllowedOrigin = (origin: string) => {
+  if (staticAllowedOrigins.has(origin)) return true;
+  const publicUrl = (Deno.env.get('AITASK_PUBLIC_URL') || '').replace(/\/$/, '');
+  if (publicUrl && origin === publicUrl) return true;
+  const configured = (Deno.env.get('AITASK_ALLOWED_ORIGINS') || '')
+    .split(',').map(value => value.trim().replace(/\/$/, '')).filter(Boolean);
+  return configured.includes(origin);
+};
 const roles = new Set(['Super Admin', 'Project Manager', 'HOD', 'Staff', 'Client']);
 const devices = new Set(['Desktop', 'Laptop', 'Tablet', 'Mobile', 'Other']);
 const answerValues = new Set(['pass', 'issue', 'na']);
@@ -22,7 +32,7 @@ const submitRateLimit = 8;
 const submitRateWindowSeconds = 10 * 60;
 
 const corsHeaders = (origin: string | null) => ({
-  'Access-Control-Allow-Origin': origin && allowedOrigins.has(origin) ? origin : 'https://aitask-virid.vercel.app',
+  ...(origin && isAllowedOrigin(origin) ? { 'Access-Control-Allow-Origin': origin } : {}),
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Vary': 'Origin',
@@ -77,7 +87,7 @@ Deno.serve(async request => {
   const origin = request.headers.get('Origin');
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(origin) });
   if (request.method !== 'POST') return json(origin, { error: 'Method not allowed' }, 405);
-  if (origin && !allowedOrigins.has(origin)) return json(origin, { error: 'Origin not allowed' }, 403);
+  if (origin && !isAllowedOrigin(origin)) return json(origin, { error: 'Origin not allowed' }, 403);
   const contentLength = Number(request.headers.get('content-length') || 0);
   if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) return json(origin, { error: 'Feedback payload is too large' }, 413);
 

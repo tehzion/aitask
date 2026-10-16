@@ -7,7 +7,7 @@ import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSession
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { useToastStore } from './useToastStore';
-import { hasInvalidDeliveryLink } from '../lib/deliveryLinks';
+import { deliverableLinkError, hasInvalidDeliveryLink } from '../lib/deliveryLinks';
 import { isTaskOpen } from '../lib/taskReporting';
 import { applyTaskWorkIntent, recordTaskWorkTransition, taskEvidenceError, taskWorkContactId, type TaskWorkIntent } from '../lib/staffWorkflow';
 import {
@@ -75,7 +75,6 @@ import {
   canManageClientPlans,
   canManageServiceCatalog,
   canManageServiceCycles,
-  hasPermission,
   canManageTaskTemplates,
   canViewServicePrices,
   canViewAllClients,
@@ -563,7 +562,17 @@ const isServiceClientInScope = (state: StoreState, clientId: string) => {
   if (!actor) return false;
   if (isBossKoo(actor) || actor.role !== 'Project Manager') return true;
   const client = state.clients.find(item => item.id === clientId);
-  return Boolean(client && canOpenServiceClient(actor, client.clientName, state.tasks, state.rolePermissions, state.clients, state.projects));
+  if (!client) return false;
+  // Authorize the exact record by id. When the company has an owner, a matching
+  // name must never widen the portfolio: a duplicate "Acme" owned by another PM
+  // is out of scope unless this PM participates via work bound to this clientId.
+  if (client.createdBy) {
+    if (client.createdBy === actor.id) return true;
+    return state.tasks.some(task => task.clientId === clientId && (task.createdBy === actor.id || task.assignedTo === actor.id))
+      || state.projects.some(project => project.clientId === clientId && project.createdBy === actor.id);
+  }
+  // Legacy/discovered records carry no owner, so fall back to the name-based check.
+  return canOpenServiceClient(actor, client.clientName, state.tasks, state.rolePermissions, state.clients, state.projects);
 };
 
 const serviceClientScopeError = 'This company is outside your portfolio.';
@@ -1311,9 +1320,9 @@ export const useStore = create<StoreState>()(
               apply((state) => ({
                 backend: {
                   ...state.backend,
-                  status: 'upgrade_required',
+                  status: compatibility.retryable ? 'retry_required' : 'upgrade_required',
                   isPulling: false,
-                  upgradeRequired: true,
+                  upgradeRequired: !compatibility.retryable,
                   error: compatibility.error,
                   message: compatibility.error,
                 },
@@ -2382,7 +2391,7 @@ export const useStore = create<StoreState>()(
           const returningForRevision = ['In Progress', 'Revision'].includes(nextStatus) && ['Waiting Approval', 'Approved', 'Completed'].includes(t.status);
           const clientApprovalStatus = returningForRevision ? 'Rejected' : isReadyForClientReview
             ? isCompleted
-              ? t.visibility !== 'internal' ? (t.clientApprovalStatus === 'Approved' ? 'Approved' : 'Pending') : (nextStatus !== t.status ? 'Approved' : t.clientApprovalStatus)
+              ? t.visibility !== 'internal' ? (t.clientApprovalStatus === 'Approved' ? 'Approved' : t.clientApprovalStatus === 'Rejected' ? 'Rejected' : 'Pending') : (nextStatus !== t.status ? 'Approved' : t.clientApprovalStatus)
               : 'Pending'
             : t.clientApprovalStatus === 'Approved' || wasCompleted
               ? 'Pending'
@@ -2537,11 +2546,11 @@ export const useStore = create<StoreState>()(
           result = { ok: false, error: stageError };
           return state;
         }
-        // Submitted, approved or finished work must be returned for revision
-        // before it can change hands; otherwise a Completed task silently
-        // transfers ownership, an Approved task is reopened without the
-        // protected-output contract, or a submitted task is reset to Pending.
-        if (['Waiting Approval', 'Approved', 'Completed'].includes(task.status) || task.isCompleted) {
+        // Submitted, approved, finished or cancelled work cannot change hands;
+        // otherwise a Completed task silently transfers ownership, an Approved
+        // task is reopened without the protected-output contract, a submitted
+        // task is reset to Pending, or cancelled work pings a new assignee.
+        if (['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status) || task.isCompleted) {
           result = { ok: false, error: 'Return this work for revision before reassigning it.' };
           return state;
         }
@@ -2720,9 +2729,9 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
         }
         if (assignmentChanged) {
-          // Submitted, approved or finished work must be returned for revision
-          // before it can change hands, matching updateTaskAssignee.
-          if (['Waiting Approval', 'Approved', 'Completed'].includes(task.status) || task.isCompleted) {
+          // Submitted, approved, finished or cancelled work cannot change hands,
+          // matching updateTaskAssignee.
+          if (['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status) || task.isCompleted) {
             return { ok: false, error: 'Return this work for revision before reassigning it.' };
           }
           // Stage 1 must also hold when the department changes into one with an
@@ -2768,6 +2777,19 @@ export const useStore = create<StoreState>()(
           if (project?.clientId && clientId !== project.clientId) return { ok: false, error: 'Choose a company from the Companies database.' };
           if (isWorkflowTask(task) && clientId !== task.clientId) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
         }
+        // Ordinary-task link changes must satisfy the same rules as
+        // linkTaskToDeliverable instead of bypassing the explicit validator.
+        if (!isWorkflowTask(task) && data.deliverableId) {
+          const nextCycleId = data.serviceCycleId ?? task.serviceCycleId;
+          const deliverableError = deliverableLinkError(
+            { id: taskId, clientId, deliverableId: data.deliverableId, serviceCycleId: nextCycleId },
+            state.deliverables.find(item => item.id === data.deliverableId),
+            state.deliverables,
+          );
+          if (deliverableError) return { ok: false, error: deliverableError };
+        }
+        if (!isWorkflowTask(task) && data.visibility !== undefined && data.visibility !== task.visibility
+          && (task.status !== 'Pending' || task.isCompleted)) return { ok: false, error: 'Task visibility cannot change after work has started.' };
         const serviceType = data.serviceType !== undefined ? data.serviceType.trim() : task.serviceType;
         const startDate = data.startDate !== undefined ? normalizeRequiredStartDate(data.startDate) : normalizeRequiredStartDate(task.startDate);
         const dueDate = data.dueDate !== undefined ? normalizeOptionalIsoDate(data.dueDate) : task.dueDate;
@@ -2845,7 +2867,7 @@ export const useStore = create<StoreState>()(
           clientApprovalStatus: statusChanged
             ? isReadyForClientReview
               ? isCompleted
-                ? task.visibility !== 'internal' ? (task.clientApprovalStatus === 'Approved' ? 'Approved' : 'Pending') : (status !== task.status ? 'Approved' : task.clientApprovalStatus)
+                ? task.visibility !== 'internal' ? (task.clientApprovalStatus === 'Approved' ? 'Approved' : task.clientApprovalStatus === 'Rejected' ? 'Rejected' : 'Pending') : (status !== task.status ? 'Approved' : task.clientApprovalStatus)
                 : 'Pending'
               : task.clientApprovalStatus === 'Approved' || wasCompleted
                 ? 'Pending'
@@ -2873,6 +2895,12 @@ export const useStore = create<StoreState>()(
         const workflowError = workflowTransitionError(task, updatedTask, currentUser, state.tasks, state.serviceCycles, state.deliverables, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (workflowError) return { ok: false, error: workflowError };
         if (state.backend.mode === 'local') delete updatedTask.reviewOverrideReason;
+        // A department change invalidates any review configuration scoped to the
+        // previous department (accountable lead / temporary cover).
+        if (nextDepartment !== task.department) {
+          updatedTask.accountableLeadId = undefined;
+          updatedTask.reviewCover = undefined;
+        }
 
         const notifications: AppNotification[] = [];
         if (state.backend.mode === 'local') notifications.push(...localHodReviewNotifications(
@@ -2955,7 +2983,10 @@ export const useStore = create<StoreState>()(
           });
           return {
             tasks,
-            notifications: [...notifications, ...(current.notifications || [])],
+            notifications: [
+              ...notifications,
+              ...(current.notifications || []).filter(item => item.route?.entityId !== taskId),
+            ],
             ...deriveServiceProgress(tasks, deliverables, current.serviceCycles),
           };
         });
@@ -3157,15 +3188,18 @@ export const useStore = create<StoreState>()(
           );
           if (!assignableProjectIds.has(taskData.projectId)) return '';
         }
-        if (taskData.deliverableId && state.deliverables.some(item => item.id === taskData.deliverableId && item.status === 'Delivered')) return '';
-        if (['Staff', 'HOD'].includes(currentUser.role) && !project) {
-          const serviceDeliverable = taskData.deliverableId
-            ? state.deliverables.find(item => item.id === taskData.deliverableId && item.cycleId === taskData.serviceCycleId)
-            : undefined;
-          const canCreateForServiceClient = serviceDeliverable
-            && serviceDeliverable.clientId === taskData.clientId
-            && canOpenServiceClient(currentUser, serviceDeliverable.clientName, state.tasks, state.rolePermissions);
-          if (!canCreateForServiceClient) return '';
+        // Deliverable links are validated for every role, not only Staff/HOD.
+        // Otherwise a Project Manager could attach work to another portfolio's
+        // deliverable and mutate its derived status.
+        if (taskData.deliverableId) {
+          const serviceDeliverable = state.deliverables.find(item => item.id === taskData.deliverableId);
+          const deliverableClientId = project?.clientId || taskData.clientId;
+          if (deliverableLinkError(
+            { id: '', clientId: deliverableClientId, deliverableId: taskData.deliverableId, serviceCycleId: taskData.serviceCycleId },
+            serviceDeliverable,
+            state.deliverables,
+          )) return '';
+          if (!canOpenServiceClient(currentUser, serviceDeliverable!.clientName, state.tasks, state.rolePermissions, state.clients, state.projects)) return '';
         }
 
         const title = taskData.title.trim();
@@ -3648,22 +3682,35 @@ export const useStore = create<StoreState>()(
         const currentUser = state.currentUser;
         const client = state.clients.find(c => c.id === clientId);
         if (!client) return { ok: false, error: 'Company not found.' };
-        if (!canDeleteClientProfile(currentUser, client.clientName, state.clients, state.rolePermissions, state.tasks)) {
+        if (!canDeleteClientProfile(currentUser, client.clientName, state.clients, state.rolePermissions, state.tasks, clientId)) {
           return { ok: false, error: 'You need permission to delete this company.' };
         }
 
         const clientKey = normalizeClientKey(client.clientName);
+        // Matching by name must never widen a delete: a row that carries a
+        // different clientId belongs to another company even if the name matches
+        // (duplicate company names are allowed). Only fall back to the name for
+        // legacy rows that have no clientId at all.
         const belongsToClient = (item: { clientId?: string; clientName?: string }) => (
-          item.clientId === clientId
-          || (Boolean(item.clientName) && normalizeClientKey(item.clientName) === clientKey)
+          item.clientId ? item.clientId === clientId
+            : Boolean(item.clientName) && normalizeClientKey(item.clientName) === clientKey
+        );
+        // A Client portal account points at this company. Removing the company
+        // without clearing the account leaves a ghost login bound to a company
+        // that no longer exists.
+        const removedClientUserIds = new Set(
+          state.users.filter(user => user.role === 'Client' && normalizeClientKey(user.companyName) === clientKey).map(user => user.id)
         );
 
         set(current => ({
           clients: current.clients.filter(c => c.id !== clientId),
           deletedClientIds: Array.from(new Set([...(current.deletedClientIds || []), clientId])),
+          users: current.users.filter(user => !removedClientUserIds.has(user.id)),
+          deletedUserIds: Array.from(new Set([...(current.deletedUserIds || []), ...removedClientUserIds])),
           projects: current.projects.filter(item => !belongsToClient(item)),
           tasks: current.tasks.filter(item => !belongsToClient(item)),
-          notifications: current.notifications.filter(item => normalizeClientKey(item.targetClient) !== clientKey),
+          notifications: current.notifications.filter(item => normalizeClientKey(item.targetClient) !== clientKey
+            && !(Boolean(item.targetUserId) && removedClientUserIds.has(item.targetUserId as string))),
           clientPlans: current.clientPlans.filter(item => item.clientId !== clientId),
           serviceCycles: current.serviceCycles.filter(item => item.clientId !== clientId),
           deliverables: current.deliverables.filter(item => item.clientId !== clientId),
@@ -4262,7 +4309,7 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const task = state.tasks.find(item => item.id === taskId);
-        if (!hasPermission(state.currentUser, 'editTasks', state.rolePermissions) || !task || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
+        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
         if (isWorkflowTask(task) && (cycleId !== task.serviceCycleId || deliverableId !== task.deliverableId)) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
         const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
         if (deliverableId && (!deliverable || deliverable.cycleId !== cycleId || deliverable.clientId !== task.clientId)) return { ok: false, error: 'The task and deliverable must belong to the same client and cycle.' };
@@ -4366,7 +4413,7 @@ export const useStore = create<StoreState>()(
         if (!cycle || !actor || actor.role === 'Client') return { ok: false, error: 'You cannot comment on this cycle.' };
         if (!isServiceClientInScope(state, cycle.clientId)) return { ok: false, error: serviceClientScopeError };
         const authorized = canManageServiceCycles(actor, state.rolePermissions)
-          || (canOpenServiceClient(actor, cycle.clientName, state.tasks, state.rolePermissions, state.clients) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
+          || (canOpenServiceClient(actor, cycle.clientName, state.tasks, state.rolePermissions, state.clients, state.projects) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
         const clean = text.trim().slice(0, 10_000);
         if (!authorized || !clean) return { ok: false, error: authorized ? 'Comment cannot be empty.' : 'You do not have access to this cycle.' };
         const now = new Date().toISOString();
@@ -4811,7 +4858,7 @@ export const useStore = create<StoreState>()(
 
         apply((state) => {
           const notification = makeNotification({
-            targetRole: 'Project Manager',
+            targetUserId: currentUser.id,
             title: 'Member Added',
             message: `${currentUser.name} added ${name} as ${data.role}.`,
             route: { page: 'approvals' },
@@ -5469,7 +5516,7 @@ export const useStore = create<StoreState>()(
 
         apply((current) => {
           const notification = makeNotification({
-            targetRole: 'Project Manager',
+            targetUserId: state.currentUser?.id,
             title: 'Member Removed',
             message: `${state.currentUser?.name || 'Super admin'} removed ${targetUser?.name}. ${state.tasks.some(task => task.assignedTo === userId) ? 'Their assigned tasks are now unassigned.' : ''}`,
             route: { page: 'approvals' },

@@ -12,6 +12,41 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 });
 
+// Bound the authenticated request body by bytes, even without Content-Length,
+// so a large payload cannot amplify memory/CPU before authorization completes.
+const MAX_BODY_BYTES = 64_000;
+const readBoundedJson = async (request: Request): Promise<unknown> => {
+  const contentLength = Number(request.headers.get('content-length') || 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) return null;
+  const reader = request.body?.getReader();
+  if (!reader) return null;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > MAX_BODY_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return null;
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.byteLength; }
+  try {
+    return JSON.parse(new TextDecoder().decode(merged) || '{}');
+  } catch {
+    return null;
+  }
+};
+
 const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const listAllAuthUsers = async (adminClient: ReturnType<typeof createClient>): Promise<{ users: SupabaseAuthUser[]; error: unknown }> => {
   const users: SupabaseAuthUser[] = [];
@@ -131,7 +166,7 @@ const handleRequest = async (request: Request): Promise<Response> => {
     return json({ error: 'This signed-in account is not linked to an AiTask member. Sign out and sign in again.' }, 403);
   }
 
-  const parsedBody = await request.json().catch(() => null);
+  const parsedBody = await readBoundedJson(request);
   const body = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody) ? parsedBody : {};
   const action = typeof body.action === 'string' ? body.action.trim() : 'invite_member';
 
@@ -392,7 +427,15 @@ const handleRequest = async (request: Request): Promise<Response> => {
 
 Deno.serve(async request => {
   const origin = request.headers.get('Origin');
-  const response = await handleRequest(request);
+  let response: Response;
+  try {
+    response = await handleRequest(request);
+  } catch (error) {
+    // Keep CORS headers on unexpected failures so the browser surfaces the real
+    // error instead of an opaque network/CORS failure.
+    console.error('Unhandled invite-aitask-member error', error);
+    response = json({ error: 'Unexpected server error. Please retry.' }, 500);
+  }
   const headers = new Headers(response.headers);
   headers.set('Vary', 'Origin');
   if (origin && isAllowedOrigin(origin)) headers.set('Access-Control-Allow-Origin', origin);

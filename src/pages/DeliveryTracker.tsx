@@ -45,10 +45,10 @@ const STATUS_FILTERS: { id: DeliveryTrackerStatusFilter; label: string }[] = [
   { id: 'completed', label: 'Completed' },
 ];
 
-const readableDate = (value: string | undefined, locale: Parameters<typeof formatLocalizedDate>[1]) => {
-  if (!value) return 'No deadline';
+const readableDate = (value: string | undefined, locale: Parameters<typeof formatLocalizedDate>[1], t: (key: string) => string) => {
+  if (!value) return t('No deadline');
   const date = parseISO(value);
-  return isValid(date) ? formatLocalizedDate(date, locale) : 'No deadline';
+  return isValid(date) ? formatLocalizedDate(date, locale) : t('No deadline');
 };
 
 const DeliveryTracker: React.FC = () => {
@@ -261,7 +261,7 @@ const DeliveryTracker: React.FC = () => {
                       : <>{summary.completed}/{summary.open + summary.completed} {t('tasks completed')}</>}</p>
                   </div>
                   <div className="min-w-0">
-                    <p className="inline-flex items-center gap-1.5 text-sm font-medium text-ink"><CalendarDays className="h-4 w-4 text-accent" />{readableDate(summary.nextDeadline, locale)}</p>
+                    <p className="inline-flex items-center gap-1.5 text-sm font-medium text-ink"><CalendarDays className="h-4 w-4 text-accent" />{readableDate(summary.nextDeadline, locale, t)}</p>
                     <p className="mt-2 truncate text-xs text-muted"><UsersRound className="mr-1 inline h-3.5 w-3.5" />{team.length ? team.join(', ') : t('No team in this period')}</p>
                   </div>
                   <Button variant="secondary" aria-expanded={expanded} onClick={() => toggleExpanded(summary.clientName)} className="w-full xl:w-auto">{expanded ? t('Hide work') : t('View work')}{expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</Button>
@@ -273,14 +273,14 @@ const DeliveryTracker: React.FC = () => {
                       <section aria-labelledby={`${summary.clientName}-tasks`}>
                         <h4 id={`${summary.clientName}-tasks`} className="text-sm font-semibold text-ink">{t('Tasks')}</h4>
                         <div className="mt-3 space-y-2">
-                          {summary.tasks.map(task => <button key={task.id} type="button" onClick={() => setSelectedTaskId(task.id)} className="grid w-full gap-2 rounded-control bg-surface px-3 py-3 text-left ring-1 ring-line/70 transition-colors hover:bg-accent-soft/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{task.title}</p><p className="mt-1 text-xs text-muted">{task.serviceType} · {t('due')} {readableDate(task.dueDate, locale)}</p></div><Badge tone={isClientView ? getClientDeliveryStageTone(task) : task.isCompleted || task.status === 'Completed' ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{t(isClientView ? getClientDeliveryStageLabel(task) : task.status)}</Badge></button>)}
+                          {summary.tasks.map(task => <button key={task.id} type="button" onClick={() => setSelectedTaskId(task.id)} className="grid w-full gap-2 rounded-control bg-surface px-3 py-3 text-left ring-1 ring-line/70 transition-colors hover:bg-accent-soft/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{task.title}</p><p className="mt-1 text-xs text-muted">{task.serviceType} · {t('due')} {readableDate(task.dueDate, locale, t)}</p></div><Badge tone={isClientView ? getClientDeliveryStageTone(task) : task.isCompleted || task.status === 'Completed' ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{t(isClientView ? getClientDeliveryStageLabel(task) : task.status)}</Badge></button>)}
                           {summary.tasks.length === 0 && <p className="rounded-control bg-surface px-3 py-4 text-sm text-muted ring-1 ring-line/70">{t('No tasks in this period.')}</p>}
                         </div>
                       </section>
                       <section aria-labelledby={`${summary.clientName}-deliverables`}>
                         <h4 id={`${summary.clientName}-deliverables`} className="text-sm font-semibold text-ink">{t('Deliverables')}</h4>
                         <div className="mt-3 space-y-2">
-                          {summary.deliverables.map(item => <div key={item.id} className="grid gap-2 rounded-control bg-surface px-3 py-3 ring-1 ring-line/70 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{item.title}</p><p className="mt-1 text-xs text-muted">{t('Deliverable')} {item.sequence}{item.deliveredAt ? ` · ${t('completed')} ${readableDate(item.deliveredAt, locale)}` : ''}</p></div><StatusChip tone={item.status === 'Delivered' ? 'emerald' : item.status === 'Ready' ? 'amber' : 'slate'}>{t(item.status)}</StatusChip></div>)}
+                          {summary.deliverables.map(item => <div key={item.id} className="grid gap-2 rounded-control bg-surface px-3 py-3 ring-1 ring-line/70 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{item.title}</p><p className="mt-1 text-xs text-muted">{t('Deliverable')} {item.sequence}{item.deliveredAt ? ` · ${t('completed')} ${readableDate(item.deliveredAt, locale, t)}` : ''}</p></div><StatusChip tone={item.status === 'Delivered' ? 'emerald' : item.status === 'Ready' ? 'amber' : 'slate'}>{t(item.status)}</StatusChip></div>)}
                           {summary.deliverables.length === 0 && <p className="rounded-control bg-surface px-3 py-4 text-sm text-muted ring-1 ring-line/70">{t('No deliverables in this period.')}</p>}
                         </div>
                       </section>

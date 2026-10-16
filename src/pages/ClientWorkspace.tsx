@@ -53,11 +53,11 @@ import {
   canSetDeliverableStatus,
 } from "../lib/serviceManagement";
 import {
+  canEditTask,
   canManageClientPlans,
   canManageServiceCycles,
   canOpenServiceClient,
   canViewServicePrices,
-  hasPermission,
   getVisibleTasks,
   isDepartmentScopedUser,
 } from "../lib/access";
@@ -199,11 +199,19 @@ const OperationsClientWorkspace = () => {
     store.currentUser,
     store.rolePermissions,
   );
-  const canLinkTasks = hasPermission(
+  const canLinkTasks = getVisibleTasks(
     store.currentUser,
-    "editTasks",
+    store.tasks,
     store.rolePermissions,
-  );
+    { clients: store.clients, projects: store.projects },
+  )
+    .filter(task => task.clientId === client.id)
+    .some(task => canEditTask(
+      store.currentUser,
+      task,
+      store.rolePermissions,
+      { clients: store.clients, projects: store.projects },
+    ));
   const canSeePrices = canViewServicePrices(
     store.currentUser,
     store.rolePermissions,

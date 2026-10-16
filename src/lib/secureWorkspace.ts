@@ -40,6 +40,7 @@ export const SECURE_WORKSPACE_ID = 'aitask-main';
 export const SECURE_SYNC_PROTOCOL_VERSION = 1;
 export const SECURE_BACKEND_SCHEMA_VERSION = 4;
 export const BACKEND_UPGRADE_REQUIRED_MESSAGE = enMessages['errors.workspaceUpgrade'];
+export const BACKEND_RETRY_REQUIRED_MESSAGE = enMessages['errors.workspaceRetry'];
 const SYNC_REQUEST_TIMEOUT_MS = 20_000;
 const WORKSPACE_PAGE_SIZE = 500;
 const PENDING_COMMAND_STORAGE_VERSION = 1;
@@ -1439,10 +1440,10 @@ export const loadSecureBackendCapabilities = async (): Promise<SecureBackendComp
   })));
   try {
     const { loadBackendCompatibility } = await import('./secureBackendCapabilities');
-    return loadBackendCompatibility(invoke, refreshSecureSession, isAuthError, SECURE_BACKEND_SCHEMA_VERSION, BACKEND_UPGRADE_REQUIRED_MESSAGE);
+    return loadBackendCompatibility(invoke, refreshSecureSession, isAuthError, SECURE_BACKEND_SCHEMA_VERSION, BACKEND_UPGRADE_REQUIRED_MESSAGE, BACKEND_RETRY_REQUIRED_MESSAGE);
   } catch {
     // A thrown transport error is not a schema mismatch; let the caller retry.
-    return { compatible: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE, code: 'RETRY_REQUIRED', retryable: true };
+    return { compatible: false, error: BACKEND_RETRY_REQUIRED_MESSAGE, code: 'RETRY_REQUIRED', retryable: true };
   }
 };
 

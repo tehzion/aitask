@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Priority, TaskStatus } from '../types';
 import { useStore } from '../store';
 import { getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../lib/access';
-import { buildStaffWorkQueue, getHodScopeTasks, getStaffGuidedAction, getStaffBucketLabel, type StaffWorkBucketKey } from '../lib/staffWorkspace';
+import { buildStaffWorkQueue, getHodScopeTasks, isStaffGuidedActionEnabled, getStaffBucketLabel, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { normalizeDepartment } from '../lib/departments';
 import { getTodayInputDate } from '../lib/utils';
 import { Button, PageHeader, SegmentedTabs, Surface } from './ui';
@@ -30,7 +30,7 @@ const priorities: Priority[] = ['Urgent', 'High', 'Medium', 'Low'];
 const StaffAllWork: React.FC = () => {
   const { locale, t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, tasks: allTasks, rolePermissions, taskStatuses, clients: clientProfiles, projects, users, setCreateTaskModalOpen } = useStore(useShallow(state => ({
+  const { currentUser, tasks: allTasks, rolePermissions, taskStatuses, clients: clientProfiles, projects, users, serviceCycles, deliverables, setCreateTaskModalOpen } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     tasks: state.tasks,
     rolePermissions: state.rolePermissions,
@@ -38,6 +38,8 @@ const StaffAllWork: React.FC = () => {
     clients: state.clients,
     projects: state.projects,
     users: state.users,
+    serviceCycles: state.serviceCycles,
+    deliverables: state.deliverables,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
@@ -100,9 +102,9 @@ const StaffAllWork: React.FC = () => {
   const today = getTodayInputDate(useLocalToday());
   const queue = React.useMemo(
     () => buildStaffWorkQueue(tasks, today, {
-      isActionable: task => getStaffGuidedAction(task, taskStatuses, currentUser, rolePermissions, { users, clients: clientProfiles, projects }).kind === 'advance',
+      isActionable: task => isStaffGuidedActionEnabled(task, taskStatuses, currentUser, rolePermissions, { users, clients: clientProfiles, projects }, { tasks: allTasks, cycles: serviceCycles, deliverables }),
     }),
-    [clientProfiles, currentUser, projects, rolePermissions, taskStatuses, tasks, today, users],
+    [allTasks, clientProfiles, currentUser, deliverables, projects, rolePermissions, serviceCycles, taskStatuses, tasks, today, users],
   );
   const orderedTasks = React.useMemo(() => (
     bucket === 'all'

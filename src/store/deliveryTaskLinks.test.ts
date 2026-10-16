@@ -44,8 +44,28 @@ describe('explicit delivery task links', () => {
     expect(useStore.getState().linkTaskToDeliverable(task.id, cycle.id, deliverable.id)).toMatchObject({ ok: false, error: 'This task is already linked to another deliverable.' });
     expect(useStore.getState().tasks).toEqual(before);
   });
-  it('requires link permission even when assigned task editing is allowed', () => {
+  it('lets an assigned worker link their own work without the Boss-only task key', () => {
     useStore.setState({ currentUser: { id: 'worker', name: 'Worker', role: 'Staff', departments: ['Designer'] }, tasks: [{ ...task, assignedTo: 'worker', createdBy: 'worker' }] });
+    expect(useStore.getState().linkTaskToDeliverable(task.id, cycle.id, deliverable.id).ok).toBe(true);
+    expect(useStore.getState().deliverables[0].taskIds).toEqual([task.id]);
+  });
+  it('lets a Project Manager link work in their own portfolio', () => {
+    const pm = { id: 'pm-owner', name: 'PM', role: 'Project Manager', departments: [] } as User;
+    useStore.setState({
+      currentUser: pm,
+      users: [pm],
+      clients: [{ id: 'client', clientName: 'Company', createdBy: 'pm-owner', createdAt: '', updatedAt: '' }],
+    });
+    expect(useStore.getState().linkTaskToDeliverable(task.id, cycle.id, deliverable.id).ok).toBe(true);
+    expect(useStore.getState().deliverables[0].taskIds).toEqual([task.id]);
+  });
+  it('blocks a Project Manager from linking a foreign portfolio task', () => {
+    const pm = { id: 'pm-owner', name: 'PM', role: 'Project Manager', departments: [] } as User;
+    useStore.setState({
+      currentUser: pm,
+      users: [pm],
+      clients: [{ id: 'other-client', clientName: 'Other Company', createdBy: 'other-pm', createdAt: '', updatedAt: '' }],
+    });
     expect(useStore.getState().linkTaskToDeliverable(task.id, cycle.id, deliverable.id).ok).toBe(false);
     expect(useStore.getState().deliverables[0]).toEqual(deliverable);
   });

@@ -126,11 +126,11 @@ const projectionToEntityRow = (
     : [];
   const comments = new Map<string, Task['comments']>();
   const approvals = new Map<string, Task['approvalHistory']>();
-    clientPortal.taskComments.forEach(item => {
+    clientPortal?.taskComments?.forEach(item => {
       const { taskId, ...comment } = item;
       comments.set(taskId, [...(comments.get(taskId) || []), comment as unknown as NonNullable<Task['comments']>[number]]);
     });
-    clientPortal.taskApprovals.forEach(item => {
+    clientPortal?.taskApprovals?.forEach(item => {
       const { taskId, ...approval } = item;
       approvals.set(taskId, [...(approvals.get(taskId) || []), approval as unknown as NonNullable<Task['approvalHistory']>[number]]);
     });

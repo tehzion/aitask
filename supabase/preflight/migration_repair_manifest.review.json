@@ -5,6 +5,7 @@
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "pendingMigrationRationales": {
+    "20261016160000_pm_client_scope_and_ownership": "The service-command RPC accepted a `client` operation under the generic manageClientPlans capability without binding the target company to the caller's portfolio; because the RPC is SECURITY DEFINER and aitask_entities has no FORCE ROW LEVEL SECURITY, an authenticated Project Manager could rename, edit, re-own or delete any company. This migration adds an explicit portfolio scope check for update/delete and a create check for insert to both service-command overloads, a BEFORE UPDATE/DELETE trigger that freezes client ownership and blocks foreign PM mutations, makes createClients/deleteClients authoritative for a PM override, and makes the service-client helper prefer canonical client_id/project parent ids over duplicate names.",
     "20261015140049_monthly_plan_revision_scheduling": "Client plan schedule fields already live in the aitask_entities JSONB payload, so no columns or public RPC signatures are added. This migration backfills pre-status draft revisions that already have an effective boundary as scheduled, then replaces the private monthly generator so only an explicit revisionScheduleStatus=scheduled revision can supersede an active plan."
   },
   "productionVerification": {
@@ -974,7 +975,10 @@
     "20261015160000_pm_project_service_scope",
     "20261016120000_task_role_assignment_and_contact_notification_hardening",
     "20261016140000_client_visible_completion_review",
-    "20261016150000_service_transition_guard"
+    "20261016150000_service_transition_guard",
+    "20261016160000_pm_client_scope_and_ownership"
   ],
-  "pendingProductionMigrations": []
+  "pendingProductionMigrations": [
+    "20261016160000_pm_client_scope_and_ownership"
+  ]
 }

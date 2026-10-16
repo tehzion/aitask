@@ -5,7 +5,7 @@ import { useStore } from '../store';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import { canEditTask, canManageServiceCycles, canOpenServiceClient, getVisibleTasks, hasPermission } from '../lib/access';
+import { canEditTask, canManageServiceCycles, canOpenServiceClient, getVisibleTasks } from '../lib/access';
 import { getDeliveryReviewRecords, isTaskLinkedToDeliverable, hasInvalidDeliveryLink } from '../lib/dashboardData';
 import { isTaskCompleted } from '../lib/taskCompletion';
 import { formatLocalizedDate } from '../lib/i18n';
@@ -34,7 +34,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   const records = getDeliveryReviewRecords(visibleTasks, cycles, store.deliverables, today);
   const reviewTasks = [...records.invalidLinkedTasks, ...(includeOpenTasks ? visibleTasks.filter(task => task.clientId && !isTaskLinkedToDeliverable(task, store.deliverables) && task.status !== 'Cancelled') : records.unlinkedTasks)];
   const canPublish = canManageServiceCycles(store.currentUser, store.rolePermissions);
-  const canLink = hasPermission(store.currentUser, 'editTasks', store.rolePermissions);
+  const canLink = reviewTasks.some(task => canEditTask(store.currentUser, task, store.rolePermissions, { clients: store.clients, projects: store.projects }));
   const date = (value: string) => { const parsed = parseOptionalDate(value); return parsed ? formatLocalizedDate(parsed, locale) : t('Date to be confirmed'); };
   const save = (operation: () => { ok: boolean; error?: string }, command: PendingReview['command'], submitted?: { taskId: string; deliverableId: string }) => {
     const receipt = pending || { command, ...submitted };

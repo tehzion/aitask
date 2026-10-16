@@ -1034,7 +1034,7 @@ const Settings: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => void handleDeleteStatus(status)}
-                            disabled={isStatusSaving || taskCount > 0}
+                            disabled={isStatusSaving || pendingStatusKind !== null || taskCount > 0}
                             className="text-slate-400 hover:text-red-600 p-1 rounded transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
                             title={taskCount > 0 ? t('In-use status cannot be deleted') : t('Delete status')}
                             aria-label={t('Delete status')}

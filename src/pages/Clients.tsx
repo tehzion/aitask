@@ -793,7 +793,7 @@ const Clients: React.FC = () => {
     <div className={pageShell}>
       <PageHeader
         title={isClientUser ? t('Company profile') : t('Companies')}
-        description={isClientUser ? t('Review your company details, services, contacts, and linked work.') : t('The complete client database for company details, contacts, accounts, services, and linked work.')}
+        description={isClientUser ? t('Review your company details, services, contacts, and linked work.') : canSeeAllClients ? t('The complete client database for company details, contacts, accounts, services, and linked work.') : t('Companies in your portfolio.')}
         meta={<><span>{clients.length} {t('visible companies')}</span><span aria-hidden="true">·</span><span>{totalTasks} {t('linked tasks')}</span></>}
         action={<div className="flex flex-wrap gap-2">
           {canCreateClientProfiles(currentUser, rolePermissions) && <Button onClick={() => { clearSearch(); setIsCreateClientOpen(true); }} disabled={upgradeRequired}><Building2 className="h-4 w-4" />{t('New client')}</Button>}

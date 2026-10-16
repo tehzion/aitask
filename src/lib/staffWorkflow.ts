@@ -6,7 +6,7 @@ export const TASK_EVIDENCE_REQUIRED = 'Add an output link or upload a deliverabl
 export const TASK_HISTORY_FIELDS = ['title', 'description', 'notes', 'dueDate', 'startDate', 'assignedTo', 'department', 'status', 'priority', 'attachmentLink', 'outputAttachments', 'reviewCover', 'accountableLeadId', 'requiresInternalApproval', 'acceptedBy', 'blocker'] as const;
 
 export const isTaskLinkedToDeliverable = (task: Pick<Task, 'id' | 'deliverableId'>, deliverables: readonly Deliverable[]) =>
-  Boolean(task.deliverableId || deliverables.some(item => item.taskIds.includes(task.id)));
+  Boolean(task.deliverableId || deliverables.some(item => item.taskIds?.includes(task.id)));
 
 export const hasTaskEvidence = (task: Task, deliverables: readonly Deliverable[], tasks: Task[] = []) => {
   if (safeHttpsUrl(task.attachmentLink)) return true;
@@ -22,7 +22,7 @@ export const hasTaskEvidence = (task: Task, deliverables: readonly Deliverable[]
         && isWorkflowTaskSatisfied(input, tasks) && (safeHttpsUrl(input.attachmentLink) || input.outputAttachments?.length);
     })) return true;
   }
-  const links = deliverables.filter(item => item.id === task.deliverableId || item.taskIds.includes(task.id));
+  const links = deliverables.filter(item => item.id === task.deliverableId || item.taskIds?.includes(task.id));
   if ((task.deliverableId && !links.some(item => item.id === task.deliverableId)) || links.length !== 1) return false;
   const linked = links[0];
   return linked.clientId === task.clientId && (!task.serviceCycleId || linked.cycleId === task.serviceCycleId)

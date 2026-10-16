@@ -53,6 +53,18 @@ they own or can reach through visible work. Project
 Managers do not receive workspace-wide task/client visibility, account/role
 administration, or workspace-wide task editing; those remain with Boss Koo.
 
+Portfolio membership is resolved by canonical **id** first. A task or project that
+carries a `clientId` matches only the company with that id; a shared display name
+never widens a PM's scope onto another owner's company. Records with no id fall
+back to normalized-name matching for legacy compatibility. `createClients` /
+`deleteClients` overrides are authoritative for a PM: revoking either key removes
+the capability. Company ownership (`createdBy`) is transferable only by Boss Koo;
+a PM cannot change it through any path. A PM needs creator or owned-portfolio
+standing to delete work — a transient delegation assignment grants routine
+editing but not destructive authority. `linkTaskToDeliverable` follows
+`canEditTask` scoped to the portfolio, so a responsible PM can link or repair
+delivery records in their own portfolio.
+
 ### HOD
 A Staff-based department lead. Sees and edits work in **their departments**
 (tasks and any project carrying those tasks), manages the tasks they create, and
@@ -131,12 +143,24 @@ Role changes are Boss-Koo-only, reset the member's departments (Client uses
   `HOD` base role; permission normalization retains its operational boundaries.
 - `private.aitask_can_delete_task` separates destructive authority from task editing.
   The shared mutation validator applies it to command and direct-table delete paths.
+- `aitask_execute_service_command` requires portfolio scope for `client` update/delete
+  (and `createClients` for insert) in addition to the service capability.
+- `private.aitask_guard_client_ownership_scope` (BEFORE UPDATE/DELETE on
+  `aitask_entities`) freezes `client.createdBy` for everyone except Boss Koo and
+  blocks a PM from mutating or deleting a company outside their portfolio. It does
+  not fire on insert, so atomic company+plan creation still works.
+- `aitask_can_access_service_client` prefers `task.client_id` / `project.parent_id`
+  over a matching name, so duplicate company names cannot smuggle foreign work into scope.
 
 ## Change log of role-template fixes
 
 - Project Manager: server parity for `createClients` / `deleteClients`;
   Project Managers retain portfolio-scoped project control. Approvals access is
   reserved for Boss Koo in the current role model.
+- Project Manager (2026-10-16): id-keyed portfolio matching; `createClients`/
+  `deleteClients` overrides made authoritative; company ownership frozen server-side;
+  delegation no longer authorizes task deletion; PM can link delivery records in
+  their own portfolio. See `pm-role-remediation-2026-10-16.md`.
 - HOD: department-scoped task visibility and editing.
 - Custom roles: optional `departmentScoped` flag; member overrides can persist
   `createClients` / `deleteClients`; overrides now layer on the custom role.

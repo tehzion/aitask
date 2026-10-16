@@ -23,10 +23,26 @@ export type TaskAccess = {
   canAssign: boolean;
 };
 
+const ownedClientIds = (user: User, scope: VisibilityScope) => new Set(
+  (scope.clients || [])
+    .filter(client => client.createdBy === user.id && Boolean(client.id))
+    .map(client => client.id)
+);
+
+// Legacy records without a canonical client id keep matching by name. Records
+// that carry an id always match on that id, so a duplicate company name can
+// never widen a Project Manager's portfolio onto another owner's company.
 const ownedClientKeys = (user: User, scope: VisibilityScope) => new Set(
   (scope.clients || [])
     .filter(client => client.createdBy === user.id)
-    .map(client => client.clientName.trim().toLowerCase())
+    .map(client => getClientKey(client.clientName))
+    .filter(Boolean)
+);
+
+const matchesOwnedClient = (user: User, task: Task, scope: VisibilityScope) => (
+  task.clientId
+    ? ownedClientIds(user, scope).has(task.clientId)
+    : ownedClientKeys(user, scope).has(getClientKey(task.clientName))
 );
 
 const ownedProjectIds = (user: User, scope: VisibilityScope) => new Set(
@@ -36,7 +52,7 @@ const ownedProjectIds = (user: User, scope: VisibilityScope) => new Set(
 );
 
 export const isTaskInOwnedPortfolio = (user: User, task: Task, scope: VisibilityScope) => (
-  ownedClientKeys(user, scope).has(task.clientName.trim().toLowerCase())
+  matchesOwnedClient(user, task, scope)
   || (Boolean(task.projectId) && ownedProjectIds(user, scope).has(task.projectId as string))
 );
 
@@ -138,10 +154,16 @@ export const hodRestrictedPermissionKeys: RolePermissionKey[] = [
 ];
 
 // Project Managers are always portfolio-scoped: the scoped visibility helpers
-// ignore these keys for PM, so never present them as granted.
+// ignore these keys for PM, so never present them as granted. `viewAllServiceClients`,
+// `viewAssignedServiceClients`, and `manageAssignedClients` are also inert for a PM
+// (their service access derives from ownership/visible work), so they must not be
+// offered as if they changed PM behaviour.
 export const projectManagerRestrictedPermissionKeys: RolePermissionKey[] = [
   'viewAllTasks',
   'viewAllClients',
+  'viewAllServiceClients',
+  'viewAssignedServiceClients',
+  'manageAssignedClients',
 ];
 
 // A department-scoped custom role (a Staff-based lead) is limited to its own
@@ -260,7 +282,6 @@ const routePermission: Record<AppPath, RolePermissionKey> = {
 };
 
 export const isBossKoo = (user: User | null | undefined) => Boolean(user?.isSuperAdmin);
-export const isProjectManager = (user: User | null | undefined) => user?.role === 'Project Manager';
 export const BUILTIN_HOD_ROLE_ID = 'builtin-hod';
 
 // Every base role has one editable built-in template that supplies that role's
@@ -424,10 +445,10 @@ export const canManageClientProfiles = (
   return profile?.createdBy === user.id;
 };
 export const canCreateClientProfiles = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
-  Boolean(user) && (isBossKoo(user) || user.role === 'Project Manager' || hasPermission(user, 'createClients', customRoles))
+  Boolean(user) && (isBossKoo(user) || hasPermission(user, 'createClients', customRoles))
 );
 export const canDeleteClientProfiles = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
-  Boolean(user) && (isBossKoo(user) || user.role === 'Project Manager' || hasPermission(user, 'deleteClients', customRoles))
+  Boolean(user) && (isBossKoo(user) || hasPermission(user, 'deleteClients', customRoles))
 );
 export const canDeleteClientProfile = (
   user: User | null | undefined,
@@ -435,17 +456,24 @@ export const canDeleteClientProfile = (
   profiles: ClientProfile[] = [],
   customRoles: CustomRole[] = [],
   tasks: Task[] = [],
+  clientId?: string,
 ) => {
+  // The capability is checked first so a revoked createClients/deleteClients
+  // override is authoritative for every role, including a Project Manager.
+  if (!canDeleteClientProfiles(user, customRoles)) return false;
   if (isBossKoo(user)) return true;
   if (user?.role === 'Project Manager') {
-    const profile = profiles.find(item => getClientKey(item.clientName) === getClientKey(clientName));
+    // Prefer the exact record by id: a duplicate company name must never let a
+    // manager authorize against their own profile and delete another's.
+    const profile = clientId
+      ? profiles.find(item => item.id === clientId)
+      : profiles.find(item => getClientKey(item.clientName) === getClientKey(clientName));
     return profile?.createdBy === user.id;
   }
-  if (!user || !canDeleteClientProfiles(user, customRoles)) return false;
   // A company may only be deleted by someone who can also edit it. Otherwise a
   // role could permanently destroy a record (with its projects and tasks) that
   // it is not allowed to change.
-  return canEditClientProfile(user, clientName, tasks, customRoles, profiles);
+  return canEditClientProfile(user, clientName, tasks, customRoles, profiles, clientId);
 };
 export const getClientKey = (value: string | null | undefined) => value?.trim().toLowerCase() || '';
 export const canEditClientProfile = (
@@ -453,12 +481,15 @@ export const canEditClientProfile = (
   clientName: string,
   tasks: Task[] = [],
   customRoles: CustomRole[] = [],
-  profiles: ClientProfile[] = []
+  profiles: ClientProfile[] = [],
+  clientId?: string,
 ) => {
   if (isBossKoo(user)) return true;
   const clientKey = getClientKey(clientName);
   if (user?.role === 'Project Manager') {
-    const profile = profiles.find(item => getClientKey(item.clientName) === clientKey);
+    const profile = clientId
+      ? profiles.find(item => item.id === clientId)
+      : profiles.find(item => getClientKey(item.clientName) === clientKey);
     if (profile?.createdBy === user.id) return true;
     // Match the backend edit policy: a Project Manager may edit an existing
     // company when they created or are assigned to one of its tasks.
@@ -552,11 +583,10 @@ export const canViewTask = (
   }
   if (isBossKoo(user)) return true;
   if (user.role === 'Project Manager') {
-    const clientKeys = ownedClientKeys(user, scope);
     const projectIds = ownedProjectIds(user, scope);
     return task.assignedTo === user.id
       || task.createdBy === user.id
-      || clientKeys.has(getClientKey(task.clientName))
+      || matchesOwnedClient(user, task, scope)
       || (Boolean(task.projectId) && projectIds.has(task.projectId as string));
   }
   if (user.role !== 'HOD' && canViewAllTasks(user, customRoles)) return true;
@@ -590,6 +620,11 @@ export const canDeleteTask = (
   scope: VisibilityScope = {},
 ) => canEditTask(user, task, customRoles, scope)
   && !(task.generatedFromDeliverable || task.workflowStepId)
+  // A Project Manager needs an ownership or portfolio relationship to destroy
+  // work. A transient delegation assignment only grants routine editing.
+  && (user?.role !== 'Project Manager' || isBossKoo(user)
+    || task.createdBy === user.id
+    || isTaskInOwnedPortfolio(user, task, scope))
   && (user?.role !== 'Staff' || isBossKoo(user) || isHodUser(user, customRoles)
     || (!['Waiting Approval', 'Approved', 'Completed'].includes(task.status) && !task.isCompleted))
   && (isBossKoo(user) || !isDepartmentScopedUser(user, customRoles)
@@ -709,10 +744,11 @@ export const getVisibleProjects = (
       .filter((id): id is string => Boolean(id))
   );
   if (user.role === 'Project Manager') {
+    const clientIds = ownedClientIds(user, scope);
     const clientKeys = ownedClientKeys(user, scope);
     return projects.filter(project => (
       project.createdBy === user.id
-      || clientKeys.has(getClientKey(project.clientName))
+      || (project.clientId ? clientIds.has(project.clientId) : clientKeys.has(getClientKey(project.clientName)))
       || visibleProjectIds.has(project.id)
     ));
   }

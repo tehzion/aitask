@@ -7,7 +7,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { canCreateTasks, getDashboardPersona, getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../lib/access';
-import { buildStaffWorkQueue, getHodScopeTasks, getTaskBlockers, getUnavailableTaskDependencyCount, type HodWorkScope, getStaffBucketLabel, getStaffFocusTask, getStaffGuidedAction, type StaffWorkBucketKey } from '../lib/staffWorkspace';
+import { buildStaffWorkQueue, getHodScopeTasks, getTaskBlockers, getUnavailableTaskDependencyCount, type HodWorkScope, getStaffBucketLabel, getStaffFocusTask, isStaffGuidedActionEnabled, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getMemberDepartments, isMemberInDepartment } from '../lib/departments';
 import { getTeamWorkloadSummaries, isTaskOpen } from '../lib/taskReporting';
 import { getRelativeDueDateString, getTodayInputDate } from '../lib/utils';
@@ -27,7 +27,7 @@ const StaffMyWork: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const scope: HodWorkScope = searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'delegated' ? 'delegated' : 'department';
   const { locale, t } = useI18n();
-  const { currentUser, tasks: allTasks, clients, projects, users, rolePermissions, clientPlans, taskStatuses, setCreateTaskModalOpen } = useStore(useShallow(state => ({
+  const { currentUser, tasks: allTasks, clients, projects, users, rolePermissions, clientPlans, taskStatuses, serviceCycles, deliverables, setCreateTaskModalOpen } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     tasks: state.tasks,
     clients: state.clients,
@@ -36,6 +36,8 @@ const StaffMyWork: React.FC = () => {
     rolePermissions: state.rolePermissions,
     clientPlans: state.clientPlans,
     taskStatuses: state.taskStatuses,
+    serviceCycles: state.serviceCycles,
+    deliverables: state.deliverables,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
@@ -63,9 +65,9 @@ const StaffMyWork: React.FC = () => {
   }, [currentUser, departmentTasks, isDepartmentLead, todayDate, users]);
   const queue = React.useMemo(
     () => buildStaffWorkQueue(tasks, today, {
-      isActionable: task => getStaffGuidedAction(task, taskStatuses, currentUser, rolePermissions, { users, clients, projects }).kind === 'advance',
+      isActionable: task => isStaffGuidedActionEnabled(task, taskStatuses, currentUser, rolePermissions, { users, clients, projects }, { tasks: allTasks, cycles: serviceCycles, deliverables }),
     }),
-    [tasks, today, taskStatuses, currentUser, rolePermissions, users, clients, projects],
+    [allTasks, clients, currentUser, deliverables, projects, rolePermissions, serviceCycles, taskStatuses, tasks, today, users],
   );
   const focusTask = getStaffFocusTask(queue);
   const defaultBucket = queue.needs_action.length > 0 ? 'needs_action' : queue.up_next.length > 0 ? 'up_next' : queue.waiting.length > 0 ? 'waiting' : 'done';

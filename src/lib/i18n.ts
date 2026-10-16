@@ -1279,6 +1279,10 @@ const zhCopyAdditions: Record<string, string> = {
   'Companies, deadlines, review work, and output in your portfolio.': '您项目组合中的公司、截止日期、审核工作和产出。',
   'Commercial summary': '商业摘要',
   'Active plan value in your visible portfolio.': '您可见项目组合中的启用方案价值。',
+  'Active plan value in your owned portfolio.': '您自有项目组合中的启用方案价值。',
+  'Task visibility cannot change after work has started.': '工作开始后无法更改任务可见性。',
+  'Companies in your portfolio.': '您项目组合中的公司。',
+  'Portfolio': '项目组合',
   'Company operations': '公司运营',
   'Client delivery, team workload, output, and commercial records across the company.': '公司范围内的客户交付、团队工作量、产出和商业记录。',
   'Agency operations': '机构运营',
@@ -2016,7 +2020,6 @@ const zhSystemCopy: Record<string, string> = {
   'Active plans with started cycles cannot return to Draft.': '已有开始周期的启用方案不能恢复为草稿。',
   'This cycle status transition is not allowed.': '不允许此服务周期状态转换。',
   'Complete every required delivery before completing this cycle.': '请先完成所有必需交付项，再完成此服务周期。',
-  'Client approval is required before completion.': '完成任务前需要客户批准。',
   'Cycle not found.': '未找到周期。',
   'You do not have access to this cycle.': '您无权访问此周期。',
   'You do not have permission to manage service cycles.': '您没有管理服务周期的权限。',
@@ -2162,7 +2165,9 @@ const weekdays = {
   en: new Intl.DateTimeFormat('en-US', { weekday: 'long' }),
   zh: new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }),
 };
-const isValidDate = (value: Date) => !Number.isNaN(value.getTime());
+// `parseOptionalDate(...)!` call sites can still pass null for a blank or
+// malformed date, so treat a missing value as invalid instead of throwing.
+const isValidDate = (value: Date | null | undefined): value is Date => Boolean(value) && !Number.isNaN(value.getTime());
 const calendarYear = (value: Date) => String(value.getFullYear()).padStart(4, '0');
 const clockTime = (value: Date) => `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
 

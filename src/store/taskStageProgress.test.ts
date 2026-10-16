@@ -130,16 +130,15 @@ describe('role readiness at alternate entry points', () => {
     expect(useStore.getState().notifications.some(notification => notification.targetUserId === staff.id && /returned to you/.test(notification.message || ''))).toBe(false);
   });
 
-  it('routes client-visible work to client approval when internal approval is optional', () => {
+  it.each(['quick', 'full'])('lets the PM complete client-visible opt-out work through the %s editor without client acceptance', entry => {
     useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Waiting Approval', requiresInternalApproval: false }] });
     actor(pm);
-    expect(useStore.getState().updateTaskStatus(task.id, 'Completed')).toEqual({ ok: false, error: 'Client approval is required before completion.' });
-    expect(useStore.getState().updateTaskStatus(task.id, 'Approved').ok).toBe(true);
-    actor(client);
-    expect(useStore.getState().reviewClientApproval(task.id, 'Approved', 'Customer OK').ok).toBe(true);
-    actor(pm);
-    expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
-    expect(current()).toMatchObject({ completionPercentage: 100, isCompleted: true, clientApprovalStatus: 'Approved' });
+    const result = entry === 'quick'
+      ? useStore.getState().updateTaskStatus(task.id, 'Completed')
+      : useStore.getState().updateTask(task.id, { status: 'Completed' });
+    expect(result.ok).toBe(true);
+    expect(current()).toMatchObject({ status: 'Completed', completionPercentage: 100, isCompleted: true, clientApprovalStatus: 'Pending' });
+    expect(current().completedAt).toBeTruthy();
   });
 
   it('HOD-delegated tasks submitted for review notify the HOD reviewer', () => {

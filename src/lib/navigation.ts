@@ -136,11 +136,13 @@ export const getNavigationSections = (
     icon: navIcons[item.label as keyof typeof navIcons],
   }));
   return {
-    // The task-management workspace is Boss Koo only, so the general sidebar
-    // never lists it; surface it explicitly for the account that owns it.
+    // The management workspace is Boss Koo's; a Project Manager gets the same
+    // page as their portfolio list instead of the workspace-wide management view.
     primary: isBossKoo(user)
       ? [{ path: '/tasks', label: 'Tasks', icon: CheckSquare }, ...generalPrimary]
-      : generalPrimary,
+      : user?.role === 'Project Manager'
+        ? [{ path: '/tasks', label: 'Portfolio work', icon: CheckSquare }, ...generalPrimary]
+        : generalPrimary,
     secondary: [],
     footer: filterVisible(user, rolePermissions, [{ path: '/settings', label: 'Settings', icon: Settings }]),
   };

@@ -265,8 +265,11 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const completionError = currentUser?.role === 'Project Manager' && task.status !== 'Completed'
     ? statusOptions.find(option => option.status === 'Completed')?.disabledReason : undefined;
   const showCompletionAction = task.status === 'Approved' || canCompleteWithoutInternalApproval(task);
-  const reassignmentLocked = ['Waiting Approval', 'Approved', 'Completed'].includes(task.status) || task.isCompleted;
-  const canAssignOthers = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canAssign && !reassignmentLocked;
+  // Reassignment is frozen once work is submitted, but non-reassignment scope
+  // fields (Client/Brand, Service) stay editable until then.
+  const reassignmentLocked = ['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status) || task.isCompleted;
+  const canEditScope = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canAssign;
+  const canAssignOthers = canEditScope && !reassignmentLocked;
   const canDelegateAssignedTask = Boolean(
     canAssignOthers
     && isDepartmentScopedUser(currentUser, rolePermissions)
@@ -699,7 +702,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   if (!result.ok) { setMutationError(t(result.error || 'Unable to update the task status.')); return; }
                   if (await confirmPendingMutation('task.update')) announceTaskStatusSaved('Approved');
                 }} className="mt-3 min-h-11 rounded-control bg-accent px-4 py-2 font-semibold text-white disabled:opacity-50">{t('Approve internal review')}</button>}
-                {!task.internalReview && <p className="mt-2 text-muted">{t(transitionError('Approved') || INTERNAL_REVIEW_PERMISSION_MESSAGE)}</p>}
+                {!task.internalReview && !canApproveInternalReview(currentUser, task, rolePermissions, { users, clients, projects }) && <p className="mt-2 text-muted">{t(transitionError('Approved') || INTERNAL_REVIEW_PERMISSION_MESSAGE)}</p>}
               </section>}
 
               {!isClientTaskViewer && <div className="space-y-3">
@@ -749,7 +752,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                       <input
                         type="text"
                         value={editForm.clientName}
-                        disabled={!canAssignOthers}
+                        disabled={!canEditScope}
                         onChange={(e) => setEditForm({ ...editForm, clientName: e.target.value })}
                         className={cn(inputBase, 'px-2.5 py-2.5')}
                       />
@@ -759,7 +762,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                       <input
                         type="text"
                         value={editForm.serviceType}
-                        disabled={!canAssignOthers}
+                        disabled={!canEditScope}
                         onChange={(e) => setEditForm({ ...editForm, serviceType: e.target.value })}
                         className={cn(inputBase, 'px-2.5 py-2.5')}
                       />

@@ -91,7 +91,12 @@ const optionalText = (value: unknown, maxLength: number) => cleanText(value, max
 
 const safeIsoDate = (value: unknown, fallback: string) => {
   const date = cleanText(value, 10);
-  return isoDate.test(date) && !Number.isNaN(Date.parse(`${date}T00:00:00Z`)) ? date : fallback;
+  if (!isoDate.test(date)) return fallback;
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  // Date.parse rolls impossible days over (e.g. 2026-02-31T00:00:00Z becomes
+  // 2026-03-03), so require the round-trip to match the input exactly.
+  return parsed.toISOString().slice(0, 10) === date ? date : fallback;
 };
 
 const safeIsoTimestamp = (value: unknown) => {
@@ -286,7 +291,7 @@ const parseClientProfile = (value: unknown): ClientProfile | null => {
     clientName,
     createdBy: optionalText(value.createdBy, 160),
     awaitingPublication: typeof value.awaitingPublication === 'boolean' ? value.awaitingPublication : undefined,
-    clientSince: /^\d{4}-\d{2}-\d{2}$/.test(String(value.clientSince || '')) ? String(value.clientSince) : undefined,
+    clientSince: safeIsoDate(value.clientSince, '') || undefined,
     contactPerson: optionalText(value.contactPerson, 160),
     email: optionalText(value.email, 320),
     phone: optionalText(value.phone, 80),

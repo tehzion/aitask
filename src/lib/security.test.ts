@@ -138,6 +138,14 @@ describe('remote snapshot validation', () => {
     expect(parsed?.assignedTo).toBe('');
   });
 
+  it('rejects impossible calendar dates instead of rolling them over', () => {
+    const parsed = parseTask({ ...taskFixture, startDate: '2026-02-31', dueDate: '2026-13-99' });
+    expect(parsed).not.toBeNull();
+    // 2026-02-31 rolls over to March in Date.parse; it must fall back instead.
+    expect(parsed?.startDate).not.toBe('2026-02-31');
+    expect(parsed?.dueDate).toBe('');
+  });
+
   it('accepts only valid ISO completion timestamps', () => {
     expect(parseTask({
       ...taskFixture,

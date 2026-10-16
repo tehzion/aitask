@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(15);
+select plan(17);
 
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000006101','authenticated','authenticated','optional-pm@aitask.local','',now(),'{}','{}',now(),now()),
@@ -14,7 +14,8 @@ insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,d
 ('optional-staff','optional-approval-test','00000000-0000-0000-0000-000000006103','Staff','optional-staff@aitask.local','Staff','Designer',array['Designer'],false),
 ('optional-other-pm','optional-approval-test','00000000-0000-0000-0000-000000006104','Other PM','optional-other-pm@aitask.local','Project Manager','Management',array['Management'],false);
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
-('optional-approval-test','task','optional-task','{"id":"optional-task","clientName":"Optional Company","title":"Output","department":"Designer","assignedTo":"optional-staff","createdBy":"optional-pm","assignedBy":"optional-pm","status":"Waiting Approval","isCompleted":false,"clientApprovalStatus":"Pending","attachmentLink":"https://example.com/output.pdf"}');
+('optional-approval-test','task','optional-task','{"id":"optional-task","clientName":"Optional Company","title":"Output","department":"Designer","assignedTo":"optional-staff","createdBy":"optional-pm","assignedBy":"optional-pm","status":"Waiting Approval","isCompleted":false,"clientApprovalStatus":"Pending","visibility":"client-visible","attachmentLink":"https://example.com/output.pdf"}'),
+('optional-approval-test','task','optional-internal','{"id":"optional-internal","clientName":"Optional Company","title":"Internal Output","department":"Designer","assignedTo":"optional-staff","createdBy":"optional-pm","assignedBy":"optional-pm","status":"Waiting Approval","isCompleted":false,"clientApprovalStatus":"Pending","visibility":"internal","requiresInternalApproval":false,"attachmentLink":"https://example.com/internal.pdf"}');
 
 create function pg_temp.optional_update(p_id text,p_patch jsonb,p_omit_flag boolean default false) returns jsonb language sql as $$
  select public.aitask_execute_command('optional-approval-test',gen_random_uuid(),'task.update',jsonb_build_array(jsonb_build_object(
@@ -53,7 +54,9 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000006101'
 set local role authenticated;
 select is((pg_temp.optional_update('optional-task','{"status":"Completed","isCompleted":true}')->>'ok')::boolean,true,'responsible PM completes from Waiting Approval');
 select is((select (data->>'completionPercentage')::integer from public.aitask_entities where workspace_id='optional-approval-test' and entity_id='optional-task'),100,'direct completion reaches 100 percent');
+select is((select data->>'clientApprovalStatus' from public.aitask_entities where workspace_id='optional-approval-test' and entity_id='optional-task'),'Pending','PM completion leaves the separate client decision pending');
 select ok((select data->>'completedAt' is not null and not(data ? 'reviewDecision') from public.aitask_entities where workspace_id='optional-approval-test' and entity_id='optional-task'),'direct completion has timestamp without forged review signature');
+select is((pg_temp.optional_update('optional-internal','{"status":"Completed","isCompleted":true}')->>'ok')::boolean,true,'responsible PM completes internal opted-out task without client review');
 select is((pg_temp.optional_update('optional-task','{"requiresInternalApproval":true}')->>'ok')::boolean,false,'closed task approval requirement cannot change');
 reset role;
 select * from finish();

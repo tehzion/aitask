@@ -21,9 +21,11 @@ export const getTaskStatusControls = (
   }
   return options.map(status => {
     const next = { ...task, status, isCompleted: status === 'Completed' };
+    // Evidence is enforced by the store for every review-ready status, so the
+    // control must report the same reason for each of them, not just Completed.
     const disabledReason = taskTransitionError(user, task, next, roles, scope)
       || workflowTransitionError(task, next, user, workflow.tasks, workflow.cycles, workflow.deliverables, roles, scope)
-      || (status === 'Completed' && taskEvidenceError(task, next, workflow.deliverables, workflow.tasks))
+      || (['Waiting Approval', 'Approved', 'Completed'].includes(status) && taskEvidenceError(task, next, workflow.deliverables, workflow.tasks))
       || undefined;
     return { status, disabledReason };
   });

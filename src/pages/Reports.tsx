@@ -139,7 +139,7 @@ const Reports: React.FC = () => {
           : 'Review due work across the latest four Monday-to-Saturday weeks.')}
         meta={(
           <>
-            <span>{t('Scope')}: {t(isClientUser ? 'Client workspace' : 'Internal workspace')}</span>
+            <span>{t('Scope')}: {t(isClientUser ? 'Client workspace' : currentUser?.role === 'Project Manager' && !currentUser?.isSuperAdmin ? 'Portfolio' : 'Internal workspace')}</span>
             <span aria-hidden="true">•</span>
             <span>{reportRangeLabel}</span>
             <span aria-hidden="true">•</span>

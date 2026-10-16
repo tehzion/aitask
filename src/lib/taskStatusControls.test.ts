@@ -59,14 +59,13 @@ describe('PM completion controls', () => {
     expect(completion(pm, { ...optional, workflowStepKind: 'internal_review' })?.disabledReason).toBe('Only a project manager can confirm completion after internal approval.');
   });
 
-  it('routes client-visible opt-out work through client review before completion', () => {
+  it('allows the responsible PM to complete client-visible opt-out work before client acceptance', () => {
     const optional = makeTask({ requiresInternalApproval: false, visibility: 'client-visible' });
-    expect(completion(pm, optional)?.disabledReason).toBe('Client approval is required before completion.');
-    expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).toContain('Approved');
-    expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).not.toContain('Completed');
-    // Self-approval (Waiting Approval -> Approved) must not bypass the client
-    // checkpoint while client approval is still pending.
-    expect(completion(pm, { ...optional, status: 'Approved', clientApprovalStatus: 'Pending' })?.disabledReason).toBe('Client approval is required before completion.');
+    expect(completion(pm, optional)).toEqual({ status: 'Completed', disabledReason: undefined });
+    // Approval stays with the department reviewer; PM self-approval is not offered.
+    expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).not.toContain('Approved');
+    expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).toContain('Completed');
+    expect(completion(pm, { ...optional, status: 'Approved', clientApprovalStatus: 'Pending' })).toEqual({ status: 'Completed', disabledReason: undefined });
     expect(completion(pm, { ...optional, status: 'Approved', clientApprovalStatus: 'Approved' })).toEqual({ status: 'Completed', disabledReason: undefined });
   });
 
@@ -121,5 +120,20 @@ describe('HOD revision respects review cover', () => {
   it('falls back to the department HOD once cover has expired', () => {
     const expired = makeTask({ reviewCover: { reviewerId: coverHod.id, expiresAt: '2026-10-15T00:00:00.000Z' } });
     expect(canRequestTaskRevision(hod, expired, [], scope)).toBe(true);
+  });
+});
+
+describe('revision authority', () => {
+  const { pm } = makeActors();
+  const scope = { users: [pm] };
+
+  it('grants revision to the responsible PM who owns the work', () => {
+    const owned = makeTask({ createdBy: pm.id, status: 'Approved' });
+    expect(canRequestTaskRevision(pm, owned, [], scope)).toBe(true);
+  });
+
+  it('denies revision to an unrelated PM with no editorial relationship', () => {
+    const foreign = makeTask({ createdBy: 'other-pm', assignedTo: 'staff', status: 'Approved' });
+    expect(canRequestTaskRevision(pm, foreign, [], scope)).toBe(false);
   });
 });
