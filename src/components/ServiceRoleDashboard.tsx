@@ -123,11 +123,11 @@ const ServiceRoleDashboard = () => {
   const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && commercialClientKeys.has(getClientKey(plan.clientName)));
   const contractedMonthly = canSeePrices ? activePlans.reduce((sum, plan) => sum + (store.servicePricingSnapshots.find(item => item.parentType === 'client_plan' && item.parentId === plan.id)?.totalMinor || 0), 0) : 0;
   const delivered = store.deliverables.filter(item => item.status === 'Delivered' && commercialClientKeys.has(getClientKey(item.clientName)));
-  const waitingInternal = scopeTasks.filter(task => task.status === 'Waiting Approval' && task.visibility !== 'client-visible');
-  const waitingClient = scopeTasks.filter(task => task.status === 'Waiting Approval' && task.visibility === 'client-visible');
+  const portfolioReviews = getPortfolioReviewQueues(scopeTasks);
+  const waitingInternal = portfolioReviews.internal;
+  const waitingClient = portfolioReviews.client;
   const revisions = scopeTasks.filter(task => task.revisionCount > 0 && isTaskOpen(task));
   const completed = scopeTasks.filter(isTaskCompleted);
-  const portfolioReviews = getPortfolioReviewQueues(scopeTasks);
   const renewalPlans = activePlans.filter(plan => plan.contractEndDate).sort((a, b) => (a.contractEndDate || '').localeCompare(b.contractEndDate || ''));
   const workers = store.users.filter(user => user.role === 'Staff' || user.role === 'HOD').map(user => ({
     user,

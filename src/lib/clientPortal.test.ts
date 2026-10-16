@@ -14,6 +14,8 @@ import {
   getClientTaskStage,
   getClientUpcomingDeliveries,
   groupClientDeliveries,
+  isAwaitingClientReview,
+  isAwaitingInternalReview,
 } from './clientPortal';
 
 const makeTask = (overrides: Partial<Task> = {}): Task => ({
@@ -48,6 +50,19 @@ describe('Client portal reporting', () => {
   it('treats completed but unapproved work as awaiting review', () => {
     const task = makeTask({ status: 'Completed', isCompleted: true, clientApprovalStatus: 'Pending' });
     expect(getClientTaskStage(task)).toBe('awaiting_review');
+  });
+
+  it('keeps internal and client review mutually exclusive', () => {
+    const internal = makeTask({ status: 'Waiting Approval', isCompleted: true, visibility: 'client-visible' });
+    const completed = makeTask({ status: 'Completed', isCompleted: true, visibility: 'client-visible' });
+    const approved = makeTask({ status: 'Approved', visibility: 'client-visible' });
+    const hidden = makeTask({ status: 'Completed', isCompleted: true, visibility: 'internal' });
+
+    expect(isAwaitingInternalReview(internal)).toBe(true);
+    expect(isAwaitingClientReview(internal)).toBe(false);
+    expect(isAwaitingClientReview(completed)).toBe(true);
+    expect(isAwaitingClientReview(approved)).toBe(true);
+    expect(isAwaitingClientReview(hidden)).toBe(false);
   });
 
   it('counts only client-approved work as approved', () => {

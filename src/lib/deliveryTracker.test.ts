@@ -6,6 +6,7 @@ import {
   moveDeliveryPeriod,
   taskAppearsInDeliveryPeriod,
 } from './deliveryTracker';
+import { getPortfolioReviewQueues } from './pmDashboard';
 
 const task = (data: Partial<Task> & Pick<Task, 'id' | 'clientName'>): Task => ({
   id: data.id,
@@ -177,9 +178,24 @@ describe('client-facing statistic reconciliation', () => {
       task({ id: 'cancelled', clientName: 'Acme', status: 'Cancelled', isCompleted: true }),
     ];
     const [summary] = buildClientDeliverySummaries({ ...input, tasks, clientView: true });
-    expect(summary).toMatchObject({ open: 3, review: 2, completed: 1, overdue: 1, inProgress: 1, progress: 63 });
+    expect(summary).toMatchObject({ open: 3, review: 1, completed: 1, overdue: 1, inProgress: 1, progress: 63 });
     expect(summary.open + summary.completed).toBe(tasks.filter(item => item.status !== 'Cancelled').length);
     expect(buildClientDeliverySummaries({ ...input, tasks })[0].completed).toBe(3);
+  });
+
+  it('reports the same client-review count for staff and client views', () => {
+    const tasks = [
+      task({ id: 'internal-review', clientName: 'Acme', status: 'Waiting Approval', isCompleted: true, visibility: 'client-visible' }),
+      task({ id: 'completed-review', clientName: 'Acme', status: 'Completed', isCompleted: true, visibility: 'client-visible' }),
+      task({ id: 'approved-review', clientName: 'Acme', status: 'Approved', visibility: 'client-visible' }),
+      task({ id: 'hidden-review', clientName: 'Acme', status: 'Completed', isCompleted: true, visibility: 'internal' }),
+    ];
+
+    const staff = buildClientDeliverySummaries({ ...input, tasks })[0];
+    const client = buildClientDeliverySummaries({ ...input, tasks, clientView: true })[0];
+    const portfolio = getPortfolioReviewQueues(tasks);
+    expect(staff.review).toBe(portfolio.client.length);
+    expect(client.review).toBe(staff.review);
   });
 
   it('does not lower task progress because cancelled work remains in history', () => {

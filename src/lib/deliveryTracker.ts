@@ -10,7 +10,7 @@ import {
   startOfMonth,
 } from 'date-fns';
 import type { Deliverable, ServiceCycle, Task, User } from '../types';
-import { getClientTaskStage } from './clientPortal';
+import { getClientTaskStage, isAwaitingClientReview, isAwaitingInternalReview } from './clientPortal';
 import { averageTaskProgress } from './taskProgress';
 import { getWorkWeekRange } from './workWeek';
 import { formatLocalizedDate, formatLocalizedMonth, type AppLocale } from './i18n';
@@ -182,11 +182,13 @@ export const buildClientDeliverySummaries = ({
     const openTasks = clientTasks.filter(task => !completedForView(task) && !isTaskCancelled(task));
     const completed = clientTasks.filter(task => completedForView(task) && !isTaskCancelled(task)).length;
     const inProgress = openTasks.filter(task => task.status === 'In Progress' && (!clientView || getClientTaskStage(task) === 'active')).length;
-    const review = openTasks.filter(task => clientView ? getClientTaskStage(task) === 'awaiting_review' : task.status === 'Waiting Approval').length;
+    const review = clientTasks.filter(isAwaitingClientReview).length;
     const todayStart = atStartOfDay(today);
     const overdue = openTasks.filter(task => {
       const due = dateValue(task.dueDate);
-      return Boolean(due && (!clientView || getClientTaskStage(task) === 'active') && isBefore(atStartOfDay(due), todayStart));
+      return Boolean(due
+        && (!clientView || (getClientTaskStage(task) === 'active' && !isAwaitingInternalReview(task)))
+        && isBefore(atStartOfDay(due), todayStart));
     }).length;
     const delivered = clientDeliverables.filter(item => item.status === 'Delivered').length;
     const included = clientDeliverables.length;

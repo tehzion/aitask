@@ -24,6 +24,7 @@ export const CLIENT_DELIVERY_STAGE_LABELS: Record<ClientDeliveryStage, string> =
 
 export const getClientTaskStage = (task: Task): ClientTaskStage => {
   if (task.status === 'Cancelled') return 'cancelled';
+  if (task.status === 'Waiting Approval') return 'active';
   if (task.status === 'Approved') return task.clientApprovalStatus === 'Approved' ? 'active' : 'awaiting_review';
   if (task.clientApprovalStatus === 'Approved' && (task.status === 'Completed' || task.isCompleted)) return 'approved';
   if (task.status === 'Completed' || task.isCompleted) {
@@ -32,9 +33,17 @@ export const getClientTaskStage = (task: Task): ClientTaskStage => {
   return 'active';
 };
 
+export const isAwaitingInternalReview = (task: Task) => task.status === 'Waiting Approval';
+
+export const isAwaitingClientReview = (task: Task) => (
+  task.visibility !== 'internal'
+  && !isAwaitingInternalReview(task)
+  && getClientTaskStage(task) === 'awaiting_review'
+);
+
 export const getClientProgress = (tasks: Task[]) => {
   const active = tasks.filter(task => getClientTaskStage(task) === 'active').length;
-  const awaitingReview = tasks.filter(task => getClientTaskStage(task) === 'awaiting_review').length;
+  const awaitingReview = tasks.filter(isAwaitingClientReview).length;
   const approved = tasks.filter(task => getClientTaskStage(task) === 'approved').length;
   const cancelled = tasks.filter(task => getClientTaskStage(task) === 'cancelled').length;
   return {
@@ -69,6 +78,7 @@ const compareClientDeliveryTasks = (left: Task, right: Task) => (
 
 export const getClientDeliveryStage = (task: Task, now = new Date()): ClientDeliveryStage => {
   if (task.status === 'Cancelled') return 'cancelled';
+  if (task.status === 'Waiting Approval') return 'in_delivery';
   if (task.status === 'Approved') return task.clientApprovalStatus === 'Approved' ? 'in_delivery' : 'needs_review';
   if (task.clientApprovalStatus === 'Approved' && (task.status === 'Completed' || task.isCompleted)) return 'delivered';
   if (task.status === 'Completed' || task.isCompleted) return 'needs_review';
@@ -106,7 +116,7 @@ export const getClientFocusTask = (tasks: Task[], now = new Date()) => {
 };
 
 export const getClientReviewReadyTasks = (tasks: Task[]) => [...tasks]
-  .filter(task => getClientTaskStage(task) === 'awaiting_review')
+  .filter(isAwaitingClientReview)
   .sort(compareClientDeliveryTasks);
 
 export const getClientUpcomingDeliveries = (tasks: Task[]) => [...tasks]
