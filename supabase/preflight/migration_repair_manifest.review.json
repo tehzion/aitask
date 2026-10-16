@@ -1,17 +1,17 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "task_role_assignment_and_contact_notification_hardening_prepared_20261016120000; production through 20261015002102; connector aliases verified",
+  "status": "production through 20261016153759_service_transition_guard (repository 20261016150000); connector aliases verified",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "pendingMigrationRationales": {
     "20261015140049_monthly_plan_revision_scheduling": "Client plan schedule fields already live in the aitask_entities JSONB payload, so no columns or public RPC signatures are added. This migration backfills pre-status draft revisions that already have an effective boundary as scheduled, then replaces the private monthly generator so only an explicit revisionScheduleStatus=scheduled revision can supersede an active plan."
   },
   "productionVerification": {
-    "verifiedAt": "2026-10-15",
-    "historyThrough": "20261015002102_pm_portfolio_service_boundaries (repository 20261014135947); connector aliases preserved",
+    "verifiedAt": "2026-10-16",
+    "historyThrough": "20261016153759_service_transition_guard (repository 20261016150000); connector aliases preserved",
     "historyAligned": false,
-    "historyAlignmentNote": "The connector stored deployment IDs 20260919065513, 20260919065609, 20260919065620, 20260919065648, and 20260919072524 for the five matching repository migrations. Names and live SQL are verified; timestamp repair is intentionally prohibited.",
+    "historyAlignmentNote": "The deployment connector stores generated production timestamps for some repository migrations. Migration names and committed SQL were verified live through repository migration 20261016150000_service_transition_guard; timestamp repair is intentionally prohibited.",
     "clientOwnershipRollout": {
       "appliedAt": "2026-09-23",
       "method": "Supabase Management API database/query (owner personal access token); versions recorded in supabase_migrations.schema_migrations",
@@ -233,7 +233,93 @@
         {
           "repository": "20261014135947_pm_portfolio_service_boundaries",
           "production": "20261015002102_pm_portfolio_service_boundaries"
+        },
+        {
+          "repository": "20261015014716_pm_task_company_boundaries",
+          "production": "20261016153507_pm_task_company_boundaries"
+        },
+        {
+          "repository": "20261015015730_staff_task_contact_notifications",
+          "production": "20261016153512_staff_task_contact_notifications"
+        },
+        {
+          "repository": "20261015064701_manual_deliverable_progress",
+          "production": "20261016153515_manual_deliverable_progress"
+        },
+        {
+          "repository": "20261015065635_deliverable_status_integrity",
+          "production": "20261016153647_deliverable_status_integrity"
+        },
+        {
+          "repository": "20261015140049_monthly_plan_revision_scheduling",
+          "production": "20261016153658_monthly_plan_revision_scheduling"
+        },
+        {
+          "repository": "20261015141803_optional_task_internal_approval",
+          "production": "20261016153709_optional_task_internal_approval"
+        },
+        {
+          "repository": "20261015152000_pm_hod_first_assignment",
+          "production": "20261016153713_pm_hod_first_assignment"
+        },
+        {
+          "repository": "20261015160000_pm_project_service_scope",
+          "production": "20261016153718_pm_project_service_scope"
+        },
+        {
+          "repository": "20261016120000_task_role_assignment_and_contact_notification_hardening",
+          "production": "20261016153722_task_role_assignment_and_contact_notification_hardening"
+        },
+        {
+          "repository": "20261016140000_client_visible_completion_review",
+          "production": "20261016153726_client_visible_completion_review"
+        },
+        {
+          "repository": "20261016150000_service_transition_guard",
+          "production": "20261016153759_service_transition_guard"
         }
+      ]
+    },
+    "auditP0P1ProductionRollout": {
+      "appliedAt": "2026-10-16",
+      "sourceCommit": "80cc23441922f1e08d060574adf680bd5e448ecc",
+      "method": "Supabase deployment connector; eleven sequential migrations from committed source",
+      "backup": "Supabase Free plan provides no scheduled backups and the local CLI lacked valid production credentials; the release owner explicitly authorized proceeding without a new backup.",
+      "edgeFunctions": [
+        {
+          "name": "aitask-feedback",
+          "version": 23,
+          "verifyJwt": false,
+          "sourceMatchesRepository": true
+        },
+        {
+          "name": "invite-aitask-member",
+          "version": 36,
+          "verifyJwt": true,
+          "sourceMatchesRepository": true
+        }
+      ],
+      "liveVerification": {
+        "tasks": 174,
+        "projects": 71,
+        "clients": 79,
+        "notifications": 1295,
+        "registrations": 6,
+        "serviceEntities": 226,
+        "businessHashBefore": "7a92d018bd789c970ff267d3d80b6e70",
+        "businessHashAfter": "7a92d018bd789c970ff267d3d80b6e70",
+        "workItemsWithoutClientId": 0,
+        "workItemsWithoutClientKey": 0,
+        "anonymousDirectTableAccess": false,
+        "authenticatedDirectTableMutation": false,
+        "anonymousCommandRpcExecution": false,
+        "securityDefinerSearchPathsFixed": true,
+        "anonymousProductionVerifier": "passed"
+      },
+      "limitations": [
+        "No new production backup was created before rollout at the release owner's explicit direction.",
+        "Leaked-password protection remains disabled on the Supabase Free plan.",
+        "Requested test suites were skipped for this live rollout; read-only production verification was completed."
       ]
     },
     "taskAttributionAndAssignmentHardening": {
@@ -890,17 +976,5 @@
     "20261016140000_client_visible_completion_review",
     "20261016150000_service_transition_guard"
   ],
-  "pendingProductionMigrations": [
-    "20261015014716_pm_task_company_boundaries",
-    "20261015015730_staff_task_contact_notifications",
-    "20261015064701_manual_deliverable_progress",
-    "20261015065635_deliverable_status_integrity",
-    "20261015140049_monthly_plan_revision_scheduling",
-    "20261015141803_optional_task_internal_approval",
-    "20261015152000_pm_hod_first_assignment",
-    "20261015160000_pm_project_service_scope",
-    "20261016120000_task_role_assignment_and_contact_notification_hardening",
-    "20261016140000_client_visible_completion_review",
-    "20261016150000_service_transition_guard"
-  ]
+  "pendingProductionMigrations": []
 }
