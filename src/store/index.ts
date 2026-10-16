@@ -2545,7 +2545,9 @@ export const useStore = create<StoreState>()(
 
           const returningForRevision = ['In Progress', 'Revision'].includes(nextStatus) && ['Waiting Approval', 'Approved', 'Completed'].includes(t.status);
           const clientApprovalStatus = returningForRevision ? 'Rejected' : isReadyForClientReview
-            ? isCompleted ? (nextStatus !== t.status ? 'Approved' : t.clientApprovalStatus) : 'Pending'
+            ? isCompleted
+              ? t.visibility !== 'internal' ? 'Pending' : (nextStatus !== t.status ? 'Approved' : t.clientApprovalStatus)
+              : 'Pending'
             : t.clientApprovalStatus === 'Approved' || wasCompleted
               ? 'Pending'
               : t.clientApprovalStatus;
@@ -2964,7 +2966,9 @@ export const useStore = create<StoreState>()(
                 : task.completionPercentage,
           clientApprovalStatus: statusChanged
             ? isReadyForClientReview
-              ? isCompleted ? (status !== task.status ? 'Approved' : task.clientApprovalStatus) : 'Pending'
+              ? isCompleted
+                ? task.visibility !== 'internal' ? 'Pending' : (status !== task.status ? 'Approved' : task.clientApprovalStatus)
+                : 'Pending'
               : task.clientApprovalStatus === 'Approved' || wasCompleted
                 ? 'Pending'
                 : task.clientApprovalStatus

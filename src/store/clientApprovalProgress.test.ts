@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Deliverable, ServiceCycle, Task, User } from '../types';
+import { canReviewTaskAsClient } from '../lib/access';
+import { getClientApprovalDate } from '../lib/clientPortal';
 
 const backend = vi.hoisted(() => ({ secure: false }));
 vi.mock('../lib/supabaseClient', () => ({
@@ -12,6 +14,7 @@ import { useStore } from './index';
 const initial = useStore.getState();
 const timestamp = '2026-10-01T00:00:00Z';
 const client: User = { id: 'progress-client', name: 'Customer', role: 'Client', companyName: 'Progress Co', departments: ['Client'] };
+const pm: User = { id: 'progress-pm', name: 'Project Manager', role: 'Project Manager', department: 'Management', departments: ['Management'], isSuperAdmin: true };
 const task: Task = {
   id: 'progress-task', clientId: 'progress-company', clientName: 'Progress Co', title: 'Historical delivery awaiting acceptance',
   description: '', serviceType: 'Design', department: 'Designer', assignedTo: 'staff', createdBy: 'pm',
@@ -29,6 +32,20 @@ const cycle: ServiceCycle = {
   periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Published', currency: 'MYR',
   serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0,
   publishedAt: timestamp, createdAt: timestamp, updatedAt: timestamp,
+};
+const reviewReadyTask: Task = {
+  ...task,
+  id: 'review-ready-task',
+  assignedTo: pm.id,
+  createdBy: pm.id,
+  status: 'Approved',
+  isCompleted: false,
+  completedAt: undefined,
+  completionPercentage: 80,
+  clientApprovalStatus: 'Pending',
+  deliverableId: undefined,
+  serviceCycleId: undefined,
+  approvalHistory: [],
 };
 beforeEach(() => {
   backend.secure = false;
@@ -70,5 +87,34 @@ describe('client decisions and derived delivery progress', () => {
     expect(useStore.getState().tasks[0].clientApprovalStatus).toBe(decision);
     expect(useStore.getState().deliverables).toEqual(beforeDeliverables);
     expect(useStore.getState().serviceCycles).toEqual(beforeCycles);
+  });
+});
+
+describe('project manager completion and client acceptance', () => {
+  const setReviewReadyTask = () => useStore.setState({
+    currentUser: pm,
+    users: [pm, client],
+    tasks: [structuredClone(reviewReadyTask)],
+    deliverables: [],
+    serviceCycles: [],
+  });
+  const expectClientReviewPending = () => {
+    const completed = useStore.getState().tasks[0];
+    expect(completed).toMatchObject({ status: 'Completed', isCompleted: true, completionPercentage: 100, clientApprovalStatus: 'Pending' });
+    expect(completed.approvalHistory).toEqual([]);
+    expect(canReviewTaskAsClient(client, completed)).toBe(true);
+    expect(getClientApprovalDate(completed)).toBeNull();
+  };
+
+  it('keeps client review pending when completion uses the status action', () => {
+    setReviewReadyTask();
+    expect(useStore.getState().updateTaskStatus(reviewReadyTask.id, 'Completed').ok).toBe(true);
+    expectClientReviewPending();
+  });
+
+  it('keeps client review pending when completion uses the full task editor', () => {
+    setReviewReadyTask();
+    expect(useStore.getState().updateTask(reviewReadyTask.id, { status: 'Completed' }).ok).toBe(true);
+    expectClientReviewPending();
   });
 });

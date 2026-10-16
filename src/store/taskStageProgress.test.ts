@@ -54,7 +54,7 @@ describe('role-controlled task milestones', () => {
     expect(current()).toMatchObject({ status: 'Approved', completionPercentage: 80, isCompleted: false });
     actor(pm);
     expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
-    expect(current()).toMatchObject({ completionPercentage: 100, isCompleted: true, clientApprovalStatus: 'Approved' });
+    expect(current()).toMatchObject({ completionPercentage: 100, isCompleted: true, clientApprovalStatus: 'Pending' });
     expect(current().completedAt).toBeTruthy();
   });
   it('hides decisions belonging to other roles and requires HOD approval before PM completion', () => {
