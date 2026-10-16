@@ -81,6 +81,7 @@ const run = (command, args, options = {}) => {
   return result;
 };
 
+run(process.execPath, [join(projectRoot, 'scripts', 'verify-migrations-nonempty.mjs')]);
 run('docker', ['info', '--format', '{{.ServerVersion}}'], { capture: true });
 
 const validationRoot = mkdtempSync(join(tmpdir(), 'aitask-supabase-validation-'));

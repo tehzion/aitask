@@ -4,6 +4,9 @@
   "status": "task_workflow_hod_first_and_optional_approval_prepared_20261015152000; production through 20261015002102; connector aliases verified",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
+  "pendingMigrationRationales": {
+    "20261015140049_monthly_plan_revision_scheduling": "Client plan schedule fields already live in the aitask_entities JSONB payload, so no columns or public RPC signatures are added. This migration backfills pre-status draft revisions that already have an effective boundary as scheduled, then replaces the private monthly generator so only an explicit revisionScheduleStatus=scheduled revision can supersede an active plan."
+  },
   "productionVerification": {
     "verifiedAt": "2026-10-15",
     "historyThrough": "20261015002102_pm_portfolio_service_boundaries (repository 20261014135947); connector aliases preserved",
