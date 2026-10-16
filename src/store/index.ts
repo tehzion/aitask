@@ -565,6 +565,12 @@ const isServiceClientInScope = (state: StoreState, clientId: string) => {
 };
 
 const serviceClientScopeError = 'This company is outside your portfolio.';
+const allowedServiceCycleTransitions: Record<ServiceCycleStatus, readonly ServiceCycleStatus[]> = {
+  Draft: ['Published', 'Cancelled'],
+  Published: ['Completed', 'Cancelled'],
+  Completed: [],
+  Cancelled: [],
+};
 
 // Check the destination before the new task relationship can grant access.
 // Unchanged legacy company links remain editable during routine task updates.
@@ -4292,6 +4298,10 @@ export const useStore = create<StoreState>()(
         if (!isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
         if (status === 'Active') return { ok: false, error: 'Use Activate to start or resume this plan.' };
         if (plan.status === 'Ended') return { ok: false, error: 'Ended plans cannot be reopened.' };
+        const hasStartedCycle = state.serviceCycles.some(cycle => cycle.planId === plan.id && cycle.status !== 'Draft');
+        if (plan.status === 'Active' && status === 'Draft' && hasStartedCycle) {
+          return { ok: false, error: 'Active plans with started cycles cannot return to Draft.' };
+        }
         set(current => ({ clientPlans: current.clientPlans.map(item => item.id === planId ? { ...item, status, updatedAt: new Date().toISOString() } : item) }));
         return { ok: true };
       },
@@ -4304,6 +4314,17 @@ export const useStore = create<StoreState>()(
         if (!cycle || !actor) return { ok: false, error: 'Cycle not found.' };
         if (!isServiceClientInScope(state, cycle.clientId)) return { ok: false, error: serviceClientScopeError };
         if (!canManageServiceCycles(actor, state.rolePermissions)) return { ok: false, error: 'You do not have permission to manage service cycles.' };
+        if (status === cycle.status) return { ok: true };
+        if (!allowedServiceCycleTransitions[cycle.status].includes(status)) {
+          return { ok: false, error: 'This cycle status transition is not allowed.' };
+        }
+        if (status === 'Completed') {
+          const cycleDeliverables = state.deliverables.filter(item => item.cycleId === cycle.id && item.clientId === cycle.clientId);
+          const allDelivered = cycleDeliverables.length > 0 && cycleDeliverables.every(
+            deliverable => resolveDeliverableStatus(deliverable, state.tasks, state.serviceCycles) === 'Delivered',
+          );
+          if (!allDelivered) return { ok: false, error: 'Complete every required delivery before completing this cycle.' };
+        }
         const now = new Date().toISOString();
         set(current => ({ serviceCycles: current.serviceCycles.map(item => item.id === cycleId ? { ...item, status, publishedAt: status === 'Published' ? item.publishedAt || now : item.publishedAt, updatedAt: now } : item) }));
         return { ok: true };

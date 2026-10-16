@@ -57,6 +57,52 @@ describe('client service plan store', () => {
     }
   });
 
+  it('rejects impossible cycle transitions and incomplete completion', () => {
+    const created = useStore.getState().createClientWithPlan({
+      clientName: 'Cycle Guard Co', planName: 'Guarded cycle', origin: 'custom',
+      serviceItems: [{ id: 'guarded-service', name: 'Design', platforms: [], unit: 'post', quantity: 1, unitPriceMinor: 10000 }],
+      startDate: '2026-10-01', billingDay: 1, discountType: 'none', discountValue: 0, taxRateBps: 0,
+    });
+    const activation = useStore.getState().activateClientPlan(created.planId!);
+    const cycleId = activation.cycleId!;
+
+    expect(useStore.getState().setServiceCycleStatus(cycleId, 'Completed')).toEqual({
+      ok: false,
+      error: 'This cycle status transition is not allowed.',
+    });
+    expect(useStore.getState().setServiceCycleStatus(cycleId, 'Published').ok).toBe(true);
+    expect(useStore.getState().setServiceCycleStatus(cycleId, 'Completed')).toEqual({
+      ok: false,
+      error: 'Complete every required delivery before completing this cycle.',
+    });
+
+    useStore.setState(state => ({
+      deliverables: state.deliverables.map(item => item.cycleId === cycleId ? { ...item, status: 'Delivered' } : item),
+    }));
+    expect(useStore.getState().setServiceCycleStatus(cycleId, 'Completed').ok).toBe(true);
+    expect(useStore.getState().setServiceCycleStatus(cycleId, 'Draft')).toEqual({
+      ok: false,
+      error: 'This cycle status transition is not allowed.',
+    });
+    expect(useStore.getState().serviceCycles.find(item => item.id === cycleId)?.status).toBe('Completed');
+  });
+
+  it('does not return an active plan with a started cycle to Draft', () => {
+    const created = useStore.getState().createClientWithPlan({
+      clientName: 'Plan Guard Co', planName: 'Guarded plan', origin: 'custom',
+      serviceItems: [{ id: 'plan-service', name: 'Design', platforms: [], unit: 'post', quantity: 1, unitPriceMinor: 10000 }],
+      startDate: '2026-10-01', billingDay: 1, discountType: 'none', discountValue: 0, taxRateBps: 0,
+    });
+    const activation = useStore.getState().activateClientPlan(created.planId!);
+    expect(useStore.getState().setServiceCycleStatus(activation.cycleId!, 'Published').ok).toBe(true);
+
+    expect(useStore.getState().setClientPlanStatus(created.planId!, 'Draft')).toEqual({
+      ok: false,
+      error: 'Active plans with started cycles cannot return to Draft.',
+    });
+    expect(useStore.getState().clientPlans.find(item => item.id === created.planId)?.status).toBe('Active');
+  });
+
   it('lets a Project Manager edit draft plan dates and active billing/contract dates', () => {
     const created = useStore.getState().createClientWithPlan({
       clientName: 'Dates Co', planName: 'Plan', origin: 'custom',
