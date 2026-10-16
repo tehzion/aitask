@@ -46,6 +46,8 @@ const PENDING_COMMAND_STORAGE_VERSION = 1;
 const PENDING_COMMAND_STORAGE_PREFIX = 'aitask:secure-pending-command';
 const PENDING_MEMBER_MUTATION_STORAGE_VERSION = 1;
 const PENDING_MEMBER_MUTATION_STORAGE_PREFIX = 'aitask:secure-pending-member-mutation';
+const PENDING_NOTIFICATION_STORAGE_VERSION = 1;
+const PENDING_NOTIFICATION_STORAGE_PREFIX = 'aitask:secure-pending-notification';
 
 export const SECURE_COMMAND_TYPES = [
   'workspace.patch',
@@ -254,8 +256,8 @@ export type SecureBackendCapabilities = {
 };
 
 export type SecureBackendCompatibility =
-  | { compatible: true; capabilities: SecureBackendCapabilities; error?: undefined }
-  | { compatible: false; error: string; code?: string };
+  | { compatible: true; capabilities: SecureBackendCapabilities; error?: undefined; code?: undefined; retryable?: undefined }
+  | { compatible: false; error: string; code?: string; retryable?: boolean };
 
 type PendingCommandEnvelope = {
   version: number;
@@ -293,6 +295,13 @@ type PendingMemberMutationEnvelope = {
   mutation: RetainedSecureMemberMutationWithId;
 };
 
+type PendingNotificationEnvelope = {
+  version: number;
+  workspaceId: string;
+  authUserId: string;
+  mutation: { id: string; notificationIds: string[]; isRead: boolean; markAll: boolean };
+};
+
 export type PendingCommandBatch = {
   commands: SecureCommand[];
   before: BaselineRow[];
@@ -301,6 +310,7 @@ export type PendingCommandBatch = {
   attempted: boolean;
 };
 let retryableBatch: PendingCommandBatch | null = null;
+let saveInFlight = false;
 let baseline = new Map<string, BaselineRow>();
 let retryableCommand: SecureCommand | null = null;
 let activeSecureAuthUserId: string | null = null;
@@ -312,6 +322,7 @@ let retryableNotificationMutation: {
   notificationIds: string[];
   isRead: boolean;
   markAll: boolean;
+  restored?: boolean;
 } | null = null;
 
 const entityKey = (type: string, id: string) => `${type}:${id}`;
@@ -324,6 +335,10 @@ const pendingCommandStorageKey = (authUserId: string) => (
 
 const pendingMemberMutationStorageKey = (authUserId: string) => (
   `${PENDING_MEMBER_MUTATION_STORAGE_PREFIX}:v${PENDING_MEMBER_MUTATION_STORAGE_VERSION}:${SECURE_WORKSPACE_ID}:${authUserId}`
+);
+
+const pendingNotificationStorageKey = (authUserId: string) => (
+  `${PENDING_NOTIFICATION_STORAGE_PREFIX}:v${PENDING_NOTIFICATION_STORAGE_VERSION}:${SECURE_WORKSPACE_ID}:${authUserId}`
 );
 
 const getSessionStorage = (): Storage | null => {
@@ -456,6 +471,60 @@ const clearPersistedRetryableMemberMutation = (authUserId = activeSecureAuthUser
   }
 };
 
+const setRetryableNotificationMutation = (value: typeof retryableNotificationMutation) => {
+  retryableNotificationMutation = value;
+  if (!activeSecureAuthUserId) return;
+  const storage = getSessionStorage();
+  if (!storage) return;
+  try {
+    if (value) {
+      const envelope: PendingNotificationEnvelope = {
+        version: PENDING_NOTIFICATION_STORAGE_VERSION,
+        workspaceId: SECURE_WORKSPACE_ID,
+        authUserId: activeSecureAuthUserId,
+        mutation: value,
+      };
+      storage.setItem(pendingNotificationStorageKey(activeSecureAuthUserId), JSON.stringify(envelope));
+    } else {
+      storage.removeItem(pendingNotificationStorageKey(activeSecureAuthUserId));
+    }
+  } catch {
+    // Session storage may be unavailable; the in-memory value still applies.
+  }
+};
+
+const restoreRetryableNotificationMutation = (authUserId: string): typeof retryableNotificationMutation => {
+  if (!authUserId) return null;
+  if (retryableNotificationMutation) return retryableNotificationMutation;
+  const storage = getSessionStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(pendingNotificationStorageKey(authUserId));
+    if (!raw) return null;
+    const envelope = JSON.parse(raw) as Partial<PendingNotificationEnvelope>;
+    const mutation = envelope.mutation;
+    if (
+      envelope.version !== PENDING_NOTIFICATION_STORAGE_VERSION
+      || envelope.workspaceId !== SECURE_WORKSPACE_ID
+      || envelope.authUserId !== authUserId
+      || !mutation
+      || typeof mutation.id !== 'string'
+      || typeof mutation.isRead !== 'boolean'
+      || typeof mutation.markAll !== 'boolean'
+      || !Array.isArray(mutation.notificationIds)
+      || !mutation.notificationIds.every(id => typeof id === 'string')
+    ) {
+      storage.removeItem(pendingNotificationStorageKey(authUserId));
+      return null;
+    }
+    retryableNotificationMutation = { ...mutation, restored: true };
+    return retryableNotificationMutation;
+  } catch {
+    storage.removeItem(pendingNotificationStorageKey(authUserId));
+    return null;
+  }
+};
+
 export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand | null => {
   if (!authUserId) return null;
   if (activeSecureAuthUserId && activeSecureAuthUserId !== authUserId) {
@@ -464,8 +533,10 @@ export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand
     retryableMemberDepartments = null;
     retryableMemberPermissions = null;
     retryableMemberRole = null;
+    retryableNotificationMutation = null;
   }
   activeSecureAuthUserId = authUserId;
+  restoreRetryableNotificationMutation(authUserId);
   if (retryableCommand) return retryableCommand;
   const storage = getSessionStorage();
   if (!storage) return null;
@@ -495,6 +566,9 @@ export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand
         storage.removeItem(pendingCommandStorageKey(authUserId));
         return null;
       }
+      // A restored batch must re-run derived-progress reconciliation before
+      // sending its next group; a persisted `attempted` would skip it.
+      batch.attempted = false;
       retryableBatch = batch;
     }
     retryableCommand = envelope.command;
@@ -1366,7 +1440,10 @@ export const loadSecureBackendCapabilities = async (): Promise<SecureBackendComp
   try {
     const { loadBackendCompatibility } = await import('./secureBackendCapabilities');
     return loadBackendCompatibility(invoke, refreshSecureSession, isAuthError, SECURE_BACKEND_SCHEMA_VERSION, BACKEND_UPGRADE_REQUIRED_MESSAGE);
-  } catch { return { compatible: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE }; }
+  } catch {
+    // A thrown transport error is not a schema mismatch; let the caller retry.
+    return { compatible: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE, code: 'RETRY_REQUIRED', retryable: true };
+  }
 };
 
 export const loadSecureWorkspaceRevision = async () => {
@@ -1528,9 +1605,9 @@ export const acknowledgeSecureReleaseNotice = (noticeId: string) => requestRelea
 
 const notificationRuntime = () => ({
   get retryableNotificationMutation() { return retryableNotificationMutation; },
-  set retryableNotificationMutation(value: typeof retryableNotificationMutation) { retryableNotificationMutation = value; },
+  set retryableNotificationMutation(value: typeof retryableNotificationMutation) { setRetryableNotificationMutation(value); },
   get baseline() { return baseline; },
-  captureWorkspaceSession, isWorkspaceSessionCurrent, isRecord, cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, entityKey, stable, commandId, SyncRequestTimeoutError,
+  captureWorkspaceSession, isWorkspaceSessionCurrent, isRecord, cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, entityKey, stable, commandId, commandErrorCode, SyncRequestTimeoutError,
 });
 export type SecureNotificationRuntime = ReturnType<typeof notificationRuntime>;
 
@@ -1785,6 +1862,12 @@ export const saveSecureWorkspace = async (
 
   if (retryableBatch) return { ok: false, code: 'RETRY_REQUIRED', error: 'Save was not confirmed. Your pending change is retained for retry.' };
   if (pendingOperations.length > 500) return { ok: false, code: 'VALIDATION', error: 'This change touches too many records. Save it in smaller steps.' };
+  // Guard synchronously: two interleaved saves must not both create a batch,
+  // because the second would clobber the first (the dynamic import below is an
+  // async boundary).
+  if (saveInFlight) return { ok: false, code: 'RETRY_REQUIRED', error: 'A save is already in progress. Your pending change will be confirmed shortly.' };
+  saveInFlight = true;
+  try {
   const clientDeletes = pendingOperations.filter(operation => operation.entityType === 'client' && operation.action === 'delete');
   const remaining = pendingOperations.filter(operation => !clientDeletes.includes(operation));
   const remainingType = type === 'client.delete' ? undefined : type;
@@ -1801,6 +1884,9 @@ export const saveSecureWorkspace = async (
   // All later groups are retained before the first request can reach the server.
   retainSecureWorkspaceCommand(commands[0]);
   return runSecureCommandBatch(saveSession, options);
+  } finally {
+    saveInFlight = false;
+  }
 };
 
 const runSecureCommandBatch = async (
@@ -1877,7 +1963,11 @@ export const retrySecureWorkspaceCommand = async (
   if (!retryableBatch) retryableBatch = { commands: [command], before: structuredClone(command.operations.map(operation => baseline.get(entityKey(operation.entityType, operation.entityId))).filter((row): row is BaselineRow => Boolean(row))), cursor: 0, workspaceVersion: expectedWorkspaceVersion, attempted: true };
   else {
     retryableBatch.commands[retryableBatch.cursor] = command;
-    if (expectedWorkspaceVersion !== undefined) retryableBatch.workspaceVersion = expectedWorkspaceVersion;
+    // Never lower the version already advanced by earlier groups in this
+    // batch; the caller's value can be stale after a partial save failure.
+    if (expectedWorkspaceVersion !== undefined) {
+      retryableBatch.workspaceVersion = Math.max(retryableBatch.workspaceVersion ?? 0, expectedWorkspaceVersion);
+    }
   }
   return runSecureCommandBatch(captureWorkspaceSession(), options);
 };
@@ -1927,6 +2017,7 @@ export const discardSecureWorkspaceCommand = () => {
   retryableMemberPermissions = null;
   retryableMemberRole = null;
   clearPersistedRetryableMemberMutation();
+  setRetryableNotificationMutation(null);
   activeSecureAuthUserId = null;
 };
 

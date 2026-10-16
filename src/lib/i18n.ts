@@ -1900,6 +1900,8 @@ const zhSystemCopy: Record<string, string> = {
   'New password must be at least 12 characters.': '新密码至少需要 12 个字符。',
   'New password and confirmation do not match.': '新密码与确认密码不匹配。',
   'Your secure session has expired.': '您的安全会话已过期。',
+  'A save is already in progress. Your pending change will be confirmed shortly.': '保存正在进行中，您待提交的更改很快就会确认。',
+  'Email updated, but your session could not be refreshed. Sign out, then sign in again.': '邮箱已更新，但您的会话无法刷新。请退出后重新登录。',
   'Current password is incorrect.': '当前密码不正确。',
   'User account was not found.': '未找到用户账号。',
   'This browser could not verify the current password.': '此浏览器无法验证当前密码。',

@@ -2,9 +2,9 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient, type User as SupabaseAuthUser } from 'npm:@supabase/supabase-js@2.117.3';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Vary': 'Origin',
 };
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
@@ -77,7 +77,22 @@ const publicAppUrl = () => {
   }
 };
 
-Deno.serve(async (request) => {
+const localDevOrigins = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5178',
+  'http://127.0.0.1:5181',
+]);
+
+const isAllowedOrigin = (origin: string) => {
+  if (localDevOrigins.has(origin)) return true;
+  if (origin === publicAppUrl()) return true;
+  const configured = (Deno.env.get('AITASK_ALLOWED_ORIGINS') || '')
+    .split(',').map(value => value.trim()).filter(Boolean);
+  return configured.includes(origin);
+};
+
+const handleRequest = async (request: Request): Promise<Response> => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -116,7 +131,8 @@ Deno.serve(async (request) => {
     return json({ error: 'This signed-in account is not linked to an AiTask member. Sign out and sign in again.' }, 403);
   }
 
-  const body = await request.json().catch(() => ({}));
+  const parsedBody = await request.json().catch(() => null);
+  const body = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody) ? parsedBody : {};
   const action = typeof body.action === 'string' ? body.action.trim() : 'invite_member';
 
   if (action === 'update_self_email') {
@@ -372,4 +388,14 @@ Deno.serve(async (request) => {
     return retryError('Invitation confirmation is pending. Keep this draft and retry; the prepared login has been retained.');
   }
   return json(result, createdAuthUser ? 201 : 200);
+};
+
+Deno.serve(async request => {
+  const origin = request.headers.get('Origin');
+  const response = await handleRequest(request);
+  const headers = new Headers(response.headers);
+  headers.set('Vary', 'Origin');
+  if (origin && isAllowedOrigin(origin)) headers.set('Access-Control-Allow-Origin', origin);
+  else headers.delete('Access-Control-Allow-Origin');
+  return new Response(response.body, { status: response.status, headers });
 });

@@ -1102,7 +1102,7 @@ export const useStore = create<StoreState>()(
                 ...state.backend,
                 status: compatibility.compatible
                   ? (hasRetainedChange ? 'retry_required' : 'live')
-                  : 'upgrade_required',
+                  : compatibility.retryable ? 'retry_required' : 'upgrade_required',
                 isLoading: false,
                 lastSyncedAt: loadedAt,
                 lastPulledAt: loadedAt,
@@ -1112,7 +1112,7 @@ export const useStore = create<StoreState>()(
                 hasLocalChanges: hasRetainedChange,
                 pendingMutations: hasRetainedChange ? 1 : 0,
                 pendingCommandType: retained ? retained.type : undefined,
-                upgradeRequired: !compatibility.compatible,
+                upgradeRequired: !compatibility.compatible && !compatibility.retryable,
                 error: compatibility.compatible ? undefined : compatibility.error,
                 message: compatibility.compatible
                   ? hasRetainedChange
@@ -1590,9 +1590,9 @@ export const useStore = create<StoreState>()(
             apply((state) => ({
               backend: {
                 ...state.backend,
-                status: 'upgrade_required',
+                status: compatibility.retryable ? 'retry_required' : 'upgrade_required',
                 isSaving: false,
-                upgradeRequired: true,
+                upgradeRequired: !compatibility.retryable,
                 error: compatibility.error,
                 message: compatibility.error,
               },
@@ -1799,6 +1799,9 @@ export const useStore = create<StoreState>()(
           if (error || !data.user) {
             return loginFailure(classifyLoginFailure(error?.message || ''));
           }
+          // A normal sign-in always discards any password-setup link mode left
+          // over from an abandoned invite/recovery link in this tab.
+          clearPasswordSetupMode();
 
           try {
             const retainedBeforeLogin = restoreSecureWorkspaceCommand(data.user.id);
@@ -1827,7 +1830,7 @@ export const useStore = create<StoreState>()(
                 ...state.backend,
                 status: compatibility.compatible
                   ? (hasRetainedChange ? 'retry_required' : 'live')
-                  : 'upgrade_required',
+                  : compatibility.retryable ? 'retry_required' : 'upgrade_required',
                 isLoading: false,
                 workspaceVersion: secure.revision.version,
                 remoteVersion: secure.revision.version,
@@ -1836,7 +1839,7 @@ export const useStore = create<StoreState>()(
                 pendingMutations: hasRetainedChange ? 1 : 0,
                 pendingCommandType: hasRetainedChange ? retainedBeforeLogin?.type : undefined,
                 hasLocalChanges: hasRetainedChange,
-                upgradeRequired: !compatibility.compatible,
+                upgradeRequired: !compatibility.compatible && !compatibility.retryable,
                 error: compatibility.compatible ? undefined : compatibility.error,
                 message: compatibility.compatible
                   ? hasRetainedChange
@@ -1914,8 +1917,13 @@ export const useStore = create<StoreState>()(
           const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
             redirectTo: passwordSetupRedirectUrl(),
           });
-          if (error && /fetch|network|offline/i.test(error.message)) {
-            return { ok: false, error: 'The recovery service could not be reached. Please try again.' };
+          if (error) {
+            if (/fetch|network|offline/i.test(error.message)) {
+              return { ok: false, error: 'The recovery service could not be reached. Please try again.' };
+            }
+            // Rate limits, SMTP and configuration failures must not be reported
+            // as a sent email; Supabase already keeps unknown emails silent.
+            return { ok: false, error: error.message };
           }
           return { ok: true };
         } catch {
@@ -2080,7 +2088,10 @@ export const useStore = create<StoreState>()(
         });
         if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to update the login email.') };
 
-        await supabase.auth.refreshSession();
+        const { error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          return { ok: false, error: 'Email updated, but your session could not be refreshed. Sign out, then sign in again.' };
+        }
         if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
           await get().pullBackendNow({ force: true, silent: true });
         }
@@ -4567,6 +4578,12 @@ export const useStore = create<StoreState>()(
           });
           if (error) return { ok: false, error: error.message };
           if (signUpData.session) await supabase.auth.signOut({ scope: 'local' });
+          // When email confirmation is on, Supabase obfuscates an existing
+          // email by returning a user with an empty identities array instead of
+          // an error. Treat that as the duplicate it is.
+          if (signUpData.user && (signUpData.user.identities?.length ?? 0) === 0) {
+            return { ok: false, error: 'This email is already registered. Use the sign-in page instead.' };
+          }
           if (!signUpData.user && !signUpData.session) {
             return { ok: false, error: 'This email is already registered. Use the sign-in page instead.' };
           }
@@ -5928,6 +5945,8 @@ useStore.subscribe((state, previous) => {
 });
 
 export const clearWorkspaceSession = (options: { discardPending?: boolean } = {}) => {
+  // Signing out must not leave a password-setup link mode active for the tab.
+  clearPasswordSetupMode();
   const actor = useStore.getState().currentUser;
   if (actor) clearRecoveredDrafts(actor.authUserId || actor.id);
   if (options.discardPending) { discardSecureWorkspaceCommand(); discardRetainedSecureMemberMutation(); }

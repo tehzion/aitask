@@ -48,25 +48,51 @@ const hashIdentity = async (identity: string) => {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 };
 
+const MAX_BODY_BYTES = 256_000;
+// Read at most `maxBytes`, returning null when the limit is exceeded. This
+// bounds memory even when a client omits Content-Length (chunked upload).
+const readBoundedBody = async (request: Request, maxBytes: number): Promise<string | null> => {
+  const reader = request.body?.getReader();
+  if (!reader) return '';
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(merged);
+};
+
 Deno.serve(async request => {
   const origin = request.headers.get('Origin');
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(origin) });
   if (request.method !== 'POST') return json(origin, { error: 'Method not allowed' }, 405);
   if (origin && !allowedOrigins.has(origin)) return json(origin, { error: 'Origin not allowed' }, 403);
   const contentLength = Number(request.headers.get('content-length') || 0);
-  if (Number.isFinite(contentLength) && contentLength > 256_000) return json(origin, { error: 'Feedback payload is too large' }, 413);
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) return json(origin, { error: 'Feedback payload is too large' }, 413);
 
   const url = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !serviceKey) return json(origin, { error: 'Feedback service is unavailable' }, 500);
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
-  const rawBody = await request.text().catch(() => '');
-  if (new TextEncoder().encode(rawBody).byteLength > 256_000) {
+  const rawBody = await readBoundedBody(request, MAX_BODY_BYTES);
+  if (rawBody === null) {
     return json(origin, { error: 'Feedback payload is too large' }, 413);
   }
   let body: Record<string, unknown>;
   try {
-    body = JSON.parse(rawBody || '{}') as Record<string, unknown>;
+    const parsed = JSON.parse(rawBody || '{}');
+    body = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return json(origin, { error: 'Feedback payload must be valid JSON' }, 400);
   }
@@ -122,7 +148,7 @@ Deno.serve(async request => {
     const { data: existing } = await admin.from('aitask_feedback_submissions')
       .select('id')
       .eq('campaign', 'launch-week-2026-07')
-      .ilike('email', email)
+      .eq('email', email)
       .maybeSingle();
     if (existing) {
       return json(origin, {

@@ -6,7 +6,10 @@ export const loadBackendCompatibility = async (invoke: () => PromiseLike<RpcResp
   try {
     result = await invoke();
     if (isAuthError(result.error) && await refresh()) result = await invoke();
-  } catch { return { compatible: false, error: upgradeMessage }; }
+  } catch {
+    // A thrown timeout/network error is transient, not a schema mismatch.
+    return { compatible: false, error: upgradeMessage, code: 'RETRY_REQUIRED', retryable: true };
+  }
   if (result.error) return { compatible: false, code: result.error.code, error: upgradeMessage };
   const response = result.data as Partial<SecureBackendCapabilities> & { ok?: boolean };
   const capabilities: SecureBackendCapabilities = {

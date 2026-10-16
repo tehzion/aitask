@@ -118,7 +118,10 @@ export const runCommandBatch = async (batch: PendingCommandBatch, options: Build
       const result = await api.execute(group, version);
       if (!api.isCurrent()) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
       if (result.ok === false) {
-        if (batch.commands.length === 1 && !['OFFLINE', 'CONFLICT', 'RETRY_REQUIRED'].includes(result.code)) {
+        // A terminal rejection can never succeed on retry. Clear the whole
+        // batch so the user can fix the change and save again instead of being
+        // trapped resending a doomed group forever.
+        if (!['OFFLINE', 'CONFLICT', 'RETRY_REQUIRED'].includes(result.code)) {
           api.complete();
         } else api.retain(group);
         return result;
