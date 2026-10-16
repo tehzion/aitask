@@ -765,7 +765,7 @@ const TasksWorkspace: React.FC = () => {
 
           {activeFilterLabels.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {activeFilterLabels.map(label => <Badge key={label} tone="indigo">{label}</Badge>)}
+              {activeFilterLabels.map(label => <Badge key={label} tone="indigo">{t(label)}</Badge>)}
             </div>
           )}
 

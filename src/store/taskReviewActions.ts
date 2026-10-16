@@ -6,6 +6,7 @@ import { canBeTaskReviewLead, canManageTaskReview, getDepartmentReviewers, isInd
 import { recordTaskWorkTransition } from '../lib/staffWorkflow';
 import { getWorkflowStepKind } from '../lib/workflowReview';
 import { isWorkspaceMutationLocked } from './index';
+import { SECURE_WORKSPACE_ID } from '../lib/secureWorkspace';
 
 export const attachTaskOutput = (state: StoreState, set: (patch: Partial<StoreState>) => void, pendingMessage: string, taskId: string, attachment: AttachmentRef): MutationActionResult => {
   const task = state.tasks.find(item => item.id === taskId); const actor = state.currentUser;
@@ -16,7 +17,7 @@ export const attachTaskOutput = (state: StoreState, set: (patch: Partial<StoreSt
   if (['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status)) return { ok: false, error: 'Return this task for revision before changing its output files.' };
   const parts = attachment.path.split('/');
   if (!task.clientId || !task.serviceCycleId || !state.deliverables.some(item => (item.id === task.deliverableId || item.taskIds.includes(task.id)) && item.clientId === task.clientId && item.cycleId === task.serviceCycleId)
-    || attachment.bucket !== 'client-service-files' || attachment.uploadedBy !== actor.id || parts.length !== 4 || parts[1] !== task.clientId || parts[2] !== task.serviceCycleId || parts.some(part => !part || part === '.' || part === '..') || attachment.path.includes('\\')) return { ok: false, error: 'Choose an output file belonging to this task and cycle.' };
+    || attachment.bucket !== 'client-service-files' || attachment.uploadedBy !== actor.id || parts.length !== 4 || parts[0] !== SECURE_WORKSPACE_ID || parts[1] !== task.clientId || parts[2] !== task.serviceCycleId || parts.some(part => !part || part === '.' || part === '..') || attachment.path.includes('\\')) return { ok: false, error: 'Choose an output file belonging to this task and cycle.' };
   if (task.outputAttachments?.some(file => file.path === attachment.path)) return { ok: true };
   if ((task.outputAttachments?.length || 0) >= 50) return { ok: false, error: 'A task can contain at most 50 output files.' };
   const next = recordTaskWorkTransition(task, { ...task, outputAttachments: [...(task.outputAttachments || []), attachment], updatedAt: new Date().toISOString() }, actor.id);

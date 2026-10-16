@@ -1,6 +1,6 @@
 import type { NotificationCategory, AppNotification } from '../types';
 import { type AppLocale } from './i18n';
-import { getLocalizedStatus } from './localeLabels';
+import { getLocalizedStatus, getLocalizedRole } from './localeLabels';
 import { classifyNotification, notificationCategoryLabels, notificationIconType } from './notificationCenter';
 
 const titles: Record<string, string> = {
@@ -11,6 +11,7 @@ const titles: Record<string, string> = {
   'Client Feedback': '客户反馈', 'Client Approved Task': '客户已批准任务',
   'Client Requested Revision': '客户请求修订', 'Revision Requested': '已请求修订',
   'Task Deadline Approaching': '任务截止日期临近', 'Help Requested': '协助请求',
+  'Member Added': '已添加成员', 'Member Removed': '已移除成员', 'New Registration': '新注册',
 };
 const categories: Record<NotificationCategory, string> = { assignment: '任务分配', deadline: '截止日期', review: '审核', feedback: '反馈', account: '账号', status: '状态更新', system: '系统' };
 export const notificationCategoryLabel = (category: NotificationCategory, locale: AppLocale) => locale === 'zh' ? categories[category] : notificationCategoryLabels[category];
@@ -35,6 +36,12 @@ const patterns: [RegExp, (...values: string[]) => string][] = [
   [/^"([\s\S]+)": blocker cleared by ([\s\S]+)\.$/, (title, name) => `${name}已清除“${title}”的阻碍。`],
   [/^"([\s\S]+)" is due today\.$/, title => `“${title}”今日到期。`],
   [/^"([\s\S]+)" is due tomorrow\.$/, title => `“${title}”明日到期。`],
+  [/^"([\s\S]+)" for ([\s\S]+) is due today\.$/, (title, client) => `“${title}”（${client}）今日到期。`],
+  [/^"([\s\S]+)" for ([\s\S]+) is due tomorrow\.$/, (title, client) => `“${title}”（${client}）明日到期。`],
+  [/^"([\s\S]+)" was returned to you by ([\s\S]+)\.$/, (title, name) => `${name}已将“${title}”退回给您。`],
+  [/^([\s\S]+) added ([\s\S]+) as ([\s\S]+)\.$/, (name, member, role) => `${name}已将 ${member} 添加为${getLocalizedRole(role, 'zh')}。`],
+  [/^([\s\S]+?) removed ([\s\S]+?)\.( Their assigned tasks are now unassigned\.)?$/, (name, member, unassigned) => `${name}已移除 ${member}。${unassigned ? '其已分配的任务现已取消分配。' : ''}`],
+  [/^([\s\S]+) has registered and is waiting for your approval\.$/, name => `${name} 已注册，正在等待您的批准。`],
 ];
 
 export const presentNotification = (notification: AppNotification, locale: AppLocale) => {

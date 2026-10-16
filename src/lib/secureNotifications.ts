@@ -40,7 +40,7 @@ export const createSecureNotifications = (runtime: SecureNotificationRuntime) =>
     if (!isRecord(result.data) || result.data.ok !== true) {
       throw new Error(isRecord(result.data) && typeof result.data.error === 'string'
         ? result.data.error
-        : 'Supabase returned an invalid notification feed.');
+        : "We couldn't load your notifications. Please try again.");
     }
 
     const memberId = cleanPortalText(result.data.memberId, 160);
@@ -137,8 +137,8 @@ export const createSecureNotifications = (runtime: SecureNotificationRuntime) =>
         ok: false,
         code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
         error: error instanceof SyncRequestTimeoutError
-          ? 'Notification update confirmation timed out. Try the same action again safely.'
-          : 'Supabase could not confirm the notification update.',
+          ? 'This is taking longer than expected. Please try again.'
+          : "We couldn't confirm the notification update. Please try again.",
       };
     }
 

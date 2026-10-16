@@ -7,6 +7,7 @@ export const SERVICE_FILES_BUCKET = 'client-service-files';
 export const SERVICE_FILE_MAX_BYTES = 100 * 1024 * 1024;
 export const SERVICE_FILE_ACCEPT = '.pdf,image/jpeg,image/png,image/webp,image/gif';
 export const SERVICE_FILE_TYPE_ERROR = 'Only PDF or image files are allowed.';
+export const SERVICE_FILE_UPLOAD_UNAVAILABLE_ERROR = "File uploads aren't available in this workspace.";
 export const SERVICE_FILE_ALLOWED_MIME_TYPES = [
   'application/pdf',
   'image/jpeg',
@@ -133,6 +134,13 @@ export const clearPendingServiceFiles = () => {
   legacyHydrated = false;
   if (typeof window === 'undefined') return;
   try { window.sessionStorage.removeItem(PENDING_SERVICE_FILES_KEY); } catch { /* best effort */ }
+  try {
+    // Durable per-file records live in localStorage and are re-hydrated on the
+    // next call, so they must be removed here or they resurrect on sign-out.
+    Object.keys(window.localStorage)
+      .filter(key => key.startsWith(DURABLE_FILE_PREFIX))
+      .forEach(key => window.localStorage.removeItem(key));
+  } catch { /* best effort */ }
 };
 
 // Bind only attachments actually submitted by this command. An unrelated save
@@ -205,7 +213,7 @@ export const uploadServiceFile = async (input: {
   cycleId: string;
   userId: string;
 }): Promise<{ ok: true; attachment: AttachmentRef } | { ok: false; error: string }> => {
-  if (!shouldUseSecureSupabase()) return { ok: false, error: 'Private file uploads require the Supabase backend.' };
+  if (!shouldUseSecureSupabase()) return { ok: false, error: SERVICE_FILE_UPLOAD_UNAVAILABLE_ERROR };
   if (input.file.size > SERVICE_FILE_MAX_BYTES) return { ok: false, error: 'Files must be 100 MB or smaller.' };
   const contentType = getServiceFileMimeType(input.file);
   if (!contentType) return { ok: false, error: SERVICE_FILE_TYPE_ERROR };
@@ -223,13 +231,20 @@ export const uploadServiceFile = async (input: {
     uploadedAt: new Date().toISOString(),
   };
   try {
+    // Record the intent before the network write so a lost success response
+    // (timeout/abort) still leaves a recoverable pending record instead of a
+    // permanent orphan in the bucket.
+    trackPendingServiceFile(attachment);
     const { error } = await supabase.storage.from(SERVICE_FILES_BUCKET).upload(path, input.file, {
       cacheControl: '3600',
       contentType,
       upsert: false,
     });
-    if (error) return { ok: false, error: error.message || 'The file could not be uploaded.' };
-    trackPendingServiceFile(attachment);
+    if (error) {
+      // A definitive rejection means no object was written.
+      forgetPendingServiceFile(attachment);
+      return { ok: false, error: error.message || 'The file could not be uploaded.' };
+    }
     assertWorkspaceSession(sessionToken);
   } catch (error) {
     return {
@@ -281,7 +296,7 @@ export const removeServiceFile = async (attachment: AttachmentRef, options: { ab
   const key = pendingServiceFileKey(attachment);
   if (!pendingServiceFiles.has(key)) return { ok: false as const, error: 'This file is not an unsubmitted upload and cannot be removed here.' };
   if (submissions.has(key) && !options.abandonSubmitted) return { ok: false as const, error: 'Upload confirmation is unresolved. The file was retained to protect saved activity.' };
-  if (!shouldUseSecureSupabase()) return { ok: false as const, error: 'Private file cleanup requires the Supabase backend.' };
+  if (!shouldUseSecureSupabase()) return { ok: false as const, error: "File cleanup isn't available in this workspace." };
   const status = await reconcileServiceUpload(attachment, true);
   if (!status.ok) return status;
   if (!isWorkspaceSessionCurrent(token)) return { ok: false as const, error: 'Your session changed. Sign in again.' };
@@ -332,7 +347,7 @@ export const downloadServiceFile = async (attachment: AttachmentRef, options: { 
   try {
     if (!shouldUseSecureSupabase()) {
       const localDemoFile = getLocalServiceDemoFile(attachment);
-      if (!localDemoFile) return { ok: false as const, error: 'Private file downloads require the Supabase backend.' };
+      if (!localDemoFile) return { ok: false as const, error: "File downloads aren't available in this workspace." };
       if (options.isCurrent && !options.isCurrent()) return { ok: false as const, error: 'The download was cancelled because the workspace changed.' };
       triggerBrowserDownload(new Blob([localDemoFile.content], { type: localDemoFile.mimeType }), attachment.fileName);
       return { ok: true as const };

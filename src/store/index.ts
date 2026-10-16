@@ -456,6 +456,9 @@ const waitForSyncIdle = async (timeoutMs = 5000) => {
 };
 let isApplyingRemoteSnapshot = false;
 let isApplyingNotificationRead = false;
+// Monotonic counter of local workspace mutations. A pull captures it before its
+// network work and refuses to overwrite edits that landed while it was in flight.
+let localMutationEpoch = 0;
 const legacyDemoTaskIdSet = new Set<string>(legacyDemoTaskIds);
 const retiredDemoUserIdSet = new Set<string>(retiredDemoUserIds);
 const allowedDepartments = new Set<Department>(DEPARTMENTS);
@@ -973,6 +976,7 @@ export const useStore = create<StoreState>()(
         const next = typeof patch === 'function' ? patch(state) : patch;
         const changed = workspaceMutationFields.some(key => key in next && next[key] !== state[key]);
         if (!changed || !state.currentUser || isApplyingRemoteSnapshot || isApplyingNotificationRead || !shouldUseSupabase() || (next.backend && next.backend.hasLocalChanges === false)) return next;
+        localMutationEpoch += 1;
         return { ...next, backend: { ...(next.backend || state.backend), hasLocalChanges: true, pendingMutations: Math.max(1, (next.backend || state.backend).pendingMutations), status: 'saving' as const } };
       });
       return ({
@@ -1116,8 +1120,8 @@ export const useStore = create<StoreState>()(
                 error: compatibility.compatible ? undefined : compatibility.error,
                 message: compatibility.compatible
                   ? hasRetainedChange
-                    ? 'Your pending change was restored in this browser tab. Review and retry it when ready.'
-                    : 'Secure Supabase session is active.'
+                    ? 'Your unsaved change was restored here. Review and retry it when ready.'
+                    : "You're securely connected."
                   : compatibility.error,
               },
             }));
@@ -1125,6 +1129,10 @@ export const useStore = create<StoreState>()(
             return;
           }
         } catch (error) {
+          isApplyingRemoteSnapshot = false;
+          const retainedCommand = getRetainedSecureCommand();
+          const retainedMemberMutation = getRetainedSecureMemberMutation();
+          const hasRetainedChange = Boolean(retainedCommand || retainedMemberMutation);
           apply({
             backend: {
               mode: 'supabase',
@@ -1134,10 +1142,13 @@ export const useStore = create<StoreState>()(
               isSaving: false,
               isPulling: false,
               hasRemoteUpdate: false,
-              hasLocalChanges: false,
-              pendingMutations: 0,
-              message: 'Supabase sync failed. Continuing with local state.',
-              error: error instanceof Error ? error.message : 'Unable to load Supabase state.',
+              hasLocalChanges: hasRetainedChange,
+              pendingMutations: hasRetainedChange ? 1 : 0,
+              pendingCommandType: retainedCommand?.type,
+              message: hasRetainedChange
+                ? "We couldn't reach the server. Your unsaved change is kept here — please retry it."
+                : "We couldn't reach the server. You can keep working; changes will sync when you're back online.",
+              error: error instanceof Error ? error.message : "We couldn't load your workspace. Please try again.",
             }
           });
         }
@@ -1258,8 +1269,8 @@ export const useStore = create<StoreState>()(
               status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
               isSaving: false,
               pendingMutations: state.backend.hasLocalChanges ? 1 : 0,
-              message: 'Save was not confirmed. Your pending change is retained for retry.',
-              error: error instanceof Error ? error.message : 'Supabase could not confirm the save.',
+              message: "We couldn't confirm your save yet. Your change is kept safe — please retry.",
+              error: error instanceof Error ? error.message : "We couldn't confirm your save. Please try again.",
               errorCode: 'RETRY_REQUIRED',
             }
           }));
@@ -1284,6 +1295,7 @@ export const useStore = create<StoreState>()(
             message: options.silent ? state.backend.message : 'Checking for the latest workspace data.',
           }
         }));
+        const epochBeforeLoad = localMutationEpoch;
 
         try {
           if (shouldUseSecureSupabase()) {
@@ -1360,6 +1372,24 @@ export const useStore = create<StoreState>()(
             const secure = await loadSecureWorkspace(capabilityUser, { preserveRetainedCommand: true });
             if (!isWorkspaceSessionCurrent(sessionToken)) return;
             const latest = get();
+            if (localMutationEpoch !== epochBeforeLoad) {
+              // A local edit landed while the refresh was in flight. Never
+              // overwrite it (a forced pull included); keep it and let the
+              // auto-sync persist it.
+              apply((state) => ({
+                backend: {
+                  ...state.backend,
+                  isPulling: false,
+                  lastPulledAt: pulledAt,
+                  remoteVersion: secure.revision.version,
+                  remoteUpdatedAt: secure.revision.updatedAt,
+                },
+              }));
+              if (get().backend.hasLocalChanges || get().backend.pendingMutations > 0) {
+                queueMicrotask(() => { if (isWorkspaceSessionCurrent(sessionToken)) void get().syncBackendNow(); });
+              }
+              return;
+            }
             if (!options.force && (latest.backend.hasLocalChanges || latest.backend.pendingMutations > 0)) {
               apply((state) => ({
                 backend: {
@@ -1416,8 +1446,8 @@ export const useStore = create<StoreState>()(
               ...state.backend,
               status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
               isPulling: false,
-              message: 'Unable to check the latest Supabase state.',
-              error: error instanceof Error ? error.message : 'Unable to load Supabase state.',
+              message: 'Unable to check for the latest updates.',
+              error: error instanceof Error ? error.message : "We couldn't load your workspace. Please try again.",
             }
           }));
         } finally {
@@ -1843,8 +1873,8 @@ export const useStore = create<StoreState>()(
                 error: compatibility.compatible ? undefined : compatibility.error,
                 message: compatibility.compatible
                   ? hasRetainedChange
-                    ? 'Secure session restored. Review and retry the retained change.'
-                    : 'Secure Supabase session is active.'
+                    ? "You're signed in. Review and retry your unsaved change."
+                    : "You're securely connected."
                   : compatibility.error,
               },
             }));
@@ -1852,6 +1882,7 @@ export const useStore = create<StoreState>()(
             if (typeof window !== 'undefined') startBackendAutoSync();
             return { ok: true };
           } catch (loadError) {
+            isApplyingRemoteSnapshot = false;
             if (!isWorkspaceSessionCurrent(sessionToken)) return loginFailure('workspace_load_failed');
             await supabase.auth.signOut({ scope: 'local' });
             const message = loadError instanceof Error ? loadError.message : String(loadError || '');
@@ -2019,7 +2050,7 @@ export const useStore = create<StoreState>()(
         if (duplicate) return { ok: false, error: 'Another user already uses that name or email.' };
 
         if (data.avatar?.trim() && !avatar) {
-          return { ok: false, error: 'Avatar must be an uploaded photo, app image, generated avatar, or Supabase image URL.' };
+          return { ok: false, error: 'Avatar must be an uploaded photo, app image, generated avatar, or image link.' };
         }
         if (shouldUseSecureSupabase() && email !== cleanAccountEmail(currentUser.email)) {
           return { ok: false, error: 'Confirm the login email change with your current password first.' };
@@ -2223,7 +2254,7 @@ export const useStore = create<StoreState>()(
                 }
               : notification
           ));
-          return { notifications, notificationUnreadCount: countUnreadForUser(currentUser, notifications) };
+          return { notifications, notificationUnreadCount: shouldUseSecureSupabase() ? state.notificationUnreadCount : countUnreadForUser(currentUser, notifications) };
         });
         isApplyingNotificationRead = false;
       },
@@ -2247,7 +2278,7 @@ export const useStore = create<StoreState>()(
                 }
               : notification
           ));
-          return { notifications, notificationUnreadCount: countUnreadForUser(currentUser, notifications) };
+          return { notifications, notificationUnreadCount: shouldUseSecureSupabase() ? state.notificationUnreadCount : countUnreadForUser(currentUser, notifications) };
         });
         isApplyingNotificationRead = false;
       },
@@ -2272,7 +2303,7 @@ export const useStore = create<StoreState>()(
                 : notification.isRead,
             };
           });
-          return { notifications, notificationUnreadCount: countUnreadForUser(currentUser, notifications) };
+          return { notifications, notificationUnreadCount: shouldUseSecureSupabase() ? state.notificationUnreadCount : countUnreadForUser(currentUser, notifications) };
         });
         isApplyingNotificationRead = false;
       },

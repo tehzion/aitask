@@ -265,7 +265,7 @@ const Layout: React.FC = () => {
       <a href="#main-content" className="fixed left-3 top-3 z-[100] -translate-y-20 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-lg transition-transform focus:translate-y-0">
         {t('Skip to main content')}
       </a>
-      <p className="sr-only" aria-live="polite" aria-atomic="true">{shortcutAnnouncement}</p>
+      <p className="sr-only" aria-live="polite" aria-atomic="true"><SystemMessage message={shortcutAnnouncement} /></p>
       <Sidebar isOpen={isMobileMenuOpen} onClose={closeMobileMenu} isCollapsed={isSidebarCollapsed} onToggleCollapsed={toggleSidebar} />
       <div ref={appContentRef} className="relative flex min-w-0 w-full flex-1 flex-col overflow-hidden">
         <Navbar

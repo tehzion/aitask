@@ -1166,7 +1166,37 @@ const zhCopyAdditions: Record<string, string> = {
   'Saving change.': '正在保存更改。',
   'Unable to update notifications. The previous read state was restored.': '无法更新通知，已恢复之前的已读状态。',
   'You are offline. The notification state was not changed.': '您处于离线状态，通知状态未更改。',
+  "We couldn't reach the server. Your unsaved change is kept here — please retry it.": '无法连接服务器。您未保存的更改已保留在此，请重试。',
+  "We couldn't reach the server. You can keep working; changes will sync when you're back online.": '无法连接服务器。您可以继续操作，网络恢复后更改会自动同步。',
+  "We couldn't reach the server. Your change is kept safe — please retry.": '无法连接服务器。您的更改已安全保留，请重试。',
+  "We couldn't reach the server. Your draft is safe — please retry.": '无法连接服务器。您的草稿已安全保留，请重试。',
+  "We couldn't load your workspace. Please try again.": '无法加载工作区，请重试。',
+  "We couldn't confirm your save yet. Your change is kept safe — please retry.": '尚未确认保存。您的更改已安全保留，请重试。',
+  "We couldn't confirm your save. Please try again.": '无法确认保存，请重试。',
+  'Unable to check for the latest updates.': '无法检查最新更新。',
+  "You're securely connected.": '您已安全连接。',
+  "You're signed in. Review and retry your unsaved change.": '您已登录。请检查并重试未保存的更改。',
+  'Your unsaved change was restored here. Review and retry it when ready.': '您未保存的更改已在此恢复。准备好后请检查并重试。',
+  'Avatar must be an uploaded photo, app image, generated avatar, or image link.': '头像必须是上传的照片、应用图片、生成的头像或图片链接。',
+  'The server took too long to respond. Please try again.': '服务器响应超时，请重试。',
+  "The save took longer than expected. Your change is kept safe — retrying it won't create duplicates.": '保存耗时较长。您的更改已安全保留，重试不会产生重复。',
+  "We couldn't save your acknowledgement. Please try again.": '无法保存您的确认，请重试。',
+  "We couldn't check the release notice. Please try again.": '无法检查发布通知，请重试。',
+  "We couldn't load the release notice. Please try again.": '无法加载发布通知，请重试。',
+  'This is taking longer than expected. It will be checked again next time.': '操作耗时较长，将在下次重新检查。',
+  "We couldn't confirm the notification update. Please try again.": '无法确认通知更新，请重试。',
+  'This is taking longer than expected. Please try again.': '操作耗时较长，请重试。',
+  "We couldn't load your notifications. Please try again.": '无法加载通知，请重试。',
+  "We couldn't confirm the department change. Please try again.": '无法确认部门更改，请重试。',
+  "We couldn't confirm the permission change. Please try again.": '无法确认权限更改，请重试。',
+  "We couldn't confirm the role change. Please try again.": '无法确认角色更改，请重试。',
+  "Your password was updated, but we couldn't finish setting up your account. Sign in with the new password and try again.": '密码已更新，但我们无法完成账户设置。请使用新密码登录后重试。',
+  "We couldn't load your client portal. Please try again.": '无法加载客户门户，请重试。',
+  "File uploads aren't available in this workspace.": '此工作区暂不支持文件上传。',
+  "File cleanup isn't available in this workspace.": '此工作区暂不支持文件清理。',
+  "File downloads aren't available in this workspace.": '此工作区暂不支持文件下载。',
   'Supabase sync failed. Continuing with local state.': 'Supabase 同步失败，将继续使用本地状态。',
+  'Supabase sync failed. A pending change is retained in this browser tab; review and retry it.': 'Supabase 同步失败。此浏览器标签页中保留了一项待处理的更改，请检查并重试。',
   'Save was not confirmed. Your pending change is retained for retry.': '未能确认保存。您的更改已保留以供重试。',
   'Browser storage is full. The pending change survives in this tab only until it is saved.': '浏览器存储空间不足。待保存的更改仅保留在当前标签页中，保存前请勿关闭。',
   'This change touches too many records. Save it in smaller steps.': '此更改涉及的记录过多，请分批保存。',
@@ -2346,6 +2376,12 @@ const translatePattern = (value: string) => {
     [/^Owner cleared for "(.+)"\.$/, name => `已清除“${name}”的负责人。`],
     [/^Approve (\d+) registrations as (.+) with their requested departments\?$/, (count, role) => `批准 ${count} 个注册（角色：${role}），并使用其申请的部门？`],
     [/^This step still has (\d+) incomplete predecessor task\(s\)\. Start it anyway\?$/, count => `此步骤仍有 ${count} 个未完成的前置任务，仍要开始吗？`],
+    // Task filter chips (label + user value)
+    [/^Search: (.+)$/, value => `搜索：${value}`],
+    [/^Assignee: (.+)$/, name => `负责人：${name}`],
+    [/^Client: (.+)$/, name => `客户：${name}`],
+    [/^From (.+)$/, value => `从 ${value}`],
+    [/^To (.+)$/, value => `至 ${value}`],
   ];
   for (const [pattern, replace] of patterns) {
     const match = value.match(pattern);
@@ -3066,10 +3102,52 @@ const zhCopyCoverage: Record<string, string> = {
   'visible companies': '可见公司',
 };
 
+// Copy that is reachable only through variables, defaults, or ternary branches
+// (so the literal-based coverage guards cannot see it).
+const zhCopyDeepDive: Record<string, string> = {
+  // Next-month plan editor
+  'Save draft': '保存草稿',
+  'Edit scheduled plan': '编辑已排定方案',
+  'Proposed start': '建议开始',
+  'Scheduled for': '排定于',
+  'Schedule for': '安排于',
+  'Draft saved. Review the changes before scheduling.': '草稿已保存。安排前请检查更改。',
+  'Next month’s plan is scheduled.': '下月方案已排定。',
+  'Plan returned to draft. Review and schedule it again when ready.': '方案已退回草稿。准备好后请检查并重新排定。',
+  'This saved plan will apply at the next billing boundary. Editing returns it to draft until you schedule it again.': '此已保存方案将在下个账单周期边界生效。编辑会将其退回草稿，直到您重新排定。',
+  'Save a draft, review the changes, then schedule it. Existing monthly records keep their scope and prices.': '先保存草稿、检查更改，再安排。现有月度记录保留其范围与价格。',
+  // Monthly record picker
+  'Historical scope and prices are preserved. Delivery progress and late files stay with this period.': '历史范围与价格将保留。交付进度和逾期文件仍归属该周期。',
+  'This month’s scope and prices are saved with this record. Plan changes apply to the next cycle.': '本月范围与价格随此记录保存。方案更改将在下个周期生效。',
+  'No current cycle': '当前无周期',
+  // Client workspace
+  'Historical record': '历史记录',
+  'This month’s record': '本月记录',
+  // Revision recovery
+  'Carry edits to next revision': '将修改带入下一版本',
+  // Approvals
+  'The registration could not be rejected.': '无法拒绝该注册申请。',
+  "Approve without SMTP using the member's existing password.": '使用成员现有密码批准（无需邮件邀请）。',
+  // Calendar
+  'start date adjusted': '开始日期已调整',
+  'due date adjusted': '截止日期已调整',
+  // Sign-in errors
+  'The email or password is incorrect. Check both and try again.': '邮箱或密码不正确，请检查后重试。',
+  'Your account is not approved or linked to an AiTask workspace. Ask Boss Koo to confirm your access.': '您的账号尚未获批准或未关联到 AiTask 工作区，请联系 Boss Koo 确认您的访问权限。',
+  'Your password was accepted, but the workspace could not be loaded. Please try again shortly.': '密码已通过，但工作区无法加载，请稍后重试。',
+  // Release notice offline
+  'Reconnect before checking the release notice.': '请重新联网后再检查发布通知。',
+  'Reconnect before saving the release notice acknowledgement.': '请重新联网后再保存发布通知确认。',
+  // Misc
+  'Add client or plan': '添加客户或方案',
+  'AiTask User': 'AiTask 用户',
+  'Unknown': '未知',
+};
+
 export const translateUiText = (value: string, locale: AppLocale) => {
   if (locale !== 'zh' || !value) return value;
   const core = value.trim();
-  const translated = zhCopy[core] || zhCopyExtras[core] || zhCopyAdditions[core] || zhSystemCopy[core] || zhCopyFollowups[core] || zhCopyCoverage[core] || translatePattern(core);
+  const translated = zhCopy[core] || zhCopyExtras[core] || zhCopyAdditions[core] || zhSystemCopy[core] || zhCopyFollowups[core] || zhCopyCoverage[core] || zhCopyDeepDive[core] || translatePattern(core);
   return translated === core ? value : preserveWhitespace(value, translated);
 };
 

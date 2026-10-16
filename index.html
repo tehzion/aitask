@@ -20,6 +20,16 @@
           root.style.colorScheme = dark ? 'dark' : 'light';
           var meta = document.querySelector('meta[name="theme-color"]');
           if (meta) meta.setAttribute('content', dark ? '#101618' : '#E5231B');
+          // Apply the persisted/system locale before first paint so the document
+          // language and title are correct for screen readers from the start.
+          var savedLocale = window.localStorage.getItem('aitask:locale');
+          var wantsZh = savedLocale === 'zh'
+            || (savedLocale !== 'en' && (navigator.language || '').toLowerCase().indexOf('zh') === 0);
+          if (wantsZh) {
+            root.lang = 'zh-CN';
+            root.dataset.locale = 'zh';
+            document.title = 'AiTask - 营销代理任务管理';
+          }
         } catch (error) {
           // Theme bootstrap is best-effort; the app re-applies it on mount.
         }

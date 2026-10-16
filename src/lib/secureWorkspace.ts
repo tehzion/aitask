@@ -620,7 +620,7 @@ export const restoreSecureMemberMutation = (authUserId: string): RetainedSecureM
 
 class SyncRequestTimeoutError extends Error {
   constructor() {
-    super('Supabase did not confirm the request within 20 seconds.');
+    super('The server took too long to respond. Please try again.');
     this.name = 'SyncRequestTimeoutError';
   }
 }
@@ -1373,8 +1373,8 @@ const executeCommand = async (
       error: offline
         ? 'You are offline. Reconnect before retrying this change.'
         : error instanceof SyncRequestTimeoutError
-          ? 'Save confirmation timed out. Your change is retained; retrying with the same command will not duplicate it.'
-          : 'Supabase could not be reached. Your change is retained for retry.',
+          ? "The save took longer than expected. Your change is kept safe — retrying it won't create duplicates."
+          : "We couldn't reach the server. Your change is kept safe — please retry.",
     };
   }
 
@@ -1488,7 +1488,7 @@ export const saveSecureMemberDepartments = async (member: WorkspaceMember, reque
     if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberDepartments(member, requestedDepartments);
   } catch {
-    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your draft is safe — please retry." };
   }
 };
 
@@ -1499,7 +1499,7 @@ export const saveSecureMemberPermissions = async (member: WorkspaceMember, permi
     if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberPermissions(member, permissions);
   } catch {
-    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your draft is safe — please retry." };
   }
 };
 
@@ -1515,7 +1515,7 @@ export const saveSecureMemberRole = async (member: WorkspaceMember, assignment: 
     if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberRole(member, assignment);
   } catch {
-    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your draft is safe — please retry." };
   }
 };
 
@@ -1587,7 +1587,7 @@ const releaseNoticeFailure = (
   error: string,
 ): ReleaseNoticeAcknowledgementResult => ({ ok: false, code, error });
 
-const releaseNoticeRuntime = () => ({ cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, SyncRequestTimeoutError });
+const releaseNoticeRuntime = () => ({ cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, commandErrorCode, SyncRequestTimeoutError });
 export type SecureReleaseNoticeRuntime = ReturnType<typeof releaseNoticeRuntime>;
 
 const requestReleaseNotice = async (noticeId: string, acknowledge: boolean): Promise<ReleaseNoticeAcknowledgementResult> => {
@@ -1597,7 +1597,7 @@ const requestReleaseNotice = async (noticeId: string, acknowledge: boolean): Pro
     assertWorkspaceSession(sessionToken);
     return module.requestReleaseNotice(noticeId, acknowledge, releaseNoticeRuntime());
   } catch {
-    return releaseNoticeFailure('RETRY_REQUIRED', acknowledge ? 'Supabase could not save the release notice acknowledgement.' : 'Supabase could not verify the release notice.');
+    return releaseNoticeFailure('RETRY_REQUIRED', acknowledge ? "We couldn't save your acknowledgement. Please try again." : "We couldn't check the release notice. Please try again.");
   }
 };
 export const getSecureReleaseNoticeAcknowledgement = (noticeId: string) => requestReleaseNotice(noticeId, false);
@@ -1625,7 +1625,7 @@ export const setSecureNotificationsRead = async (notificationIds: string[], isRe
     if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     return module.createSecureNotifications(notificationRuntime()).setSecureNotificationsRead(notificationIds, isRead, markAll);
   } catch {
-    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your draft is safe — please retry." };
   }
 };
 
@@ -1736,7 +1736,10 @@ const loadSecureWorkspaceInternal = async (authUser: User, options: { preserveRe
     entity_type: 'notification',
     entity_id: notification.id,
     parent_id: null,
-    data: stripRuntimeFields(notification as unknown as Record<string, unknown>),
+    // The feed RPC only emits notifications this member may see, so mark them
+    // visible: isNotificationVisible otherwise drops every row and no popups,
+    // sounds or optimistic read counts ever resolve.
+    data: { ...stripRuntimeFields(notification as unknown as Record<string, unknown>), visibleToCurrentUser: true },
     version: Math.max(1, Number(notification.version) || 1),
     updated_at: notification.updatedAt || notification.createdAt,
   }));
@@ -1896,7 +1899,7 @@ const runSecureCommandBatch = async (
   const batch = retryableBatch;
   if (!batch) return { ok: false, code: 'NOT_FOUND', error: 'There is no command waiting to retry.' };
   const module = await import('./secureCommandBatch').catch(() => null);
-  if (!module) return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Your change is retained for retry.' };
+  if (!module) return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your change is kept safe — please retry." };
   const { runCommandBatch } = module;
   return runCommandBatch(batch, options, {
     isCurrent: () => isWorkspaceSessionCurrent(saveSession),
@@ -1996,7 +1999,10 @@ export const rebaseRetryableCommand = (conflict: MutationConflict) => {
       }];
     }
     let mergedData = operation.data;
-    if (conflict.changedFields && operation.data && conflict.current) {
+    // Only merge when we actually know which fields this client changed.
+    // An empty changed-field set would otherwise replace the row with the
+    // server copy and silently drop the local change.
+    if (conflict.changedFields?.length && operation.data && conflict.current) {
       mergedData = { ...conflict.current, ...locallyChangedFields(operation) };
     }
     return [{ ...operation, data: mergedData, expectedVersion: conflict.actualVersion }];

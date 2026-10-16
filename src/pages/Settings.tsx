@@ -1131,7 +1131,7 @@ const Settings: React.FC = () => {
             <div>
               <p className="text-xs font-semibold text-slate-400">{t('Status')}</p>
               <p className="mt-1 font-semibold text-slate-900">
-                {backend.status === 'loading' ? t('settings.checkingWorkspace') : backend.status === 'saving' ? t('settings.savingChanges') : t(backend.message)}
+                {backend.status === 'loading' ? t('settings.checkingWorkspace') : backend.status === 'saving' ? t('settings.savingChanges') : <SystemMessage message={backend.message} />}
               </p>
               {backend.error && <p className="mt-2 text-red-600" role="alert" aria-live="polite"><SystemMessage message={backend.error} /></p>}
             </div>

@@ -67,6 +67,7 @@ import {
   SERVICE_FILE_ACCEPT,
   SERVICE_FILE_MAX_BYTES,
   SERVICE_FILE_TYPE_ERROR,
+  SERVICE_FILE_UPLOAD_UNAVAILABLE_ERROR,
   forgetPendingServiceFile,
   downloadServiceFile,
   getServiceFileMimeType,
@@ -340,7 +341,7 @@ const OperationsClientWorkspace = () => {
         return setActivityFeedback({
           tone: "error",
           text: t(uploaded.error),
-          action: uploaded.error === "Private file uploads require the Supabase backend." ? undefined : "upload",
+          action: uploaded.error === SERVICE_FILE_UPLOAD_UNAVAILABLE_ERROR ? undefined : "upload",
         });
       }
       attachment = uploaded.attachment;

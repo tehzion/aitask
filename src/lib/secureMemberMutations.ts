@@ -52,8 +52,8 @@ export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime
         ok: false,
         code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
         error: error instanceof SyncRequestTimeoutError
-          ? 'Save confirmation timed out. Submit again to retry the same department change safely.'
-          : 'Supabase could not confirm the department change. Submit again to retry.',
+          ? 'This is taking longer than expected. Please try again.'
+          : "We couldn't confirm the department change. Please try again.",
       };
     }
 
@@ -161,8 +161,8 @@ export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime
         ok: false,
         code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
         error: error instanceof SyncRequestTimeoutError
-          ? 'Save confirmation timed out. Submit again to retry the same permission change safely.'
-          : 'Supabase could not confirm the permission change. Submit again to retry.',
+          ? 'This is taking longer than expected. Please try again.'
+          : "We couldn't confirm the permission change. Please try again.",
       };
     }
 
@@ -283,8 +283,8 @@ export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime
         ok: false,
         code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
         error: error instanceof SyncRequestTimeoutError
-          ? 'Save confirmation timed out. Submit again to retry the role change safely.'
-          : 'Supabase could not confirm the role change. Submit again to retry.',
+          ? 'This is taking longer than expected. Please try again.'
+          : "We couldn't confirm the role change. Please try again.",
       };
     }
 

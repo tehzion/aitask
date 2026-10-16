@@ -8,7 +8,7 @@ export const finalizePasswordSetup = async (invoke: () => PromiseLike<RpcRespons
     return {
       ok: false,
       code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
-      error: 'The password changed, but Supabase could not finalize account setup. Sign in with the new password and retry.',
+      error: "Your password was updated, but we couldn't finish setting up your account. Sign in with the new password and try again.",
     };
   }
   if (isAuthError(result.error) && await refreshSecureSession()) {
@@ -18,7 +18,7 @@ export const finalizePasswordSetup = async (invoke: () => PromiseLike<RpcRespons
       return {
         ok: false,
         code: 'RETRY_REQUIRED',
-        error: 'The password changed, but Supabase could not finalize account setup. Sign in with the new password and retry.',
+        error: "Your password was updated, but we couldn't finish setting up your account. Sign in with the new password and try again.",
       };
     }
   }

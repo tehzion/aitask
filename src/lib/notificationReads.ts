@@ -4,6 +4,7 @@ export interface NotificationReadState {
   id: string;
   isRead: boolean;
   readByUserIds?: string[];
+  unreadByUserIds?: string[];
 }
 
 export const createNotificationMutationLock = () => {
@@ -33,6 +34,9 @@ export const captureNotificationReadState = (
       readByUserIds: notification.readByUserIds
         ? [...notification.readByUserIds]
         : undefined,
+      unreadByUserIds: notification.unreadByUserIds
+        ? [...notification.unreadByUserIds]
+        : undefined,
     }));
 };
 
@@ -49,6 +53,9 @@ export const restoreNotificationReadState = (
       isRead: snapshot.isRead,
       readByUserIds: snapshot.readByUserIds
         ? [...snapshot.readByUserIds]
+        : undefined,
+      unreadByUserIds: snapshot.unreadByUserIds
+        ? [...snapshot.unreadByUserIds]
         : undefined,
     };
   });

@@ -1,5 +1,5 @@
 import type { AttachmentRef, Task } from '../types';
-import { useStore } from '../store';
+import { isWorkspaceMutationLocked, useStore } from '../store';
 import { BACKEND_UPGRADE_REQUIRED_MESSAGE, loadSecureBackendCapabilities, SECURE_WORKSPACE_ID } from './secureWorkspace';
 import { forgetPendingServiceFile, removeServiceFile, uploadServiceFile } from './serviceFiles';
 
@@ -29,6 +29,12 @@ export const saveTaskOutputFile = async (task: Task, file: File, isCurrent: () =
   }
   const result = await useStore.getState().attachTaskOutput(task.id, attachment);
   if (!result.ok) {
+    // A mutation lock or a session change is transient: keep the upload so the
+    // caller can retry with the same path instead of deleting a valid object and
+    // forcing a full re-upload.
+    if (isWorkspaceMutationLocked(useStore.getState())) {
+      return { ok: false, error: typeof result.error === 'string' ? result.error : 'The change is waiting to be saved.', attachment };
+    }
     const cleanup = await removeServiceFile(attachment);
     return { ok: false, error: typeof result.error === 'string' ? result.error : 'The change is waiting to be saved.', attachment: cleanup.ok ? undefined : attachment };
   }

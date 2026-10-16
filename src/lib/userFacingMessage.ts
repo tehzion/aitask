@@ -18,7 +18,8 @@ export const userFacingMessage = (value: unknown): string | MessageDescriptor =>
   if (/^Private file (?:uploads|downloads|cleanup) require the Supabase backend\./.test(text)) return 'File sharing is unavailable in this workspace. Ask your workspace administrator to enable it.';
   if (/^Upload (?:reconciliation|confirmation)/.test(text)) return 'The upload could not be confirmed. The file has been kept for another check.';
   if (/^The password changed, but Supabase could not finalize account setup\./.test(text)) return 'Your password changed, but account setup could not finish. Sign in with the new password and try again.';
-  if (/^Supabase\b/.test(text)) return msg('errors.requestFailed');
+  if (/\bSupabase\b/i.test(text)) return msg('errors.requestFailed');
+  if (/\b(?:PostgREST|PGRST\d+|RPC|sync failed|retained for retry|browser tab)\b/i.test(text)) return msg('errors.requestFailed');
   if (/^(?:TypeError:\s*)?(?:Failed to fetch|fetch failed|Load failed|NetworkError\b|Network request failed|The network connection was lost)/i.test(text)) return msg('errors.connectionUnavailable');
   if (/^(?:Invalid Refresh Token|Refresh Token (?:Not Found|Has Expired)|JWT (?:expired|is expired)|Auth session missing)/i.test(text)) return msg('errors.sessionExpired');
   if (/^(?:new row violates row-level security|permission denied for (?:table|schema|function|relation)|violates row-level security)/i.test(text)) return msg('errors.permissionDenied');

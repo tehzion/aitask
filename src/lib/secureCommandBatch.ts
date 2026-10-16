@@ -150,6 +150,6 @@ export const runCommandBatch = async (batch: PendingCommandBatch, options: Build
   } catch {
     if (!api.isCurrent()) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     if (batch.commands[batch.cursor]) api.retain(batch.commands[batch.cursor]);
-    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Your change is retained for retry.' };
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your change is kept safe — please retry." };
   }
 };
