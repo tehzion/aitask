@@ -34,6 +34,12 @@ short-circuited by `aitask_is_admin`.
 - PM sidebar gains the portfolio task list (`/tasks`, "Portfolio work").
 - Role-aware scope copy on Companies (`Companies in your portfolio.`), Reports
   (`Portfolio`), and the PM commercial summary (`owned portfolio`).
+- PM no-op permission keys (`viewAllServiceClients`, `viewAssignedServiceClients`,
+  `manageAssignedClients`) are added to the PM restricted set, so the role editor
+  no longer presents inert grants. The unused `isProjectManager` helper is removed.
+- Task↔deliverable validation is centralized in `deliverableLinkError`
+  (`src/lib/deliveryLinks.ts`) and reused by `addTask`, `updateTask`, and the
+  explicit linker.
 - `docs/role-templates.md` updated for the changed policies.
 
 ## Tests

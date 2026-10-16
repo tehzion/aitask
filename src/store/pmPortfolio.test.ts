@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useStore } from './index';
-import type { Task, User } from '../types';
+import type { ClientServicePlan, Task, User } from '../types';
 import { snapshotWorkflow, SHORT_VIDEO_WORKFLOW_TEMPLATE } from '../lib/serviceManagement';
 import { defaultRolePermissions } from '../lib/access';
 
@@ -56,6 +56,19 @@ describe('PM portfolio mutation boundaries', () => {
     useStore.setState({ currentUser: pm });
     expect(useStore.getState().updateDraftClientPlan(created.planId!, { name: 'Hijacked' }).ok).toBe(false);
     expect(useStore.getState().activateClientPlan(created.planId!).ok).toBe(false);
+  });
+
+  it('denies service access to a duplicate-named company owned by another PM', () => {
+    const ownClient = { id: 'dup-own', clientName: 'Acme', createdBy: pm.id, createdAt: '', updatedAt: '' };
+    const foreignClient = { id: 'dup-foreign', clientName: 'Acme', createdBy: other.id, createdAt: '', updatedAt: '' };
+    const foreignPlan = {
+      id: 'dup-plan', clientId: 'dup-foreign', clientName: 'Acme', revision: 1, status: 'Draft', origin: 'custom',
+      name: 'Acme plan', serviceItems: [], startDate: '2026-10-01', billingDay: 1, discountType: 'none',
+      discountValue: 0, taxRateBps: 0, currency: 'MYR', createdAt: '', updatedAt: '',
+    } as unknown as ClientServicePlan;
+    useStore.setState({ currentUser: pm, clients: [ownClient, foreignClient], clientPlans: [foreignPlan] });
+    // Matching by name would wrongly authorize against this PM's own "Acme".
+    expect(useStore.getState().setClientPlanStatus('dup-plan', 'Paused').ok).toBe(false);
   });
 
   it('rejects a one-off add-on targeting another company without changing its cycle', () => {
