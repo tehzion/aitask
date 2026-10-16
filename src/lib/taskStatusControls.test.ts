@@ -1,25 +1,43 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Task, User } from '../types';
 import { getTaskStatusControls } from './taskStatusControls';
 import { getTaskStatusOptions } from './taskWorkflowAccess';
 import { getStaffGuidedAction } from './staffWorkspace';
 import { TASK_EVIDENCE_REQUIRED } from './staffWorkflow';
 
-const pm: User = { id: 'pm', name: 'PM', role: 'Project Manager', departments: [] };
-const hod: User = { id: 'hod', name: 'HOD', role: 'HOD', departments: ['Designer'] };
-const staff: User = { id: 'staff', name: 'Staff', role: 'Staff', departments: ['Designer'] };
-const task: Task = {
+const makeActors = () => ({
+  pm: { id: 'pm', name: 'PM', role: 'Project Manager', departments: [] } as User,
+  hod: { id: 'hod', name: 'HOD', role: 'HOD', departments: ['Designer'] } as User,
+  staff: { id: 'staff', name: 'Staff', role: 'Staff', departments: ['Designer'] } as User,
+});
+const makeTask = (overrides: Partial<Task> = {}): Task => ({
   id: 'task', clientName: 'Company', title: 'Artwork', description: '', serviceType: 'Design',
-  department: 'Designer', assignedTo: staff.id, createdBy: pm.id, startDate: '', dueDate: '',
+  department: 'Designer', assignedTo: 'staff', createdBy: 'pm', startDate: '', dueDate: '',
   priority: 'Medium', status: 'Waiting Approval', completionPercentage: 60, isCompleted: false,
   revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false,
+  ...overrides,
+});
+const makeStatuses = () => ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'];
+const completion = (user: User, current = makeTask(), configured = makeStatuses()) => {
+  const actors = makeActors();
+  return getTaskStatusControls(user, current, configured, [], { users: [actors.pm, actors.hod, actors.staff] })
+    .find(option => option.status === 'Completed');
 };
-const statuses = ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'];
-const scope = { users: [pm, hod, staff] };
-const completion = (user: User, current = task, configured = statuses) =>
-  getTaskStatusControls(user, current, configured, [], scope).find(option => option.status === 'Completed');
+
+// This suite previously depended on shared module fixtures and the ambient
+// clock while its access dependency graph supports expiring reviewer grants.
+// Fresh records plus a fixed clock keep actor ownership and time isolated.
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-10-16T00:00:00.000Z'));
+});
+afterEach(() => vi.useRealTimers());
 
 describe('PM completion controls', () => {
+  const { pm, hod, staff } = makeActors();
+  const task = makeTask();
+  const statuses = makeStatuses();
+  const scope = { users: [pm, hod, staff] };
   it.each(['Pending', 'In Progress', 'Waiting Approval', 'Revision', 'Cancelled'])('keeps completion visible with an approval explanation from %s', status => {
     expect(completion(pm, { ...task, status })).toEqual({ status: 'Completed', disabledReason: 'Only a project manager can confirm completion after internal approval.' });
     expect(getTaskStatusOptions(pm, { ...task, status }, statuses, [], scope)).not.toContain('Completed');
@@ -52,6 +70,14 @@ describe('PM completion controls', () => {
     expect(completion(staff, approved)).toBeUndefined();
     expect(completion(hod, approved)).toBeUndefined();
     expect(completion({ ...pm, id: 'foreign-pm' })).toBeUndefined();
+  });
+
+  it('does not leak completion ownership across repeated actor checks', () => {
+    const optional = makeTask({ requiresInternalApproval: false });
+    for (let index = 0; index < 100; index += 1) {
+      expect(completion(pm, optional)?.status).toBe('Completed');
+      expect(completion({ ...pm, id: `foreign-pm-${index}` }, optional)).toBeUndefined();
+    }
   });
 
   it('keeps PM completion blocked on unfinished workflow dependencies', () => {
