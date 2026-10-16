@@ -894,7 +894,7 @@ const Clients: React.FC = () => {
                       <div className="font-semibold text-ink">{client.taskCount} {t('total')}</div>
                       <p className="mt-1 text-xs text-slate-500">{client.openTaskCount} {t('open')}, {client.completedTaskCount} {t('completed')}</p>
                       <p className="mt-1 text-xs text-slate-500">{client.projectIds.size} {t(client.projectIds.size === 1 ? 'company record' : 'company records')}</p>
-                      {serviceContext?.cycle && <ProgressBar className="mt-3 w-40" label="Cycle delivered" value={serviceContext.delivered} max={Math.max(1, serviceContext.included)} />}
+                      {serviceContext?.cycle && <ProgressBar className="mt-3 w-40" label={t('Cycle delivered')} value={serviceContext.delivered} max={Math.max(1, serviceContext.included)} />}
                     </td>
                     <td className="px-5 py-6 align-top">
                       <div className="flex flex-col items-start gap-2">

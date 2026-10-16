@@ -208,9 +208,6 @@ const OperationsClientWorkspace = () => {
     store.rolePermissions,
   );
   const isClient = store.currentUser?.role === "Client";
-  if (!client) {
-    return <Navigate to={isClient ? "/projects" : "/clients"} replace />;
-  }
   if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions, store.clients, store.projects)) {
     if (store.currentUser?.role === "Client") return <Navigate to="/projects" replace />;
     const departmentLead = isDepartmentScopedUser(store.currentUser, store.rolePermissions);
@@ -248,6 +245,11 @@ const OperationsClientWorkspace = () => {
   }
   const monthly = resolveMonthlyRecord(cycles, client.id, getTodayInputDate(today), requestedCycle, new Set(plans.map(plan => plan.id)));
   const selectedCycle = monthly.selected;
+  const activityCycle = cycles.find(item => item.id === activityCycleId) || selectedCycle;
+  const canAddActivityForCycle = Boolean(canManageCycles
+    || (activityCycle && store.currentUser
+      && canOpenServiceClient(store.currentUser, activityCycle.clientName, store.tasks, store.rolePermissions, store.clients, store.projects)
+      && store.tasks.some(task => task.serviceCycleId === activityCycle.id && task.assignedTo === store.currentUser!.id)));
   const capturedPlan = selectedCycle ? plans.find(plan => plan.id === selectedCycle.planId) : undefined;
   const displayPlan = selectedCycle ? {
     ...(capturedPlan || activePlan), id: selectedCycle.planId, name: capturedPlan?.name || `${t('Plan revision')} ${selectedCycle.planRevision}`,
@@ -975,7 +977,7 @@ const OperationsClientWorkspace = () => {
 
       {tab === "activity" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-activity`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-activity`} tabIndex={0} className="scroll-mt-36 space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {!isClient && <div className="flex justify-end"><Button disabled={!selectedCycle && !activityCycleId} onClick={() => { if (!pendingActivity.current) setActivityFeedback(null); if (!activityCycleId || (!comment.trim() && !file && !pendingActivity.current)) setActivityCycleId(selectedCycle?.id || null); setActivitySheetOpen(true); }}><MessageSquareText className="h-4 w-4" />{t("Add activity")}</Button></div>}
+          {!isClient && <div className="flex justify-end"><Button disabled={!activityCycle || !canAddActivityForCycle} onClick={() => { if (!pendingActivity.current) setActivityFeedback(null); if (!activityCycleId || (!comment.trim() && !file && !pendingActivity.current)) setActivityCycleId(selectedCycle?.id || null); setActivitySheetOpen(true); }}><MessageSquareText className="h-4 w-4" />{t("Add activity")}</Button></div>}
           <section className={cn(cardBase, "divide-y divide-line/70")}>
             {comments.map((item) => (
               <article key={item.id} className="p-5">

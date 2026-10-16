@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Task } from '../types';
+import type { Task, User } from '../types';
 import { buildStaffWorkQueue, getStaffFocusTask, getStaffGuidedAction, getTaskBlockers, getHodScopeTasks, getUnavailableTaskDependencyCount } from './staffWorkspace';
 
 const task = (overrides: Partial<Task>): Task => ({
@@ -147,5 +147,25 @@ describe('approved work ownership', () => {
 describe('explicit revision action', () => {
   it('guides returned work back to execution without pretending it is complete', () => {
     expect(getStaffGuidedAction(task({ status: 'Revision', completionPercentage: 50 }), ['Pending', 'In Progress', 'Waiting Approval', 'Completed'])).toMatchObject({ label: 'Start revision', targetStatus: 'In Progress', disabled: false });
+  });
+});
+
+describe('reviewer-aware queue', () => {
+  it('keeps submitted work waiting by default and reclassifies it when the predicate says it is actionable', () => {
+    const waiting = task({ id: 'waiting', status: 'Waiting Approval' });
+    expect(buildStaffWorkQueue([waiting], '2026-08-26').waiting.map(item => item.id)).toEqual(['waiting']);
+    const reviewerQueue = buildStaffWorkQueue([waiting], '2026-08-26', { isActionable: () => true });
+    expect(reviewerQueue.needs_action.map(item => item.id)).toEqual(['waiting']);
+    expect(reviewerQueue.waiting).toEqual([]);
+    expect(getStaffFocusTask(reviewerQueue)?.id).toBe('waiting');
+  });
+
+  it('agrees with the guided action for a department reviewer', () => {
+    const actor = { id: 'reviewer-hod', name: 'HOD', role: 'HOD', departments: ['Video Editor'], hasLogin: true } as User;
+    const statuses = ['Pending', 'In Progress', 'Waiting Approval', 'Approved', 'Completed'];
+    const reviewable = task({ status: 'Waiting Approval', department: 'Video Editor', assignedTo: 'staff-1' });
+    const isActionable = (item: Task) => getStaffGuidedAction(item, statuses, actor, [], { users: [actor] }).kind === 'advance';
+    expect(getStaffGuidedAction(reviewable, statuses, actor, [], { users: [actor] }).kind).toBe('advance');
+    expect(buildStaffWorkQueue([reviewable], '2026-08-26', { isActionable }).needs_action.map(item => item.id)).toEqual([reviewable.id]);
   });
 });

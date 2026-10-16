@@ -23,7 +23,8 @@ export default function TaskOutputFiles({ task, onUploadStateChange }: { task: T
   const actorId = useStore(state => state.currentUser?.id);
   const state = useStore(useShallow(s => ({ currentUser: s.currentUser, users: s.users, clients: s.clients, projects: s.projects, rolePermissions: s.rolePermissions, backend: s.backend })));
   const access = getTaskAccess(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
-  const canUpload = access.canEdit && Boolean(task.clientId && task.serviceCycleId && (task.assignedTo === actorId || canManageTaskReview(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })))
+  const hasLinkedDeliverable = deliverables.some(item => (item.id === task.deliverableId || item.taskIds.includes(task.id)) && item.clientId === task.clientId && item.cycleId === task.serviceCycleId);
+  const canUpload = access.canEdit && hasLinkedDeliverable && Boolean(task.clientId && task.serviceCycleId && (task.assignedTo === actorId || canManageTaskReview(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })))
     && !['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status);
   const { busy: uploading, run } = useSaveAction(`output:${task.id}`);
   const input = React.useRef<HTMLInputElement>(null);

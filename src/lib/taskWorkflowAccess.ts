@@ -18,8 +18,8 @@ export const canReviewTaskInternally = (user: User | null | undefined, task: Tas
     || Boolean(scope.users && getDepartmentReviewers(scope.users, task, roles, scope).some(reviewer => reviewer.id === user.id));
 };
 
-export const canRequestTaskRevision = (user: User | null | undefined, task: Task, roles: CustomRole[] = []) => Boolean(user
-  && (user.role === 'Project Manager' || canReviewTaskInternally(user, task, roles)));
+export const canRequestTaskRevision = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => Boolean(user
+  && (user.role === 'Project Manager' || canReviewTaskInternally(user, task, roles, scope)));
 
 // A task whose responsible project manager opted it out of the internal-approval
 // checkpoint. Internal-review workflow steps can never be opted out.
@@ -51,8 +51,8 @@ export const taskTransitionError = (user: User | null | undefined, before: Task 
   if ((after.status === 'Completed' || after.isCompleted) && !isBossKoo(user)
     && (user?.role !== 'Project Manager' || !before || !isResponsibleProjectManager(user, before, scope)
       || (before.status !== 'Approved' && !canCompleteWithoutInternalApproval(before)))) return 'Only a project manager can confirm completion after internal approval.';
-  if (before && ['Waiting Approval', 'Approved', 'Completed'].includes(before.status) && !canRequestTaskRevision(user, before, roles)) return 'Ask the HOD or project manager to return approved work for revision.';
-  if (before && after.status === 'Revision' && !canRequestTaskRevision(user, before, roles)) return 'Ask the HOD or project manager to return approved work for revision.';
+  if (before && ['Waiting Approval', 'Approved', 'Completed'].includes(before.status) && !canRequestTaskRevision(user, before, roles, scope)) return 'Ask the HOD or project manager to return approved work for revision.';
+  if (before && after.status === 'Revision' && !canRequestTaskRevision(user, before, roles, scope)) return 'Ask the HOD or project manager to return approved work for revision.';
   return undefined;
 };
 

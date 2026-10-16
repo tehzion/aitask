@@ -265,7 +265,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const completionError = currentUser?.role === 'Project Manager' && task.status !== 'Completed'
     ? statusOptions.find(option => option.status === 'Completed')?.disabledReason : undefined;
   const showCompletionAction = task.status === 'Approved' || canCompleteWithoutInternalApproval(task);
-  const canAssignOthers = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canAssign;
+  const reassignmentLocked = ['Waiting Approval', 'Approved', 'Completed'].includes(task.status) || task.isCompleted;
+  const canAssignOthers = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canAssign && !reassignmentLocked;
   const canDelegateAssignedTask = Boolean(
     canAssignOthers
     && isDepartmentScopedUser(currentUser, rolePermissions)
@@ -1070,7 +1071,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </div>
               )}
 
-              {canEditTask && canRequestTaskRevision(currentUser, task, rolePermissions) && (
+              {canEditTask && ['Waiting Approval', 'Approved', 'Completed'].includes(task.status) && canRequestTaskRevision(currentUser, task, rolePermissions, { users, clients, projects }) && (
                 <form onSubmit={handleRevisionRequest} className="pt-4 border-t border-slate-100 space-y-2">
                   <label className="block text-xs font-medium text-slate-500">{t('Revision Control')}</label>
                   <textarea

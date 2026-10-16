@@ -144,11 +144,20 @@ export const projectManagerRestrictedPermissionKeys: RolePermissionKey[] = [
   'viewAllClients',
 ];
 
-export const getGrantablePermissionGroups = (baseRole: Role) => {
+// A department-scoped custom role (a Staff-based lead) is limited to its own
+// departments, so workspace-wide visibility must never be granted to it — it
+// would silently defeat the scoping the role opted into.
+export const departmentScopedRestrictedPermissionKeys: RolePermissionKey[] = [
+  'viewAllTasks',
+  'viewAllClients',
+];
+
+export const getGrantablePermissionGroups = (baseRole: Role, options: { departmentScoped?: boolean } = {}) => {
   const restricted = new Set<RolePermissionKey>([
     ...nonSuperAdminOnlyPermissionKeys,
     ...(baseRole === 'HOD' ? hodRestrictedPermissionKeys : []),
     ...(baseRole === 'Project Manager' ? projectManagerRestrictedPermissionKeys : []),
+    ...(baseRole === 'Staff' && options.departmentScoped === true ? departmentScopedRestrictedPermissionKeys : []),
   ]);
   return permissionGroups
     .map(group => ({ ...group, keys: group.keys.filter(key => !restricted.has(key)) }))
@@ -163,13 +172,15 @@ export const sanitizeNonSuperAdminPermissions = (permissions: RolePermissions): 
   return sanitized;
 };
 
-export const sanitizeRolePermissions = (permissions: RolePermissions, baseRole: Role): RolePermissions => {
+export const sanitizeRolePermissions = (permissions: RolePermissions, baseRole: Role, options: { departmentScoped?: boolean } = {}): RolePermissions => {
   const sanitized = sanitizeNonSuperAdminPermissions(permissions);
   const restricted = baseRole === 'HOD'
     ? hodRestrictedPermissionKeys
     : baseRole === 'Project Manager'
       ? projectManagerRestrictedPermissionKeys
-      : [];
+      : baseRole === 'Staff' && options.departmentScoped === true
+        ? departmentScopedRestrictedPermissionKeys
+        : [];
   restricted.forEach(key => {
     sanitized[key] = false;
   });
@@ -302,7 +313,7 @@ export const getEffectivePermissions = (
       || (key === 'viewDeliveryTracker' && source.viewDeliveryTracker === undefined && source.viewProjects === true)
     ))
   );
-  return sanitizeRolePermissions(permissions, effectiveBaseRole);
+  return sanitizeRolePermissions(permissions, effectiveBaseRole, { departmentScoped: customRole?.departmentScoped === true });
 };
 
 export const isHodRole = (role: CustomRole | null | undefined) => Boolean(role?.isBuiltin && role.baseRole === 'HOD');
@@ -431,10 +442,10 @@ export const canDeleteClientProfile = (
     return profile?.createdBy === user.id;
   }
   if (!user || !canDeleteClientProfiles(user, customRoles)) return false;
-  const key = getClientKey(clientName);
-  return profiles.some(profile => profile.createdBy === user.id && getClientKey(profile.clientName) === key)
-    || getVisibleTasks(user, tasks, customRoles).some(task => getClientKey(task.clientName) === key)
-    || canViewAllClients(user, customRoles);
+  // A company may only be deleted by someone who can also edit it. Otherwise a
+  // role could permanently destroy a record (with its projects and tasks) that
+  // it is not allowed to change.
+  return canEditClientProfile(user, clientName, tasks, customRoles, profiles);
 };
 export const getClientKey = (value: string | null | undefined) => value?.trim().toLowerCase() || '';
 export const canEditClientProfile = (

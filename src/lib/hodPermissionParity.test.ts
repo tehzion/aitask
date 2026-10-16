@@ -41,12 +41,17 @@ describe('HOD permission parity', () => {
     expect(canAccessPath(hostile, '/approvals')).toBe(false);
     expect(getEffectivePermissions(hostile)).toMatchObject({ viewApprovals: false, manageUsers: false, viewAllTasks: false, viewAllClients: false, manageClientPlans: false, manageServiceCycles: false, viewServicePrices: false });
   });
-  it('requires visible or owned company scope before offering deletion', () => {
+  it('gates company deletion on edit capability', () => {
     const profiles = [{ id: 'c', clientName: 'Visible Co', createdBy: 'pm', createdAt: '', updatedAt: '' }];
+    // Deletion is gated on edit: a department-visible task alone is not enough.
     expect(canDeleteClientProfile(hod, 'Visible Co', profiles)).toBe(false);
-    expect(canDeleteClientProfile(hod, 'Visible Co', profiles, [], [task()])).toBe(true);
+    expect(canDeleteClientProfile(hod, 'Visible Co', profiles, [], [task()])).toBe(false);
     expect(canDeleteClientProfile(hod, 'Hidden Co', profiles, [], [task()])).toBe(false);
-    expect(canDeleteClientProfile(hod, 'Visible Co', [{ ...profiles[0], createdBy: hod.id }])).toBe(true);
+    // A HOD who can edit the company (assigned task + manageAssignedClients) may delete it.
+    const assigningHod = { ...hod, permissions: { ...defaultRolePermissions.HOD, manageAssignedClients: true } };
+    expect(canDeleteClientProfile(assigningHod, 'Visible Co', profiles, [], [task({ assignedTo: hod.id })])).toBe(true);
+    // Owning the profile no longer bypasses the edit requirement.
+    expect(canDeleteClientProfile(hod, 'Visible Co', [{ ...profiles[0], createdBy: hod.id }])).toBe(false);
     expect(canDeleteClientProfile({ ...hod, permissions: { ...defaultRolePermissions.HOD, deleteClients: false } }, 'Visible Co', profiles, [], [task()])).toBe(false);
   });
   it('offers populated Boss-curated projects without exposing another PM’s projects', () => {

@@ -77,7 +77,7 @@ export const compareStaffTasks = (today: string) => (left: Task, right: Task) =>
   return left.id.localeCompare(right.id);
 };
 
-export const buildStaffWorkQueue = (tasks: Task[], today: string): StaffWorkQueue => {
+export const buildStaffWorkQueue = (tasks: Task[], today: string, options: { isActionable?: (task: Task) => boolean } = {}): StaffWorkQueue => {
   const queue: StaffWorkQueue = { needs_action: [], up_next: [], waiting: [], done: [] };
 
   tasks.forEach(task => {
@@ -86,7 +86,9 @@ export const buildStaffWorkQueue = (tasks: Task[], today: string): StaffWorkQueu
       return;
     }
     if (isWaiting(task)) {
-      queue.waiting.push(task);
+      // A reviewer (HOD/PM) who can advance a submitted or approved task must see
+      // it in the action queue; everyone else waits for that reviewer.
+      (options.isActionable?.(task) ? queue.needs_action : queue.waiting).push(task);
       return;
     }
     if (

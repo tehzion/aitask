@@ -174,7 +174,7 @@ const Settings: React.FC = () => {
   const { busy: isPasswordSaving, run: runPassword } = useSaveAction();
   const { busy: isStatusSaving, run: runStatus } = useSaveAction();
   const pendingStatus = React.useRef<{ kind: 'add' | 'delete'; name: string; raw: string } | null>(null);
-  const [hasPendingStatusAdd, setHasPendingStatusAdd] = React.useState(false);
+  const [pendingStatusKind, setPendingStatusKind] = React.useState<'add' | 'delete' | null>(null);
   const [localDemoMessage, setLocalDemoMessage] = React.useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [confirmation, setConfirmation] = React.useState<{
     title: string;
@@ -193,7 +193,7 @@ const Settings: React.FC = () => {
     if (!saved.ok) { setStatusError(saved.error || t('The change is waiting to be saved.')); return; }
     const present = useStore.getState().taskStatuses.includes(submitted.name);
     pendingStatus.current = null;
-    setHasPendingStatusAdd(false);
+    setPendingStatusKind(null);
     if (present !== (submitted.kind === 'add')) {
       setStatusError(t('The pending status change is no longer available. Review your draft before saving again.'));
       return;
@@ -206,12 +206,16 @@ const Settings: React.FC = () => {
   const handleStatusAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isStatusSaving) return;
-    const retry = Boolean(pendingStatus.current);
+    // Never let the Add form hijack a pending delete: it would retry the
+    // deletion and discard the status the user just typed. Pending deletes get
+    // their own retry control below.
+    if (pendingStatusKind === 'delete') return;
+    const retry = pendingStatusKind === 'add';
     if (!pendingStatus.current) {
       const result = addTaskStatus(newStatusInput);
       if (!result.ok) { setStatusError(result.error || 'Failed to add status.'); return; }
       pendingStatus.current = { kind: 'add', name: newStatusInput.trim(), raw: newStatusInput };
-      setHasPendingStatusAdd(true);
+      setPendingStatusKind('add');
     }
     await confirmStatus(retry);
   };
@@ -224,7 +228,7 @@ const Settings: React.FC = () => {
         const result = deleteTaskStatus(status);
         if (!result.ok) { setStatusError(result.error || 'Failed to delete status.'); return; }
         pendingStatus.current = { kind: 'delete', name: status, raw: '' };
-        setHasPendingStatusAdd(true);
+        setPendingStatusKind('delete');
         await confirmStatus();
       },
     });
@@ -255,7 +259,7 @@ const Settings: React.FC = () => {
   const profileEmailChanged = profileEmail.trim().toLowerCase() !== (currentUser?.email || '').trim().toLowerCase();
   const isUploadedAvatar = avatarUrl.startsWith('data:image/');
   const passwordChanged = Boolean(passwordForm.currentPassword || passwordForm.newPassword || passwordForm.confirmPassword);
-  useUnsavedChanges(profileChanged || passwordChanged || Boolean(profileCurrentPassword) || isProfileSaving || isPasswordSaving || isPreparingAvatar || hasPendingStatusAdd || Boolean(newStatusInput.trim()));
+  useUnsavedChanges(profileChanged || passwordChanged || Boolean(profileCurrentPassword) || isProfileSaving || isPasswordSaving || isPreparingAvatar || pendingStatusKind !== null || Boolean(newStatusInput.trim()));
   const mustResetPassword = Boolean(currentUser?.mustResetPassword);
   const canBypassPasswordReset = mustResetPassword && canUsePasswordResetBypass();
   const bypassActive = currentUser ? hasPasswordResetBypass(currentUser.id) : false;
@@ -336,7 +340,7 @@ const Settings: React.FC = () => {
     setProfileRetryDraft(null);
     setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setPasswordMessage(null);
-    pendingStatus.current = null; setHasPendingStatusAdd(false); setStatusError(''); setNewStatusInput('');
+    pendingStatus.current = null; setPendingStatusKind(null); setStatusError(''); setNewStatusInput('');
     setConfirmation(null);
     // Account identity owns the draft; profile refreshes must not erase it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1059,10 +1063,15 @@ const Settings: React.FC = () => {
                     className={cn(inputBase, 'flex-1 px-3 py-2 text-sm')}
                     maxLength={50}
                   />
-                  <Button type="submit" disabled={(!newStatusInput.trim() && !hasPendingStatusAdd) || isStatusSaving}>
-                    {isStatusSaving ? t('Saving...') : hasPendingStatusAdd ? t('Retry save') : t('Add Status')}
+                  <Button type="submit" disabled={pendingStatusKind === 'delete' || (!newStatusInput.trim() && pendingStatusKind !== 'add') || isStatusSaving}>
+                    {isStatusSaving ? t('Saving...') : pendingStatusKind === 'add' ? t('Retry save') : t('Add Status')}
                   </Button>
                 </form>
+                {pendingStatusKind === 'delete' && (
+                  <Button type="button" className="mt-2" onClick={() => void confirmStatus(true)} disabled={isStatusSaving}>
+                    {isStatusSaving ? t('Saving...') : t('Retry save')}
+                  </Button>
+                )}
                 {statusError && (
                   <p className="mt-2 text-xs text-red-600" role="alert" aria-live="polite"><SystemMessage message={statusError} /></p>
                 )}

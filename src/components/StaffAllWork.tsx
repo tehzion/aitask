@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Priority, TaskStatus } from '../types';
 import { useStore } from '../store';
 import { getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../lib/access';
-import { buildStaffWorkQueue, getHodScopeTasks, getStaffBucketLabel, type StaffWorkBucketKey } from '../lib/staffWorkspace';
+import { buildStaffWorkQueue, getHodScopeTasks, getStaffGuidedAction, getStaffBucketLabel, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { normalizeDepartment } from '../lib/departments';
 import { getTodayInputDate } from '../lib/utils';
 import { Button, PageHeader, SegmentedTabs, Surface } from './ui';
@@ -98,7 +98,12 @@ const StaffAllWork: React.FC = () => {
     return visibleTasks;
   }, [currentUser, isDepartmentLead, isHod, scopeView, visibleTasks]);
   const today = getTodayInputDate(useLocalToday());
-  const queue = React.useMemo(() => buildStaffWorkQueue(tasks, today), [tasks, today]);
+  const queue = React.useMemo(
+    () => buildStaffWorkQueue(tasks, today, {
+      isActionable: task => getStaffGuidedAction(task, taskStatuses, currentUser, rolePermissions, { users, clients: clientProfiles, projects }).kind === 'advance',
+    }),
+    [clientProfiles, currentUser, projects, rolePermissions, taskStatuses, tasks, today, users],
+  );
   const orderedTasks = React.useMemo(() => (
     bucket === 'all'
       ? [...queue.needs_action, ...queue.up_next, ...queue.waiting, ...queue.done]
@@ -196,7 +201,7 @@ const StaffAllWork: React.FC = () => {
         >
           {isHod && (
             <SegmentedTabs<'mine' | 'delegated' | 'department'>
-              items={[{ id: 'mine', label: t('My assignments'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'mine').length }, { id: 'delegated', label: t('Delegated by me'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'delegated').length }, { id: 'department', label: t('Department work'), count: visibleTasks.length }]}
+              items={[{ id: 'mine', label: t('My assignments'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'mine').filter(isTaskOpen).length }, { id: 'delegated', label: t('Delegated by me'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'delegated').filter(isTaskOpen).length }, { id: 'department', label: t('Department work'), count: visibleTasks.filter(isTaskOpen).length }]}
               value={scopeView}
               onChange={setScopeView}
               label={t('HOD work scope')}

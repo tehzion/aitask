@@ -16,7 +16,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { useI18n } from '../components/I18nProvider';
-import { canCreateTasks, canViewAllClients, getClientKey, getVisibleClientNames, getVisibleTasks } from '../lib/access';
+import { canCreateTasks, getClientKey, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { getClientDeliveryStageLabel, getClientDeliveryStageTone } from '../lib/clientPortal';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import {
@@ -110,7 +110,6 @@ const DeliveryTracker: React.FC = () => {
   );
   const visibleClientNames = React.useMemo(() => {
     const names = getVisibleClientNames(currentUser, allTasks, projects, rolePermissions, { clients, projects });
-    if (canViewAllClients(currentUser, rolePermissions)) names.push(...clients.map(client => client.clientName));
     if (currentUser?.role === 'Client' && currentUser.companyName) names.push(currentUser.companyName);
     return Array.from(new Map(names.filter(Boolean).map(name => [name.trim().toLowerCase(), name.trim()])).values())
       .sort((left, right) => left.localeCompare(right));

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CustomRole, User } from '../types';
-import { canAccessPath, getVisibleNavigation, isDepartmentScopedUser } from './access';
+import { canAccessPath, getVisibleNavigation, isBossKoo, isDepartmentScopedUser } from './access';
 
 export type NavigationItem = {
   path: string;
@@ -131,11 +131,16 @@ export const getNavigationSections = (
     };
   }
 
+  const generalPrimary = getVisibleNavigation(user, rolePermissions).map(item => ({
+    ...item,
+    icon: navIcons[item.label as keyof typeof navIcons],
+  }));
   return {
-    primary: getVisibleNavigation(user, rolePermissions).map(item => ({
-      ...item,
-      icon: navIcons[item.label as keyof typeof navIcons],
-    })),
+    // The task-management workspace is Boss Koo only, so the general sidebar
+    // never lists it; surface it explicitly for the account that owns it.
+    primary: isBossKoo(user)
+      ? [{ path: '/tasks', label: 'Tasks', icon: CheckSquare }, ...generalPrimary]
+      : generalPrimary,
     secondary: [],
     footer: filterVisible(user, rolePermissions, [{ path: '/settings', label: 'Settings', icon: Settings }]),
   };

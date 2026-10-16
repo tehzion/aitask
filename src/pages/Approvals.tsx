@@ -11,7 +11,7 @@ import { cardBase, fieldLabel, inputBase, pageShell } from '../components/uiToke
 import { cn } from '../lib/utils';
 import { formatLocalizedDate } from '../lib/i18n';
 import { useI18n } from '../components/I18nProvider';
-import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getBuiltinRoleId, getEffectivePermissions, getEffectiveRoleName, getGrantablePermissionGroups, getRoleDisplayName, isBossKoo, permissionLabels } from '../lib/access';
+import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getBuiltinRoleId, getEffectivePermissions, getEffectiveRoleName, getGrantablePermissionGroups, getRoleDisplayName, isBossKoo, isDepartmentScopedUser, permissionLabels } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
@@ -442,7 +442,13 @@ const Approvals: React.FC = () => {
     ? getEffectivePermissions({ ...memberPermissionsUser, permissions: undefined }, rolePermissions)
     : clonePermissions(defaultRolePermissions.Staff);
   const memberPermissionsPreview = memberPermissionsCustom ? memberPermissions : memberPermissionsDefault;
-  const memberPermissionGroups = getGrantablePermissionGroups(memberPermissionsUser?.role || 'Staff');
+  // Mirror getEffectivePermissions: only the built-in HOD role resolves to the
+  // HOD base role. A custom role based on HOD keeps its member's base role, so
+  // the grantable set never hides permissions that would actually take effect.
+  const memberPermissionsBaseRole = memberPermissionsUser?.role === 'Staff' && memberPermissionsUser.customRoleId === getBuiltinRoleId('HOD')
+    ? 'HOD'
+    : (memberPermissionsUser?.role || 'Staff');
+  const memberPermissionGroups = getGrantablePermissionGroups(memberPermissionsBaseRole, { departmentScoped: isDepartmentScopedUser(memberPermissionsUser, rolePermissions) });
   const memberPermissionKeys = memberPermissionGroups.flatMap(group => group.keys);
   const addedMemberPermissions = memberPermissionKeys.filter(key => memberPermissionsPreview[key] && !memberPermissionsBefore[key]);
   const removedMemberPermissions = memberPermissionKeys.filter(key => !memberPermissionsPreview[key] && memberPermissionsBefore[key]);
@@ -1509,6 +1515,7 @@ const Approvals: React.FC = () => {
                   value={roleForm.name}
                   onChange={e => setRoleForm({ ...roleForm, name: e.target.value })}
                   placeholder={t('e.g. Account Manager')}
+                  maxLength={60}
                   disabled={editingBuiltinRole}
                   required
                 />
@@ -1534,6 +1541,7 @@ const Approvals: React.FC = () => {
                 value={roleForm.description}
                 onChange={e => setRoleForm({ ...roleForm, description: e.target.value })}
                 placeholder={t('Short internal note')}
+                maxLength={200}
               />
             </div>
 
@@ -1552,7 +1560,7 @@ const Approvals: React.FC = () => {
                   </span>
                 </label>
               )}
-              {getGrantablePermissionGroups(roleForm.baseRole).map(group => (
+              {getGrantablePermissionGroups(roleForm.baseRole, { departmentScoped: roleForm.departmentScoped }).map(group => (
                 <div key={group.title}>
                   <p className="text-xs font-semibold tracking-wide text-slate-400 mb-2">{group.title}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2163,6 +2171,7 @@ const Approvals: React.FC = () => {
                     className={cn(inputBase, 'px-3 py-2.5')}
                     value={newUser.name}
                     onChange={e => setNewUser({ ...newUser, name: e.target.value })}
+                    maxLength={80}
                     required
                   />
                 </div>

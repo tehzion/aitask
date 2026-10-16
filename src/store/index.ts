@@ -90,6 +90,7 @@ import {
   isHodUser,
   canViewTask,
   isHodRole,
+  isDepartmentScopedUser,
   sanitizeRolePermissions,
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
@@ -2494,6 +2495,14 @@ export const useStore = create<StoreState>()(
           result = { ok: false, error: stageError };
           return state;
         }
+        // Submitted, approved or finished work must be returned for revision
+        // before it can change hands; otherwise a Completed task silently
+        // transfers ownership, an Approved task is reopened without the
+        // protected-output contract, or a submitted task is reset to Pending.
+        if (['Waiting Approval', 'Approved', 'Completed'].includes(task.status) || task.isCompleted) {
+          result = { ok: false, error: 'Return this work for revision before reassigning it.' };
+          return state;
+        }
 
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
@@ -2669,6 +2678,11 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
         }
         if (assignmentChanged) {
+          // Submitted, approved or finished work must be returned for revision
+          // before it can change hands, matching updateTaskAssignee.
+          if (['Waiting Approval', 'Approved', 'Completed'].includes(task.status) || task.isCompleted) {
+            return { ok: false, error: 'Return this work for revision before reassigning it.' };
+          }
           // Stage 1 must also hold when the department changes into one with an
           // HOD while the current assignee stays a staff member; otherwise a PM
           // could route work around the HOD checkpoint by editing the department.
@@ -2943,18 +2957,27 @@ export const useStore = create<StoreState>()(
           if (t.id !== taskId) return t;
 
           const preserveCompletion = status === 'Approved' && (t.status === 'Completed' || t.isCompleted);
-
-          return {
+          const nextStatus: TaskStatus = preserveCompletion ? 'Completed' : status === 'Approved' ? 'Approved' : 'In Progress';
+          // Record the decision through the canonical transition helper so review
+          // metadata (reviewRequestedBy/acceptedBy/blocker) and history stay in
+          // step with every other status change. The client's decision is stored
+          // in approvalHistory; the internal reviewDecision is preserved because
+          // recordTaskWorkTransition would otherwise stamp the client as reviewer.
+          const transitioned = recordTaskWorkTransition(t, {
             ...t,
             clientApprovalStatus: status,
-            status: preserveCompletion ? 'Completed' as TaskStatus : status === 'Approved' ? 'Approved' as TaskStatus : 'In Progress' as TaskStatus,
+            status: nextStatus,
             reviewDecision: status === 'Approved' ? t.reviewDecision : undefined,
             isCompleted: preserveCompletion,
             completedAt: preserveCompletion ? t.completedAt : undefined,
-            completionPercentage: preserveCompletion ? 100 : status === 'Approved' ? 80 : 50,
             revisionCount: status === 'Rejected' ? t.revisionCount + 1 : t.revisionCount,
             approvalHistory: [...(t.approvalHistory || []), event],
             updatedAt: now,
+          }, currentUser.id, now);
+          return {
+            ...transitioned,
+            reviewDecision: status === 'Approved' ? t.reviewDecision : undefined,
+            completionPercentage: preserveCompletion ? 100 : status === 'Approved' ? 80 : getTaskProgress(transitioned, state.users),
           };
         });
 
@@ -2999,8 +3022,16 @@ export const useStore = create<StoreState>()(
         }
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canRequestTaskRevision(currentUser, task, state.rolePermissions) || !canEditTask(currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) {
+        const scope = { users: state.users, clients: state.clients, projects: state.projects };
+        if (!currentUser || !task || !canRequestTaskRevision(currentUser, task, state.rolePermissions, scope) || !canEditTask(currentUser, task, state.rolePermissions, scope)) {
           result = { ok: false, error: 'You do not have permission to request a revision.' };
+          return state;
+        }
+        // A revision may only withdraw work that was actually submitted for review.
+        // Without this guard an unguarded call could revive a Cancelled task or push
+        // a never-reviewed task into revision and corrupt its client acceptance.
+        if (!['Waiting Approval', 'Approved', 'Completed'].includes(task.status)) {
+          result = { ok: false, error: 'Request a revision only after work has been submitted for review.' };
           return state;
         }
 
@@ -3013,22 +3044,23 @@ export const useStore = create<StoreState>()(
             }
           : null;
 
+        const now = new Date().toISOString();
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
 
-          return {
+          const updated = recordTaskWorkTransition(t, {
             ...t,
             revisionCount: t.revisionCount + 1,
             clientApprovalStatus: 'Rejected' as ClientApprovalStatus,
             status: 'In Progress' as TaskStatus,
-            reviewDecision: undefined,
-            reviewOverrideReason: undefined,
             isCompleted: false,
             completedAt: undefined,
-            completionPercentage: 50,
+            reviewDecision: undefined,
+            reviewOverrideReason: undefined,
             comments: revisionComment ? [...(t.comments || []), revisionComment] : t.comments,
-            updatedAt: new Date().toISOString(),
-          };
+            updatedAt: now,
+          }, currentUser.id, now);
+          return { ...updated, completionPercentage: getTaskProgress(updated, state.users) };
         });
 
         queueActionFeedback(currentUser.id, `task:${taskId}:revision`, msg('task.revisionRequested'), saved => saved.tasks.some(item => item.id === taskId && item.revisionCount === task.revisionCount + 1 && item.status === 'In Progress'));
@@ -4307,8 +4339,10 @@ export const useStore = create<StoreState>()(
         const comment = state.cycleComments.find(item => item.id === commentId);
         if (!comment || comment.userId !== state.currentUser?.id) return { ok: false, error: 'You cannot attach a file to this comment.' };
         if (!isServiceClientInScope(state, comment.clientId)) return { ok: false, error: serviceClientScopeError };
-        if (!canManageServiceCycles(state.currentUser, state.rolePermissions)
-          && !canOpenServiceClient(state.currentUser, comment.clientName, state.tasks, state.rolePermissions, state.clients)) return { ok: false, error: 'You do not have access to this cycle.' };
+        const authorized = canManageServiceCycles(state.currentUser, state.rolePermissions)
+          || (canOpenServiceClient(state.currentUser, comment.clientName, state.tasks, state.rolePermissions, state.clients, state.projects)
+            && state.tasks.some(task => task.serviceCycleId === comment.cycleId && task.assignedTo === state.currentUser?.id));
+        if (!authorized) return { ok: false, error: 'You do not have access to this cycle.' };
         set(current => ({ cycleComments: current.cycleComments.map(item => item.id === commentId ? { ...item, attachments: [...item.attachments, attachment], updatedAt: new Date().toISOString() } : item) }));
         return { ok: true };
       },
@@ -4598,7 +4632,7 @@ export const useStore = create<StoreState>()(
         if (departments.length === 0 && data.role !== 'Project Manager') {
           return { ok: false, error: 'Choose at least one department.' };
         }
-        if (initialPassword !== DEFAULT_USER_PASSWORD && initialPassword.length < 12) {
+        if (initialPassword && initialPassword !== DEFAULT_USER_PASSWORD && initialPassword.length < 12) {
           return { ok: false, error: 'Custom initial passwords must be at least 12 characters.' };
         }
         if (data.role === 'Client' && !companyName) {
@@ -4758,7 +4792,7 @@ export const useStore = create<StoreState>()(
 
         const name = data.name.trim();
         if (!name) return { ok: false, error: 'Role name is required.' };
-        const permissions = sanitizeRolePermissions(data.permissions, data.baseRole);
+        const permissions = sanitizeRolePermissions(data.permissions, data.baseRole, { departmentScoped: data.departmentScoped === true });
         const hasAnyPermission = permissions && Object.values(permissions).some(Boolean);
         if (!hasAnyPermission) return { ok: false, error: 'Choose at least one permission so members with this role keep workspace access.' };
 
@@ -4801,9 +4835,10 @@ export const useStore = create<StoreState>()(
 
         const nextName = editingBuiltin ? targetRole.name : data.name?.trim() || targetRole.name;
         const nextBaseRole = editingBuiltin ? targetRole.baseRole : data.baseRole || targetRole.baseRole;
+        const nextDepartmentScoped = editingBuiltin ? nextBaseRole === 'HOD' : (data.departmentScoped ?? targetRole.departmentScoped);
         const duplicate = get().rolePermissions.some(role => role.id !== id && role.name.toLowerCase() === nextName.toLowerCase());
         if (duplicate) return { ok: false, error: 'A role with this name already exists.' };
-        const nextPermissions = sanitizeRolePermissions(data.permissions ?? targetRole.permissions, nextBaseRole);
+        const nextPermissions = sanitizeRolePermissions(data.permissions ?? targetRole.permissions, nextBaseRole, { departmentScoped: nextDepartmentScoped === true });
         if (!Object.values(nextPermissions).some(Boolean)) {
           return { ok: false, error: 'Choose at least one permission so members with this role keep workspace access.' };
         }
@@ -4817,7 +4852,7 @@ export const useStore = create<StoreState>()(
                   permissions: nextPermissions,
                   name: nextName,
                   baseRole: nextBaseRole,
-                  departmentScoped: editingBuiltin ? nextBaseRole === 'HOD' : (data.departmentScoped ?? role.departmentScoped),
+                  departmentScoped: nextDepartmentScoped,
                   isProtected: editingBuiltin ? false : role.isProtected,
                   isBuiltin: editingBuiltin ? true : role.isBuiltin,
                   description: data.description !== undefined ? (data.description.trim() || undefined) : role.description,
@@ -5175,7 +5210,7 @@ export const useStore = create<StoreState>()(
         }
 
         const permissions = requestedPermissions
-          ? sanitizeRolePermissions(requestedPermissions, targetUser.role)
+          ? sanitizeRolePermissions(requestedPermissions, targetUser.role, { departmentScoped: isDepartmentScopedUser(targetUser, state.rolePermissions) })
           : undefined;
         if (permissions && !Object.values(permissions).some(Boolean)) {
           return { ok: false, error: 'Choose at least one permission or reset to role defaults.' };
@@ -5277,7 +5312,7 @@ export const useStore = create<StoreState>()(
         }
         const customRole = selectedCustomRole;
         const departments = normalizeMemberDepartments(role, departmentsInput);
-        if (departments.length === 0) return { ok: false, error: 'Choose at least one department before approving this member.' };
+        if (departments.length === 0 && role !== 'Project Manager') return { ok: false, error: 'Choose at least one department before approving this member.' };
 
         const duplicate = state.users.some(user => (
           user.name.toLowerCase() === reg.name.toLowerCase() ||
@@ -5371,6 +5406,7 @@ export const useStore = create<StoreState>()(
             headers: { Authorization: `Bearer ${session.access_token}` },
             body: { action: 'delete_member', memberId: userId },
           });
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
           if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to delete the member account.') };
           try {
             clearLocalUserPassword(userId);

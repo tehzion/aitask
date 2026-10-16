@@ -218,13 +218,21 @@ describe('client profile store authorization', () => {
     expect(useStore.getState().deleteClientProfile('CL-keep')).toEqual({ ok: false, error: 'You need permission to delete this company.' });
     expect(useStore.getState().clients).toHaveLength(1);
   });
-  it('rejects a hidden-company deletion by HOD without removing optimistic state', () => {
+  it('gates HOD company deletion on edit capability without removing optimistic state', () => {
     const hod: User = { id: 'hod-delete', name: 'HOD', role: 'HOD', department: 'Video Editor', departments: ['Video Editor'] };
     useStore.setState({ currentUser: hod, clients: [{ id: 'hidden-company', clientName: 'Hidden Co', createdBy: 'other', createdAt: '', updatedAt: '' }], tasks: [], projects: [], rolePermissions: [] });
     expect(useStore.getState().deleteClientProfile('hidden-company').ok).toBe(false);
     expect(useStore.getState().clients).toHaveLength(1);
+    // Owning the profile is not enough; deletion now requires edit capability.
     useStore.setState({ clients: [{ id: 'hidden-company', clientName: 'Hidden Co', createdBy: hod.id, createdAt: '', updatedAt: '' }] });
-    expect(useStore.getState().deleteClientProfile('hidden-company').ok).toBe(true);
+    expect(useStore.getState().deleteClientProfile('hidden-company').ok).toBe(false);
+    expect(useStore.getState().clients).toHaveLength(1);
+    // A HOD who can edit the company (assigned task + manageAssignedClients) may delete it.
+    const editableHod: User = { ...hod, permissions: { ...defaultRolePermissions.HOD, manageAssignedClients: true } };
+    const assigned: Task = { ...assignedTask, id: 'hod-task', clientName: 'Owned Co', assignedTo: hod.id, department: 'Video Editor' };
+    useStore.setState({ currentUser: editableHod, clients: [{ id: 'owned-company', clientName: 'Owned Co', createdAt: '', updatedAt: '' }], tasks: [assigned] });
+    expect(useStore.getState().deleteClientProfile('owned-company').ok).toBe(true);
+    expect(useStore.getState().clients).toHaveLength(0);
   });
 
 });
