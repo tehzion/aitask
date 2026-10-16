@@ -709,13 +709,17 @@ export const getVisibleNavigation = (user: User | null | undefined, customRoles:
   appNavigation.filter(item => canAccessPath(user, item.path, customRoles))
 );
 
+// The notification centre is intentionally unguarded (it hosts the fallback
+// "Go to workspace" target for every authenticated account). Falling back to
+// it — instead of '/' — prevents a zero-permission role from being bounced
+// between AccessDenied and a RoleRoute-denied dashboard indefinitely.
 export const getDefaultAccessiblePath = (
   user: User | null | undefined,
   customRoles: CustomRole[] = []
-): AppPath => {
+): AppPath | '/notifications' => {
   const firstPage = getVisibleNavigation(user, customRoles)[0];
   if (firstPage) return firstPage.path;
-  return canAccessPath(user, '/settings', customRoles) ? '/settings' : '/';
+  return canAccessPath(user, '/settings', customRoles) ? '/settings' : '/notifications';
 };
 
 export const getVisibleTasks = (
