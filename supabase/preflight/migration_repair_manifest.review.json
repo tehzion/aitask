@@ -886,7 +886,9 @@
     "20261015141803_optional_task_internal_approval",
     "20261015152000_pm_hod_first_assignment",
     "20261015160000_pm_project_service_scope",
-    "20261016120000_task_role_assignment_and_contact_notification_hardening"
+    "20261016120000_task_role_assignment_and_contact_notification_hardening",
+    "20261016140000_client_visible_completion_review",
+    "20261016150000_service_transition_guard"
   ],
   "pendingProductionMigrations": [
     "20261015014716_pm_task_company_boundaries",
@@ -897,6 +899,8 @@
     "20261015141803_optional_task_internal_approval",
     "20261015152000_pm_hod_first_assignment",
     "20261015160000_pm_project_service_scope",
-    "20261016120000_task_role_assignment_and_contact_notification_hardening"
+    "20261016120000_task_role_assignment_and_contact_notification_hardening",
+    "20261016140000_client_visible_completion_review",
+    "20261016150000_service_transition_guard"
   ]
 }
