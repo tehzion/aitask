@@ -54,7 +54,7 @@ describe('role-controlled task milestones', () => {
     expect(current()).toMatchObject({ status: 'Approved', completionPercentage: 80, isCompleted: false });
     actor(pm);
     expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
-    expect(current()).toMatchObject({ completionPercentage: 100, isCompleted: true, clientApprovalStatus: 'Pending' });
+    expect(current()).toMatchObject({ completionPercentage: 100, isCompleted: true, clientApprovalStatus: 'Approved' });
     expect(current().completedAt).toBeTruthy();
   });
   it('hides decisions belonging to other roles and requires HOD approval before PM completion', () => {
@@ -130,11 +130,16 @@ describe('role readiness at alternate entry points', () => {
     expect(useStore.getState().notifications.some(notification => notification.targetUserId === staff.id && /returned to you/.test(notification.message || ''))).toBe(false);
   });
 
-  it('lets a project manager finalize a waiting task when internal approval is optional', () => {
+  it('routes client-visible work to client approval when internal approval is optional', () => {
     useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Waiting Approval', requiresInternalApproval: false }] });
     actor(pm);
+    expect(useStore.getState().updateTaskStatus(task.id, 'Completed')).toEqual({ ok: false, error: 'Client approval is required before completion.' });
+    expect(useStore.getState().updateTaskStatus(task.id, 'Approved').ok).toBe(true);
+    actor(client);
+    expect(useStore.getState().reviewClientApproval(task.id, 'Approved', 'Customer OK').ok).toBe(true);
+    actor(pm);
     expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
-    expect(current()).toMatchObject({ completionPercentage: 100, isCompleted: true });
+    expect(current()).toMatchObject({ completionPercentage: 100, isCompleted: true, clientApprovalStatus: 'Approved' });
   });
 
   it('HOD-delegated tasks submitted for review notify the HOD reviewer', () => {

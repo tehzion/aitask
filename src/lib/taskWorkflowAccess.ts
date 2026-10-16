@@ -21,8 +21,11 @@ export const canReviewTaskInternally = (user: User | null | undefined, task: Tas
 export const canRequestTaskRevision = (user: User | null | undefined, task: Task, roles: CustomRole[] = []) => Boolean(user
   && (user.role === 'Project Manager' || canReviewTaskInternally(user, task, roles)));
 
-export const canCompleteWithoutInternalApproval = (task: Partial<Task> | undefined) => task?.status === 'Waiting Approval'
+const canSkipInternalApproval = (task: Partial<Task> | undefined) => task?.status === 'Waiting Approval'
   && task.requiresInternalApproval === false && task.workflowStepKind !== 'internal_review';
+
+export const canCompleteWithoutInternalApproval = (task: Partial<Task> | undefined) => canSkipInternalApproval(task)
+  && task?.visibility !== 'client-visible';
 
 export const taskTransitionError = (user: User | null | undefined, before: Task | undefined, after: Pick<Task, 'status' | 'isCompleted' | 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
   const protectedOutput = before?.status === 'Approved' ? ['title', 'description', 'notes', 'attachmentLink', 'attachmentName', 'outputAttachments'] as const
@@ -32,8 +35,12 @@ export const taskTransitionError = (user: User | null | undefined, before: Task 
     && ['assignedTo', 'department'].some(field => Object.prototype.hasOwnProperty.call(after, field) && before[field as 'assignedTo' | 'department'] !== after[field as 'assignedTo' | 'department'])) return 'Reassign work before submitting it for review.';
   if (before?.status === after.status && before.isCompleted === after.isCompleted) return undefined;
   const override = Boolean(user && isBossKoo(user) && after.reviewOverrideReason?.trim() && after.reviewOverrideReason.trim().length <= 2000);
+  const responsiblePmBypass = Boolean(user?.role === 'Project Manager' && before
+    && isResponsibleProjectManager(user, before, scope) && canSkipInternalApproval(before));
   if (after.status === 'Approved' && (!before || before.status !== 'Waiting Approval'
-    || (!canReviewTaskInternally(user, before, roles, scope) && !override))) return 'Only the department reviewer can approve submitted work.';
+    || (!canReviewTaskInternally(user, before, roles, scope) && !responsiblePmBypass && !override))) return 'Only the department reviewer can approve submitted work.';
+  if ((after.status === 'Completed' || after.isCompleted) && before?.visibility === 'client-visible'
+    && before.clientApprovalStatus !== 'Approved' && canSkipInternalApproval(before)) return 'Client approval is required before completion.';
   if ((after.status === 'Completed' || after.isCompleted) && !isBossKoo(user)
     && (user?.role !== 'Project Manager' || !before || !isResponsibleProjectManager(user, before, scope)
       || (before.status !== 'Approved' && !canCompleteWithoutInternalApproval(before)))) return 'Only a project manager can confirm completion after internal approval.';

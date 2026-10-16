@@ -59,6 +59,14 @@ describe('PM completion controls', () => {
     expect(completion(pm, { ...optional, workflowStepKind: 'internal_review' })?.disabledReason).toBe('Only a project manager can confirm completion after internal approval.');
   });
 
+  it('routes client-visible opt-out work through client review before completion', () => {
+    const optional = makeTask({ requiresInternalApproval: false, visibility: 'client-visible' });
+    expect(completion(pm, optional)?.disabledReason).toBe('Client approval is required before completion.');
+    expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).toContain('Approved');
+    expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).not.toContain('Completed');
+    expect(completion(pm, { ...optional, status: 'Approved', clientApprovalStatus: 'Approved' })).toEqual({ status: 'Completed', disabledReason: undefined });
+  });
+
   it('still requires earlier workflow steps and output evidence for opted-out tasks', () => {
     const optional = { ...task, requiresInternalApproval: false, generatedFromDeliverable: true, workflowStepKind: 'work' as const, workflowDependenciesReady: false };
     expect(completion(pm, optional)?.disabledReason).toBe('Complete the earlier workflow steps first.');
