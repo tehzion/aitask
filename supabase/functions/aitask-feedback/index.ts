@@ -170,6 +170,24 @@ Deno.serve(async request => {
   const { data: authData, error: authError } = await admin.auth.getUser(token);
   if (authError || !authData.user) return json(origin, { error: 'Reviewer session is invalid' }, 401);
 
+  const rateLimit = await admin.rpc('aitask_consume_feedback_rate_limit', {
+    p_key_hash: await hashIdentity(`results:${authData.user.id}:${requestIdentity(request)}`),
+    p_limit: submitRateLimit,
+    p_window_seconds: submitRateWindowSeconds,
+  });
+  if (rateLimit.error || !rateLimit.data || rateLimit.data.ok !== true || typeof rateLimit.data.allowed !== 'boolean') {
+    return json(origin, { error: 'Feedback service is temporarily unavailable. Please try again later.' }, 503);
+  }
+  if (!rateLimit.data.allowed) {
+    const retryAfterSeconds = Math.max(1, Number(rateLimit.data.retryAfterSeconds) || submitRateWindowSeconds);
+    return json(
+      origin,
+      { error: 'Too many requests. Please try again later.' },
+      429,
+      { 'Retry-After': String(retryAfterSeconds) },
+    );
+  }
+
   const email = authData.user.email?.trim().toLowerCase() || '';
   const reviewerEmails = new Set((Deno.env.get('AITASK_FEEDBACK_REVIEWER_EMAILS') || '')
     .split(',').map(value => value.trim().toLowerCase()).filter(Boolean));
