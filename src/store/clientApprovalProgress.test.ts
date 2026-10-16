@@ -70,11 +70,18 @@ describe('client decisions and derived delivery progress', () => {
     expect(state.serviceCycles[0].status).toBe('Published');
   });
 
-  it('keeps local customer acceptance at 80 percent until PM finalization', () => {
+  it('records customer acceptance without reopening an already completed task', () => {
     expect(useStore.getState().reviewClientApproval(task.id, 'Approved').ok).toBe(true);
     const state = useStore.getState();
-    expect(state.tasks[0]).toMatchObject({ status: 'Approved', clientApprovalStatus: 'Approved', isCompleted: false, completionPercentage: 80 });
-    expect(state.deliverables[0].status).toBe('In Progress');
+    expect(state.tasks[0]).toMatchObject({
+      status: 'Completed',
+      clientApprovalStatus: 'Approved',
+      isCompleted: true,
+      completedAt: timestamp,
+      completionPercentage: 100,
+    });
+    expect(state.tasks[0].approvalHistory).toEqual([expect.objectContaining({ userId: client.id, status: 'Approved' })]);
+    expect(state.deliverables[0].status).toBe('Ready');
     expect(state.serviceCycles[0].status).toBe('Published');
   });
 

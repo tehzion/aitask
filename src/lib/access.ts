@@ -1,4 +1,5 @@
 import { AppNotification, ClientProfile, CustomRole, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
+import { isAwaitingClientReview } from './clientPortal';
 import { getMemberDepartments, isMemberInDepartment } from './departments';
 
 export type DashboardPersona = 'boss' | 'projectManager' | 'operation' | 'account' | 'production' | 'client';
@@ -592,8 +593,7 @@ export const canReviewTaskAsClient = (user: User | null | undefined, task: Task,
   task.visibility !== 'internal' &&
   hasPermission(user, 'clientReview', customRoles) &&
   getClientKey(user.companyName) === getClientKey(task.clientName) &&
-  (task.isCompleted || task.status === 'Completed' || task.status === 'Approved') &&
-  task.clientApprovalStatus !== 'Approved'
+  isAwaitingClientReview(task)
 );
 export const canCommentOnTask = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = [], scope: VisibilityScope = {}) => (
   canEditTask(user, task, customRoles, scope) ||

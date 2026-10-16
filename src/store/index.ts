@@ -3111,14 +3111,16 @@ export const useStore = create<StoreState>()(
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
 
+          const preserveCompletion = status === 'Approved' && (t.status === 'Completed' || t.isCompleted);
+
           return {
             ...t,
             clientApprovalStatus: status,
-            status: status === 'Approved' ? 'Approved' as TaskStatus : 'In Progress' as TaskStatus,
+            status: preserveCompletion ? 'Completed' as TaskStatus : status === 'Approved' ? 'Approved' as TaskStatus : 'In Progress' as TaskStatus,
             reviewDecision: status === 'Approved' ? t.reviewDecision : undefined,
-            isCompleted: false,
-            completedAt: undefined,
-            completionPercentage: status === 'Approved' ? 80 : 50,
+            isCompleted: preserveCompletion,
+            completedAt: preserveCompletion ? t.completedAt : undefined,
+            completionPercentage: preserveCompletion ? 100 : status === 'Approved' ? 80 : 50,
             revisionCount: status === 'Rejected' ? t.revisionCount + 1 : t.revisionCount,
             approvalHistory: [...(t.approvalHistory || []), event],
             updatedAt: now,
