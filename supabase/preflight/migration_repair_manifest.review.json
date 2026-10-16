@@ -6,6 +6,7 @@
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "pendingMigrationRationales": {
     "20261016160000_pm_client_scope_and_ownership": "The service-command RPC accepted a `client` operation under the generic manageClientPlans capability without binding the target company to the caller's portfolio; because the RPC is SECURITY DEFINER and aitask_entities has no FORCE ROW LEVEL SECURITY, an authenticated Project Manager could rename, edit, re-own or delete any company. This migration adds an explicit portfolio scope check for update/delete and a create check for insert to both service-command overloads, a BEFORE UPDATE/DELETE trigger that freezes client ownership and blocks foreign PM mutations, makes createClients/deleteClients authoritative for a PM override, and makes the service-client helper prefer canonical client_id/project parent ids over duplicate names.",
+    "20261016170000_department_scoped_visibility_cleanup": "Department-scoped custom roles (and members that reference one, plus the builtin HOD role) must never carry workspace-wide viewAllTasks/viewAllClients, because aitask_can_view_task/aitask_can_view_client honour the grant in the database even though the interface strips it. This migration strips those two keys from department-scoped custom_role rows and from member permission overrides that reference a department-scoped role or the builtin HOD role, so the visibility policy is enforced at the data layer. It changes data only; no columns, RPC signatures, or policies are added.",
     "20261015140049_monthly_plan_revision_scheduling": "Client plan schedule fields already live in the aitask_entities JSONB payload, so no columns or public RPC signatures are added. This migration backfills pre-status draft revisions that already have an effective boundary as scheduled, then replaces the private monthly generator so only an explicit revisionScheduleStatus=scheduled revision can supersede an active plan."
   },
   "productionVerification": {
@@ -976,9 +977,11 @@
     "20261016120000_task_role_assignment_and_contact_notification_hardening",
     "20261016140000_client_visible_completion_review",
     "20261016150000_service_transition_guard",
-    "20261016160000_pm_client_scope_and_ownership"
+    "20261016160000_pm_client_scope_and_ownership",
+    "20261016170000_department_scoped_visibility_cleanup"
   ],
   "pendingProductionMigrations": [
-    "20261016160000_pm_client_scope_and_ownership"
+    "20261016160000_pm_client_scope_and_ownership",
+    "20261016170000_department_scoped_visibility_cleanup"
   ]
 }
