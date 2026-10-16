@@ -208,6 +208,9 @@ const OperationsClientWorkspace = () => {
     store.rolePermissions,
   );
   const isClient = store.currentUser?.role === "Client";
+  if (!client) {
+    return <Navigate to={isClient ? "/projects" : "/clients"} replace />;
+  }
   if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions, store.clients, store.projects)) {
     if (store.currentUser?.role === "Client") return <Navigate to="/projects" replace />;
     const departmentLead = isDepartmentScopedUser(store.currentUser, store.rolePermissions);
