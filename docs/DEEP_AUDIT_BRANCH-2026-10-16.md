@@ -24,8 +24,7 @@ The branch is **high quality and safe to continue reviewing toward release**. Th
   - `completion(pm, {status:'Approved', client-visible, requiresInternalApproval:false, clientApprovalStatus:'Pending'})` → `{status:'Completed'}` ❌ **allowed (no reason)**
   - Code: `src/lib/taskWorkflowAccess.ts:40-42` — the guard requires `canSkipInternalApproval(before)`, which requires `before.status === 'Waiting Approval'` (`:24-25`); `responsiblePmBypass` (`:38`) permits the self-approval.
 - **Impact:** The rule the fix advertises (and that its own test asserts) is not reliably enforced. **Mitigated:** A2 keeps `clientApprovalStatus='Pending'` on completion, so `canReviewTaskAsClient` still lets the client review afterwards — client review is *not* lost, only the ordering rule is inconsistent.
-- **Status:** Confirmed.
-- **Recommended fix:** Gate the guard on the task being opted-out + client-visible regardless of the current status, e.g. `before?.visibility==='client-visible' && before.clientApprovalStatus!=='Approved' && before.requiresInternalApproval===false && before.workflowStepKind!=='internal_review'`; **or** drop the guard and rely on A2 (client review after completion). Add a regression test for `Approved → Completed` with `clientApprovalStatus:'Pending'`.
+- **Status:** Confirmed → **Fixed** (2026-10-16). The guard now keys off `isApprovalOptOut(before)` (opt-out flag + non-internal-review step) at any status, so `Approved → Completed` with `clientApprovalStatus:'Pending'` is blocked. Regression test added to `taskStatusControls.test.ts`.
 
 ### DA-02 — Delivery tracker "review" metric changed meaning for the agency view (Low–Medium)
 - **Module:** Delivery tracker
@@ -72,10 +71,11 @@ The branch is **local only** and not pushed. `supabase/preflight/migration_repai
 
 ---
 
-## 6. Recommended next actions
-1. **DA-01:** decide the intended rule and either enforce it uniformly (recommended) or remove the guard; add the `Approved → Completed` test.
-2. **DA-02 / DA-05 / DA-06:** confirm intent; adjust copy/counters if needed.
-3. **Deploy checkpoint:** apply the pending migrations + edge function behind the runbook, then re-verify on staging/production.
-4. Optional: fold DA-03 into the reopen path (`scope.users` always provided by callers).
+## 6. Resolution (2026-10-16)
+1. **DA-01 — Fixed.** `isApprovalOptOut` extracted and the client-approval-before-completion guard now applies at any task status, closing the self-approval bypass. Regression test added (`Approved → Completed` with `clientApprovalStatus:'Pending'` blocked; `...:'Approved'` allowed).
+2. **DA-02 — Accepted as intended.** Unifying the tracker's "in review" to client review is the deliberate outcome of B1; the label is view-neutral ("in review") and consistent across client/staff. No code change.
+3. **DA-05 / DA-06 — Accepted as intended.** Both are the PM portfolio-boundary tightenings from the remediation; covered by `accessPmScope.test.ts`. No code change.
+4. **DA-03 — No production impact.** The only production caller (`store/index.ts`) always passes `user`, `clients`, and `projects`; the `scope.users || []` fallback only affects direct test calls. No code change.
+5. **Deploy checkpoint (unchanged):** apply the pending migrations + edge function behind the runbook, then re-verify on staging/production.
 
 **Unverified (needs live env):** pgTAP suite, Playwright e2e, live RLS/grants, and production data integrity.

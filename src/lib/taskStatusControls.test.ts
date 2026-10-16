@@ -64,6 +64,9 @@ describe('PM completion controls', () => {
     expect(completion(pm, optional)?.disabledReason).toBe('Client approval is required before completion.');
     expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).toContain('Approved');
     expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).not.toContain('Completed');
+    // Self-approval (Waiting Approval -> Approved) must not bypass the client
+    // checkpoint while client approval is still pending.
+    expect(completion(pm, { ...optional, status: 'Approved', clientApprovalStatus: 'Pending' })?.disabledReason).toBe('Client approval is required before completion.');
     expect(completion(pm, { ...optional, status: 'Approved', clientApprovalStatus: 'Approved' })).toEqual({ status: 'Completed', disabledReason: undefined });
   });
 

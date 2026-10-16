@@ -21,8 +21,11 @@ export const canReviewTaskInternally = (user: User | null | undefined, task: Tas
 export const canRequestTaskRevision = (user: User | null | undefined, task: Task, roles: CustomRole[] = []) => Boolean(user
   && (user.role === 'Project Manager' || canReviewTaskInternally(user, task, roles)));
 
-const canSkipInternalApproval = (task: Partial<Task> | undefined) => task?.status === 'Waiting Approval'
-  && task.requiresInternalApproval === false && task.workflowStepKind !== 'internal_review';
+// A task whose responsible project manager opted it out of the internal-approval
+// checkpoint. Internal-review workflow steps can never be opted out.
+const isApprovalOptOut = (task: Partial<Task> | undefined) => task?.requiresInternalApproval === false
+  && task.workflowStepKind !== 'internal_review';
+const canSkipInternalApproval = (task: Partial<Task> | undefined) => task?.status === 'Waiting Approval' && isApprovalOptOut(task);
 
 export const canCompleteWithoutInternalApproval = (task: Partial<Task> | undefined) => canSkipInternalApproval(task)
   && task?.visibility !== 'client-visible';
@@ -39,8 +42,12 @@ export const taskTransitionError = (user: User | null | undefined, before: Task 
     && isResponsibleProjectManager(user, before, scope) && canSkipInternalApproval(before));
   if (after.status === 'Approved' && (!before || before.status !== 'Waiting Approval'
     || (!canReviewTaskInternally(user, before, roles, scope) && !responsiblePmBypass && !override))) return 'Only the department reviewer can approve submitted work.';
-  if ((after.status === 'Completed' || after.isCompleted) && before?.visibility === 'client-visible'
-    && before.clientApprovalStatus !== 'Approved' && canSkipInternalApproval(before)) return 'Client approval is required before completion.';
+  // Opt-out client-visible work must still pass client review before completion;
+  // enforce it at any stage so self-approval (Waiting Approval -> Approved) cannot
+  // bypass the checkpoint. Standard client-visible work completes first and is
+  // reviewed by the client afterwards, so it is deliberately not gated here.
+  if ((after.status === 'Completed' || after.isCompleted) && before && isApprovalOptOut(before)
+    && before.visibility === 'client-visible' && before.clientApprovalStatus !== 'Approved') return 'Client approval is required before completion.';
   if ((after.status === 'Completed' || after.isCompleted) && !isBossKoo(user)
     && (user?.role !== 'Project Manager' || !before || !isResponsibleProjectManager(user, before, scope)
       || (before.status !== 'Approved' && !canCompleteWithoutInternalApproval(before)))) return 'Only a project manager can confirm completion after internal approval.';
