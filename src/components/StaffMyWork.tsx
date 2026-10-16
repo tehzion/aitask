@@ -176,10 +176,11 @@ const StaffMyWork: React.FC = () => {
             }}
             label={t('Staff work queue')}
             idPrefix="staff-queue"
+            panelId="staff-queue-panel"
             variant="underline"
           />
         </div>
-        <Surface id={`staff-queue-panel-${activeBucket}`} role="tabpanel" aria-labelledby={`staff-queue-tab-${activeBucket}`} tabIndex={0} className="mt-3 overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+        <Surface id="staff-queue-panel" role="tabpanel" aria-labelledby={`staff-queue-tab-${activeBucket}`} tabIndex={0} className="mt-3 overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
           {queue[activeBucket].slice(0, 8).map(task => <StaffWorkItem key={task.id} task={task} allTasks={accessibleTasks} users={users} onOpen={item => openTask(item.id)} />)}
           {queue[activeBucket].length === 0 && <div className="px-5 py-12 text-center"><ListChecks className="mx-auto h-7 w-7 text-muted/60" aria-hidden="true" /><p className="mt-3 text-sm font-semibold text-ink">{t(activeBucket === 'needs_action' ? 'feedback.noNeedsAction' : activeBucket === 'up_next' ? 'feedback.noUpNext' : activeBucket === 'waiting' ? 'feedback.noWaiting' : 'feedback.noDone')}</p><p className="mt-1 text-sm text-muted">{t('Choose another queue to review your work.')}</p></div>}
         </Surface>

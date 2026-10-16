@@ -8,6 +8,20 @@ number remain uniquely identifiable.
 
 ### Fixed
 
+- Project Managers can no longer skip the PM -> HOD -> Staff checkpoint by
+  changing only a task's department into an HOD department; the stage-1 rule
+  now applies to department changes in the client and the database.
+- The full editor no longer defaults the assignee to a staff member the
+  HOD-first rule forbids when a Project Manager switches departments.
+- Staff-authored task updates now reach the displayed task contact (the person
+  who assigned or created the work), including a department-scoped lead who
+  delegated it, without widening who may review or approve.
+- Returning submitted work to the assignee through the status picker now
+  notifies the assignee; reviewers still receive their own review handoff.
+- Department-scoped roles (HOD or a department-lead custom role) share the same
+  "Department work" navigation labels as their pages.
+- Staff All work and My work tablists now control distinct tab panels so the
+  HOD scope selector is correctly associated with its region.
 - Designer tasks without a configured HOD route review to responsible portfolio
   PMs. Review approval remains 80%, followed by separate PM completion at 100%.
   Changing department or assignee during approval cannot bypass review authority.

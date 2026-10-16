@@ -208,6 +208,7 @@ type TaskUpdateInput = Partial<Pick<
   | 'notes'
   | 'isRecurring'
   | 'recurrenceFrequency'
+  | 'visibility'
 >>;
 
 export type ClientPlanSetupInput = {
@@ -624,15 +625,17 @@ const appendNotification = (notifications: AppNotification[], data: Notification
 // PM who assigned it (assignedBy), falling back to the creator, then the owning
 // PM of the task's client or project. This keeps a Staff member who works for
 // several PMs notifying only the right one for each task. Include the displayed
-// HOD task contact when they can still view this task, without a department-wide
-// fan-out or dropping the responsible PM's oversight.
+// task contact (the person who assigned or created the work) whenever they can
+// still view the task, so a department-scoped lead who delegated work is not
+// left dark. Reviewers get their own transactional handoff and are filtered by
+// the caller on submission to avoid duplicate notices.
 const resolveTaskUpdateRecipientIds = (
   users: User[],
   task: Task,
   clients: ClientProfile[],
   projects: Project[],
   roles: CustomRole[],
-  includeHodContact = true,
+  includeTaskContact = true,
 ): string[] => {
   const recipientIds = new Set<string>();
   users.forEach(user => {
@@ -653,7 +656,8 @@ const resolveTaskUpdateRecipientIds = (
   }
   if (ownerPm) recipientIds.add(ownerPm);
   const contact = users.find(user => user.id === taskWorkContactId(task));
-  if (includeHodContact && contact && contact.hasLogin !== false && isHodUser(contact, roles) && canViewTask(contact, task, roles, { clients, projects })) recipientIds.add(contact.id);
+  if (includeTaskContact && contact && contact.hasLogin !== false && contact.role !== 'Client'
+    && canViewTask(contact, task, roles, { clients, projects })) recipientIds.add(contact.id);
   return [...recipientIds];
 };
 
@@ -2571,9 +2575,20 @@ export const useStore = create<StoreState>()(
           return { ...updated, completionPercentage: getTaskProgress(updated, state.users) };
         });
 
+        // Initial review submission already has its canonical reviewer handoff,
+        // so reviewers are notified there and filtered from the generic notice.
+        const submittedForReview = isWaitingApproval && task.status !== nextStatus;
+        const reviewerIds = new Set(
+          getDepartmentReviewers(
+            state.users,
+            { ...task, workState: { ...task.workState, reviewRequestedBy: currentUser!.id } },
+            state.rolePermissions,
+            { clients: state.clients, projects: state.projects },
+          ).map(reviewer => reviewer.id),
+        );
         const newNotifs: AppNotification[] = taskUpdateNotifications(
-          // Initial review submission already has its canonical reviewer handoff.
-          resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects, state.rolePermissions, nextStatus !== 'Waiting Approval'),
+          resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects, state.rolePermissions)
+            .filter(id => !(submittedForReview && reviewerIds.has(id))),
           {
             title: 'Task Status Updated',
             message: `"${task.title}" was moved to ${nextStatus} by ${currentUser?.name}.`,
@@ -2582,6 +2597,21 @@ export const useStore = create<StoreState>()(
           },
           currentUser?.id,
         );
+
+        // Returning submitted work to the assignee must reach them even though
+        // they are excluded from the accountability broadcast above.
+        const returningWork = ['Waiting Approval', 'Approved', 'Completed'].includes(task.status)
+          && ['Pending', 'In Progress', 'Revision'].includes(nextStatus);
+        if (returningWork && task.assignedTo && task.assignedTo !== currentUser?.id
+          && !newNotifs.some(notification => notification.targetUserId === task.assignedTo)) {
+          appendNotification(newNotifs, {
+            targetUserId: task.assignedTo,
+            title: 'Task Status Updated',
+            message: `"${task.title}" was returned to you by ${currentUser?.name}.`,
+            route: { page: 'tasks', entityId: taskId },
+            iconType: 'status',
+          });
+        }
 
         if (state.backend.mode === 'local') newNotifs.push(...localHodReviewNotifications(
           state.users, state.rolePermissions, task, newTasks.find(item => item.id === taskId)!, currentUser!.id, { clients: state.clients, projects: state.projects },
@@ -2855,7 +2885,10 @@ export const useStore = create<StoreState>()(
         if (assignmentChanged && assignee && !isEligibleTaskAssignee(assignee, nextDepartment)) {
           return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
         }
-        if (nextAssigneeId !== task.assignedTo) {
+        if (assignmentChanged) {
+          // Stage 1 must also hold when the department changes into one with an
+          // HOD while the current assignee stays a staff member; otherwise a PM
+          // could route work around the HOD checkpoint by editing the department.
           const stageError = taskAssignmentStageError(currentUser, { department: nextDepartment }, nextAssigneeId, state.users, state.rolePermissions);
           if (stageError) return { ok: false, error: stageError };
         }

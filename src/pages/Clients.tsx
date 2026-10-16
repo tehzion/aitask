@@ -301,6 +301,11 @@ const Clients: React.FC = () => {
 
   const canSeeAllClients = canViewAllClients(currentUser, rolePermissions);
   const isClientUser = currentUser?.role === 'Client';
+  const ownerNameFor = (profile?: ClientProfile) => (
+    profile?.createdBy
+      ? (users.find(user => user.id === profile.createdBy)?.name || t('Unassigned'))
+      : t('Unassigned')
+  );
   const visibleClientKeys = React.useMemo(() => new Set(
     getVisibleClientNames(currentUser, allTasks, allProjects, rolePermissions, { clients: clientProfiles, projects: allProjects }).map(getClientKey)
   ), [allProjects, allTasks, clientProfiles, currentUser, rolePermissions]);
@@ -865,6 +870,7 @@ const Clients: React.FC = () => {
                           {client.projectNames.size > 2 ? ` +${client.projectNames.size - 2}` : ''}
                         </p>
                       )}
+                      <p className="mt-1 text-xs text-slate-500">{t('Owner')}: {ownerNameFor(client.profile)}</p>
                       {assignedByTeam.length > 0 && (
                         <p className="mt-1 text-xs text-slate-500">{t('Assigned by')}: {assignedByTeam.join(', ')}</p>
                       )}
@@ -986,6 +992,7 @@ const Clients: React.FC = () => {
                 <div className="mt-5 grid gap-5 border-t border-line/70 pt-4 lg:grid-cols-[minmax(0,1fr)_minmax(19rem,1fr)]">
                   <div className="min-w-0 space-y-2">
                     {renderContactSummary(client)}
+                    <p className="text-xs text-muted">{t('Owner')}: {ownerNameFor(client.profile)}</p>
                     {assignedByTeam.length > 0 && <p className="text-xs text-muted">{t('Assigned by')}: {assignedByTeam.join(', ')}</p>}
                     {assignedTeam.length > 0 && <p className="text-xs text-muted">{t('Assigned staff')}: {assignedTeam.join(', ')}</p>}
                     {client.projectNames.size > 0 && <p className="text-xs text-muted">{t('Projects')}: {Array.from(client.projectNames).join(', ')}</p>}
@@ -1240,6 +1247,10 @@ const Clients: React.FC = () => {
                       <strong className="text-slate-950">
                         {selectedClient.latestTaskDate ? formatLocalizedDate(new Date(getActivityTime(selectedClient.latestTaskDate)), locale) : t('No tasks recorded')}
                       </strong>
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-500">{t('Owner')}:</span>{' '}
+                      <strong className="text-slate-950">{ownerNameFor(selectedClient.profile)}</strong>
                     </p>
                     <p>
                       <span className="font-semibold text-slate-500">{t('Assigned by')}:</span>{' '}

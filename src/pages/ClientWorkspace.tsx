@@ -59,7 +59,7 @@ import {
   canViewServicePrices,
   hasPermission,
   getVisibleTasks,
-  isHodUser,
+  isDepartmentScopedUser,
 } from "../lib/access";
 import { SECURE_WORKSPACE_ID } from "../lib/secureWorkspace";
 import { useI18n } from "../components/I18nProvider";
@@ -210,7 +210,7 @@ const OperationsClientWorkspace = () => {
   const isClient = store.currentUser?.role === "Client";
   if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions, store.clients, store.projects)) {
     if (store.currentUser?.role === "Client") return <Navigate to="/projects" replace />;
-    const departmentLead = isHodUser(store.currentUser, store.rolePermissions);
+    const departmentLead = isDepartmentScopedUser(store.currentUser, store.rolePermissions);
     return <UnavailableWork hint={departmentLead ? t('You can see this company through your department work, but no service workspace is assigned to you.') : undefined} />;
   }
   if (

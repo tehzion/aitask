@@ -83,16 +83,20 @@ const StaffAllWork: React.FC = () => {
     [allTasks, clientProfiles, currentUser, projects, rolePermissions],
   );
   const isHod = isHodUser(currentUser, rolePermissions);
+  // A department-scoped custom-role lead oversees a department just like an HOD,
+  // so the page is titled for oversight even though the HOD-only scope tabs and
+  // getHodScopeTasks below stay limited to real HODs (matching StaffMyWork).
+  const isDepartmentLead = isHod || isDepartmentScopedUser(currentUser, rolePermissions);
   const isProjectManager = currentUser?.role === 'Project Manager';
   const scopeView = searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'delegated' ? 'delegated' : 'department';
   const setScopeView = (value: 'mine' | 'delegated' | 'department') => setParam('scope', value, 'department');
   const tasks = React.useMemo(() => {
     if (isHod) return getHodScopeTasks(visibleTasks, currentUser?.id, scopeView);
-    if (currentUser?.role === 'Staff' && !isDepartmentScopedUser(currentUser, rolePermissions)) {
+    if (currentUser?.role === 'Staff' && !isDepartmentLead) {
       return visibleTasks.filter(task => task.assignedTo === currentUser.id || task.createdBy === currentUser.id);
     }
     return visibleTasks;
-  }, [currentUser, isHod, rolePermissions, scopeView, visibleTasks]);
+  }, [currentUser, isDepartmentLead, isHod, scopeView, visibleTasks]);
   const today = getTodayInputDate(useLocalToday());
   const queue = React.useMemo(() => buildStaffWorkQueue(tasks, today), [tasks, today]);
   const orderedTasks = React.useMemo(() => (
@@ -149,8 +153,8 @@ const StaffAllWork: React.FC = () => {
     <div className={`${pageShell} max-w-6xl`}>
       <PageHeader
         compact
-        title={t(isProjectManager ? 'Portfolio work' : isHod ? 'Department work' : 'All work')}
-        description={t(isProjectManager ? 'Your portfolio work, ordered by delivery risk and next action.' : isHod ? 'Department work, including delegated tasks and items that need review.' : 'All visible work, ordered by what needs attention first.')}
+        title={t(isProjectManager ? 'Portfolio work' : isDepartmentLead ? 'Department work' : 'All work')}
+        description={t(isProjectManager ? 'Your portfolio work, ordered by delivery risk and next action.' : isDepartmentLead ? 'Department work, including delegated tasks and items that need review.' : 'All visible work, ordered by what needs attention first.')}
         meta={<span className="calm-number">{filteredTasks.length} {t(filteredTasks.length === 1 ? 'task' : 'tasks')}</span>}
         action={<div className="flex flex-wrap items-center gap-2">
           {canCreateTask && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
@@ -185,40 +189,46 @@ const StaffAllWork: React.FC = () => {
       <section aria-labelledby="staff-all-work-list" className="space-y-4">
         <h2 id="staff-all-work-list" className="sr-only">{t('Visible task list')}</h2>
 
-        {isHod && (
-          <SegmentedTabs<'mine' | 'delegated' | 'department'>
-            items={[{ id: 'mine', label: t('My assignments'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'mine').length }, { id: 'delegated', label: t('Delegated by me'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'delegated').length }, { id: 'department', label: t('Department work'), count: visibleTasks.length }]}
-            value={scopeView}
-            onChange={setScopeView}
-            label={t('HOD work scope')}
-            idPrefix="hod-scope"
+        <div
+          id="hod-scope-panel"
+          {...(isHod ? { role: 'tabpanel' as const, 'aria-labelledby': `hod-scope-tab-${scopeView}`, tabIndex: 0 } : {})}
+          className="space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+        >
+          {isHod && (
+            <SegmentedTabs<'mine' | 'delegated' | 'department'>
+              items={[{ id: 'mine', label: t('My assignments'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'mine').length }, { id: 'delegated', label: t('Delegated by me'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'delegated').length }, { id: 'department', label: t('Department work'), count: visibleTasks.length }]}
+              value={scopeView}
+              onChange={setScopeView}
+              label={t('HOD work scope')}
+              idPrefix="hod-scope"
+              panelId="hod-scope-panel"
+              variant="underline"
+            />
+          )}
+
+          <SegmentedTabs<StaffAllWorkBucket>
+            items={buckets.map(item => ({ id: item, label: item === 'all' ? t('All') : t(getStaffBucketLabel(item)), count: item === 'all' ? tasks.length : queue[item].length }))}
+            value={bucket}
+            onChange={setBucket}
+            label={t('All work queues')}
+            idPrefix="all-work"
             panelId="all-work-panel"
             variant="underline"
           />
-        )}
 
-        <SegmentedTabs<StaffAllWorkBucket>
-          items={buckets.map(item => ({ id: item, label: item === 'all' ? t('All') : t(getStaffBucketLabel(item)), count: item === 'all' ? tasks.length : queue[item].length }))}
-          value={bucket}
-          onChange={setBucket}
-          label={t('All work queues')}
-          idPrefix="all-work"
-          panelId="all-work-panel"
-          variant="underline"
-        />
+          {activeFilterCount > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted">
+              <ListFilter className="h-4 w-4" />{activeFilterCount} {t(activeFilterCount === 1 ? 'active filter' : 'active filters')}
+              <button type="button" onClick={clearFilters} className="min-h-11 px-2 text-accent hover:underline">{t('Clear filters')}</button>
+            </div>
+          )}
 
-        {activeFilterCount > 0 && (
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted">
-            <ListFilter className="h-4 w-4" />{activeFilterCount} {t(activeFilterCount === 1 ? 'active filter' : 'active filters')}
-            <button type="button" onClick={clearFilters} className="min-h-11 px-2 text-accent hover:underline">{t('Clear filters')}</button>
-          </div>
-        )}
-
-        {taskId && !selectedTask && <UnavailableWork onDismiss={() => setTaskId()} />}
-        <Surface id="all-work-panel" role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={visibleTasks} users={users} onOpen={item => setTaskId(item.id)} />)}
-          {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">{t(activeFilterCount > 0 ? 'feedback.noMatches' : tasks.length === 0 ? 'feedback.noAssignments' : bucket === 'needs_action' ? 'feedback.noNeedsAction' : bucket === 'up_next' ? 'feedback.noUpNext' : bucket === 'waiting' ? 'feedback.noWaiting' : 'feedback.noDone')}</p><p className="mt-1 text-sm text-muted">{t('Clear a filter or choose another queue.')}</p></div>}
-        </Surface>
+          {taskId && !selectedTask && <UnavailableWork onDismiss={() => setTaskId()} />}
+          <Surface id="all-work-panel" role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+            {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={visibleTasks} users={users} onOpen={item => setTaskId(item.id)} />)}
+            {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">{t(activeFilterCount > 0 ? 'feedback.noMatches' : tasks.length === 0 ? 'feedback.noAssignments' : bucket === 'needs_action' ? 'feedback.noNeedsAction' : bucket === 'up_next' ? 'feedback.noUpNext' : bucket === 'waiting' ? 'feedback.noWaiting' : 'feedback.noDone')}</p><p className="mt-1 text-sm text-muted">{t('Clear a filter or choose another queue.')}</p></div>}
+          </Surface>
+        </div>
       </section>
 
       <SideSheet

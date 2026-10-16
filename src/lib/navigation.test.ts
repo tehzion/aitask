@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { User } from '../types';
+import type { CustomRole, User } from '../types';
+import { defaultRolePermissions } from './access';
 import { getDeliveryWorkspaceLabel, getMobileNavigation, getNavigationSections } from './navigation';
 
 const internalUsers: User[] = [
@@ -42,6 +43,17 @@ describe('delivery tracker navigation labels', () => {
     const staffSections = getNavigationSections(staff);
     expect(staffSections.primary.find(entry => entry.path === '/')).toMatchObject({ label: 'My work' });
     expect(staffSections.secondary.find(entry => entry.path === '/tasks')).toMatchObject({ label: 'All work' });
+  });
+
+  it('labels a department-scoped Staff lead for oversight like the page header', () => {
+    const lead: User = { id: 'dept-lead', name: 'Department lead', role: 'Staff', departments: ['Designer'], department: 'Designer', customRoleId: 'dept-lead-role' };
+    const role: CustomRole = {
+      id: 'dept-lead-role', name: 'Department lead', baseRole: 'Staff', departmentScoped: true,
+      permissions: { ...defaultRolePermissions.Staff, manageCreatedTasks: true }, createdAt: '', updatedAt: '',
+    };
+    const sections = getNavigationSections(lead, [role]);
+    expect(sections.primary.find(entry => entry.path === '/')).toMatchObject({ label: 'Department work' });
+    expect(sections.secondary.find(entry => entry.path === '/tasks')).toMatchObject({ label: 'Department tasks' });
   });
 
   it('keeps the Client portal navigation label as Deliveries', () => {

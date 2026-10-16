@@ -1,7 +1,7 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "task_workflow_hod_first_and_optional_approval_prepared_20261015152000; production through 20261015002102; connector aliases verified",
+  "status": "task_role_assignment_and_contact_notification_hardening_prepared_20261016120000; production through 20261015002102; connector aliases verified",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "pendingMigrationRationales": {
@@ -885,7 +885,8 @@
     "20261015140049_monthly_plan_revision_scheduling",
     "20261015141803_optional_task_internal_approval",
     "20261015152000_pm_hod_first_assignment",
-    "20261015160000_pm_project_service_scope"
+    "20261015160000_pm_project_service_scope",
+    "20261016120000_task_role_assignment_and_contact_notification_hardening"
   ],
   "pendingProductionMigrations": [
     "20261015014716_pm_task_company_boundaries",
@@ -895,6 +896,7 @@
     "20261015140049_monthly_plan_revision_scheduling",
     "20261015141803_optional_task_internal_approval",
     "20261015152000_pm_hod_first_assignment",
-    "20261015160000_pm_project_service_scope"
+    "20261015160000_pm_project_service_scope",
+    "20261016120000_task_role_assignment_and_contact_notification_hardening"
   ]
 }

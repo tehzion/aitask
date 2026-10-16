@@ -55,3 +55,27 @@ test('Staff review enquiry notifies the displayed HOD contact and PM', async ({ 
     .map(item => item.targetUserId).sort())).toEqual(['audit-hod', 'audit-pm']);
   await expect(sheet.getByText('Please share the review result', { exact: true })).toBeVisible();
 });
+
+test('All work HOD scope and queue tablists control distinct panels', async ({ page }) => {
+  await page.goto('/login');
+  await page.evaluate(async () => {
+    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
+    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    stopBackendAutoSync();
+    const old = useStore.getState();
+    const hod = { id: 'scope-hod', name: 'Scope HOD', role: 'HOD', departments: ['Designer'], department: 'Designer', mustResetPassword: false };
+    const staff = { id: 'scope-worker', name: 'Scope Worker', role: 'Staff', departments: ['Designer'], department: 'Designer' };
+    enablePasswordResetBypass(hod.id);
+    localStorage.setItem('aitask:locale', 'en');
+    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${hod.id}`, 'acknowledged');
+    useStore.setState({ currentUser: hod, users: [hod, staff], tasks: [], clients: [], projects: [], notifications: [], rolePermissions: [], serviceCycles: [], deliverables: [], clientPlans: [], backend: { ...old.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
+  });
+  await page.goto('/tasks');
+  await expect(page.getByRole('tab', { name: 'My assignments' })).toHaveAttribute('aria-controls', 'hod-scope-panel');
+  await expect(page.getByRole('tab', { name: 'Up next' })).toHaveAttribute('aria-controls', 'all-work-panel');
+  await expect(page.locator('#hod-scope-panel')).toHaveAttribute('role', 'tabpanel');
+  await expect(page.locator('#all-work-panel')).toHaveAttribute('role', 'tabpanel');
+  // Exactly one tablist may control each panel.
+  await expect(page.locator('[aria-controls="hod-scope-panel"]')).toHaveCount(3);
+  await expect(page.locator('[aria-controls="all-work-panel"]')).toHaveCount(5);
+});

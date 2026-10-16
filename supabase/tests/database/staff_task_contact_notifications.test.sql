@@ -1,12 +1,12 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(14);
 
 insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 select '00000000-0000-0000-0000-000000000000'::uuid,
   ('00000000-0000-0000-0000-' || lpad((7000+n)::text,12,'0'))::uuid,
   'authenticated','authenticated','staff-contact-' || n || '@aitask.local','',now(),'{}'::jsonb,'{}'::jsonb,now(),now()
-from generate_series(1,7) n;
+from generate_series(1,9) n;
 insert into public.aitask_workspaces(id,name) values ('pgtap-staff-contact','Staff HOD contact notices');
 -- Build the historic Staff + built-in HOD contact with the role guard paused, the
 -- same way the other legacy-HOD fixtures do; normal assignments stay guarded.
@@ -21,7 +21,9 @@ from (values
   (4,'contact-other','HOD','Designer',null),
   (5,'contact-former','HOD','Video Editor',null),
   (6,'contact-builtin','Staff','Designer','builtin-hod'),
-  (7,'contact-creator','HOD','Video Editor',null)
+  (7,'contact-creator','HOD','Video Editor',null),
+  (8,'contact-lead','Staff','Designer',null),
+  (9,'contact-lead-other','Staff','Video Editor',null)
 ) m(n,id,role,department,custom_role_id);
 alter table public.aitask_members enable trigger aitask_00_guard_member_role_scope;
 
@@ -37,7 +39,9 @@ from (values
   ('contact-builtin-task','contact-builtin','contact-pm'),
   ('contact-former-task','contact-former','contact-pm'),
   ('contact-creator-task','contact-worker','contact-hod'),
-  ('contact-own-task','contact-worker','contact-creator')
+  ('contact-own-task','contact-worker','contact-creator'),
+  ('contact-lead-task','contact-lead','contact-pm'),
+  ('contact-lead-other-task','contact-lead-other','contact-pm')
 ) t(id,assigner,creator);
 
 -- Exercise the public command API, not just the recipient predicate. Every
@@ -85,11 +89,15 @@ select is((pg_temp.send_contact_notice('contact-creator-task','contact-hod')->>'
   'Creator contact is selected when the assigner is the current assignee');
 select is((pg_temp.send_contact_notice('contact-own-task','contact-creator')->>'ok')::boolean,true,
   'A HOD creator can receive a notice for their own task outside their department');
+select is((pg_temp.send_contact_notice('contact-lead-task','contact-lead')->>'ok')::boolean,true,
+  'A department-scoped Staff lead who delegated the work receives the notice as the accountable contact');
+select is((pg_temp.send_contact_notice('contact-lead-other-task','contact-lead-other')->>'ok')::boolean,false,
+  'A Staff contact outside the task department cannot receive the notice');
 select is((pg_temp.send_contact_notice('contact-task','contact-hod','contact-builtin-task')->>'ok')::boolean,false,
   'A valid HOD contact does not bypass command/task context binding');
 
 reset role;
-select is((select count(*)::integer from public.aitask_entities where workspace_id='pgtap-staff-contact' and entity_type='comment'),5,
+select is((select count(*)::integer from public.aitask_entities where workspace_id='pgtap-staff-contact' and entity_type='comment'),6,
   'Rejected notification audiences roll back their comments atomically');
 select ok(not exists(select 1 from public.aitask_entities where workspace_id='pgtap-staff-contact' and entity_type='notification'
   and data->>'message'='Untrusted fabricated content'),

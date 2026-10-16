@@ -28,7 +28,7 @@ import { Department, Priority, Task, TaskStatus } from '../types';
 import { canViewTask, getVisibleTasks, getTaskAccess, canReviewTaskAsClient, isDepartmentScopedUser } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate, parseOptionalDate, cn } from '../lib/utils';
-import { assignableDepartments, isMemberInDepartment, isEligibleTaskAssignee } from '../lib/departments';
+import { assignableDepartments, isMemberInDepartment } from '../lib/departments';
 import type { SecureCommandType } from '../lib/secureWorkspace';
 import ClientDeliveryFocus from './ClientDeliveryFocus';
 import ModalShell from './ModalShell';
@@ -771,12 +771,15 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                           disabled={!canAssignOthers}
                           onChange={(e) => {
                             const nextDepartment = e.target.value as Department;
-                            const firstUser = users.find(user => user.role !== 'Client' && isMemberInDepartment(user, nextDepartment))
-                              || users.find(user => isEligibleTaskAssignee(user, nextDepartment));
+                            // Default to a stage-eligible assignee so a Project
+                            // Manager switching into an HOD department never lands
+                            // on a staff member the dropdown/HOD-first rule forbids.
+                            const eligible = assignableTaskAssignees(currentUser, nextDepartment, users, rolePermissions);
+                            const keep = eligible.find(user => user.id === editForm.assignedTo);
                             setEditForm({
                               ...editForm,
                               department: nextDepartment,
-                              assignedTo: firstUser?.id || editForm.assignedTo,
+                              assignedTo: keep?.id || eligible[0]?.id || '',
                             });
                           }}
                           className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}

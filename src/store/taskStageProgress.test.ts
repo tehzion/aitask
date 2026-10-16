@@ -104,6 +104,32 @@ describe('role readiness at alternate entry points', () => {
     expect(useStore.getState().updateTask(task.id, { assignedTo: staff.id }).ok).toBe(true);
   });
 
+  it('rejects a Project Manager moving a staff-assigned task into an HOD department', () => {
+    const multiDeptStaff: User = { ...staff, departments: ['Designer', 'Video Editor'], department: 'Designer' };
+    useStore.setState({
+      tasks: [{ ...task, department: 'Video Editor', assignedTo: multiDeptStaff.id, createdBy: pm.id }],
+      users: [pm, hod, multiDeptStaff, client],
+    });
+    actor(pm);
+    expect(useStore.getState().updateTask(task.id, { department: 'Designer' })).toEqual({ ok: false, error: TASK_HOD_ASSIGNMENT_REQUIRED });
+    expect(current()).toMatchObject({ department: 'Video Editor', assignedTo: multiDeptStaff.id });
+  });
+
+  it('notifies the assignee when a reviewer returns submitted work through the status picker', () => {
+    useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Waiting Approval' }] });
+    actor(hod);
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress').ok).toBe(true);
+    const returned = useStore.getState().notifications.find(notification => notification.targetUserId === staff.id && notification.title === 'Task Status Updated');
+    expect(returned?.message).toMatch(/returned to you/);
+  });
+
+  it('does not label an ordinary start of work as a return to the assignee', () => {
+    useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Pending' }] });
+    actor(pm);
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress').ok).toBe(true);
+    expect(useStore.getState().notifications.some(notification => notification.targetUserId === staff.id && /returned to you/.test(notification.message || ''))).toBe(false);
+  });
+
   it('lets a project manager finalize a waiting task when internal approval is optional', () => {
     useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Waiting Approval', requiresInternalApproval: false }] });
     actor(pm);

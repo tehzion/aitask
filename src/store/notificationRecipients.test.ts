@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Task, User } from '../types';
+import type { CustomRole, Task, User } from '../types';
+import { defaultRolePermissions } from '../lib/access';
 import { shouldNotifyClientForTask, useStore } from './index';
 
 const initialState = useStore.getState();
@@ -73,6 +74,21 @@ describe('task update notification recipients', () => {
     useStore.setState({ users: [boss, pmA, staff, hod], tasks: [{ ...task, assignedBy: staff.id, createdBy: hod.id }] });
     expect(useStore.getState().updateTaskWork(task.id, { kind: 'block', reason: 'Need assets' }).ok).toBe(true);
     expect(useStore.getState().notifications.map(item => item.targetUserId).sort()).toEqual([boss.id, pmA.id, hod.id].sort());
+  });
+
+  it('notifies a department-scoped Staff lead who delegated the work as the accountable contact', () => {
+    const role: CustomRole = {
+      id: 'dept-lead-role', name: 'Department lead', baseRole: 'Staff', departmentScoped: true,
+      permissions: { ...defaultRolePermissions.Staff, manageCreatedTasks: true }, createdAt: '', updatedAt: '',
+    };
+    const lead: User = { ...staff, id: 'dept-lead', customRoleId: role.id };
+    useStore.setState({
+      users: [boss, pmA, staff, lead],
+      rolePermissions: [role],
+      tasks: [{ ...task, assignedBy: lead.id, createdBy: pmA.id, status: 'Waiting Approval' }],
+    });
+    expect(useStore.getState().addComment(task.id, 'Please share a review update.').ok).toBe(true);
+    expect(useStore.getState().notifications.map(item => item.targetUserId).sort()).toEqual([boss.id, pmA.id, lead.id].sort());
   });
 
   it('does not notify a former HOD contact that can no longer view the task', () => {

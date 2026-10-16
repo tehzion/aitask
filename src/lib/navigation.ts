@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CustomRole, User } from '../types';
-import { canAccessPath, getVisibleNavigation, isHodUser } from './access';
+import { canAccessPath, getVisibleNavigation, isDepartmentScopedUser } from './access';
 
 export type NavigationItem = {
   path: string;
@@ -102,10 +102,12 @@ export const getNavigationSections = (
   const isClient = user?.role === 'Client';
 
   if (isStaff) {
-    // HODs oversee a department, so their primary destinations are labelled for
-    // that role instead of the plain Staff "My work" / "All work" wording.
+    // Any department-scoped role (HOD or a department-lead custom role) oversees
+    // a department, so its primary destinations are labelled for oversight
+    // instead of the plain Staff "My work" / "All work" wording. This matches
+    // the My work / All work page headers, which key off isDepartmentScopedUser.
     const forHod = (items: NavigationItem[]) => (
-      isHodUser(user, rolePermissions)
+      isDepartmentScopedUser(user, rolePermissions)
         ? items.map(item => item.path === '/'
           ? { ...item, label: 'Department work' }
           : item.path === '/tasks'

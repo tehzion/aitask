@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(6);
+select plan(7);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -11,7 +11,8 @@ insert into auth.users (
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000952', 'authenticated', 'authenticated', 'pgtap-pmhod-pm@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000953', 'authenticated', 'authenticated', 'pgtap-pmhod-hod@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000954', 'authenticated', 'authenticated', 'pgtap-pmhod-staff@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
-  ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000955', 'authenticated', 'authenticated', 'pgtap-pmhod-video@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
+  ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000955', 'authenticated', 'authenticated', 'pgtap-pmhod-video@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000956', 'authenticated', 'authenticated', 'pgtap-pmhod-both@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
 
 insert into public.aitask_workspaces(id, name)
 values ('pgtap-pmhod', 'PM hands off to HOD first test workspace');
@@ -23,7 +24,8 @@ insert into public.aitask_members(
   ('pgtap-pmhod-pm', 'pgtap-pmhod', '00000000-0000-0000-0000-000000000952', 'PM', 'pgtap-pmhod-pm@aitask.local', 'Project Manager', 'Management', array['Management'], '{}'::jsonb, false),
   ('pgtap-pmhod-hod', 'pgtap-pmhod', '00000000-0000-0000-0000-000000000953', 'HOD', 'pgtap-pmhod-hod@aitask.local', 'HOD', 'Designer', array['Designer'], '{}'::jsonb, false),
   ('pgtap-pmhod-staff', 'pgtap-pmhod', '00000000-0000-0000-0000-000000000954', 'Staff', 'pgtap-pmhod-staff@aitask.local', 'Staff', 'Designer', array['Designer'], '{}'::jsonb, false),
-  ('pgtap-pmhod-video', 'pgtap-pmhod', '00000000-0000-0000-0000-000000000955', 'Video Staff', 'pgtap-pmhod-video@aitask.local', 'Staff', 'Video Editor', array['Video Editor'], '{}'::jsonb, false);
+  ('pgtap-pmhod-video', 'pgtap-pmhod', '00000000-0000-0000-0000-000000000955', 'Video Staff', 'pgtap-pmhod-video@aitask.local', 'Staff', 'Video Editor', array['Video Editor'], '{}'::jsonb, false),
+  ('pgtap-pmhod-both', 'pgtap-pmhod', '00000000-0000-0000-0000-000000000956', 'Cross Dept Staff', 'pgtap-pmhod-both@aitask.local', 'Staff', 'Video Editor', array['Video Editor','Designer'], '{}'::jsonb, false);
 
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values
@@ -31,7 +33,8 @@ values
   ('pgtap-pmhod', 'task', 'pgtap-pmhod-a', '{"id":"pgtap-pmhod-a","clientId":"pgtap-pmhod-client","clientName":"PMHod Co","title":"Designer task","department":"Designer","assignedTo":"","createdBy":"pgtap-pmhod-pm","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-pmhod', 'task', 'pgtap-pmhod-b', '{"id":"pgtap-pmhod-b","clientId":"pgtap-pmhod-client","clientName":"PMHod Co","title":"Video task","department":"Video Editor","assignedTo":"","createdBy":"pgtap-pmhod-pm","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-pmhod', 'task', 'pgtap-pmhod-c', '{"id":"pgtap-pmhod-c","clientId":"pgtap-pmhod-client","clientName":"PMHod Co","title":"Optional approval","department":"Designer","assignedTo":"pgtap-pmhod-staff","createdBy":"pgtap-pmhod-pm","status":"Waiting Approval","requiresInternalApproval":false,"visibility":"internal"}'::jsonb),
-  ('pgtap-pmhod', 'task', 'pgtap-pmhod-d', '{"id":"pgtap-pmhod-d","clientId":"pgtap-pmhod-client","clientName":"PMHod Co","title":"Required approval","department":"Designer","assignedTo":"pgtap-pmhod-staff","createdBy":"pgtap-pmhod-pm","status":"Waiting Approval","visibility":"internal"}'::jsonb);
+  ('pgtap-pmhod', 'task', 'pgtap-pmhod-d', '{"id":"pgtap-pmhod-d","clientId":"pgtap-pmhod-client","clientName":"PMHod Co","title":"Required approval","department":"Designer","assignedTo":"pgtap-pmhod-staff","createdBy":"pgtap-pmhod-pm","status":"Waiting Approval","visibility":"internal"}'::jsonb),
+  ('pgtap-pmhod', 'task', 'pgtap-pmhod-e', '{"id":"pgtap-pmhod-e","clientId":"pgtap-pmhod-client","clientName":"PMHod Co","title":"Cross department task","department":"Video Editor","assignedTo":"pgtap-pmhod-both","createdBy":"pgtap-pmhod-pm","status":"Pending","visibility":"internal"}'::jsonb);
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000952', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -97,7 +100,21 @@ select is(
   'a department without an HOD allows the PM fallback staff assignment'
 );
 
--- 5. PM finalizes a waiting task that opted out of internal approval.
+-- 5. A department-only change into an HOD department cannot bypass the HOD.
+select is(
+  (public.aitask_execute_command(
+    'pgtap-pmhod', gen_random_uuid(), 'task.update',
+    jsonb_build_array(jsonb_build_object(
+      'kind', 'entity', 'action', 'update', 'entityType', 'task', 'entityId', 'pgtap-pmhod-e',
+      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-pmhod' and entity_type = 'task' and entity_id = 'pgtap-pmhod-e'),
+      'data', '{"id":"pgtap-pmhod-e","clientId":"pgtap-pmhod-client","clientName":"PMHod Co","title":"Cross department task","department":"Designer","assignedTo":"pgtap-pmhod-both","createdBy":"pgtap-pmhod-pm","status":"Pending","visibility":"internal","updatedAt":"2026-10-16T00:00:00.000Z"}'::jsonb
+    ))
+  ) ->> 'ok')::boolean,
+  false,
+  'PM cannot skip the HOD by moving a staff-assigned task into an HOD department'
+);
+
+-- 6. PM finalizes a waiting task that opted out of internal approval.
 select is(
   (public.aitask_execute_command(
     'pgtap-pmhod', gen_random_uuid(), 'task.update',
@@ -111,7 +128,7 @@ select is(
   'PM finalizes a waiting task when internal approval is optional'
 );
 
--- 6. PM cannot finalize a waiting task that still requires internal approval.
+-- 7. PM cannot finalize a waiting task that still requires internal approval.
 select is(
   (public.aitask_execute_command(
     'pgtap-pmhod', gen_random_uuid(), 'task.update',
