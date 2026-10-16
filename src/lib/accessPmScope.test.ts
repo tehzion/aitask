@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import type { ClientProfile, Project, User } from '../types';
-import { allPermissions, getOwnedPortfolioClientKeys, sanitizeRolePermissions } from './access';
+import { allPermissions, getGrantablePermissionGroups, getOwnedPortfolioClientKeys, permissionGroups, sanitizeRolePermissions } from './access';
 
 describe('sanitizeRolePermissions for project managers', () => {
+  it('never offers non-grantable permissions in an editor group', () => {
+    const nonGrantable = ['manageUsers', 'approveRegistrations', 'deleteUsers', 'viewApprovals'];
+    const editorKeys = permissionGroups.flatMap(group => group.keys);
+    expect(editorKeys).not.toEqual(expect.arrayContaining(nonGrantable));
+
+    for (const baseRole of ['Project Manager', 'HOD', 'Staff', 'Client'] as const) {
+      const keys = getGrantablePermissionGroups(baseRole).flatMap(group => group.keys);
+      const offered = { ...allPermissions };
+      Object.keys(offered).forEach(key => { offered[key as keyof typeof offered] = keys.includes(key as keyof typeof offered); });
+      const sanitized = sanitizeRolePermissions(offered, baseRole);
+      expect(keys.filter(key => sanitized[key] !== offered[key])).toEqual([]);
+    }
+  });
+
   it('strips workspace-wide view permissions that scoping ignores for a Project Manager', () => {
     const permissions = sanitizeRolePermissions(allPermissions, 'Project Manager');
     expect(permissions.viewAllTasks).toBe(false);

@@ -97,7 +97,7 @@ export const permissionLabels: Record<RolePermissionKey, string> = {
 };
 
 export const permissionGroups: { title: string; keys: RolePermissionKey[] }[] = [
-  { title: 'Page Access', keys: ['viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects', 'viewDeliveryTracker', 'viewReports', 'viewApprovals', 'viewSettings'] },
+  { title: 'Page Access', keys: ['viewDashboard', 'viewTasks', 'viewCalendar', 'viewProjects', 'viewDeliveryTracker', 'viewReports', 'viewSettings'] },
   { title: 'Task Access', keys: ['viewAllTasks', 'createTasks', 'manageCreatedTasks'] },
   { title: 'Client Access', keys: ['viewAllClients', 'manageAssignedClients', 'createClients', 'deleteClients', 'viewAllServiceClients', 'viewAssignedServiceClients', 'viewServicePrices'] },
   { title: 'Service Management', keys: ['manageServiceCatalog', 'manageTaskTemplates', 'manageClientPlans', 'manageServiceCycles'] },
@@ -143,6 +143,17 @@ export const projectManagerRestrictedPermissionKeys: RolePermissionKey[] = [
   'viewAllTasks',
   'viewAllClients',
 ];
+
+export const getGrantablePermissionGroups = (baseRole: Role) => {
+  const restricted = new Set<RolePermissionKey>([
+    ...nonSuperAdminOnlyPermissionKeys,
+    ...(baseRole === 'HOD' ? hodRestrictedPermissionKeys : []),
+    ...(baseRole === 'Project Manager' ? projectManagerRestrictedPermissionKeys : []),
+  ]);
+  return permissionGroups
+    .map(group => ({ ...group, keys: group.keys.filter(key => !restricted.has(key)) }))
+    .filter(group => group.keys.length > 0);
+};
 
 export const sanitizeNonSuperAdminPermissions = (permissions: RolePermissions): RolePermissions => {
   const sanitized = { ...permissions };

@@ -11,7 +11,7 @@ import { cardBase, fieldLabel, inputBase, pageShell } from '../components/uiToke
 import { cn } from '../lib/utils';
 import { formatLocalizedDate } from '../lib/i18n';
 import { useI18n } from '../components/I18nProvider';
-import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getBuiltinRoleId, getEffectivePermissions, getEffectiveRoleName, getRoleDisplayName, hodRestrictedPermissionKeys, isBossKoo, nonSuperAdminOnlyPermissionKeys, permissionGroups, permissionLabels } from '../lib/access';
+import { canDeleteUser, defaultRolePermissions, getAssignableCustomRoles, getBuiltinRoleId, getEffectivePermissions, getEffectiveRoleName, getGrantablePermissionGroups, getRoleDisplayName, isBossKoo, permissionLabels } from '../lib/access';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { getMemberDepartments, normalizeDepartment } from '../lib/departments';
@@ -442,7 +442,8 @@ const Approvals: React.FC = () => {
     ? getEffectivePermissions({ ...memberPermissionsUser, permissions: undefined }, rolePermissions)
     : clonePermissions(defaultRolePermissions.Staff);
   const memberPermissionsPreview = memberPermissionsCustom ? memberPermissions : memberPermissionsDefault;
-  const memberPermissionKeys = permissionGroups.flatMap(group => group.keys);
+  const memberPermissionGroups = getGrantablePermissionGroups(memberPermissionsUser?.role || 'Staff');
+  const memberPermissionKeys = memberPermissionGroups.flatMap(group => group.keys);
   const addedMemberPermissions = memberPermissionKeys.filter(key => memberPermissionsPreview[key] && !memberPermissionsBefore[key]);
   const removedMemberPermissions = memberPermissionKeys.filter(key => !memberPermissionsPreview[key] && memberPermissionsBefore[key]);
 
@@ -1551,28 +1552,20 @@ const Approvals: React.FC = () => {
                   </span>
                 </label>
               )}
-              {permissionGroups.map(group => (
+              {getGrantablePermissionGroups(roleForm.baseRole).map(group => (
                 <div key={group.title}>
                   <p className="text-xs font-semibold tracking-wide text-slate-400 mb-2">{group.title}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {group.keys.map(key => (
-                      (() => {
-                        const protectedPermission = nonSuperAdminOnlyPermissionKeys.includes(key)
-                          || (roleForm.baseRole === 'HOD' && hodRestrictedPermissionKeys.includes(key));
-                        return (
-                      <label key={key} className={cn('flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700', protectedPermission && 'cursor-not-allowed bg-slate-50 text-slate-400')}>
+                      <label key={key} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
                         <input
                           type="checkbox"
                           checked={roleForm.permissions[key]}
                           onChange={() => togglePermission(key)}
-                          disabled={protectedPermission}
                           className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                         />
                         <span>{permissionLabels[key]}</span>
-                        {protectedPermission && <span className="ml-auto text-[10px] font-semibold tracking-wide text-slate-400">{t('Protected')}</span>}
                       </label>
-                        );
-                      })()
                     ))}
                   </div>
                 </div>
@@ -2111,7 +2104,7 @@ const Approvals: React.FC = () => {
 
             <fieldset disabled={!memberPermissionsCustom || isActionSaving} className="space-y-4 disabled:opacity-55">
               <legend className="sr-only">{t('Member permissions')}</legend>
-              {permissionGroups.map(group => (
+              {memberPermissionGroups.map(group => (
                 <div key={group.title}>
                   <p className="mb-2 text-xs font-semibold tracking-wide text-slate-400">{group.title}</p>
                   <div className="grid gap-2 sm:grid-cols-2">
