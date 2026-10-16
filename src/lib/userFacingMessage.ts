@@ -26,6 +26,7 @@ export const userFacingMessage = (value: unknown): string | MessageDescriptor =>
   if (/^(?:duplicate key value violates unique constraint|23505\b)/i.test(text)) return msg('errors.duplicateRecord');
   if (/^(?:update or delete on table|insert or update on table).*foreign key constraint/i.test(text)) return msg('errors.linkedRecord');
   if (/^(?:invalid input syntax for|value too long for type|new row for relation .* violates check constraint|null value in column .* violates not-null constraint|23514\b|23503\b)/i.test(text)) return msg('errors.invalidData');
+  if (/^(?:Object not found|The resource was not found|No such object|Storage object not found)/i.test(text)) return msg('errors.fileUnavailable');
   if (/^(?:\[object Object\]|(?:Error:\s*)?(?:Cannot read properties of|Cannot destructure|Unexpected token|Unexpected end of JSON|SyntaxError\b|ReferenceError\b|TypeError\b)|Could not find (?:the (?:function|table)|a relationship)|relation .* does not exist|column .* does not exist|PGRST\d+\b|Functions(?:Http|Relay|Fetch)Error\b|Edge Function returned|JSON object requested|Cannot coerce the result|syntax error at or near|canceling statement due to statement timeout)/i.test(text)) return msg('errors.requestFailed');
   return value;
 };

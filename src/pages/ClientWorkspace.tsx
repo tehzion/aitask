@@ -348,7 +348,7 @@ const OperationsClientWorkspace = () => {
         setActivityStage("idle");
         return setActivityFeedback({
           tone: "error",
-          text: t(uploaded.error),
+          text: uploaded.error || "The file could not be uploaded.",
           action: uploaded.error === SERVICE_FILE_UPLOAD_UNAVAILABLE_ERROR ? undefined : "upload",
         });
       }
@@ -362,7 +362,7 @@ const OperationsClientWorkspace = () => {
       if (attachment) await removeServiceFile(attachment);
       setActivitySaving(false);
       setActivityStage("idle");
-      return setActivityFeedback({ tone: "error", text: t(result.error || "Unable to add the comment.") });
+      return setActivityFeedback({ tone: "error", text: result.error || "Unable to add the comment." });
     }
     if (attachment) {
       const attachmentResult = store.addCycleCommentAttachment(result.id, attachment);
@@ -373,7 +373,7 @@ const OperationsClientWorkspace = () => {
         setActivityStage("idle");
         return setActivityFeedback({
           tone: "error",
-          text: t(cleanup.ok ? (attachmentResult.error || "Unable to attach the uploaded file.") : `${attachmentResult.error || "Unable to attach the uploaded file."} ${cleanup.error}`),
+          text: cleanup.ok ? (attachmentResult.error || "Unable to attach the uploaded file.") : "Unable to attach the uploaded file. The uploaded file was kept and could not be removed automatically.",
         });
       }
     }

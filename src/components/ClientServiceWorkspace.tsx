@@ -107,7 +107,7 @@ const ClientServiceWorkspace = () => {
     setMessage('');
     try {
       const result = await downloadServiceFile(attachment, { isCurrent });
-      if (isCurrent() && !result.ok) setMessage(t(result.error));
+      if (isCurrent() && !result.ok) setMessage(result.error || 'The file could not be downloaded.');
     } catch (failure) {
       if (isCurrent()) setMessage(failure instanceof Error ? failure.message : t('The file could not be downloaded.'));
     } finally {

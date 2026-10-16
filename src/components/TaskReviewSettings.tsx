@@ -7,6 +7,7 @@ import { canBeTaskReviewLead, canManageTaskReview, canReviewTaskInternally, isIn
 import { getTodayInputDate } from '../lib/utils';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { useI18n } from './I18nProvider';
+import SystemMessage from './SystemMessage';
 
 export default function TaskReviewSettings({ task }: { task: Task }) {
   const { t } = useI18n();
@@ -37,11 +38,11 @@ export default function TaskReviewSettings({ task }: { task: Task }) {
       const result = isOverride
         ? useStore.getState().updateTask(task.id, { status: 'Approved', reviewOverrideReason: reason.trim() })
         : await useStore.getState().setTaskReviewConfig(task.id, { ...(requiresApproval === (task.requiresInternalApproval !== false) ? {} : { requiresInternalApproval: requiresApproval }), accountableLeadId: lead || undefined, cover: reviewer ? { reviewerId: reviewer, expiresAt: new Date(`${until}T23:59:59`).toISOString() } : null });
-      if (!result.ok) return { ok: false, error: result.error ? t(result.error) : t('The change is waiting to be saved.') };
+      if (!result.ok) return { ok: false, error: result.error ? t(result.error) : 'The change is waiting to be saved.' };
       const saved = await useStore.getState().commitPendingMutation('task.update');
       if (!saved.ok) return saved;
       return { ok: true };
-    }, result => { if (result.ok) { setMessage(t(isOverride ? 'Review override saved with your reason.' : requiresApproval !== (task.requiresInternalApproval !== false) ? 'Review responsibility saved.' : 'Review cover and lead saved.')); setReason(''); } else setError(result.error || t('The change is waiting to be saved.')); });
+    }, result => { if (result.ok) { setMessage(t(isOverride ? 'Review override saved with your reason.' : requiresApproval !== (task.requiresInternalApproval !== false) ? 'Review responsibility saved.' : 'Review cover and lead saved.')); setReason(''); } else setError(result.error || 'The change is waiting to be saved.'); });
   };
   return <section aria-label={t('Review responsibility')} className="space-y-3 rounded-control border border-line p-4">
     <h3 className="text-sm font-semibold text-ink">{t('Review responsibility')}</h3>
@@ -58,6 +59,6 @@ export default function TaskReviewSettings({ task }: { task: Task }) {
     {reviewer && <label className="block text-sm text-ink">{t('Cover until')}<input type="date" value={until} min={getTodayInputDate()} max={getTodayInputDate(new Date(Date.now() + 89 * 86400000))} onChange={event => setUntil(event.target.value)} disabled={locked} className="mt-1 min-h-11 w-full rounded-control border border-line bg-surface px-3" /></label>}
     <button type="button" disabled={locked || Boolean(reviewer && !until)} onClick={() => void save()} className="min-h-11 rounded-control border border-line px-3 text-sm font-semibold text-ink disabled:opacity-50">{t(busy ? 'Saving…' : 'Save review responsibility')}</button>
     {override && <div className="space-y-2 border-t border-line pt-3"><p className="text-sm text-muted">{t('This review requires independent cover. Boss Koo may override with an audited reason.')}</p><label className="block text-sm text-ink">{t('Review override reason')}<textarea value={reason} maxLength={2000} onChange={event => setReason(event.target.value)} disabled={locked} className="mt-1 w-full rounded-control border border-line bg-surface p-3" /></label><button type="button" disabled={locked || !reason.trim()} onClick={() => void save(true)} className="min-h-11 rounded-control border border-amber-300 px-3 text-sm font-semibold text-amber-800 disabled:opacity-50">{t('Approve with audited override')}</button></div>}
-    {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}{error && <p role="alert" className="text-sm text-red-700">{t(error)}</p>}
+    {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}{error && <p role="alert" className="text-sm text-red-700"><SystemMessage message={error} /></p>}
   </section>;
 }

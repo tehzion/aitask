@@ -18,6 +18,8 @@ describe('application feedback', () => {
     ['duplicate key value violates unique constraint "aitask_entities_pkey"', 'already exists', '已有相同的记录'],
     ['update or delete on table "aitask_members" violates foreign key constraint "private_fk"', 'linked to other work', '其他工作有关联'],
     ['invalid input syntax for type uuid: "bad-value"', 'Review the fields', '检查填写的内容'],
+    ['Object not found', 'no longer available', '已不存在'],
+    ['The resource was not found', 'no longer available', '已不存在'],
     ['Cannot read properties of undefined (reading "data")', 'contact your workspace administrator', '联系工作区管理员'],
     ['Could not find the function public.aitask_execute_command in the schema cache', 'contact your workspace administrator', '联系工作区管理员'],
     ['[object Object]', 'contact your workspace administrator', '联系工作区管理员'],
