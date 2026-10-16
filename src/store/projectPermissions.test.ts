@@ -27,8 +27,6 @@ const company: Project = {
   services: ['Design'],
   startDate: '2026-07-18',
   deadline: '',
-  totalTasks: 1,
-  completedTasks: 0,
   createdBy: staff.id,
 };
 

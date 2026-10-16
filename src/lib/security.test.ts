@@ -242,4 +242,19 @@ describe('remote snapshot validation', () => {
     expect(parsed.users[0]).not.toHaveProperty('password');
     expect(parsed.users[0]).not.toHaveProperty('api_token');
   });
+
+  it('drops malformed service and role records that lack a usable identity', () => {
+    const parsed = parseWorkspaceSnapshot({
+      servicePackages: [{ id: 'pkg-1', name: 'Starter' }, { name: 'No id' }, 'nonsense', { id: '   ' }],
+      deliverables: [{ id: 'd-1', clientId: 'c-1' }, { clientId: 'c-2' }],
+      rolePermissions: [{ id: 'role-1', name: 'Lead' }, { name: 'No id' }],
+    } as never);
+
+    expect(parsed.servicePackages).toHaveLength(1);
+    expect(parsed.servicePackages[0]).toMatchObject({ id: 'pkg-1' });
+    expect(parsed.deliverables).toHaveLength(1);
+    expect(parsed.deliverables[0]).toMatchObject({ id: 'd-1' });
+    expect(parsed.rolePermissions).toHaveLength(1);
+    expect(parsed.rolePermissions[0]).toMatchObject({ id: 'role-1' });
+  });
 });

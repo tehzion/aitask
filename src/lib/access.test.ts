@@ -69,8 +69,6 @@ const projects: Project[] = [
     services: ['Design'],
     startDate: '2026-07-13',
     deadline: '',
-    totalTasks: 1,
-    completedTasks: 0,
   },
   {
     id: 'project-beta',
@@ -79,8 +77,6 @@ const projects: Project[] = [
     services: ['SEO'],
     startDate: '2026-07-13',
     deadline: '',
-    totalTasks: 1,
-    completedTasks: 0,
   },
 ];
 

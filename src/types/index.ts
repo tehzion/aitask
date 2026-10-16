@@ -420,8 +420,6 @@ export interface Project {
   services: ServiceType[];
   startDate: string; // New field for Finance to track
   deadline: string;
-  totalTasks: number;
-  completedTasks: number;
   updatedAt?: string;
 }
 

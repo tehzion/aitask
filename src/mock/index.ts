@@ -27,8 +27,6 @@ export const mockProjects: Project[] = [
     services: ['Social Media', 'Design', 'Ads'],
     startDate: getTodayInputDate(today),
     deadline: getTodayInputDate(addDays(today, 30)),
-    totalTasks: 0,
-    completedTasks: 0,
   },
   {
     id: 'p2',
@@ -37,8 +35,6 @@ export const mockProjects: Project[] = [
     services: ['Website', 'SEO', 'Design'],
     startDate: getTodayInputDate(subDays(today, 10)),
     deadline: getTodayInputDate(addDays(today, 15)),
-    totalTasks: 0,
-    completedTasks: 0,
   },
   {
     id: 'p3',
@@ -47,8 +43,6 @@ export const mockProjects: Project[] = [
     services: ['Video', 'Social Media'],
     startDate: getTodayInputDate(subDays(today, 5)),
     deadline: getTodayInputDate(addDays(today, 5)),
-    totalTasks: 0,
-    completedTasks: 0,
   }
 ];
 

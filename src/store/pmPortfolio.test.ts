@@ -71,7 +71,7 @@ describe('PM portfolio mutation boundaries', () => {
 
   it('lets the new company PM edit and create work in an inherited project', () => {
     const client = { id: 'transferred', clientName: 'Transferred', createdBy: pm.id, createdAt: '', updatedAt: '' };
-    const project = { id: 'inherited', clientId: client.id, clientName: client.clientName, projectName: 'Campaign', createdBy: other.id, services: ['Design'], startDate: '2026-10-01', deadline: '', totalTasks: 1, completedTasks: 0 };
+    const project = { id: 'inherited', clientId: client.id, clientName: client.clientName, projectName: 'Campaign', createdBy: other.id, services: ['Design'], startDate: '2026-10-01', deadline: '' };
     const task: Task = { id: 'inherited-task', title: 'Inherited task', clientId: client.id, clientName: client.clientName, projectId: project.id, projectName: project.projectName, serviceType: 'Design', description: '', department: 'Designer', createdBy: other.id, assignedTo: '', status: 'Pending', startDate: '2026-10-01', dueDate: '', priority: 'Medium', completionPercentage: 0, isCompleted: false, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false };
     useStore.setState({ currentUser: pm, clients: [client], projects: [project], tasks: [task] });
     expect(useStore.getState().updateTask(task.id, { priority: 'High' })).toEqual({ ok: true });

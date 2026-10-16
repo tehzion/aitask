@@ -121,8 +121,6 @@ describe('task store authorization', () => {
         services: ['Design'],
         startDate: '2026-07-13',
         deadline: '',
-        totalTasks: 0,
-        completedTasks: 0,
       }],
     });
 
@@ -265,8 +263,6 @@ describe('task store authorization', () => {
         services: ['Design'],
         startDate: '2026-07-13',
         deadline: '',
-        totalTasks: 0,
-        completedTasks: 0,
       }],
     });
 

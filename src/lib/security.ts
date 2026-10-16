@@ -318,8 +318,6 @@ const parseProject = (value: unknown): Project | null => {
     services: safeStringArray(value.services, 50, 120),
     startDate: safeIsoDate(value.startDate, today),
     deadline: cleanText(value.deadline, 10) ? safeIsoDate(value.deadline, today) : '',
-    totalTasks: Math.max(0, Number(value.totalTasks) || 0),
-    completedTasks: Math.max(0, Number(value.completedTasks) || 0),
     updatedAt: safeIsoTimestamp(value.updatedAt),
   };
 };
@@ -490,6 +488,16 @@ const parseRegistration = (value: unknown): Registration | null => {
   };
 };
 
+// Service-domain and role collections arrive as free-form JSONB. Entries without
+// a usable string identity are dropped so downstream Map/key lookups can never
+// receive an undefined id. Field-level coercion for these shapes stays light by
+// design; the database remains the authoritative shape.
+const parseIdentifiedRecords = <T>(items: unknown): T[] => (
+  Array.isArray(items)
+    ? (items.filter(isRecord).filter(item => typeof item.id === 'string' && item.id.trim().length > 0) as unknown as T[])
+    : []
+);
+
 export const parseWorkspaceSnapshot = (value: unknown): SafeWorkspaceState => {
   const record = isRecord(value) ? value : {};
   const mapValid = <T>(items: unknown, parser: (item: unknown) => T | null): T[] => (
@@ -503,19 +511,19 @@ export const parseWorkspaceSnapshot = (value: unknown): SafeWorkspaceState => {
     tasks: mapValid(record.tasks, parseTask),
     notifications: mapValid(record.notifications, parseNotification),
     registrations: mapValid(record.registrations, parseRegistration),
-    rolePermissions: Array.isArray(record.rolePermissions) ? record.rolePermissions.filter(isRecord) as unknown as CustomRole[] : [],
+    rolePermissions: parseIdentifiedRecords<CustomRole>(record.rolePermissions),
     taskStatuses: safeStringArray(record.taskStatuses, 100, 80),
     deletedUserIds: safeStringArray(record.deletedUserIds, 2000, 160),
     deletedRoleIds: safeStringArray(record.deletedRoleIds, 2000, 160),
     deletedTaskStatuses: safeStringArray(record.deletedTaskStatuses, 2000, 80),
     deletedClientIds: safeStringArray(record.deletedClientIds, 2000, 160),
-    servicePackages: Array.isArray(record.servicePackages) ? record.servicePackages.filter(isRecord) as unknown as ServicePackage[] : [],
-    clientPlans: Array.isArray(record.clientPlans) ? record.clientPlans.filter(isRecord) as unknown as ClientServicePlan[] : [],
-    serviceCycles: Array.isArray(record.serviceCycles) ? record.serviceCycles.filter(isRecord) as unknown as ServiceCycle[] : [],
-    deliverables: Array.isArray(record.deliverables) ? record.deliverables.filter(isRecord) as unknown as Deliverable[] : [],
-    cycleComments: Array.isArray(record.cycleComments) ? record.cycleComments.filter(isRecord) as unknown as CycleComment[] : [],
-    addons: Array.isArray(record.addons) ? record.addons.filter(isRecord) as unknown as Addon[] : [],
-    serviceWorkflowTemplates: Array.isArray(record.serviceWorkflowTemplates) ? record.serviceWorkflowTemplates.filter(isRecord) as unknown as ServiceWorkflowTemplate[] : [],
-    servicePricingSnapshots: Array.isArray(record.servicePricingSnapshots) ? record.servicePricingSnapshots.filter(isRecord) as unknown as ServicePricingSnapshot[] : [],
+    servicePackages: parseIdentifiedRecords<ServicePackage>(record.servicePackages),
+    clientPlans: parseIdentifiedRecords<ClientServicePlan>(record.clientPlans),
+    serviceCycles: parseIdentifiedRecords<ServiceCycle>(record.serviceCycles),
+    deliverables: parseIdentifiedRecords<Deliverable>(record.deliverables),
+    cycleComments: parseIdentifiedRecords<CycleComment>(record.cycleComments),
+    addons: parseIdentifiedRecords<Addon>(record.addons),
+    serviceWorkflowTemplates: parseIdentifiedRecords<ServiceWorkflowTemplate>(record.serviceWorkflowTemplates),
+    servicePricingSnapshots: parseIdentifiedRecords<ServicePricingSnapshot>(record.servicePricingSnapshots),
   };
 };

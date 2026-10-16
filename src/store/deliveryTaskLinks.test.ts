@@ -58,5 +58,16 @@ describe('explicit delivery task links', () => {
     expect(useStore.getState().tasks).toEqual(before);
     expect(useStore.getState().deliverables).toEqual([confirmed]);
   });
+  it('clears a dangling primary task reference when its task is deleted', () => {
+    useStore.setState({ tasks: [{ ...task, deliverableId: 'd' }], deliverables: [{ ...deliverable, taskIds: [task.id], primaryTaskId: task.id }] });
+    expect(useStore.getState().deleteTask(task.id).ok).toBe(true);
+    expect(useStore.getState().tasks).toHaveLength(0);
+    expect(useStore.getState().deliverables[0]).toMatchObject({ taskIds: [], primaryTaskId: undefined });
+  });
+  it('clears a dangling primary task reference when its task is unlinked', () => {
+    useStore.setState({ tasks: [{ ...task, deliverableId: 'd' }], deliverables: [{ ...deliverable, taskIds: [task.id], primaryTaskId: task.id }] });
+    expect(useStore.getState().linkTaskToDeliverable(task.id).ok).toBe(true);
+    expect(useStore.getState().deliverables[0]).toMatchObject({ taskIds: [], primaryTaskId: undefined });
+  });
 
 });

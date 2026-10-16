@@ -351,7 +351,7 @@ export interface StoreState {
   reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => MutationActionResult;
   requestRevision: (taskId: string, note?: string) => MutationActionResult;
   addTask: (task: Omit<Task, 'id' | 'isCompleted' | 'completedAt' | 'revisionCount' | 'clientApprovalStatus' | 'dueReminderSent' | 'approvalHistory'>) => string;
-  addProject: (project: Omit<Project, 'id' | 'totalTasks' | 'completedTasks'>) => string;
+  addProject: (project: Omit<Project, 'id'>) => string;
   updateProject: (projectId: string, data: ProjectUpdateInput) => { ok: boolean; error?: string };
   deleteProject: (projectId: string) => { ok: boolean; error?: string };
   createClientProfile: (data: { clientName: string } & ClientProfileInput) => { ok: boolean; id?: string; error?: string };
@@ -455,11 +455,8 @@ const waitForSyncIdle = async (timeoutMs = 5000) => {
 };
 let isApplyingRemoteSnapshot = false;
 let isApplyingNotificationRead = false;
-const seededUserIds = new Set(mockUsers.map(user => user.id));
-const seededProjectIds = new Set(mockProjects.map(project => project.id));
 const legacyDemoTaskIdSet = new Set<string>(legacyDemoTaskIds);
 const retiredDemoUserIdSet = new Set<string>(retiredDemoUserIds);
-const defaultTaskStatuses = ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'];
 const allowedDepartments = new Set<Department>(DEPARTMENTS);
 const allowedPriorities = new Set<Priority>(['Low', 'Medium', 'High', 'Urgent']);
 const sensitiveSnapshotKeyPattern = /(password|secret|token|api[_-]?key|service[_-]?role)/i;
@@ -824,9 +821,6 @@ const deriveServiceProgress = (tasks: Task[], deliverables: Deliverable[], cycle
   return { tasks, deliverables: nextDeliverables, serviceCycles: nextCycles };
 };
 
-const legacySnapshotRuntime = () => ({ normalizeWorkspaceState, ensureBuiltinRoleTemplate, defaultTaskStatuses, legacyDemoTaskIdSet, retiredDemoUserIdSet, seededProjectIds, seededUserIds });
-export type LegacySnapshotRuntime = ReturnType<typeof legacySnapshotRuntime>;
-
 const workspaceStatesEqual = (left: PersistedWorkspaceState, right: PersistedWorkspaceState) => (
   JSON.stringify(normalizeWorkspaceState(left)) === JSON.stringify(normalizeWorkspaceState(right))
 );
@@ -1129,51 +1123,6 @@ export const useStore = create<StoreState>()(
             isApplyingRemoteSnapshot = false;
             return;
           }
-
-          const { loadSupabaseSnapshot, createLegacySnapshotMerge } = await import('../lib/legacySnapshot');
-          if (!isWorkspaceSessionCurrent(sessionToken)) return;
-          const { hasRecoverableLocalWorkspaceContent, mergeWorkspaceStates } = createLegacySnapshotMerge(legacySnapshotRuntime());
-          const localBeforeRemote = selectPersistedWorkspaceState(get());
-          const result = await loadSupabaseSnapshot(localBeforeRemote);
-          const shouldRecoverLocal = hasRecoverableLocalWorkspaceContent(localBeforeRemote, result.state);
-          const recoveredState = shouldRecoverLocal
-            ? mergeWorkspaceStates(localBeforeRemote, result.state, result.updatedAt || '')
-            : result.state;
-          const shouldUploadRecoveredState = shouldRecoverLocal && !workspaceStatesEqual(recoveredState, result.state);
-          const snapshotToApply: SnapshotResult = shouldRecoverLocal
-            ? {
-                ...result,
-                state: recoveredState,
-                message: shouldUploadRecoveredState
-                  ? 'Recovered browser-local workspace changes. Syncing them to Supabase.'
-                  : result.message,
-              }
-            : result;
-          const syncedAt = new Date().toISOString();
-          isApplyingRemoteSnapshot = true;
-          apply((state) => ({
-            ...makeWorkspacePatch(state, snapshotToApply),
-            backend: {
-              mode: 'supabase',
-              status: shouldUploadRecoveredState ? 'saving' : 'live',
-              isConfigured: true,
-              isLoading: false,
-              isSaving: false,
-              isPulling: false,
-              lastSyncedAt: syncedAt,
-              lastPulledAt: syncedAt,
-              remoteVersion: result.version,
-              remoteUpdatedAt: result.updatedAt,
-              hasRemoteUpdate: false,
-              hasLocalChanges: shouldUploadRecoveredState,
-              pendingMutations: shouldUploadRecoveredState ? 1 : 0,
-              message: snapshotToApply.message,
-            }
-          }));
-          isApplyingRemoteSnapshot = false;
-          if (shouldUploadRecoveredState) {
-            useToastStore.getState().addToast(msg('errors.recoveredWorkspace'), 'info');
-          }
         } catch (error) {
           apply({
             backend: {
@@ -1301,81 +1250,6 @@ export const useStore = create<StoreState>()(
             }
             return;
           }
-
-          const { saveSupabaseSnapshot, createLegacySnapshotMerge } = await import('../lib/legacySnapshot');
-          if (!isWorkspaceSessionCurrent(sessionToken)) return;
-          const { mergeWorkspaceStates } = createLegacySnapshotMerge(legacySnapshotRuntime());
-          const result = await saveSupabaseSnapshot(
-            selectPersistedWorkspaceState(stateToSave),
-            stateToSave.backend.remoteVersion || 1
-          );
-
-          if (!result.saved) {
-            const latest = result.latest;
-            if (latest) {
-              const merged = mergeWorkspaceStates(
-                selectPersistedWorkspaceState(current),
-                latest.state,
-                current.backend.lastSyncedAt || ''
-              );
-
-              isApplyingRemoteSnapshot = true;
-              apply((state) => ({
-                ...makeWorkspacePatch(state, { ...latest, state: merged }),
-                backend: {
-                  ...state.backend,
-                  isSaving: false,
-                  remoteVersion: latest.version,
-                  remoteUpdatedAt: latest.updatedAt,
-                  hasRemoteUpdate: false,
-                  hasLocalChanges: true,
-                }
-              }));
-              isApplyingRemoteSnapshot = false;
-
-
-
-              setTimeout(() => {
-                get().syncBackendNow();
-              }, 100);
-              return;
-            }
-
-            apply((state) => ({
-              backend: {
-                ...state.backend,
-                isSaving: false,
-                remoteVersion: result.version || state.backend.remoteVersion,
-                remoteUpdatedAt: result.updatedAt || state.backend.remoteUpdatedAt,
-                hasRemoteUpdate: true,
-                message: result.message,
-              }
-            }));
-            return;
-          }
-
-          const syncedAt = new Date().toISOString();
-          apply((state) => ({
-            backend: {
-              ...state.backend,
-              status: 'live',
-              isSaving: false,
-              lastSyncedAt: syncedAt,
-              lastPulledAt: syncedAt,
-              remoteVersion: result.version,
-              remoteUpdatedAt: result.updatedAt,
-              hasRemoteUpdate: false,
-              hasLocalChanges: false,
-              pendingMutations: 0,
-              pendingCommandType: undefined,
-              error: undefined,
-              errorCode: undefined,
-              message: result.message,
-            }
-          }));
-
-          acknowledgeActionFeedback(get(), stateToSave);
-
         } catch (error) {
           apply((state) => ({
             backend: {
@@ -1534,97 +1408,6 @@ export const useStore = create<StoreState>()(
             isApplyingRemoteSnapshot = false;
             return;
           }
-
-          const { loadSupabaseSnapshot, createLegacySnapshotMerge } = await import('../lib/legacySnapshot');
-          if (!isWorkspaceSessionCurrent(sessionToken)) return;
-          const { mergeWorkspaceStates } = createLegacySnapshotMerge(legacySnapshotRuntime());
-          const result = await loadSupabaseSnapshot(selectPersistedWorkspaceState(get()));
-          const pulledAt = new Date().toISOString();
-          const current = get();
-          const currentVersion = current.backend.remoteVersion || 0;
-          const hasUnsavedLocalChanges = current.backend.hasLocalChanges && !options.force;
-          const hasPendingRemoteUpdate = current.backend.hasRemoteUpdate && !options.force;
-          const remoteIsNewer = result.version > currentVersion || hasPendingRemoteUpdate;
-
-          if (hasUnsavedLocalChanges && remoteIsNewer) {
-            const merged = mergeWorkspaceStates(
-              selectPersistedWorkspaceState(current),
-              result.state,
-              current.backend.lastSyncedAt || ''
-            );
-
-            isApplyingRemoteSnapshot = true;
-            apply((state) => ({
-              ...makeWorkspacePatch(state, { ...result, state: merged }),
-              backend: {
-                ...state.backend,
-                isPulling: false,
-                lastPulledAt: pulledAt,
-                remoteVersion: result.version,
-                remoteUpdatedAt: result.updatedAt,
-                hasRemoteUpdate: false,
-                hasLocalChanges: true,
-                message: 'Auto-merged concurrent updates.',
-              }
-            }));
-            isApplyingRemoteSnapshot = false;
-
-
-
-            setTimeout(() => {
-              get().syncBackendNow();
-            }, 100);
-            return;
-          }
-
-          if (hasUnsavedLocalChanges || hasPendingRemoteUpdate) {
-            apply((state) => ({
-              backend: {
-                ...state.backend,
-                isPulling: false,
-                lastPulledAt: pulledAt,
-                remoteVersion: remoteIsNewer ? result.version : state.backend.remoteVersion,
-                remoteUpdatedAt: remoteIsNewer ? result.updatedAt : state.backend.remoteUpdatedAt,
-                hasRemoteUpdate: remoteIsNewer || state.backend.hasRemoteUpdate,
-                message: remoteIsNewer
-                  ? 'A newer workspace update is available. Refresh before saving.'
-                  : state.backend.message,
-              }
-            }));
-            return;
-          }
-
-          if (remoteIsNewer || options.force || currentVersion === 0) {
-            isApplyingRemoteSnapshot = true;
-            apply((state) => ({
-              ...makeWorkspacePatch(state, result),
-              backend: {
-                ...state.backend,
-                isPulling: false,
-                lastPulledAt: pulledAt,
-                remoteVersion: result.version,
-                remoteUpdatedAt: result.updatedAt,
-                hasRemoteUpdate: false,
-                hasLocalChanges: false,
-                message: options.silent ? 'Dashboard is current.' : result.message,
-              }
-            }));
-            isApplyingRemoteSnapshot = false;
-            return;
-          }
-
-          apply((state) => ({
-            backend: {
-              ...state.backend,
-              status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
-              isPulling: false,
-              lastPulledAt: pulledAt,
-              remoteVersion: result.version,
-              remoteUpdatedAt: result.updatedAt,
-              hasRemoteUpdate: false,
-              message: options.silent ? state.backend.message : 'Dashboard is current.',
-            }
-          }));
         } catch (error) {
           isApplyingRemoteSnapshot = false;
           apply((state) => ({
@@ -3102,9 +2885,18 @@ export const useStore = create<StoreState>()(
 
         set(current => {
           const tasks = current.tasks.filter(item => item.id !== taskId);
-          const deliverables = current.deliverables.map(item => item.taskIds.includes(taskId)
-            ? { ...item, taskIds: item.taskIds.filter(id => id !== taskId), updatedAt: new Date().toISOString() }
-            : item);
+          const now = new Date().toISOString();
+          const deliverables = current.deliverables.map(item => {
+            const removedFromLinks = item.taskIds.includes(taskId);
+            const clearsPrimary = item.primaryTaskId === taskId;
+            if (!removedFromLinks && !clearsPrimary) return item;
+            return {
+              ...item,
+              taskIds: removedFromLinks ? item.taskIds.filter(id => id !== taskId) : item.taskIds,
+              primaryTaskId: clearsPrimary ? undefined : item.primaryTaskId,
+              updatedAt: now,
+            };
+          });
           return {
             tasks,
             notifications: [...notifications, ...(current.notifications || [])],
@@ -3443,8 +3235,6 @@ export const useStore = create<StoreState>()(
           startDate,
           deadline,
           createdBy: currentUser.id,
-          totalTasks: 0,
-          completedTasks: 0,
           id: nowId('P'),
           updatedAt: new Date().toISOString(),
         };
@@ -4407,13 +4197,20 @@ export const useStore = create<StoreState>()(
         const now = new Date().toISOString();
         set(current => {
           const tasks = current.tasks.map(item => item.id === taskId ? { ...item, serviceCycleId: cycleId, deliverableId, updatedAt: now } : item);
-          const deliverables = current.deliverables.map(item => ({
-            ...item,
-            taskIds: item.id === deliverableId
-              ? Array.from(new Set([...item.taskIds, taskId]))
-              : item.taskIds.filter(id => id !== taskId),
-            updatedAt: item.taskIds.includes(taskId) || item.id === deliverableId ? now : item.updatedAt,
-          }));
+          const deliverables = current.deliverables.map(item => {
+            const isTarget = item.id === deliverableId;
+            const wasLinked = item.taskIds.includes(taskId);
+            if (!isTarget && !wasLinked) return item;
+            return {
+              ...item,
+              taskIds: isTarget
+                ? Array.from(new Set([...item.taskIds, taskId]))
+                : item.taskIds.filter(id => id !== taskId),
+              // Unlinking a task must not leave a dangling primary reference.
+              primaryTaskId: !isTarget && item.primaryTaskId === taskId ? undefined : item.primaryTaskId,
+              updatedAt: wasLinked || isTarget ? now : item.updatedAt,
+            };
+          });
           return { tasks, ...deriveServiceProgress(tasks, deliverables, current.serviceCycles) };
         });
         return { ok: true };
