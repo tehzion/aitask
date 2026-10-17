@@ -392,6 +392,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                     <button
                       key={service}
                       type="button"
+                      data-draft-control
                       onClick={() => togglePreset(service)}
                       className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
                         isSelected
@@ -413,6 +414,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                       <button
                         key={service}
                       type="button"
+                      data-draft-control
                       onClick={() => togglePreset(service)}
                       data-i18n-skip
                         className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
@@ -439,6 +441,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                       {name}
                       <button
                         type="button"
+                        data-draft-control
                         onClick={() => removeCustomService(name)}
                         className="ml-0.5 text-blue-500 hover:text-blue-700 transition-colors rounded"
                         aria-label={`${t('Remove')} ${name}`}
@@ -467,6 +470,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                 </div>
                 <button
                   type="button"
+                  data-draft-control
                   onClick={addCustomService}
                   disabled={!customInput.trim()}
                   className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"

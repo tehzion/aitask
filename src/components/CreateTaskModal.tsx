@@ -642,6 +642,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       />
                       <button
                         type="button"
+                        data-draft-control
                         onClick={addCustomService}
                         disabled={!customServiceInput.trim()}
                         className="inline-flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"

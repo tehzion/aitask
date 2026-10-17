@@ -30,12 +30,14 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost' | 'quiet' | 'danger';
 }
 
-export const Button: React.FC<ButtonProps> = ({ className, variant = 'primary', type = 'button', ...props }) => (
+export const Button: React.FC<ButtonProps> = ({ className, variant = 'primary', type = 'button', 'aria-busy': ariaBusy, ...props }) => (
   <button
     type={type}
+    aria-busy={ariaBusy}
     className={cn(
       buttonBase,
       'min-h-11 px-4 py-2.5',
+      ariaBusy && 'disabled:cursor-wait',
       variant === 'primary'   && 'bg-accent text-white shadow-[0_5px_12px_-10px_rgb(7_22_18/0.8)] hover:bg-accent/90 dark:text-[rgb(var(--calm-accent-ink))]',
       variant === 'secondary' && 'border border-line bg-surface text-ink hover:border-accent/35 hover:bg-inset',
       variant === 'ghost'     && 'text-muted hover:bg-inset hover:text-ink',

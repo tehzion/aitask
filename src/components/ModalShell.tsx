@@ -146,10 +146,16 @@ const ModalShell: React.FC<ModalShellProps> = ({
         ref={panelRef}
         onChangeCapture={onEdit}
         onClickCapture={event => {
-          // Button-driven field controls (packages, services, visibility) must
-          // protect the draft just like native input controls.
+          // Native fields are covered by onChangeCapture. Legacy modal editors
+          // use buttons for draft fields, so treat non-submit buttons as draft
+          // edits unless they are clearly Cancel, Close, navigation, or
+          // recovery controls; those must not create a false dirty warning.
           const button = event.target instanceof Element ? event.target.closest('button') : null;
-          if (button && !button.hasAttribute('data-draft-navigation') && button.type !== 'submit') onEdit?.();
+          if (!button || button.type === 'submit') return;
+          const actionName = `${button.getAttribute('aria-label') || ''} ${button.textContent || ''}`.trim().toLowerCase();
+          const isNonDraftAction = button.hasAttribute('data-draft-navigation')
+            || /^(?:close|cancel|back|done|add client|new project|manage companies|add service plan|restore draft|discard draft)\b/.test(actionName);
+          if (button.hasAttribute('data-draft-control') || !isNonDraftAction) onEdit?.();
         }}
         role="dialog"
         aria-modal="true"

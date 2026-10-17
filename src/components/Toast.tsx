@@ -28,13 +28,14 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
     <div
       role={toast.type === 'error' ? 'alert' : 'status'}
       aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
+      aria-atomic="true"
       className={cn(
         'flex w-full min-w-0 items-center gap-3 rounded-lg p-4 shadow-[0_10px_24px_rgba(15,23,42,0.12)] pointer-events-auto transition-all duration-300 md:w-auto md:min-w-[300px] md:max-w-sm',
         '',
         bgClasses[toast.type]
       )}
     >
-      {iconMap[toast.type]}
+      <span aria-hidden="true">{iconMap[toast.type]}</span>
       <p className="min-w-0 flex-1 break-words pr-2 text-sm font-semibold leading-5">{toast.type === 'error' || toast.type === 'warning' ? <SystemMessage message={toast.message} /> : t(toast.message)}</p>
       <button
         onClick={() => removeToast(toast.id)}
@@ -42,7 +43,7 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
         className="flex h-11 w-11 shrink-0 items-center justify-center text-slate-400 hover:text-slate-600 p-0.5 rounded-lg hover:bg-slate-100 transition-colors"
         aria-label={t('common.closeNotification')}
       >
-        <X className="w-4 h-4" />
+        <X className="w-4 h-4" aria-hidden="true" />
       </button>
     </div>
   );
