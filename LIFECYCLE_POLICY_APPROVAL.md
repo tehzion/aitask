@@ -53,6 +53,6 @@ The business owner must approve or reject each item below before implementation:
 - [ ] Permanent client deletion, storage cleanup, and retention rule.
 - [ ] Workspace disable/archive behavior and final deletion process.
 - [ ] Audit-history retention duration, export, and redaction policy.
-- [ ] Approval to apply `20261017140000_audit_history_retention_guards_followup.sql` to staging.
+- [ ] Explicit approval to apply `20261017140000_audit_history_retention_guards_followup.sql` to production with actor foreign-key removal, workspace `ON DELETE RESTRICT`, indefinite retained snapshots pending a separate redaction/expiry policy, and no direct `service_role` table privileges.
 
 Until this record is approved, the lifecycle and retention gates remain **BLOCKED** and no lifecycle migration should be applied.

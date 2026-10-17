@@ -2,15 +2,46 @@
 
 **Date:** 2026-10-17
 
-The latest AiTask improvements have completed the available local verification checks. The full browser test suite passed with 324 successful tests and no failures, skips, or interruptions.
+## 1. Overview
 
-Verified improvements include:
+The latest AiTask release candidate improves day-to-day workflow reliability, clearer feedback, and protection against accidental data loss. The changes have completed the available local quality checks but have not yet been released to the live environment.
 
-- Unsaved work is protected with clearer navigation warnings and safer draft handling.
+## 2. Features and improvements completed
+
 - Client, company, and project setup flows are more resilient when searching, saving, or recovering from an error.
 - Delivery review, planning dates, staff snapshots, and workflow approval screens now behave consistently across the tested user journeys.
-- Error messages and confirmation feedback are clearer, with translations and accessible labels checked in the tested areas.
-- Audit-history safeguards now preserve important history and prevent unauthorized changes to historical records in the verified disposable database environment.
-- The production build now refuses the local password-reset bypass setting when it is accidentally enabled for a hosted build.
+- Cross-role workspace updates have a more reliable refresh path when the supporting database change is approved and released.
 
-The release has not been placed into live production yet. The remaining launch checks require explicit approval of the data-retention/deletion policy, confirmation of backup and recovery readiness, and verification of the live hosting configuration. No production data was changed during this preparation work.
+## 3. User experience improvements
+
+- Unsaved work is protected with clearer navigation warnings and safer draft handling.
+- Error messages and confirmation feedback are clearer.
+- Translations, accessible labels, keyboard behavior, and responsive layouts were checked in the tested areas.
+
+## 4. Task and project management improvements
+
+- Tested task, project, assignment, review, and completion journeys now use more consistent validation and conflict handling.
+- Planning-date and delivery-review behavior has additional regression coverage.
+
+## 5. Dashboard and notification improvements
+
+- Dashboard data and role-scoped refresh behavior have additional automated coverage.
+- Notification and cross-role synchronization paths were rechecked as part of the release suite.
+
+## 6. Security and reliability improvements
+
+- The production build now refuses a local password-reset bypass if it is accidentally enabled for a hosted build.
+- Audit-history safeguards preserve important history and reject unauthorized mutation in the verified disposable database environment.
+- Release checks exclude secrets and temporary evidence files from the intended commit.
+
+## 7. Quality assurance performed
+
+The release candidate passed type checking, linting, unit tests, production build validation, PWA and bundle checks, and a fresh disposable-database rollout covering all current migrations. The full browser suite was started but interrupted before completion, so it is not counted as a clean release gate. The public live login page was also checked on desktop and mobile without changing business data. Authenticated live role workflows have not yet been exercised.
+
+## 8. Deployment status
+
+**Deployment blocked pending approval.** The release is not yet live. No production database records, Git production branch, or Vercel production deployment were changed during this execution.
+
+## 9. Next steps
+
+Launch requires explicit owner approval of the audit-data retention and deletion behavior, confirmation of a current recovery point, and verification of the protected production hosting configuration. After those gates are cleared, the release can follow the coordinated database-first deployment sequence and complete authenticated live role checks.

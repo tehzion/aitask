@@ -49,6 +49,14 @@ begin
 end;
 $migration$;
 
+-- Supabase's default table privileges grant service_role TRUNCATE, TRIGGER,
+-- and REFERENCES on newly created public tables. TRUNCATE does not fire the
+-- row-level UPDATE/DELETE immutability trigger, so retaining it would leave a
+-- privileged path that can erase the entire audit ledger. History writes run
+-- through SECURITY DEFINER capture triggers owned by postgres and do not
+-- require direct service_role table privileges.
+revoke all on table public.aitask_entity_history from service_role;
+
 comment on column public.aitask_entity_history.actor_member_id is
   'Historical actor id; deliberately not an FK so member removal cannot mutate immutable evidence.';
 

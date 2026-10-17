@@ -1,0 +1,75 @@
+{
+  "manifestVersion": "2026-10-17.4",
+  "manifestKind": "aitask-production-golive-gate",
+  "supersedes": "aitask_release_manifest_20261017.json",
+  "immutable": true,
+  "capturedAt": "2026-10-17T14:27:51Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "source": {
+    "gitCommit": "8e16c5c79c2a6d45b1edf598dfe07d8dbd4b487f",
+    "gitBranch": "codex/audit-p0p1-2026-10-16",
+    "workingTreeDirtyBeforeEvidenceCommit": true,
+    "productionChangesThisTurn": false
+  },
+  "repository": {
+    "migrationCount": 114,
+    "latestMigration": "20261017140000_audit_history_retention_guards_followup",
+    "retentionMigrationSha256": "7620a58e34d775359ef870d85ffbac1f0b3cf6e9ab7d6d663a9d61b7986c00ab",
+    "auditHistoryTestSha256": "d50a0f87780c501fb7e35628164faaafb22f629d696afe6ead5df3266c309303"
+  },
+  "production": {
+    "migrationCount": 112,
+    "latestMigration": "20261017095628_align_service_cycle_cancel_rpc",
+    "pendingLocalMigrations": [
+      "20261017091031_workspace_revision_realtime",
+      "20261017140000_audit_history_retention_guards_followup"
+    ],
+    "historyRowsAtReadOnlyVerification": 0,
+    "productionDatabaseMutatedThisTurn": false
+  },
+  "retentionDecision": {
+    "status": "AWAITING_EXPLICIT_RELEASE_OWNER_APPROVAL",
+    "migration": "20261017140000_audit_history_retention_guards_followup",
+    "semantics": [
+      "Remove actor_member_id foreign-key mutation so deleted members do not rewrite immutable history",
+      "Change workspace history relationship to ON DELETE RESTRICT",
+      "Retain actor and entity snapshots until a separately approved export, redaction, or expiry policy exists",
+      "Revoke all direct service_role privileges on immutable history, including TRUNCATE, REFERENCES, TRIGGER, and MAINTAIN"
+    ],
+    "review": "AUDIT_HISTORY_RETENTION_REVIEW.md"
+  },
+  "backupRecovery": {
+    "status": "NOT_VERIFIED",
+    "reason": "No current recoverable production backup or restore point was available to this execution context"
+  },
+  "qualityGates": {
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "unit": "PASS — 107 files / 830 tests",
+    "productionBuild": "PASS",
+    "i18nStrict": "PASS — 171 files / 0 findings",
+    "migrationNonempty": "PASS — 114/114",
+    "bundleAndPwa": "PASS",
+    "disposableDatabaseRollout": "PASS — 67 files / 1,033 pgTAP assertions; all 114 migrations; no DB lint errors",
+    "supportingDatabaseProbes": "PASS — storage, staff save, HOD status, onboarding recovery, workflow review gate",
+    "playwrightFullSuite": "NOT_VERIFIED — interrupted at 50/324; clean rerun required",
+    "releaseDbAlignment": "BLOCKED AS INTENDED — two pending production migrations"
+  },
+  "hostingConfiguration": {
+    "status": "NOT_VERIFIED",
+    "reason": "Vercel environment-variable metadata read returned HTTP 403; no secrets were exposed"
+  },
+  "releaseDecision": {
+    "status": "NO-GO",
+    "reasons": [
+      "Retention/deletion semantics require explicit release-owner approval",
+      "Production migration history is behind the repository tail",
+      "Current backup/recovery readiness is not evidenced",
+      "Vercel production environment metadata is not readable in this context",
+      "Authenticated live four-role workflows were not exercised"
+    ],
+    "pushPerformed": false,
+    "supabaseProductionMigrationsApplied": false,
+    "vercelProductionDeploymentPerformed": false
+  }
+}

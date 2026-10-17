@@ -1,6 +1,6 @@
 -- Run after all migrations with pgTAP enabled.
 begin;
-select plan(21);
+select plan(22);
 
 select has_table(
   'public', 'aitask_entity_history',
@@ -31,6 +31,18 @@ select ok(
   and not has_table_privilege('authenticated', 'public.aitask_entity_history', 'UPDATE')
   and not has_table_privilege('authenticated', 'public.aitask_entity_history', 'DELETE'),
   'authenticated users can read only through the MFA super-admin RLS policy'
+);
+
+select ok(
+  not has_table_privilege('service_role', 'public.aitask_entity_history', 'SELECT')
+  and not has_table_privilege('service_role', 'public.aitask_entity_history', 'INSERT')
+  and not has_table_privilege('service_role', 'public.aitask_entity_history', 'UPDATE')
+  and not has_table_privilege('service_role', 'public.aitask_entity_history', 'DELETE')
+  and not has_table_privilege('service_role', 'public.aitask_entity_history', 'TRUNCATE')
+  and not has_table_privilege('service_role', 'public.aitask_entity_history', 'REFERENCES')
+  and not has_table_privilege('service_role', 'public.aitask_entity_history', 'TRIGGER')
+  and not has_table_privilege('service_role', 'public.aitask_entity_history', 'MAINTAIN'),
+  'service role has no direct privileges on immutable entity history'
 );
 
 select ok(

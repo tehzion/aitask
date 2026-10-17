@@ -1,18 +1,20 @@
 # AiTask Production Deployment Report
 
 **Assessment date:** 2026-10-17 (Asia/Kuala_Lumpur)
-**Release state:** **PREPARED LOCALLY — NOT DEPLOYED**
+**Release state:** **DEPLOYMENT BLOCKED — PREPARED LOCALLY, NOT DEPLOYED**
 **Recommendation:** **NO-GO** until retention/deletion approval, backup/recovery readiness, and production configuration verification are complete.
 
 ## Executive result
 
-The full local verification work is complete and the release changes are ready for a reviewed Git commit. No production database mutation, Git push, or Vercel deployment was performed in this preparation turn. The explicit retention/deletion approval required by the release instruction was not present, and the live database is not aligned with the repository tail.
+The applicable local code and database gates are complete, while the full Playwright suite remains incomplete and must be rerun before release. The release changes are ready for a reviewed Git commit. No production database mutation, Git push, or Vercel deployment was performed in this preparation turn. The explicit retention/deletion approval required by the release instruction was not present, and the live database is not aligned with the repository tail.
+
+The superseding gate evidence is recorded in [`supabase/preflight/aitask_release_manifest_20261017_golive.json`](supabase/preflight/aitask_release_manifest_20261017_golive.json). The original immutable manifest is retained unchanged for traceability.
 
 ## Verification results
 
 | Gate | Result |
 | --- | --- |
-| Full Playwright E2E | **PASS — 324 passed, 0 failed, 0 skipped, 0 interrupted** |
+| Full Playwright E2E | **NOT VERIFIED — interrupted at 50/324 during orchestration; 0 failures observed before interruption; clean rerun required** |
 | Unit suite | **PASS — 107 test files / 830 tests** |
 | Type-check (`pnpm check`) | **PASS** |
 | Lint | **PASS** |
@@ -20,7 +22,7 @@ The full local verification work is complete and the release changes are ready f
 | Unsafe hosted bypass guard | **PASS** — build rejected the enabled bypass |
 | PWA verification | **PASS** |
 | Bundle budgets | **PASS** |
-| Disposable Supabase rollout | **PASS — 67 database files / 1,032 pgTAP assertions** |
+| Disposable Supabase rollout | **PASS — 67 database files / 1,033 pgTAP assertions on all 114 current migrations, including the service-role privilege guard; DB lint had no errors and supporting probes passed** |
 | Migration alignment | **BLOCKED as intended** — repository has two pending migrations relative to production |
 
 The disposable database verification specifically covered append-only audit history, actor-history retention after member deletion, workspace foreign-key restriction, and immutable history update/delete rejection. Local success is not treated as proof of production compatibility.
@@ -61,6 +63,12 @@ The second migration changes retention/deletion behavior. It remains unapplied u
 
 No Vercel deployment or alias change was performed in this turn.
 
+## Live smoke-test results
+
+Read-only checks against `https://aitask-virid.vercel.app` confirmed the production login page, password-recovery flow, Chinese-language toggle, invalid-credential feedback, mobile layout without horizontal overflow, accessibility labels, and absence of captured console errors during those checks. The deployed live build reports `v3.0.0+463eb7c3a3a88215505e8387d4f80ace73bbc0cd`.
+
+No real credentials were available for this execution. Super Admin, Project Manager, HOD, and Staff authenticated dashboards, role-scoped workflows, notifications, Realtime, Storage, and business-record actions are therefore **not verified live**.
+
 ## Backup, recovery, and safe sequence
 
 Fresh production backup/recovery readiness is **NOT VERIFIED**. Existing historical notes are not treated as a current backup confirmation. A production release must wait for a backup or an explicitly documented recovery point and restore path.
@@ -85,3 +93,4 @@ Vercel rollback does not roll back database migrations. A failed database change
 - Vercel production environment configuration could not be verified due permissions.
 - Staging is intentionally skipped; live authenticated four-role, RLS, Realtime, Storage, dashboard, notification, and concurrency evidence remains unavailable.
 - Supabase security advisors still report disabled leaked-password protection and reviewed authenticated security-definer notices.
+- The pending retention migration also requires explicit acceptance that entity/member snapshots can contain personal and authorization data until a separate expiry, export, or redaction policy is approved.
