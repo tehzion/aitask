@@ -681,7 +681,9 @@ test('first login reaches the app and critical responsive routes remain usable',
       startDate: '2026-08-01',
       dueDate: '2026-08-05',
       priority: 'Urgent' as const,
-      status: 'Waiting Approval',
+      // Client review follows internal completion; Waiting Approval is the
+      // separate internal review gate and deliberately hides client actions.
+      status: 'Completed',
       completionPercentage: 100,
       attachmentLink: 'https://example.com/deliverable',
       attachmentName: 'Campaign artwork',

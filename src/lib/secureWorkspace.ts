@@ -1,4 +1,5 @@
 import { recordDiagnostic } from './diagnostics';
+import { withoutTaskCascadeNotificationDeletes } from './secureTaskDelete';
 import { assertWorkspaceSession, captureWorkspaceSession, isWorkspaceSessionCurrent, onWorkspaceSessionInvalidated } from './workspaceSession';
 import type { User } from '@supabase/supabase-js';
 import type {
@@ -1016,7 +1017,7 @@ export const buildOperations = (
 
   // Deliverable execution triggers cycle completion. Persist the child first
   // so a derived cycle update is validated against its completed deliveries.
-  return operations.sort((left, right) =>
+  return withoutTaskCascadeNotificationDeletes(operations, baseline).sort((left, right) =>
     Number(left.entityType === 'service_cycle' && left.action === 'update')
     - Number(right.entityType === 'service_cycle' && right.action === 'update'));
 };

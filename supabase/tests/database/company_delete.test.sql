@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(3);
+select plan(5);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -34,9 +34,22 @@ values
   ('pgtap-company-delete', 'client', 'pgtap-delete-client', '{"id":"pgtap-delete-client","clientName":"Delete Co","createdBy":"pgtap-hod-delete"}'::jsonb),
   ('pgtap-company-delete', 'client', 'pgtap-keep-client', '{"id":"pgtap-keep-client","clientName":"Keep Co"}'::jsonb);
 
--- A member with Delete companies can remove a company.
+-- Delete companies does not bypass the edit requirement, even for its creator.
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000915', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
+
+select is((public.aitask_execute_command('pgtap-company-delete',gen_random_uuid(),'client.delete',
+  jsonb_build_array(jsonb_build_object('kind','entity','action','delete','entityType','client','entityId','pgtap-delete-client','expectedVersion',1)))->>'ok')::boolean,
+  false,'Delete companies alone does not permit deleting an uneditable company');
+reset role;
+select is((select count(*)::integer from public.aitask_entities where workspace_id='pgtap-company-delete' and entity_id='pgtap-delete-client'),1,'denied deletion preserves the company');
+select set_config('request.jwt.claim.sub','',true);
+update public.aitask_members set permissions=permissions||'{"manageAssignedClients":true}'::jsonb
+where workspace_id='pgtap-company-delete' and id='pgtap-hod-delete';
+insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
+('pgtap-company-delete','task','delete-assigned-task','{"id":"delete-assigned-task","title":"Assigned company work","clientId":"pgtap-delete-client","clientName":"Delete Co","department":"Designer","assignedTo":"pgtap-hod-delete","createdBy":"pgtap-hod-delete"}');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000915',true);
 set local role authenticated;
 
 select is(
@@ -48,7 +61,7 @@ select is(
     ))
   ) ->> 'ok')::boolean,
   true,
-  'a member with Delete companies can delete a company'
+  'a member with Delete companies can delete a company they can edit'
 );
 
 reset role;

@@ -57,8 +57,8 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expect(page.getByText('Internal monthly total')).toBeVisible();
   await expect(page.getByText('Short Video Production · rev 1 · 10 tasks')).toBeVisible();
   await page.getByRole('button', { name: 'Create next revision' }).click();
-  await expect(page.getByText(/Scheduled revision 2/)).toBeVisible();
-  await expect(page.getByText(/Existing cycles remain unchanged/)).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Next month’s plan', exact: true })).toBeVisible();
+  await expect(page.getByText(/Existing monthly records keep their scope and prices/)).toBeVisible();
   await page.getByRole('button', { name: 'Pause' }).click();
   const pauseDialog = page.getByRole('dialog', { name: /Pause the/ });
   await expect(pauseDialog).toBeVisible();

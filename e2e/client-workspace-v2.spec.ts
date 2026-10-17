@@ -167,8 +167,8 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
     await page.getByRole('tab', { name: 'Services' }).click();
     await expect(page.getByText('Short Video', { exact: true }).first()).toBeVisible();
     await expect(page.locator('main article').first().getByText(/video/)).toBeVisible();
-    await expect(page.getByText(/Billing day/)).toBeVisible();
-    await expect(page.getByText(/Day \d+/).first()).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Billing period' })).toBeVisible();
+    await expect(page.getByRole('tabpanel', { name: 'Services' }).getByText(/Billing period/)).toBeVisible();
   }
 
   await page.getByRole('button', { name: '切换为中文' }).click();

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(10);
+select plan(11);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -91,7 +91,7 @@ select is(private.aitask_can_view_project('pgtap-pm-security', 'sec-pm2-project'
 select is(private.aitask_can_view_client('pgtap-pm-security', 'pm two co'), true, 'a Project Manager can view the client of that project');
 reset role;
 
--- HOD company deletion requires view access.
+-- HOD company deletion requires edit access as well as visibility.
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000925', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
@@ -118,10 +118,21 @@ select is(
       'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-pm-security' and entity_type = 'client' and entity_id = 'sec-hod-client')
     ))
   ) ->> 'ok')::boolean,
-  true,
-  'an HOD can delete a company they can view'
+  false,
+  'company ownership and visibility alone do not allow HOD deletion'
 );
 
+reset role;
+select set_config('request.jwt.claim.sub','',true);
+update public.aitask_members set permissions=permissions||'{"manageAssignedClients":true}'::jsonb
+where workspace_id='pgtap-pm-security' and id='pgtap-sec-hod';
+insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
+('pgtap-pm-security','task','sec-hod-assignment','{"id":"sec-hod-assignment","title":"Assigned company work","clientId":"sec-hod-client","clientName":"HOD Co","department":"Designer","assignedTo":"pgtap-sec-hod","createdBy":"pgtap-sec-hod"}');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000925',true);
+set local role authenticated;
+select ok((result->>'ok')::boolean,'HOD can delete a company they can edit: '||result::text)
+from (select public.aitask_execute_command('pgtap-pm-security',gen_random_uuid(),'client.delete',
+ jsonb_build_array(jsonb_build_object('kind','entity','action','delete','entityType','client','entityId','sec-hod-client','expectedVersion',1))) as result) command;
 reset role;
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.role', '', true);

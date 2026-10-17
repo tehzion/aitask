@@ -63,6 +63,32 @@ end;
 $$;
 
 -- 2. Freeze company ownership at the table for every mutation path. -----------
+-- An atomic company cascade can visit its task rows before its client row.
+-- Authorize while those task-derived edit rights still exist, and carry only
+-- that exact actor/workspace/client decision to the table guard. Direct client
+-- mutations continue to use the ordinary live scope checks below.
+do $$
+declare
+  signature regprocedure := 'private.aitask_delete_client_cascade(text,uuid,jsonb,bigint)'::regprocedure;
+  definition text;
+  anchor text := $anchor$perform set_config('aitask.cascade_delete', 'true', true);$anchor$;
+  addition text := $addition$if not private.aitask_is_super_admin(p_workspace_id)
+    and not private.aitask_can_edit_client(p_workspace_id, v_client_key) then
+    return jsonb_build_object('ok', false, 'code', 'FORBIDDEN', 'error', 'This company is outside your portfolio.');
+  end if;
+  perform set_config('aitask.authorized_client_delete', jsonb_build_object(
+    'workspace', p_workspace_id, 'client', v_client_id, 'actor', v_actor_id
+  )::text, true);
+  perform set_config('aitask.cascade_delete', 'true', true);$addition$;
+begin
+  definition := pg_get_functiondef(signature);
+  if strpos(definition, anchor) = 0 then
+    raise exception 'Company cascade authorization anchor was not found in %.', signature;
+  end if;
+  execute replace(definition, anchor, addition);
+end;
+$$;
+
 create or replace function private.aitask_guard_client_ownership_scope()
 returns trigger
 language plpgsql
@@ -84,6 +110,11 @@ begin
   if tg_op = 'UPDATE'
     and coalesce(v_new_creator, '') is distinct from coalesce(v_old_creator, '') then
     raise check_violation using message = 'Company ownership cannot be changed';
+  end if;
+
+  if tg_op = 'DELETE' and current_setting('aitask.authorized_client_delete', true)
+    = jsonb_build_object('workspace', v_workspace, 'client', old.entity_id, 'actor', v_actor)::text then
+    return old;
   end if;
 
   if v_role = 'Project Manager' then

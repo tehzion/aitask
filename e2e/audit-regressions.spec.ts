@@ -17,7 +17,7 @@ const seedPlan = async (page: Page) => {
   });
   await page.goto(`/clients/${result.clientId}`);
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Save revision' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save draft' })).toBeVisible();
   return result;
 };
 
@@ -25,8 +25,8 @@ test('saved drafts accept newer canonical data and dirty drafts require reconcil
   const { draftId } = await seedPlan(page);
   const name = page.getByLabel('Plan name', { exact: true });
   await name.fill('Saved A');
-  await page.getByRole('button', { name: 'Save revision' }).click();
-  await expect(page.getByText('Draft revision saved.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByText('Draft saved. Review the changes before scheduling.', { exact: true })).toBeVisible();
   await page.evaluate(async id => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id ? { ...plan, name: 'Remote B', version: (plan.version || 0) + 1 } : plan) }));
@@ -37,17 +37,17 @@ test('saved drafts accept newer canonical data and dirty drafts require reconcil
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id ? { ...plan, name: 'Remote D', taxRateBps: 900, version: (plan.version || 0) + 1 } : plan) }));
   }, draftId);
-  await expect(page.getByRole('button', { name: 'Save revision' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save draft' })).toBeDisabled();
   await expect(name).toHaveValue('Local C');
   await page.getByRole('button', { name: 'Keep my draft' }).click();
   await page.getByRole('button', { name: 'Use my value' }).click();
   await expect(page.getByLabel('Tax rate (%)', { exact: true })).toHaveValue('9');
-  await page.getByRole('button', { name: 'Save revision' }).click();
+  await page.getByRole('button', { name: 'Save draft' }).click();
   const saved = await page.evaluate(async id => { const { useStore } = await import('/src/store/index.ts'); return useStore.getState().clientPlans.find(plan => plan.id === id); }, draftId);
   expect(saved).toMatchObject({ name: 'Local C', taxRateBps: 900 });
 });
 
-test('typing during an in-flight save remains dirty and blocks PWA reload', async ({ page }) => {
+test('saving locks the submitted draft and later edits block PWA reload', async ({ page }) => {
   const { draftId } = await seedPlan(page);
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -56,12 +56,13 @@ test('typing during an in-flight save remains dirty and blocks PWA reload', asyn
   });
   const name = page.getByLabel('Plan name', { exact: true });
   await name.fill('Submitted');
-  await page.getByRole('button', { name: 'Save revision' }).click();
+  await page.getByRole('button', { name: 'Save draft' }).click();
   await expect(page.getByRole('button', { name: 'Saving…', exact: true })).toBeVisible();
-  await name.fill('Typed while saving');
+  await expect(name).toBeDisabled();
   await page.evaluate(() => (window as unknown as { finishAuditSave: () => void }).finishAuditSave());
-  await expect(page.getByRole('button', { name: 'Save revision' })).toBeEnabled();
-  await expect(name).toHaveValue('Typed while saving');
+  await expect(page.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+  await expect(name).toHaveValue('Submitted');
+  await name.fill('Typed after saving');
   expect(await page.evaluate(async () => { const { hasUnsavedChanges } = await import('/src/lib/unsavedChanges.ts'); return hasUnsavedChanges(); })).toBe(true);
   expect(await page.evaluate(async id => { const { useStore } = await import('/src/store/index.ts'); return useStore.getState().clientPlans.find(plan => plan.id === id)?.name; }, draftId)).toBe('Submitted');
   await page.evaluate(async () => {
@@ -71,7 +72,7 @@ test('typing during an in-flight save remains dirty and blocks PWA reload', asyn
   await expect(page.getByRole('button', { name: 'Refresh now' })).toBeDisabled();
 });
 
-test('a remote revision arriving during save still reconciles edits typed while saving', async ({ page }) => {
+test('a remote revision arriving during a locked save becomes the canonical draft', async ({ page }) => {
   const { draftId } = await seedPlan(page);
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -81,9 +82,9 @@ test('a remote revision arriving during save still reconciles edits typed while 
   });
   const name = page.getByLabel('Plan name', { exact: true });
   await name.fill('Submitted');
-  await page.getByRole('button', { name: 'Save revision' }).click();
+  await page.getByRole('button', { name: 'Save draft' }).click();
   await expect(page.getByRole('button', { name: 'Saving…', exact: true })).toBeVisible();
-  await name.fill('Typed during save');
+  await expect(name).toBeDisabled();
   await page.evaluate(async id => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id
@@ -91,12 +92,10 @@ test('a remote revision arriving during save still reconciles edits typed while 
       : plan) }));
     (window as unknown as { finishAuditSave: () => void }).finishAuditSave();
   }, draftId);
-  await expect(name).toHaveValue('Typed during save');
-  await expect(page.getByRole('button', { name: 'Save revision' })).toBeDisabled();
-  await page.getByRole('button', { name: 'Keep my draft' }).click();
-  await page.getByRole('button', { name: 'Use my value' }).click();
+  await expect(name).toHaveValue('Remote after submission');
   await expect(page.getByLabel('Tax rate (%)', { exact: true })).toHaveValue('9');
-  await expect(page.getByRole('button', { name: 'Save revision' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Keep my draft' })).toHaveCount(0);
 });
 
 test('modified shortcuts open the palette without hijacking browser commands', async ({ page }) => {
@@ -180,8 +179,8 @@ test('a failed save does not mistake its own optimistic draft for a remote confl
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'The revision is waiting to be saved.' }) });
   });
   await page.getByLabel('Plan name', { exact: true }).fill('Pending own draft');
-  await page.getByRole('button', { name: 'Save revision' }).click();
-  await expect(page.getByText('The revision is waiting to be saved.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByRole('alert')).toContainText('The revision is waiting to be saved.');
   await expect(page.getByRole('button', { name: 'Reload saved data' })).toHaveCount(0);
   await expect(page.getByLabel('Plan name', { exact: true })).toHaveValue('Pending own draft');
 });
@@ -189,6 +188,11 @@ test('a failed save does not mistake its own optimistic draft for a remote confl
 
 test('browser back and programmatic palette navigation preserve a declined draft', async ({ page }) => {
   const { clientId } = await seedPlan(page);
+  // Build a same-document router history entry; page.goto creates a new
+  // document that React Router's navigation blocker cannot intercept.
+  await page.getByRole('link', { name: 'Companies', exact: true }).click();
+  await page.locator(`a[href="/clients/${clientId}"]`).first().click();
+  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
   await page.getByLabel('Plan name', { exact: true }).fill('Protected draft');
   let prompts = 0;
   page.on('dialog', async dialog => { prompts += 1; await dialog.dismiss(); });
@@ -216,10 +220,9 @@ test('recoverable drafts survive reload and reconcile against the latest baselin
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
   await page.getByRole('button', { name: 'Restore recovered draft' }).click();
   await expect(page.getByLabel('Plan name', { exact: true })).toHaveValue('Recovered draft');
-  await expect(page.getByRole('button', { name: 'Save revision' })).toBeDisabled();
-  await page.getByRole('button', { name: 'Keep my draft' }).click();
-  await page.getByRole('button', { name: 'Save revision' }).click();
-  await expect(page.getByText('Draft revision saved.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save draft' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByText('Draft saved. Review the changes before scheduling.', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('aitask:draft-recovery:v1:')).length)).toBe(0);
 });
 
@@ -234,7 +237,7 @@ test('field-level service reconciliation preserves independent remote changes', 
   await expect(page.getByRole('textbox', { name: 'Service name', exact: true })).toHaveValue('Local design');
   await expect(page.getByLabel('Quantity', { exact: true })).toHaveValue('4');
   await expect(page.getByRole('button', { name: 'Use my value' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Save revision' }).click();
+  await page.getByRole('button', { name: 'Save draft' }).click();
 });
 
 test('two tabs retain independent recovery copies and account changes clear owned drafts', async ({ page, context }) => {
