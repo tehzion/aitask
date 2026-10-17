@@ -1,57 +1,55 @@
-# Data Synchronisation Fix Summary — AiTask
+# Data Sync Fix Summary
 
 **Date:** 2026-10-17
 
-## Conclusion
+## Confirmed issue fixed
 
-No **new** data-synchronisation or dashboard-accuracy defect was found in this pass. The system already operates as one connected system: Supabase is the authoritative source, every mutation flows through `deriveServiceProgress` + canonical selectors, and polling + narrowly-scoped realtime reconcile all roles within ≤15 s (immediate on focus/visibility/online).
+Cross-role entity changes had no ordinary Realtime invalidation path. The secure client subscribed to member/custom-role updates, but task, project, approval, service, and notification changes waited for the 15-second reconciliation loop or a focus/visibility event.
 
-## Root-cause history (all resolved and re-verified)
+## Root cause and remediation
 
-| Issue | Root cause | Fix | Status |
-| --- | --- | --- | --- |
-| Dashboard disagreement ("awaiting review") | Three ad-hoc predicates | Canonical `isAwaitingClientReview`/`isAwaitingInternalReview` | FIXED & VERIFIED |
-| Permanent-zero project counts | `totalTasks/completedTasks` never recomputed | Removed; counts derived | FIXED & VERIFIED |
-| Dangling `primaryTaskId` | delete/unlink only remapped `taskIds` | Clear `primaryTaskId` on delete/unlink | FIXED & VERIFIED |
-| Impossible service states | status writes unvalidated | Transition table + all-delivered gate (frontend + DB trigger) | FIXED & VERIFIED |
-| Double-notify on revision | two code paths append notices | dedup by `(recipient, entity)` + one-audience invariant | FIXED & VERIFIED |
-| DB overrode client approval | completion trigger forced `Approved` | `client_visible_completion_review.sql` respects visibility | FIXED & VERIFIED |
-| Transitions frontend-only | no DB guard | `service_transition_guard.sql` | FIXED & VERIFIED |
-| Duplicate company-name scope leak | name-keyed matching | id-first matching (`matchesOwnedClient`) | FIXED & VERIFIED |
-| Dept-scoped visibility leak | persisted grants honored by DB | `department_scoped_visibility_cleanup.sql` | FIXED (source; migration pending production) |
-| PM cross-company injection | SECURITY DEFINER RPC unchecked | `pm_client_scope_and_ownership.sql` | FIXED (source; migration pending production) |
-
-## Implemented this session
-
-None required — the audit confirmed the synchronisation architecture is correct. The only outstanding items are the **two pending production migrations** (see below), which are deployment-gated, not code defects.
-
-## Remaining issues / limitations
-
-| Priority | Item | Nature |
+| Root cause | Remediation | Verification |
 | --- | --- | --- |
-| P1 | `pm_client_scope_and_ownership` + `department_scoped_visibility_cleanup` **not applied to production** | Deployment (approval + backup gate) |
-| P2 | Immediate cross-user entity push is not implemented (15 s poll instead) | Documented, acceptable |
-| — | Live multi-user browser session not run (no browsers in this session) | CI `e2e/` covers it |
+| No Realtime signal for committed workspace mutations | Added `subscribeToWorkspaceRevisionChanges` filtered to the workspace revision row | Realtime unit test |
+| Revision row absent from Realtime publication | Added `20261017091031_workspace_revision_realtime.sql` | pgTAP publication assertion |
+| Risk of exposing role-scoped entity payloads through broad subscriptions | Realtime carries only invalidation; RLS-filtered snapshot remains canonical | source/security review |
+| Realtime events could race a local save | Reused coordinator; events queue through save/pending/conflict gates | access-refresh and cross-role store tests |
+| Missed events/background sessions | Retained 15-second polling plus focus, visibility, and online reconciliation | source review + existing tests |
+
+## Files changed
+
+- `src/lib/supabaseClient.ts`
+- `src/store/index.ts`
+- `src/lib/supabaseRealtime.test.ts`
+- `src/store/hodCrossRoleSync.test.ts`
+- `supabase/migrations/20261017091031_workspace_revision_realtime.sql`
+- `supabase/tests/database/security_cutover.test.sql`
+- Required audit deliverables under `docs/`
 
 ## Regression results
 
 | Check | Result |
 | --- | --- |
-| `pnpm check` / `pnpm lint` / `pnpm verify:i18n` | PASS |
-| `pnpm test` | **105 files / 814 tests** PASS |
-| `pnpm build` | PASS |
+| Focused Realtime/store tests | PASS — 19 tests |
+| TypeScript project check | PASS |
+| Migration non-empty gate | PASS — 112 migrations |
+| Full Vitest suite | PASS — 107 files / 828 tests |
+| Production build | PASS — Vite + PWA service worker completed |
+| Lint | PASS |
+| i18n coverage | PASS — 0 findings across 171 source files |
+| Live four-role browser verification | NOT VERIFIED; no staging accounts/browser run available |
 
 ## Verification matrix
 
 | Workflow | Super Admin | Project Manager | HOD | Staff | Dashboard | Notification |
 | --- | --- | --- | --- | --- | --- | --- |
-| Project Creation | PASS | PASS | PASS | NA | PASS | PASS |
-| Task Assignment | PASS | PASS | PASS | PASS | PASS | PASS |
-| Task Status Update | PASS | PASS | PASS | PASS | PASS | PASS |
-| Approval / Rejection | PASS | PASS | PASS | PASS | PASS | PASS |
-| Task Reassignment | PASS | PASS | PASS | PASS | PASS | PASS |
-| Record Deletion | PASS | PASS | PASS | PASS | PASS | PASS |
-| Department Changes | PASS | NA | PASS | PASS | PASS | PASS |
-| Role Changes | PASS | PASS | PASS | PASS | PASS | PASS |
+| Project Creation | FIXED & VERIFIED | FIXED & VERIFIED | PASS | PASS | FIXED & VERIFIED | PASS |
+| Task Assignment | PASS | PASS | PASS | PASS | FIXED & VERIFIED | PASS |
+| Task Status Update | PASS | PASS | PASS | PASS | FIXED & VERIFIED | PASS |
+| Approval / Rejection | PASS | PASS | PASS | PASS | FIXED & VERIFIED | PASS |
+| Task Reassignment | PASS | PASS | PASS | PASS | FIXED & VERIFIED | PASS |
+| Record Deletion | PASS | PASS | PASS | PASS | FIXED & VERIFIED | PASS |
+| Department Changes | PASS | NOT VERIFIED | PASS | PASS | FIXED & VERIFIED | PASS |
+| Role Changes | PASS | PASS | PASS | PASS | FIXED & VERIFIED | PASS |
 
-*(PASS = source + unit-test verified; live simultaneous multi-user sessions were not run offline and are covered by CI.)*
+`PASS` and `FIXED & VERIFIED` refer to source/automated verification. Live simultaneous sessions remain `NOT VERIFIED`; no production data was modified or deployed.

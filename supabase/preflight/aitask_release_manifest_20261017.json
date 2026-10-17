@@ -1,0 +1,1240 @@
+{
+  "manifestVersion": "2026-10-17.3",
+  "manifestKind": "aitask-p1-remediation-release-gate",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "immutable": true,
+  "capturedAt": "2026-10-17T11:33:39Z",
+  "project": {
+    "ref": "ohjhwyiffgzyatcmmdql",
+    "name": "AiTask",
+    "region": "ap-southeast-1",
+    "status": "ACTIVE_HEALTHY",
+    "postgres": "17.6.1.121",
+    "source": "Supabase project identity + read-only SQL via connector"
+  },
+  "source": {
+    "gitCommit": "c46bbcbe05746e20792cc6e62eb478906b48cf0b",
+    "gitBranch": "codex/audit-p0p1-2026-10-16",
+    "packageVersion": "3.0.0",
+    "workingTreeDirty": true,
+    "workingTreeFiles": [
+      "M DEPLOYMENT_CHECKLIST.md",
+      " M SUPABASE_HANDOVER.md",
+      " M docs/CROSS_ROLE_DATA_FLOW.md",
+      " M docs/DASHBOARD_ACCURACY_REPORT.md",
+      " M docs/DATA_SYNCHRONISATION_AUDIT.md",
+      " M docs/DATA_SYNC_FIX_SUMMARY.md",
+      " M docs/REALTIME_VERIFICATION.md",
+      " M e2e/accessibility.spec.ts",
+      " M e2e/audit-regressions.spec.ts",
+      " M e2e/client-service-workspace.spec.ts",
+      " M e2e/ui-message-audit.spec.ts",
+      " M playwright.config.ts",
+      " M scripts/verify-release-db-alignment.mjs",
+      " M scripts/verify-supabase-rollout.mjs",
+      " M src/components/ClientServiceWorkspace.tsx",
+      " M src/components/I18nProvider.tsx",
+      " M src/components/Layout.tsx",
+      " M src/components/NavigationGuard.tsx",
+      " M src/components/Sidebar.tsx",
+      " M src/components/Toast.tsx",
+      " M src/hooks/useSaveAction.ts",
+      " M src/lib/auth.ts",
+      " M src/lib/messages.ts",
+      " M src/lib/secureMemberMutations.ts",
+      " M src/lib/secureNotifications.ts",
+      " M src/lib/securePasswordSetup.ts",
+      " M src/lib/secureReleaseNoticeResponse.ts",
+      " M src/lib/secureReleaseNotices.ts",
+      " M src/lib/secureWorkspace.ts",
+      " M src/lib/serviceFileIntegrity.test.ts",
+      " M src/lib/serviceFiles.ts",
+      " M src/lib/supabaseClient.ts",
+      " M src/lib/supabaseRealtime.test.ts",
+      " M src/lib/taskOutputUpload.ts",
+      " M src/lib/userFacingMessage.test.ts",
+      " M src/lib/userFacingMessage.ts",
+      " M src/store/hodCrossRoleSync.test.ts",
+      " M src/store/index.ts",
+      " M supabase/tests/database/security_cutover.test.sql",
+      " M supabase/tests/database/service_transition_guard.test.sql",
+      " M vite.config.ts",
+      "?? .codex-manifest-test.txt",
+      "?? AITASK_RELEASE_GATE_REPORT.md",
+      "?? AUDIT_HISTORY_RETENTION_REVIEW.md",
+      "?? BLOCKER_RESOLUTION_REPORT.md",
+      "?? BUG_REPORT.md",
+      "?? BUSINESS_LOGIC_AUDIT.md",
+      "?? CONCURRENCY_TEST_REPORT.md",
+      "?? DATA_LIFECYCLE_REPORT.md",
+      "?? ERROR_HANDLING_VERIFICATION.md",
+      "?? FINAL_PRODUCTION_GATE.md",
+      "?? FIX_VERIFICATION_REPORT.md",
+      "?? HISTORICAL_DATA_VERIFICATION.md",
+      "?? IMPROVEMENT_PLAN.md",
+      "?? LIFECYCLE_DECISIONS.md",
+      "?? LIFECYCLE_POLICY_APPROVAL.md",
+      "?? PRODUCTION_READINESS_REPORT.md",
+      "?? REGRESSION_TEST_REPORT.md",
+      "?? RELEASE_CHECKLIST.md",
+      "?? REMAINING_GAPS.md",
+      "?? SUPABASE_AUDIT.md",
+      "?? SUPABASE_SECURITY_REVIEW.md",
+      "?? SUPABASE_VERIFICATION_REPORT.md",
+      "?? SYSTEM_AUDIT_REPORT.md",
+      "?? SYSTEM_INTEGRITY_REPORT.md",
+      "?? TEST_COVERAGE_REPORT.md",
+      "?? supabase/migrations/20261017091031_workspace_revision_realtime.sql",
+      "?? supabase/migrations/20261017113000_audit_value_history.sql",
+      "?? supabase/migrations/20261017130000_align_service_cycle_cancel_rpc.sql",
+      "?? supabase/migrations/20261017140000_audit_history_retention_guards_followup.sql",
+      "?? supabase/preflight/aitask_release_manifest_20261017.json",
+      "?? supabase/preflight/aitask_release_manifest_20261017_followup.json",
+      "?? supabase/tests/database/audit_entity_history.test.sql"
+    ]
+  },
+  "repository": {
+    "migrationCount": 114,
+    "latestMigration": "20261017140000_audit_history_retention_guards_followup",
+    "migrations": [
+      {
+        "name": "20260701000000_legacy_snapshot_baseline",
+        "sha256": "f95d62202951c4d85e1d8d756dd966e5835db76729d58b969f72004b31fef131"
+      },
+      {
+        "name": "20260701010000_secure_auth_baseline",
+        "sha256": "f592258b9a82a95d7f942521c95695b70976de3ad7bc4e32eb7a11fb6ed93e45"
+      },
+      {
+        "name": "20260713152038_assigned_client_management",
+        "sha256": "ffc0b49292e17f6d621e05432545d8662b4698ad5898e5b04607f85bd058fb58"
+      },
+      {
+        "name": "20260713160111_scoped_staff_task_visibility",
+        "sha256": "e7d8823c9c096bfe59cb8876f630c4b6fb5dafc6606b1ee09aadc14f73a1ac1d"
+      },
+      {
+        "name": "20260713164356_assigned_staff_visibility_only",
+        "sha256": "01679beab647bf4d100d936144306cd25465248ad1f6d89e24e154cbcd38cfbb"
+      },
+      {
+        "name": "20260715090000_reliable_workspace_commands",
+        "sha256": "692ffc237d7f77b9ff172bce29e72df575bdd13a28c571e1e60463b8eb44542b"
+      },
+      {
+        "name": "20260715090100_reliable_workspace_command_cutover",
+        "sha256": "60ca47f5bc1655d9d36b2533dd9762e511d957dcbc60375ade0c493266099cbe"
+      },
+      {
+        "name": "20260715093000_harden_reliable_workspace_commands",
+        "sha256": "5d9ee6c90773027910ec62283034f2434e5cfa155ee3fa4159bcb59b563d0b38"
+      },
+      {
+        "name": "20260715110000_add_reliable_workspace_indexes",
+        "sha256": "104ffa66adedfde0eb04baa50786d3637440faf385c85b738438b936ae59aafb"
+      },
+      {
+        "name": "20260715154533_add_sync_protocol_version",
+        "sha256": "53700da1b8bb55bf5e40dd7925d3ffc7d357742cedabd3148609c1d264bf468f"
+      },
+      {
+        "name": "20260717112145_super_admin_staff_onboarding",
+        "sha256": "d4e3ce1569375b0de8c53c67fdcf1e6c15167af96dccbd119c263a526ca82cb7"
+      },
+      {
+        "name": "20260718005102_production_login_readiness",
+        "sha256": "23f9e30838b3c239bf9bd9f1ceb787040b1454171e460d178025b9cac21df877"
+      },
+      {
+        "name": "20260718073416_close_launch_authorization_gaps",
+        "sha256": "598ccbc2d631ad176f349817c96e2ef33dbda17bd2daae975abb5dd8695a6c2d"
+      },
+      {
+        "name": "20260718081404_staff_company_permission_consistency",
+        "sha256": "fbafcbc7b025d22be459f3daa6c3235a5720054afafbe5e181b4d2b0d1cd33b0"
+      },
+      {
+        "name": "20260718094000_public_feedback_collection",
+        "sha256": "84480a0a289c0cc8e1dd4e19295180621831073da025eaccc41c9ae891673a3e"
+      },
+      {
+        "name": "20260718103935_fix_staff_task_creation_and_password_setup",
+        "sha256": "af5fbfc513393c2821f2a79f3e70567c902ffdbbf61b3cd601fa8eae27cd0aa1"
+      },
+      {
+        "name": "20260718120000_feedback_single_submission",
+        "sha256": "448b873036dc17a1657a089e1a122f7e01ee21640b80e881081beb3eec422f85"
+      },
+      {
+        "name": "20260718124500_disable_mfa_enforcement",
+        "sha256": "659b981d4beb8f8faa2637f7cf248576814a9e6eadcb9e17b23e0708980bc099"
+      },
+      {
+        "name": "20260718125450_restrict_registration_visibility_to_super_admin",
+        "sha256": "5bef32320731af9c0875b551412753bb92e110854b77e7f67a75dbd8a027d5a1"
+      },
+      {
+        "name": "20260718131500_link_adminmojo_auth",
+        "sha256": "ff8de0fdd9f4cdc021c651321061a036bb75eda7341c821098596883f78ec4a7"
+      },
+      {
+        "name": "20260729100000_multi_department_membership",
+        "sha256": "a58cc15c8a98ddefbac8345a380535d5fa53c66eb400fd2a11865265d2e9b930"
+      },
+      {
+        "name": "20260729112000_enforce_staff_task_department_membership",
+        "sha256": "7414216b0d14af174273d371844c63d6b9d7a1118916a1bd9d0527894a43f6f9"
+      },
+      {
+        "name": "20260731130000_task_completion_timestamps",
+        "sha256": "9387bba83ee5ec92734fb1f8e368907c54e8fe7c2104fff9b9ec3d9c5f22d231"
+      },
+      {
+        "name": "20260801191419_client_portal_projection",
+        "sha256": "8a6f2f80fc39965c631d8bf8bbcab8238ccfd3f0a7401605e0c47c381682810c"
+      },
+      {
+        "name": "20260801191430_restrict_client_direct_reads",
+        "sha256": "f84672d9b37d30b5a81c2ed8a1958346d81fc92dc306f11e9a6a32ccd3753efb"
+      },
+      {
+        "name": "20260802121500_notification_center",
+        "sha256": "558cc6f9b56d1b8769329fa149d07d9ef7bfbc5d2add96285c1ca1171da2e503"
+      },
+      {
+        "name": "20260815042430_client_service_management",
+        "sha256": "00f6cbd6ace922d7de11cf343ba3b43bf40fe5b8a8439b0b6400452863e4a0b1"
+      },
+      {
+        "name": "20260816120000_notification_unread_tombstone_guard",
+        "sha256": "542cf52e2dff92011c5c7a1ce9e026e263332c5a47a2692ab1e74e07991dc0a2"
+      },
+      {
+        "name": "20260816220000_notification_feed_cursor_precision",
+        "sha256": "5772be25f40ddcb8c41832deff881e45e04fe0edd8f80b44c0307d10df6857b3"
+      },
+      {
+        "name": "20260816230000_workspace_optimistic_lock",
+        "sha256": "1347623dbf65a64eaca677236a5190131ecbd059e5a0bbbcef3ac097dd33211b"
+      },
+      {
+        "name": "20260821075407_add_release_notice_acknowledgements",
+        "sha256": "950781b866ae18b7ac2dabd63021508be19ca971d8bc55b4b7987d9a458d3595"
+      },
+      {
+        "name": "20260826230000_client_read_privacy",
+        "sha256": "c46afe89a74778128c59e592b2b5f689e33586beeeb8f951c6e16d69204b2001"
+      },
+      {
+        "name": "20260903160806_harden_staff_command_authorization",
+        "sha256": "e7768b54b2cac734637af325a9dc056552d726df9d314a9cc04a3f333ac859be"
+      },
+      {
+        "name": "20260904104435_allow_staff_cycle_published_at",
+        "sha256": "798bd50fe6002009c093ebac37b971937afff2ea59213e406bba73c6fdd48503"
+      },
+      {
+        "name": "20260907043633_hod_task_ownership_permissions",
+        "sha256": "8610b0e54424cf0d66cb69eaca189fea879ea53631b95f75ac12059347b2d6be"
+      },
+      {
+        "name": "20260907120000_harden_legacy_access_privileges",
+        "sha256": "6ef28d912c7bbff5b77373355653a212d50dc2b450b64e9ca0007a3903dc6238"
+      },
+      {
+        "name": "20260910010207_company_tracker_member_permissions",
+        "sha256": "d6effb3aaa47a4685531cbd029f5205a6a7e65bc97aaf3911fa905ac7153ef2a"
+      },
+      {
+        "name": "20260910120000_client_project_link_authorization",
+        "sha256": "2eb72528ba38bea50c11743b3e5b8d776ab724a0124ecbcc4a72163839bb9c14"
+      },
+      {
+        "name": "20260910144226_member_permission_realtime_refresh",
+        "sha256": "fdaedcf60d5e7a07cd3f1a9a21efac8b9d7b66f03d8e31e04ca914e46051b882"
+      },
+      {
+        "name": "20260911020546_enforce_task_project_link_authorization",
+        "sha256": "5df7aa5286b7ac60b7430ff9d5235182f87ce8314d09dd876c9db15798c1ff34"
+      },
+      {
+        "name": "20260918090000_role_authorization_fixes",
+        "sha256": "3ec3f18b9be2b05f9c56109c3a4e7411841e942b5c4ac04b711062e7700cca9b"
+      },
+      {
+        "name": "20260918095737_allow_unassigned_tasks",
+        "sha256": "68523ba366134ee20a0504b1a8eb6fbca4503244eb84e5ca16b3e9ecc1fff20c"
+      },
+      {
+        "name": "20260918120000_hod_company_creation",
+        "sha256": "bc655d4ad4db45b00c513a964cf2c2e1e270e644888ff50208f92634b4dbef25"
+      },
+      {
+        "name": "20260918130000_company_delete",
+        "sha256": "cb7ef5004a85ed38c5cfb6421acd39fe956de3c611567db867ede99788608dda"
+      },
+      {
+        "name": "20260918140000_role_template_fixes",
+        "sha256": "150897882fb574134a3e95e25677e215bd2d8f796eee962af7454b445440008e"
+      },
+      {
+        "name": "20260918150000_member_role_assignment",
+        "sha256": "0272cebd4d19b32a5e5047cdcbfc8f598e45f2c4fd7891268589de96d1a0ecae"
+      },
+      {
+        "name": "20260918160000_admin_department_optional",
+        "sha256": "9d1c9541e86a7663b9d0bcdda3a83e4222770a560162e5c50620378f8f560884"
+      },
+      {
+        "name": "20260918170000_delete_member_unassign_tasks",
+        "sha256": "125532567c590f09d569d0ee3ef845a7fe951b6aaa91a84cf386db0a4750cd98"
+      },
+      {
+        "name": "20260918180000_scope_project_manager_ownership",
+        "sha256": "b3b34428eebe9cda6f93ddd624d3634eacdb8c731be2e077a60483d9a7026ed5"
+      },
+      {
+        "name": "20260918190000_scope_project_manager_followups",
+        "sha256": "1879a7dc5fbba1a7b24ca2ae00fe2fc968c105ccace82920f086586f002cff30"
+      },
+      {
+        "name": "20260918200000_member_security_and_project_visibility",
+        "sha256": "9604f0099a16b3d8c31d591f8696cefcfe0cb7ca29362e5862668b5f09406ed6"
+      },
+      {
+        "name": "20260918210000_authorization_hardening_followups",
+        "sha256": "46383ae73373a09f8ac4802afadf807bee0f7329d8760e45ed9a958a2d94311b"
+      },
+      {
+        "name": "20260918220000_project_manager_hod_role_model",
+        "sha256": "2923cbc379506dfb71b616814c5fdd48c25f6b0e310764f24f115640d4ff583d"
+      },
+      {
+        "name": "20260919090000_enforce_pm_hod_scope_invariants",
+        "sha256": "c12f5c9c11e5e8f6933bc48c244cda6c2af7496971bc83cbaba0f29c60694504"
+      },
+      {
+        "name": "20260919110000_task_detail_authorization",
+        "sha256": "40cf4a69d318b4643cbbb8dc3b58d58ce1d26bf2b66d5095d4ed55dd89354444"
+      },
+      {
+        "name": "20260919120000_restrict_client_service_file_types",
+        "sha256": "8d180aa17afea87f4e89df428ab96da8a49d6b1035e88e8621f68051adf942a2"
+      },
+      {
+        "name": "20260922100000_fix_pm_role_wording",
+        "sha256": "e83a61e7c105aa42634c9e9a258b1258079885c6a9581efb2fa1ab32f70deee5"
+      },
+      {
+        "name": "20260922110000_pm_portfolio_task_management",
+        "sha256": "22349e9ede170c9e95d5dd9d386db756dc9729eebfae0e451010223faf6942ae"
+      },
+      {
+        "name": "20260922120000_idempotent_entity_insert",
+        "sha256": "b0f7fa68047c64ea736ed7a5602bbc03e19a08867dac85f9f38bb82c0871a296"
+      },
+      {
+        "name": "20260922130000_pm_portfolio_task_reassignment",
+        "sha256": "96ee31cd45c1812ee473db3008415619428691060c9b6cb92cd654e1b7e0d204"
+      },
+      {
+        "name": "20260922131000_task_assignment_attribution",
+        "sha256": "afe9bf44dae38b94d2c52ed5a3c514fc5c20bbae823e552f5141255abbc5e724"
+      },
+      {
+        "name": "20260922132000_staff_deliverable_delivered_at",
+        "sha256": "230229ced22e27707fb81bf997a92164086e76f7bb401a62cec841ee8d03c0c3"
+      },
+      {
+        "name": "20260922133000_staff_notification_recipients",
+        "sha256": "a33ae96709bef1a9d66748d7ded6a0e363e15d76aaf0afadbf41b048703f98f5"
+      },
+      {
+        "name": "20260923120000_client_ownership_backfill",
+        "sha256": "ca6c6eb6615e1064a4767afb803c1c4d9d92994c9d0683db1c070ffa15a45073"
+      },
+      {
+        "name": "20260923130000_task_guard_fixes",
+        "sha256": "5caae29409786edc67c90083cabe788f87f946188e1c364cd3f56dde0a9c1837"
+      },
+      {
+        "name": "20260923140000_editable_default_roles",
+        "sha256": "cfed27994f5a08812c32c036727bd6da575dbcf51782eef35be2c76c6969ffc9"
+      },
+      {
+        "name": "20260925110000_staff_comment_notification_context",
+        "sha256": "c138d5bcdfc10e2b813e316047f9cb2a94a9711fe09a163d0093240e930c840b"
+      },
+      {
+        "name": "20260925120000_service_role_member_grants",
+        "sha256": "555ad2a0a85d98abd5578c875c8f1f1b532c7ac495dc6c06e71556a79af55e6e"
+      },
+      {
+        "name": "20260925130000_staff_notification_assigner_recipient",
+        "sha256": "960734220ea269eeeb35e92b4535f0d707e52e35de2b7cadbb58c01a8e666931"
+      },
+      {
+        "name": "20260926100000_task_attribution_and_staff_context_hardening",
+        "sha256": "7cb4ae69c88068ae022ecf72a8329e1c1ecf44f2cecaa195a2d1be390f0cee04"
+      },
+      {
+        "name": "20260926110000_service_role_least_privilege",
+        "sha256": "2e0cd4c3b3501a92afb2a0bd66360104c96565efc1da8da70ed8a01145672d5b"
+      },
+      {
+        "name": "20260926120000_pm_assignee_department_optional",
+        "sha256": "7f9f9fe54531192d331f72eb985d17a51a1191a5edbfdb39581d7b019a37badc"
+      },
+      {
+        "name": "20260928140058_server_reminders_and_feedback_rate_limit",
+        "sha256": "0eaf36fa19e27b6f29ac6cd7a483b1ad65c1ff8c3535eeabd6e0667de3b15928"
+      },
+      {
+        "name": "20260930110000_hod_assigned_task_delegation",
+        "sha256": "3c7dc904d5d3d229d01453084c56231da8b681848548a7f340618c3dd5acce07"
+      },
+      {
+        "name": "20260930111033_service_upload_reconciliation",
+        "sha256": "df34623540cd63a93e7c0f81d91fd07f3a1395f3f45fdecf286697590dac4860"
+      },
+      {
+        "name": "20260930154013_initialize_deadline_reminder_claim",
+        "sha256": "fc053a937fcbf9006f014c10f5530322910fb3023c982bc98b0dcd5ea37d60c8"
+      },
+      {
+        "name": "20261002065644_hod_permission_parity_followups",
+        "sha256": "29227a86dedd1bdbf2a47518b9b26cd19c72b057a8310f24d8b4e1892c4e4a1d"
+      },
+      {
+        "name": "20261002101435_universal_notification_audience_guard",
+        "sha256": "b15c0d32a1f4c2acf5ff1c30e797d3eae6f20f129e9c07e709fd93e72ee54e23"
+      },
+      {
+        "name": "20261007173905_reliable_member_onboarding",
+        "sha256": "9209f62a164a6ab7681fd8626a48c77181fad4f81b4bf63954cdb6435688874a"
+      },
+      {
+        "name": "20261012162419_client_portal_review_privacy",
+        "sha256": "1591c45e608c12938b80a00643cccc232b4b9b08a449f4de6bdb0416c6681654"
+      },
+      {
+        "name": "20261012164407_delivery_link_derivation",
+        "sha256": "920547d7c1584b6a9870ebe8234f5179bf5f788d2184c11f8876ceeebe57fdc9"
+      },
+      {
+        "name": "20261012165347_hod_task_deletion_authority",
+        "sha256": "679fb0ff2bb4483f5482d40ebb5856dd7ae18a8993af257fa7df0b1ff579a9be"
+      },
+      {
+        "name": "20261013035142_staff_workflow_recovery",
+        "sha256": "9f9cc854cd343ad0a9a8ca3582d6c694fe369017bb0c3403697f71e27a3b684c"
+      },
+      {
+        "name": "20261013035310_workflow_internal_review_gate",
+        "sha256": "31247ba1f1f2b4e0a27152d5b8b12015fa8cbf25da1fb9af3b84d4a9d40c81d8"
+      },
+      {
+        "name": "20261013053636_hod_review_handoff",
+        "sha256": "84bfe28e8987104a4fb7876dbe1415ef3d00b2bd2cb6f31f21b7c0e8c58e410f"
+      },
+      {
+        "name": "20261013055051_task_stage_progress",
+        "sha256": "7ca3a4be49393922d21f5d5921124eb3b0223391e97671f3862f158a9212bef9"
+      },
+      {
+        "name": "20261013105534_task_role_readiness_hardening",
+        "sha256": "aad48bea6cc5110c4961cd72ba482060f174fb240e7e21f70bb11f96d4de9eb2"
+      },
+      {
+        "name": "20261013160804_task_dependency_review_invalidation",
+        "sha256": "fbafc12235e75b092efc5b4ce2d324cb675f5e99fd17ed70765f266873054ca0"
+      },
+      {
+        "name": "20261014045216_client_approval_masked_assignment_compatibility",
+        "sha256": "68a96dec76f1141c3da6ef3c065d78cca41dc72990fb524a82b6d3cec752e535"
+      },
+      {
+        "name": "20261014045911_designer_pm_review_fallback",
+        "sha256": "d550fc39e0cff4e453090faae071f7851e1a7fd8d38e4adb7fde203b7a481786"
+      },
+      {
+        "name": "20261014050918_preserve_completed_review_notes",
+        "sha256": "7010ba7983c3320bd772835d0daed7c29328669ad1ba6a7d80fc9211ee0fbf07"
+      },
+      {
+        "name": "20261014065237_protect_staff_submitted_task_deletion",
+        "sha256": "feb010f634c2c1f7e420e2745487fe5ae9c995daa7deb6ea465f06a1058b2a32"
+      },
+      {
+        "name": "20261014071022_reviewer_output_evidence_access",
+        "sha256": "b987486fa2147ead07ae42e147183d12ce67509345f87f6c9a769b03cedd89aa"
+      },
+      {
+        "name": "20261014111759_pm_review_fallback_and_workflow_inputs",
+        "sha256": "20a4a3f567d0e5cd844b984bd0736153749b26d47c6c5a9a40d6501730444e6d"
+      },
+      {
+        "name": "20261014132839_hod_review_remediation",
+        "sha256": "8c87f74f90c69160814d6a7c1bbe915a3a26dc1165442f994ca4f9789db16af1"
+      },
+      {
+        "name": "20261014135947_pm_portfolio_service_boundaries",
+        "sha256": "3e2e715c9f22e35f18f5efdd29822b69dd0642f27677e290d014efe085bd3df5"
+      },
+      {
+        "name": "20261015014716_pm_task_company_boundaries",
+        "sha256": "27723b6a3b98f32eafc00dd6292499accb47752490cac9294985a3ac829b5711"
+      },
+      {
+        "name": "20261015015730_staff_task_contact_notifications",
+        "sha256": "33b164e1eb944aa6f69fbe3fba55ffd80010a05082b9fef84657e90d1d193fce"
+      },
+      {
+        "name": "20261015064701_manual_deliverable_progress",
+        "sha256": "860c8d72d80c8c9245036e8f71ab405c4368ff02d576cea4d28a448fc807c20f"
+      },
+      {
+        "name": "20261015065635_deliverable_status_integrity",
+        "sha256": "74cb8046cc2a7967e4fbc19567d65cfe2f9f61273a878bafe8f245e6ffe7d098"
+      },
+      {
+        "name": "20261015140049_monthly_plan_revision_scheduling",
+        "sha256": "c8dc329b3387996913fcd743be3ef000bf879f07007e24a914d5bd397de5d601"
+      },
+      {
+        "name": "20261015141803_optional_task_internal_approval",
+        "sha256": "7743c58a85deb0dfca2fd0d02dc5e4049bacd6ee981ad2e4c972c821c18dda19"
+      },
+      {
+        "name": "20261015152000_pm_hod_first_assignment",
+        "sha256": "a84512973b42b958ef3490e5dd88f94d17c049b7c03c6d58e3f55a5cc5ea51e1"
+      },
+      {
+        "name": "20261015160000_pm_project_service_scope",
+        "sha256": "aaadd5559b7efdc17ed40b97b250dd2a9027c3236cfc16facb03932b0ade7cad"
+      },
+      {
+        "name": "20261016120000_task_role_assignment_and_contact_notification_hardening",
+        "sha256": "1435adef5d748ba29fd581ca91131349bd23e6d7e7b3df46f1f00c58c9743c79"
+      },
+      {
+        "name": "20261016140000_client_visible_completion_review",
+        "sha256": "4f274c9439f8f5462fd7b41ed9468565891844e21cb856e7a943b8ea99c74685"
+      },
+      {
+        "name": "20261016150000_service_transition_guard",
+        "sha256": "64380963da161238377b9e419a37babf619ab7a6b54b18c2cc2163d7d3a3c15f"
+      },
+      {
+        "name": "20261016160000_pm_client_scope_and_ownership",
+        "sha256": "777bbe1603aedcbd99d69869c559df5ac1c087a4e62a2dc6ffeed53454ea695b"
+      },
+      {
+        "name": "20261016170000_department_scoped_visibility_cleanup",
+        "sha256": "99157939057d58ae5d23c82a585b34d9fac980df77ed56dff1dea12159b97dc0"
+      },
+      {
+        "name": "20261017030340_task_delete_notification_cleanup",
+        "sha256": "f9bee4fa48ad054f98db01a5deda7ca9a4d221990d5677993f1f9cd180bd6dbf"
+      },
+      {
+        "name": "20261017091031_workspace_revision_realtime",
+        "sha256": "d6fad68fa7218992ac330bd3bee7ce43fd7c2e84c442e7a5d8bde477dd6e4927"
+      },
+      {
+        "name": "20261017113000_audit_value_history",
+        "sha256": "765662646f8896fa0789897752b8867de3339acb88eeef4ca8b2f6b90f052697"
+      },
+      {
+        "name": "20261017130000_align_service_cycle_cancel_rpc",
+        "sha256": "6b8c31e615bd1373c00f4f4a9dea82a7f82a578a7628d1c9041eb4b97d4b6309"
+      },
+      {
+        "name": "20261017140000_audit_history_retention_guards_followup",
+        "sha256": "dafc736c7b348ea4ae260efc1ef9bbc61c45f1a07a94ab58beb3da6d7b11939b"
+      }
+    ]
+  },
+  "production": {
+    "migrationCount": 112,
+    "latestMigration": {
+      "version": "20261017095628",
+      "name": "align_service_cycle_cancel_rpc"
+    },
+    "pendingLocalMigrations": [
+      "20261017091031_workspace_revision_realtime",
+      "20261017140000_audit_history_retention_guards_followup"
+    ],
+    "migrations": [
+      {
+        "version": "20260701000000",
+        "name": "legacy_snapshot_baseline"
+      },
+      {
+        "version": "20260701010000",
+        "name": "secure_auth_baseline"
+      },
+      {
+        "version": "20260713152038",
+        "name": "assigned_client_management"
+      },
+      {
+        "version": "20260713160111",
+        "name": "scoped_staff_task_visibility"
+      },
+      {
+        "version": "20260713164356",
+        "name": "assigned_staff_visibility_only"
+      },
+      {
+        "version": "20260715090000",
+        "name": "reliable_workspace_commands"
+      },
+      {
+        "version": "20260715090100",
+        "name": "reliable_workspace_command_cutover"
+      },
+      {
+        "version": "20260715093000",
+        "name": "harden_reliable_workspace_commands"
+      },
+      {
+        "version": "20260715110000",
+        "name": "add_reliable_workspace_indexes"
+      },
+      {
+        "version": "20260715154533",
+        "name": "add_sync_protocol_version"
+      },
+      {
+        "version": "20260717112145",
+        "name": "super_admin_staff_onboarding"
+      },
+      {
+        "version": "20260718005102",
+        "name": "production_login_readiness"
+      },
+      {
+        "version": "20260718073416",
+        "name": "close_launch_authorization_gaps"
+      },
+      {
+        "version": "20260718081404",
+        "name": "staff_company_permission_consistency"
+      },
+      {
+        "version": "20260718094000",
+        "name": "public_feedback_collection"
+      },
+      {
+        "version": "20260718103935",
+        "name": "fix_staff_task_creation_and_password_setup"
+      },
+      {
+        "version": "20260718120000",
+        "name": "feedback_single_submission"
+      },
+      {
+        "version": "20260718124500",
+        "name": "disable_mfa_enforcement"
+      },
+      {
+        "version": "20260718125450",
+        "name": "restrict_registration_visibility_to_super_admin"
+      },
+      {
+        "version": "20260718131500",
+        "name": "link_adminmojo_auth"
+      },
+      {
+        "version": "20260729100000",
+        "name": "multi_department_membership"
+      },
+      {
+        "version": "20260729112000",
+        "name": "enforce_staff_task_department_membership"
+      },
+      {
+        "version": "20260731130000",
+        "name": "task_completion_timestamps"
+      },
+      {
+        "version": "20260801191419",
+        "name": "client_portal_projection"
+      },
+      {
+        "version": "20260801191430",
+        "name": "restrict_client_direct_reads"
+      },
+      {
+        "version": "20260802121500",
+        "name": "notification_center"
+      },
+      {
+        "version": "20260815042430",
+        "name": "client_service_management"
+      },
+      {
+        "version": "20260816120000",
+        "name": "notification_unread_tombstone_guard"
+      },
+      {
+        "version": "20260816220000",
+        "name": "notification_feed_cursor_precision"
+      },
+      {
+        "version": "20260816230000",
+        "name": "workspace_optimistic_lock"
+      },
+      {
+        "version": "20260821075407",
+        "name": "add_release_notice_acknowledgements"
+      },
+      {
+        "version": "20260826230000",
+        "name": "client_read_privacy"
+      },
+      {
+        "version": "20260903160806",
+        "name": "harden_staff_command_authorization"
+      },
+      {
+        "version": "20260904104435",
+        "name": "allow_staff_cycle_published_at"
+      },
+      {
+        "version": "20260907043633",
+        "name": "hod_task_ownership_permissions"
+      },
+      {
+        "version": "20260907120000",
+        "name": "harden_legacy_access_privileges"
+      },
+      {
+        "version": "20260910010207",
+        "name": "company_tracker_member_permissions"
+      },
+      {
+        "version": "20260910120000",
+        "name": "client_project_link_authorization"
+      },
+      {
+        "version": "20260910144226",
+        "name": "member_permission_realtime_refresh"
+      },
+      {
+        "version": "20260911020546",
+        "name": "enforce_task_project_link_authorization"
+      },
+      {
+        "version": "20260918090000",
+        "name": "role_authorization_fixes"
+      },
+      {
+        "version": "20260918095737",
+        "name": "allow_unassigned_tasks"
+      },
+      {
+        "version": "20260918120000",
+        "name": "hod_company_creation"
+      },
+      {
+        "version": "20260918130000",
+        "name": "company_delete"
+      },
+      {
+        "version": "20260918140000",
+        "name": "role_template_fixes"
+      },
+      {
+        "version": "20260918150000",
+        "name": "member_role_assignment"
+      },
+      {
+        "version": "20260918160000",
+        "name": "admin_department_optional"
+      },
+      {
+        "version": "20260918170000",
+        "name": "delete_member_unassign_tasks"
+      },
+      {
+        "version": "20260918180000",
+        "name": "scope_project_manager_ownership"
+      },
+      {
+        "version": "20260918190000",
+        "name": "scope_project_manager_followups"
+      },
+      {
+        "version": "20260918200000",
+        "name": "member_security_and_project_visibility"
+      },
+      {
+        "version": "20260919065513",
+        "name": "authorization_hardening_followups"
+      },
+      {
+        "version": "20260919065609",
+        "name": "project_manager_hod_role_model"
+      },
+      {
+        "version": "20260919065620",
+        "name": "enforce_pm_hod_scope_invariants"
+      },
+      {
+        "version": "20260919065648",
+        "name": "task_detail_authorization"
+      },
+      {
+        "version": "20260919072524",
+        "name": "restrict_client_service_file_types"
+      },
+      {
+        "version": "20260922100000",
+        "name": "fix_pm_role_wording"
+      },
+      {
+        "version": "20260922110000",
+        "name": "pm_portfolio_task_management"
+      },
+      {
+        "version": "20260922120000",
+        "name": "idempotent_entity_insert"
+      },
+      {
+        "version": "20260922130000",
+        "name": "pm_portfolio_task_reassignment"
+      },
+      {
+        "version": "20260922131000",
+        "name": "task_assignment_attribution"
+      },
+      {
+        "version": "20260922132000",
+        "name": "staff_deliverable_delivered_at"
+      },
+      {
+        "version": "20260922133000",
+        "name": "staff_notification_recipients"
+      },
+      {
+        "version": "20260923120000",
+        "name": "client_ownership_backfill"
+      },
+      {
+        "version": "20260923130000",
+        "name": "task_guard_fixes"
+      },
+      {
+        "version": "20260923140000",
+        "name": "editable_default_roles"
+      },
+      {
+        "version": "20260925110000",
+        "name": "staff_comment_notification_context"
+      },
+      {
+        "version": "20260925120000",
+        "name": "service_role_member_grants"
+      },
+      {
+        "version": "20260925130000",
+        "name": "staff_notification_assigner_recipient"
+      },
+      {
+        "version": "20260926100000",
+        "name": "task_attribution_and_staff_context_hardening"
+      },
+      {
+        "version": "20260926110000",
+        "name": "service_role_least_privilege"
+      },
+      {
+        "version": "20260926120000",
+        "name": "pm_assignee_department_optional"
+      },
+      {
+        "version": "20261002064719",
+        "name": "hod_assigned_task_delegation"
+      },
+      {
+        "version": "20261002070755",
+        "name": "hod_permission_parity_followups"
+      },
+      {
+        "version": "20261002100701",
+        "name": "server_reminders_and_feedback_rate_limit"
+      },
+      {
+        "version": "20261002100717",
+        "name": "service_upload_reconciliation"
+      },
+      {
+        "version": "20261002100723",
+        "name": "initialize_deadline_reminder_claim"
+      },
+      {
+        "version": "20261002164513",
+        "name": "universal_notification_audience_guard"
+      },
+      {
+        "version": "20261009024458",
+        "name": "reliable_member_onboarding"
+      },
+      {
+        "version": "20261012172315",
+        "name": "client_portal_review_privacy"
+      },
+      {
+        "version": "20261012172326",
+        "name": "delivery_link_derivation"
+      },
+      {
+        "version": "20261013051554",
+        "name": "hod_task_deletion_authority"
+      },
+      {
+        "version": "20261013061241",
+        "name": "workflow_internal_review_gate"
+      },
+      {
+        "version": "20261013102204",
+        "name": "staff_workflow_recovery"
+      },
+      {
+        "version": "20261013164424",
+        "name": "hod_review_handoff"
+      },
+      {
+        "version": "20261013164440",
+        "name": "task_stage_progress"
+      },
+      {
+        "version": "20261013164522",
+        "name": "task_role_readiness_hardening"
+      },
+      {
+        "version": "20261013164548",
+        "name": "task_dependency_review_invalidation"
+      },
+      {
+        "version": "20261014125330",
+        "name": "client_approval_masked_assignment_compatibility"
+      },
+      {
+        "version": "20261014125342",
+        "name": "designer_pm_review_fallback"
+      },
+      {
+        "version": "20261014125344",
+        "name": "preserve_completed_review_notes"
+      },
+      {
+        "version": "20261014125347",
+        "name": "protect_staff_submitted_task_deletion"
+      },
+      {
+        "version": "20261014125350",
+        "name": "reviewer_output_evidence_access"
+      },
+      {
+        "version": "20261014125353",
+        "name": "pm_review_fallback_and_workflow_inputs"
+      },
+      {
+        "version": "20261015002054",
+        "name": "hod_review_remediation"
+      },
+      {
+        "version": "20261015002102",
+        "name": "pm_portfolio_service_boundaries"
+      },
+      {
+        "version": "20261016153507",
+        "name": "pm_task_company_boundaries"
+      },
+      {
+        "version": "20261016153512",
+        "name": "staff_task_contact_notifications"
+      },
+      {
+        "version": "20261016153515",
+        "name": "manual_deliverable_progress"
+      },
+      {
+        "version": "20261016153647",
+        "name": "deliverable_status_integrity"
+      },
+      {
+        "version": "20261016153658",
+        "name": "monthly_plan_revision_scheduling"
+      },
+      {
+        "version": "20261016153709",
+        "name": "optional_task_internal_approval"
+      },
+      {
+        "version": "20261016153713",
+        "name": "pm_hod_first_assignment"
+      },
+      {
+        "version": "20261016153718",
+        "name": "pm_project_service_scope"
+      },
+      {
+        "version": "20261016153722",
+        "name": "task_role_assignment_and_contact_notification_hardening"
+      },
+      {
+        "version": "20261016153726",
+        "name": "client_visible_completion_review"
+      },
+      {
+        "version": "20261016153759",
+        "name": "service_transition_guard"
+      },
+      {
+        "version": "20261017031828",
+        "name": "pm_client_scope_and_ownership"
+      },
+      {
+        "version": "20261017031838",
+        "name": "department_scoped_visibility_cleanup"
+      },
+      {
+        "version": "20261017031841",
+        "name": "task_delete_notification_cleanup"
+      },
+      {
+        "version": "20261017095621",
+        "name": "audit_value_history"
+      },
+      {
+        "version": "20261017095628",
+        "name": "align_service_cycle_cancel_rpc"
+      }
+    ],
+    "migrationResolution": "Repository and production migrations are matched by migration name because some connector timestamps differ from repository filenames.",
+    "migrationStatus": "Production is verified through the live connector result; the two local tail migrations are not applied.",
+    "authenticatedRoleMatrix": "BLOCKED: staging project is not visible to the connected account and no disposable hosted credentials were supplied."
+  },
+  "edgeFunctions": [
+    {
+      "slug": "invite-aitask-member",
+      "status": "ACTIVE",
+      "version": 37,
+      "verifyJwt": true,
+      "sha256": "aa17c0168d5fbf5a416bacf368620f40c6223d078b85cd4a2a3c8389580fc95f"
+    },
+    {
+      "slug": "aitask-feedback",
+      "status": "ACTIVE",
+      "version": 24,
+      "verifyJwt": false,
+      "sha256": "cd16c8223a797399f4241eaaf338e8790a48643c6c39ad8adeaffb745fcfe9e5"
+    },
+    {
+      "slug": "provision-aitask-launch-users",
+      "status": "ACTIVE",
+      "version": 5,
+      "verifyJwt": true,
+      "sha256": "ce96def3717096cba1ff5c85207ac5f6922425b02e15b2649596ec84ff328081"
+    }
+  ],
+  "fingerprints": {
+    "production": {
+      "rls": "85a8f0e0fcdf06c1806d502acff26f8f",
+      "policies": "e3c52e66970f9a8ccd36f6630b48274e",
+      "grants": "670a702dcef3a5cfff2bf1ac0da7b85d",
+      "storageBuckets": "8fa97be08f014928d32bd5f178a9ac0e",
+      "storagePolicies": "f6f20a21a20d2831392d9a8cae8d6a45",
+      "publicFunctions": "b04c8f350196312c79a3a0b4ab6fcbe9",
+      "authSchema": "56e932a04312c7e32b2fc7ce4c506667"
+    },
+    "authHostedSettings": {
+      "status": "NOT VERIFIED",
+      "reason": "The connected Supabase data tools expose project/database metadata but not hosted Auth configuration; no Auth mutation was attempted."
+    }
+  },
+  "verification": {
+    "static": [
+      "pnpm check",
+      "pnpm lint",
+      "pnpm test -- --reporter=dot",
+      "pnpm build",
+      "pnpm verify:migrations"
+    ],
+    "unitTests": {
+      "status": "PASS",
+      "tests": 830,
+      "testFiles": 107
+    },
+    "browser": {
+      "status": "PASS",
+      "passed": 324,
+      "failed": 0,
+      "skipped": 0,
+      "interrupted": 0,
+      "command": "pnpm test:e2e --reporter=line"
+    },
+    "passwordResetBypass": {
+      "hostedBuildFlagGuard": "PASS",
+      "runtimeLocalOnlyGuard": "PASS"
+    },
+    "disposableSupabase": {
+      "status": "PASS",
+      "databaseFiles": 67,
+      "pgTapAssertions": 1032,
+      "scope": "migrations, pgTAP/schema/advisor, storage, onboarding, service-command, staff-save, workflow, and HOD checks"
+    }
+  },
+  "advisors": {
+    "security": {
+      "status": "WARN",
+      "findings": [
+        "Leaked password protection is disabled.",
+        "19 public SECURITY DEFINER functions are executable by authenticated users by design; each requires policy review."
+      ]
+    },
+    "performance": {
+      "status": "INFO",
+      "findings": [
+        "9 unused-index notices."
+      ]
+    }
+  },
+  "releaseDecision": {
+    "status": "NO-GO",
+    "blockers": [
+      "The repository is two migrations ahead of production; pending migrations require compatibility review and explicit approval before application.",
+      "The retention/deletion migration is not approved and remains unapplied.",
+      "Fresh production backup/recovery readiness is not evidenced.",
+      "Vercel production environment-variable metadata could not be read due a 403 permission response.",
+      "Staging authenticated cross-company negative authorization tests are blocked by missing staging access.",
+      "Hosted Auth configuration, backup/recovery, and full production operational evidence remain unverified.",
+      "Production deployment was intentionally not executed in this preparation turn."
+    ]
+  },
+  "validatedMigrationTail": [
+    "20260701000000_legacy_snapshot_baseline",
+    "20260701010000_secure_auth_baseline",
+    "20260713152038_assigned_client_management",
+    "20260713160111_scoped_staff_task_visibility",
+    "20260713164356_assigned_staff_visibility_only",
+    "20260715090000_reliable_workspace_commands",
+    "20260715090100_reliable_workspace_command_cutover",
+    "20260715093000_harden_reliable_workspace_commands",
+    "20260715110000_add_reliable_workspace_indexes",
+    "20260715154533_add_sync_protocol_version",
+    "20260717112145_super_admin_staff_onboarding",
+    "20260718005102_production_login_readiness",
+    "20260718073416_close_launch_authorization_gaps",
+    "20260718081404_staff_company_permission_consistency",
+    "20260718094000_public_feedback_collection",
+    "20260718103935_fix_staff_task_creation_and_password_setup",
+    "20260718120000_feedback_single_submission",
+    "20260718124500_disable_mfa_enforcement",
+    "20260718125450_restrict_registration_visibility_to_super_admin",
+    "20260718131500_link_adminmojo_auth",
+    "20260729100000_multi_department_membership",
+    "20260729112000_enforce_staff_task_department_membership",
+    "20260731130000_task_completion_timestamps",
+    "20260801191419_client_portal_projection",
+    "20260801191430_restrict_client_direct_reads",
+    "20260802121500_notification_center",
+    "20260815042430_client_service_management",
+    "20260816120000_notification_unread_tombstone_guard",
+    "20260816220000_notification_feed_cursor_precision",
+    "20260816230000_workspace_optimistic_lock",
+    "20260821075407_add_release_notice_acknowledgements",
+    "20260826230000_client_read_privacy",
+    "20260903160806_harden_staff_command_authorization",
+    "20260904104435_allow_staff_cycle_published_at",
+    "20260907043633_hod_task_ownership_permissions",
+    "20260907120000_harden_legacy_access_privileges",
+    "20260910010207_company_tracker_member_permissions",
+    "20260910120000_client_project_link_authorization",
+    "20260910144226_member_permission_realtime_refresh",
+    "20260911020546_enforce_task_project_link_authorization",
+    "20260918090000_role_authorization_fixes",
+    "20260918095737_allow_unassigned_tasks",
+    "20260918120000_hod_company_creation",
+    "20260918130000_company_delete",
+    "20260918140000_role_template_fixes",
+    "20260918150000_member_role_assignment",
+    "20260918160000_admin_department_optional",
+    "20260918170000_delete_member_unassign_tasks",
+    "20260918180000_scope_project_manager_ownership",
+    "20260918190000_scope_project_manager_followups",
+    "20260918200000_member_security_and_project_visibility",
+    "20260918210000_authorization_hardening_followups",
+    "20260918220000_project_manager_hod_role_model",
+    "20260919090000_enforce_pm_hod_scope_invariants",
+    "20260919110000_task_detail_authorization",
+    "20260919120000_restrict_client_service_file_types",
+    "20260922100000_fix_pm_role_wording",
+    "20260922110000_pm_portfolio_task_management",
+    "20260922120000_idempotent_entity_insert",
+    "20260922130000_pm_portfolio_task_reassignment",
+    "20260922131000_task_assignment_attribution",
+    "20260922132000_staff_deliverable_delivered_at",
+    "20260922133000_staff_notification_recipients",
+    "20260923120000_client_ownership_backfill",
+    "20260923130000_task_guard_fixes",
+    "20260923140000_editable_default_roles",
+    "20260925110000_staff_comment_notification_context",
+    "20260925120000_service_role_member_grants",
+    "20260925130000_staff_notification_assigner_recipient",
+    "20260926100000_task_attribution_and_staff_context_hardening",
+    "20260926110000_service_role_least_privilege",
+    "20260926120000_pm_assignee_department_optional",
+    "20260928140058_server_reminders_and_feedback_rate_limit",
+    "20260930110000_hod_assigned_task_delegation",
+    "20260930111033_service_upload_reconciliation",
+    "20260930154013_initialize_deadline_reminder_claim",
+    "20261002065644_hod_permission_parity_followups",
+    "20261002101435_universal_notification_audience_guard",
+    "20261007173905_reliable_member_onboarding",
+    "20261012162419_client_portal_review_privacy",
+    "20261012164407_delivery_link_derivation",
+    "20261012165347_hod_task_deletion_authority",
+    "20261013035142_staff_workflow_recovery",
+    "20261013035310_workflow_internal_review_gate",
+    "20261013053636_hod_review_handoff",
+    "20261013055051_task_stage_progress",
+    "20261013105534_task_role_readiness_hardening",
+    "20261013160804_task_dependency_review_invalidation",
+    "20261014045216_client_approval_masked_assignment_compatibility",
+    "20261014045911_designer_pm_review_fallback",
+    "20261014050918_preserve_completed_review_notes",
+    "20261014065237_protect_staff_submitted_task_deletion",
+    "20261014071022_reviewer_output_evidence_access",
+    "20261014111759_pm_review_fallback_and_workflow_inputs",
+    "20261014132839_hod_review_remediation",
+    "20261014135947_pm_portfolio_service_boundaries",
+    "20261015014716_pm_task_company_boundaries",
+    "20261015015730_staff_task_contact_notifications",
+    "20261015064701_manual_deliverable_progress",
+    "20261015065635_deliverable_status_integrity",
+    "20261015140049_monthly_plan_revision_scheduling",
+    "20261015141803_optional_task_internal_approval",
+    "20261015152000_pm_hod_first_assignment",
+    "20261015160000_pm_project_service_scope",
+    "20261016120000_task_role_assignment_and_contact_notification_hardening",
+    "20261016140000_client_visible_completion_review",
+    "20261016150000_service_transition_guard",
+    "20261016160000_pm_client_scope_and_ownership",
+    "20261016170000_department_scoped_visibility_cleanup",
+    "20261017030340_task_delete_notification_cleanup",
+    "20261017091031_workspace_revision_realtime",
+    "20261017113000_audit_value_history",
+    "20261017130000_align_service_cycle_cancel_rpc",
+    "20261017140000_audit_history_retention_guards_followup"
+  ],
+  "pendingProductionMigrations": [
+    "20261017091031_workspace_revision_realtime",
+    "20261017140000_audit_history_retention_guards_followup"
+  ],
+  "status": "repository through 20261017140000_audit_history_retention_guards_followup; production through 20261017095628; current tail pending"
+}

@@ -1,50 +1,61 @@
-# Data Synchronisation Audit — AiTask
+# Data Synchronisation Audit
 
-**Date:** 2026-10-17 · **Branch:** `codex/audit-p0p1-2026-10-16`
+**Date:** 2026-10-17
+**Scope:** Supabase secure workspace path, React/Zustand state, dashboards, notifications, RLS, Realtime, offline recovery, and cross-role mutation flows.
 
-## 1. Single source of truth
+## Executive result
 
-| Concern | Mechanism | Verdict |
+Supabase remains the authoritative source for persistent business data. Every secure mutation is committed through a guarded, versioned RPC; the browser keeps an optimistic projection and reconciles it against an RLS-filtered snapshot.
+
+One synchronization gap was confirmed and fixed in this pass: ordinary workspace mutations previously depended on a 15-second poll because Realtime only watched member-access rows. The app now subscribes to the non-sensitive `aitask_workspaces.version` update as an invalidation signal. The client then reloads its own authorized snapshot. Polling, focus/visibility, and online-reconnect reconciliation remain as missed-event fallbacks.
+
+## Single source of truth
+
+| Concern | Canonical source/rule | Result |
 | --- | --- | --- |
-| Authoritative store | Supabase (Postgres + RLS + versioned command RPCs) is authoritative; frontend is a canonical projection | PASS |
-| Frontend ↔ DB alignment | `secureWorkspace.ts` diffs current state against a module-level `baseline` and emits versioned operations (`aitask_execute_command`); optimistic concurrency + idempotency receipts | PASS |
-| Task/deliverable/cycle progress | `deriveServiceProgress` (`store/index.ts:805`) is the single reducer called on every task/deliverable mutation; `getTaskProgress` (`taskProgress.ts`), `resolveDeliverableStatus` (`serviceManagement.ts:157`) are canonical | PASS |
-| Review queues | `isAwaitingClientReview` / `isAwaitingInternalReview` (`clientPortal.ts`) — one definition used by PM/Staff/Boss/delivery surfaces (DBG-02 fixed) | PASS |
-| Project counters | Removed `Project.totalTasks/completedTasks`; counts derived from tasks (DBG-04 fixed) | PASS |
-| Status/deadline/progress definitions | Shared `isTaskCompleted`/`isTaskOpen`/`getClientTaskStage` predicates | PASS |
+| Persistent business data | Supabase Postgres tables and guarded command/service RPCs | PASS |
+| Frontend state | Optimistic projection of the last confirmed Supabase snapshot; retained commands are replayable/idempotent | PASS |
+| Concurrency | Workspace revision plus per-row versions and command receipts | PASS |
+| Task progress | `getTaskProgress` and `deriveServiceProgress` | PASS |
+| Deliverable/cycle status | `resolveDeliverableStatus` and guarded transition rules | PASS |
+| Review queues | `isAwaitingClientReview` / `isAwaitingInternalReview` | PASS |
+| Project totals | Derived from visible tasks; no stale stored `totalTasks`/`completedTasks` authority | PASS |
+| Notification reads | Server notification feed/read RPCs; browser updates optimistically and reconciles | PASS |
+| Access | Database RLS and command authorization; client checks are UX only | PASS |
 
-## 2. Synchronisation mechanism
+## Synchronization path
 
-| Mechanism | Implementation | Notes |
-| --- | --- | --- |
-| Polling (primary) | 15 s `setInterval(pullLatest)` + `focus`/`visibilitychange`/`online` listeners (`store/index.ts:5992-5996`) | Reconciles background tabs, missed events |
-| Realtime (narrow) | `subscribeToCurrentMemberAccessChanges` (`supabaseClient.ts:29`) — only member-access/permission changes; safe filter `^[A-Za-z0-9_-]+$`, cleanup on unmount | Deliberately NOT full entity push (avoids over-subscription + exposure) |
-| Offline/online | `handleOffline`/`handleOnline` set backend status + reconcile on reconnect | PASS |
-| Cleanup | `backendAutoSyncCleanup` removes interval, listeners, realtime channel | PASS (no leak) |
+```text
+Authorised action
+  → guarded transactional RPC
+  → Supabase commit + workspace version increment
+  → Realtime workspace-revision event
+  → RLS-filtered snapshot reload for each affected session
+  → canonical selectors recalculate dashboards
+  → committed notification feed is refreshed
+```
 
-**Expected update interval:** 15 s polling + immediate on focus/visibility/online. This is the documented, accepted interval for a task-management workflow (not realtime chat); the README/DEPLOYMENT docs state this explicitly.
+The Realtime event carries no business entity payload. It only invalidates the cache. This avoids using the polymorphic entity table as a broad broadcast channel and keeps authorization at the snapshot query/RLS boundary.
 
-## 3. Concurrency & integrity
+## Confirmed fixes in this pass
 
-- Workspace-level optimistic lock (5-arg RPC overload) + per-row `expectedVersion` preflight → `CONFLICT` + actual version.
-- Command-id idempotency (`aitask_command_receipts`) → duplicate/replayed commands are no-ops.
-- `makeNotification` one-audience invariant + `resolveTaskUpdateRecipientIds` dedup (`Set`) → no duplicate notifications.
-- Optimistic local updates with `discardMutation`/`retryPendingSave` reconciliation (no blind retry of non-idempotent ops).
+| Finding | Root cause | Fix | Verification |
+| --- | --- | --- | --- |
+| Cross-role entity changes waited for polling | No ordinary workspace Realtime invalidation subscription | Added `subscribeToWorkspaceRevisionChanges` and `aitask_workspaces` publication migration | `supabaseRealtime.test.ts`, `hodCrossRoleSync.test.ts`, TypeScript check |
+| Realtime publication did not include the revision row | Only member/entity publication entries existed | Added idempotent `20261017091031_workspace_revision_realtime.sql` | `security_cutover.test.sql`, migration gate |
+| Existing access subscription could be mistaken for data sync | It only covered member/custom-role changes | Documented separate revision invalidation and retained access subscription for authorization refresh | Source review + regression tests |
 
-## 4. Known prior defects — resolved & re-verified
+## Reliability and security checks
 
-| ID | Defect | Status |
-| --- | --- | --- |
-| DBG-02 | "Awaiting client review" computed 3 incompatible ways | FIXED (canonical selector) |
-| DBG-04 | Project task totals permanent zeros | FIXED (derived counts) |
-| DBG-05 | Dangling `deliverable.primaryTaskId` after delete/unlink | FIXED |
-| DBG-06/07 | Impossible service-cycle/plan states | FIXED (transitions + DB trigger) |
-| DBG-08 | Double-notify on revision | FIXED (dedup) |
-| GAP-D1/D2 | DB overrode client-approval / transitions frontend-only | FIXED (migrations) |
+- Direct authenticated writes to secure tables remain revoked; writes use guarded RPCs.
+- RLS protects workspace, member, entity, notification, and storage access.
+- Realtime publishes the workspace revision row only for invalidation; the subsequent snapshot is still filtered by RLS.
+- Duplicate Realtime subscriptions are prevented by the auto-sync lifecycle and cleaned up on session change/unmount.
+- A coordinator coalesces events and waits while a save, pull, conflict, or retained mutation is active.
+- A local edit arriving during a pull cannot be overwritten because `localMutationEpoch` is checked before applying the remote snapshot.
+- Command receipts make retries idempotent; optimistic concurrency returns a conflict instead of overwriting newer data.
+- Polling every 15 seconds plus focus, visibility, and online listeners reconciles missed or delayed events.
 
-No **new** data-consistency or synchronisation defect was found this pass.
+## Residual verification limits
 
-## 5. Residual
-
-- Live multi-user browser sessions were **not** run in this environment (no browsers); the `e2e/` suite (staff/PM/HOD role flows, action-save-gaps, session-action-gaps) runs in CI.
-- Immediate cross-user push is not implemented for entity data (15 s poll instead) — documented and acceptable; a realtime push of all entities would risk exposure and over-subscription.
+The focused Realtime/store suite, full Vitest suite (107 files / 828 tests), TypeScript check, migration gate, lint, i18n audit, and production build passed. A simultaneous four-account live browser run was not available in this session, so live cross-role cells remain `NOT VERIFIED` until a staging project with separate credentials is exercised. No production data was modified or deployed.

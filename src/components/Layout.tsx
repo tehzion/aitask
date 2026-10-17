@@ -17,7 +17,6 @@ import { useColorTheme } from '../hooks/useColorTheme';
 import { getNavigationShortcut, isEditableShortcutTarget } from '../lib/keyboard';
 import { useI18n } from './I18nProvider';
 import { getMobileNavigation } from '../lib/navigation';
-import { useToastStore } from '../store/useToastStore';
 
 const CreateTaskModal = React.lazy(() => import('./CreateTaskModal'));
 const KeyboardShortcutsDialog = React.lazy(() => import('./KeyboardShortcutsDialog'));
@@ -62,7 +61,6 @@ const Layout: React.FC = () => {
     if (result && !result.ok) setSyncActionError(result.error || 'Unable to reload saved data. Try again.');
   };
   const navigate = routerNavigate;
-  const toastCount = useToastStore(state => state.toasts.length);
   const { preference, resolvedTheme, setPreference, toggleTheme } = useColorTheme();
 
   const {
@@ -118,7 +116,7 @@ const Layout: React.FC = () => {
   // Global keyboard shortcuts are intentionally disabled while typing.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.isComposing || isEditableShortcutTarget(e.target)) return;
+      if (e.isComposing || isEditableShortcutTarget(e.target) || isEditableShortcutTarget(document.activeElement)) return;
       if (!e.altKey && !e.shiftKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && !document.querySelector('[data-aitask-modal-portal]')) {
         e.preventDefault();
         setIsCommandPaletteOpen(true);
@@ -200,6 +198,7 @@ const Layout: React.FC = () => {
   }, [closeMobileMenu, currentUser, navigate, resolvedTheme, rolePermissions, setCreateTaskModalOpen, toggleTheme, userCanCreateTasks]);
 
   useEffect(() => {
+    if (isMobileMenuOpen) return;
     const frame = window.requestAnimationFrame(() => {
       const main = mainRef.current;
       if (!main) return;
@@ -209,7 +208,7 @@ const Layout: React.FC = () => {
       main.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [location.pathname]);
+  }, [isMobileMenuOpen, location.pathname]);
 
   useEffect(() => {
     const content = appContentRef.current;
@@ -403,11 +402,9 @@ const Layout: React.FC = () => {
           <ReleaseNotice currentUser={currentUser} isReady />
         </React.Suspense>
       )}
-      {toastCount > 0 && (
-        <React.Suspense fallback={null}>
-          <ToastContainer />
-        </React.Suspense>
-      )}
+      <React.Suspense fallback={null}>
+        <ToastContainer />
+      </React.Suspense>
       {isCreateTaskModalOpen && (
         <React.Suspense fallback={null}>
           <CreateTaskModal isOpen onClose={() => setCreateTaskModalOpen(false)} />

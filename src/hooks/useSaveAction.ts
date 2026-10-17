@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
+import { userFacingText } from '../lib/userFacingMessage';
 
 type Result = { ok: boolean; error?: string };
 type Failure = { ok: false; error: string; code?: undefined };
@@ -36,7 +37,7 @@ export const useSaveAction = (context?: string) => {
       return result;
     } catch (error) {
       if (!isCurrent()) return null;
-      const result: Failure = { ok: false, error: error instanceof Error ? error.message : 'The change is waiting to be saved.' };
+      const result: Failure = { ok: false, error: userFacingText(error, 'The change is waiting to be saved.') };
       settle?.(result);
       return result;
     } finally {

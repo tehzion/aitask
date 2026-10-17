@@ -23,11 +23,12 @@ interface Props {
   onClose: () => void;
   project?: Project | null;
   initialClientId?: string;
+  onClientCreated?: (clientId: string) => void;
   onProjectCreated?: (projectId: string) => void;
   onProjectUpdated?: (projectId: string) => void;
 }
 
-const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initialClientId, onProjectCreated, onProjectUpdated }) => {
+const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initialClientId, onClientCreated, onProjectCreated, onProjectUpdated }) => {
   const { t } = useI18n();
   const { addProject, updateProject, projects, clients, tasks, currentUser, rolePermissions, retryPendingSave, backend } = useStore(useShallow(state => ({
     addProject: state.addProject,
@@ -40,7 +41,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     retryPendingSave: state.retryPendingSave,
     backend: state.backend,
   })));
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [, setSearchParams] = useSearchParams();
   const titleId = React.useId();
   const descriptionId = React.useId();
   const clientSelectId = React.useId();
@@ -51,11 +52,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   // A company search filter on the Companies page would hide the company this
   // project is linked to. Clear it whenever the project is created or updated.
   const clearCompanySearch = React.useCallback(() => {
-    if (!searchParams.get('search')) return;
-    const next = new URLSearchParams(searchParams);
-    next.delete('search');
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+    setSearchParams(current => {
+      if (!current.get('search')) return current;
+      const next = new URLSearchParams(current);
+      next.delete('search');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const [clientId, setClientId] = useState('');
   const [projectName, setProjectName] = useState('');
@@ -198,7 +201,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     setFormError('');
   };
 
-  const handleClose = () => { recovery.clear(); markPristine(); setFormEdited(false); resetForm(); onClose(); };
+  const handleClose = () => { recovery.clear(); markPristine(); setFormEdited(false); resetForm(); clearCompanySearch(); onClose(); };
   const requestClose = () => { if (!isSubmitting && (!formEdited || window.confirm(t('Discard unsaved changes?')))) handleClose(); };
 
   const confirmProjectSave = async (id: string) => {
@@ -528,6 +531,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         onCreated={(newClientId) => {
           setClientId(newClientId);
           setFormError('');
+          clearCompanySearch();
+          onClientCreated?.(newClientId);
           setIsClientModalOpen(false);
         }}
       />}

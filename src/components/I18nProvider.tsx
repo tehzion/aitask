@@ -9,6 +9,7 @@ import {
 } from '../lib/i18n';
 import { formatMessage, isMessageId, type MessageDescriptor, type MessageId, type MessageValues } from '../lib/messages';
 import { getLocalizedStatus, getLocalizedPriority, getLocalizedDepartment } from '../lib/localeLabels';
+import { userFacingMessage } from '../lib/userFacingMessage';
 import { cn } from '../lib/utils';
 
 interface I18nContextValue {
@@ -30,8 +31,9 @@ export const I18nProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const toggleLocale = React.useCallback(() => setLocale(locale === 'en' ? 'zh' : 'en'), [locale, setLocale]);
   const translate = React.useCallback((value: MessageId | string | MessageDescriptor, values?: MessageValues) => {
-    if (typeof value === 'object' || isMessageId(value)) {
-      const descriptor = typeof value === 'object' ? value : { id: value as MessageId, values };
+    const safeValue = typeof value === 'string' && !isMessageId(value) ? userFacingMessage(value) : value;
+    if (typeof safeValue === 'object' || isMessageId(safeValue)) {
+      const descriptor = typeof safeValue === 'object' ? safeValue : { id: safeValue as MessageId, values };
       const localized = { ...descriptor.values };
       if (descriptor.id === 'task.statusUpdated' && typeof localized.status === 'string') localized.status = getLocalizedStatus(localized.status, locale);
       if (descriptor.id === 'task.priorityUpdated' && typeof localized.priority === 'string') localized.priority = getLocalizedPriority(localized.priority, locale);
@@ -39,10 +41,10 @@ export const I18nProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       return formatMessage({ ...descriptor, values: localized }, locale);
     }
     const resolvedValue = values
-      ? value.replace(/\{(\w+)\}/g, (match, key: string) => (
+      ? safeValue.replace(/\{(\w+)\}/g, (match, key: string) => (
         Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : match
       ))
-      : value;
+      : safeValue;
     return translateUiText(resolvedValue, locale);
   }, [locale]);
 

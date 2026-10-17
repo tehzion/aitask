@@ -29,7 +29,7 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
   await page.goto(`/clients/${seeded.clientId}`);
   await page.getByRole('tab', { name: locale === 'zh' ? '方案' : 'Plan', exact: true }).click();
   const revision = page.getByRole('region', { name: locale === 'zh' ? '下月方案' : 'Next month’s plan', exact: true });
-  const date = revision.getByLabel(locale === 'zh' ? '合同结束日期（仅提醒）' : 'Contract end date (reminder only)', { exact: true });
+  const date = revision.getByLabel(locale === 'zh' ? '合同结束日期（仅提醒）' : 'Contract end date (reminder only)');
   await expect(date).toHaveValue('2026-10-03');
   await expect(date).toHaveAttribute('min', '2026-09-30');
   await expect(revision).toContainText(locale === 'zh' ? '2026年10月30日' : '30 Oct 2026');

@@ -1,56 +1,64 @@
-# Cross-Role Data Flow — AiTask
+# Cross-Role Data Flow
 
-**Date:** 2026-10-17 · **Dependency map of every data mutation → affected records/roles/dashboards/notifications.**
+**Date:** 2026-10-17
+**Roles:** Super Admin (SA), Project Manager (PM), HOD, Staff. Client projection is included where it participates in approval/review.
 
-Legend: roles = SA (Super Admin), PM, HOD, Staff.
+## Dependency map
 
----
+| Mutation/source action | Committed records | Affected roles | Dashboards/modules | Notifications | Cache/realtime behavior |
+| --- | --- | --- | --- | --- | --- |
+| Create/update/delete project | `project`; related client/task scope | SA, owning PM, authorised HOD/Staff | Dashboard, Companies, Reports, Tasks | Contextual project/task notices where configured | optimistic store update → command → workspace revision event → authorised snapshot |
+| Create task | `task`; linked deliverable progress | SA, PM, HOD, assignee Staff | Tasks, Dashboard, Calendar, Delivery Tracker, Reports | assignee/reviewer/portfolio recipients | task and derived progress recompute; revision invalidates all sessions |
+| Assign/reassign task | `task.assignedTo`, attribution fields | SA, PM, HOD; old/new Staff | workload, task counts, review queues | new assignee; affected prior/portfolio recipients | old visibility is removed by the next RLS snapshot; counts recalculate |
+| Status/work update | task status, completion, work-state, timestamps | SA, PM, HOD, Staff; Client projection when visible | all role dashboards, Calendar, Delivery Tracker, Reports | task owner, reviewer, PM/SA, client when applicable | canonical transition/progress reducer + revision event |
+| Internal approval/revision | task review fields, comments, approval history | Staff requester, HOD/PM reviewer, SA/PM reporting | Approvals, Dashboard, Tasks, Reports | requester/reviewer/portfolio recipients | review queue and progress recalculate from committed task |
+| Client approval/rejection | task client approval and approval history | Client, Staff, PM, HOD/SA reporting | Client Workspace, Delivery Tracker, Reports | assigned Staff and internal recipients | client projection reloads through portal RPC; internal users reload RLS snapshot |
+| Delete/archive task | task, deliverable links, task-linked notifications | authorised owner/manager/reviewer; all viewers lose visibility | Tasks, Calendar, dashboards, Reports | deletion notice retained; stale task routes removed | DB cleanup trigger + optimistic unlink + revision event |
+| Delete project/client | project/client and related service records per policy | SA/owner PM; affected HOD/Staff/Client | Companies, portfolio, service workspace | restricted/deleted links do not remain actionable | canonical snapshot removes inaccessible rows |
+| Service plan/cycle/deliverable change | service package, plan, cycle, deliverable, comments, add-ons | SA/PM and authorised operational roles | Delivery Tracker, Dashboard, Reports | service/review recipients where configured | service RPC transaction + derived status + revision event |
+| Comment/attachment/output | comment/attachment metadata and task/service link | authorised task/service viewers | task detail, Client Workspace, delivery review | comment/review recipients | storage reconciliation and entity snapshot reload |
+| Notification read/unread | notification receipt/read fields | current recipient only | Navbar, Notifications, dashboard counters | no new notification | notification read RPC; revision event; local optimistic receipt rollback on failure |
+| Due-date reminder | notification plus reminder claim | assigned Staff/reviewer/PM/SA as configured | Dashboard, Calendar, Notifications | deduplicated server reminder recipients | claim/idempotency guard; revision event |
+| Member role/department/permission | `aitask_members`, custom-role entity | affected member and all scopes | navigation, dashboards, workload, settings | admin/member notices where configured | access Realtime + workspace revision; pending stale commands are discarded |
+| Registration approve/reject | registration and member rows | SA; new member; affected PM/HOD | Settings, people/reporting surfaces | onboarding/decision recipients | command transaction + access refresh |
+| Task status/template/role administration | `task_status`, custom-role/template entities | SA and members whose access/status list changes | Settings, task forms, navigation | admin notices where configured | workspace revision; guarded by permissions |
 
-## Mutation dependency map
+## Mutation contract
 
-| Mutation | Source | Affected records | Affected roles | Dashboards | Notifications | Invalidation |
-| --- | --- | --- | --- | --- | --- | --- |
-| Create project | `createProject` | `projects`, `clients` (implied) | creator (PM/SA) | PM portfolio, Companies | — (creation notice where configured) | `projects`/`clients` set + selectors |
-| Create task | `addTask` | `tasks`, `deliverables` (via `deriveServiceProgress`) | PM/HOD/Staff (creator/assigned) | PM/HOD/Staff lists | assignee "Task Assigned To You" | task list + progress |
-| Assign / reassign task | `updateTaskAssignee` | `tasks.assignedTo/assignedBy/assignedAt` | SA, PM (owner), HOD (dept), old+new assignee | PM/HOD/Staff workload | new assignee `Task Assigned To You`; old assignee via status return | `tasks` + workload + counts |
-| Task status update | `updateTaskStatus`/`updateTaskWork` | `tasks.status/completion/…`, `deliverables` | SA, PM, HOD (dept), Staff | all role dashboards + progress | `resolveTaskUpdateRecipientIds` (Boss + owning PM + contact) | `deriveServiceProgress` |
-| Submit for review | `updateTaskStatus('Waiting Approval')` | `tasks.status`, `workState` | HOD/PM reviewers | review queues | `localHodReviewNotifications` → department reviewers | review queues |
-| Approve / reject (internal) | `updateTaskStatus('Approved')` / `requestRevision` | `tasks.status/reviewDecision/internalReview` | requester (Staff), PM, HOD | pending approval counts | requester + PM + Boss | review queues + progress |
-| Client approve / request changes | `reviewClientApproval` | `tasks.clientApprovalStatus/approvalHistory` | Client + PM + assignee | client portal + delivery tracker | assignee + PM + Boss | approval history + stage |
-| Delete task | `deleteTask` | `tasks`, `deliverables.taskIds/primaryTaskId`, notification routes | PM/creator/SA | lists + counts | routes to deleted task filtered (`store/index.ts:2983`) | task list + progress |
-| Delete company/client | `deleteClientProfile` | `clients`, orphaned Client portal accounts | PM/SA | Companies + portfolio | — | client list + portfolio |
-| Change role/permission | `updateMember`/role editor | `aitask_members`, `custom_role` rows | all (access recalc) | nav + access | — | **Realtime** member-access channel → refresh |
-| Change department | `updateMember`/`updateTask.department` | `members.departments`, `tasks.department/reviewCover` | HOD/Staff (dept scope) | dept workload | — | access + workload |
+Every mutation must satisfy:
 
-## Key invariants (verified in source + tests)
+1. The browser validates the role-scoped action for immediate UX feedback.
+2. The secure backend rechecks authorization, versions, relationships, and transition rules.
+3. The transaction commits business rows, derived rows, audit history, and notifications together where applicable.
+4. The local projection is only acknowledged as saved after the RPC succeeds.
+5. A workspace revision update invalidates other active sessions.
+6. Each session reloads only the rows allowed by its current RLS/portal projection.
+7. Dashboard selectors recalculate from the refreshed canonical collections.
 
-- **Reassignment** (`Scenario E`): old assignee loses edit access (unless creator/HOD-scope), new assignee gains it; `resolveTaskUpdateRecipientIds` notifies the right parties; no stale visibility.
-- **Deletion** (`Scenario F`): `primaryTaskId` cleared, notification routes to deleted task removed, Client portal accounts cleaned on company delete; `canDeleteTask`/`canDeleteClientProfile` enforce ownership/portfolio.
-- **Department change**: `reviewCover`/`accountableLeadId` invalidated on department change (`store/index.ts:2895-2900`).
-- **No cross-tenant exposure**: PM scope is id-first (`matchesOwnedClient`), HOD is department-scoped, Staff is assignment-scoped; server-side `aitask_can_view_task`/`aitask_can_mutate_entity` match.
+## Scenario verification
 
-## Cross-role scenarios (source-verified; browser e2e not re-run)
-
-| Scenario | Result | Evidence |
+| Scenario | Automated/source result | Live four-account result |
 | --- | --- | --- |
-| A — Project creation | PASS | `createProject`, `getVisibleProjects` |
-| B — Task assignment | PASS | `updateTaskAssignee`, `unassignedTaskNotifications.test.ts` |
-| C — Task status update | PASS | `updateTaskStatus`, `taskStageProgress.test.ts` |
-| D — Approval workflow | PASS | `hodReviewHandoff.test.ts`, `workflowReviewGate.test.ts`, `clientApprovalProgress.test.ts` |
-| E — Reassignment | PASS | `taskAssignment.test.ts`, `canEditTask`/`canAssignTasksToOthers` |
-| F — Deletion/archiving | PASS | `deleteTask` cleanup, `duplicateClientDelete.test.ts` |
+| A — Project creation | FIXED & VERIFIED | NOT VERIFIED |
+| B — Task assignment | PASS | NOT VERIFIED |
+| C — Task status update | PASS | NOT VERIFIED |
+| D — Approval/rejection | PASS | NOT VERIFIED |
+| E — Reassignment | PASS | NOT VERIFIED |
+| F — Deletion/archiving | PASS | NOT VERIFIED |
+
+`PASS` means existing source, unit, database, or E2E coverage passed. `FIXED & VERIFIED` identifies the new revision-invalidation path specifically. `NOT VERIFIED` means no simultaneous live accounts/browser sessions were available in this workspace.
 
 ## Verification matrix
 
 | Workflow | Super Admin | Project Manager | HOD | Staff | Dashboard | Notification |
 | --- | --- | --- | --- | --- | --- | --- |
-| Project Creation | PASS | PASS | PASS | NA | PASS | PASS |
-| Task Assignment | PASS | PASS | PASS | PASS | PASS | PASS |
-| Task Status Update | PASS | PASS | PASS | PASS | PASS | PASS |
-| Approval / Rejection | PASS | PASS | PASS | PASS | PASS | PASS |
-| Task Reassignment | PASS | PASS | PASS | PASS | PASS | PASS |
-| Record Deletion | PASS | PASS | PASS | PASS | PASS | PASS |
-| Department Changes | PASS | NA | PASS | PASS | PASS | PASS |
-| Role Changes | PASS | PASS | PASS | PASS | PASS | PASS |
+| Project Creation | FIXED & VERIFIED | FIXED & VERIFIED | PASS | PASS | FIXED & VERIFIED | PASS |
+| Task Assignment | PASS | PASS | PASS | PASS | FIXED & VERIFIED | PASS |
+| Task Status Update | PASS | PASS | PASS | PASS | FIXED & VERIFIED | PASS |
+| Approval / Rejection | PASS | PASS | PASS | PASS | FIXED & VERIFIED | PASS |
+| Task Reassignment | PASS | PASS | PASS | PASS | FIXED & VERIFIED | PASS |
+| Record Deletion | PASS | PASS | PASS | PASS | FIXED & VERIFIED | PASS |
+| Department Changes | PASS | NOT VERIFIED | PASS | PASS | FIXED & VERIFIED | PASS |
+| Role Changes | PASS | PASS | PASS | PASS | FIXED & VERIFIED | PASS |
 
-*(All PASS = source + unit-test verified. Live simultaneous multi-user browser sessions were not run in this offline environment — they run in CI.)*
+Live simultaneous cross-role verification remains `NOT VERIFIED` for this session; the automated result is not being represented as live production evidence.

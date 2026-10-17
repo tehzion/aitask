@@ -1,5 +1,6 @@
 import type { Department, RolePermissions, WorkspaceMember } from '../types';
 import type { MemberDepartmentsResponse, MemberPermissionsResponse, MemberRoleAssignment, MemberRoleResponse, MutationResult, SecureMemberMutationRuntime } from './secureWorkspace';
+import { userFacingText } from './userFacingMessage';
 
 export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime) => {
   const { captureWorkspaceSession, normalizeMemberDepartments, isWorkspaceSessionCurrent, stable, retainedMemberMutationWithId, commandId, persistRetryableMemberMutation, bindSessionRequest, withSyncTimeout, supabase, isAuthError, refreshSecureSession, SyncRequestTimeoutError, commandErrorCode, clearPersistedRetryableMemberMutation, getLegacyDepartmentMirror, entityKey, memberData, SECURE_WORKSPACE_ID } = runtime;
@@ -67,7 +68,7 @@ export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime
       return {
         ok: false,
         code,
-        error: rpcResult.error.message || 'Unable to update departments.',
+        error: userFacingText(rpcResult.error, 'Unable to update departments.'),
       };
     }
 
@@ -81,7 +82,7 @@ export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime
       return {
         ok: false,
         code,
-        error: response.error || 'The department change was rejected.',
+        error: userFacingText(response.error, 'The department change was rejected.'),
         conflict: response.conflict,
       };
     }
@@ -176,7 +177,7 @@ export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime
       return {
         ok: false,
         code,
-        error: rpcResult.error.message || 'Unable to update permissions.',
+        error: userFacingText(rpcResult.error, 'Unable to update permissions.'),
       };
     }
 
@@ -190,7 +191,7 @@ export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime
       return {
         ok: false,
         code,
-        error: response.error || 'The permission change was rejected.',
+        error: userFacingText(response.error, 'The permission change was rejected.'),
         conflict: response.conflict,
       };
     }
@@ -298,7 +299,7 @@ export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime
       return {
         ok: false,
         code,
-        error: rpcResult.error.message || 'Unable to change the role.',
+        error: userFacingText(rpcResult.error, 'Unable to change the role.'),
       };
     }
 
@@ -312,7 +313,7 @@ export const createSecureMemberMutations = (runtime: SecureMemberMutationRuntime
       return {
         ok: false,
         code,
-        error: response.error || 'The role change was rejected.',
+        error: userFacingText(response.error, 'The role change was rejected.'),
         conflict: response.conflict,
       };
     }

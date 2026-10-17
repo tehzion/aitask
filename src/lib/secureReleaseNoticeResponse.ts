@@ -1,4 +1,5 @@
 import type { MutationErrorCode, ReleaseNoticeAcknowledgementResult } from './secureWorkspace';
+import { userFacingText } from './userFacingMessage';
 
 const releaseNoticeErrorCodes = new Set<MutationErrorCode>(['OFFLINE', 'CONFLICT', 'FORBIDDEN', 'VALIDATION', 'NOT_FOUND', 'RETRY_REQUIRED']);
 
@@ -13,7 +14,7 @@ export const readReleaseNoticeResponse = (value: unknown, noticeId: string): Rel
     return {
       ok: false,
       code,
-      error: typeof response?.error === 'string' ? response.error : "We couldn't load the release notice. Please try again.",
+      error: userFacingText(response?.error, "We couldn't load the release notice. Please try again."),
     };
   }
   if ((typeof response.noticeId === 'string' ? response.noticeId.trim().slice(0, 80) : '') !== noticeId) {

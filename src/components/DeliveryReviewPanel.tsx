@@ -29,7 +29,11 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   const unlinkTitleId = React.useId();
   const [showOlderDrafts, setShowOlderDrafts] = React.useState(false);
   React.useEffect(() => { setSelections({}); setMessage(''); setPending(null); }, [clientId, store.currentUser?.id]);
-  useUnsavedChanges(Boolean(pending || Object.values(selections).some(Boolean)));
+  // A selected link is an in-memory choice that remains mounted while the
+  // client workspace switches tabs. Only an in-flight save must block route
+  // navigation; otherwise a harmless tab switch is mistaken for discarding
+  // the review selections.
+  useUnsavedChanges(Boolean(pending));
   const visibleTasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects })
     .filter(task => !clientId || task.clientId === clientId);
   const cycles = store.serviceCycles.filter(cycle => (!clientId || cycle.clientId === clientId)

@@ -149,17 +149,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
     return () => media.removeEventListener('change', handleChange);
   }, []);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     if (!sidebarRef.current) return;
     if (!isDesktop && !isOpen) sidebarRef.current.setAttribute('inert', '');
     else sidebarRef.current.removeAttribute('inert');
   }, [isDesktop, isOpen]);
 
-  React.useEffect(() => {
-    if (!isDesktop && isOpen) {
-      window.setTimeout(() => sidebarRef.current?.querySelector<HTMLElement>('a[href]')?.focus(), 0);
-    }
-  }, [isDesktop, isOpen]);
+  React.useLayoutEffect(() => {
+    // Read the media query at the moment the drawer opens.  Viewport changes
+    // can occur without a MediaQueryList event in test runners and embedded
+    // browsers, so the stateful desktop hint is not sufficient here.
+    if (!isOpen || window.matchMedia('(min-width: 768px)').matches) return;
+    const firstLink = sidebarRef.current?.querySelector<HTMLElement>('a[href]');
+    firstLink?.focus({ preventScroll: true });
+  }, [isOpen, isDesktop]);
 
   React.useEffect(() => {
     if (isDesktop || !isOpen) return;

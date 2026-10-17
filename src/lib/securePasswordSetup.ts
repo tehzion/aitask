@@ -1,4 +1,5 @@
 import type { CommandResponse, MutationResult } from './secureWorkspace';
+import { userFacingText } from './userFacingMessage';
 type RpcResponse = { data: unknown; error: { code?: string; message?: string } | null };
 export const finalizePasswordSetup = async (invoke: () => PromiseLike<RpcResponse>, id: string, isAuthError: (error: RpcResponse['error']) => boolean, refreshSecureSession: () => Promise<boolean>): Promise<MutationResult<CommandResponse>> => {
   let result: Awaited<ReturnType<typeof invoke>>;
@@ -26,7 +27,7 @@ export const finalizePasswordSetup = async (invoke: () => PromiseLike<RpcRespons
     return {
       ok: false,
       code: isAuthError(result.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
-      error: result.error.message || 'Account setup could not be finalized.',
+      error: userFacingText(result.error, 'Account setup could not be finalized.'),
     };
   }
 
@@ -35,7 +36,7 @@ export const finalizePasswordSetup = async (invoke: () => PromiseLike<RpcRespons
     return {
       ok: false,
       code: response?.code || 'RETRY_REQUIRED',
-      error: response?.error || 'Account setup could not be finalized.',
+      error: userFacingText(response?.error, 'Account setup could not be finalized.'),
     };
   }
 

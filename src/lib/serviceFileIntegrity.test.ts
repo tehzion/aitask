@@ -59,7 +59,7 @@ describe('upload ownership and uncertain saves', () => {
   it('retains unresolved files when the authoritative endpoint is missing', async () => {
     const file = attachment('unavailable'); trackPendingServiceFile(file);
     rpc.mockResolvedValueOnce({ data: null, error: { message: 'RPC unavailable' } });
-    expect(await cleanupPendingServiceFiles('actor-a', { abandonSubmitted: true })).toMatchObject({ ok: false, error: 'RPC unavailable' });
+    expect(await cleanupPendingServiceFiles('actor-a', { abandonSubmitted: true })).toMatchObject({ ok: false, error: expect.stringContaining('could not be completed') });
     expect(remove).not.toHaveBeenCalled();
     expect(await cleanupPendingServiceFiles('actor-a', { abandonSubmitted: true })).toEqual({ ok: true, removed: 1, cleared: 1, deleted: 1, failed: 0, remaining: 0 });
   });

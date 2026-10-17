@@ -1,5 +1,6 @@
 import type { ReleaseNoticeAcknowledgementResult, SecureReleaseNoticeRuntime } from './secureWorkspace';
 import { readReleaseNoticeResponse } from './secureReleaseNoticeResponse';
+import { userFacingText } from './userFacingMessage';
 
 export const requestReleaseNotice = async (noticeId: string, acknowledge: boolean, runtime: SecureReleaseNoticeRuntime): Promise<ReleaseNoticeAcknowledgementResult> => {
   const { cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, commandErrorCode, SyncRequestTimeoutError } = runtime;
@@ -24,6 +25,6 @@ export const requestReleaseNotice = async (noticeId: string, acknowledge: boolea
         : failure,
     };
   }
-  if (result.error) return { ok: false, code: isAuthError(result.error) ? 'FORBIDDEN' : commandErrorCode(result.error), error: result.error.message || failure };
+  if (result.error) return { ok: false, code: isAuthError(result.error) ? 'FORBIDDEN' : commandErrorCode(result.error), error: userFacingText(result.error, failure) };
   return readReleaseNoticeResponse(result.data, normalizedNoticeId);
 };

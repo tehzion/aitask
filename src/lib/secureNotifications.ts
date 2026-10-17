@@ -2,6 +2,7 @@ import type { AppNotification, NotificationFeedPage } from '../types';
 import type { MutationResult, NotificationFeedQuery, NotificationReadResponse, SecureNotificationRuntime } from './secureWorkspace';
 import { parseNotification } from './security';
 import { enrichNotificationMetadata } from './notificationCenter';
+import { userFacingText } from './userFacingMessage';
 
 export const createSecureNotifications = (runtime: SecureNotificationRuntime) => {
   const { captureWorkspaceSession, isWorkspaceSessionCurrent, isRecord, cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, entityKey, stable, commandId, commandErrorCode, SyncRequestTimeoutError } = runtime;
@@ -149,7 +150,7 @@ export const createSecureNotifications = (runtime: SecureNotificationRuntime) =>
       return {
         ok: false,
         code,
-        error: result.error.message || 'Unable to update notifications.',
+        error: userFacingText(result.error, 'Unable to update notifications.'),
       };
     }
 
@@ -162,7 +163,7 @@ export const createSecureNotifications = (runtime: SecureNotificationRuntime) =>
       return {
         ok: false,
         code,
-        error: response?.error || 'The notification update was rejected.',
+        error: userFacingText(response?.error, 'The notification update was rejected.'),
       };
     }
 

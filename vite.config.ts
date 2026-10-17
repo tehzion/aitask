@@ -50,6 +50,10 @@ const verifyProductionBackend = (mode: string) => {
     }
     return;
   }
+  const passwordResetBypass = buildEnv.VITE_AITASK_ALLOW_PASSWORD_RESET_BYPASS?.trim().toLowerCase();
+  if (passwordResetBypass && ['1', 'true', 'yes', 'on'].includes(passwordResetBypass)) {
+    throw new Error('Hosted production builds must not enable VITE_AITASK_ALLOW_PASSWORD_RESET_BYPASS.');
+  }
   if (buildEnv.VITE_AITASK_BACKEND !== 'supabase') {
     throw new Error('Production builds require VITE_AITASK_BACKEND=supabase.');
   }

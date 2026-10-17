@@ -35,6 +35,7 @@ import { parseWorkspaceSnapshot } from './security';
 import { supabase } from './supabaseClient';
 import { stripServiceItemPrices } from './serviceManagement';
 import { enMessages, msg } from './messages';
+import { userFacingText } from './userFacingMessage';
 import { useToastStore } from '../store/useToastStore';
 
 export const SECURE_WORKSPACE_ID = 'aitask-main';
@@ -1395,7 +1396,7 @@ const executeCommand = async (
       ? { ok: false, code: 'FORBIDDEN', error: 'Your session expired. Sign in again, then retry the retained change.' }
       : error.code === 'PGRST202'
         ? { ok: false, code: 'RETRY_REQUIRED', error: BACKEND_UPGRADE_REQUIRED_MESSAGE }
-        : { ok: false, code, error: error.message || 'The command could not be confirmed.' };
+        : { ok: false, code, error: userFacingText(error, 'The command could not be confirmed.') };
   }
 
   const response = data as CommandResponse;
@@ -1415,7 +1416,7 @@ const executeCommand = async (
     return {
       ok: false,
       code: response.code || 'RETRY_REQUIRED',
-      error: response.error || 'The command was not applied.',
+      error: userFacingText(response.error, 'The command was not applied.'),
       conflict,
     };
   }

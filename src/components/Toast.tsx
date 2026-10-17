@@ -36,7 +36,7 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
       )}
     >
       <span aria-hidden="true">{iconMap[toast.type]}</span>
-      <p className="min-w-0 flex-1 break-words pr-2 text-sm font-semibold leading-5">{toast.type === 'error' || toast.type === 'warning' ? <SystemMessage message={toast.message} /> : t(toast.message)}</p>
+      <p className="min-w-0 flex-1 break-words pr-2 text-sm font-semibold leading-5"><SystemMessage message={toast.message} /></p>
       <button
         onClick={() => removeToast(toast.id)}
         data-draft-navigation

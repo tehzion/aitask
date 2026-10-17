@@ -4,6 +4,22 @@
 
 **Prepared:** 2026-10-17 · **Project ref (production):** `ohjhwyiffgzyatcmmdql` (from `migration_repair_manifest.review.json`)
 
+## 0. Current follow-up status — 2026-10-17
+
+This document contains historical rollout notes, but the following status supersedes its older pending-migration and access assumptions for the current release gate:
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Supabase management access | **Staging blocked** | The connected account lists only the production organization `vercel_icfg_ntT6WWmEZtbeszivo9KBzcf3` and projects `ohjhwyiffgzyatcmmdql` / inactive `aweyluvuvydbwdanodqe`; documented staging project `dyaxtloducpgjoxuaszk` is not listed and direct project queries return permission denial. |
+| CLI authentication | **Blocked** | Repository CLI `2.117.0` is installed, but `supabase projects list --output-format json` returns `LegacyPlatformAuthRequiredError: Access token not provided`. No token was supplied or created during this follow-up. |
+| CLI linkage | **Production only** | `supabase/.temp/project-ref` and `linked-project.json` point to `ohjhwyiffgzyatcmmdql`; no staging link exists. |
+| Direct staging PostgreSQL access | **Unavailable** | No `STAGING_SUPABASE_DB_URL`, database password, service credential, or `STAGING_*` process configuration is available in this workspace. A direct database permission test was therefore not attempted. |
+| Production technical remediation | **Applied and verified** | `20261017095621 audit_value_history` and `20261017095628 align_service_cycle_cancel_rpc` were applied to `ohjhwyiffgzyatcmmdql`. Read-only checks confirmed the table/RLS/triggers/grants and `Cancelled` RPC support; no production business rows changed. |
+| Audit-history retention guard | **Pending approval** | Local `20261017140000_audit_history_retention_guards_followup.sql` prevents member deletion from mutating immutable history and restricts workspace deletion. It is not applied because it changes deletion/retention semantics and requires owner approval. |
+| Production safety | **Preserved** | The production URL in local environment files was not used for destructive, role-authenticated, or migration tests. |
+
+The root cause is an authorization/configuration gap, not evidence that the staging database is unavailable: the current Supabase account lacks visible project membership for staging, the CLI has no management access token, and the workspace has no direct staging connection configuration. Restore staging project membership and provision scoped staging credentials before rerunning the release gates.
+
 ---
 
 ## 1. Database architecture
@@ -25,7 +41,7 @@
 
 ## 3. Migrations
 
-- **109 non-empty migration files** (`pnpm verify:migrations` green).
+- **Current repository:** 114 non-empty migration files (`pnpm verify:migrations` green in the follow-up workspace).
 - **Production verified through** `20261016150000_service_transition_guard` (prod alias `20261016153759`) per `manifest.auditP0P1ProductionRollout`.
 - **Pending (NOT applied to production):**
   1. `20261016160000_pm_client_scope_and_ownership` — **P1 security** (closes PM cross-company rename/edit/delete/re-own in the SECURITY DEFINER service RPC; adds `BEFORE UPDATE/DELETE` ownership-freezing trigger). pgTAP: `supabase/tests/database/pm_client_scope_and_ownership.test.sql`.

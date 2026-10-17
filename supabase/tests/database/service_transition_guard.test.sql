@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(4);
+select plan(5);
 
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 values('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-0000000007b1','authenticated','authenticated','guard-pm@aitask.local','',now(),'{}','{}',now(),now());
@@ -27,6 +27,11 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000007b1'
 set local role authenticated;
 
 select is((pg_temp.set_cycle('guard-draft','Published')->>'ok')::boolean,true,'a Draft cycle may be published');
+select is((public.aitask_set_service_cycle_status(
+  'service-guard-test', gen_random_uuid(), 'guard-published',
+  (select version from public.aitask_entities where workspace_id='service-guard-test' and entity_type='service_cycle' and entity_id='guard-published'),
+  'Cancelled'
+)->>'ok')::boolean,true,'the intent-specific cycle RPC permits an allowed Published to Cancelled transition');
 select is((pg_temp.set_cycle('guard-draft','Completed')->>'ok')::boolean,false,'a Published cycle cannot jump to Completed without delivered work');
 select is((pg_temp.set_cycle('guard-draft','Draft')->>'ok')::boolean,false,'a Published cycle cannot return to Draft');
 select is((pg_temp.set_cycle('guard-published','Draft')->>'ok')::boolean,false,'a Published cycle with no delivered work cannot be reverted to Draft');

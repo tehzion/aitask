@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(17);
+select plan(18);
 
 select ok(
   not has_function_privilege('anon', 'public.aitask_app_state_health()', 'EXECUTE'),
@@ -83,6 +83,13 @@ select ok(
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'aitask_entities'
   ),
   'Realtime publishes custom role updates for an affected member to refresh their access view'
+);
+select ok(
+  exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'aitask_workspaces'
+  ),
+  'Realtime publishes workspace revisions as a cross-role invalidation signal'
 );
 
 select * from finish();

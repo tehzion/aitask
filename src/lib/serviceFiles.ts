@@ -2,6 +2,7 @@ import { assertWorkspaceSession, captureWorkspaceSession, isWorkspaceSessionCurr
 import type { AttachmentRef } from '../types';
 import { shouldUseSecureSupabase, supabase } from './supabaseClient';
 import { getLocalServiceDemoFile } from '../mock/localServiceDemo';
+import { userFacingText } from './userFacingMessage';
 
 export const SERVICE_FILES_BUCKET = 'client-service-files';
 export const SERVICE_FILE_MAX_BYTES = 100 * 1024 * 1024;
@@ -243,13 +244,13 @@ export const uploadServiceFile = async (input: {
     if (error) {
       // A definitive rejection means no object was written.
       forgetPendingServiceFile(attachment);
-      return { ok: false, error: error.message || 'The file could not be uploaded.' };
+      return { ok: false, error: userFacingText(error, 'The file could not be uploaded.') };
     }
     assertWorkspaceSession(sessionToken);
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : 'The file could not be uploaded.',
+      error: userFacingText(error, 'The file could not be uploaded.'),
     };
   }
   return {
@@ -283,10 +284,10 @@ export const reconcileServiceUpload = async (attachment: AttachmentRef, abandon 
       new Promise<never>((_, reject) => { timeout = setTimeout(() => { controller.abort(); reject(new Error('Upload reconciliation timed out. The file was retained.')); }, 20000); }),
     ]);
     assertWorkspaceSession(token);
-    if (error || !data?.ok) return { ok: false as const, error: error?.message || data?.error || 'Upload reconciliation is unavailable. The file was retained.' };
+    if (error || !data?.ok) return { ok: false as const, error: userFacingText(error || data?.error, 'Upload reconciliation is unavailable. The file was retained.') };
     if (!['referenced', 'missing', 'abandoned', 'unresolved', 'committed-unreferenced'].includes(data.status)) return { ok: false as const, error: 'Upload confirmation is unresolved. The file was retained to protect saved activity.' };
     return { ok: true as const, status: data.status as string };
-  } catch (error) { return { ok: false as const, error: error instanceof Error ? error.message : 'Upload reconciliation is unavailable. The file was retained.' }; }
+  } catch (error) { return { ok: false as const, error: userFacingText(error, 'Upload reconciliation is unavailable. The file was retained.') }; }
   finally { if (timeout) clearTimeout(timeout); token.signal.removeEventListener('abort', abort); }
 };
 
@@ -305,9 +306,9 @@ export const removeServiceFile = async (attachment: AttachmentRef, options: { ab
   try {
     const { error } = await supabase.storage.from(attachment.bucket).remove([attachment.path]);
     assertWorkspaceSession(token);
-    if (error) return { ok: false as const, error: error.message || 'The uploaded file could not be removed.' };
+    if (error) return { ok: false as const, error: userFacingText(error, 'The uploaded file could not be removed.') };
     forgetPendingServiceFile(attachment); return { ok: true as const, deleted: true };
-  } catch (error) { return { ok: false as const, error: error instanceof Error ? error.message : 'The uploaded file could not be removed.' }; }
+  } catch (error) { return { ok: false as const, error: userFacingText(error, 'The uploaded file could not be removed.') }; }
 };
 
 export const cleanupPendingServiceFiles = async (actorId?: string, options: { abandonSubmitted?: boolean; commandIds?: string[]; includeUnsubmitted?: boolean } = {}) => {
@@ -354,14 +355,14 @@ export const downloadServiceFile = async (attachment: AttachmentRef, options: { 
     }
     const { data, error } = await supabase.storage.from(attachment.bucket).download(attachment.path);
     assertWorkspaceSession(token);
-    if (error || !data) return { ok: false as const, error: error?.message || 'The file could not be downloaded.' };
+    if (error || !data) return { ok: false as const, error: userFacingText(error, 'The file could not be downloaded.') };
     if (options.isCurrent && !options.isCurrent()) return { ok: false as const, error: 'The download was cancelled because the workspace changed.' };
     triggerBrowserDownload(data, attachment.fileName);
     return { ok: true as const };
   } catch (error) {
     return {
       ok: false as const,
-      error: error instanceof Error ? error.message : 'The file could not be downloaded.',
+      error: userFacingText(error, 'The file could not be downloaded.'),
     };
   }
 };

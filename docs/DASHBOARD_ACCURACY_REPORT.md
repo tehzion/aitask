@@ -1,52 +1,40 @@
-# Dashboard Accuracy Report — AiTask
+# Dashboard Accuracy Report
 
 **Date:** 2026-10-17
 
-## 1. Metric → source → calculation map
+## Metric source and calculation map
 
-| Metric | Source | Calculation | Tested |
-| --- | --- | --- | --- |
-| Task progress % | `tasks` | `getTaskProgress(task, users)` (`taskProgress.ts`) | `taskProgress.test.ts` |
-| Deliverable status | `deliverables` + `tasks` | `resolveDeliverableStatus(deliverable, tasks, cycles)` | `serviceManagement.test.ts` |
-| Plan delivery summary | `cycles`/`deliverables`/`visibleTasks` | `getPlanDeliverySummary` (`dashboardData.ts:35`) | `dashboardData.test.ts` |
-| Company activity | `visibleTasks` | `getCompanyTaskActivity` (completed-this-month, unassigned, per-handler open) | `dashboardData.test.ts` |
-| Staff metrics | `assignedTasks` | `getStaffDashboardMetrics` (`staffDashboard.ts:8`) | `staffDashboard.test.ts` (14) |
-| PM review queues | `tasks` | `getPortfolioReviewQueues` (`pmDashboard.ts:6`) | `pmDashboard.test.ts` |
-| "Awaiting review" | `tasks` | `isAwaitingClientReview` / `isAwaitingInternalReview` | `clientPortal.test.ts` |
-| Deadline/overdue | `dueDate` + today | `getRelativeDueDateString`, `buildStaffWorkQueue` | `staffWorkspace.test.ts` |
+| Dashboard metric | Source | Canonical calculation | Archived/deleted behavior | Test evidence |
+| --- | --- | --- | --- | --- |
+| Task completion/progress | visible `tasks` + users | `getTaskProgress` and `deriveServiceProgress` | inaccessible/deleted tasks leave the projection | `taskProgress.test.ts`, `dashboardData.test.ts` |
+| Project totals | visible `tasks` grouped by `projectId` | derived counts; no stored counter authority | deleted/unlinked tasks are excluded | `dashboardData.test.ts`, project audit tests |
+| Deliverable status | deliverables, tasks, cycles | `resolveDeliverableStatus` | invalid links are flagged/removed, not counted as completed | service/deliverable tests |
+| Pending internal review | visible tasks | `isAwaitingInternalReview` | only authorised reviewer scope is included | workflow/review tests |
+| Pending client review | visible tasks/client projection | `isAwaitingClientReview` | client projection exposes only permitted fields | client portal tests |
+| Overdue/upcoming | task `dueDate` + workspace business date | `useLocalToday`, calendar-safe date helpers | cancelled/completed tasks follow shared open/completed predicates | calendar/staff workspace tests |
+| Staff workload | assigned/created visible tasks | `getStaffDashboardMetrics` and workload selectors | reassignment moves counts from old to new assignee | `staffDashboard.test.ts`, `taskAssignment.test.ts` |
+| PM portfolio | owned client/project/task scope | id-first portfolio scope helpers | foreign client-name collisions do not expand scope | `pmDashboard.test.ts`, `pmPortfolioIdScope.test.ts` |
+| HOD department workload | department membership + task scope | `isMemberInDepartment` and department selectors | changed departments narrow the next snapshot | HOD permission/sync tests |
+| SA system totals | all authorised workspace collections | same canonical selectors without portfolio/department narrowing | deleted rows absent after committed refresh | dashboard/report tests |
+| Notification count | server notification feed/read state | unread count from feed RPC, optimistic local receipt until confirmed | restricted/deleted routes do not remain actionable | notification and secure workspace tests |
 
-## 2. Role-scoped accuracy
+## Role filters
 
-| Dashboard | Role filter | Evidence |
-| --- | --- | --- |
-| Super Admin | `isBossKoo` → all records | `dashboardData.test.ts` |
-| Project Manager | `getOwnedPortfolioClientKeys` / `isTaskInOwnedPortfolio` (id-first) | `pmDashboard.test.ts`, `pmPortfolioIdScope.test.ts`, `pmDuplicateClientScope.test.ts` |
-| HOD | `isDepartmentScopedUser` + `isMemberInDepartment` | `hodPermissionParity.test.ts` (12) |
-| Staff | `assignedTo === user.id` + `createdBy` | `staffDashboard.test.ts` (14) |
+- Super Admin: workspace-wide authorised view.
+- Project Manager: portfolio/client/project scope; ownership is id-first.
+- HOD: department-scoped task/review visibility.
+- Staff: assigned/created/permission-scoped work.
+- Client projection: client-owned portal payload, separate from internal entity visibility.
 
-## 3. Specific accuracy guarantees
+## Accuracy guarantees
 
-- **No hardcoded/placeholder stats** — all metrics derive from store tasks/clients/projects/deliverables/cycles. (`Project.totalTasks/completedTasks` were removed; counts are derived.)
-- **Archived/deleted handling** — `getPlanDeliverySummary`/`getCompanyTaskActivity` only count `visibleTasks` (permission-filtered); deleted records are absent from the store after commit. `getDeliveryReviewRecords` flags invalid/unlinked links rather than silently miscounting.
-- **Reassignment** — workload/activity recomputed from `assignedTo`, so both old and new assignees' counts update via `deriveServiceProgress`.
-- **Date/timezone** — `useLocalToday()` (midnight timer + focus/visibility refresh) drives date-dependent metrics; `startOfDay`/`differenceInCalendarDays` for cycle/contract math (calendar-safe).
-- **Change triggers update** — every mutation calls `set()` with `...deriveServiceProgress(...)` (or the relevant reducer), so dashboards reading the store react immediately.
+- No production dashboard statistic is hardcoded or placeholder-derived.
+- Reassignment recalculates both old and new workload counts from the task collection.
+- Deletion updates task/deliverable links and removes stale task-linked notification routes.
+- Status, completion, review, and deadline semantics are shared across Dashboard, Tasks, Calendar, Approvals, Delivery Tracker, and Reports.
+- Date-only business fields are calculated in the workspace calendar rather than by an arbitrary browser timezone.
+- A committed workspace revision causes every active authorized session to reload the latest snapshot; polling and visibility/focus/reconnect are fallback reconciliation paths.
 
-## 4. Prior dashboard defects — resolved
+## Verification result
 
-| Defect | Status |
-| --- | --- |
-| "Awaiting client review" counted 3 ways (DBG-02) | FIXED — canonical selector |
-| Project totals permanent zeros (DBG-04) | FIXED — derived |
-| Boss/PM/HOD dashboard disagreement | FIXED — `boss-dashboard-accuracy-audit`, `staff-dashboard-accuracy-audit` remediations |
-| Delivery-tracker "review" semantic drift (DA-02) | Accepted as intended (view-neutral label) |
-
-## 5. Verification
-
-- `dashboardData.test.ts` (21), `staffDashboard.test.ts` (14), `pmDashboard.test.ts`, `hodPermissionParity.test.ts` (12) — all PASS.
-- Full gate: `pnpm test` **105 files / 814 tests** PASS.
-- **Not executed**: live DB-vs-display comparison (no live Supabase session in this environment); the manifest records prior live verification (`auditP0P1ProductionRollout.liveVerification`, business hashes unchanged after migration).
-
-## 6. Conclusion
-
-Dashboard metrics use canonical selectors fed by a single `deriveServiceProgress` reducer, with correct role-scoping, archived/deleted handling, and local-date awareness. **No dashboard-accuracy defect was found.**
+Automated dashboard and selector coverage passes. Source review confirms role filters and mutation reducers. A live database-to-four-browser comparison was not run in this session; live cells are therefore `NOT VERIFIED`, and no production data was changed.

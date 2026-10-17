@@ -7,7 +7,6 @@ import { DeliveryProgress } from '../components/DeliveryProgress';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
-import { hasUnsavedChanges } from '../lib/unsavedChanges';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React from "react";
 import {
@@ -450,7 +449,7 @@ const OperationsClientWorkspace = () => {
       setMessage('The pending add-on is no longer available. Review your draft before saving again.'); return;
     }
     setMessage(msg('feedback.addonAdded'), 'success');
-    setAddon(current => ({ ...current, name: '', platforms: '', quantity: 1, unitPrice: 0 }));
+    setAddon({ name: '', platforms: '', quantity: 1, unitPrice: 0, billingMode: 'one_off', effectiveFrom: addonDefaultDate, targetCycleId: '' });
     setAddonSheetOpen(false);
   };
 
@@ -524,7 +523,6 @@ const OperationsClientWorkspace = () => {
       />
       <div className="sticky top-[4.5rem] z-20 border-b border-line/80 bg-canvas/95 py-3 backdrop-blur-md">
         <SegmentedTabs<Tab> items={tabs} value={tab} onChange={next => {
-          if (next !== tab && tab === 'plan' && hasUnsavedChanges() && !window.confirm(t('Discard unsaved changes?'))) return;
           setTab(next);
         }} label={t("Client workspace")} idPrefix={CLIENT_WORKSPACE_TABS_ID} />
       </div>

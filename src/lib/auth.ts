@@ -78,11 +78,14 @@ export const canLoginWithSeedAccount = (userId: string) => (
 export const canUsePasswordResetBypass = () => {
   const configured = env('VITE_AITASK_ALLOW_PASSWORD_RESET_BYPASS');
   if (configured) {
-    if (isEnabled(configured)) return true;
+    // An explicit bypass flag is only meaningful for a local build running on
+    // a local host.  Never let a hosted production bundle opt into this path
+    // through an accidentally forwarded environment variable.
+    if (isEnabled(configured)) return (import.meta.env.DEV || isLocalBackendBuild) && isLocalHost();
     if (isDisabled(configured)) return false;
   }
 
-  return import.meta.env.DEV && isLocalHost();
+  return (import.meta.env.DEV || isLocalBackendBuild) && isLocalHost();
 };
 
 export const hasPasswordResetBypass = (userId?: string) => {

@@ -65,9 +65,13 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await pauseDialog.getByRole('button', { name: 'Pause plan' }).click();
 
   await page.getByRole('tab', { name: 'Cycles', exact: true }).click();
-  await expect(page.getByText('Included', { exact: true })).toBeVisible();
+  const billingPeriod = page.getByRole('combobox', { name: 'Billing period' });
+  const publishedPeriod = billingPeriod.locator('option').filter({ hasText: /Published/ }).first();
+  await billingPeriod.selectOption(await publishedPeriod.getAttribute('value'));
+  const cyclesPanel = page.getByRole('tabpanel', { name: 'Cycles', exact: true });
+  await expect(cyclesPanel.getByText('Included', { exact: true })).toBeVisible();
   await expect(page.getByRole('term').filter({ hasText: /^Delivered$/ })).toBeVisible();
-  await expect(page.getByText('Remaining', { exact: true })).toBeVisible();
+  await expect(cyclesPanel.getByText('Remaining', { exact: true })).toBeVisible();
   await expect(page.getByText('10 linked task(s) · Short Video Production', { exact: true })).toBeVisible();
   await expect(page.getByText('Invoice', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Outstanding', { exact: true })).toHaveCount(0);

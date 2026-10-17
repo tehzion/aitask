@@ -81,12 +81,13 @@ test('day/night mode and keyboard shortcuts remain accessible', async ({ page })
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Open menu' }).click();
   const navigation = page.locator('nav[aria-label="Primary navigation"]');
+  const firstNavigationLink = navigation.getByRole('link').first();
   await expect(navigation).toHaveAttribute('aria-hidden', 'false');
-  await expect(navigation.getByRole('link', { name: 'Dashboard' })).toBeFocused();
+  await expect(firstNavigationLink).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(navigation.getByRole('button', { name: 'Close navigation menu' })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(navigation.getByRole('link', { name: 'Dashboard' })).toBeFocused();
+  await expect(firstNavigationLink).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(navigation).toHaveAttribute('aria-hidden', 'true');
   await expect(navigation).toHaveAttribute('inert', '');

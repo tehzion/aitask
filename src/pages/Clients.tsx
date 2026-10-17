@@ -1466,6 +1466,7 @@ const Clients: React.FC = () => {
         project={editingProject}
         initialClientId={initialProjectClientId}
         onClose={closeProjectEditor}
+        onClientCreated={() => navigate('/projects', { replace: true })}
       />
       {planClientId && <CreateClientPlanModal
         client={clientProfiles.find(client => client.id === planClientId)}

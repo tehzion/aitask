@@ -117,6 +117,7 @@ import {
   saveSecureMemberPermissions,
   saveSecureMemberRole,
   saveSecureWorkspace,
+  SECURE_WORKSPACE_ID,
   type MutationConflict,
   type MutationErrorCode,
   type SecureCommandType,
@@ -125,8 +126,10 @@ import {
   resolveAuthEmail,
   shouldUseSecureSupabase,
   subscribeToCurrentMemberAccessChanges,
+  subscribeToWorkspaceRevisionChanges,
   supabase,
 } from '../lib/supabaseClient';
+import { userFacingText } from '../lib/userFacingMessage';
 import {
   clearPasswordSetupMode,
   getPasswordSetupMode,
@@ -469,14 +472,13 @@ const profileEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9\s\-()]{7,20}$/;
 
 const getFunctionErrorMessage = async (error: unknown, fallback: string) => {
-  if (!error || typeof error !== 'object') return fallback;
+  if (!error || typeof error !== 'object') return userFacingText(error, fallback);
   const context = (error as { context?: unknown }).context;
   if (typeof Response !== 'undefined' && context instanceof Response) {
-    const payload = await context.clone().json().catch(() => null) as { error?: unknown } | null;
-    if (typeof payload?.error === 'string' && payload.error.trim()) return payload.error;
+    const payload = await context.clone().json().catch(() => null) as { error?: unknown; message?: unknown } | null;
+    if (payload?.error || payload?.message) return userFacingText(payload.error || payload.message, fallback);
   }
-  const message = (error as { message?: unknown }).message;
-  return typeof message === 'string' && message.trim() ? message : fallback;
+  return userFacingText(error, fallback);
 };
 
 const isValidIsoDate = (value: string) => {
@@ -1157,7 +1159,7 @@ export const useStore = create<StoreState>()(
               message: hasRetainedChange
                 ? "We couldn't reach the server. Your unsaved change is kept here — please retry it."
                 : "We couldn't reach the server. You can keep working; changes will sync when you're back online.",
-              error: error instanceof Error ? error.message : "We couldn't load your workspace. Please try again.",
+              error: userFacingText(error, "We couldn't load your workspace. Please try again."),
             }
           });
         }
@@ -1279,7 +1281,7 @@ export const useStore = create<StoreState>()(
               isSaving: false,
               pendingMutations: state.backend.hasLocalChanges ? 1 : 0,
               message: "We couldn't confirm your save yet. Your change is kept safe — please retry.",
-              error: error instanceof Error ? error.message : "We couldn't confirm your save. Please try again.",
+              error: userFacingText(error, "We couldn't confirm your save. Please try again."),
               errorCode: 'RETRY_REQUIRED',
             }
           }));
@@ -1456,7 +1458,7 @@ export const useStore = create<StoreState>()(
               status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
               isPulling: false,
               message: 'Unable to check for the latest updates.',
-              error: error instanceof Error ? error.message : "We couldn't load your workspace. Please try again.",
+              error: userFacingText(error, "We couldn't load your workspace. Please try again."),
             }
           }));
         } finally {
@@ -1479,7 +1481,7 @@ export const useStore = create<StoreState>()(
         try { revision = await loadSecureWorkspaceRevision(); }
         catch (error) {
           if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
-          const message = error instanceof Error ? error.message : 'Unable to load the latest workspace right now. Try again shortly.';
+          const message = userFacingText(error, 'Unable to load the latest workspace right now. Try again shortly.');
           apply(state => ({ backend: { ...state.backend, isSaving: false, error: message, message } }));
           return { ok: false, error: message };
         }
@@ -1963,7 +1965,7 @@ export const useStore = create<StoreState>()(
             }
             // Rate limits, SMTP and configuration failures must not be reported
             // as a sent email; Supabase already keeps unknown emails silent.
-            return { ok: false, error: error.message };
+            return { ok: false, error: userFacingText(error, 'The recovery service could not be reached. Please try again.') };
           }
           return { ok: true };
         } catch {
@@ -5780,6 +5782,8 @@ export const startBackendAutoSync = () => {
   backendAutoSyncStarted = true;
   let accessRealtimeCleanup: (() => void) | null = null;
   let accessRealtimeKey: string | null = null;
+  let workspaceRealtimeCleanup: (() => void) | null = null;
+  let workspaceRealtimeKey: string | null = null;
   const accessRefresh = createAccessRefreshCoordinator(
     () => {
       const state = useStore.getState();
@@ -5792,6 +5796,7 @@ export const startBackendAutoSync = () => {
     },
     () => useStore.getState().pullBackendNow({ force: true, silent: true }),
   );
+  const reportRealtimeFailure = () => useToastStore.getState().addToast(msg('errors.realtimeUnavailable'), 'warning');
 
   const syncAccessRealtime = () => {
     const currentUser = useStore.getState().currentUser;
@@ -5809,7 +5814,19 @@ export const startBackendAutoSync = () => {
       currentUser?.customRoleId,
       builtinRoleId,
       accessRefresh.request,
+      reportRealtimeFailure,
     );
+  };
+
+  const syncWorkspaceRealtime = () => {
+    const currentUser = useStore.getState().currentUser;
+    const key = shouldUseSecureSupabase() && currentUser ? SECURE_WORKSPACE_ID : null;
+    if (key === workspaceRealtimeKey) return;
+    workspaceRealtimeCleanup?.();
+    workspaceRealtimeCleanup = null;
+    workspaceRealtimeKey = key;
+    if (!key) return;
+    workspaceRealtimeCleanup = subscribeToWorkspaceRevisionChanges(key, accessRefresh.request, reportRealtimeFailure);
   };
 
   // A role, permission, department, or custom-role change can invalidate a
@@ -5844,12 +5861,17 @@ export const startBackendAutoSync = () => {
   };
 
   syncAccessRealtime();
+  syncWorkspaceRealtime();
   const unsubscribeAccessRealtime = useStore.subscribe((state, previousState) => {
     if (
       state.currentUser?.authUserId !== previousState.currentUser?.authUserId
       || state.currentUser?.customRoleId !== previousState.currentUser?.customRoleId
       || state.currentUser?.role !== previousState.currentUser?.role
     ) syncAccessRealtime();
+
+    if (state.currentUser?.authUserId !== previousState.currentUser?.authUserId) {
+      syncWorkspaceRealtime();
+    }
 
     const previousSignature = accessSignature(previousState.currentUser);
     const nextSignature = accessSignature(state.currentUser);
@@ -6001,6 +6023,9 @@ export const startBackendAutoSync = () => {
     accessRealtimeCleanup?.();
     accessRealtimeCleanup = null;
     accessRealtimeKey = null;
+    workspaceRealtimeCleanup?.();
+    workspaceRealtimeCleanup = null;
+    workspaceRealtimeKey = null;
     accessRefresh.reset();
     window.clearInterval(pullInterval);
     window.removeEventListener('focus', pullLatest);

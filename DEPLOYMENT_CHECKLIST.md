@@ -1,16 +1,31 @@
 # Deployment Checklist — AiTask
 
-> Historical checklist. The owner authorized the audit-branch push and Supabase rollout and explicitly waived a fresh backup for this release. See [DEPLOYMENT_REPORT.md](DEPLOYMENT_REPORT.md) for execution results and outstanding gates; this does not waive future backup or production-promotion approval requirements.
+> Current release-preparation checklist. Historical execution notes below are retained for traceability. No production migration, deployment, or push was performed in the current turn because retention approval, backup/recovery evidence, and Vercel environment verification remain incomplete.
 
 **Prepared:** 2026-10-17 · **For:** incoming agent (do NOT execute without owner approval + backup/preflight gate)
+
+## Current follow-up gate state
+
+As of the latest verification, this checklist remains blocked for production promotion:
+
+- **Staging Supabase access:** BLOCKED. The connected account does not list project `dyaxtloducpgjoxuaszk`; direct connector queries return permission denial.
+- **CLI access:** BLOCKED. The repository-pinned CLI is installed but has no `SUPABASE_ACCESS_TOKEN` or authenticated profile. The local Supabase link points to production only.
+- **Disposable database testing:** PASS. The local Supabase rollout completed with 67 database files and 1,032 pgTAP assertions, including append-only history and foreign-key behavior. This is not evidence of production compatibility.
+- **Staging/live role testing:** BLOCKED/NOT VERIFIED. Staging is intentionally skipped and no authenticated four-role production sessions were available.
+- **Lifecycle approval:** BLOCKED. Member deactivation, project archive/reopen, and client archive rules require owner approval. See [LIFECYCLE_DECISIONS.md](LIFECYCLE_DECISIONS.md).
+- **Repository migrations:** 114 non-empty files pass validation. Production has 112 recorded migrations through aliases `20261017095621 audit_value_history` and `20261017095628 align_service_cycle_cancel_rpc`, verified read-only. Pending repository migrations are `20261017091031_workspace_revision_realtime` and `20261017140000_audit_history_retention_guards_followup.sql`; the latter remains pending explicit retention/deletion approval. See the [current release manifest](supabase/preflight/aitask_release_manifest_20261017.json).
+
+Do not substitute production credentials or the production project for staging. Do not apply lifecycle or otherwise unreviewed migrations until the relevant business decisions and release approvals are explicit. The two confirmed technical migrations above are already applied and must not be replayed.
 
 ---
 
 ## 1. Pre-deployment checks
 
-- [ ] Working tree clean; on `codex/audit-p0p1-2026-10-16`.
-- [ ] `pnpm check` / `pnpm lint` / `pnpm verify:i18n` / `pnpm test` / `pnpm build` all green.
-- [ ] `pnpm verify:migrations` — 109 non-empty.
+- [x] Release commit prepared on `codex/audit-p0p1-2026-10-16`; temporary `.codex-manifest-test.txt` is excluded.
+- [x] `pnpm check` / `pnpm lint` / `pnpm verify:i18n` / full unit suite / safe `pnpm build` all green.
+- [x] Full Playwright E2E: 324 passed, 0 failed, 0 skipped, 0 interrupted.
+- [x] `pnpm verify:migrations` — 114 non-empty.
+- [ ] `pnpm verify:release-db-alignment` — intentionally blocked until the two pending migrations are approved and applied in production.
 - [ ] Confirm production migration state against `supabase_migrations.schema_migrations` (do NOT trust the manifest alone).
 - [ ] Create a fresh production backup (Free plan has no scheduled backups — see `docs/production-rpc-mismatch-recovery.md`).
 
@@ -27,7 +42,7 @@
 4. **Vercel deploy** (reviewed `master` merge → auto-deploy; or tagged release workflow).
 5. **Post-deployment verification** (§4).
 
-> Frontend fails closed (read-only) on schema mismatch, so migrations MUST precede a frontend that needs them. Both pending migrations are backward-compatible (trigger/data-only); no expected downtime.
+> Frontend fails closed (read-only) on schema mismatch, so migrations MUST precede a frontend that needs them. The retention migration changes deletion semantics and is not treated as backward-compatible or deployable without explicit approval.
 
 ## 3. Migration verification
 
@@ -63,6 +78,9 @@
 ## 6. Final conditions for GO
 
 - [ ] Both pending migrations applied + verified.
+- [ ] Current audit-history and service-cycle compatibility migrations applied and verified in staging.
 - [ ] Edge functions redeployed.
 - [ ] pgTAP + e2e + live RLS/grants re-check pass.
+- [ ] Four-role authenticated staging sessions and simultaneous concurrency checks pass.
+- [ ] Member and project/client lifecycle decisions approved and implemented.
 - [ ] Product sign-off recorded (approval-ordering policy — **already signed off 2026-10-17**).

@@ -164,11 +164,13 @@ test('sidebar logout and same-tab login restart synchronization listeners', asyn
 test('a dirty revision requires confirmation before changing tabs', async ({ page }) => {
   await seedPlan(page);
   await page.getByLabel('Plan name', { exact: true }).fill('Unsaved draft');
-  page.once('dialog', dialog => dialog.dismiss());
+  const dismissNavigationPrompt = page.waitForEvent('dialog').then(dialog => dialog.dismiss());
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  await dismissNavigationPrompt;
   await expect(page.getByLabel('Plan name', { exact: true })).toHaveValue('Unsaved draft');
-  page.once('dialog', dialog => dialog.accept());
+  const acceptNavigationPrompt = page.waitForEvent('dialog').then(dialog => dialog.accept());
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  await acceptNavigationPrompt;
   await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 
@@ -191,14 +193,14 @@ test('browser back and programmatic palette navigation preserve a declined draft
   // Build a same-document router history entry; page.goto creates a new
   // document that React Router's navigation blocker cannot intercept.
   await page.getByRole('link', { name: 'Companies', exact: true }).click();
-  await page.locator(`a[href="/clients/${clientId}"]`).first().click();
+  await page.locator(`main a[href="/clients/${clientId}"]:visible`).first().click();
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
   await page.getByLabel('Plan name', { exact: true }).fill('Protected draft');
   let prompts = 0;
   page.on('dialog', async dialog => { prompts += 1; await dialog.dismiss(); });
   await page.evaluate(() => history.back());
   await expect.poll(() => prompts).toBe(1);
-  await expect(page).toHaveURL(new RegExp(`/clients/${clientId}$`));
+  await expect(page).toHaveURL(new RegExp(`/clients/${clientId}(?:\\?tab=plan)?$`));
   await expect(page.getByLabel('Plan name', { exact: true })).toHaveValue('Protected draft');
   await page.keyboard.press('Escape');
   await page.getByLabel('Plan name', { exact: true }).blur();
@@ -208,7 +210,7 @@ test('browser back and programmatic palette navigation preserve a declined draft
   await palette.getByRole('textbox').fill('Notifications');
   await page.keyboard.press('Enter');
   await expect.poll(() => prompts).toBe(2);
-  await expect(page).toHaveURL(new RegExp(`/clients/${clientId}$`));
+  await expect(page).toHaveURL(new RegExp(`/clients/${clientId}(?:\\?tab=plan)?$`));
 });
 
 test('recoverable drafts survive reload and reconcile against the latest baseline', async ({ page }) => {
