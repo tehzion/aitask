@@ -1,12 +1,14 @@
 # AiTask Production Deployment Report
 
 **Assessment date:** 2026-10-17 (Asia/Kuala_Lumpur)
-**Release state:** **DATABASE APPLIED — APPLICATION DEPLOYMENT IN PROGRESS**
-**Recommendation:** Release the verified application commit; mandatory recovery, configuration, approval, and authenticated smoke prerequisites are satisfied.
+**Release state:** **DEPLOYED WITH KNOWN LIMITATIONS**
+**Production URL:** <https://aitask-virid.vercel.app>
+**Released commit:** `a56517420947d6ed6e1ef061be5a18772ac7b326`
+**Verified:** 2026-10-17T15:38:36Z (23:38 Asia/Kuala_Lumpur)
 
 ## Executive result
 
-The local code/database/browser gates are complete. Supabase CLI reauthentication succeeded, a consistent PostgreSQL 17 archive was restored and verified, Vercel configuration was verified through the local owner session, and four isolated production QA identities passed ordinary authentication and page checks. Both approved production migrations are now applied and verified. Application deployment follows this database-compatible state.
+AiTask is live on the verified release commit. Recovery was demonstrated before both approved database migrations were applied. The existing release branch was pushed, a production build was verified, and Vercel promotion assigned it to the existing live alias. Post-promotion ordinary-user smoke checks passed for all four roles. The four QA accounts were then removed; original business data and original member checksums are unchanged.
 
 Applied-database evidence is recorded in [`supabase/preflight/aitask_release_manifest_20261017_production.json`](supabase/preflight/aitask_release_manifest_20261017_production.json). Historical manifests are retained for traceability.
 
@@ -32,6 +34,8 @@ The disposable database verification specifically covered append-only audit hist
 - Remote: `origin` → `git@github.com:tehzion/aitask.git`.
 - Production branch: `master` at `fd45ca9fd544c4daa1f105cb9b14655b66dd11ad`.
 - Working branch: `codex/audit-p0p1-2026-10-16` at preparation start `c46bbcbe05746e20792cc6e62eb478906b48cf0b`.
+- Released/pushed source: `a56517420947d6ed6e1ef061be5a18772ac7b326`; the remote SHA was confirmed after push.
+- Production was deployed explicitly from this existing audited branch through the authenticated Vercel CLI, then promoted. Protected `master` was not merged or changed; no branch protections were modified. Subsequent report-only commits do not change the released build's provenance.
 - Release implementation commit: `ee54922c1bb3bc510886ea15ec8aa701011d58ab` (`fix(release): close P1 verification blockers`).
 - Gate-evidence commit: `ebdcf39` (`chore(release): finalize production gate evidence`), containing the current retention privilege patch, regression assertion, superseding manifest, and updated reports.
 - The documentation follow-up commit records the implementation and gate-evidence hashes in the report.
@@ -57,18 +61,22 @@ Postflight verified Realtime publication, one validated workspace FK using `ON D
 
 - Project: `aitask` / `prj_uzWREguA16aYjlhTHPw9hE8DRLSM`.
 - Team: `team_g508b9bq8m0arklfrfDId3wH`.
-- Latest listed production deployment: `dpl_1t34cYdnYV5LJxHU9AziXiUzrVq4`, **READY**, from audit-branch commit `463eb7c3a3a88215505e8387d4f80ace73bbc0cd`.
+- Current production deployment: `dpl_EYoNBRe1mCTCJAdFvXaN7cPcpwNN`, **READY**, commit `a56517420947d6ed6e1ef061be5a18772ac7b326`.
+- Deployment URL: <https://aitask-ebw1ynsbx-tehzions-projects.vercel.app>.
+- Live alias `aitask-virid.vercel.app` independently resolves to that deployment. The deployed `build-info.json` verifies version `3.0.0`, the exact commit, production channel, and build time `2026-10-17T15:32:52.297Z`.
+- Previous live deployment / application rollback candidate: `dpl_1t34cYdnYV5LJxHU9AziXiUzrVq4`, commit `463eb7c3a3a88215505e8387d4f80ace73bbc0cd`.
 - Previous master production deployment: `dpl_2xYFtMbz8M6Rxei9R95PuNVJEZ8n`, **READY**, commit `fd45ca9fd544c4daa1f105cb9b14655b66dd11ad`.
-- Current release-preparation HEAD was not deployed.
 - Production environment-variable metadata: **VERIFIED through the local Vercel CLI**; the connector still returns HTTP 403. Production has `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_ANON_KEY`, and `VITE_SUPABASE_URL`. Secret-type values are concealed and cannot be read back. The served public assets contain the intended production reference `ohjhwyiffgzyatcmmdql`.
 
-No Vercel deployment or alias change was performed in this turn.
+The production build completed successfully and was promoted after protected-build provenance verification. The upload inventory excluded local credentials, backups, and `.codex-manifest-test.txt`.
 
 ## Live smoke-test results
 
-Read-only checks against `https://aitask-virid.vercel.app` confirmed the production login page, password-recovery flow, Chinese-language toggle, invalid-credential feedback, mobile layout without horizontal overflow, accessibility labels, and absence of captured console errors during those checks. The deployed live build reports `v3.0.0+463eb7c3a3a88215505e8387d4f80ace73bbc0cd`.
+The promoted live build reports `v3.0.0+a56517420947d6ed6e1ef061be5a18772ac7b326`. Four-role post-promotion checks completed at `2026-10-17T15:36:09.867Z` with zero uncaught browser errors or HTTP 5xx responses. Earlier public-login checks covered password-recovery UI, language toggle, invalid credentials, and accessible labels. Recovery-email delivery was not exercised.
 
-Four isolated production QA identities passed ordinary password login, role binding, backend capabilities, role-scoped task/project queries, dashboard/tasks/projects/reports/calendar pages, and uncaught browser/server-error checks. Super Admin approvals and Staff mobile overflow also passed. Admin credentials were used only for provisioning; role assertions used ordinary user sessions. No real client business records were modified. Notification delivery, Realtime event propagation, and positive role-scoped Storage access require the separate operational probes; page rendering alone does not prove them.
+Four isolated production QA identities passed ordinary password login, role binding, backend capabilities, role-scoped task/project queries, dashboard/tasks/projects/reports/calendar pages, and uncaught browser/server-error checks. Super Admin approvals and Staff mobile overflow also passed. All four roles passed notification-read RPCs and authenticated Realtime subscription handshakes. The isolated Super Admin downloaded the private Storage object; the other roles were denied an out-of-scope object. Admin credentials were used for provisioning/cleanup only; role assertions used ordinary sessions. No real client business records were modified. These smoke checks do not prove notification delivery, Realtime event propagation, every write workflow, or production concurrency behavior.
+
+At `2026-10-17T15:36:51.717Z`, all four QA memberships and Auth users were removed. Final counts returned to 11 original members and 10 Auth users; 1,863 business entities and both original checksums still matched. Eight QA create/delete history rows remain intentionally preserved in the append-only ledger.
 
 ## Backup, recovery, and safe sequence
 
@@ -92,10 +100,16 @@ Vercel rollback does not roll back database migrations. A failed database change
 - Vercel connector environment access remains restricted, but the authorized local CLI now verifies production metadata and project configuration. Secret-type values remain hidden; the serving app's intended Supabase target is confirmed from its public assets.
 - Staging is intentionally skipped. Live four-role authentication and read/page smoke checks passed; these are not exhaustive concurrency or authorization proofs.
 - Supabase security advisors still report disabled leaked-password protection and reviewed authenticated security-definer notices.
-- The pending retention migration also requires explicit acceptance that entity/member snapshots can contain personal and authorization data until a separate expiry, export, or redaction policy is approved.
+- The approved retention policy preserves personal and authorization snapshots indefinitely until an export/redaction/expiry process is separately approved.
+- The owner explicitly skipped staging. The existing remote staging workflow still fails due unavailable staging access; it was not represented as passed or bypassed by changing repository protection. Local full E2E passed; the new remote database job also passed, while the duplicate remote full verification job was still running at report time.
+- Production is a direct release of the audited branch. Reconcile the released source through normal review before a future `master` auto-deploy can replace it.
 
 ## Vercel configuration and role verification
 
-Vercel CLI 59.20.0 verifies authenticated user `tehzion`, team `tehzions-projects`, project `aitask`, project ID `prj_uzWREguA16aYjlhTHPw9hE8DRLSM`, production branch `master`, Vite/Node 22.x, output `dist`, and SSO protection for non-custom domains. `vercel.json` selects `pnpm build`. Production variable names/targets are verified through the CLI. No backend/demo/password-bypass overrides exist remotely; the tracked production file supplies Supabase mode with demo and bypass disabled. Three public JavaScript assets were inspected and contain the intended Supabase project reference. Public build metadata still serves commit `463eb7c3a3a88215505e8387d4f80ace73bbc0cd`; the local release has not been deployed.
+Vercel CLI 59.20.0 verifies authenticated user `tehzion`, team `tehzions-projects`, project `aitask`, project ID `prj_uzWREguA16aYjlhTHPw9hE8DRLSM`, canonical production branch `master`, Vite/Node 22.x, output `dist`, and SSO protection for non-custom domains. `vercel.json` selects `pnpm build`. Production variable names/targets are verified through the CLI. No backend/demo/password-bypass overrides exist remotely; the tracked production file supplies Supabase mode with demo and bypass disabled. Public assets identify the intended Supabase project; the live build's provenance matches the released commit.
 
 The complete local Playwright suite passes 324/324 using isolated fixtures. Four isolated ordinary production identities also passed live browser and API checks; operational notification/Realtime/Storage checks are reported separately from page rendering.
+
+## Production monitoring
+
+Vercel returned no error/fatal runtime log records for this deployment in the sampled release window. Supabase logs from `15:34:00Z` to `15:36:46Z` showed zero HTTP 5xx responses. Fourteen PostgreSQL `42501` permission denials occurred between `15:35:47.151Z` and `15:35:52.826Z`; these correlate with the successful CI "Verify Supabase secure cutover" step (`15:35:45Z`–`15:35:52Z`) and its deliberate protected-endpoint probes, which returned HTTP 401. No authenticated browser errors were observed. Monitoring is a short release-window sample, not a long-term availability guarantee.

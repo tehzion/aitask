@@ -1,0 +1,84 @@
+{
+  "immutable": true,
+  "capturedAt": "2026-10-17T15:38:36Z",
+  "status": "DEPLOYED_WITH_KNOWN_LIMITATIONS",
+  "releaseCommit": "a56517420947d6ed6e1ef061be5a18772ac7b326",
+  "gitRemote": "git@github.com:tehzion/aitask.git",
+  "pushedBranch": "codex/audit-p0p1-2026-10-16",
+  "remoteReleaseCommitVerified": true,
+  "canonicalMasterMerged": false,
+  "deploymentMethod": "Explicit production CLI deployment followed by verified promotion",
+  "vercel": {
+    "projectId": "prj_uzWREguA16aYjlhTHPw9hE8DRLSM",
+    "teamId": "team_g508b9bq8m0arklfrfDId3wH",
+    "deploymentId": "dpl_EYoNBRe1mCTCJAdFvXaN7cPcpwNN",
+    "readyState": "READY",
+    "target": "production",
+    "productionUrl": "https://aitask-virid.vercel.app",
+    "deploymentUrl": "https://aitask-ebw1ynsbx-tehzions-projects.vercel.app",
+    "aliasVerified": true,
+    "publicBuildCommitVerified": true,
+    "builtAt": "2026-10-17T15:32:52.297Z",
+    "previousDeploymentId": "dpl_1t34cYdnYV5LJxHU9AziXiUzrVq4"
+  },
+  "supabase": {
+    "projectRef": "ohjhwyiffgzyatcmmdql",
+    "migrationCount": 114,
+    "appliedThisRelease": [
+      {"repository":"20261017091031_workspace_revision_realtime","productionVersion":"20261017152814","verified":true},
+      {"repository":"20261017140000_audit_history_retention_guards_followup","productionVersion":"20261017152826","verified":true}
+    ],
+    "pendingApprovedMigrations": [],
+    "businessEntityRows": 1863,
+    "businessEntityHash": "5c3dbf9232130abcb4b4b65d9a401d51",
+    "originalMemberRows": 11,
+    "originalMemberHash": "0c33b230fb39ce6f109746bb4c170333",
+    "originalAuthUsers": 10,
+    "retainedQaHistoryRows": 8,
+    "qaAuthUsersRemaining": 0,
+    "qaMembersRemaining": 0,
+    "originalBusinessDataUnchanged": true
+  },
+  "recovery": {
+    "archiveCreatedAt": "2026-10-17T15:20:51.005Z",
+    "archiveSha256": "d3d1f2be17e15df14ec2b811a0dc5f258fcae1221b6be778fa2576029d87a525",
+    "restoreVerifiedAt": "2026-10-17T15:22:33.134Z",
+    "verifiedTables": 50,
+    "verifiedRows": 7545,
+    "rowCountsAndHashesMatch": true,
+    "location": "/Users/user/Downloads/aitask-production-backups/20261017T151800Z",
+    "privateStorageObjectsIncluded": 1
+  },
+  "verification": {
+    "unitTests": 830,
+    "playwright": {"passed":324,"failed":0,"skipped":0,"interrupted":0},
+    "pgTapAssertions": 1033,
+    "buildPwaBundleAndMigrationAlignment": "PASS",
+    "postPromotionBrowserVerifiedAt": "2026-10-17T15:36:09.867Z",
+    "ordinaryLiveRoles": ["Super Admin","Project Manager","HOD","Staff"],
+    "roleAuthenticationAndPageSmoke": "PASS",
+    "staffMobileOverflow": false,
+    "uncaughtBrowserErrors": 0,
+    "notificationReads": "PASS for all four roles",
+    "authenticatedRealtimeSubscriptions": "SUBSCRIBED for all four roles",
+    "storage": "Super Admin download PASS; other QA roles correctly denied an out-of-scope object",
+    "qaCleanupAt": "2026-10-17T15:36:51.717Z"
+  },
+  "monitoring": {
+    "vercelErrorOrFatalRecords": 0,
+    "supabaseWindowStart": "2026-10-17T15:34:00Z",
+    "supabaseWindowEnd": "2026-10-17T15:36:46Z",
+    "http5xx": 0,
+    "postgres42501Denials": 14,
+    "denialWindow": "15:35:47.151Z–15:35:52.826Z",
+    "denialCorrelation": "Matches successful CI secure-cutover anonymous probes at 15:35:45Z–15:35:52Z"
+  },
+  "limitations": [
+    "Release smoke checks are not exhaustive live writes, concurrency tests, notification delivery tests, or Realtime event-propagation tests",
+    "Password-recovery email delivery was not exercised",
+    "Logical snapshot does not provide PITR or include platform encryption roots and provider/deployment secrets",
+    "Staging was explicitly skipped; its remote workflow remains failed and repository protections were not changed",
+    "Canonical master must be reconciled through normal review before a future automatic production merge",
+    "Leaked-password protection remains unavailable/disabled on the existing Free setup"
+  ]
+}

@@ -4,13 +4,13 @@
 
 ## 1. Overview
 
-The latest AiTask release candidate improves day-to-day workflow reliability, clearer feedback, and protection against accidental data loss. The changes have completed the available local quality checks but have not yet been released to the live environment.
+The latest AiTask update is now live at <https://aitask-virid.vercel.app>. It improves day-to-day workflow reliability, clearer feedback, and protection against accidental data loss.
 
 ## 2. Features and improvements completed
 
 - Client, company, and project setup flows are more resilient when searching, saving, or recovering from an error.
 - Delivery review, planning dates, staff snapshots, and workflow approval screens now behave consistently across the tested user journeys.
-- Cross-role workspace updates have a more reliable refresh path when the supporting database change is approved and released.
+- The supporting database update for more timely workspace refreshes has been released.
 
 ## 3. User experience improvements
 
@@ -36,14 +36,12 @@ The latest AiTask release candidate improves day-to-day workflow reliability, cl
 
 ## 7. Quality assurance performed
 
-The release candidate passed type checking, linting, unit tests, production build validation, the full 324-test browser suite, PWA and bundle checks, and a fresh disposable-database rollout covering all current migrations. The public live login page was also checked on desktop and mobile without changing business data. Authenticated live role workflows have not yet been exercised.
+The update passed 830 unit tests, all 324 browser tests, production build validation, PWA and bundle checks, and 1,033 database assertions. A fresh recovery backup was successfully restored and verified before launch. After deployment, isolated Super Admin, Project Manager, HOD, and Staff accounts passed login and dashboard/task/project/report/calendar checks; notification reads, live connection setup, file access boundaries, and Staff mobile layout were also checked. These are release smoke tests, not exhaustive live workflow or concurrency tests.
 
 ## 8. Deployment status
 
-**Deployment waiting for verified recovery and live role checks.** Hosting access and production configuration metadata are now verified, and retention approval is recorded. The release is not yet live. No production database records, Git production branch, or Vercel production deployment were changed during this execution.
+**Live and verified within the release smoke-test scope.** The approved database changes and application update are deployed. Existing customer business records and original user data remained unchanged. Temporary test accounts were removed after verification.
 
 ## 9. Next steps
 
-Launch requires confirmation of a current recovery point and authorized live role checks. The backup connection and matching database tools are ready; the database CLI session needs owner reauthentication. After those gates are cleared, the release can follow the coordinated database-first deployment sequence.
-
-The release team has completed the local quality and browser checks. Production launch is still waiting on an owner-provided recovery point and authorized live test access; no production records or customer data were changed.
+Continue normal use and report any unexpected behavior. The recovery bundle is retained privately, and the sampled release logs showed no server-side HTTP failures. Broader workflow and sustained concurrency checks remain separate from this release's live smoke verification.

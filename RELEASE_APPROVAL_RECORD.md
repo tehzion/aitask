@@ -1,13 +1,13 @@
 # AiTask Production Release Approval Record
 
-**Status:** APPROVED — BACKUP/RESTORE AND FOUR-ROLE SMOKE VERIFIED; MIGRATIONS APPLIED
+**Status:** RELEASED — BACKUP/RESTORE, MIGRATIONS, LIVE ALIAS, AND FOUR-ROLE SMOKE VERIFIED
 **Prepared:** 2026-10-17 (Asia/Kuala_Lumpur)
 
 **Approval received:** 2026-10-17T15:04:28Z via explicit release-owner message (`approve`). This approves the retention/deletion semantics below; it does not waive backup, configuration, migration-alignment, or live-authentication gates.
 
 ## Release identity
 
-- Release candidate commit: `1ce9f6f0b1f496c9895623b82ff93462d776b79a`
+- Released commit: `a56517420947d6ed6e1ef061be5a18772ac7b326` (tested application baseline `1ce9f6f0b1f496c9895623b82ff93462d776b79a`; subsequent changes record release evidence, migration aliases, and upload exclusions).
 - Supabase project: **AiTask**, `ohjhwyiffgzyatcmmdql`, `ap-southeast-1`, ACTIVE_HEALTHY
 - Vercel project: **aitask**, `prj_uzWREguA16aYjlhTHPw9hE8DRLSM`
 - Production URL: <https://aitask-virid.vercel.app>
