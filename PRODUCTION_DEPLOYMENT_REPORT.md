@@ -6,7 +6,7 @@
 
 ## Executive result
 
-The applicable local code and database gates are complete, while the full Playwright suite remains incomplete and must be rerun before release. The release changes are ready for a reviewed Git commit. No production database mutation, Git push, or Vercel deployment was performed in this preparation turn. The explicit retention/deletion approval required by the release instruction was not present, and the live database is not aligned with the repository tail.
+The applicable local code, database, and full Playwright gates are complete. The release evidence is committed locally, but no production database mutation, Git push, or Vercel deployment was performed in this preparation turn. The explicit retention/deletion approval required by the release instruction was not present, and the live database is not aligned with the repository tail.
 
 The superseding gate evidence is recorded in [`supabase/preflight/aitask_release_manifest_20261017_golive.json`](supabase/preflight/aitask_release_manifest_20261017_golive.json). The original immutable manifest is retained unchanged for traceability.
 
@@ -14,7 +14,7 @@ The superseding gate evidence is recorded in [`supabase/preflight/aitask_release
 
 | Gate | Result |
 | --- | --- |
-| Full Playwright E2E | **NOT VERIFIED — interrupted at 50/324 during orchestration; 0 failures observed before interruption; clean rerun required** |
+| Full Playwright E2E | **PASS — 324 passed, 0 failed, 0 skipped, 0 interrupted** |
 | Unit suite | **PASS — 107 test files / 830 tests** |
 | Type-check (`pnpm check`) | **PASS** |
 | Lint | **PASS** |

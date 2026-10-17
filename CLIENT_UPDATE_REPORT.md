@@ -36,7 +36,7 @@ The latest AiTask release candidate improves day-to-day workflow reliability, cl
 
 ## 7. Quality assurance performed
 
-The release candidate passed type checking, linting, unit tests, production build validation, PWA and bundle checks, and a fresh disposable-database rollout covering all current migrations. The full browser suite was started but interrupted before completion, so it is not counted as a clean release gate. The public live login page was also checked on desktop and mobile without changing business data. Authenticated live role workflows have not yet been exercised.
+The release candidate passed type checking, linting, unit tests, production build validation, the full 324-test browser suite, PWA and bundle checks, and a fresh disposable-database rollout covering all current migrations. The public live login page was also checked on desktop and mobile without changing business data. Authenticated live role workflows have not yet been exercised.
 
 ## 8. Deployment status
 

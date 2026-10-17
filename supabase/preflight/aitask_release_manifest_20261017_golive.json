@@ -52,7 +52,7 @@
     "bundleAndPwa": "PASS",
     "disposableDatabaseRollout": "PASS — 67 files / 1,033 pgTAP assertions; all 114 migrations; no DB lint errors",
     "supportingDatabaseProbes": "PASS — storage, staff save, HOD status, onboarding recovery, workflow review gate",
-    "playwrightFullSuite": "NOT_VERIFIED — interrupted at 50/324; clean rerun required",
+    "playwrightFullSuite": "PASS — 324 passed / 0 failed / 0 skipped / 0 interrupted",
     "releaseDbAlignment": "BLOCKED AS INTENDED — two pending production migrations"
   },
   "hostingConfiguration": {
