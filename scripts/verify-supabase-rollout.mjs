@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const supabaseSource = join(projectRoot, 'supabase');
-const manifestPath = join(supabaseSource, 'preflight', 'aitask_release_manifest_20261017.json');
+const manifestPath = join(supabaseSource, 'preflight', 'aitask_release_manifest_20261017_production.json');
 const supabaseCli = join(projectRoot, 'node_modules', '.bin', 'supabase');
 const expectedProjectRef = 'ohjhwyiffgzyatcmmdql';
 const databaseTestPath = process.env.AITASK_DATABASE_TEST_PATH || 'supabase/tests/database';

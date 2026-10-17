@@ -40,10 +40,10 @@ The release candidate passed type checking, linting, unit tests, production buil
 
 ## 8. Deployment status
 
-**Deployment blocked pending recovery and hosting verification.** The retention policy approval is recorded, but the release is not yet live. No production database records, Git production branch, or Vercel production deployment were changed during this execution.
+**Deployment waiting for verified recovery and live role checks.** Hosting access and production configuration metadata are now verified, and retention approval is recorded. The release is not yet live. No production database records, Git production branch, or Vercel production deployment were changed during this execution.
 
 ## 9. Next steps
 
-Launch requires confirmation of a current recovery point, verification of the protected production hosting configuration, and authorized live role checks. After those gates are cleared, the release can follow the coordinated database-first deployment sequence.
+Launch requires confirmation of a current recovery point and authorized live role checks. The backup connection and matching database tools are ready; the database CLI session needs owner reauthentication. After those gates are cleared, the release can follow the coordinated database-first deployment sequence.
 
 The release team has completed the local quality and browser checks. Production launch is still waiting on an owner-provided recovery point and authorized live test access; no production records or customer data were changed.

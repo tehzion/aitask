@@ -7,7 +7,7 @@ const manifestPath = join(
   projectRoot,
   'supabase',
   'preflight',
-  'aitask_release_manifest_20261017.json',
+  'aitask_release_manifest_20261017_production.json',
 );
 const migrationsPath = join(projectRoot, 'supabase', 'migrations');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));

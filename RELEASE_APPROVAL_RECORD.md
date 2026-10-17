@@ -1,6 +1,6 @@
 # AiTask Production Release Approval Record
 
-**Status:** RETENTION APPROVED — RELEASE BLOCKED ON RECOVERY AND CONFIGURATION EVIDENCE
+**Status:** APPROVED — BACKUP/RESTORE AND FOUR-ROLE SMOKE VERIFIED; MIGRATIONS APPLIED
 **Prepared:** 2026-10-17 (Asia/Kuala_Lumpur)
 
 **Approval received:** 2026-10-17T15:04:28Z via explicit release-owner message (`approve`). This approves the retention/deletion semantics below; it does not waive backup, configuration, migration-alignment, or live-authentication gates.
@@ -30,7 +30,7 @@ Snapshots can contain names, email addresses, auth identifiers, roles, departmen
 
 ## Recovery and rollback limitations
 
-- A current recoverable backup or restore point, restore method, named operator, and restore verification are required before production application. None is evidenced in this execution context.
+- Recovery point: `2026-10-17T15:20:51.005Z`, PostgreSQL 17.6 custom logical archive, SHA-256 `d3d1f2be17e15df14ec2b811a0dc5f258fcae1221b6be778fa2576029d87a525`, private folder `/Users/user/Downloads/aitask-production-backups/20261017T151800Z`. The restore drill verified all 50 tables and 7,545 rows at `2026-10-17T15:22:33.134Z`; every per-table row count and SHA-256 matched. Restore operator: authenticated project owner `tehzion`, assisted by Codex, using the isolated Supabase platform-owner role. Application scopes remain owned by `postgres`; managed Auth/Storage schema replacement requires platform-owner permissions. Storage-object backup is included separately.
 - No automatic down migration is safe. Re-adding the actor `ON DELETE SET NULL` foreign key can recreate immutable-history mutation and may fail after orphaned actor IDs exist.
 - Restoring workspace `ON DELETE CASCADE` or direct `service_role` privileges requires a reviewed forward migration and reopens destructive paths. Application rollback alone does not roll back database semantics.
 
@@ -40,7 +40,7 @@ The release owner must explicitly confirm all of the following:
 
 - [x] `20261017140000_audit_history_retention_guards_followup.sql` is the intended replacement for the nonexistent requested filename.
 - [x] The actor-FK removal, workspace `ON DELETE RESTRICT`, indefinite snapshot retention, and complete direct `service_role` privilege revocation are approved.
-- [ ] A current recovery point and restore owner/method are recorded.
-- [ ] Vercel production environment metadata has been verified without exposing secret values.
+- [x] A current recovery point and restore owner/method are recorded.
+- [x] Vercel production environment metadata has been verified without exposing secret values, using local CLI 59.20.0 as `tehzion` in `tehzions-projects`. The connector remains restricted, but the authorized CLI succeeds. The serving application points to `ohjhwyiffgzyatcmmdql`; Secret-type URL/key values cannot be read back.
 
 Until the remaining boxes are confirmed, do not apply either pending migration, push the production branch, or deploy the release candidate.
