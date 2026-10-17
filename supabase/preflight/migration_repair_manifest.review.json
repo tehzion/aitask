@@ -1,7 +1,7 @@
 {
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "preparedAt": "2026-09-23",
-  "status": "production through 20261016153759_service_transition_guard (repository 20261016150000); connector aliases verified",
+  "status": "production through 20261017031841_task_delete_notification_cleanup (repository 20261017030340); connector aliases verified",
   "metadataOnly": false,
   "warning": "The Supabase deployment connector recorded generated production versions for the authorization rollout instead of the repository filename timestamps. The deployed SQL and migration names were verified live. Do not use migration-history repair to rewrite the connector entries.",
   "pendingMigrationRationales": {
@@ -11,10 +11,10 @@
     "20261015140049_monthly_plan_revision_scheduling": "Client plan schedule fields already live in the aitask_entities JSONB payload, so no columns or public RPC signatures are added. This migration backfills pre-status draft revisions that already have an effective boundary as scheduled, then replaces the private monthly generator so only an explicit revisionScheduleStatus=scheduled revision can supersede an active plan."
   },
   "productionVerification": {
-    "verifiedAt": "2026-10-16",
-    "historyThrough": "20261016153759_service_transition_guard (repository 20261016150000); connector aliases preserved",
+    "verifiedAt": "2026-10-17",
+    "historyThrough": "20261017031841_task_delete_notification_cleanup (repository 20261017030340); connector aliases preserved",
     "historyAligned": false,
-    "historyAlignmentNote": "The deployment connector stores generated production timestamps for some repository migrations. Migration names and committed SQL were verified live through repository migration 20261016150000_service_transition_guard; timestamp repair is intentionally prohibited.",
+    "historyAlignmentNote": "The deployment connector stores generated production timestamps for some repository migrations. Migration names and committed SQL were verified live through repository migration 20261017030340_task_delete_notification_cleanup; all 110 repository migrations resolve to 110 live entries. Timestamp repair is intentionally prohibited.",
     "clientOwnershipRollout": {
       "appliedAt": "2026-09-23",
       "method": "Supabase Management API database/query (owner personal access token); versions recorded in supabase_migrations.schema_migrations",
@@ -280,7 +280,53 @@
         {
           "repository": "20261016150000_service_transition_guard",
           "production": "20261016153759_service_transition_guard"
+        },
+        {
+          "repository": "20261016160000_pm_client_scope_and_ownership",
+          "production": "20261017031828_pm_client_scope_and_ownership"
+        },
+        {
+          "repository": "20261016170000_department_scoped_visibility_cleanup",
+          "production": "20261017031838_department_scoped_visibility_cleanup"
+        },
+        {
+          "repository": "20261017030340_task_delete_notification_cleanup",
+          "production": "20261017031841_task_delete_notification_cleanup"
         }
+      ]
+    },
+    "takeoverProductionRollout": {
+      "appliedAt": "2026-10-17",
+      "sourceCommit": "463eb7c3a3a88215505e8387d4f80ace73bbc0cd",
+      "method": "Supabase connector; three sequential migrations and two edge function deployments from committed source",
+      "backup": "The release owner explicitly waived a fresh backup after the CLI backup request returned Invalid access token. Pre-change function definitions were saved locally as schema evidence only, not a data backup.",
+      "repositoryMigrations": [
+        "20261016160000_pm_client_scope_and_ownership",
+        "20261016170000_department_scoped_visibility_cleanup",
+        "20261017030340_task_delete_notification_cleanup"
+      ],
+      "edgeFunctions": [
+        { "name": "invite-aitask-member", "version": 37, "verifyJwt": true, "status": "ACTIVE" },
+        { "name": "aitask-feedback", "version": 24, "verifyJwt": false, "status": "ACTIVE" }
+      ],
+      "verification": {
+        "migrationCount": 110,
+        "businessEntityGroupsWithUnchangedCountsAndHashes": 14,
+        "membersUnchanged": true,
+        "authUserCountUnchanged": true,
+        "publicAndStoragePolicyHashUnchanged": true,
+        "all13ApplicationTablesRlsEnabled": true,
+        "anonymousCommandRpcExecute": false,
+        "anonymousOrAuthenticatedDirectMutationGrants": 0,
+        "bothServiceCommandOverloadsHaveScopeGuards": true,
+        "clientOwnershipAndTaskCleanupTriggersEnabled": true,
+        "securityAdvisorErrors": 0
+      },
+      "limitations": [
+        "The full isolated database gate stopped during local Auth fixture setup with a request timeout after all 66 pgTAP files / 1009 assertions, schema lint and Storage checks passed.",
+        "The complete browser suite has not passed; targeted coverage and a smoke rerun passed, but the latest broad run was interrupted at the owner's push request.",
+        "Staging Supabase access and staging Vercel token access require repair before treating staging CI as verified.",
+        "No master merge or Vercel production promotion was performed."
       ]
     },
     "auditP0P1ProductionRollout": {
@@ -982,9 +1028,5 @@
     "20261016170000_department_scoped_visibility_cleanup",
     "20261017030340_task_delete_notification_cleanup"
   ],
-  "pendingProductionMigrations": [
-    "20261016160000_pm_client_scope_and_ownership",
-    "20261016170000_department_scoped_visibility_cleanup",
-    "20261017030340_task_delete_notification_cleanup"
-  ]
+  "pendingProductionMigrations": []
 }
