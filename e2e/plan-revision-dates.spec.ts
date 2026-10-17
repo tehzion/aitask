@@ -28,15 +28,14 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
   });
   await page.goto(`/clients/${seeded.clientId}`);
   await page.getByRole('tab', { name: locale === 'zh' ? '方案' : 'Plan', exact: true }).click();
-  const revision = page.locator('section').filter({ has: page.getByRole('heading', { name: locale === 'zh' ? '计划修订版本 2' : 'Scheduled revision 2' }) });
-  const date = revision.getByLabel(locale === 'zh' ? '合同结束日期（仅提醒）' : 'Contract end date (reminder only)', { exact: true });
+  const revision = page.getByRole('region', { name: locale === 'zh' ? '下月方案' : 'Next month’s plan', exact: true });
+  const date = revision.getByLabel(locale === 'zh' ? '合同结束日期（仅提醒）' : 'Contract end date (reminder only)');
   await expect(date).toHaveValue('2026-10-03');
   await expect(date).toHaveAttribute('min', '2026-09-30');
-  await expect(revision.getByText(/2026-10-30/)).toBeVisible();
-  await expect(revision.getByText(/2026-09-30/)).toBeVisible();
+  await expect(revision).toContainText(locale === 'zh' ? '2026年10月30日' : '30 Oct 2026');
   await revision.getByLabel(locale === 'zh' ? '方案名称' : 'Plan name', { exact: true }).fill('Revised RM2250 PACKAGE');
-  await revision.getByRole('button', { name: locale === 'zh' ? '保存修订' : 'Save revision', exact: true }).click();
-  await expect(revision.getByText(locale === 'zh' ? '草稿修订版本已保存。' : 'Draft revision saved.', { exact: true })).toBeVisible();
+  await revision.getByRole('button', { name: locale === 'zh' ? '保存草稿' : 'Save draft', exact: true }).click();
+  await expect(revision.getByText(locale === 'zh' ? '草稿已保存。安排前请检查更改。' : 'Draft saved. Review the changes before scheduling.', { exact: true })).toBeVisible();
 
   await page.reload();
   await page.getByRole('tab', { name: locale === 'zh' ? '方案' : 'Plan', exact: true }).click();
@@ -51,7 +50,7 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
   expect(saved.cycles).toEqual(seeded.previousCycles);
 
   await date.fill('2026-09-29');
-  await revision.getByRole('button', { name: locale === 'zh' ? '保存修订' : 'Save revision', exact: true }).click();
-  await expect(revision.getByText(locale === 'zh' ? '合同结束日期不能早于开始日期。' : 'Contract end date cannot be before the start date.', { exact: true })).toBeVisible();
+  await revision.getByRole('button', { name: locale === 'zh' ? '保存草稿' : 'Save draft', exact: true }).click();
+  expect(await date.evaluate(input => (input as HTMLInputElement).validity.rangeUnderflow)).toBe(true);
   expect(await page.evaluate(async id => (await import('/src/store/index.ts')).useStore.getState().clientPlans.find(plan => plan.id === id)?.contractEndDate, seeded.revisionId)).toBe('2026-10-03');
 });

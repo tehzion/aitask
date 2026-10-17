@@ -21,7 +21,7 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
       assignedTo: contact.id,
       createdBy: contact.id,
       startDate: '2026-08-20',
-      dueDate: '2026-08-26',
+      dueDate: '2026-12-26',
       priority: 'Urgent' as const,
       status: 'Approved',
       completionPercentage: 80,
@@ -33,15 +33,22 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
       comments: [],
       approvalHistory: [],
       updatedAt: '2026-08-26T08:00:00.000Z',
+      serviceCycleId: undefined as string | undefined,
     };
     const approveTask = {
       ...reviewTask,
       id: 'client-v2-approve',
       title: 'Approve launch artwork',
+      dueDate: '2026-10-18',
       approvalHistory: [],
     };
     const foreignTask = { ...reviewTask, id: 'client-v2-foreign', clientName: 'Another Company', title: 'Private foreign delivery' };
     const seededClientId = current.clients.find(item => item.clientName.trim().toLowerCase() === client.companyName?.trim().toLowerCase())?.id;
+    const seededCycleId = seededClientId
+      ? current.serviceCycles.find(cycle => cycle.clientId === seededClientId && ['Published', 'Completed'].includes(cycle.status))?.id
+      : undefined;
+    reviewTask.serviceCycleId = seededCycleId;
+    approveTask.serviceCycleId = seededCycleId;
     const now = new Date().toISOString();
     const seededPlan = seededClientId ? {
       id: 'e2e-cvp-plan', clientId: seededClientId, clientName: client.companyName || 'UrbanEats',
@@ -167,8 +174,8 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
     await page.getByRole('tab', { name: 'Services' }).click();
     await expect(page.getByText('Short Video', { exact: true }).first()).toBeVisible();
     await expect(page.locator('main article').first().getByText(/video/)).toBeVisible();
-    await expect(page.getByText(/Billing day/)).toBeVisible();
-    await expect(page.getByText(/Day \d+/).first()).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Billing period' })).toBeVisible();
+    await expect(page.getByRole('tabpanel', { name: 'Services' }).getByText(/Billing period/)).toBeVisible();
   }
 
   await page.getByRole('button', { name: '切换为中文' }).click();

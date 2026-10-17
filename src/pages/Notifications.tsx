@@ -74,12 +74,18 @@ const updateReadState = (
   return notifications.map(notification => {
     if (!selected.has(notification.id)) return notification;
     const current = notification.readByUserIds || [];
+    // isNotificationReadByUser checks unreadByUserIds first, so the mirror must
+    // clear it too or the row keeps rendering as unread after a successful read.
+    const unread = notification.unreadByUserIds || [];
     return {
       ...notification,
       isRead: isRead ? notification.isRead : false,
       readByUserIds: isRead
         ? Array.from(new Set([...current, userId]))
         : current.filter(id => id !== userId),
+      unreadByUserIds: isRead
+        ? unread.filter(id => id !== userId)
+        : Array.from(new Set([...unread, userId])),
     };
   });
 };

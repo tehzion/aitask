@@ -138,6 +138,14 @@ describe('remote snapshot validation', () => {
     expect(parsed?.assignedTo).toBe('');
   });
 
+  it('rejects impossible calendar dates instead of rolling them over', () => {
+    const parsed = parseTask({ ...taskFixture, startDate: '2026-02-31', dueDate: '2026-13-99' });
+    expect(parsed).not.toBeNull();
+    // 2026-02-31 rolls over to March in Date.parse; it must fall back instead.
+    expect(parsed?.startDate).not.toBe('2026-02-31');
+    expect(parsed?.dueDate).toBe('');
+  });
+
   it('accepts only valid ISO completion timestamps', () => {
     expect(parseTask({
       ...taskFixture,
@@ -241,5 +249,20 @@ describe('remote snapshot validation', () => {
     expect(parsed.users).toHaveLength(1);
     expect(parsed.users[0]).not.toHaveProperty('password');
     expect(parsed.users[0]).not.toHaveProperty('api_token');
+  });
+
+  it('drops malformed service and role records that lack a usable identity', () => {
+    const parsed = parseWorkspaceSnapshot({
+      servicePackages: [{ id: 'pkg-1', name: 'Starter' }, { name: 'No id' }, 'nonsense', { id: '   ' }],
+      deliverables: [{ id: 'd-1', clientId: 'c-1' }, { clientId: 'c-2' }],
+      rolePermissions: [{ id: 'role-1', name: 'Lead' }, { name: 'No id' }],
+    } as never);
+
+    expect(parsed.servicePackages).toHaveLength(1);
+    expect(parsed.servicePackages[0]).toMatchObject({ id: 'pkg-1' });
+    expect(parsed.deliverables).toHaveLength(1);
+    expect(parsed.deliverables[0]).toMatchObject({ id: 'd-1' });
+    expect(parsed.rolePermissions).toHaveLength(1);
+    expect(parsed.rolePermissions[0]).toMatchObject({ id: 'role-1' });
   });
 });

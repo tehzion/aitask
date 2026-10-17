@@ -215,7 +215,7 @@ const ServiceRoleDashboard = () => {
         {activeCompanies.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">{t('No active companies yet.')}</p>}
       </div>
     </Surface>
-    <Surface variant="inset" className="flex flex-wrap items-center justify-between gap-3 p-5"><div><p className="calm-eyebrow">{t('Commercial summary')}</p><p className="mt-1 text-sm text-muted">{t('Active plan value in your visible portfolio.')}</p></div><p className="calm-number text-2xl font-semibold text-ink">{canSeePrices ? formatMoney(contractedMonthly, 'MYR', locale) : t('Restricted')}</p></Surface>
+    <Surface variant="inset" className="flex flex-wrap items-center justify-between gap-3 p-5"><div><p className="calm-eyebrow">{t('Commercial summary')}</p><p className="mt-1 text-sm text-muted">{t('Active plan value in your owned portfolio.')}</p></div><p className="calm-number text-2xl font-semibold text-ink">{canSeePrices ? formatMoney(contractedMonthly, 'MYR', locale) : t('Restricted')}</p></Surface>
     <React.Suspense fallback={null}><DeliveryReviewPanel /></React.Suspense>
   </section>;
 

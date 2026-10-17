@@ -45,7 +45,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     </div>
     <div className="flex justify-end gap-3 px-5 py-4">
       <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>{t(cancelLabel)}</Button>
-      <Button type="button" variant={tone === 'danger' ? 'danger' : 'primary'} onClick={() => void onConfirm()} disabled={busy}>
+      <Button type="button" variant={tone === 'danger' ? 'danger' : 'primary'} onClick={() => void onConfirm()} disabled={busy} aria-busy={busy}>
         {busy ? t('feedback.working') : t(confirmLabel)}
       </Button>
     </div>

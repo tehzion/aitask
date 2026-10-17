@@ -765,7 +765,7 @@ const TasksWorkspace: React.FC = () => {
 
           {activeFilterLabels.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {activeFilterLabels.map(label => <Badge key={label} tone="indigo">{label}</Badge>)}
+              {activeFilterLabels.map(label => <Badge key={label} tone="indigo">{t(label)}</Badge>)}
             </div>
           )}
 
@@ -872,7 +872,7 @@ const TasksWorkspace: React.FC = () => {
                           </td>
 	                          {!isClientUser && <td className="max-w-[150px] px-3 py-3">
                             <div data-i18n-skip className="font-medium text-slate-800 truncate">{task.clientName}</div>
-                            <div data-i18n-skip className="text-xs text-slate-500 truncate mt-0.5">{task.projectName || 'Independent task'}</div>
+                            <div data-i18n-skip className="text-xs text-slate-500 truncate mt-0.5">{task.projectName || t('Independent task')}</div>
 	                          </td>}
 	                          {!isClientUser && <td className="whitespace-nowrap px-3 py-3">
                             <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-md font-medium border border-slate-200">{getLocalizedDepartment(task.department, locale)}</span>
@@ -979,7 +979,7 @@ const TasksWorkspace: React.FC = () => {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div data-i18n-skip className={cn("font-semibold leading-5", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
-                            <div data-i18n-skip className="text-xs text-slate-500 mt-1 leading-5">{task.id} - {task.clientName} - {task.projectName || 'Independent task'}</div>
+                            <div data-i18n-skip className="text-xs text-slate-500 mt-1 leading-5">{task.id} - {task.clientName} - {task.projectName || t('Independent task')}</div>
                           </div>
 	                          {!isClientUser && <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${priorityColors[task.priority]}`}>{getLocalizedPriority(task.priority, locale)}</span>}
                         </div>

@@ -5,7 +5,7 @@ import { useStore } from '../store';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import { canEditTask, canManageServiceCycles, canOpenServiceClient, getVisibleTasks, hasPermission } from '../lib/access';
+import { canEditTask, canManageServiceCycles, canOpenServiceClient, getVisibleTasks } from '../lib/access';
 import { getDeliveryReviewRecords, isTaskLinkedToDeliverable, hasInvalidDeliveryLink } from '../lib/dashboardData';
 import { isTaskCompleted } from '../lib/taskCompletion';
 import { formatLocalizedDate } from '../lib/i18n';
@@ -13,6 +13,7 @@ import { parseOptionalDate } from '../lib/utils';
 import { useI18n } from './I18nProvider';
 import { Button } from './ui';
 import { inputBase } from './uiTokens';
+import ConfirmDialog from './ConfirmDialog';
 
 type PendingReview = { command: 'service_cycle.manage' | 'task.update'; taskId?: string; deliverableId?: string };
 
@@ -24,9 +25,15 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   const [selections, setSelections] = React.useState<Record<string, string>>({});
   const [message, setMessage] = React.useState('');
   const [pending, setPending] = React.useState<PendingReview | null>(null);
+  const [unlinkTask, setUnlinkTask] = React.useState<{ id: string; title: string } | null>(null);
+  const unlinkTitleId = React.useId();
   const [showOlderDrafts, setShowOlderDrafts] = React.useState(false);
   React.useEffect(() => { setSelections({}); setMessage(''); setPending(null); }, [clientId, store.currentUser?.id]);
-  useUnsavedChanges(Boolean(pending || Object.values(selections).some(Boolean)));
+  // A selected link is an in-memory choice that remains mounted while the
+  // client workspace switches tabs. Only an in-flight save must block route
+  // navigation; otherwise a harmless tab switch is mistaken for discarding
+  // the review selections.
+  useUnsavedChanges(Boolean(pending));
   const visibleTasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects })
     .filter(task => !clientId || task.clientId === clientId);
   const cycles = store.serviceCycles.filter(cycle => (!clientId || cycle.clientId === clientId)
@@ -34,11 +41,11 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   const records = getDeliveryReviewRecords(visibleTasks, cycles, store.deliverables, today);
   const reviewTasks = [...records.invalidLinkedTasks, ...(includeOpenTasks ? visibleTasks.filter(task => task.clientId && !isTaskLinkedToDeliverable(task, store.deliverables) && task.status !== 'Cancelled') : records.unlinkedTasks)];
   const canPublish = canManageServiceCycles(store.currentUser, store.rolePermissions);
-  const canLink = hasPermission(store.currentUser, 'editTasks', store.rolePermissions);
+  const canLink = reviewTasks.some(task => canEditTask(store.currentUser, task, store.rolePermissions, { clients: store.clients, projects: store.projects }));
   const date = (value: string) => { const parsed = parseOptionalDate(value); return parsed ? formatLocalizedDate(parsed, locale) : t('Date to be confirmed'); };
   const save = (operation: () => { ok: boolean; error?: string }, command: PendingReview['command'], submitted?: { taskId: string; deliverableId: string }) => {
     const receipt = pending || { command, ...submitted };
-    void run(async () => {
+    return run(async () => {
       if (pending) return useStore.getState().retryPendingSave(pending.command);
       const result = operation();
       if (!result.ok) return result;
@@ -60,7 +67,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   return <section className="mt-5 rounded-control border border-line p-4" aria-label={t('Delivery records need review')}>
     <h3 className="font-semibold text-ink">{t('Delivery records need review')}</h3>
     <p className="mt-1 text-xs text-muted">{t('Review links and publication before confirming delivery.')}</p>
-    {!canLink && <p className="mt-1 text-xs text-muted">{t('Only Boss Koo can relink or publish these records; this list is read-only for you.')}</p>}
+    {!canLink && <p className="mt-1 text-xs text-muted">{t('Relinking tasks is restricted for your role; task links are read-only on this list.')}</p>}
     {message && <p className="mt-3 text-sm" role="status"><SystemMessage message={message} /></p>}
     {pending && <Button className="mt-3" disabled={busy} onClick={() => save(() => ({ ok: true }), pending.command)}>{t('Retry pending save')}</Button>}
     <div className="mt-3 space-y-4">
@@ -83,10 +90,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
         return <div key={task.id} className="space-y-2 text-sm">
           <Link className="font-medium text-accent" to={`/tasks?taskId=${encodeURIComponent(task.id)}`}><span data-i18n-skip>{task.title}</span></Link>
           <p className="text-xs text-muted">{t(invalidLink ? 'Invalid delivery link. Review before linking again.' : isTaskCompleted(task) ? 'Completed task without a deliverable link' : 'Task without a deliverable link')}</p>
-          {editable && invalidLink && <Button variant="secondary" disabled={busy || Boolean(pending)} onClick={() => {
-            if (window.confirm(t('Remove the invalid delivery link? The task will remain and require an explicit new link.')))
-              save(() => useStore.getState().unlinkInvalidTaskDelivery(task.id), 'task.update');
-          }}>{t('Remove invalid link')}</Button>}
+          {editable && invalidLink && <Button variant="secondary" disabled={busy || Boolean(pending)} onClick={() => setUnlinkTask({ id: task.id, title: task.title })}>{t('Remove invalid link')}</Button>}
           {editable && !invalidLink && eligible.length > 0 && <div className="flex flex-wrap gap-2">
             <select aria-label={t('Choose a deliverable')} className={`${inputBase} min-w-0 flex-1`} disabled={busy || Boolean(pending)} value={selections[task.id] || ''} onChange={event => setSelections(current => ({ ...current, [task.id]: event.target.value }))}>
               <option value="">{t('Choose a deliverable')}</option>
@@ -101,6 +105,18 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
         </div>;
       })}
     </div>
+    {unlinkTask && <ConfirmDialog
+      labelledBy={unlinkTitleId}
+      title={t('Remove invalid delivery link')}
+      description={t('Remove the invalid delivery link from "{title}"? The task will remain and require an explicit new link.', { title: unlinkTask.title })}
+      confirmLabel={t('Remove invalid link')}
+      busy={busy}
+      onClose={() => { if (!busy) setUnlinkTask(null); }}
+      onConfirm={async () => {
+        const result = await save(() => useStore.getState().unlinkInvalidTaskDelivery(unlinkTask.id), 'task.update');
+        if (result?.ok) setUnlinkTask(null);
+      }}
+    />}
   </section>;
 };
 export default DeliveryReviewPanel;

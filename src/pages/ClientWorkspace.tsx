@@ -7,7 +7,6 @@ import { DeliveryProgress } from '../components/DeliveryProgress';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
-import { hasUnsavedChanges } from '../lib/unsavedChanges';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React from "react";
 import {
@@ -53,11 +52,11 @@ import {
   canSetDeliverableStatus,
 } from "../lib/serviceManagement";
 import {
+  canEditTask,
   canManageClientPlans,
   canManageServiceCycles,
   canOpenServiceClient,
   canViewServicePrices,
-  hasPermission,
   getVisibleTasks,
   isDepartmentScopedUser,
 } from "../lib/access";
@@ -67,6 +66,7 @@ import {
   SERVICE_FILE_ACCEPT,
   SERVICE_FILE_MAX_BYTES,
   SERVICE_FILE_TYPE_ERROR,
+  SERVICE_FILE_UPLOAD_UNAVAILABLE_ERROR,
   forgetPendingServiceFile,
   downloadServiceFile,
   getServiceFileMimeType,
@@ -198,11 +198,19 @@ const OperationsClientWorkspace = () => {
     store.currentUser,
     store.rolePermissions,
   );
-  const canLinkTasks = hasPermission(
+  const canLinkTasks = getVisibleTasks(
     store.currentUser,
-    "editTasks",
+    store.tasks,
     store.rolePermissions,
-  );
+    { clients: store.clients, projects: store.projects },
+  )
+    .filter(task => task.clientId === client.id)
+    .some(task => canEditTask(
+      store.currentUser,
+      task,
+      store.rolePermissions,
+      { clients: store.clients, projects: store.projects },
+    ));
   const canSeePrices = canViewServicePrices(
     store.currentUser,
     store.rolePermissions,
@@ -245,6 +253,11 @@ const OperationsClientWorkspace = () => {
   }
   const monthly = resolveMonthlyRecord(cycles, client.id, getTodayInputDate(today), requestedCycle, new Set(plans.map(plan => plan.id)));
   const selectedCycle = monthly.selected;
+  const activityCycle = cycles.find(item => item.id === activityCycleId) || selectedCycle;
+  const canAddActivityForCycle = Boolean(canManageCycles
+    || (activityCycle && store.currentUser
+      && canOpenServiceClient(store.currentUser, activityCycle.clientName, store.tasks, store.rolePermissions, store.clients, store.projects)
+      && store.tasks.some(task => task.serviceCycleId === activityCycle.id && task.assignedTo === store.currentUser!.id)));
   const capturedPlan = selectedCycle ? plans.find(plan => plan.id === selectedCycle.planId) : undefined;
   const displayPlan = selectedCycle ? {
     ...(capturedPlan || activePlan), id: selectedCycle.planId, name: capturedPlan?.name || `${t('Plan revision')} ${selectedCycle.planRevision}`,
@@ -334,8 +347,8 @@ const OperationsClientWorkspace = () => {
         setActivityStage("idle");
         return setActivityFeedback({
           tone: "error",
-          text: t(uploaded.error),
-          action: uploaded.error === "Private file uploads require the Supabase backend." ? undefined : "upload",
+          text: uploaded.error || "The file could not be uploaded.",
+          action: uploaded.error === SERVICE_FILE_UPLOAD_UNAVAILABLE_ERROR ? undefined : "upload",
         });
       }
       attachment = uploaded.attachment;
@@ -348,7 +361,7 @@ const OperationsClientWorkspace = () => {
       if (attachment) await removeServiceFile(attachment);
       setActivitySaving(false);
       setActivityStage("idle");
-      return setActivityFeedback({ tone: "error", text: t(result.error || "Unable to add the comment.") });
+      return setActivityFeedback({ tone: "error", text: result.error || "Unable to add the comment." });
     }
     if (attachment) {
       const attachmentResult = store.addCycleCommentAttachment(result.id, attachment);
@@ -359,7 +372,7 @@ const OperationsClientWorkspace = () => {
         setActivityStage("idle");
         return setActivityFeedback({
           tone: "error",
-          text: t(cleanup.ok ? (attachmentResult.error || "Unable to attach the uploaded file.") : `${attachmentResult.error || "Unable to attach the uploaded file."} ${cleanup.error}`),
+          text: cleanup.ok ? (attachmentResult.error || "Unable to attach the uploaded file.") : "Unable to attach the uploaded file. The uploaded file was kept and could not be removed automatically.",
         });
       }
     }
@@ -436,7 +449,7 @@ const OperationsClientWorkspace = () => {
       setMessage('The pending add-on is no longer available. Review your draft before saving again.'); return;
     }
     setMessage(msg('feedback.addonAdded'), 'success');
-    setAddon(current => ({ ...current, name: '', platforms: '', quantity: 1, unitPrice: 0 }));
+    setAddon({ name: '', platforms: '', quantity: 1, unitPrice: 0, billingMode: 'one_off', effectiveFrom: addonDefaultDate, targetCycleId: '' });
     setAddonSheetOpen(false);
   };
 
@@ -510,7 +523,6 @@ const OperationsClientWorkspace = () => {
       />
       <div className="sticky top-[4.5rem] z-20 border-b border-line/80 bg-canvas/95 py-3 backdrop-blur-md">
         <SegmentedTabs<Tab> items={tabs} value={tab} onChange={next => {
-          if (next !== tab && tab === 'plan' && hasUnsavedChanges() && !window.confirm(t('Discard unsaved changes?'))) return;
           setTab(next);
         }} label={t("Client workspace")} idPrefix={CLIENT_WORKSPACE_TABS_ID} />
       </div>
@@ -972,7 +984,7 @@ const OperationsClientWorkspace = () => {
 
       {tab === "activity" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-activity`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-activity`} tabIndex={0} className="scroll-mt-36 space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {!isClient && <div className="flex justify-end"><Button disabled={!selectedCycle && !activityCycleId} onClick={() => { if (!pendingActivity.current) setActivityFeedback(null); if (!activityCycleId || (!comment.trim() && !file && !pendingActivity.current)) setActivityCycleId(selectedCycle?.id || null); setActivitySheetOpen(true); }}><MessageSquareText className="h-4 w-4" />{t("Add activity")}</Button></div>}
+          {!isClient && <div className="flex justify-end"><Button disabled={!activityCycle || !canAddActivityForCycle} onClick={() => { if (!pendingActivity.current) setActivityFeedback(null); if (!activityCycleId || (!comment.trim() && !file && !pendingActivity.current)) setActivityCycleId(selectedCycle?.id || null); setActivitySheetOpen(true); }}><MessageSquareText className="h-4 w-4" />{t("Add activity")}</Button></div>}
           <section className={cn(cardBase, "divide-y divide-line/70")}>
             {comments.map((item) => (
               <article key={item.id} className="p-5">

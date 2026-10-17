@@ -7,7 +7,7 @@ import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSession
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { useToastStore } from './useToastStore';
-import { hasInvalidDeliveryLink } from '../lib/deliveryLinks';
+import { deliverableLinkError, hasInvalidDeliveryLink } from '../lib/deliveryLinks';
 import { isTaskOpen } from '../lib/taskReporting';
 import { applyTaskWorkIntent, recordTaskWorkTransition, taskEvidenceError, taskWorkContactId, type TaskWorkIntent } from '../lib/staffWorkflow';
 import {
@@ -75,7 +75,6 @@ import {
   canManageClientPlans,
   canManageServiceCatalog,
   canManageServiceCycles,
-  hasPermission,
   canManageTaskTemplates,
   canViewServicePrices,
   canViewAllClients,
@@ -90,6 +89,7 @@ import {
   isHodUser,
   canViewTask,
   isHodRole,
+  isDepartmentScopedUser,
   sanitizeRolePermissions,
 } from '../lib/access';
 import { parseWorkspaceSnapshot, safeAvatarSource, safeHttpsUrl } from '../lib/security';
@@ -117,6 +117,7 @@ import {
   saveSecureMemberPermissions,
   saveSecureMemberRole,
   saveSecureWorkspace,
+  SECURE_WORKSPACE_ID,
   type MutationConflict,
   type MutationErrorCode,
   type SecureCommandType,
@@ -125,8 +126,10 @@ import {
   resolveAuthEmail,
   shouldUseSecureSupabase,
   subscribeToCurrentMemberAccessChanges,
+  subscribeToWorkspaceRevisionChanges,
   supabase,
 } from '../lib/supabaseClient';
+import { userFacingText } from '../lib/userFacingMessage';
 import {
   clearPasswordSetupMode,
   getPasswordSetupMode,
@@ -351,7 +354,7 @@ export interface StoreState {
   reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => MutationActionResult;
   requestRevision: (taskId: string, note?: string) => MutationActionResult;
   addTask: (task: Omit<Task, 'id' | 'isCompleted' | 'completedAt' | 'revisionCount' | 'clientApprovalStatus' | 'dueReminderSent' | 'approvalHistory'>) => string;
-  addProject: (project: Omit<Project, 'id' | 'totalTasks' | 'completedTasks'>) => string;
+  addProject: (project: Omit<Project, 'id'>) => string;
   updateProject: (projectId: string, data: ProjectUpdateInput) => { ok: boolean; error?: string };
   deleteProject: (projectId: string) => { ok: boolean; error?: string };
   createClientProfile: (data: { clientName: string } & ClientProfileInput) => { ok: boolean; id?: string; error?: string };
@@ -455,11 +458,11 @@ const waitForSyncIdle = async (timeoutMs = 5000) => {
 };
 let isApplyingRemoteSnapshot = false;
 let isApplyingNotificationRead = false;
-const seededUserIds = new Set(mockUsers.map(user => user.id));
-const seededProjectIds = new Set(mockProjects.map(project => project.id));
+// Monotonic counter of local workspace mutations. A pull captures it before its
+// network work and refuses to overwrite edits that landed while it was in flight.
+let localMutationEpoch = 0;
 const legacyDemoTaskIdSet = new Set<string>(legacyDemoTaskIds);
 const retiredDemoUserIdSet = new Set<string>(retiredDemoUserIds);
-const defaultTaskStatuses = ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'];
 const allowedDepartments = new Set<Department>(DEPARTMENTS);
 const allowedPriorities = new Set<Priority>(['Low', 'Medium', 'High', 'Urgent']);
 const sensitiveSnapshotKeyPattern = /(password|secret|token|api[_-]?key|service[_-]?role)/i;
@@ -469,14 +472,13 @@ const profileEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?[0-9\s\-()]{7,20}$/;
 
 const getFunctionErrorMessage = async (error: unknown, fallback: string) => {
-  if (!error || typeof error !== 'object') return fallback;
+  if (!error || typeof error !== 'object') return userFacingText(error, fallback);
   const context = (error as { context?: unknown }).context;
   if (typeof Response !== 'undefined' && context instanceof Response) {
-    const payload = await context.clone().json().catch(() => null) as { error?: unknown } | null;
-    if (typeof payload?.error === 'string' && payload.error.trim()) return payload.error;
+    const payload = await context.clone().json().catch(() => null) as { error?: unknown; message?: unknown } | null;
+    if (payload?.error || payload?.message) return userFacingText(payload.error || payload.message, fallback);
   }
-  const message = (error as { message?: unknown }).message;
-  return typeof message === 'string' && message.trim() ? message : fallback;
+  return userFacingText(error, fallback);
 };
 
 const isValidIsoDate = (value: string) => {
@@ -562,7 +564,17 @@ const isServiceClientInScope = (state: StoreState, clientId: string) => {
   if (!actor) return false;
   if (isBossKoo(actor) || actor.role !== 'Project Manager') return true;
   const client = state.clients.find(item => item.id === clientId);
-  return Boolean(client && canOpenServiceClient(actor, client.clientName, state.tasks, state.rolePermissions, state.clients, state.projects));
+  if (!client) return false;
+  // Authorize the exact record by id. When the company has an owner, a matching
+  // name must never widen the portfolio: a duplicate "Acme" owned by another PM
+  // is out of scope unless this PM participates via work bound to this clientId.
+  if (client.createdBy) {
+    if (client.createdBy === actor.id) return true;
+    return state.tasks.some(task => task.clientId === clientId && (task.createdBy === actor.id || task.assignedTo === actor.id))
+      || state.projects.some(project => project.clientId === clientId && project.createdBy === actor.id);
+  }
+  // Legacy/discovered records carry no owner, so fall back to the name-based check.
+  return canOpenServiceClient(actor, client.clientName, state.tasks, state.rolePermissions, state.clients, state.projects);
 };
 
 const serviceClientScopeError = 'This company is outside your portfolio.';
@@ -824,9 +836,6 @@ const deriveServiceProgress = (tasks: Task[], deliverables: Deliverable[], cycle
   return { tasks, deliverables: nextDeliverables, serviceCycles: nextCycles };
 };
 
-const legacySnapshotRuntime = () => ({ normalizeWorkspaceState, ensureBuiltinRoleTemplate, defaultTaskStatuses, legacyDemoTaskIdSet, retiredDemoUserIdSet, seededProjectIds, seededUserIds });
-export type LegacySnapshotRuntime = ReturnType<typeof legacySnapshotRuntime>;
-
 const workspaceStatesEqual = (left: PersistedWorkspaceState, right: PersistedWorkspaceState) => (
   JSON.stringify(normalizeWorkspaceState(left)) === JSON.stringify(normalizeWorkspaceState(right))
 );
@@ -978,6 +987,7 @@ export const useStore = create<StoreState>()(
         const next = typeof patch === 'function' ? patch(state) : patch;
         const changed = workspaceMutationFields.some(key => key in next && next[key] !== state[key]);
         if (!changed || !state.currentUser || isApplyingRemoteSnapshot || isApplyingNotificationRead || !shouldUseSupabase() || (next.backend && next.backend.hasLocalChanges === false)) return next;
+        localMutationEpoch += 1;
         return { ...next, backend: { ...(next.backend || state.backend), hasLocalChanges: true, pendingMutations: Math.max(1, (next.backend || state.backend).pendingMutations), status: 'saving' as const } };
       });
       return ({
@@ -1107,7 +1117,7 @@ export const useStore = create<StoreState>()(
                 ...state.backend,
                 status: compatibility.compatible
                   ? (hasRetainedChange ? 'retry_required' : 'live')
-                  : 'upgrade_required',
+                  : compatibility.retryable ? 'retry_required' : 'upgrade_required',
                 isLoading: false,
                 lastSyncedAt: loadedAt,
                 lastPulledAt: loadedAt,
@@ -1117,64 +1127,23 @@ export const useStore = create<StoreState>()(
                 hasLocalChanges: hasRetainedChange,
                 pendingMutations: hasRetainedChange ? 1 : 0,
                 pendingCommandType: retained ? retained.type : undefined,
-                upgradeRequired: !compatibility.compatible,
+                upgradeRequired: !compatibility.compatible && !compatibility.retryable,
                 error: compatibility.compatible ? undefined : compatibility.error,
                 message: compatibility.compatible
                   ? hasRetainedChange
-                    ? 'Your pending change was restored in this browser tab. Review and retry it when ready.'
-                    : 'Secure Supabase session is active.'
+                    ? 'Your unsaved change was restored here. Review and retry it when ready.'
+                    : "You're securely connected."
                   : compatibility.error,
               },
             }));
             isApplyingRemoteSnapshot = false;
             return;
           }
-
-          const { loadSupabaseSnapshot, createLegacySnapshotMerge } = await import('../lib/legacySnapshot');
-          if (!isWorkspaceSessionCurrent(sessionToken)) return;
-          const { hasRecoverableLocalWorkspaceContent, mergeWorkspaceStates } = createLegacySnapshotMerge(legacySnapshotRuntime());
-          const localBeforeRemote = selectPersistedWorkspaceState(get());
-          const result = await loadSupabaseSnapshot(localBeforeRemote);
-          const shouldRecoverLocal = hasRecoverableLocalWorkspaceContent(localBeforeRemote, result.state);
-          const recoveredState = shouldRecoverLocal
-            ? mergeWorkspaceStates(localBeforeRemote, result.state, result.updatedAt || '')
-            : result.state;
-          const shouldUploadRecoveredState = shouldRecoverLocal && !workspaceStatesEqual(recoveredState, result.state);
-          const snapshotToApply: SnapshotResult = shouldRecoverLocal
-            ? {
-                ...result,
-                state: recoveredState,
-                message: shouldUploadRecoveredState
-                  ? 'Recovered browser-local workspace changes. Syncing them to Supabase.'
-                  : result.message,
-              }
-            : result;
-          const syncedAt = new Date().toISOString();
-          isApplyingRemoteSnapshot = true;
-          apply((state) => ({
-            ...makeWorkspacePatch(state, snapshotToApply),
-            backend: {
-              mode: 'supabase',
-              status: shouldUploadRecoveredState ? 'saving' : 'live',
-              isConfigured: true,
-              isLoading: false,
-              isSaving: false,
-              isPulling: false,
-              lastSyncedAt: syncedAt,
-              lastPulledAt: syncedAt,
-              remoteVersion: result.version,
-              remoteUpdatedAt: result.updatedAt,
-              hasRemoteUpdate: false,
-              hasLocalChanges: shouldUploadRecoveredState,
-              pendingMutations: shouldUploadRecoveredState ? 1 : 0,
-              message: snapshotToApply.message,
-            }
-          }));
-          isApplyingRemoteSnapshot = false;
-          if (shouldUploadRecoveredState) {
-            useToastStore.getState().addToast(msg('errors.recoveredWorkspace'), 'info');
-          }
         } catch (error) {
+          isApplyingRemoteSnapshot = false;
+          const retainedCommand = getRetainedSecureCommand();
+          const retainedMemberMutation = getRetainedSecureMemberMutation();
+          const hasRetainedChange = Boolean(retainedCommand || retainedMemberMutation);
           apply({
             backend: {
               mode: 'supabase',
@@ -1184,10 +1153,13 @@ export const useStore = create<StoreState>()(
               isSaving: false,
               isPulling: false,
               hasRemoteUpdate: false,
-              hasLocalChanges: false,
-              pendingMutations: 0,
-              message: 'Supabase sync failed. Continuing with local state.',
-              error: error instanceof Error ? error.message : 'Unable to load Supabase state.',
+              hasLocalChanges: hasRetainedChange,
+              pendingMutations: hasRetainedChange ? 1 : 0,
+              pendingCommandType: retainedCommand?.type,
+              message: hasRetainedChange
+                ? "We couldn't reach the server. Your unsaved change is kept here — please retry it."
+                : "We couldn't reach the server. You can keep working; changes will sync when you're back online.",
+              error: userFacingText(error, "We couldn't load your workspace. Please try again."),
             }
           });
         }
@@ -1301,81 +1273,6 @@ export const useStore = create<StoreState>()(
             }
             return;
           }
-
-          const { saveSupabaseSnapshot, createLegacySnapshotMerge } = await import('../lib/legacySnapshot');
-          if (!isWorkspaceSessionCurrent(sessionToken)) return;
-          const { mergeWorkspaceStates } = createLegacySnapshotMerge(legacySnapshotRuntime());
-          const result = await saveSupabaseSnapshot(
-            selectPersistedWorkspaceState(stateToSave),
-            stateToSave.backend.remoteVersion || 1
-          );
-
-          if (!result.saved) {
-            const latest = result.latest;
-            if (latest) {
-              const merged = mergeWorkspaceStates(
-                selectPersistedWorkspaceState(current),
-                latest.state,
-                current.backend.lastSyncedAt || ''
-              );
-
-              isApplyingRemoteSnapshot = true;
-              apply((state) => ({
-                ...makeWorkspacePatch(state, { ...latest, state: merged }),
-                backend: {
-                  ...state.backend,
-                  isSaving: false,
-                  remoteVersion: latest.version,
-                  remoteUpdatedAt: latest.updatedAt,
-                  hasRemoteUpdate: false,
-                  hasLocalChanges: true,
-                }
-              }));
-              isApplyingRemoteSnapshot = false;
-
-
-
-              setTimeout(() => {
-                get().syncBackendNow();
-              }, 100);
-              return;
-            }
-
-            apply((state) => ({
-              backend: {
-                ...state.backend,
-                isSaving: false,
-                remoteVersion: result.version || state.backend.remoteVersion,
-                remoteUpdatedAt: result.updatedAt || state.backend.remoteUpdatedAt,
-                hasRemoteUpdate: true,
-                message: result.message,
-              }
-            }));
-            return;
-          }
-
-          const syncedAt = new Date().toISOString();
-          apply((state) => ({
-            backend: {
-              ...state.backend,
-              status: 'live',
-              isSaving: false,
-              lastSyncedAt: syncedAt,
-              lastPulledAt: syncedAt,
-              remoteVersion: result.version,
-              remoteUpdatedAt: result.updatedAt,
-              hasRemoteUpdate: false,
-              hasLocalChanges: false,
-              pendingMutations: 0,
-              pendingCommandType: undefined,
-              error: undefined,
-              errorCode: undefined,
-              message: result.message,
-            }
-          }));
-
-          acknowledgeActionFeedback(get(), stateToSave);
-
         } catch (error) {
           apply((state) => ({
             backend: {
@@ -1383,8 +1280,8 @@ export const useStore = create<StoreState>()(
               status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
               isSaving: false,
               pendingMutations: state.backend.hasLocalChanges ? 1 : 0,
-              message: 'Save was not confirmed. Your pending change is retained for retry.',
-              error: error instanceof Error ? error.message : 'Supabase could not confirm the save.',
+              message: "We couldn't confirm your save yet. Your change is kept safe — please retry.",
+              error: userFacingText(error, "We couldn't confirm your save. Please try again."),
               errorCode: 'RETRY_REQUIRED',
             }
           }));
@@ -1409,6 +1306,7 @@ export const useStore = create<StoreState>()(
             message: options.silent ? state.backend.message : 'Checking for the latest workspace data.',
           }
         }));
+        const epochBeforeLoad = localMutationEpoch;
 
         try {
           if (shouldUseSecureSupabase()) {
@@ -1424,9 +1322,9 @@ export const useStore = create<StoreState>()(
               apply((state) => ({
                 backend: {
                   ...state.backend,
-                  status: 'upgrade_required',
+                  status: compatibility.retryable ? 'retry_required' : 'upgrade_required',
                   isPulling: false,
-                  upgradeRequired: true,
+                  upgradeRequired: !compatibility.retryable,
                   error: compatibility.error,
                   message: compatibility.error,
                 },
@@ -1485,6 +1383,24 @@ export const useStore = create<StoreState>()(
             const secure = await loadSecureWorkspace(capabilityUser, { preserveRetainedCommand: true });
             if (!isWorkspaceSessionCurrent(sessionToken)) return;
             const latest = get();
+            if (localMutationEpoch !== epochBeforeLoad) {
+              // A local edit landed while the refresh was in flight. Never
+              // overwrite it (a forced pull included); keep it and let the
+              // auto-sync persist it.
+              apply((state) => ({
+                backend: {
+                  ...state.backend,
+                  isPulling: false,
+                  lastPulledAt: pulledAt,
+                  remoteVersion: secure.revision.version,
+                  remoteUpdatedAt: secure.revision.updatedAt,
+                },
+              }));
+              if (get().backend.hasLocalChanges || get().backend.pendingMutations > 0) {
+                queueMicrotask(() => { if (isWorkspaceSessionCurrent(sessionToken)) void get().syncBackendNow(); });
+              }
+              return;
+            }
             if (!options.force && (latest.backend.hasLocalChanges || latest.backend.pendingMutations > 0)) {
               apply((state) => ({
                 backend: {
@@ -1534,97 +1450,6 @@ export const useStore = create<StoreState>()(
             isApplyingRemoteSnapshot = false;
             return;
           }
-
-          const { loadSupabaseSnapshot, createLegacySnapshotMerge } = await import('../lib/legacySnapshot');
-          if (!isWorkspaceSessionCurrent(sessionToken)) return;
-          const { mergeWorkspaceStates } = createLegacySnapshotMerge(legacySnapshotRuntime());
-          const result = await loadSupabaseSnapshot(selectPersistedWorkspaceState(get()));
-          const pulledAt = new Date().toISOString();
-          const current = get();
-          const currentVersion = current.backend.remoteVersion || 0;
-          const hasUnsavedLocalChanges = current.backend.hasLocalChanges && !options.force;
-          const hasPendingRemoteUpdate = current.backend.hasRemoteUpdate && !options.force;
-          const remoteIsNewer = result.version > currentVersion || hasPendingRemoteUpdate;
-
-          if (hasUnsavedLocalChanges && remoteIsNewer) {
-            const merged = mergeWorkspaceStates(
-              selectPersistedWorkspaceState(current),
-              result.state,
-              current.backend.lastSyncedAt || ''
-            );
-
-            isApplyingRemoteSnapshot = true;
-            apply((state) => ({
-              ...makeWorkspacePatch(state, { ...result, state: merged }),
-              backend: {
-                ...state.backend,
-                isPulling: false,
-                lastPulledAt: pulledAt,
-                remoteVersion: result.version,
-                remoteUpdatedAt: result.updatedAt,
-                hasRemoteUpdate: false,
-                hasLocalChanges: true,
-                message: 'Auto-merged concurrent updates.',
-              }
-            }));
-            isApplyingRemoteSnapshot = false;
-
-
-
-            setTimeout(() => {
-              get().syncBackendNow();
-            }, 100);
-            return;
-          }
-
-          if (hasUnsavedLocalChanges || hasPendingRemoteUpdate) {
-            apply((state) => ({
-              backend: {
-                ...state.backend,
-                isPulling: false,
-                lastPulledAt: pulledAt,
-                remoteVersion: remoteIsNewer ? result.version : state.backend.remoteVersion,
-                remoteUpdatedAt: remoteIsNewer ? result.updatedAt : state.backend.remoteUpdatedAt,
-                hasRemoteUpdate: remoteIsNewer || state.backend.hasRemoteUpdate,
-                message: remoteIsNewer
-                  ? 'A newer workspace update is available. Refresh before saving.'
-                  : state.backend.message,
-              }
-            }));
-            return;
-          }
-
-          if (remoteIsNewer || options.force || currentVersion === 0) {
-            isApplyingRemoteSnapshot = true;
-            apply((state) => ({
-              ...makeWorkspacePatch(state, result),
-              backend: {
-                ...state.backend,
-                isPulling: false,
-                lastPulledAt: pulledAt,
-                remoteVersion: result.version,
-                remoteUpdatedAt: result.updatedAt,
-                hasRemoteUpdate: false,
-                hasLocalChanges: false,
-                message: options.silent ? 'Dashboard is current.' : result.message,
-              }
-            }));
-            isApplyingRemoteSnapshot = false;
-            return;
-          }
-
-          apply((state) => ({
-            backend: {
-              ...state.backend,
-              status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
-              isPulling: false,
-              lastPulledAt: pulledAt,
-              remoteVersion: result.version,
-              remoteUpdatedAt: result.updatedAt,
-              hasRemoteUpdate: false,
-              message: options.silent ? state.backend.message : 'Dashboard is current.',
-            }
-          }));
         } catch (error) {
           isApplyingRemoteSnapshot = false;
           apply((state) => ({
@@ -1632,8 +1457,8 @@ export const useStore = create<StoreState>()(
               ...state.backend,
               status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
               isPulling: false,
-              message: 'Unable to check the latest Supabase state.',
-              error: error instanceof Error ? error.message : 'Unable to load Supabase state.',
+              message: 'Unable to check for the latest updates.',
+              error: userFacingText(error, "We couldn't load your workspace. Please try again."),
             }
           }));
         } finally {
@@ -1656,7 +1481,7 @@ export const useStore = create<StoreState>()(
         try { revision = await loadSecureWorkspaceRevision(); }
         catch (error) {
           if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
-          const message = error instanceof Error ? error.message : 'Unable to load the latest workspace right now. Try again shortly.';
+          const message = userFacingText(error, 'Unable to load the latest workspace right now. Try again shortly.');
           apply(state => ({ backend: { ...state.backend, isSaving: false, error: message, message } }));
           return { ok: false, error: message };
         }
@@ -1806,9 +1631,9 @@ export const useStore = create<StoreState>()(
             apply((state) => ({
               backend: {
                 ...state.backend,
-                status: 'upgrade_required',
+                status: compatibility.retryable ? 'retry_required' : 'upgrade_required',
                 isSaving: false,
-                upgradeRequired: true,
+                upgradeRequired: !compatibility.retryable,
                 error: compatibility.error,
                 message: compatibility.error,
               },
@@ -2015,6 +1840,9 @@ export const useStore = create<StoreState>()(
           if (error || !data.user) {
             return loginFailure(classifyLoginFailure(error?.message || ''));
           }
+          // A normal sign-in always discards any password-setup link mode left
+          // over from an abandoned invite/recovery link in this tab.
+          clearPasswordSetupMode();
 
           try {
             const retainedBeforeLogin = restoreSecureWorkspaceCommand(data.user.id);
@@ -2043,7 +1871,7 @@ export const useStore = create<StoreState>()(
                 ...state.backend,
                 status: compatibility.compatible
                   ? (hasRetainedChange ? 'retry_required' : 'live')
-                  : 'upgrade_required',
+                  : compatibility.retryable ? 'retry_required' : 'upgrade_required',
                 isLoading: false,
                 workspaceVersion: secure.revision.version,
                 remoteVersion: secure.revision.version,
@@ -2052,12 +1880,12 @@ export const useStore = create<StoreState>()(
                 pendingMutations: hasRetainedChange ? 1 : 0,
                 pendingCommandType: hasRetainedChange ? retainedBeforeLogin?.type : undefined,
                 hasLocalChanges: hasRetainedChange,
-                upgradeRequired: !compatibility.compatible,
+                upgradeRequired: !compatibility.compatible && !compatibility.retryable,
                 error: compatibility.compatible ? undefined : compatibility.error,
                 message: compatibility.compatible
                   ? hasRetainedChange
-                    ? 'Secure session restored. Review and retry the retained change.'
-                    : 'Secure Supabase session is active.'
+                    ? "You're signed in. Review and retry your unsaved change."
+                    : "You're securely connected."
                   : compatibility.error,
               },
             }));
@@ -2065,6 +1893,7 @@ export const useStore = create<StoreState>()(
             if (typeof window !== 'undefined') startBackendAutoSync();
             return { ok: true };
           } catch (loadError) {
+            isApplyingRemoteSnapshot = false;
             if (!isWorkspaceSessionCurrent(sessionToken)) return loginFailure('workspace_load_failed');
             await supabase.auth.signOut({ scope: 'local' });
             const message = loadError instanceof Error ? loadError.message : String(loadError || '');
@@ -2130,8 +1959,13 @@ export const useStore = create<StoreState>()(
           const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
             redirectTo: passwordSetupRedirectUrl(),
           });
-          if (error && /fetch|network|offline/i.test(error.message)) {
-            return { ok: false, error: 'The recovery service could not be reached. Please try again.' };
+          if (error) {
+            if (/fetch|network|offline/i.test(error.message)) {
+              return { ok: false, error: 'The recovery service could not be reached. Please try again.' };
+            }
+            // Rate limits, SMTP and configuration failures must not be reported
+            // as a sent email; Supabase already keeps unknown emails silent.
+            return { ok: false, error: userFacingText(error, 'The recovery service could not be reached. Please try again.') };
           }
           return { ok: true };
         } catch {
@@ -2227,7 +2061,7 @@ export const useStore = create<StoreState>()(
         if (duplicate) return { ok: false, error: 'Another user already uses that name or email.' };
 
         if (data.avatar?.trim() && !avatar) {
-          return { ok: false, error: 'Avatar must be an uploaded photo, app image, generated avatar, or Supabase image URL.' };
+          return { ok: false, error: 'Avatar must be an uploaded photo, app image, generated avatar, or image link.' };
         }
         if (shouldUseSecureSupabase() && email !== cleanAccountEmail(currentUser.email)) {
           return { ok: false, error: 'Confirm the login email change with your current password first.' };
@@ -2296,7 +2130,10 @@ export const useStore = create<StoreState>()(
         });
         if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to update the login email.') };
 
-        await supabase.auth.refreshSession();
+        const { error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          return { ok: false, error: 'Email updated, but your session could not be refreshed. Sign out, then sign in again.' };
+        }
         if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
           await get().pullBackendNow({ force: true, silent: true });
         }
@@ -2428,7 +2265,7 @@ export const useStore = create<StoreState>()(
                 }
               : notification
           ));
-          return { notifications, notificationUnreadCount: countUnreadForUser(currentUser, notifications) };
+          return { notifications, notificationUnreadCount: shouldUseSecureSupabase() ? state.notificationUnreadCount : countUnreadForUser(currentUser, notifications) };
         });
         isApplyingNotificationRead = false;
       },
@@ -2452,7 +2289,7 @@ export const useStore = create<StoreState>()(
                 }
               : notification
           ));
-          return { notifications, notificationUnreadCount: countUnreadForUser(currentUser, notifications) };
+          return { notifications, notificationUnreadCount: shouldUseSecureSupabase() ? state.notificationUnreadCount : countUnreadForUser(currentUser, notifications) };
         });
         isApplyingNotificationRead = false;
       },
@@ -2477,7 +2314,7 @@ export const useStore = create<StoreState>()(
                 : notification.isRead,
             };
           });
-          return { notifications, notificationUnreadCount: countUnreadForUser(currentUser, notifications) };
+          return { notifications, notificationUnreadCount: shouldUseSecureSupabase() ? state.notificationUnreadCount : countUnreadForUser(currentUser, notifications) };
         });
         isApplyingNotificationRead = false;
       },
@@ -2556,7 +2393,7 @@ export const useStore = create<StoreState>()(
           const returningForRevision = ['In Progress', 'Revision'].includes(nextStatus) && ['Waiting Approval', 'Approved', 'Completed'].includes(t.status);
           const clientApprovalStatus = returningForRevision ? 'Rejected' : isReadyForClientReview
             ? isCompleted
-              ? t.visibility !== 'internal' ? (t.clientApprovalStatus === 'Approved' ? 'Approved' : 'Pending') : (nextStatus !== t.status ? 'Approved' : t.clientApprovalStatus)
+              ? t.visibility !== 'internal' ? (t.clientApprovalStatus === 'Approved' ? 'Approved' : t.clientApprovalStatus === 'Rejected' ? 'Rejected' : 'Pending') : (nextStatus !== t.status ? 'Approved' : t.clientApprovalStatus)
               : 'Pending'
             : t.clientApprovalStatus === 'Approved' || wasCompleted
               ? 'Pending'
@@ -2709,6 +2546,14 @@ export const useStore = create<StoreState>()(
         if (stageError) {
           useToastStore.getState().addToast(stageError, 'warning');
           result = { ok: false, error: stageError };
+          return state;
+        }
+        // Submitted, approved, finished or cancelled work cannot change hands;
+        // otherwise a Completed task silently transfers ownership, an Approved
+        // task is reopened without the protected-output contract, a submitted
+        // task is reset to Pending, or cancelled work pings a new assignee.
+        if (['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status) || task.isCompleted) {
+          result = { ok: false, error: 'Return this work for revision before reassigning it.' };
           return state;
         }
 
@@ -2886,6 +2731,11 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
         }
         if (assignmentChanged) {
+          // Submitted, approved, finished or cancelled work cannot change hands,
+          // matching updateTaskAssignee.
+          if (['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status) || task.isCompleted) {
+            return { ok: false, error: 'Return this work for revision before reassigning it.' };
+          }
           // Stage 1 must also hold when the department changes into one with an
           // HOD while the current assignee stays a staff member; otherwise a PM
           // could route work around the HOD checkpoint by editing the department.
@@ -2929,6 +2779,19 @@ export const useStore = create<StoreState>()(
           if (project?.clientId && clientId !== project.clientId) return { ok: false, error: 'Choose a company from the Companies database.' };
           if (isWorkflowTask(task) && clientId !== task.clientId) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
         }
+        // Ordinary-task link changes must satisfy the same rules as
+        // linkTaskToDeliverable instead of bypassing the explicit validator.
+        if (!isWorkflowTask(task) && data.deliverableId) {
+          const nextCycleId = data.serviceCycleId ?? task.serviceCycleId;
+          const deliverableError = deliverableLinkError(
+            { id: taskId, clientId, deliverableId: data.deliverableId, serviceCycleId: nextCycleId },
+            state.deliverables.find(item => item.id === data.deliverableId),
+            state.deliverables,
+          );
+          if (deliverableError) return { ok: false, error: deliverableError };
+        }
+        if (!isWorkflowTask(task) && data.visibility !== undefined && data.visibility !== task.visibility
+          && (task.status !== 'Pending' || task.isCompleted)) return { ok: false, error: 'Task visibility cannot change after work has started.' };
         const serviceType = data.serviceType !== undefined ? data.serviceType.trim() : task.serviceType;
         const startDate = data.startDate !== undefined ? normalizeRequiredStartDate(data.startDate) : normalizeRequiredStartDate(task.startDate);
         const dueDate = data.dueDate !== undefined ? normalizeOptionalIsoDate(data.dueDate) : task.dueDate;
@@ -3006,7 +2869,7 @@ export const useStore = create<StoreState>()(
           clientApprovalStatus: statusChanged
             ? isReadyForClientReview
               ? isCompleted
-                ? task.visibility !== 'internal' ? (task.clientApprovalStatus === 'Approved' ? 'Approved' : 'Pending') : (status !== task.status ? 'Approved' : task.clientApprovalStatus)
+                ? task.visibility !== 'internal' ? (task.clientApprovalStatus === 'Approved' ? 'Approved' : task.clientApprovalStatus === 'Rejected' ? 'Rejected' : 'Pending') : (status !== task.status ? 'Approved' : task.clientApprovalStatus)
                 : 'Pending'
               : task.clientApprovalStatus === 'Approved' || wasCompleted
                 ? 'Pending'
@@ -3034,6 +2897,12 @@ export const useStore = create<StoreState>()(
         const workflowError = workflowTransitionError(task, updatedTask, currentUser, state.tasks, state.serviceCycles, state.deliverables, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (workflowError) return { ok: false, error: workflowError };
         if (state.backend.mode === 'local') delete updatedTask.reviewOverrideReason;
+        // A department change invalidates any review configuration scoped to the
+        // previous department (accountable lead / temporary cover).
+        if (nextDepartment !== task.department) {
+          updatedTask.accountableLeadId = undefined;
+          updatedTask.reviewCover = undefined;
+        }
 
         const notifications: AppNotification[] = [];
         if (state.backend.mode === 'local') notifications.push(...localHodReviewNotifications(
@@ -3102,12 +2971,24 @@ export const useStore = create<StoreState>()(
 
         set(current => {
           const tasks = current.tasks.filter(item => item.id !== taskId);
-          const deliverables = current.deliverables.map(item => item.taskIds.includes(taskId)
-            ? { ...item, taskIds: item.taskIds.filter(id => id !== taskId), updatedAt: new Date().toISOString() }
-            : item);
+          const now = new Date().toISOString();
+          const deliverables = current.deliverables.map(item => {
+            const removedFromLinks = item.taskIds.includes(taskId);
+            const clearsPrimary = item.primaryTaskId === taskId;
+            if (!removedFromLinks && !clearsPrimary) return item;
+            return {
+              ...item,
+              taskIds: removedFromLinks ? item.taskIds.filter(id => id !== taskId) : item.taskIds,
+              primaryTaskId: clearsPrimary ? undefined : item.primaryTaskId,
+              updatedAt: now,
+            };
+          });
           return {
             tasks,
-            notifications: [...notifications, ...(current.notifications || [])],
+            notifications: [
+              ...notifications,
+              ...(current.notifications || []).filter(item => item.route?.entityId !== taskId),
+            ],
             ...deriveServiceProgress(tasks, deliverables, current.serviceCycles),
           };
         });
@@ -3151,18 +3032,27 @@ export const useStore = create<StoreState>()(
           if (t.id !== taskId) return t;
 
           const preserveCompletion = status === 'Approved' && (t.status === 'Completed' || t.isCompleted);
-
-          return {
+          const nextStatus: TaskStatus = preserveCompletion ? 'Completed' : status === 'Approved' ? 'Approved' : 'In Progress';
+          // Record the decision through the canonical transition helper so review
+          // metadata (reviewRequestedBy/acceptedBy/blocker) and history stay in
+          // step with every other status change. The client's decision is stored
+          // in approvalHistory; the internal reviewDecision is preserved because
+          // recordTaskWorkTransition would otherwise stamp the client as reviewer.
+          const transitioned = recordTaskWorkTransition(t, {
             ...t,
             clientApprovalStatus: status,
-            status: preserveCompletion ? 'Completed' as TaskStatus : status === 'Approved' ? 'Approved' as TaskStatus : 'In Progress' as TaskStatus,
+            status: nextStatus,
             reviewDecision: status === 'Approved' ? t.reviewDecision : undefined,
             isCompleted: preserveCompletion,
             completedAt: preserveCompletion ? t.completedAt : undefined,
-            completionPercentage: preserveCompletion ? 100 : status === 'Approved' ? 80 : 50,
             revisionCount: status === 'Rejected' ? t.revisionCount + 1 : t.revisionCount,
             approvalHistory: [...(t.approvalHistory || []), event],
             updatedAt: now,
+          }, currentUser.id, now);
+          return {
+            ...transitioned,
+            reviewDecision: status === 'Approved' ? t.reviewDecision : undefined,
+            completionPercentage: preserveCompletion ? 100 : status === 'Approved' ? 80 : getTaskProgress(transitioned, state.users),
           };
         });
 
@@ -3207,8 +3097,16 @@ export const useStore = create<StoreState>()(
         }
         const currentUser = state.currentUser;
         const task = state.tasks.find(t => t.id === taskId);
-        if (!currentUser || !task || !canRequestTaskRevision(currentUser, task, state.rolePermissions) || !canEditTask(currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) {
+        const scope = { users: state.users, clients: state.clients, projects: state.projects };
+        if (!currentUser || !task || !canRequestTaskRevision(currentUser, task, state.rolePermissions, scope) || !canEditTask(currentUser, task, state.rolePermissions, scope)) {
           result = { ok: false, error: 'You do not have permission to request a revision.' };
+          return state;
+        }
+        // A revision may only withdraw work that was actually submitted for review.
+        // Without this guard an unguarded call could revive a Cancelled task or push
+        // a never-reviewed task into revision and corrupt its client acceptance.
+        if (!['Waiting Approval', 'Approved', 'Completed'].includes(task.status)) {
+          result = { ok: false, error: 'Request a revision only after work has been submitted for review.' };
           return state;
         }
 
@@ -3221,22 +3119,23 @@ export const useStore = create<StoreState>()(
             }
           : null;
 
+        const now = new Date().toISOString();
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
 
-          return {
+          const updated = recordTaskWorkTransition(t, {
             ...t,
             revisionCount: t.revisionCount + 1,
             clientApprovalStatus: 'Rejected' as ClientApprovalStatus,
             status: 'In Progress' as TaskStatus,
-            reviewDecision: undefined,
-            reviewOverrideReason: undefined,
             isCompleted: false,
             completedAt: undefined,
-            completionPercentage: 50,
+            reviewDecision: undefined,
+            reviewOverrideReason: undefined,
             comments: revisionComment ? [...(t.comments || []), revisionComment] : t.comments,
-            updatedAt: new Date().toISOString(),
-          };
+            updatedAt: now,
+          }, currentUser.id, now);
+          return { ...updated, completionPercentage: getTaskProgress(updated, state.users) };
         });
 
         queueActionFeedback(currentUser.id, `task:${taskId}:revision`, msg('task.revisionRequested'), saved => saved.tasks.some(item => item.id === taskId && item.revisionCount === task.revisionCount + 1 && item.status === 'In Progress'));
@@ -3291,15 +3190,18 @@ export const useStore = create<StoreState>()(
           );
           if (!assignableProjectIds.has(taskData.projectId)) return '';
         }
-        if (taskData.deliverableId && state.deliverables.some(item => item.id === taskData.deliverableId && item.status === 'Delivered')) return '';
-        if (['Staff', 'HOD'].includes(currentUser.role) && !project) {
-          const serviceDeliverable = taskData.deliverableId
-            ? state.deliverables.find(item => item.id === taskData.deliverableId && item.cycleId === taskData.serviceCycleId)
-            : undefined;
-          const canCreateForServiceClient = serviceDeliverable
-            && serviceDeliverable.clientId === taskData.clientId
-            && canOpenServiceClient(currentUser, serviceDeliverable.clientName, state.tasks, state.rolePermissions);
-          if (!canCreateForServiceClient) return '';
+        // Deliverable links are validated for every role, not only Staff/HOD.
+        // Otherwise a Project Manager could attach work to another portfolio's
+        // deliverable and mutate its derived status.
+        if (taskData.deliverableId) {
+          const serviceDeliverable = state.deliverables.find(item => item.id === taskData.deliverableId);
+          const deliverableClientId = project?.clientId || taskData.clientId;
+          if (deliverableLinkError(
+            { id: '', clientId: deliverableClientId, deliverableId: taskData.deliverableId, serviceCycleId: taskData.serviceCycleId },
+            serviceDeliverable,
+            state.deliverables,
+          )) return '';
+          if (!canOpenServiceClient(currentUser, serviceDeliverable!.clientName, state.tasks, state.rolePermissions, state.clients, state.projects)) return '';
         }
 
         const title = taskData.title.trim();
@@ -3443,8 +3345,6 @@ export const useStore = create<StoreState>()(
           startDate,
           deadline,
           createdBy: currentUser.id,
-          totalTasks: 0,
-          completedTasks: 0,
           id: nowId('P'),
           updatedAt: new Date().toISOString(),
         };
@@ -3784,22 +3684,35 @@ export const useStore = create<StoreState>()(
         const currentUser = state.currentUser;
         const client = state.clients.find(c => c.id === clientId);
         if (!client) return { ok: false, error: 'Company not found.' };
-        if (!canDeleteClientProfile(currentUser, client.clientName, state.clients, state.rolePermissions, state.tasks)) {
+        if (!canDeleteClientProfile(currentUser, client.clientName, state.clients, state.rolePermissions, state.tasks, clientId)) {
           return { ok: false, error: 'You need permission to delete this company.' };
         }
 
         const clientKey = normalizeClientKey(client.clientName);
+        // Matching by name must never widen a delete: a row that carries a
+        // different clientId belongs to another company even if the name matches
+        // (duplicate company names are allowed). Only fall back to the name for
+        // legacy rows that have no clientId at all.
         const belongsToClient = (item: { clientId?: string; clientName?: string }) => (
-          item.clientId === clientId
-          || (Boolean(item.clientName) && normalizeClientKey(item.clientName) === clientKey)
+          item.clientId ? item.clientId === clientId
+            : Boolean(item.clientName) && normalizeClientKey(item.clientName) === clientKey
+        );
+        // A Client portal account points at this company. Removing the company
+        // without clearing the account leaves a ghost login bound to a company
+        // that no longer exists.
+        const removedClientUserIds = new Set(
+          state.users.filter(user => user.role === 'Client' && normalizeClientKey(user.companyName) === clientKey).map(user => user.id)
         );
 
         set(current => ({
           clients: current.clients.filter(c => c.id !== clientId),
           deletedClientIds: Array.from(new Set([...(current.deletedClientIds || []), clientId])),
+          users: current.users.filter(user => !removedClientUserIds.has(user.id)),
+          deletedUserIds: Array.from(new Set([...(current.deletedUserIds || []), ...removedClientUserIds])),
           projects: current.projects.filter(item => !belongsToClient(item)),
           tasks: current.tasks.filter(item => !belongsToClient(item)),
-          notifications: current.notifications.filter(item => normalizeClientKey(item.targetClient) !== clientKey),
+          notifications: current.notifications.filter(item => normalizeClientKey(item.targetClient) !== clientKey
+            && !(Boolean(item.targetUserId) && removedClientUserIds.has(item.targetUserId as string))),
           clientPlans: current.clientPlans.filter(item => item.clientId !== clientId),
           serviceCycles: current.serviceCycles.filter(item => item.clientId !== clientId),
           deliverables: current.deliverables.filter(item => item.clientId !== clientId),
@@ -4398,7 +4311,7 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const task = state.tasks.find(item => item.id === taskId);
-        if (!hasPermission(state.currentUser, 'editTasks', state.rolePermissions) || !task || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
+        if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
         if (isWorkflowTask(task) && (cycleId !== task.serviceCycleId || deliverableId !== task.deliverableId)) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
         const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
         if (deliverableId && (!deliverable || deliverable.cycleId !== cycleId || deliverable.clientId !== task.clientId)) return { ok: false, error: 'The task and deliverable must belong to the same client and cycle.' };
@@ -4407,13 +4320,20 @@ export const useStore = create<StoreState>()(
         const now = new Date().toISOString();
         set(current => {
           const tasks = current.tasks.map(item => item.id === taskId ? { ...item, serviceCycleId: cycleId, deliverableId, updatedAt: now } : item);
-          const deliverables = current.deliverables.map(item => ({
-            ...item,
-            taskIds: item.id === deliverableId
-              ? Array.from(new Set([...item.taskIds, taskId]))
-              : item.taskIds.filter(id => id !== taskId),
-            updatedAt: item.taskIds.includes(taskId) || item.id === deliverableId ? now : item.updatedAt,
-          }));
+          const deliverables = current.deliverables.map(item => {
+            const isTarget = item.id === deliverableId;
+            const wasLinked = item.taskIds.includes(taskId);
+            if (!isTarget && !wasLinked) return item;
+            return {
+              ...item,
+              taskIds: isTarget
+                ? Array.from(new Set([...item.taskIds, taskId]))
+                : item.taskIds.filter(id => id !== taskId),
+              // Unlinking a task must not leave a dangling primary reference.
+              primaryTaskId: !isTarget && item.primaryTaskId === taskId ? undefined : item.primaryTaskId,
+              updatedAt: wasLinked || isTarget ? now : item.updatedAt,
+            };
+          });
           return { tasks, ...deriveServiceProgress(tasks, deliverables, current.serviceCycles) };
         });
         return { ok: true };
@@ -4495,7 +4415,7 @@ export const useStore = create<StoreState>()(
         if (!cycle || !actor || actor.role === 'Client') return { ok: false, error: 'You cannot comment on this cycle.' };
         if (!isServiceClientInScope(state, cycle.clientId)) return { ok: false, error: serviceClientScopeError };
         const authorized = canManageServiceCycles(actor, state.rolePermissions)
-          || (canOpenServiceClient(actor, cycle.clientName, state.tasks, state.rolePermissions, state.clients) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
+          || (canOpenServiceClient(actor, cycle.clientName, state.tasks, state.rolePermissions, state.clients, state.projects) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
         const clean = text.trim().slice(0, 10_000);
         if (!authorized || !clean) return { ok: false, error: authorized ? 'Comment cannot be empty.' : 'You do not have access to this cycle.' };
         const now = new Date().toISOString();
@@ -4510,8 +4430,10 @@ export const useStore = create<StoreState>()(
         const comment = state.cycleComments.find(item => item.id === commentId);
         if (!comment || comment.userId !== state.currentUser?.id) return { ok: false, error: 'You cannot attach a file to this comment.' };
         if (!isServiceClientInScope(state, comment.clientId)) return { ok: false, error: serviceClientScopeError };
-        if (!canManageServiceCycles(state.currentUser, state.rolePermissions)
-          && !canOpenServiceClient(state.currentUser, comment.clientName, state.tasks, state.rolePermissions, state.clients)) return { ok: false, error: 'You do not have access to this cycle.' };
+        const authorized = canManageServiceCycles(state.currentUser, state.rolePermissions)
+          || (canOpenServiceClient(state.currentUser, comment.clientName, state.tasks, state.rolePermissions, state.clients, state.projects)
+            && state.tasks.some(task => task.serviceCycleId === comment.cycleId && task.assignedTo === state.currentUser?.id));
+        if (!authorized) return { ok: false, error: 'You do not have access to this cycle.' };
         set(current => ({ cycleComments: current.cycleComments.map(item => item.id === commentId ? { ...item, attachments: [...item.attachments, attachment], updatedAt: new Date().toISOString() } : item) }));
         return { ok: true };
       },
@@ -4736,6 +4658,12 @@ export const useStore = create<StoreState>()(
           });
           if (error) return { ok: false, error: error.message };
           if (signUpData.session) await supabase.auth.signOut({ scope: 'local' });
+          // When email confirmation is on, Supabase obfuscates an existing
+          // email by returning a user with an empty identities array instead of
+          // an error. Treat that as the duplicate it is.
+          if (signUpData.user && (signUpData.user.identities?.length ?? 0) === 0) {
+            return { ok: false, error: 'This email is already registered. Use the sign-in page instead.' };
+          }
           if (!signUpData.user && !signUpData.session) {
             return { ok: false, error: 'This email is already registered. Use the sign-in page instead.' };
           }
@@ -4801,7 +4729,7 @@ export const useStore = create<StoreState>()(
         if (departments.length === 0 && data.role !== 'Project Manager') {
           return { ok: false, error: 'Choose at least one department.' };
         }
-        if (initialPassword !== DEFAULT_USER_PASSWORD && initialPassword.length < 12) {
+        if (initialPassword && initialPassword !== DEFAULT_USER_PASSWORD && initialPassword.length < 12) {
           return { ok: false, error: 'Custom initial passwords must be at least 12 characters.' };
         }
         if (data.role === 'Client' && !companyName) {
@@ -4932,7 +4860,7 @@ export const useStore = create<StoreState>()(
 
         apply((state) => {
           const notification = makeNotification({
-            targetRole: 'Project Manager',
+            targetUserId: currentUser.id,
             title: 'Member Added',
             message: `${currentUser.name} added ${name} as ${data.role}.`,
             route: { page: 'approvals' },
@@ -4961,7 +4889,7 @@ export const useStore = create<StoreState>()(
 
         const name = data.name.trim();
         if (!name) return { ok: false, error: 'Role name is required.' };
-        const permissions = sanitizeRolePermissions(data.permissions, data.baseRole);
+        const permissions = sanitizeRolePermissions(data.permissions, data.baseRole, { departmentScoped: data.departmentScoped === true });
         const hasAnyPermission = permissions && Object.values(permissions).some(Boolean);
         if (!hasAnyPermission) return { ok: false, error: 'Choose at least one permission so members with this role keep workspace access.' };
 
@@ -5004,9 +4932,10 @@ export const useStore = create<StoreState>()(
 
         const nextName = editingBuiltin ? targetRole.name : data.name?.trim() || targetRole.name;
         const nextBaseRole = editingBuiltin ? targetRole.baseRole : data.baseRole || targetRole.baseRole;
+        const nextDepartmentScoped = editingBuiltin ? nextBaseRole === 'HOD' : (data.departmentScoped ?? targetRole.departmentScoped);
         const duplicate = get().rolePermissions.some(role => role.id !== id && role.name.toLowerCase() === nextName.toLowerCase());
         if (duplicate) return { ok: false, error: 'A role with this name already exists.' };
-        const nextPermissions = sanitizeRolePermissions(data.permissions ?? targetRole.permissions, nextBaseRole);
+        const nextPermissions = sanitizeRolePermissions(data.permissions ?? targetRole.permissions, nextBaseRole, { departmentScoped: nextDepartmentScoped === true });
         if (!Object.values(nextPermissions).some(Boolean)) {
           return { ok: false, error: 'Choose at least one permission so members with this role keep workspace access.' };
         }
@@ -5020,7 +4949,7 @@ export const useStore = create<StoreState>()(
                   permissions: nextPermissions,
                   name: nextName,
                   baseRole: nextBaseRole,
-                  departmentScoped: editingBuiltin ? nextBaseRole === 'HOD' : (data.departmentScoped ?? role.departmentScoped),
+                  departmentScoped: nextDepartmentScoped,
                   isProtected: editingBuiltin ? false : role.isProtected,
                   isBuiltin: editingBuiltin ? true : role.isBuiltin,
                   description: data.description !== undefined ? (data.description.trim() || undefined) : role.description,
@@ -5378,7 +5307,7 @@ export const useStore = create<StoreState>()(
         }
 
         const permissions = requestedPermissions
-          ? sanitizeRolePermissions(requestedPermissions, targetUser.role)
+          ? sanitizeRolePermissions(requestedPermissions, targetUser.role, { departmentScoped: isDepartmentScopedUser(targetUser, state.rolePermissions) })
           : undefined;
         if (permissions && !Object.values(permissions).some(Boolean)) {
           return { ok: false, error: 'Choose at least one permission or reset to role defaults.' };
@@ -5480,7 +5409,7 @@ export const useStore = create<StoreState>()(
         }
         const customRole = selectedCustomRole;
         const departments = normalizeMemberDepartments(role, departmentsInput);
-        if (departments.length === 0) return { ok: false, error: 'Choose at least one department before approving this member.' };
+        if (departments.length === 0 && role !== 'Project Manager') return { ok: false, error: 'Choose at least one department before approving this member.' };
 
         const duplicate = state.users.some(user => (
           user.name.toLowerCase() === reg.name.toLowerCase() ||
@@ -5574,6 +5503,7 @@ export const useStore = create<StoreState>()(
             headers: { Authorization: `Bearer ${session.access_token}` },
             body: { action: 'delete_member', memberId: userId },
           });
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
           if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to delete the member account.') };
           try {
             clearLocalUserPassword(userId);
@@ -5588,7 +5518,7 @@ export const useStore = create<StoreState>()(
 
         apply((current) => {
           const notification = makeNotification({
-            targetRole: 'Project Manager',
+            targetUserId: state.currentUser?.id,
             title: 'Member Removed',
             message: `${state.currentUser?.name || 'Super admin'} removed ${targetUser?.name}. ${state.tasks.some(task => task.assignedTo === userId) ? 'Their assigned tasks are now unassigned.' : ''}`,
             route: { page: 'approvals' },
@@ -5852,6 +5782,8 @@ export const startBackendAutoSync = () => {
   backendAutoSyncStarted = true;
   let accessRealtimeCleanup: (() => void) | null = null;
   let accessRealtimeKey: string | null = null;
+  let workspaceRealtimeCleanup: (() => void) | null = null;
+  let workspaceRealtimeKey: string | null = null;
   const accessRefresh = createAccessRefreshCoordinator(
     () => {
       const state = useStore.getState();
@@ -5864,6 +5796,7 @@ export const startBackendAutoSync = () => {
     },
     () => useStore.getState().pullBackendNow({ force: true, silent: true }),
   );
+  const reportRealtimeFailure = () => useToastStore.getState().addToast(msg('errors.realtimeUnavailable'), 'warning');
 
   const syncAccessRealtime = () => {
     const currentUser = useStore.getState().currentUser;
@@ -5881,7 +5814,19 @@ export const startBackendAutoSync = () => {
       currentUser?.customRoleId,
       builtinRoleId,
       accessRefresh.request,
+      reportRealtimeFailure,
     );
+  };
+
+  const syncWorkspaceRealtime = () => {
+    const currentUser = useStore.getState().currentUser;
+    const key = shouldUseSecureSupabase() && currentUser ? SECURE_WORKSPACE_ID : null;
+    if (key === workspaceRealtimeKey) return;
+    workspaceRealtimeCleanup?.();
+    workspaceRealtimeCleanup = null;
+    workspaceRealtimeKey = key;
+    if (!key) return;
+    workspaceRealtimeCleanup = subscribeToWorkspaceRevisionChanges(key, accessRefresh.request, reportRealtimeFailure);
   };
 
   // A role, permission, department, or custom-role change can invalidate a
@@ -5916,12 +5861,17 @@ export const startBackendAutoSync = () => {
   };
 
   syncAccessRealtime();
+  syncWorkspaceRealtime();
   const unsubscribeAccessRealtime = useStore.subscribe((state, previousState) => {
     if (
       state.currentUser?.authUserId !== previousState.currentUser?.authUserId
       || state.currentUser?.customRoleId !== previousState.currentUser?.customRoleId
       || state.currentUser?.role !== previousState.currentUser?.role
     ) syncAccessRealtime();
+
+    if (state.currentUser?.authUserId !== previousState.currentUser?.authUserId) {
+      syncWorkspaceRealtime();
+    }
 
     const previousSignature = accessSignature(previousState.currentUser);
     const nextSignature = accessSignature(state.currentUser);
@@ -6073,6 +6023,9 @@ export const startBackendAutoSync = () => {
     accessRealtimeCleanup?.();
     accessRealtimeCleanup = null;
     accessRealtimeKey = null;
+    workspaceRealtimeCleanup?.();
+    workspaceRealtimeCleanup = null;
+    workspaceRealtimeKey = null;
     accessRefresh.reset();
     window.clearInterval(pullInterval);
     window.removeEventListener('focus', pullLatest);
@@ -6095,6 +6048,8 @@ useStore.subscribe((state, previous) => {
 });
 
 export const clearWorkspaceSession = (options: { discardPending?: boolean } = {}) => {
+  // Signing out must not leave a password-setup link mode active for the tab.
+  clearPasswordSetupMode();
   const actor = useStore.getState().currentUser;
   if (actor) clearRecoveredDrafts(actor.authUserId || actor.id);
   if (options.discardPending) { discardSecureWorkspaceCommand(); discardRetainedSecureMemberMutation(); }

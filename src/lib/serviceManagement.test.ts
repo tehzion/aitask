@@ -86,6 +86,11 @@ describe('service management calculations', () => {
       { ...deliverable, status: 'Delivered' },
       { ...deliverable, id: 'foreign', clientId: 'other-company', clientName: 'Other', status: 'Delivered' },
     ])).toEqual([{ serviceItemId: 'item-1', name: 'Video', included: 1, completed: 1, remaining: 0 }]);
+    // Legacy deliverables that omit clientId still count for their cycle.
+    expect(getCycleServiceProgress(cycle, [
+      { ...deliverable, status: 'Delivered' },
+      { ...deliverable, id: 'legacy', clientId: undefined, status: 'Delivered' },
+    ])).toEqual([{ serviceItemId: 'item-1', name: 'Video', included: 2, completed: 2, remaining: 0 }]);
   });
 });
 

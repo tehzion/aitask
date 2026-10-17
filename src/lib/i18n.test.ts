@@ -40,6 +40,11 @@ describe('Chinese UI translations', () => {
     expect(translateUiText('Client "UrbanEats" and draft plan created.', 'zh')).toBe('客户“UrbanEats”及其草稿方案已创建。');
   });
 
+  it('translates store-returned member administration errors', () => {
+    expect(translateUiText('Jing Yi is not in the Designer department.', 'zh')).toBe('Jing Yi 不属于 Designer 部门。');
+    expect(translateUiText('This role can only be assigned to Staff members.', 'zh')).toBe('此角色只能分配给 Staff 成员。');
+  });
+
   it('translates confirm dialogs while keeping embedded user content untouched', () => {
     expect(translateUiText('Delete "Launch film" ? This removes the task from the workspace.', 'zh')).toBe('Delete "Launch film" ? This removes the task from the workspace.');
     expect(translateUiText('Delete "Launch film"? This removes the task from the workspace.', 'zh')).toBe('确定删除“Launch film”？该任务将从工作区移除。');

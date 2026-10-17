@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { Task } from '../types';
-import { buildStaffWorkQueue, getStaffFocusTask, getStaffGuidedAction, getTaskBlockers, getHodScopeTasks, getUnavailableTaskDependencyCount } from './staffWorkspace';
+import type { Task, User } from '../types';
+import { buildStaffWorkQueue, getStaffFocusTask, getStaffGuidedAction, getTaskBlockers, getHodScopeTasks, getUnavailableTaskDependencyCount, isStaffGuidedActionEnabled } from './staffWorkspace';
+import { getTaskStatusControls } from './taskStatusControls';
+import { TASK_EVIDENCE_REQUIRED } from './staffWorkflow';
 
 const task = (overrides: Partial<Task>): Task => ({
   id: overrides.id || crypto.randomUUID(),
@@ -147,5 +149,56 @@ describe('approved work ownership', () => {
 describe('explicit revision action', () => {
   it('guides returned work back to execution without pretending it is complete', () => {
     expect(getStaffGuidedAction(task({ status: 'Revision', completionPercentage: 50 }), ['Pending', 'In Progress', 'Waiting Approval', 'Completed'])).toMatchObject({ label: 'Start revision', targetStatus: 'In Progress', disabled: false });
+  });
+});
+
+describe('reviewer-aware queue', () => {
+  it('keeps submitted work waiting by default and reclassifies it when the predicate says it is actionable', () => {
+    const waiting = task({ id: 'waiting', status: 'Waiting Approval' });
+    expect(buildStaffWorkQueue([waiting], '2026-08-26').waiting.map(item => item.id)).toEqual(['waiting']);
+    const reviewerQueue = buildStaffWorkQueue([waiting], '2026-08-26', { isActionable: () => true });
+    expect(reviewerQueue.needs_action.map(item => item.id)).toEqual(['waiting']);
+    expect(reviewerQueue.waiting).toEqual([]);
+    expect(getStaffFocusTask(reviewerQueue)?.id).toBe('waiting');
+  });
+
+  it('agrees with the guided action for a department reviewer', () => {
+    const actor = { id: 'reviewer-hod', name: 'HOD', role: 'HOD', departments: ['Video Editor'], hasLogin: true } as User;
+    const statuses = ['Pending', 'In Progress', 'Waiting Approval', 'Approved', 'Completed'];
+    const reviewable = task({ status: 'Waiting Approval', department: 'Video Editor', assignedTo: 'staff-1' });
+    const isActionable = (item: Task) => getStaffGuidedAction(item, statuses, actor, [], { users: [actor] }).kind === 'advance';
+    expect(getStaffGuidedAction(reviewable, statuses, actor, [], { users: [actor] }).kind).toBe('advance');
+    expect(buildStaffWorkQueue([reviewable], '2026-08-26', { isActionable }).needs_action.map(item => item.id)).toEqual([reviewable.id]);
+  });
+
+  it('does not mark review work actionable when the guided action is gated', () => {
+    const actor = { id: 'gated-hod', name: 'HOD', role: 'HOD', departments: ['Video Editor'], hasLogin: true } as User;
+    const statuses = ['Pending', 'In Progress', 'Waiting Approval', 'Approved', 'Completed'];
+    const scope = { users: [actor] };
+    const linked = task({ status: 'Waiting Approval', department: 'Video Editor', deliverableId: 'output' });
+    const plain = task({ status: 'Waiting Approval', department: 'Video Editor' });
+    const workflow = { tasks: [linked, plain], cycles: [], deliverables: [] };
+    expect(getStaffGuidedAction(linked, statuses, actor, [], scope).kind).toBe('advance');
+    expect(isStaffGuidedActionEnabled(linked, statuses, actor, [], scope, workflow)).toBe(false);
+    expect(isStaffGuidedActionEnabled(plain, statuses, actor, [], scope, workflow)).toBe(true);
+  });
+
+  it('reports the evidence requirement for every review-ready status, not only completion', () => {
+    const statuses = ['Pending', 'In Progress', 'Waiting Approval', 'Approved', 'Completed'];
+    const hod = { id: 'evidence-hod', name: 'HOD', role: 'HOD', departments: ['Video Editor'], hasLogin: true } as User;
+    const staff = { id: 'evidence-staff', name: 'Staff', role: 'Staff', departments: ['Video Editor'], hasLogin: true } as User;
+    const pm = { id: 'evidence-pm', name: 'PM', role: 'Project Manager', departments: ['Management'], hasLogin: true } as User;
+
+    const reviewTask = task({ status: 'Waiting Approval', department: 'Video Editor', deliverableId: 'output', assignedTo: staff.id });
+    const reviewControls = getTaskStatusControls(hod, reviewTask, statuses, [], { users: [hod, staff] }, { tasks: [reviewTask], cycles: [], deliverables: [] });
+    expect(reviewControls.find(option => option.status === 'Approved')?.disabledReason).toBe(TASK_EVIDENCE_REQUIRED);
+
+    const submitTask = task({ status: 'In Progress', department: 'Video Editor', deliverableId: 'output', assignedTo: staff.id });
+    const submitControls = getTaskStatusControls(staff, submitTask, statuses, [], { users: [staff] }, { tasks: [submitTask], cycles: [], deliverables: [] });
+    expect(submitControls.find(option => option.status === 'Waiting Approval')?.disabledReason).toBe(TASK_EVIDENCE_REQUIRED);
+
+    const completeTask = task({ status: 'Approved', department: 'Video Editor', deliverableId: 'output', assignedTo: staff.id, createdBy: pm.id });
+    const completeControls = getTaskStatusControls(pm, completeTask, statuses, [], { users: [pm, staff] }, { tasks: [completeTask], cycles: [], deliverables: [] });
+    expect(completeControls.find(option => option.status === 'Completed')?.disabledReason).toBe(TASK_EVIDENCE_REQUIRED);
   });
 });

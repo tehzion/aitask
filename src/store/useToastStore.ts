@@ -11,7 +11,12 @@ export interface Toast {
 }
 
 const MAX_VISIBLE_TOASTS = 3;
-const TOAST_TTL_MS = 3000;
+const TOAST_TTL_MS: Record<ToastType, number> = {
+  success: 4500,
+  info: 5000,
+  warning: 8000,
+  error: 12000,
+};
 const toastTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 interface ToastState {
@@ -31,18 +36,30 @@ const clearToastTimer = (id: string) => {
 
 const scheduleToastRemoval = (id: string) => {
   clearToastTimer(id);
+  const toast = useToastStore.getState().toasts.find(item => item.id === id);
+  if (!toast) return;
   const timer = (typeof window !== 'undefined' ? window.setTimeout : setTimeout)(() => {
     toastTimers.delete(id);
     useToastStore.setState((state) => ({
       toasts: state.toasts.filter((t) => t.id !== id),
     }));
-  }, TOAST_TTL_MS);
+  }, TOAST_TTL_MS[toast.type]);
   toastTimers.set(id, timer);
+};
+
+const sameMessage = (left: ToastMessage, right: ToastMessage) => {
+  if (typeof left === 'string' || typeof right === 'string') return left === right;
+  return left.id === right.id && JSON.stringify(left.values || {}) === JSON.stringify(right.values || {});
 };
 
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
   addToast: (message, type = 'success') => {
+    const existing = useToastStore.getState().toasts.find(toast => toast.type === type && sameMessage(toast.message, message));
+    if (existing) {
+      scheduleToastRemoval(existing.id);
+      return;
+    }
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     let displacedId: string | null = null;
     set((state) => {

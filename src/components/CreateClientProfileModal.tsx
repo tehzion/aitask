@@ -31,7 +31,7 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
     backend: state.backend,
   })));
   const { t } = useI18n();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [, setSearchParams] = useSearchParams();
   const titleId = React.useId();
   const [form, setForm] = React.useState({ clientName: '', clientSince: '', contactPerson: '', email: '', phone: '', address: '', website: '', facebookPage: '', notes: '' });
   const [error, setError] = React.useState('');
@@ -58,11 +58,13 @@ const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreat
   // was just created. Clear it for every entry point (top-level "New client"
   // and the "New project" modal's "+ Add client") so the company shows at once.
   const clearCompanySearch = React.useCallback(() => {
-    if (!searchParams.get('search')) return;
-    const next = new URLSearchParams(searchParams);
-    next.delete('search');
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+    setSearchParams(current => {
+      if (!current.get('search')) return current;
+      const next = new URLSearchParams(current);
+      next.delete('search');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();

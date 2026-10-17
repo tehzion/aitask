@@ -124,4 +124,16 @@ describe('task update notification recipients', () => {
     expect(useStore.getState().updateTask(task.id, { status: 'Approved' })).toMatchObject({ ok: true });
     expect(useStore.getState().notifications.filter(notification => notification.targetClient === 'Acme')).toHaveLength(1);
   });
+
+  it('notifies the assignee exactly once when submitted work is returned', () => {
+    useStore.setState({ currentUser: pmA, tasks: [{ ...task, status: 'Waiting Approval', assignedBy: pmA.id, createdBy: pmA.id }] });
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress').ok).toBe(true);
+    expect(useStore.getState().notifications.filter(notification => notification.targetUserId === staff.id)).toHaveLength(1);
+  });
+
+  it('notifies the assignee exactly once when a revision is requested', () => {
+    useStore.setState({ currentUser: pmA, tasks: [{ ...task, status: 'Waiting Approval', assignedBy: pmA.id, createdBy: pmA.id }] });
+    expect(useStore.getState().requestRevision(task.id, 'Please redo the layout').ok).toBe(true);
+    expect(useStore.getState().notifications.filter(notification => notification.targetUserId === staff.id)).toHaveLength(1);
+  });
 });

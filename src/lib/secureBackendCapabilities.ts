@@ -1,12 +1,15 @@
 import type { SecureBackendCapabilities, SecureBackendCompatibility } from './secureWorkspace';
 
 type RpcResponse = { data: unknown; error: { code?: string; message?: string } | null };
-export const loadBackendCompatibility = async (invoke: () => PromiseLike<RpcResponse>, refresh: () => Promise<boolean>, isAuthError: (error: RpcResponse['error']) => boolean, expectedSchemaVersion: number, upgradeMessage: string): Promise<SecureBackendCompatibility> => {
+export const loadBackendCompatibility = async (invoke: () => PromiseLike<RpcResponse>, refresh: () => Promise<boolean>, isAuthError: (error: RpcResponse['error']) => boolean, expectedSchemaVersion: number, upgradeMessage: string, retryMessage: string = upgradeMessage): Promise<SecureBackendCompatibility> => {
   let result: RpcResponse;
   try {
     result = await invoke();
     if (isAuthError(result.error) && await refresh()) result = await invoke();
-  } catch { return { compatible: false, error: upgradeMessage }; }
+  } catch {
+    // A thrown timeout/network error is transient, not a schema mismatch.
+    return { compatible: false, error: retryMessage, code: 'RETRY_REQUIRED', retryable: true };
+  }
   if (result.error) return { compatible: false, code: result.error.code, error: upgradeMessage };
   const response = result.data as Partial<SecureBackendCapabilities> & { ok?: boolean };
   const capabilities: SecureBackendCapabilities = {

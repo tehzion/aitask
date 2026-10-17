@@ -75,7 +75,7 @@ test('unfinished predecessors disable HOD approval and the completion option', a
   await expect(dialog.getByRole('button', { name: 'Approve internal review', exact: true })).toHaveCount(0);
   await expect(dialog.getByRole('combobox', { name: 'All task statuses' }).locator('option[value="Waiting Approval"]')).toHaveJSProperty('disabled', true);
   await expect(dialog.getByRole('combobox', { name: 'All task statuses' }).locator('option[value="Completed"]')).toHaveCount(0);
-  await expect(dialog.getByText('Complete the earlier workflow steps first.')).toBeVisible();
+  await expect(dialog.getByText('Dependency status for 1 earlier step is unavailable. Confirm with the task owner before starting.')).toBeVisible();
 });
 
 test('legacy completed review needs explicit approval and later revisions clear its signature', async ({ page }) => {

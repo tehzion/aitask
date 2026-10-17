@@ -793,7 +793,7 @@ const Clients: React.FC = () => {
     <div className={pageShell}>
       <PageHeader
         title={isClientUser ? t('Company profile') : t('Companies')}
-        description={isClientUser ? t('Review your company details, services, contacts, and linked work.') : t('The complete client database for company details, contacts, accounts, services, and linked work.')}
+        description={isClientUser ? t('Review your company details, services, contacts, and linked work.') : canSeeAllClients ? t('The complete client database for company details, contacts, accounts, services, and linked work.') : t('Companies in your portfolio.')}
         meta={<><span>{clients.length} {t('visible companies')}</span><span aria-hidden="true">·</span><span>{totalTasks} {t('linked tasks')}</span></>}
         action={<div className="flex flex-wrap gap-2">
           {canCreateClientProfiles(currentUser, rolePermissions) && <Button onClick={() => { clearSearch(); setIsCreateClientOpen(true); }} disabled={upgradeRequired}><Building2 className="h-4 w-4" />{t('New client')}</Button>}
@@ -894,7 +894,7 @@ const Clients: React.FC = () => {
                       <div className="font-semibold text-ink">{client.taskCount} {t('total')}</div>
                       <p className="mt-1 text-xs text-slate-500">{client.openTaskCount} {t('open')}, {client.completedTaskCount} {t('completed')}</p>
                       <p className="mt-1 text-xs text-slate-500">{client.projectIds.size} {t(client.projectIds.size === 1 ? 'company record' : 'company records')}</p>
-                      {serviceContext?.cycle && <ProgressBar className="mt-3 w-40" label="Cycle delivered" value={serviceContext.delivered} max={Math.max(1, serviceContext.included)} />}
+                      {serviceContext?.cycle && <ProgressBar className="mt-3 w-40" label={t('Cycle delivered')} value={serviceContext.delivered} max={Math.max(1, serviceContext.included)} />}
                     </td>
                     <td className="px-5 py-6 align-top">
                       <div className="flex flex-col items-start gap-2">
@@ -1466,6 +1466,7 @@ const Clients: React.FC = () => {
         project={editingProject}
         initialClientId={initialProjectClientId}
         onClose={closeProjectEditor}
+        onClientCreated={() => navigate('/projects', { replace: true })}
       />
       {planClientId && <CreateClientPlanModal
         client={clientProfiles.find(client => client.id === planClientId)}

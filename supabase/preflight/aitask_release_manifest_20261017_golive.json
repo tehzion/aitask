@@ -1,0 +1,88 @@
+{
+  "manifestVersion": "2026-10-17.4",
+  "manifestKind": "aitask-production-golive-gate",
+  "supersedes": "aitask_release_manifest_20261017.json",
+  "immutable": true,
+  "capturedAt": "2026-10-17T14:27:51Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "source": {
+    "gitCommit": "1ce9f6f0b1f496c9895623b82ff93462d776b79a",
+    "gitBranch": "codex/audit-p0p1-2026-10-16",
+    "workingTreeDirtyBeforeEvidenceCommit": true,
+    "productionChangesThisTurn": false
+  },
+  "repository": {
+    "migrationCount": 114,
+    "latestMigration": "20261017140000_audit_history_retention_guards_followup",
+    "retentionMigrationSha256": "7620a58e34d775359ef870d85ffbac1f0b3cf6e9ab7d6d663a9d61b7986c00ab",
+    "auditHistoryTestSha256": "d50a0f87780c501fb7e35628164faaafb22f629d696afe6ead5df3266c309303"
+  },
+  "production": {
+    "migrationCount": 112,
+    "latestMigration": "20261017095628_align_service_cycle_cancel_rpc",
+    "pendingLocalMigrations": [
+      "20261017091031_workspace_revision_realtime",
+      "20261017140000_audit_history_retention_guards_followup"
+    ],
+    "historyRowsAtReadOnlyVerification": 0,
+    "productionDatabaseMutatedThisTurn": false
+  },
+  "retentionDecision": {
+    "status": "AWAITING_EXPLICIT_RELEASE_OWNER_APPROVAL",
+    "migration": "20261017140000_audit_history_retention_guards_followup",
+    "semantics": [
+      "Remove actor_member_id foreign-key mutation so deleted members do not rewrite immutable history",
+      "Change workspace history relationship to ON DELETE RESTRICT",
+      "Retain actor and entity snapshots until a separately approved export, redaction, or expiry policy exists",
+      "Revoke all direct service_role privileges on immutable history, including TRUNCATE, REFERENCES, TRIGGER, and MAINTAIN"
+    ],
+    "review": "AUDIT_HISTORY_RETENTION_REVIEW.md"
+  },
+  "backupRecovery": {
+    "status": "BLOCKED_TOOLING_AND_ACCESS",
+    "client": "pg_dump/pg_restore 16.14",
+    "attempt": "pg_dump --no-password against db.ohjhwyiffgzyatcmmdql.supabase.co",
+    "result": "DNS hostname resolution failed; no credentials exposed; no dump retained; production untouched",
+    "required": "Working DNS/network access plus authorized database password/connection string, then disposable restore verification"
+  },
+  "qualityGates": {
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "unit": "PASS — 107 files / 830 tests",
+    "productionBuild": "PASS",
+    "i18nStrict": "PASS — 171 files / 0 findings",
+    "migrationNonempty": "PASS — 114/114",
+    "bundleAndPwa": "PASS",
+    "disposableDatabaseRollout": "PASS — 67 files / 1,033 pgTAP assertions; all 114 migrations; no DB lint errors",
+    "supportingDatabaseProbes": "PASS — storage, staff save, HOD status, onboarding recovery, workflow review gate",
+    "playwrightFullSuite": "PASS — 324 passed / 0 failed / 0 skipped / 0 interrupted",
+    "releaseDbAlignment": "BLOCKED AS INTENDED — two pending production migrations"
+  },
+  "hostingConfiguration": {
+    "status": "PARTIALLY_VERIFIED_ENV_METADATA_BLOCKED",
+    "verified": [
+      "team and project identity",
+      "Vite framework and Node 22.x",
+      "production domain",
+      "SSO protection configuration"
+    ],
+    "blocked": "Environment-variable metadata read returned HTTP 403; no secrets were exposed"
+  },
+  "liveRoleVerification": {
+    "status": "NOT_VERIFIED",
+    "reason": "No authorized production test accounts were available; local isolated Playwright fixtures are not live-auth evidence"
+  },
+  "releaseDecision": {
+    "status": "NO-GO",
+    "reasons": [
+      "Retention/deletion approval is recorded; production application still requires recovery and access gates",
+      "Production migration history is behind the repository tail",
+      "Current backup/recovery readiness is not evidenced",
+      "Vercel production environment metadata is not readable in this context",
+      "Authenticated live four-role workflows were not exercised"
+    ],
+    "pushPerformed": false,
+    "supabaseProductionMigrationsApplied": false,
+    "vercelProductionDeploymentPerformed": false
+  }
+}

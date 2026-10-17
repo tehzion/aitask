@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(16);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -104,9 +104,20 @@ select is(
       'expectedVersion', (select version from public.aitask_entities where entity_id = 'hardening-hod-client')
     )), null
   ) ->> 'ok')::boolean,
-  true,
-  'HOD can delete a visible company with the delete capability'
+  false,
+  'HOD cannot delete an owned company without edit capability'
 );
+select is((select count(*)::integer from public.aitask_entities where entity_id = 'hardening-hod-client'), 1, 'uneditable HOD company is retained');
+reset role;
+select set_config('request.jwt.claim.sub','',true);
+update public.aitask_members set permissions=permissions||'{"manageAssignedClients":true}'::jsonb
+where workspace_id='pgtap-authorization-hardening' and id='pgtap-hardening-hod';
+insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
+('pgtap-authorization-hardening','task','hardening-hod-assignment','{"id":"hardening-hod-assignment","title":"Assigned company work","clientId":"hardening-hod-client","clientName":"HOD Co","department":"Designer","assignedTo":"pgtap-hardening-hod","createdBy":"pgtap-hardening-hod"}');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001003',true);
+set local role authenticated;
+select is((public.aitask_execute_command('pgtap-authorization-hardening',gen_random_uuid(),'client.delete',
+ jsonb_build_array(jsonb_build_object('kind','entity','action','delete','entityType','client','entityId','hardening-hod-client','expectedVersion',1)),null)->>'ok')::boolean,true,'HOD can delete an editable company with the delete capability');
 select is((select count(*)::integer from public.aitask_entities where entity_id = 'hardening-hod-client'), 0, 'HOD company is removed');
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000001004', true);

@@ -104,6 +104,16 @@ try {
   console.log('[storage] Lost confirmation, reference protection, account denial, discard fencing and cleanup retry passed against real local Storage.');
 } finally {
   await admin.storage.from('client-service-files').remove(paths);
-  sql(`delete from public.aitask_workspaces where id='${workspace}';`);
+  // The release gate deliberately makes workspace cleanup RESTRICT while
+  // immutable history exists. This is a trusted disposable-stack cleanup;
+  // production code must use an approved archive/retention procedure instead.
+  sql(`alter table public.aitask_entity_history disable trigger aitask_guard_entity_history_immutable;
+    alter table public.aitask_members disable trigger aitask_capture_member_history;
+    alter table public.aitask_entities disable trigger aitask_capture_entity_history;
+    delete from public.aitask_entity_history where workspace_id='${workspace}';
+    delete from public.aitask_workspaces where id='${workspace}';
+    alter table public.aitask_entities enable trigger aitask_capture_entity_history;
+    alter table public.aitask_members enable trigger aitask_capture_member_history;
+    alter table public.aitask_entity_history enable trigger aitask_guard_entity_history_immutable;`);
   for (const id of authIds) await admin.auth.admin.deleteUser(id);
 }

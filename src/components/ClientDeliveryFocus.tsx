@@ -157,7 +157,7 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
       else {
         setPendingSave({ ...submitted, failed: true });
         observedResolution.current = isPendingMutationResolution(useStore.getState().backend);
-        setError(result.error ? t(result.error) : t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.'));
+        setError(result.error || 'Your change is waiting to be saved. Use Retry my changes in the workspace banner.');
       }
     } catch (failure) {
       if (isCurrent()) {
@@ -177,7 +177,7 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
     }
     setDecisionError('');
     const localResult = reviewClientApproval(task.id, status, decisionNote);
-    if (!localResult.ok) { setError(localResult.error ? t(localResult.error) : t('Unable to review this task.')); return; }
+    if (!localResult.ok) { setError(localResult.error ? t(localResult.error) : 'Unable to review this task.'); return; }
     const history = useStore.getState().tasks.find(item => item.id === task.id)?.approvalHistory || [];
     await performSave({ taskId: task.id, command: 'approval.review', text: decisionNote, status, approvalId: history[history.length - 1]?.id });
   };
@@ -186,7 +186,7 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
     event.preventDefault();
     if (!commentText.trim() || isSaving || pendingSave || mutationLocked || !canComment) return;
     const localResult = addComment(task.id, commentText);
-    if (!localResult.ok || !localResult.id) { setError(localResult.error ? t(localResult.error) : t('You do not have permission to comment on this task.')); return; }
+    if (!localResult.ok || !localResult.id) { setError(localResult.error || 'You do not have permission to comment on this task.'); return; }
     await performSave({ taskId: task.id, command: 'comment.add', text: commentText, commentId: localResult.id });
   };
 

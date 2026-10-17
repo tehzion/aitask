@@ -1,4 +1,5 @@
 import { recordDiagnostic } from './diagnostics';
+import { withoutTaskCascadeNotificationDeletes } from './secureTaskDelete';
 import { assertWorkspaceSession, captureWorkspaceSession, isWorkspaceSessionCurrent, onWorkspaceSessionInvalidated } from './workspaceSession';
 import type { User } from '@supabase/supabase-js';
 import type {
@@ -34,18 +35,22 @@ import { parseWorkspaceSnapshot } from './security';
 import { supabase } from './supabaseClient';
 import { stripServiceItemPrices } from './serviceManagement';
 import { enMessages, msg } from './messages';
+import { userFacingText } from './userFacingMessage';
 import { useToastStore } from '../store/useToastStore';
 
 export const SECURE_WORKSPACE_ID = 'aitask-main';
 export const SECURE_SYNC_PROTOCOL_VERSION = 1;
 export const SECURE_BACKEND_SCHEMA_VERSION = 4;
 export const BACKEND_UPGRADE_REQUIRED_MESSAGE = enMessages['errors.workspaceUpgrade'];
+export const BACKEND_RETRY_REQUIRED_MESSAGE = enMessages['errors.workspaceRetry'];
 const SYNC_REQUEST_TIMEOUT_MS = 20_000;
 const WORKSPACE_PAGE_SIZE = 500;
 const PENDING_COMMAND_STORAGE_VERSION = 1;
 const PENDING_COMMAND_STORAGE_PREFIX = 'aitask:secure-pending-command';
 const PENDING_MEMBER_MUTATION_STORAGE_VERSION = 1;
 const PENDING_MEMBER_MUTATION_STORAGE_PREFIX = 'aitask:secure-pending-member-mutation';
+const PENDING_NOTIFICATION_STORAGE_VERSION = 1;
+const PENDING_NOTIFICATION_STORAGE_PREFIX = 'aitask:secure-pending-notification';
 
 export const SECURE_COMMAND_TYPES = [
   'workspace.patch',
@@ -254,8 +259,8 @@ export type SecureBackendCapabilities = {
 };
 
 export type SecureBackendCompatibility =
-  | { compatible: true; capabilities: SecureBackendCapabilities; error?: undefined }
-  | { compatible: false; error: string; code?: string };
+  | { compatible: true; capabilities: SecureBackendCapabilities; error?: undefined; code?: undefined; retryable?: undefined }
+  | { compatible: false; error: string; code?: string; retryable?: boolean };
 
 type PendingCommandEnvelope = {
   version: number;
@@ -293,6 +298,13 @@ type PendingMemberMutationEnvelope = {
   mutation: RetainedSecureMemberMutationWithId;
 };
 
+type PendingNotificationEnvelope = {
+  version: number;
+  workspaceId: string;
+  authUserId: string;
+  mutation: { id: string; notificationIds: string[]; isRead: boolean; markAll: boolean };
+};
+
 export type PendingCommandBatch = {
   commands: SecureCommand[];
   before: BaselineRow[];
@@ -301,6 +313,7 @@ export type PendingCommandBatch = {
   attempted: boolean;
 };
 let retryableBatch: PendingCommandBatch | null = null;
+let saveInFlight = false;
 let baseline = new Map<string, BaselineRow>();
 let retryableCommand: SecureCommand | null = null;
 let activeSecureAuthUserId: string | null = null;
@@ -312,6 +325,7 @@ let retryableNotificationMutation: {
   notificationIds: string[];
   isRead: boolean;
   markAll: boolean;
+  restored?: boolean;
 } | null = null;
 
 const entityKey = (type: string, id: string) => `${type}:${id}`;
@@ -324,6 +338,10 @@ const pendingCommandStorageKey = (authUserId: string) => (
 
 const pendingMemberMutationStorageKey = (authUserId: string) => (
   `${PENDING_MEMBER_MUTATION_STORAGE_PREFIX}:v${PENDING_MEMBER_MUTATION_STORAGE_VERSION}:${SECURE_WORKSPACE_ID}:${authUserId}`
+);
+
+const pendingNotificationStorageKey = (authUserId: string) => (
+  `${PENDING_NOTIFICATION_STORAGE_PREFIX}:v${PENDING_NOTIFICATION_STORAGE_VERSION}:${SECURE_WORKSPACE_ID}:${authUserId}`
 );
 
 const getSessionStorage = (): Storage | null => {
@@ -456,6 +474,60 @@ const clearPersistedRetryableMemberMutation = (authUserId = activeSecureAuthUser
   }
 };
 
+const setRetryableNotificationMutation = (value: typeof retryableNotificationMutation) => {
+  retryableNotificationMutation = value;
+  if (!activeSecureAuthUserId) return;
+  const storage = getSessionStorage();
+  if (!storage) return;
+  try {
+    if (value) {
+      const envelope: PendingNotificationEnvelope = {
+        version: PENDING_NOTIFICATION_STORAGE_VERSION,
+        workspaceId: SECURE_WORKSPACE_ID,
+        authUserId: activeSecureAuthUserId,
+        mutation: value,
+      };
+      storage.setItem(pendingNotificationStorageKey(activeSecureAuthUserId), JSON.stringify(envelope));
+    } else {
+      storage.removeItem(pendingNotificationStorageKey(activeSecureAuthUserId));
+    }
+  } catch {
+    // Session storage may be unavailable; the in-memory value still applies.
+  }
+};
+
+const restoreRetryableNotificationMutation = (authUserId: string): typeof retryableNotificationMutation => {
+  if (!authUserId) return null;
+  if (retryableNotificationMutation) return retryableNotificationMutation;
+  const storage = getSessionStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(pendingNotificationStorageKey(authUserId));
+    if (!raw) return null;
+    const envelope = JSON.parse(raw) as Partial<PendingNotificationEnvelope>;
+    const mutation = envelope.mutation;
+    if (
+      envelope.version !== PENDING_NOTIFICATION_STORAGE_VERSION
+      || envelope.workspaceId !== SECURE_WORKSPACE_ID
+      || envelope.authUserId !== authUserId
+      || !mutation
+      || typeof mutation.id !== 'string'
+      || typeof mutation.isRead !== 'boolean'
+      || typeof mutation.markAll !== 'boolean'
+      || !Array.isArray(mutation.notificationIds)
+      || !mutation.notificationIds.every(id => typeof id === 'string')
+    ) {
+      storage.removeItem(pendingNotificationStorageKey(authUserId));
+      return null;
+    }
+    retryableNotificationMutation = { ...mutation, restored: true };
+    return retryableNotificationMutation;
+  } catch {
+    storage.removeItem(pendingNotificationStorageKey(authUserId));
+    return null;
+  }
+};
+
 export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand | null => {
   if (!authUserId) return null;
   if (activeSecureAuthUserId && activeSecureAuthUserId !== authUserId) {
@@ -464,8 +536,10 @@ export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand
     retryableMemberDepartments = null;
     retryableMemberPermissions = null;
     retryableMemberRole = null;
+    retryableNotificationMutation = null;
   }
   activeSecureAuthUserId = authUserId;
+  restoreRetryableNotificationMutation(authUserId);
   if (retryableCommand) return retryableCommand;
   const storage = getSessionStorage();
   if (!storage) return null;
@@ -495,6 +569,9 @@ export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand
         storage.removeItem(pendingCommandStorageKey(authUserId));
         return null;
       }
+      // A restored batch must re-run derived-progress reconciliation before
+      // sending its next group; a persisted `attempted` would skip it.
+      batch.attempted = false;
       retryableBatch = batch;
     }
     retryableCommand = envelope.command;
@@ -546,7 +623,7 @@ export const restoreSecureMemberMutation = (authUserId: string): RetainedSecureM
 
 class SyncRequestTimeoutError extends Error {
   constructor() {
-    super('Supabase did not confirm the request within 20 seconds.');
+    super('The server took too long to respond. Please try again.');
     this.name = 'SyncRequestTimeoutError';
   }
 }
@@ -941,7 +1018,7 @@ export const buildOperations = (
 
   // Deliverable execution triggers cycle completion. Persist the child first
   // so a derived cycle update is validated against its completed deliveries.
-  return operations.sort((left, right) =>
+  return withoutTaskCascadeNotificationDeletes(operations, baseline).sort((left, right) =>
     Number(left.entityType === 'service_cycle' && left.action === 'update')
     - Number(right.entityType === 'service_cycle' && right.action === 'update'));
 };
@@ -1299,8 +1376,8 @@ const executeCommand = async (
       error: offline
         ? 'You are offline. Reconnect before retrying this change.'
         : error instanceof SyncRequestTimeoutError
-          ? 'Save confirmation timed out. Your change is retained; retrying with the same command will not duplicate it.'
-          : 'Supabase could not be reached. Your change is retained for retry.',
+          ? "The save took longer than expected. Your change is kept safe — retrying it won't create duplicates."
+          : "We couldn't reach the server. Your change is kept safe — please retry.",
     };
   }
 
@@ -1319,7 +1396,7 @@ const executeCommand = async (
       ? { ok: false, code: 'FORBIDDEN', error: 'Your session expired. Sign in again, then retry the retained change.' }
       : error.code === 'PGRST202'
         ? { ok: false, code: 'RETRY_REQUIRED', error: BACKEND_UPGRADE_REQUIRED_MESSAGE }
-        : { ok: false, code, error: error.message || 'The command could not be confirmed.' };
+        : { ok: false, code, error: userFacingText(error, 'The command could not be confirmed.') };
   }
 
   const response = data as CommandResponse;
@@ -1339,7 +1416,7 @@ const executeCommand = async (
     return {
       ok: false,
       code: response.code || 'RETRY_REQUIRED',
-      error: response.error || 'The command was not applied.',
+      error: userFacingText(response.error, 'The command was not applied.'),
       conflict,
     };
   }
@@ -1365,8 +1442,11 @@ export const loadSecureBackendCapabilities = async (): Promise<SecureBackendComp
   })));
   try {
     const { loadBackendCompatibility } = await import('./secureBackendCapabilities');
-    return loadBackendCompatibility(invoke, refreshSecureSession, isAuthError, SECURE_BACKEND_SCHEMA_VERSION, BACKEND_UPGRADE_REQUIRED_MESSAGE);
-  } catch { return { compatible: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE }; }
+    return loadBackendCompatibility(invoke, refreshSecureSession, isAuthError, SECURE_BACKEND_SCHEMA_VERSION, BACKEND_UPGRADE_REQUIRED_MESSAGE, BACKEND_RETRY_REQUIRED_MESSAGE);
+  } catch {
+    // A thrown transport error is not a schema mismatch; let the caller retry.
+    return { compatible: false, error: BACKEND_RETRY_REQUIRED_MESSAGE, code: 'RETRY_REQUIRED', retryable: true };
+  }
 };
 
 export const loadSecureWorkspaceRevision = async () => {
@@ -1411,7 +1491,7 @@ export const saveSecureMemberDepartments = async (member: WorkspaceMember, reque
     if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberDepartments(member, requestedDepartments);
   } catch {
-    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your draft is safe — please retry." };
   }
 };
 
@@ -1422,7 +1502,7 @@ export const saveSecureMemberPermissions = async (member: WorkspaceMember, permi
     if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberPermissions(member, permissions);
   } catch {
-    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your draft is safe — please retry." };
   }
 };
 
@@ -1438,7 +1518,7 @@ export const saveSecureMemberRole = async (member: WorkspaceMember, assignment: 
     if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberRole(member, assignment);
   } catch {
-    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your draft is safe — please retry." };
   }
 };
 
@@ -1510,7 +1590,7 @@ const releaseNoticeFailure = (
   error: string,
 ): ReleaseNoticeAcknowledgementResult => ({ ok: false, code, error });
 
-const releaseNoticeRuntime = () => ({ cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, SyncRequestTimeoutError });
+const releaseNoticeRuntime = () => ({ cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, commandErrorCode, SyncRequestTimeoutError });
 export type SecureReleaseNoticeRuntime = ReturnType<typeof releaseNoticeRuntime>;
 
 const requestReleaseNotice = async (noticeId: string, acknowledge: boolean): Promise<ReleaseNoticeAcknowledgementResult> => {
@@ -1520,7 +1600,7 @@ const requestReleaseNotice = async (noticeId: string, acknowledge: boolean): Pro
     assertWorkspaceSession(sessionToken);
     return module.requestReleaseNotice(noticeId, acknowledge, releaseNoticeRuntime());
   } catch {
-    return releaseNoticeFailure('RETRY_REQUIRED', acknowledge ? 'Supabase could not save the release notice acknowledgement.' : 'Supabase could not verify the release notice.');
+    return releaseNoticeFailure('RETRY_REQUIRED', acknowledge ? "We couldn't save your acknowledgement. Please try again." : "We couldn't check the release notice. Please try again.");
   }
 };
 export const getSecureReleaseNoticeAcknowledgement = (noticeId: string) => requestReleaseNotice(noticeId, false);
@@ -1528,9 +1608,9 @@ export const acknowledgeSecureReleaseNotice = (noticeId: string) => requestRelea
 
 const notificationRuntime = () => ({
   get retryableNotificationMutation() { return retryableNotificationMutation; },
-  set retryableNotificationMutation(value: typeof retryableNotificationMutation) { retryableNotificationMutation = value; },
+  set retryableNotificationMutation(value: typeof retryableNotificationMutation) { setRetryableNotificationMutation(value); },
   get baseline() { return baseline; },
-  captureWorkspaceSession, isWorkspaceSessionCurrent, isRecord, cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, entityKey, stable, commandId, SyncRequestTimeoutError,
+  captureWorkspaceSession, isWorkspaceSessionCurrent, isRecord, cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, entityKey, stable, commandId, commandErrorCode, SyncRequestTimeoutError,
 });
 export type SecureNotificationRuntime = ReturnType<typeof notificationRuntime>;
 
@@ -1548,7 +1628,7 @@ export const setSecureNotificationsRead = async (notificationIds: string[], isRe
     if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     return module.createSecureNotifications(notificationRuntime()).setSecureNotificationsRead(notificationIds, isRead, markAll);
   } catch {
-    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Keep your draft and retry.' };
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your draft is safe — please retry." };
   }
 };
 
@@ -1659,7 +1739,10 @@ const loadSecureWorkspaceInternal = async (authUser: User, options: { preserveRe
     entity_type: 'notification',
     entity_id: notification.id,
     parent_id: null,
-    data: stripRuntimeFields(notification as unknown as Record<string, unknown>),
+    // The feed RPC only emits notifications this member may see, so mark them
+    // visible: isNotificationVisible otherwise drops every row and no popups,
+    // sounds or optimistic read counts ever resolve.
+    data: { ...stripRuntimeFields(notification as unknown as Record<string, unknown>), visibleToCurrentUser: true },
     version: Math.max(1, Number(notification.version) || 1),
     updated_at: notification.updatedAt || notification.createdAt,
   }));
@@ -1785,6 +1868,12 @@ export const saveSecureWorkspace = async (
 
   if (retryableBatch) return { ok: false, code: 'RETRY_REQUIRED', error: 'Save was not confirmed. Your pending change is retained for retry.' };
   if (pendingOperations.length > 500) return { ok: false, code: 'VALIDATION', error: 'This change touches too many records. Save it in smaller steps.' };
+  // Guard synchronously: two interleaved saves must not both create a batch,
+  // because the second would clobber the first (the dynamic import below is an
+  // async boundary).
+  if (saveInFlight) return { ok: false, code: 'RETRY_REQUIRED', error: 'A save is already in progress. Your pending change will be confirmed shortly.' };
+  saveInFlight = true;
+  try {
   const clientDeletes = pendingOperations.filter(operation => operation.entityType === 'client' && operation.action === 'delete');
   const remaining = pendingOperations.filter(operation => !clientDeletes.includes(operation));
   const remainingType = type === 'client.delete' ? undefined : type;
@@ -1801,6 +1890,9 @@ export const saveSecureWorkspace = async (
   // All later groups are retained before the first request can reach the server.
   retainSecureWorkspaceCommand(commands[0]);
   return runSecureCommandBatch(saveSession, options);
+  } finally {
+    saveInFlight = false;
+  }
 };
 
 const runSecureCommandBatch = async (
@@ -1810,7 +1902,7 @@ const runSecureCommandBatch = async (
   const batch = retryableBatch;
   if (!batch) return { ok: false, code: 'NOT_FOUND', error: 'There is no command waiting to retry.' };
   const module = await import('./secureCommandBatch').catch(() => null);
-  if (!module) return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Your change is retained for retry.' };
+  if (!module) return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your change is kept safe — please retry." };
   const { runCommandBatch } = module;
   return runCommandBatch(batch, options, {
     isCurrent: () => isWorkspaceSessionCurrent(saveSession),
@@ -1877,7 +1969,11 @@ export const retrySecureWorkspaceCommand = async (
   if (!retryableBatch) retryableBatch = { commands: [command], before: structuredClone(command.operations.map(operation => baseline.get(entityKey(operation.entityType, operation.entityId))).filter((row): row is BaselineRow => Boolean(row))), cursor: 0, workspaceVersion: expectedWorkspaceVersion, attempted: true };
   else {
     retryableBatch.commands[retryableBatch.cursor] = command;
-    if (expectedWorkspaceVersion !== undefined) retryableBatch.workspaceVersion = expectedWorkspaceVersion;
+    // Never lower the version already advanced by earlier groups in this
+    // batch; the caller's value can be stale after a partial save failure.
+    if (expectedWorkspaceVersion !== undefined) {
+      retryableBatch.workspaceVersion = Math.max(retryableBatch.workspaceVersion ?? 0, expectedWorkspaceVersion);
+    }
   }
   return runSecureCommandBatch(captureWorkspaceSession(), options);
 };
@@ -1906,7 +2002,10 @@ export const rebaseRetryableCommand = (conflict: MutationConflict) => {
       }];
     }
     let mergedData = operation.data;
-    if (conflict.changedFields && operation.data && conflict.current) {
+    // Only merge when we actually know which fields this client changed.
+    // An empty changed-field set would otherwise replace the row with the
+    // server copy and silently drop the local change.
+    if (conflict.changedFields?.length && operation.data && conflict.current) {
       mergedData = { ...conflict.current, ...locallyChangedFields(operation) };
     }
     return [{ ...operation, data: mergedData, expectedVersion: conflict.actualVersion }];
@@ -1927,6 +2026,7 @@ export const discardSecureWorkspaceCommand = () => {
   retryableMemberPermissions = null;
   retryableMemberRole = null;
   clearPersistedRetryableMemberMutation();
+  setRetryableNotificationMutation(null);
   activeSecureAuthUserId = null;
 };
 

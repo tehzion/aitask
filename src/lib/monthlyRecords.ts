@@ -19,7 +19,7 @@ export const resolveMonthlyRecord = (cycles: ServiceCycle[], clientId: string, t
   // presented as this client's current record.
   const scopeToPlans = Boolean(planIds && planIds.size > 0);
   const available = cycles.filter(item => item.clientId === clientId
-    && (!scopeToPlans || planIds!.has(item.planId))
+    && (!scopeToPlans || !item.planId || planIds!.has(item.planId))
     && /^\d{4}-\d{2}-\d{2}$/.test(item.periodStart)
     && /^\d{4}-\d{2}-\d{2}$/.test(item.periodEnd) && item.periodStart <= item.periodEnd)
     .sort((a, b) => b.periodStart.localeCompare(a.periodStart));

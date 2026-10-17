@@ -64,7 +64,7 @@ test('PM can follow signed portfolio work through final completion', async ({ pa
   })).toEqual({ status: 'Completed', progress: 100 });
   await page.goto('/');
   await expect(queue(page, 'Ready to finalize').getByRole('link', { name: 'Signed portfolio work' })).toHaveCount(0);
-  await expect(queue(page, 'Client review (optional)').getByRole('link', { name: 'Signed portfolio work' })).toHaveCount(0);
+  await expect(queue(page, 'Client review (optional)').getByRole('link', { name: 'Signed portfolio work' })).toBeVisible();
 });
 
 test('PM sees completion in both task views while review is pending', async ({ page }) => {

@@ -59,7 +59,17 @@ select is((public.aitask_execute_command('pgtap-hod-parity',gen_random_uuid(),'w
  jsonb_build_array(jsonb_build_object('kind','entity','action','insert','entityType','client','entityId','owned-company','expectedVersion',0,'data',jsonb_build_object('id','owned-company','clientName','Owned Company','createdBy','hod-parity'))))->>'ok')::boolean,true,'default HOD can create a company');
 select is((select count(*)::integer from public.aitask_entities where workspace_id='pgtap-hod-parity' and entity_type='client' and entity_id='owned-company'),1,'created company is readable to HOD owner');
 select is((public.aitask_execute_command('pgtap-hod-parity',gen_random_uuid(),'client.delete',
- jsonb_build_array(jsonb_build_object('kind','entity','action','delete','entityType','client','entityId','owned-company','expectedVersion',1)))->>'ok')::boolean,true,'default HOD can delete their own company');
+ jsonb_build_array(jsonb_build_object('kind','entity','action','delete','entityType','client','entityId','owned-company','expectedVersion',1)))->>'ok')::boolean,false,'HOD company ownership alone does not bypass edit capability');
+reset role;
+select set_config('request.jwt.claim.sub','',true);
+update public.aitask_members set permissions=permissions||'{"manageAssignedClients":true,"deleteClients":true}'::jsonb where workspace_id='pgtap-hod-parity' and id='hod-parity';
+insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
+('pgtap-hod-parity','task','owned-company-assignment','{"id":"owned-company-assignment","title":"Assigned company work","clientId":"owned-company","clientName":"Owned Company","department":"Video Editor","assignedTo":"hod-parity","createdBy":"hod-parity"}');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000928',true);
+set local role authenticated;
+select ok((result->>'ok')::boolean,'HOD can delete their company when assigned work grants edit access: '||result::text)
+from (select public.aitask_execute_command('pgtap-hod-parity',gen_random_uuid(),'client.delete',
+ jsonb_build_array(jsonb_build_object('kind','entity','action','delete','entityType','client','entityId','owned-company','expectedVersion',1))) as result) command;
 reset role;
 select ok(not has_function_privilege('authenticated','private.aitask_can_mutate_entity(text,text,text,text,text,jsonb,jsonb)','EXECUTE'),'private mutation validator remains inaccessible directly');
 select * from finish();

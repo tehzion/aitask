@@ -14,7 +14,9 @@ export default function NavigationGuard() {
     return () => cancelAnimationFrame(frame);
   }, [location.key]);
   const blocker = useBlocker(({ currentLocation, nextLocation }) => Boolean(useStore.getState().currentUser) && hasUnsavedChanges() && (
-    currentLocation.pathname !== nextLocation.pathname || new URLSearchParams(currentLocation.search).get('taskId') !== new URLSearchParams(nextLocation.search).get('taskId')
+    currentLocation.pathname !== nextLocation.pathname
+    || currentLocation.search !== nextLocation.search
+    || currentLocation.hash !== nextLocation.hash
   ));
   useEffect(() => {
     if (blocker.state !== 'blocked') return;

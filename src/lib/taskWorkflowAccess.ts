@@ -18,14 +18,16 @@ export const canReviewTaskInternally = (user: User | null | undefined, task: Tas
     || Boolean(scope.users && getDepartmentReviewers(scope.users, task, roles, scope).some(reviewer => reviewer.id === user.id));
 };
 
-export const canRequestTaskRevision = (user: User | null | undefined, task: Task, roles: CustomRole[] = []) => Boolean(user
-  && (user.role === 'Project Manager' || canReviewTaskInternally(user, task, roles)));
+export const canRequestTaskRevision = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => Boolean(user
+  && (isResponsibleProjectManager(user, task, scope) || canReviewTaskInternally(user, task, roles, scope)));
 
-const canSkipInternalApproval = (task: Partial<Task> | undefined) => task?.status === 'Waiting Approval'
-  && task.requiresInternalApproval === false && task.workflowStepKind !== 'internal_review';
+// A task whose responsible project manager opted it out of the internal-approval
+// checkpoint. Internal-review workflow steps can never be opted out.
+const isApprovalOptOut = (task: Partial<Task> | undefined) => task?.requiresInternalApproval === false
+  && task.workflowStepKind !== 'internal_review';
+const canSkipInternalApproval = (task: Partial<Task> | undefined) => task?.status === 'Waiting Approval' && isApprovalOptOut(task);
 
-export const canCompleteWithoutInternalApproval = (task: Partial<Task> | undefined) => canSkipInternalApproval(task)
-  && task?.visibility !== 'client-visible';
+export const canCompleteWithoutInternalApproval = (task: Partial<Task> | undefined) => canSkipInternalApproval(task);
 
 export const taskTransitionError = (user: User | null | undefined, before: Task | undefined, after: Pick<Task, 'status' | 'isCompleted' | 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
   const protectedOutput = before?.status === 'Approved' ? ['title', 'description', 'notes', 'attachmentLink', 'attachmentName', 'outputAttachments'] as const
@@ -35,17 +37,19 @@ export const taskTransitionError = (user: User | null | undefined, before: Task 
     && ['assignedTo', 'department'].some(field => Object.prototype.hasOwnProperty.call(after, field) && before[field as 'assignedTo' | 'department'] !== after[field as 'assignedTo' | 'department'])) return 'Reassign work before submitting it for review.';
   if (before?.status === after.status && before.isCompleted === after.isCompleted) return undefined;
   const override = Boolean(user && isBossKoo(user) && after.reviewOverrideReason?.trim() && after.reviewOverrideReason.trim().length <= 2000);
-  const responsiblePmBypass = Boolean(user?.role === 'Project Manager' && before
-    && isResponsibleProjectManager(user, before, scope) && canSkipInternalApproval(before));
+  // Approval always belongs to the configured reviewer (department HOD or review
+  // cover). A PM who opted the task out of internal approval finalizes it
+  // directly via completion; they may not self-approve, matching the database.
   if (after.status === 'Approved' && (!before || before.status !== 'Waiting Approval'
-    || (!canReviewTaskInternally(user, before, roles, scope) && !responsiblePmBypass && !override))) return 'Only the department reviewer can approve submitted work.';
-  if ((after.status === 'Completed' || after.isCompleted) && before?.visibility === 'client-visible'
-    && before.clientApprovalStatus !== 'Approved' && canSkipInternalApproval(before)) return 'Client approval is required before completion.';
+    || (!canReviewTaskInternally(user, before, roles, scope) && !override))) return 'Only the department reviewer can approve submitted work.';
+  // Client review and PM finalization are independent. The responsible PM may
+  // complete client-visible work at 100%; customer acceptance remains available
+  // as a separate, audited decision and does not have to happen first.
   if ((after.status === 'Completed' || after.isCompleted) && !isBossKoo(user)
     && (user?.role !== 'Project Manager' || !before || !isResponsibleProjectManager(user, before, scope)
       || (before.status !== 'Approved' && !canCompleteWithoutInternalApproval(before)))) return 'Only a project manager can confirm completion after internal approval.';
-  if (before && ['Waiting Approval', 'Approved', 'Completed'].includes(before.status) && !canRequestTaskRevision(user, before, roles)) return 'Ask the HOD or project manager to return approved work for revision.';
-  if (before && after.status === 'Revision' && !canRequestTaskRevision(user, before, roles)) return 'Ask the HOD or project manager to return approved work for revision.';
+  if (before && ['Waiting Approval', 'Approved', 'Completed'].includes(before.status) && !canRequestTaskRevision(user, before, roles, scope)) return 'Ask the HOD or project manager to return approved work for revision.';
+  if (before && after.status === 'Revision' && !canRequestTaskRevision(user, before, roles, scope)) return 'Ask the HOD or project manager to return approved work for revision.';
   return undefined;
 };
 

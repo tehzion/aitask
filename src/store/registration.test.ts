@@ -104,4 +104,21 @@ describe('staff registration lifecycle', () => {
     store.approveRegistration('reg-1', 'Staff', ['Designer'], undefined, undefined);
     expect(useStore.getState().users.length).toBe(userCountAfterFirst);
   });
+
+  it('approves a Project Manager registration without requiring a department', () => {
+    const store = useStore.getState();
+    useStore.setState({
+      registrations: [makeRegistration({
+        id: 'reg-pm',
+        name: 'New PM',
+        email: 'new.pm@example.com',
+        jobPosition: 'Project Manager',
+        requestedRole: 'Project Manager',
+      })],
+    });
+
+    expect(store.approveRegistration('reg-pm', 'Project Manager', [], undefined, undefined)).toEqual({ ok: true });
+    const approvedUser = useStore.getState().users.find(user => user.name === 'New PM');
+    expect(approvedUser?.role).toBe('Project Manager');
+  });
 });

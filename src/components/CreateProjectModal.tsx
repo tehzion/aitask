@@ -23,11 +23,12 @@ interface Props {
   onClose: () => void;
   project?: Project | null;
   initialClientId?: string;
+  onClientCreated?: (clientId: string) => void;
   onProjectCreated?: (projectId: string) => void;
   onProjectUpdated?: (projectId: string) => void;
 }
 
-const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initialClientId, onProjectCreated, onProjectUpdated }) => {
+const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initialClientId, onClientCreated, onProjectCreated, onProjectUpdated }) => {
   const { t } = useI18n();
   const { addProject, updateProject, projects, clients, tasks, currentUser, rolePermissions, retryPendingSave, backend } = useStore(useShallow(state => ({
     addProject: state.addProject,
@@ -40,7 +41,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     retryPendingSave: state.retryPendingSave,
     backend: state.backend,
   })));
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [, setSearchParams] = useSearchParams();
   const titleId = React.useId();
   const descriptionId = React.useId();
   const clientSelectId = React.useId();
@@ -51,11 +52,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   // A company search filter on the Companies page would hide the company this
   // project is linked to. Clear it whenever the project is created or updated.
   const clearCompanySearch = React.useCallback(() => {
-    if (!searchParams.get('search')) return;
-    const next = new URLSearchParams(searchParams);
-    next.delete('search');
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+    setSearchParams(current => {
+      if (!current.get('search')) return current;
+      const next = new URLSearchParams(current);
+      next.delete('search');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const [clientId, setClientId] = useState('');
   const [projectName, setProjectName] = useState('');
@@ -198,7 +201,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     setFormError('');
   };
 
-  const handleClose = () => { recovery.clear(); markPristine(); setFormEdited(false); resetForm(); onClose(); };
+  const handleClose = () => { recovery.clear(); markPristine(); setFormEdited(false); resetForm(); clearCompanySearch(); onClose(); };
   const requestClose = () => { if (!isSubmitting && (!formEdited || window.confirm(t('Discard unsaved changes?')))) handleClose(); };
 
   const confirmProjectSave = async (id: string) => {
@@ -392,6 +395,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                     <button
                       key={service}
                       type="button"
+                      data-draft-control
                       onClick={() => togglePreset(service)}
                       className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
                         isSelected
@@ -413,6 +417,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                       <button
                         key={service}
                       type="button"
+                      data-draft-control
                       onClick={() => togglePreset(service)}
                       data-i18n-skip
                         className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
@@ -439,6 +444,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                       {name}
                       <button
                         type="button"
+                        data-draft-control
                         onClick={() => removeCustomService(name)}
                         className="ml-0.5 text-blue-500 hover:text-blue-700 transition-colors rounded"
                         aria-label={`${t('Remove')} ${name}`}
@@ -467,6 +473,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                 </div>
                 <button
                   type="button"
+                  data-draft-control
                   onClick={addCustomService}
                   disabled={!customInput.trim()}
                   className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
@@ -524,6 +531,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         onCreated={(newClientId) => {
           setClientId(newClientId);
           setFormError('');
+          clearCompanySearch();
+          onClientCreated?.(newClientId);
           setIsClientModalOpen(false);
         }}
       />}

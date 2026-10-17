@@ -130,16 +130,15 @@ describe('role readiness at alternate entry points', () => {
     expect(useStore.getState().notifications.some(notification => notification.targetUserId === staff.id && /returned to you/.test(notification.message || ''))).toBe(false);
   });
 
-  it('routes client-visible work to client approval when internal approval is optional', () => {
+  it.each(['quick', 'full'])('lets the PM complete client-visible opt-out work through the %s editor without client acceptance', entry => {
     useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Waiting Approval', requiresInternalApproval: false }] });
     actor(pm);
-    expect(useStore.getState().updateTaskStatus(task.id, 'Completed')).toEqual({ ok: false, error: 'Client approval is required before completion.' });
-    expect(useStore.getState().updateTaskStatus(task.id, 'Approved').ok).toBe(true);
-    actor(client);
-    expect(useStore.getState().reviewClientApproval(task.id, 'Approved', 'Customer OK').ok).toBe(true);
-    actor(pm);
-    expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
-    expect(current()).toMatchObject({ completionPercentage: 100, isCompleted: true, clientApprovalStatus: 'Approved' });
+    const result = entry === 'quick'
+      ? useStore.getState().updateTaskStatus(task.id, 'Completed')
+      : useStore.getState().updateTask(task.id, { status: 'Completed' });
+    expect(result.ok).toBe(true);
+    expect(current()).toMatchObject({ status: 'Completed', completionPercentage: 100, isCompleted: true, clientApprovalStatus: 'Pending' });
+    expect(current().completedAt).toBeTruthy();
   });
 
   it('HOD-delegated tasks submitted for review notify the HOD reviewer', () => {
@@ -151,9 +150,18 @@ describe('role readiness at alternate entry points', () => {
     expect(useStore.getState().updateTaskStatus(id, 'Waiting Approval').ok).toBe(true);
     expect(useStore.getState().notifications.some(n => n.targetUserId === hod.id && n.route?.entityId === id && n.title === 'Task Ready for Approval')).toBe(true);
   });
-  it('reassignment clears review and acceptance metadata through quick and full edits', () => {
+  it('refuses reassigning submitted work and preserves its review metadata', () => {
     for (const fullEdit of [false, true]) {
       useStore.setState({ tasks: [{ ...task, status: 'Waiting Approval', assignedTo: staff.id, workState: { acceptedBy: staff.id, acceptedAt: '2026-10-01', reviewRequestedBy: staff.id, reviewRequestedAt: '2026-10-02' } }] });
+      const result = fullEdit ? useStore.getState().updateTask(task.id, { assignedTo: hod.id }) : useStore.getState().updateTaskAssignee(task.id, hod.id);
+      expect(result.ok).toBe(false);
+      expect(current()).toMatchObject({ status: 'Waiting Approval', assignedTo: staff.id });
+      expect(current().workState?.reviewRequestedBy).toBe(staff.id);
+    }
+  });
+  it('reassignment clears review and acceptance metadata through quick and full edits', () => {
+    for (const fullEdit of [false, true]) {
+      useStore.setState({ tasks: [{ ...task, status: 'In Progress', assignedTo: staff.id, workState: { acceptedBy: staff.id, acceptedAt: '2026-10-01' } }] });
       const result = fullEdit ? useStore.getState().updateTask(task.id, { assignedTo: hod.id }) : useStore.getState().updateTaskAssignee(task.id, hod.id);
       expect(result.ok).toBe(true);
       expect(current()).toMatchObject({ status: 'Pending', completionPercentage: 10 });
@@ -211,5 +219,77 @@ describe('approved output integrity', () => {
     actor(staff);
     expect(useStore.getState().updateTaskAttachment(task.id, 'https://example.com/replacement').ok).toBe(false);
     expect(useStore.getState().updateTask(task.id, { notes: 'Internal handover note' }).ok).toBe(true);
+  });
+});
+
+describe('HOD task-action guards', () => {
+  it('refuses a revision request unless the work was submitted for review', () => {
+    for (const status of ['Pending', 'In Progress', 'Cancelled'] as const) {
+      useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status }] });
+      actor(hod);
+      const result = useStore.getState().requestRevision(task.id, 'Not yet');
+      expect(result.ok).toBe(false);
+      expect(current()).toMatchObject({ status, revisionCount: 0, clientApprovalStatus: 'Pending' });
+    }
+  });
+
+  it('returns submitted work for revision without leaving stale review metadata', () => {
+    useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Waiting Approval', workState: { reviewRequestedBy: staff.id, reviewRequestedAt: '2026-10-02', acceptedBy: staff.id, acceptedAt: '2026-10-01' } }] });
+    actor(hod);
+    expect(useStore.getState().requestRevision(task.id, 'Redo').ok).toBe(true);
+    expect(current()).toMatchObject({ status: 'In Progress', revisionCount: 1, clientApprovalStatus: 'Rejected', isCompleted: false });
+    expect(current().workState?.reviewRequestedBy).toBeUndefined();
+    expect(current().reviewDecision).toBeUndefined();
+  });
+
+  it('blocks reassigning submitted, approved or completed work through both assignment entry points', () => {
+    for (const status of ['Waiting Approval', 'Approved', 'Completed'] as const) {
+      for (const fullEdit of [false, true]) {
+        useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status, isCompleted: status === 'Completed', completionPercentage: status === 'Completed' ? 100 : 80 }] });
+        const result = fullEdit
+          ? useStore.getState().updateTask(task.id, { assignedTo: hod.id })
+          : useStore.getState().updateTaskAssignee(task.id, hod.id);
+        expect(result.ok).toBe(false);
+        expect(current().assignedTo).toBe(staff.id);
+        expect(current().status).toBe(status);
+      }
+    }
+  });
+
+  it('clears stale review metadata when the client requests changes', () => {
+    useStore.setState({
+      tasks: [{
+        ...task, assignedTo: staff.id, status: 'Approved', completionPercentage: 80, clientApprovalStatus: 'Pending',
+        workState: { reviewRequestedBy: staff.id, reviewRequestedAt: '2026-10-02', acceptedBy: staff.id, acceptedAt: '2026-10-01' },
+      }],
+    });
+    actor(client);
+    expect(useStore.getState().reviewClientApproval(task.id, 'Rejected', 'Please redo').ok).toBe(true);
+    expect(current()).toMatchObject({ status: 'In Progress', clientApprovalStatus: 'Rejected', revisionCount: 1, isCompleted: false });
+    expect(current().workState?.reviewRequestedBy).toBeUndefined();
+  });
+
+  it('preserves the internal review decision when the client approves', () => {
+    useStore.setState({
+      tasks: [{
+        ...task, assignedTo: staff.id, status: 'Approved', completionPercentage: 80, clientApprovalStatus: 'Pending',
+        reviewDecision: { reviewedBy: hod.id, reviewedAt: '2026-10-02T00:00:00.000Z' },
+      }],
+    });
+    actor(client);
+    expect(useStore.getState().reviewClientApproval(task.id, 'Approved', 'Customer OK').ok).toBe(true);
+    expect(current().reviewDecision?.reviewedBy).toBe(hod.id);
+  });
+});
+
+describe('review configuration notices', () => {
+  it('does not re-notify reviewers when settings are saved on an already-submitted task', async () => {
+    useStore.setState({ currentUser: pm, tasks: [{ ...task, assignedTo: staff.id, status: 'Waiting Approval' }], notifications: [] });
+    expect((await useStore.getState().setTaskReviewConfig(task.id, { accountableLeadId: hod.id })).ok).toBe(true);
+    const afterFirst = useStore.getState().notifications.filter(notification => notification.title === 'Task Ready for Approval').length;
+    expect((await useStore.getState().setTaskReviewConfig(task.id, { accountableLeadId: hod.id })).ok).toBe(true);
+    const afterSecond = useStore.getState().notifications.filter(notification => notification.title === 'Task Ready for Approval').length;
+    expect(afterFirst).toBe(0);
+    expect(afterSecond).toBe(afterFirst);
   });
 });

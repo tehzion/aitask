@@ -390,7 +390,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
         {workflowKind === 'internal_review' && <section className="border-b border-line pb-4 text-sm" aria-label={t('Internal review')}>
           <p className="font-semibold text-ink">{t('Internal review')}</p>
           <p className="mt-1 text-muted">{liveTask.internalReview ? t('Reviewed by {name}', { name: users.find(user => user.id === liveTask.internalReview?.reviewedBy)?.name || t('Team member') }) : t('Waiting for review')}</p>
-          {!liveTask.internalReview && <p className="mt-2 text-muted">{t(transitionError('Approved') || INTERNAL_REVIEW_PERMISSION_MESSAGE)}</p>}
+          {!liveTask.internalReview && !canApproveInternalReview(currentUser, liveTask, rolePermissions, { users, clients, projects }) && <p className="mt-2 text-muted">{t(transitionError('Approved') || INTERNAL_REVIEW_PERMISSION_MESSAGE)}</p>}
         </section>}
         <section aria-labelledby="staff-task-brief">
           <h3 id="staff-task-brief" className="flex items-center gap-2 font-semibold text-ink"><FileText className="h-4 w-4 text-accent" />{t('Brief')}</h3>

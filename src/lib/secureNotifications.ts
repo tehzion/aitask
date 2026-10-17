@@ -2,9 +2,10 @@ import type { AppNotification, NotificationFeedPage } from '../types';
 import type { MutationResult, NotificationFeedQuery, NotificationReadResponse, SecureNotificationRuntime } from './secureWorkspace';
 import { parseNotification } from './security';
 import { enrichNotificationMetadata } from './notificationCenter';
+import { userFacingText } from './userFacingMessage';
 
 export const createSecureNotifications = (runtime: SecureNotificationRuntime) => {
-  const { captureWorkspaceSession, isWorkspaceSessionCurrent, isRecord, cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, entityKey, stable, commandId, SyncRequestTimeoutError } = runtime;
+  const { captureWorkspaceSession, isWorkspaceSessionCurrent, isRecord, cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, entityKey, stable, commandId, commandErrorCode, SyncRequestTimeoutError } = runtime;
 
   const parseNotificationFeedItem = (
     value: unknown,
@@ -40,7 +41,7 @@ export const createSecureNotifications = (runtime: SecureNotificationRuntime) =>
     if (!isRecord(result.data) || result.data.ok !== true) {
       throw new Error(isRecord(result.data) && typeof result.data.error === 'string'
         ? result.data.error
-        : 'Supabase returned an invalid notification feed.');
+        : "We couldn't load your notifications. Please try again.");
     }
 
     const memberId = cleanPortalText(result.data.memberId, 160);
@@ -103,11 +104,17 @@ export const createSecureNotifications = (runtime: SecureNotificationRuntime) =>
       && runtime.retryableNotificationMutation.markAll === markAll
       && stable(runtime.retryableNotificationMutation.notificationIds) === stable(ids);
     if (runtime.retryableNotificationMutation && !matchesRetry) {
-      return {
-        ok: false,
-        code: 'RETRY_REQUIRED',
-        error: 'Retry the previous notification update before starting another one.',
-      };
+      if (runtime.retryableNotificationMutation.restored) {
+        // A pending update restored from a previous session must not block a new
+        // action the user cannot identify; discard the stale token and proceed.
+        runtime.retryableNotificationMutation = null;
+      } else {
+        return {
+          ok: false,
+          code: 'RETRY_REQUIRED',
+          error: 'Retry the previous notification update before starting another one.',
+        };
+      }
     }
     const pending = matchesRetry
       ? runtime.retryableNotificationMutation!
@@ -131,28 +138,32 @@ export const createSecureNotifications = (runtime: SecureNotificationRuntime) =>
         ok: false,
         code: typeof navigator !== 'undefined' && navigator.onLine === false ? 'OFFLINE' : 'RETRY_REQUIRED',
         error: error instanceof SyncRequestTimeoutError
-          ? 'Notification update confirmation timed out. Try the same action again safely.'
-          : 'Supabase could not confirm the notification update.',
+          ? 'This is taking longer than expected. Please try again.'
+          : "We couldn't confirm the notification update. Please try again.",
       };
     }
 
     if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     if (result.error) {
-      if (isAuthError(result.error)) runtime.retryableNotificationMutation = null;
+      const code = isAuthError(result.error) ? 'FORBIDDEN' : commandErrorCode(result.error);
+      if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') runtime.retryableNotificationMutation = null;
       return {
         ok: false,
-        code: isAuthError(result.error) ? 'FORBIDDEN' : 'RETRY_REQUIRED',
-        error: result.error.message || 'Unable to update notifications.',
+        code,
+        error: userFacingText(result.error, 'Unable to update notifications.'),
       };
     }
 
     const response = result.data as NotificationReadResponse;
     if (!response?.ok) {
-      if (response?.code !== 'RETRY_REQUIRED') runtime.retryableNotificationMutation = null;
+      // Retryable outcomes keep the pending token for idempotent replay; a
+      // terminal rejection clears it so the user can start a new action.
+      const code = response?.code || 'RETRY_REQUIRED';
+      if (code !== 'RETRY_REQUIRED' && code !== 'CONFLICT' && code !== 'OFFLINE') runtime.retryableNotificationMutation = null;
       return {
         ok: false,
-        code: response?.code || 'RETRY_REQUIRED',
-        error: response?.error || 'The notification update was rejected.',
+        code,
+        error: userFacingText(response?.error, 'The notification update was rejected.'),
       };
     }
 

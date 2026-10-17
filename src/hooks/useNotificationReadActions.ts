@@ -66,6 +66,7 @@ export const useNotificationReadActions = (): NotificationReadActions => {
     setError(null); setErrorIds([]);
     const sessionToken = captureWorkspaceSession();
     const current = useStore.getState();
+    const actorAtStart = current.currentUser?.id;
     const affectedIds = markAll && current.currentUser
       ? getUnreadNotifications(current.currentUser, current.notifications).map(notification => notification.id)
       : notificationIds;
@@ -77,7 +78,18 @@ export const useNotificationReadActions = (): NotificationReadActions => {
     try {
       if (shouldUseSecureSupabase()) {
         const result = await setSecureNotificationsRead(notificationIds, isRead, markAll);
-        if (!isWorkspaceSessionCurrent(sessionToken) || !mounted.current) return false;
+        if (!mounted.current) return false;
+        if (!isWorkspaceSessionCurrent(sessionToken)) {
+          // The session changed mid-flight; roll the optimistic mark back only
+          // while the store still belongs to the same actor.
+          if (useStore.getState().currentUser?.id === actorAtStart) {
+            useStore.setState(state => ({
+              notifications: restoreNotificationReadState(state.notifications, previousReadState),
+              notificationUnreadCount: previousUnreadCount,
+            }));
+          }
+          return false;
+        }
         if (result.ok === true) {
           const savedAt = new Date().toISOString();
           useStore.setState(state => ({

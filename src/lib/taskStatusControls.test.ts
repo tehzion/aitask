@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Task, User } from '../types';
 import { getTaskStatusControls } from './taskStatusControls';
-import { getTaskStatusOptions } from './taskWorkflowAccess';
+import { canRequestTaskRevision, getTaskStatusOptions } from './taskWorkflowAccess';
 import { getStaffGuidedAction } from './staffWorkspace';
 import { TASK_EVIDENCE_REQUIRED } from './staffWorkflow';
 
@@ -59,11 +59,13 @@ describe('PM completion controls', () => {
     expect(completion(pm, { ...optional, workflowStepKind: 'internal_review' })?.disabledReason).toBe('Only a project manager can confirm completion after internal approval.');
   });
 
-  it('routes client-visible opt-out work through client review before completion', () => {
+  it('allows the responsible PM to complete client-visible opt-out work before client acceptance', () => {
     const optional = makeTask({ requiresInternalApproval: false, visibility: 'client-visible' });
-    expect(completion(pm, optional)?.disabledReason).toBe('Client approval is required before completion.');
-    expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).toContain('Approved');
-    expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).not.toContain('Completed');
+    expect(completion(pm, optional)).toEqual({ status: 'Completed', disabledReason: undefined });
+    // Approval stays with the department reviewer; PM self-approval is not offered.
+    expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).not.toContain('Approved');
+    expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).toContain('Completed');
+    expect(completion(pm, { ...optional, status: 'Approved', clientApprovalStatus: 'Pending' })).toEqual({ status: 'Completed', disabledReason: undefined });
     expect(completion(pm, { ...optional, status: 'Approved', clientApprovalStatus: 'Approved' })).toEqual({ status: 'Completed', disabledReason: undefined });
   });
 
@@ -101,5 +103,37 @@ describe('PM completion controls', () => {
     const options = getTaskStatusControls(pm, { ...task, status: 'Approved' }, ['Completed', 'completed', 'Custom'], [], scope);
     expect(options.filter(option => option.status === 'Completed')).toHaveLength(1);
     expect(options.some(option => option.status === 'Custom')).toBe(true);
+  });
+});
+
+describe('HOD revision respects review cover', () => {
+  const { pm, hod, staff } = makeActors();
+  const coverHod: User = { id: 'cover-hod', name: 'Cover HOD', role: 'HOD', departments: ['Designer'] } as User;
+  const scope = { users: [pm, hod, staff, coverHod] };
+  const covered = makeTask({ reviewCover: { reviewerId: coverHod.id, expiresAt: '2026-10-20T00:00:00.000Z', configuredBy: pm.id, configuredAt: '2026-10-16T00:00:00.000Z' } });
+
+  it('grants revision to the active cover reviewer instead of the department HOD', () => {
+    expect(canRequestTaskRevision(coverHod, covered, [], scope)).toBe(true);
+    expect(canRequestTaskRevision(hod, covered, [], scope)).toBe(false);
+  });
+
+  it('falls back to the department HOD once cover has expired', () => {
+    const expired = makeTask({ reviewCover: { reviewerId: coverHod.id, expiresAt: '2026-10-15T00:00:00.000Z' } });
+    expect(canRequestTaskRevision(hod, expired, [], scope)).toBe(true);
+  });
+});
+
+describe('revision authority', () => {
+  const { pm } = makeActors();
+  const scope = { users: [pm] };
+
+  it('grants revision to the responsible PM who owns the work', () => {
+    const owned = makeTask({ createdBy: pm.id, status: 'Approved' });
+    expect(canRequestTaskRevision(pm, owned, [], scope)).toBe(true);
+  });
+
+  it('denies revision to an unrelated PM with no editorial relationship', () => {
+    const foreign = makeTask({ createdBy: 'other-pm', assignedTo: 'staff', status: 'Approved' });
+    expect(canRequestTaskRevision(pm, foreign, [], scope)).toBe(false);
   });
 });

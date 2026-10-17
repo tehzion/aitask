@@ -80,11 +80,14 @@ test('invalid links and expired drafts require explicit scoped review', async ({
   await panel.getByRole('button', { name: 'Older unpublished cycles (1)' }).click();
   await expect(panel.getByText(/Expired unpublished cycle/)).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Publish', exact: true })).toHaveCount(1);
-  page.once('dialog', dialog => dialog.dismiss());
   await panel.getByRole('button', { name: 'Remove invalid link' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Remove invalid delivery link' });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(panel.getByRole('combobox')).toHaveCount(1);
-  page.once('dialog', dialog => dialog.accept());
   await panel.getByRole('button', { name: 'Remove invalid link' }).click();
+  await expect(page.getByRole('dialog', { name: 'Remove invalid delivery link' })).toBeVisible();
+  await page.getByRole('dialog', { name: 'Remove invalid delivery link' }).getByRole('button', { name: 'Remove invalid link', exact: true }).click();
   await expect(panel.getByRole('combobox')).toHaveCount(2);
   const state = await page.evaluate(async () => {
     const store = (await import('/src/store/index.ts')).useStore.getState();

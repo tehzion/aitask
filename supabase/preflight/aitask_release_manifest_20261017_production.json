@@ -1,0 +1,76 @@
+{
+  "manifestVersion": "2026-10-17.5",
+  "manifestKind": "aitask-applied-production-release",
+  "supersedes": "aitask_release_manifest_20261017_golive.json",
+  "immutable": true,
+  "capturedAt": "2026-10-17T15:28:30Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "Production verified through 20261017140000_audit_history_retention_guards_followup mapped to applied version 20261017152826",
+  "validatedMigrationTail": [
+    "20261017091031_workspace_revision_realtime",
+    "20261017113000_audit_value_history",
+    "20261017130000_align_service_cycle_cancel_rpc",
+    "20261017140000_audit_history_retention_guards_followup"
+  ],
+  "pendingProductionMigrations": [],
+  "productionVerification": {
+    "migrationCount": 114,
+    "historyAligned": false,
+    "historyThrough": "20261017152826_audit_history_retention_guards_followup",
+    "migrationResolution": {
+      "status": "connector_aliases_verified",
+      "repositoryToProduction": [
+        {"repository":"20261017091031_workspace_revision_realtime","production":"20261017152814_workspace_revision_realtime"},
+        {"repository":"20261017113000_audit_value_history","production":"20261017095621_audit_value_history"},
+        {"repository":"20261017130000_align_service_cycle_cancel_rpc","production":"20261017095628_align_service_cycle_cancel_rpc"},
+        {"repository":"20261017140000_audit_history_retention_guards_followup","production":"20261017152826_audit_history_retention_guards_followup"}
+      ]
+    },
+    "workspacePublished": true,
+    "workspaceHistoryDeleteAction": "RESTRICT",
+    "actorHistoryForeignKeyRemoved": true,
+    "serviceRoleDirectHistoryPrivileges": false,
+    "historyRlsEnabled": true,
+    "historyImmutableTriggerEnabled": true,
+    "historyRowsPreserved": 4,
+    "businessEntityRows": 1863,
+    "businessEntityHash": "5c3dbf9232130abcb4b4b65d9a401d51",
+    "originalMemberRows": 11,
+    "originalMemberHash": "0c33b230fb39ce6f109746bb4c170333",
+    "businessDataUnchanged": true
+  },
+  "retentionApproval": {
+    "status": "APPROVED",
+    "record": "RELEASE_APPROVAL_RECORD.md",
+    "migrationSha256": "7620a58e34d775359ef870d85ffbac1f0b3cf6e9ab7d6d663a9d61b7986c00ab"
+  },
+  "recovery": {
+    "backupCreatedAt": "2026-10-17T15:20:51.005Z",
+    "restoreVerifiedAt": "2026-10-17T15:22:33.134Z",
+    "archiveSha256": "d3d1f2be17e15df14ec2b811a0dc5f258fcae1221b6be778fa2576029d87a525",
+    "verifiedTables": 50,
+    "verifiedRows": 7545,
+    "rowCountsAndSha256Match": true,
+    "privateStorageObjectsBackedUp": 1,
+    "postgresClient": "17.6",
+    "operator": "tehzion assisted by Codex",
+    "location": "/Users/user/Downloads/aitask-production-backups/20261017T151800Z"
+  },
+  "qualityGates": {
+    "unitTests": 830,
+    "playwright": {"passed":324,"failed":0,"skipped":0,"interrupted":0},
+    "pgTapAssertions": 1033,
+    "typecheckLintBuildPwaBundle": "PASS",
+    "liveOrdinaryRoleAuthentication": "PASS: Super Admin, Project Manager, HOD, Staff",
+    "liveRolePageSmoke": "PASS: dashboards, tasks, projects, reports, calendar; Super Admin approvals; Staff mobile layout"
+  },
+  "vercel": {
+    "projectId": "prj_uzWREguA16aYjlhTHPw9hE8DRLSM",
+    "teamId": "team_g508b9bq8m0arklfrfDId3wH",
+    "productionEnvironmentMetadata": "VERIFIED through authorized local CLI",
+    "configuration": "Vite, Node 22.x, dist, pnpm build",
+    "canonicalProductionBranch": "master",
+    "releaseBranch": "codex/audit-p0p1-2026-10-16",
+    "deploymentStatusAtCapture": "PENDING APPLICATION RELEASE"
+  }
+}

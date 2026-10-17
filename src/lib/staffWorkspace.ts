@@ -1,6 +1,7 @@
-import type { CustomRole, Priority, Task, TaskStatus, User } from '../types';
+import type { CustomRole, Deliverable, Priority, ServiceCycle, Task, TaskStatus, User } from '../types';
 import type { VisibilityScope } from './access';
 import { getTaskStatusOptions } from './taskWorkflowAccess';
+import { getTaskStatusControls } from './taskStatusControls';
 import { isTaskOpen } from './taskReporting';
 import type { MessageId } from './messages';
 
@@ -77,7 +78,7 @@ export const compareStaffTasks = (today: string) => (left: Task, right: Task) =>
   return left.id.localeCompare(right.id);
 };
 
-export const buildStaffWorkQueue = (tasks: Task[], today: string): StaffWorkQueue => {
+export const buildStaffWorkQueue = (tasks: Task[], today: string, options: { isActionable?: (task: Task) => boolean } = {}): StaffWorkQueue => {
   const queue: StaffWorkQueue = { needs_action: [], up_next: [], waiting: [], done: [] };
 
   tasks.forEach(task => {
@@ -86,7 +87,9 @@ export const buildStaffWorkQueue = (tasks: Task[], today: string): StaffWorkQueu
       return;
     }
     if (isWaiting(task)) {
-      queue.waiting.push(task);
+      // A reviewer (HOD/PM) who can advance a submitted or approved task must see
+      // it in the action queue; everyone else waits for that reviewer.
+      (options.isActionable?.(task) ? queue.needs_action : queue.waiting).push(task);
       return;
     }
     if (
@@ -147,6 +150,25 @@ export const getStaffGuidedAction = (task: Task, taskStatuses: TaskStatus[], act
     };
   }
   return { kind: 'picker', label: 'Update status', disabled: false };
+};
+
+/**
+ * True only when the guided action is an enabled advance. The queue must not
+ * surface review work the reviewer cannot actually act on (missing output
+ * evidence, unfinished workflow steps), so it reuses the same control gating.
+ */
+export const isStaffGuidedActionEnabled = (
+  task: Task,
+  taskStatuses: TaskStatus[],
+  actor: User | null | undefined,
+  roles: CustomRole[] = [],
+  scope: VisibilityScope = {},
+  workflow: { tasks: Task[]; cycles: ServiceCycle[]; deliverables: Deliverable[] } = { tasks: [], cycles: [], deliverables: [] },
+) => {
+  const action = getStaffGuidedAction(task, taskStatuses, actor, roles, scope);
+  if (action.kind !== 'advance' || !action.targetStatus) return false;
+  return !getTaskStatusControls(actor, task, taskStatuses, roles, scope, workflow)
+    .find(option => option.status === action.targetStatus)?.disabledReason;
 };
 
 const staffBucketLabels: Record<StaffWorkBucketKey, MessageId> = {

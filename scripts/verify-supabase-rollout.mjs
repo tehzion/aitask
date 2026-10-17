@@ -14,9 +14,10 @@ import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const supabaseSource = join(projectRoot, 'supabase');
-const manifestPath = join(supabaseSource, 'preflight', 'migration_repair_manifest.review.json');
+const manifestPath = join(supabaseSource, 'preflight', 'aitask_release_manifest_20261017_production.json');
 const supabaseCli = join(projectRoot, 'node_modules', '.bin', 'supabase');
 const expectedProjectRef = 'ohjhwyiffgzyatcmmdql';
+const databaseTestPath = process.env.AITASK_DATABASE_TEST_PATH || 'supabase/tests/database';
 
 const fail = (message) => {
   console.error(`[rollout] ${message}`);
@@ -132,7 +133,7 @@ try {
   // Startup output includes disposable service keys; never retain it in CI artifacts.
   console.log('[rollout] Disposable Supabase stack started.');
   supabase('migration', 'list', '--local');
-  supabase('test', 'db', 'supabase/tests/database', '--local');
+  supabase('test', 'db', databaseTestPath, '--local');
   supabase('db', 'lint', '--local', '--level', 'warning', '--fail-on', 'error');
   supabase('db', 'advisors', '--local', '--type', 'all', '--level', 'info', '--fail-on', 'error');
 

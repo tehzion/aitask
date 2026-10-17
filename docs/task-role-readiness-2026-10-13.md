@@ -1,5 +1,15 @@
 # Task role readiness — 13 October 2026
 
+> **16 October 2026 follow-up:** The production migration list now includes the
+> task-stage, role-readiness, optional-approval, PM/HOD assignment, client-visible
+> completion-review, and service-transition migrations described below. The
+> production task guard advertises all three corresponding branches: a responsible
+> PM may complete approved work at 100%, may directly complete an ordinary task
+> that explicitly opts out of internal approval, and client-visible PM completion
+> leaves the separate client decision pending. Client acceptance by itself remains
+> at 80% until PM completion. The historical rollout gap retained at the bottom of
+> this document describes the 13 October audit state, not the current deployment.
+
 ## Implemented workflow
 
 | Actor | Action | Progress |

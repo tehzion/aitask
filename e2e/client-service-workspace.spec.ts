@@ -57,17 +57,21 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expect(page.getByText('Internal monthly total')).toBeVisible();
   await expect(page.getByText('Short Video Production · rev 1 · 10 tasks')).toBeVisible();
   await page.getByRole('button', { name: 'Create next revision' }).click();
-  await expect(page.getByText(/Scheduled revision 2/)).toBeVisible();
-  await expect(page.getByText(/Existing cycles remain unchanged/)).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Next month’s plan', exact: true })).toBeVisible();
+  await expect(page.getByText(/Existing monthly records keep their scope and prices/)).toBeVisible();
   await page.getByRole('button', { name: 'Pause' }).click();
   const pauseDialog = page.getByRole('dialog', { name: /Pause the/ });
   await expect(pauseDialog).toBeVisible();
   await pauseDialog.getByRole('button', { name: 'Pause plan' }).click();
 
   await page.getByRole('tab', { name: 'Cycles', exact: true }).click();
-  await expect(page.getByText('Included', { exact: true })).toBeVisible();
+  const billingPeriod = page.getByRole('combobox', { name: 'Billing period' });
+  const publishedPeriod = billingPeriod.locator('option').filter({ hasText: /Published/ }).first();
+  await billingPeriod.selectOption(await publishedPeriod.getAttribute('value'));
+  const cyclesPanel = page.getByRole('tabpanel', { name: 'Cycles', exact: true });
+  await expect(cyclesPanel.getByText('Included', { exact: true })).toBeVisible();
   await expect(page.getByRole('term').filter({ hasText: /^Delivered$/ })).toBeVisible();
-  await expect(page.getByText('Remaining', { exact: true })).toBeVisible();
+  await expect(cyclesPanel.getByText('Remaining', { exact: true })).toBeVisible();
   await expect(page.getByText('10 linked task(s) · Short Video Production', { exact: true })).toBeVisible();
   await expect(page.getByText('Invoice', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Outstanding', { exact: true })).toHaveCount(0);

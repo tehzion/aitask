@@ -159,7 +159,7 @@ export const resolveDeliverableStatus = (
   tasks: Task[],
   cycles: ServiceCycle[] = [],
 ): Deliverable['status'] => {
-  const linked = tasks.filter(task => task.clientId === deliverable.clientId && (task.deliverableId === deliverable.id || deliverable.taskIds.includes(task.id)));
+  const linked = tasks.filter(task => task.clientId === deliverable.clientId && (task.deliverableId === deliverable.id || deliverable.taskIds?.includes(task.id)));
   const workflow = cycles.find(cycle => cycle.id === deliverable.cycleId && cycle.clientId === deliverable.clientId)
     ?.serviceItems?.find(item => item.id === deliverable.serviceItemId)?.workflow;
   const workflowComplete = !workflow || workflow.steps.filter(step => step.required !== false).every(step => linked.some(task =>
@@ -185,7 +185,12 @@ export const canSetDeliverableStatus = (
   || resolveDeliverableStatus({ ...deliverable, status }, tasks, cycles) === status;
 
 export const getCycleServiceProgress = (cycle: ServiceCycle, deliverables: Deliverable[]) => cycle.serviceItems.map(item => {
-  const slots = deliverables.filter(deliverable => deliverable.cycleId === cycle.id && deliverable.clientId === cycle.clientId && deliverable.serviceItemId === item.id);
+  // A cycle id is unique to one client, so the clientId comparison is only a
+  // defensive cross-check. Keep legacy/edge deliverables that omit clientId
+  // instead of dropping them from the cycle's progress.
+  const slots = deliverables.filter(deliverable => deliverable.cycleId === cycle.id
+    && (!deliverable.clientId || !cycle.clientId || deliverable.clientId === cycle.clientId)
+    && deliverable.serviceItemId === item.id);
   const completed = slots.filter(deliverable => deliverable.status === 'Delivered').length;
   return { serviceItemId: item.id, name: item.name, included: slots.length, completed, remaining: Math.max(0, slots.length - completed) };
 });
@@ -242,7 +247,10 @@ export const makeCycleRecords = (
   now = new Date().toISOString(),
 ): { cycle: ServiceCycle; deliverables: Deliverable[] } => {
   const cycleId = makeId('CY');
-  const addonSnapshots = addons.filter(addon => isAddonEffectiveForCycle(addon, periodStart));
+  // Pass the freshly generated id so a one-off add-on only applies to the exact
+  // cycle it targets; an untargeted/legacy one-off must not leak into every
+  // generated cycle.
+  const addonSnapshots = addons.filter(addon => isAddonEffectiveForCycle(addon, periodStart, cycleId));
   const cycle: ServiceCycle = {
     id: cycleId,
     clientId: plan.clientId,

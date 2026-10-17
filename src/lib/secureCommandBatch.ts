@@ -118,7 +118,14 @@ export const runCommandBatch = async (batch: PendingCommandBatch, options: Build
       const result = await api.execute(group, version);
       if (!api.isCurrent()) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
       if (result.ok === false) {
-        if (batch.commands.length === 1 && !['OFFLINE', 'CONFLICT', 'RETRY_REQUIRED'].includes(result.code)) {
+        // This group did not confirm, so the next attempt must re-derive
+        // progress: an earlier group's triggers may already have advanced the
+        // derived service rows this group targets.
+        batch.attempted = false;
+        // A terminal rejection can never succeed on retry. Clear the whole
+        // batch so the user can fix the change and save again instead of being
+        // trapped resending a doomed group forever.
+        if (!['OFFLINE', 'CONFLICT', 'RETRY_REQUIRED'].includes(result.code)) {
           api.complete();
         } else api.retain(group);
         return result;
@@ -145,8 +152,9 @@ export const runCommandBatch = async (batch: PendingCommandBatch, options: Build
     workspaceVersion: version ?? 1,
   };
   } catch {
+    batch.attempted = false;
     if (!api.isCurrent()) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     if (batch.commands[batch.cursor]) api.retain(batch.commands[batch.cursor]);
-    return { ok: false, code: 'RETRY_REQUIRED', error: 'Supabase could not be reached. Your change is retained for retry.' };
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your change is kept safe — please retry." };
   }
 };

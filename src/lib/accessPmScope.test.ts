@@ -36,6 +36,29 @@ describe('sanitizeRolePermissions for project managers', () => {
   });
 });
 
+describe('department-scoped custom roles', () => {
+  it('strips workspace-wide view keys for a department-scoped Staff role', () => {
+    const permissions = sanitizeRolePermissions(allPermissions, 'Staff', { departmentScoped: true });
+    expect(permissions.viewAllTasks).toBe(false);
+    expect(permissions.viewAllClients).toBe(false);
+    expect(permissions.viewDashboard).toBe(true);
+    expect(permissions.createTasks).toBe(true);
+  });
+
+  it('does not offer workspace-wide view keys to a department-scoped role editor', () => {
+    const keys = getGrantablePermissionGroups('Staff', { departmentScoped: true }).flatMap(group => group.keys);
+    expect(keys).not.toContain('viewAllTasks');
+    expect(keys).not.toContain('viewAllClients');
+    expect(keys).toContain('createTasks');
+  });
+
+  it('keeps those keys grantable for a plain Staff role', () => {
+    const keys = getGrantablePermissionGroups('Staff').flatMap(group => group.keys);
+    expect(keys).toContain('viewAllTasks');
+    expect(sanitizeRolePermissions(allPermissions, 'Staff').viewAllTasks).toBe(true);
+  });
+});
+
 describe('getOwnedPortfolioClientKeys', () => {
   it('includes owned companies and owned-project clients but never merely-assigned companies', () => {
     const pm = { id: 'pm', role: 'Project Manager' } as User;

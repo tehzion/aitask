@@ -9,7 +9,7 @@ const portalRecords = (value: unknown) => (
 );
 
 export const parseClientPortalPayload = (value: unknown, expectedWorkspaceId: string, expectedClientName?: string): ClientPortalPayload => {
-  if (!isRecord(value)) throw new Error('Supabase returned an invalid Client portal response.');
+  if (!isRecord(value)) throw new Error("We couldn't load your client portal. Please try again.");
 
   const workspaceId = cleanPortalText(value.workspaceId, 160);
   const clientName = cleanPortalText(value.clientName, 240);
@@ -28,6 +28,9 @@ export const parseClientPortalPayload = (value: unknown, expectedWorkspaceId: st
   const tasks = portalRecords(value.tasks)
     .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
     .map(item => ({ ...item })) as unknown as ClientPortalPayload['tasks'];
+  // Comments/approvals carry no client name, so scope them to the client's own
+  // task ids the same way every other collection is scoped here.
+  const clientTaskIds = new Set(tasks.map(task => cleanPortalText((task as { id?: unknown }).id, 160)).filter(Boolean));
   const projects = portalRecords(value.projects)
     .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
     .map(item => ({ ...item })) as unknown as ClientPortalPayload['projects'];
@@ -50,10 +53,10 @@ export const parseClientPortalPayload = (value: unknown, expectedWorkspaceId: st
     .filter(item => cleanPortalText(item.id, 160) && belongsToClient(item))
     .map(item => ({ ...item })) as unknown as ClientPortalPayload['cycleComments'];
   const taskComments = portalRecords(value.taskComments)
-    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.taskId, 160))
+    .filter(item => cleanPortalText(item.id, 160) && clientTaskIds.has(cleanPortalText(item.taskId, 160)))
     .map(item => ({ ...item })) as unknown as ClientPortalPayload['taskComments'];
   const taskApprovals = portalRecords(value.taskApprovals)
-    .filter(item => cleanPortalText(item.id, 160) && cleanPortalText(item.taskId, 160))
+    .filter(item => cleanPortalText(item.id, 160) && clientTaskIds.has(cleanPortalText(item.taskId, 160)))
     .map(item => ({ ...item })) as unknown as ClientPortalPayload['taskApprovals'];
 
   return { workspaceId, clientName, tasks, projects, clients, contacts, clientPlans, serviceCycles, deliverables, cycleComments, taskComments, taskApprovals };
@@ -123,11 +126,11 @@ const projectionToEntityRow = (
     : [];
   const comments = new Map<string, Task['comments']>();
   const approvals = new Map<string, Task['approvalHistory']>();
-    clientPortal.taskComments.forEach(item => {
+    clientPortal?.taskComments?.forEach(item => {
       const { taskId, ...comment } = item;
       comments.set(taskId, [...(comments.get(taskId) || []), comment as unknown as NonNullable<Task['comments']>[number]]);
     });
-    clientPortal.taskApprovals.forEach(item => {
+    clientPortal?.taskApprovals?.forEach(item => {
       const { taskId, ...approval } = item;
       approvals.set(taskId, [...(approvals.get(taskId) || []), approval as unknown as NonNullable<Task['approvalHistory']>[number]]);
     });

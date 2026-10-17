@@ -1,0 +1,74 @@
+{
+  "manifestVersion": "2026-10-17.2",
+  "manifestKind": "aitask-release-gate-followup",
+  "supersedes": "aitask_release_manifest_20261017.json",
+  "immutable": true,
+  "capturedAt": "2026-10-17T10:12:38Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "source": {
+    "gitCommit": "c46bbcbe05746e20792cc6e62eb478906b48cf0b",
+    "gitBranch": "codex/audit-p0p1-2026-10-16",
+    "workingTreeDirty": true,
+    "productionChangesThisFollowup": false
+  },
+  "repository": {
+    "migrationCount": 114,
+    "latestMigration": "20261017140000_audit_history_retention_guards_followup",
+    "migrationValidation": "PASS"
+  },
+  "production": {
+    "migrationCount": 112,
+    "latestMigration": "20261017095628_align_service_cycle_cancel_rpc",
+    "appliedAliases": [
+      "20261017095621_audit_value_history",
+      "20261017095628_align_service_cycle_cancel_rpc"
+    ],
+    "readOnlyVerification": "PASS for applied migrations",
+    "pendingLocalMigrations": [
+      "20261017091031_workspace_revision_realtime",
+      "20261017140000_audit_history_retention_guards_followup"
+    ],
+    "coreRowCountsUnchanged": true,
+    "entityHistoryRowsAtVerification": 0
+  },
+  "retentionMigration": {
+    "migration": "supabase/migrations/20261017140000_audit_history_retention_guards_followup.sql",
+    "status": "REVIEWED_NOT_APPLIED",
+    "requiresBusinessApproval": true,
+    "review": "AUDIT_HISTORY_RETENTION_REVIEW.md",
+    "reason": "Changes member/workspace deletion semantics to preserve immutable audit history"
+  },
+  "lifecyclePolicy": {
+    "status": "PENDING_APPROVAL",
+    "document": "LIFECYCLE_POLICY_APPROVAL.md",
+    "implemented": false
+  },
+  "staging": {
+    "status": "BLOCKED",
+    "projectRef": "dyaxtloducpgjoxuaszk",
+    "reason": "Project is not visible to the connected Supabase account; direct access returns permission denied; no staging credentials are configured"
+  },
+  "gates": {
+    "databaseTests": "NOT_VERIFIED",
+    "fourRoleRls": "NOT_VERIFIED",
+    "concurrency": "NOT_VERIFIED",
+    "realtime": "NOT_VERIFIED",
+    "storage": "NOT_VERIFIED",
+    "dashboard": "NOT_VERIFIED",
+    "notifications": "NOT_VERIFIED",
+    "productionBuild": "PASS",
+    "localRegressionScope": "PASS",
+    "productionCompatibility": "PASS_FOR_APPLIED_MIGRATIONS_ONLY"
+  },
+  "releaseDecision": {
+    "status": "NO-GO",
+    "reasons": [
+      "Lifecycle/archive policy approval is outstanding",
+      "The retention guard migration is reviewed but intentionally unapplied",
+      "Staging project access is unavailable",
+      "Live four-role RLS, concurrency, Realtime, Storage, dashboard, and notification gates are not evidenced",
+      "Production organization remains on the Free plan without leaked-password protection"
+    ],
+    "productionDataModifiedThisFollowup": false
+  }
+}

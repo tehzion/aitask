@@ -2,15 +2,50 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient, type User as SupabaseAuthUser } from 'npm:@supabase/supabase-js@2.117.3';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Vary': 'Origin',
 };
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status,
   headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 });
+
+// Bound the authenticated request body by bytes, even without Content-Length,
+// so a large payload cannot amplify memory/CPU before authorization completes.
+const MAX_BODY_BYTES = 64_000;
+const readBoundedJson = async (request: Request): Promise<unknown> => {
+  const contentLength = Number(request.headers.get('content-length') || 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) return null;
+  const reader = request.body?.getReader();
+  if (!reader) return null;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > MAX_BODY_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return null;
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.byteLength; }
+  try {
+    return JSON.parse(new TextDecoder().decode(merged) || '{}');
+  } catch {
+    return null;
+  }
+};
 
 const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const listAllAuthUsers = async (adminClient: ReturnType<typeof createClient>): Promise<{ users: SupabaseAuthUser[]; error: unknown }> => {
@@ -77,7 +112,22 @@ const publicAppUrl = () => {
   }
 };
 
-Deno.serve(async (request) => {
+const localDevOrigins = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5178',
+  'http://127.0.0.1:5181',
+]);
+
+const isAllowedOrigin = (origin: string) => {
+  if (localDevOrigins.has(origin)) return true;
+  if (origin === publicAppUrl()) return true;
+  const configured = (Deno.env.get('AITASK_ALLOWED_ORIGINS') || '')
+    .split(',').map(value => value.trim()).filter(Boolean);
+  return configured.includes(origin);
+};
+
+const handleRequest = async (request: Request): Promise<Response> => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -116,7 +166,8 @@ Deno.serve(async (request) => {
     return json({ error: 'This signed-in account is not linked to an AiTask member. Sign out and sign in again.' }, 403);
   }
 
-  const body = await request.json().catch(() => ({}));
+  const parsedBody = await readBoundedJson(request);
+  const body = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody) ? parsedBody : {};
   const action = typeof body.action === 'string' ? body.action.trim() : 'invite_member';
 
   if (action === 'update_self_email') {
@@ -372,4 +423,22 @@ Deno.serve(async (request) => {
     return retryError('Invitation confirmation is pending. Keep this draft and retry; the prepared login has been retained.');
   }
   return json(result, createdAuthUser ? 201 : 200);
+};
+
+Deno.serve(async request => {
+  const origin = request.headers.get('Origin');
+  let response: Response;
+  try {
+    response = await handleRequest(request);
+  } catch (error) {
+    // Keep CORS headers on unexpected failures so the browser surfaces the real
+    // error instead of an opaque network/CORS failure.
+    console.error('Unhandled invite-aitask-member error', error);
+    response = json({ error: 'Unexpected server error. Please retry.' }, 500);
+  }
+  const headers = new Headers(response.headers);
+  headers.set('Vary', 'Origin');
+  if (origin && isAllowedOrigin(origin)) headers.set('Access-Control-Allow-Origin', origin);
+  else headers.delete('Access-Control-Allow-Origin');
+  return new Response(response.body, { status: response.status, headers });
 });

@@ -3,6 +3,7 @@ import { readRecoveredDraft, removeRecoveredDraft, revisionDraftOf, writeRecover
 import type { ClientServicePlan } from '../types';
 import { useStore } from '../store';
 import { useI18n } from './I18nProvider';
+import SystemMessage from './SystemMessage';
 import { Button } from './ui';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 
@@ -45,7 +46,7 @@ const RevisionRecoveryNotice = ({ plans, activePlan }: { plans: ClientServicePla
   return <section role="status" className="rounded-panel border border-line bg-inset p-5">
     <h2 className="font-semibold text-ink">{t('Unsaved plan edits were recovered')}</h2>
     <p className="mt-2 text-sm leading-6 text-muted">{t('The original revision is no longer editable. Your unsaved changes are still on this device and can be carried into the next month’s draft.')}</p>
-    {error && <p role="alert" className="mt-2 text-sm text-ink">{error}</p>}
+    {error && <p role="alert" className="mt-2 text-sm text-ink"><SystemMessage message={error} /></p>}
     <div className="mt-4 flex flex-wrap gap-2"><Button disabled={busy || activePlan?.status !== 'Active'} onClick={() => void carry()}>{t(busy ? 'Saving…' : 'Carry edits to next revision')}</Button><Button variant="secondary" disabled={busy} onClick={() => { if (window.confirm(t('Discard unsaved changes?'))) { removeRecoveredDraft(account, `service-plan:${recovered.plan.id}`, recovered.draft!.storageKey); refresh(); } }}>{t('Discard recovered draft')}</Button></div>
   </section>;
 };

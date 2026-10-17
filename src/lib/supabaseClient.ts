@@ -31,6 +31,7 @@ export const subscribeToCurrentMemberAccessChanges = (
   customRoleId: string | undefined,
   builtinRoleId: string | undefined,
   onChange: () => void,
+  onError?: () => void,
 ) => {
   if (!isSafeRealtimeFilterValue(authUserId)) return () => undefined;
   let active = true;
@@ -62,7 +63,41 @@ export const subscribeToCurrentMemberAccessChanges = (
     });
   });
 
-  channel.subscribe();
+  channel.subscribe(status => {
+    if (active && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED')) onError?.();
+  });
+  return () => {
+    active = false;
+    void supabase.removeChannel(channel);
+  };
+};
+
+/**
+ * Subscribe to the workspace revision only. Business rows stay behind the
+ * existing RLS-protected snapshot loader; this channel is an invalidation
+ * signal, not a second data transport. A revision is incremented by every
+ * committed workspace command, including service and notification commands.
+ */
+export const subscribeToWorkspaceRevisionChanges = (
+  workspaceId: string,
+  onChange: () => void,
+  onError?: () => void,
+) => {
+  if (!isSafeRealtimeFilterValue(workspaceId)) return () => undefined;
+  let active = true;
+  const notify = () => { if (active) onChange(); };
+  const channel = supabase
+    .channel(`aitask-workspace-revision:${workspaceId}`)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'aitask_workspaces',
+      filter: `id=eq.${workspaceId}`,
+    }, notify);
+
+  channel.subscribe(status => {
+    if (active && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED')) onError?.();
+  });
   return () => {
     active = false;
     void supabase.removeChannel(channel);

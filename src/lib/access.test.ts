@@ -69,8 +69,6 @@ const projects: Project[] = [
     services: ['Design'],
     startDate: '2026-07-13',
     deadline: '',
-    totalTasks: 1,
-    completedTasks: 0,
   },
   {
     id: 'project-beta',
@@ -79,8 +77,6 @@ const projects: Project[] = [
     services: ['SEO'],
     startDate: '2026-07-13',
     deadline: '',
-    totalTasks: 1,
-    completedTasks: 0,
   },
 ];
 
@@ -497,6 +493,22 @@ describe('staff permission matrix', () => {
     expect(getDefaultAccessiblePath(taskOnlyStaff)).toBe('/clients');
   });
 
+  it('falls back to the notification centre for a role with no accessible pages', () => {
+    const noAccessRole: CustomRole = {
+      id: 'no-access',
+      name: 'No access',
+      baseRole: 'Staff',
+      permissions: {} as RolePermissions,
+      createdAt: '2026-07-13T00:00:00.000Z',
+      updatedAt: '2026-07-13T00:00:00.000Z',
+    };
+    const noAccessUser: User = { ...staff, customRoleId: noAccessRole.id, permissions: {} as User['permissions'] };
+
+    expect(canAccessPath(noAccessUser, '/', [noAccessRole])).toBe(false);
+    expect(canAccessPath(noAccessUser, '/settings', [noAccessRole])).toBe(false);
+    expect(getDefaultAccessiblePath(noAccessUser, [noAccessRole])).toBe('/notifications');
+  });
+
   it('keeps Companies separate while task access opens the merged client workspace', () => {
     const companiesOnly: User = {
       ...staff,
@@ -660,7 +672,7 @@ describe('staff permission matrix', () => {
       canDelete: true,
       canAssign: true,
     });
-    expect(getTaskAccess(admin, pmAssignedTask)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: true });
+    expect(getTaskAccess(admin, pmAssignedTask)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: false, canAssign: true });
     expect(getTaskAccess(admin, pmCreatedTask)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: true, canAssign: true });
     expect(getTaskAccess(admin, pmUnrelatedTask)).toEqual({ canView: false, canEdit: false, canComment: false, canDelete: false, canAssign: false });
 

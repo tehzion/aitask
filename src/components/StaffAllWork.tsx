@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Priority, TaskStatus } from '../types';
 import { useStore } from '../store';
 import { getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../lib/access';
-import { buildStaffWorkQueue, getHodScopeTasks, getStaffBucketLabel, type StaffWorkBucketKey } from '../lib/staffWorkspace';
+import { buildStaffWorkQueue, getHodScopeTasks, isStaffGuidedActionEnabled, getStaffBucketLabel, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { normalizeDepartment } from '../lib/departments';
 import { getTodayInputDate } from '../lib/utils';
 import { Button, PageHeader, SegmentedTabs, Surface } from './ui';
@@ -30,7 +30,7 @@ const priorities: Priority[] = ['Urgent', 'High', 'Medium', 'Low'];
 const StaffAllWork: React.FC = () => {
   const { locale, t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { currentUser, tasks: allTasks, rolePermissions, taskStatuses, clients: clientProfiles, projects, users, setCreateTaskModalOpen } = useStore(useShallow(state => ({
+  const { currentUser, tasks: allTasks, rolePermissions, taskStatuses, clients: clientProfiles, projects, users, serviceCycles, deliverables, setCreateTaskModalOpen } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     tasks: state.tasks,
     rolePermissions: state.rolePermissions,
@@ -38,6 +38,8 @@ const StaffAllWork: React.FC = () => {
     clients: state.clients,
     projects: state.projects,
     users: state.users,
+    serviceCycles: state.serviceCycles,
+    deliverables: state.deliverables,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
@@ -98,7 +100,12 @@ const StaffAllWork: React.FC = () => {
     return visibleTasks;
   }, [currentUser, isDepartmentLead, isHod, scopeView, visibleTasks]);
   const today = getTodayInputDate(useLocalToday());
-  const queue = React.useMemo(() => buildStaffWorkQueue(tasks, today), [tasks, today]);
+  const queue = React.useMemo(
+    () => buildStaffWorkQueue(tasks, today, {
+      isActionable: task => isStaffGuidedActionEnabled(task, taskStatuses, currentUser, rolePermissions, { users, clients: clientProfiles, projects }, { tasks: allTasks, cycles: serviceCycles, deliverables }),
+    }),
+    [allTasks, clientProfiles, currentUser, deliverables, projects, rolePermissions, serviceCycles, taskStatuses, tasks, today, users],
+  );
   const orderedTasks = React.useMemo(() => (
     bucket === 'all'
       ? [...queue.needs_action, ...queue.up_next, ...queue.waiting, ...queue.done]
@@ -196,7 +203,7 @@ const StaffAllWork: React.FC = () => {
         >
           {isHod && (
             <SegmentedTabs<'mine' | 'delegated' | 'department'>
-              items={[{ id: 'mine', label: t('My assignments'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'mine').length }, { id: 'delegated', label: t('Delegated by me'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'delegated').length }, { id: 'department', label: t('Department work'), count: visibleTasks.length }]}
+              items={[{ id: 'mine', label: t('My assignments'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'mine').filter(isTaskOpen).length }, { id: 'delegated', label: t('Delegated by me'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'delegated').filter(isTaskOpen).length }, { id: 'department', label: t('Department work'), count: visibleTasks.filter(isTaskOpen).length }]}
               value={scopeView}
               onChange={setScopeView}
               label={t('HOD work scope')}

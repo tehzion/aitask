@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useStore } from './index';
-import type { Task, User } from '../types';
+import type { ClientServicePlan, Task, User } from '../types';
 import { snapshotWorkflow, SHORT_VIDEO_WORKFLOW_TEMPLATE } from '../lib/serviceManagement';
 import { defaultRolePermissions } from '../lib/access';
 
@@ -58,6 +58,19 @@ describe('PM portfolio mutation boundaries', () => {
     expect(useStore.getState().activateClientPlan(created.planId!).ok).toBe(false);
   });
 
+  it('denies service access to a duplicate-named company owned by another PM', () => {
+    const ownClient = { id: 'dup-own', clientName: 'Acme', createdBy: pm.id, createdAt: '', updatedAt: '' };
+    const foreignClient = { id: 'dup-foreign', clientName: 'Acme', createdBy: other.id, createdAt: '', updatedAt: '' };
+    const foreignPlan = {
+      id: 'dup-plan', clientId: 'dup-foreign', clientName: 'Acme', revision: 1, status: 'Draft', origin: 'custom',
+      name: 'Acme plan', serviceItems: [], startDate: '2026-10-01', billingDay: 1, discountType: 'none',
+      discountValue: 0, taxRateBps: 0, currency: 'MYR', createdAt: '', updatedAt: '',
+    } as unknown as ClientServicePlan;
+    useStore.setState({ currentUser: pm, clients: [ownClient, foreignClient], clientPlans: [foreignPlan] });
+    // Matching by name would wrongly authorize against this PM's own "Acme".
+    expect(useStore.getState().setClientPlanStatus('dup-plan', 'Paused').ok).toBe(false);
+  });
+
   it('rejects a one-off add-on targeting another company without changing its cycle', () => {
     const foreign = useStore.getState().createClientWithPlan({ ...input, clientName: 'Foreign company' });
     const cycle = useStore.getState().activateClientPlan(foreign.planId!);
@@ -71,7 +84,7 @@ describe('PM portfolio mutation boundaries', () => {
 
   it('lets the new company PM edit and create work in an inherited project', () => {
     const client = { id: 'transferred', clientName: 'Transferred', createdBy: pm.id, createdAt: '', updatedAt: '' };
-    const project = { id: 'inherited', clientId: client.id, clientName: client.clientName, projectName: 'Campaign', createdBy: other.id, services: ['Design'], startDate: '2026-10-01', deadline: '', totalTasks: 1, completedTasks: 0 };
+    const project = { id: 'inherited', clientId: client.id, clientName: client.clientName, projectName: 'Campaign', createdBy: other.id, services: ['Design'], startDate: '2026-10-01', deadline: '' };
     const task: Task = { id: 'inherited-task', title: 'Inherited task', clientId: client.id, clientName: client.clientName, projectId: project.id, projectName: project.projectName, serviceType: 'Design', description: '', department: 'Designer', createdBy: other.id, assignedTo: '', status: 'Pending', startDate: '2026-10-01', dueDate: '', priority: 'Medium', completionPercentage: 0, isCompleted: false, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false };
     useStore.setState({ currentUser: pm, clients: [client], projects: [project], tasks: [task] });
     expect(useStore.getState().updateTask(task.id, { priority: 'High' })).toEqual({ ok: true });
