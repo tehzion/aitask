@@ -30,7 +30,8 @@ The disposable database verification specifically covered append-only audit hist
 - Remote: `origin` → `git@github.com:tehzion/aitask.git`.
 - Production branch: `master` at `fd45ca9fd544c4daa1f105cb9b14655b66dd11ad`.
 - Working branch: `codex/audit-p0p1-2026-10-16` at preparation start `c46bbcbe05746e20792cc6e62eb478906b48cf0b`.
-- The release commit hash is recorded in the final documentation commit after the intended changes are staged and reviewed.
+- Release implementation commit: `ee54922c1bb3bc510886ea15ec8aa701011d58ab` (`fix(release): close P1 verification blockers`).
+- The documentation follow-up commit records this implementation hash in the report.
 - `.codex-manifest-test.txt` is a temporary untracked file and is excluded from the release commit.
 
 ## Supabase production state
