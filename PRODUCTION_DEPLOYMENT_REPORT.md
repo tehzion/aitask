@@ -72,7 +72,7 @@ No real credentials were available for this execution. Super Admin, Project Mana
 
 ## Backup, recovery, and safe sequence
 
-Fresh production backup/recovery readiness is **NOT VERIFIED**. Existing historical notes are not treated as a current backup confirmation. A production release must wait for a backup or an explicitly documented recovery point and restore path.
+Fresh production backup/recovery readiness is **NOT VERIFIED**. PostgreSQL client tooling is present (`pg_dump`/`pg_restore` 16.14), but the credential-safe `pg_dump --no-password` attempt against `db.ohjhwyiffgzyatcmmdql.supabase.co` failed because the hostname could not be resolved from this environment. No credentials were exposed, no dump was retained, and production was not modified. A successful backup still requires working DNS/network access to the database endpoint plus an authorized database password or connection string, followed by a disposable restore and integrity check. Existing historical notes are not treated as a current backup confirmation.
 
 The safe sequence is:
 
@@ -95,3 +95,9 @@ Vercel rollback does not roll back database migrations. A failed database change
 - Staging is intentionally skipped; live authenticated four-role, RLS, Realtime, Storage, dashboard, notification, and concurrency evidence remains unavailable.
 - Supabase security advisors still report disabled leaked-password protection and reviewed authenticated security-definer notices.
 - The pending retention migration also requires explicit acceptance that entity/member snapshots can contain personal and authorization data until a separate expiry, export, or redaction policy is approved.
+
+## Vercel configuration and role verification
+
+Vercel team and project identity are verified read-only: team `tehzions-projects`, project `aitask`, project ID `prj_uzWREguA16aYjlhTHPw9hE8DRLSM`, Vite/Node 22.x, and SSO protection enabled for non-custom domains. The production environment-variable listing still returns HTTP 403, so live variable names/targets cannot be independently confirmed. Public build metadata currently serves production commit `463eb7c3a3a88215505e8387d4f80ace73bbc0cd`; the local release is not deployed.
+
+The complete local Playwright suite passes 324/324 using isolated fixtures. No authorized production accounts were available, so live Super Admin, Project Manager, HOD, and Staff authentication, role scope, notifications, Realtime, Storage, and dashboard workflows remain unverified.
