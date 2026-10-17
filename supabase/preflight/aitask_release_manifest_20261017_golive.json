@@ -6,7 +6,7 @@
   "capturedAt": "2026-10-17T14:27:51Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "source": {
-    "gitCommit": "ebdcf39",
+    "gitCommit": "1ce9f6f0b1f496c9895623b82ff93462d776b79a",
     "gitBranch": "codex/audit-p0p1-2026-10-16",
     "workingTreeDirtyBeforeEvidenceCommit": true,
     "productionChangesThisTurn": false
