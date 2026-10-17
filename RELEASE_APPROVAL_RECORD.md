@@ -1,7 +1,9 @@
 # AiTask Production Release Approval Record
 
-**Status:** AWAITING EXPLICIT RELEASE-OWNER APPROVAL — no production mutation performed
+**Status:** RETENTION APPROVED — RELEASE BLOCKED ON RECOVERY AND CONFIGURATION EVIDENCE
 **Prepared:** 2026-10-17 (Asia/Kuala_Lumpur)
+
+**Approval received:** 2026-10-17T15:04:28Z via explicit release-owner message (`approve`). This approves the retention/deletion semantics below; it does not waive backup, configuration, migration-alignment, or live-authentication gates.
 
 ## Release identity
 
@@ -36,9 +38,9 @@ Snapshots can contain names, email addresses, auth identifiers, roles, departmen
 
 The release owner must explicitly confirm all of the following:
 
-- [ ] `20261017140000_audit_history_retention_guards_followup.sql` is the intended replacement for the nonexistent requested filename.
-- [ ] The actor-FK removal, workspace `ON DELETE RESTRICT`, indefinite snapshot retention, and complete direct `service_role` privilege revocation are approved.
+- [x] `20261017140000_audit_history_retention_guards_followup.sql` is the intended replacement for the nonexistent requested filename.
+- [x] The actor-FK removal, workspace `ON DELETE RESTRICT`, indefinite snapshot retention, and complete direct `service_role` privilege revocation are approved.
 - [ ] A current recovery point and restore owner/method are recorded.
 - [ ] Vercel production environment metadata has been verified without exposing secret values.
 
-Until these boxes are confirmed, do not apply either pending migration, push the production branch, or deploy the release candidate.
+Until the remaining boxes are confirmed, do not apply either pending migration, push the production branch, or deploy the release candidate.

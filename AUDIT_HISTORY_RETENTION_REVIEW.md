@@ -54,4 +54,4 @@ The migration DDL is transactional at the database statement level: a failed mig
 
 ## Decision
 
-The migration is technically consistent with append-only history and the proposed archive-first lifecycle. It is **not approved for application** because `ON DELETE RESTRICT`, deliberate actor-FK removal, indefinite snapshot retention, and direct `service_role` privilege removal are production policy decisions. Apply only after the release owner explicitly approves these semantics, a current recoverable backup or restore point is confirmed, and an isolated database test validates member deletion, workspace deletion rejection, RLS, direct privileges, and history immutability.
+The migration is technically consistent with append-only history and the proposed archive-first lifecycle. The release owner has explicitly approved the retention/deletion semantics; it remains **blocked for application** until a current recoverable backup or restore point is confirmed and the isolated database evidence is tied to the final release sequence.

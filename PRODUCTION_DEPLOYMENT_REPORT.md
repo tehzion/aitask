@@ -2,11 +2,11 @@
 
 **Assessment date:** 2026-10-17 (Asia/Kuala_Lumpur)
 **Release state:** **DEPLOYMENT BLOCKED — PREPARED LOCALLY, NOT DEPLOYED**
-**Recommendation:** **NO-GO** until retention/deletion approval, backup/recovery readiness, and production configuration verification are complete.
+**Recommendation:** **NO-GO** until backup/recovery readiness and production configuration verification are complete.
 
 ## Executive result
 
-The applicable local code, database, and full Playwright gates are complete. The release evidence is committed locally, but no production database mutation, Git push, or Vercel deployment was performed in this preparation turn. The explicit retention/deletion approval required by the release instruction was not present, and the live database is not aligned with the repository tail.
+The applicable local code, database, and full Playwright gates are complete. Retention/deletion approval was received and recorded, but no production database mutation, Git push, or Vercel deployment was performed. The live database is not aligned with the repository tail and recovery/configuration gates remain open.
 
 The superseding gate evidence is recorded in [`supabase/preflight/aitask_release_manifest_20261017_golive.json`](supabase/preflight/aitask_release_manifest_20261017_golive.json). The original immutable manifest is retained unchanged for traceability.
 
@@ -51,7 +51,7 @@ The repository contains 114 non-empty migrations. The alignment check identifies
 1. `20261017091031_workspace_revision_realtime`.
 2. `20261017140000_audit_history_retention_guards_followup`.
 
-The second migration changes retention/deletion behavior. It remains unapplied until the release owner explicitly approves that policy. No Supabase production migration was applied in this turn.
+The second migration changes retention/deletion behavior. Its semantics are now explicitly approved and recorded, but it remains unapplied until recovery readiness and the remaining release gates are verified. No Supabase production migration was applied in this turn.
 
 ## Vercel production state
 
@@ -76,7 +76,7 @@ Fresh production backup/recovery readiness is **NOT VERIFIED**. Existing histori
 
 The safe sequence is:
 
-1. Record explicit approval for retention/deletion semantics and the exact release commit.
+1. Confirm the recorded retention/deletion approval against the exact release commit.
 2. Confirm a fresh recoverable backup and document restore ownership.
 3. Re-check the live migration history immediately before applying anything.
 4. Apply only the approved pending migrations in dependency order, then re-read production migration history.
@@ -88,7 +88,7 @@ Vercel rollback does not roll back database migrations. A failed database change
 
 ## Outstanding risks
 
-- Retention/deletion policy approval is missing.
+- Retention/deletion policy approval is recorded; production application is still blocked by recovery/configuration gates.
 - Production and repository migration histories are not aligned.
 - Fresh backup/recovery readiness is not evidenced.
 - Vercel production environment configuration could not be verified due permissions.
