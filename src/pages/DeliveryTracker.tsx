@@ -31,6 +31,7 @@ import { pageShell, tableShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
 import { formatLocalizedDate } from '../lib/i18n';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
+import ContextualTutorialLink from '../components/ContextualTutorialLink';
 
 const PERIOD_TABS = [
   { id: 'week' as const, label: 'Week' },
@@ -191,8 +192,14 @@ const DeliveryTracker: React.FC = () => {
       <PageHeader
         title={t('Delivery tracker')}
         description={t('Track tasks, deliverables, deadlines, and completion by client.')}
+        onboardingTarget="clients-overview"
         meta={<><span>{range.label}</span><span aria-hidden="true">·</span><span>{filteredSummaries.length} {t('clients shown')}</span></>}
-        action={canCreateTasks(currentUser, rolePermissions) ? <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button> : undefined}
+        action={(
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <ContextualTutorialLink tutorialId="track-delivery-progress" label={t('How do I track delivery progress?')} />
+            {canCreateTasks(currentUser, rolePermissions) && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
+          </div>
+        )}
       />
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-line/70 py-3 text-sm" aria-label={t('Delivery tracker summary')}>
@@ -222,6 +229,7 @@ const DeliveryTracker: React.FC = () => {
               <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
               <input
                 id="delivery-tracker-search"
+                data-onboarding-target="delivery-search"
                 type="search"
                 {...searchInput.inputProps}
                 placeholder={t('Search delivery tracker')}

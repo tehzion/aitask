@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const rawTechnicalText = /\[object Object\]|row-level security|aitask_entities|PGRST\d+|Cannot read properties|Failed to fetch/;
 const seed = async (page: Page, role: string, locale: 'en' | 'zh') => {
+  await page.clock.install({ time: new Date('2026-10-19T12:00:00.000Z') });
   await page.goto('/login');
   return page.evaluate(async ({ role, locale }) => {
     const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');

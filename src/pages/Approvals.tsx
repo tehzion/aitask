@@ -1162,6 +1162,7 @@ const Approvals: React.FC = () => {
       <PageHeader
         title={t('Approvals')}
         description={t('Review access requests and manage workspace members, roles, and decisions.')}
+        onboardingTarget="approvals-overview"
         action={superAdmin ? (
           <Button onClick={() => setIsAddUserOpen(true)} disabled={isActionSaving || backend.isSaving}>
             <UserPlus className="w-4 h-4" />

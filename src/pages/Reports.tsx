@@ -15,6 +15,7 @@ import { formatLocalizedDate } from '../lib/i18n';
 import { themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
 import { useLocalToday } from '../hooks/useLocalToday';
+import ContextualTutorialLink from '../components/ContextualTutorialLink';
 
 const ReportsTrendChart = React.lazy(() => import('../components/ReportsCharts').then(module => ({ default: module.ReportsTrendChart })));
 const ReportsDepartmentChart = React.lazy(() => import('../components/ReportsCharts').then(module => ({ default: module.ReportsDepartmentChart })));
@@ -137,6 +138,7 @@ const Reports: React.FC = () => {
         description={t(isClientUser
           ? 'Review delivery timing across the latest four Monday-to-Saturday weeks.'
           : 'Review due work across the latest four Monday-to-Saturday weeks.')}
+        onboardingTarget="reports-overview"
         meta={(
           <>
             <span>{t('Scope')}: {t(isClientUser ? 'Client workspace' : currentUser?.role === 'Project Manager' && !currentUser?.isSuperAdmin ? 'Portfolio' : 'Internal workspace')}</span>
@@ -147,10 +149,13 @@ const Reports: React.FC = () => {
           </>
         )}
         action={(
-          <Button variant="secondary" onClick={exportReport}>
-            <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-            {t('Export CSV')}
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <ContextualTutorialLink tutorialId="view-reports" label={t('How do reports work?')} />
+            <Button variant="secondary" onClick={exportReport}>
+              <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+              {t('Export CSV')}
+            </Button>
+          </div>
         )}
       />
 

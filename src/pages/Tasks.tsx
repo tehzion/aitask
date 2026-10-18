@@ -29,6 +29,8 @@ import ClientDeliveries from '../components/ClientDeliveries';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
+import PersonalTaskViews from '../components/PersonalTaskViews';
+import { taskPreferencesKey } from '../lib/personalTaskViews';
 
 const CLIENT_BOARD_COLUMNS = [
   { value: 'active', label: 'In progress' },
@@ -79,7 +81,6 @@ const TasksWorkspace: React.FC = () => {
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
     commitPendingMutation: state.commitPendingMutation,
   })));
-  const [viewType, setViewType] = useState<'table' | 'board'>('table');
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [activeQuickEdit, setActiveQuickEdit] = useState<{ taskId: string; x: number; y: number } | null>(null);
   const [quickSyncError, setQuickSyncError] = useState('');
@@ -185,6 +186,10 @@ const TasksWorkspace: React.FC = () => {
     }
   };
   const [searchParams, setSearchParams] = useSearchParams();
+  const viewType = searchParams.get('view') === 'board' ? 'board' : 'table';
+  const setViewType = useCallback((value: 'table' | 'board') => {
+    setSearchParams(previous => { const next = new URLSearchParams(previous); next.set('view', value); return next; }, { replace: true });
+  }, [setSearchParams]);
   const projectIdFilter = searchParams.get('projectId');
   const clientRouteFilter = searchParams.get('client') || '';
   const taskIdFilter = searchParams.get('taskId');
@@ -204,13 +209,26 @@ const TasksWorkspace: React.FC = () => {
   }, [searchParams, setSearchParams]);
   const searchInput = useImeSafeInput(routeSearch, updateSearch, { commitDelayMs: 180 });
   const searchTerm = searchInput.value;
-  const [filterDepartment, setFilterDepartment] = useState('All');
-  const [filterAssignee, setFilterAssignee] = useState(assigneeRouteFilter || 'All');
-  const [filterClient, setFilterClient] = useState('All');
-  const [filterStatus, setFilterStatus] = useState('All');
-  const [filterPriority, setFilterPriority] = useState('All');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const setFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value && value !== 'All') next.set(key, value); else next.delete(key);
+    if (key === 'client' || key === 'assignee') next.delete('period');
+    setSearchParams(next, { replace: true });
+  };
+  const filterDepartment = searchParams.get('department') || 'All';
+  const setFilterDepartment = (value: string) => setFilter('department', value);
+  const filterAssignee = assigneeRouteFilter || 'All';
+  const setFilterAssignee = (value: string) => setFilter('assignee', value);
+  const filterClient = clientRouteFilter || 'All';
+  const setFilterClient = (value: string) => setFilter('client', value);
+  const filterStatus = searchParams.get('status') || 'All';
+  const setFilterStatus = (value: string) => setFilter('status', value);
+  const filterPriority = searchParams.get('priority') || 'All';
+  const setFilterPriority = (value: string) => setFilter('priority', value);
+  const dateFrom = searchParams.get('dueFrom') || '';
+  const setDateFrom = (value: string) => setFilter('dueFrom', value);
+  const dateTo = searchParams.get('dueTo') || '';
+  const setDateTo = (value: string) => setFilter('dueTo', value);
   const [page, setPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -235,11 +253,7 @@ const TasksWorkspace: React.FC = () => {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  useEffect(() => {
-    setFilterAssignee(assigneeRouteFilter || 'All');
-  }, [assigneeRouteFilter]);
+  }, [setViewType]);
 
   useEffect(() => {
     setPage(1);
@@ -425,25 +439,16 @@ const TasksWorkspace: React.FC = () => {
     const next = new URLSearchParams(searchParams);
     next.delete('focus');
     next.delete('period');
+    ['dueFrom', 'dueTo', 'status'].forEach(key => next.delete(key));
     if (value === 'today') next.set('period', 'today');
     else if (value === 'overdue' || value === 'waiting') next.set('focus', value);
     setSearchParams(next, { replace: true });
-    setDateFrom('');
-    setDateTo('');
-    setFilterStatus('All');
     setPage(1);
   };
 
   const clearAllFilters = () => {
     searchInput.commit('');
-    setFilterDepartment('All');
-    setFilterAssignee('All');
-    setFilterClient('All');
-    setFilterStatus('All');
-    setFilterPriority('All');
-    setDateFrom('');
-    setDateTo('');
-    setSearchParams(new URLSearchParams(), { replace: true });
+    setSearchParams(new URLSearchParams({ view: viewType }), { replace: true });
   };
 
   const clientStatusLabel = (task: Task) => {
@@ -490,8 +495,9 @@ const TasksWorkspace: React.FC = () => {
         description={isClientUser
           ? t('Track your company work, review deliverables, and share feedback.')
           : t('Manage assignments, approvals, revisions, files, and deadlines.')}
+        onboardingTarget="tasks-overview"
         action={canCreateTasks(currentUser, rolePermissions) ? (
-          <Button onClick={() => setCreateTaskModalOpen(true)}>
+          <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}>
             <Plus className="h-4 w-4" />
             {t('New task')}
           </Button>
@@ -700,6 +706,7 @@ const TasksWorkspace: React.FC = () => {
               </span>
               <input
                 type="text"
+                data-onboarding-target="task-search"
                 aria-label={t('Filter tasks')}
                 className={cn(inputBase, 'block py-2 pl-10 pr-3')}
                 placeholder={isClientUser ? t('Search company tasks...') : t('Search tasks, clients, assignees...')}
@@ -783,12 +790,6 @@ const TasksWorkspace: React.FC = () => {
                 value={filterAssignee}
                 onChange={(e) => {
                   setFilterAssignee(e.target.value);
-                  if (assigneeRouteFilter || periodRouteFilter) {
-                    const next = new URLSearchParams(searchParams);
-                    next.delete('assignee');
-                    next.delete('period');
-                    setSearchParams(next);
-                  }
                 }}
                 className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}
               >
@@ -800,12 +801,6 @@ const TasksWorkspace: React.FC = () => {
             {!isClientUser && <div className="relative">
               <select aria-label={t('Filter by client')} value={filterClient} onChange={(e) => {
                 setFilterClient(e.target.value);
-                if (clientRouteFilter || periodRouteFilter) {
-                  const next = new URLSearchParams(searchParams);
-                  next.delete('client');
-                  next.delete('period');
-                  setSearchParams(next);
-                }
               }} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">{t('All clients')}</option>
                 {clientOptions.map(client => <option key={client} value={client}>{client}</option>)}
@@ -1310,9 +1305,13 @@ const TasksWorkspace: React.FC = () => {
 
 const Tasks: React.FC = () => {
   const currentUser = useStore(state => state.currentUser);
+  const backendMode = useStore(state => state.backend.mode);
   if (currentUser?.role === 'Client') return <ClientDeliveries />;
-  if (currentUser && !isBossKoo(currentUser)) return <StaffAllWork />;
-  return <TasksWorkspace />;
+  const key = currentUser ? taskPreferencesKey(currentUser, backendMode) : '';
+  return <>
+    {currentUser && <PersonalTaskViews key={key} storageKey={key} supportsBoard={isBossKoo(currentUser)} />}
+    {currentUser && !isBossKoo(currentUser) ? <StaffAllWork /> : <TasksWorkspace />}
+  </>;
 };
 
 export default Tasks;

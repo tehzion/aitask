@@ -53,7 +53,7 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   }
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: 'All work' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Action Centre' })).toBeVisible();
   await expect(page.getByLabel('Filter by assignee')).toHaveCount(0);
   await expect(page.locator('main').getByRole('button', { name: 'Table', exact: true })).toHaveCount(0);
   await expect(page.locator('main').getByRole('button', { name: 'Board', exact: true })).toHaveCount(0);

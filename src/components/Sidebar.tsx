@@ -102,11 +102,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
 
   const renderNavItem = (item: NavigationItem) => {
     const label = t(item.label);
+    const onboardingTarget = item.path === '/' ? 'dashboard' : item.path === '/tasks' ? 'tasks' : item.path === '/projects' ? 'projects' : item.path === '/clients' ? 'clients' : item.path === '/reports' ? 'reports' : item.path === '/approvals' ? 'approvals' : item.path === '/help' ? 'help' : undefined;
     return (
       <div key={item.path} className="group/nav-item relative" {...collapsedLabelHandlers(item.label)}>
         <NavLink
           to={item.path}
           onClick={onClose}
+          {...(onboardingTarget ? { 'data-onboarding-target': onboardingTarget } : {})}
           aria-label={isCollapsed ? label : undefined}
           title={isCollapsed ? label : undefined}
           className={({ isActive }) => clsx(

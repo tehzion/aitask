@@ -27,7 +27,7 @@ const StaffMyWork: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const scope: HodWorkScope = searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'delegated' ? 'delegated' : 'department';
   const { locale, t } = useI18n();
-  const { currentUser, tasks: allTasks, clients, projects, users, rolePermissions, clientPlans, taskStatuses, serviceCycles, deliverables, setCreateTaskModalOpen } = useStore(useShallow(state => ({
+  const { currentUser, tasks: allTasks, clients, projects, users, rolePermissions, clientPlans, taskStatuses, serviceCycles, deliverables, notificationUnreadCount, setCreateTaskModalOpen } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     tasks: state.tasks,
     clients: state.clients,
@@ -38,6 +38,7 @@ const StaffMyWork: React.FC = () => {
     taskStatuses: state.taskStatuses,
     serviceCycles: state.serviceCycles,
     deliverables: state.deliverables,
+    notificationUnreadCount: state.notificationUnreadCount,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
@@ -106,15 +107,15 @@ const StaffMyWork: React.FC = () => {
   };
 
   return (
-    <div className={`${pageShell} max-w-6xl space-y-6`}>
+    <div data-onboarding-target="dashboard-overview" className={`${pageShell} max-w-6xl space-y-6`}>
       <header className="flex items-start justify-between gap-4 border-b border-line/70 pb-4 sm:items-end">
         <div>
-          <p className="calm-eyebrow">{formatLocalizedWeekdayDate(todayDate, locale)}</p>
+          <p className="calm-eyebrow">{t('My work')} · {formatLocalizedWeekdayDate(todayDate, locale)}</p>
           <h1 className="mt-1 text-[1.8rem] font-semibold leading-9 tracking-[-0.045em] text-ink sm:text-4xl">{isDepartmentLead ? t('Department work') : t('My work')}</h1>
-          <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">{isDepartmentLead ? t('Start with what needs attention, then review delegated work across your departments.') : t('Start with what needs attention, then move through the rest of your assigned work.')}</p>
+          <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">{isDepartmentLead ? t('Personally assigned responsibilities stay in My Work; use the Action Centre for department decisions and next actions.') : t('Personally assigned responsibilities, ordered by what you need to do next.')}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          {canCreateTask && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
+          {canCreateTask && <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
           <BackendFreshness />
         </div>
       </header>
@@ -200,6 +201,30 @@ const StaffMyWork: React.FC = () => {
       </section>
 
       </div>
+
+      <Surface variant="inset" className="overflow-hidden" aria-labelledby="action-centre-title">
+        <div className="flex flex-col gap-3 border-b border-line/70 px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 id="action-centre-title" className="font-semibold text-ink">{t('Action Centre')}</h2>
+            <p className="mt-0.5 max-w-[60ch] text-sm leading-6 text-muted">{t('Decisions and next actions, drawn from your existing work queues.')}</p>
+          </div>
+          <Link to={`/tasks?queue=needs_action${isHod ? `&scope=${scope}` : ''}`} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline">
+            {t('Open Action Centre')} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </div>
+        <div className="grid gap-px bg-line/70 sm:grid-cols-3">
+          <Link to={`/tasks?queue=needs_action${isHod ? `&scope=${scope}` : ''}`} className="bg-surface px-5 py-4 transition-colors hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40">
+            <p className="calm-number text-xl font-semibold text-ink">{queue.needs_action.length}</p><p className="mt-1 text-xs leading-5 text-muted">{t('Needs action')}</p>
+          </Link>
+          <Link to={`/tasks?help=1${isHod ? `&scope=${scope}` : ''}`} className="bg-surface px-5 py-4 transition-colors hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40">
+            <p className="calm-number text-xl font-semibold text-ink">{tasks.filter(task => isTaskOpen(task) && task.workState?.blocker).length}</p><p className="mt-1 text-xs leading-5 text-muted">{t('Help requested')}</p>
+          </Link>
+          <Link to="/notifications" className="bg-surface px-5 py-4 transition-colors hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40">
+            <p className="calm-number text-xl font-semibold text-ink">{notificationUnreadCount}</p><p className="mt-1 text-xs leading-5 text-muted">{t('Unread updates')}</p>
+          </Link>
+        </div>
+        <p className="px-5 py-3 text-xs leading-5 text-muted">{t('Notifications are activity updates, not a separate task queue.')}</p>
+      </Surface>
 
       <Surface variant="inset" className="overflow-hidden" aria-labelledby="staff-role-context">
         <div className="px-5 py-4"><h2 id="staff-role-context" className="font-semibold text-ink">{roleInsight.title}</h2><p className="mt-0.5 text-sm text-muted">{roleInsight.description}</p></div>

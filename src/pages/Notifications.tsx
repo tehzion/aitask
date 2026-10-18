@@ -238,6 +238,7 @@ const Notifications: React.FC = () => {
       <PageHeader
         title={t('notifications.title')}
         description={t('notifications.description')}
+        onboardingTarget="notifications-overview"
         action={displayedUnreadCount > 0 ? (
           <Button
             variant="secondary"

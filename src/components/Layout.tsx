@@ -17,6 +17,7 @@ import { useColorTheme } from '../hooks/useColorTheme';
 import { getNavigationShortcut, isEditableShortcutTarget } from '../lib/keyboard';
 import { useI18n } from './I18nProvider';
 import { getMobileNavigation } from '../lib/navigation';
+import OnboardingExperience from './OnboardingExperience';
 
 const CreateTaskModal = React.lazy(() => import('./CreateTaskModal'));
 const KeyboardShortcutsDialog = React.lazy(() => import('./KeyboardShortcutsDialog'));
@@ -348,6 +349,7 @@ const Layout: React.FC = () => {
         <nav aria-label={t('Mobile navigation')} className="app-bottom-nav fixed bottom-0 left-0 right-0 z-40 flex h-[calc(4rem+env(safe-area-inset-bottom))] items-start justify-around border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
           {mobileNavItems.map(item => {
             const Icon = item.icon;
+            const onboardingTarget = item.path === '/' ? 'dashboard' : item.path === '/tasks' ? 'tasks' : item.path === '/clients' ? 'clients' : item.path === '/reports' ? 'reports' : item.path === '/help' ? 'help' : undefined;
             const renderContent = (isActive: boolean) => (
               <>
                 <span className="relative flex h-7 w-7 items-center justify-center">
@@ -365,6 +367,7 @@ const Layout: React.FC = () => {
               <NavLink
                 key={item.path}
                 to={item.path}
+                {...(onboardingTarget ? { 'data-onboarding-target': onboardingTarget } : {})}
                 aria-label={item.path === '/notifications'
                   ? `${t('Notifications')}${unreadCount > 0 ? `, ${t(`${unreadCount} unread`)}` : ''}`
                   : t(item.label)}
@@ -428,6 +431,7 @@ const Layout: React.FC = () => {
           />
         </React.Suspense>
       )}
+      <OnboardingExperience />
     </div>
   );
 };

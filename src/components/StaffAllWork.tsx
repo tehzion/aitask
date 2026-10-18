@@ -160,8 +160,8 @@ const StaffAllWork: React.FC = () => {
     <div className={`${pageShell} max-w-6xl`}>
       <PageHeader
         compact
-        title={t(isProjectManager ? 'Portfolio work' : isDepartmentLead ? 'Department work' : 'All work')}
-        description={t(isProjectManager ? 'Your portfolio work, ordered by delivery risk and next action.' : isDepartmentLead ? 'Department work, including delegated tasks and items that need review.' : 'All visible work, ordered by what needs attention first.')}
+        title={t(isProjectManager ? 'Portfolio work' : isDepartmentLead ? 'Department work' : 'Action Centre')}
+        description={t(isProjectManager ? 'Your portfolio work, ordered by delivery risk and next action.' : isDepartmentLead ? 'Department work, including delegated tasks and items that need review.' : 'Decisions and next actions from your existing work queues.')}
         meta={<span className="calm-number">{filteredTasks.length} {t(filteredTasks.length === 1 ? 'task' : 'tasks')}</span>}
         action={<div className="flex flex-wrap items-center gap-2">
           {canCreateTask && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}

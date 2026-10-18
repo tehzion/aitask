@@ -85,6 +85,7 @@ import { monthlyRecordLabel } from "../lib/monthlyRecords";
 import RevisionRecoveryNotice from "../components/RevisionRecoveryNotice";
 import ConfirmDialog from "../components/ConfirmDialog";
 import MonthlyPlanSchedule from "../components/MonthlyPlanSchedule";
+import ContextualTutorialLink from "../components/ContextualTutorialLink";
 
 type Tab = "overview" | "plan" | "cycles" | "addons" | "activity";
 const DeliveryReviewPanel = React.lazy(() => import('../components/DeliveryReviewPanel'));
@@ -506,6 +507,7 @@ const OperationsClientWorkspace = () => {
         compact
         title={<span data-i18n-skip>{client.clientName}</span>}
         description={t("Plan details, delivery cycles, deliverables, and shared files.")}
+        onboardingTarget="service-plan"
         meta={
           <>
             <StatusChip tone={activePlan?.status === "Active" ? "emerald" : activePlan?.status === "Paused" ? "amber" : "slate"}>{activePlan ? t(activePlan.status) : t("No plan")}</StatusChip>
@@ -521,6 +523,7 @@ const OperationsClientWorkspace = () => {
           ) : null
         }
       />
+      {canManagePlans && <div className="flex justify-end"><ContextualTutorialLink tutorialId="manage-service-plans" label={t("How do service plans work?")} /></div>}
       <div className="sticky top-[4.5rem] z-20 border-b border-line/80 bg-canvas/95 py-3 backdrop-blur-md">
         <SegmentedTabs<Tab> items={tabs} value={tab} onChange={next => {
           setTab(next);

@@ -433,6 +433,8 @@ test('first login reaches the app and critical responsive routes remain usable',
   await newTaskButton.click();
   const createTaskDialog = page.getByRole('dialog', { name: 'Create Task' });
   await expect(createTaskDialog).toBeVisible();
+  await expect(createTaskDialog.getByLabel('Attachment URL')).toBeHidden();
+  await createTaskDialog.getByText('Additional details', { exact: true }).click();
   await expect(createTaskDialog.getByLabel('Attachment URL')).toBeVisible();
   await expect(createTaskDialog.getByLabel('Recurrence')).toHaveCount(0);
   const taskDepartment = createTaskDialog.getByLabel(/Assign to Position\/Department/);
@@ -805,7 +807,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(mobileNav.getByText('Calendar', { exact: true })).toHaveCount(0);
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: 'All work' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Action Centre' })).toBeVisible();
   await page.evaluate(() => {
     const raw = window.localStorage.getItem('market-task-storage');
     if (!raw) throw new Error('Expected local AiTask state');

@@ -15,6 +15,7 @@ const seed = async (page: Page, role: 'Staff' | 'HOD', locale: 'en' | 'zh' = 'en
       localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${user.id}`, 'acknowledged');
     }
     localStorage.setItem('aitask:locale', locale);
+    localStorage.setItem('aitask:onboarding:v1', JSON.stringify({ 'ui-hod': { status: 'skipped', updatedAt: new Date().toISOString() } }));
     useStore.setState({ currentUser: actor, users: [staff, hod, ...state.users.filter(user => user.id !== staff.id)],
       rolePermissions: [], clients: [], projects: [], clientPlans: [], deliverables: [], serviceCycles: [], notifications: [],
       tasks: [{ ...state.tasks[0], id: 'ui-feedback-task', title: 'Pending Designer artwork', clientName: 'UI Company', clientId: undefined,

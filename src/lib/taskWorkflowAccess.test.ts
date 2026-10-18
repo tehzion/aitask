@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task, User } from '../types';
-import { canReviewTaskInternally, getDepartmentReviewers, taskTransitionError } from './taskWorkflowAccess';
+import { canReviewTaskInternally, getDepartmentReviewers, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from './taskWorkflowAccess';
 import { getStaffGuidedAction } from './staffWorkspace';
 import { canApproveInternalReview } from './workflowReview';
 const pm: User = { id: 'pm', name: 'PM', role: 'Project Manager', departments: [] };
@@ -9,6 +9,14 @@ const hod: User = { id: 'hod', name: 'HOD', role: 'HOD', departments: ['Designer
 const task = { id: 'task', department: 'Designer', createdBy: 'staff', clientName: 'Company', status: 'Waiting Approval' } as Task;
 const scope = { users: [pm, other], clients: [{ id: 'co', clientName: 'Company', createdBy: pm.id, createdAt: '', updatedAt: '' }] };
 describe('department PM fallback reviewer', () => {
+  it('explains assignment locks using the canonical workflow statuses', () => {
+    expect(isTaskAssignmentLocked({ status: 'Pending', isCompleted: false })).toBe(false);
+    expect(isTaskAssignmentLocked({ status: 'Revision', isCompleted: false })).toBe(false);
+    expect(isTaskAssignmentLocked({ status: 'Waiting Approval', isCompleted: false })).toBe(true);
+    expect(getTaskAssignmentUnavailableReason(pm, task)).toContain('waiting for approval');
+    expect(getTaskAssignmentUnavailableReason(pm, { ...task, status: 'Completed', isCompleted: true })).toContain('completed');
+  });
+
   it('routes and permits only the portfolio PM without a Designer HOD', () => {
     expect(getDepartmentReviewers(scope.users, task, [], scope).map(u => u.id)).toEqual(['pm']);
     expect(canReviewTaskInternally(pm, task, [], scope)).toBe(true);

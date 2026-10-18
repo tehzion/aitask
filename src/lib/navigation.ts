@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CheckSquare,
   FolderKanban,
+  HelpCircle,
   LayoutDashboard,
   ListChecks,
   PackageCheck,
@@ -35,7 +36,7 @@ const routeIsVisible = (
   user: User | null | undefined,
   rolePermissions: CustomRole[],
   path: string,
-) => path === '/notifications' || path.startsWith('/clients/') || canAccessPath(user, path, rolePermissions);
+) => path === '/notifications' || path === '/help' || path.startsWith('/clients/') || canAccessPath(user, path, rolePermissions);
 
 const filterVisible = (
   user: User | null | undefined,
@@ -118,7 +119,7 @@ export const getNavigationSections = (
     return {
       primary: filterVisible(user, rolePermissions, forHod(staffPrimary)),
       secondary: filterVisible(user, rolePermissions, forHod(staffSecondary)),
-      footer: [],
+      footer: filterVisible(user, rolePermissions, [{ path: '/help', label: 'Help', icon: HelpCircle }]),
       mobilePrimary: filterVisible(user, rolePermissions, forHod(staffMobilePrimary)),
     };
   }
@@ -127,7 +128,7 @@ export const getNavigationSections = (
     return {
       primary: filterVisible(user, rolePermissions, clientPrimary),
       secondary: filterVisible(user, rolePermissions, createClientSecondary(clientProfilePath)),
-      footer: [],
+      footer: filterVisible(user, rolePermissions, [{ path: '/help', label: 'Help', icon: HelpCircle }]),
     };
   }
 
@@ -144,7 +145,10 @@ export const getNavigationSections = (
         ? [{ path: '/tasks', label: 'Portfolio work', icon: CheckSquare }, ...generalPrimary]
         : generalPrimary,
     secondary: [],
-    footer: filterVisible(user, rolePermissions, [{ path: '/settings', label: 'Settings', icon: Settings }]),
+    footer: filterVisible(user, rolePermissions, [
+      { path: '/settings', label: 'Settings', icon: Settings },
+      { path: '/help', label: 'Help', icon: HelpCircle },
+    ]),
   };
 };
 

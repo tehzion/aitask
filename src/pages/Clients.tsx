@@ -33,6 +33,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { ClientProfile, ClientServicePlan, Project, ServiceCycle } from '../types';
 import ModalShell from '../components/ModalShell';
 import CreateClientProfileModal from '../components/CreateClientProfileModal';
+import ContextualTutorialLink from '../components/ContextualTutorialLink';
 import CreateClientPlanModal from '../components/CreateClientPlanModal';
 import CreateProjectModal from '../components/CreateProjectModal';
 import { useI18n } from '../components/I18nProvider';
@@ -794,11 +795,13 @@ const Clients: React.FC = () => {
       <PageHeader
         title={isClientUser ? t('Company profile') : t('Companies')}
         description={isClientUser ? t('Review your company details, services, contacts, and linked work.') : canSeeAllClients ? t('The complete client database for company details, contacts, accounts, services, and linked work.') : t('Companies in your portfolio.')}
+        onboardingTarget="projects-overview"
         meta={<><span>{clients.length} {t('visible companies')}</span><span aria-hidden="true">·</span><span>{totalTasks} {t('linked tasks')}</span></>}
         action={<div className="flex flex-wrap gap-2">
-          {canCreateClientProfiles(currentUser, rolePermissions) && <Button onClick={() => { clearSearch(); setIsCreateClientOpen(true); }} disabled={upgradeRequired}><Building2 className="h-4 w-4" />{t('New client')}</Button>}
-          {canAddProjects && <Button variant="secondary" onClick={() => openProjectEditor(null)}><Plus className="h-4 w-4" />{t('New project')}</Button>}
-          {canAddTasks && <Button variant="secondary" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
+          {canAddProjects && <ContextualTutorialLink tutorialId="create-project" label={t('Need help creating a project?')} />}
+          {canCreateClientProfiles(currentUser, rolePermissions) && <Button data-onboarding-target="create-company" onClick={() => { clearSearch(); setIsCreateClientOpen(true); }} disabled={upgradeRequired}><Building2 className="h-4 w-4" />{t('New client')}</Button>}
+          {canAddProjects && <Button data-onboarding-target="create-project" variant="secondary" onClick={() => openProjectEditor(null)}><Plus className="h-4 w-4" />{t('New project')}</Button>}
+          {canAddTasks && <Button data-onboarding-target="create-task" variant="secondary" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
         </div>}
       />
 

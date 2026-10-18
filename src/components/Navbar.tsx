@@ -17,6 +17,7 @@ import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import type { ResolvedTheme, ThemePreference } from '../lib/theme';
 import { LanguageSwitcher, useI18n } from './I18nProvider';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
+import GlobalSearchResults from './GlobalSearchResults';
 
 const NotificationPreviewText = React.lazy(() => import('./NotificationPreviewText'));
 
@@ -58,6 +59,7 @@ const Navbar: React.FC<NavbarProps> = ({
   })));
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [globalSearch, setGlobalSearch] = useState('');
+  const [searchResultsOpen, setSearchResultsOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [soundEnabled, setSoundEnabledState] = useState(getSoundEnabled);
   const [showAppearance, setShowAppearance] = useState(false);
@@ -89,6 +91,7 @@ const Navbar: React.FC<NavbarProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest('[data-global-search-form]')) setSearchResultsOpen(false);
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         onCloseNotifications();
       }
@@ -186,6 +189,20 @@ const Navbar: React.FC<NavbarProps> = ({
     setSearchParams(next, { replace: true });
   };
   const globalSearchInput = useImeSafeInput(globalSearchValue, updateGlobalSearch, { commitDelayMs: 180 });
+  const searchKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      setSearchResultsOpen(false);
+      event.currentTarget.querySelector<HTMLInputElement>('input')?.focus();
+    }
+    if (event.key === 'ArrowDown' && event.target instanceof HTMLInputElement) {
+      event.preventDefault();
+      event.currentTarget.querySelector<HTMLButtonElement>('[role="region"] button')?.focus();
+    }
+  };
+  const closeSearchResults = () => { setSearchResultsOpen(false); setShowMobileSearch(false); };
 
   const handleGlobalSearch = (event: React.FormEvent) => {
     event.preventDefault();
@@ -230,7 +247,7 @@ const Navbar: React.FC<NavbarProps> = ({
           <Menu aria-hidden="true" className="h-5 w-5" />
           <span className="text-sm font-semibold">{t('Menu')}</span>
         </button>
-        <form onSubmit={handleGlobalSearch} className="relative w-full max-w-md hidden sm:block">
+        <form data-global-search-form onKeyDown={searchKeyDown} onSubmit={handleGlobalSearch} className="relative w-full max-w-md hidden sm:block">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3">
             <Search className="w-5 h-5 text-slate-400" />
           </span>
@@ -242,12 +259,15 @@ const Navbar: React.FC<NavbarProps> = ({
             className={cn(inputBase, 'border-transparent bg-inset py-2.5 pl-10 pr-10 shadow-none focus:bg-surface')}
             placeholder={liveSearchPlaceholder ?? (isClient ? 'Search deliveries…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...')}
             {...globalSearchInput.inputProps}
+            onChange={event => { setSearchResultsOpen(true); globalSearchInput.inputProps.onChange(event); }}
+            onFocus={() => setSearchResultsOpen(true)}
           />
           {globalSearchInput.value && (
             <button type="button" aria-label={t('Clear search')} onClick={() => globalSearchInput.commit('')} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink">
               <X className="h-4 w-4" />
             </button>
           )}
+          {searchResultsOpen && globalSearchInput.value.trim() && <GlobalSearchResults query={globalSearchValue} onClose={closeSearchResults} />}
         </form>
       </div>
 
@@ -385,7 +405,7 @@ const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
       {showMobileSearch && (
-        <form onSubmit={handleGlobalSearch} className="absolute inset-x-0 top-16 border-b border-line bg-surface p-3 sm:hidden">
+        <form data-global-search-form onKeyDown={searchKeyDown} onSubmit={handleGlobalSearch} className="absolute inset-x-0 top-16 border-b border-line bg-surface p-3 sm:hidden">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -398,6 +418,8 @@ const Navbar: React.FC<NavbarProps> = ({
               className={cn(inputBase, 'py-2.5 pl-10 pr-10')}
               placeholder={liveSearchPlaceholder ?? (isClient ? 'Search deliveries…' : searchDestination === '/clients' ? 'Search client work…' : 'Search tasks...')}
               {...globalSearchInput.inputProps}
+              onChange={event => { setSearchResultsOpen(true); globalSearchInput.inputProps.onChange(event); }}
+              onFocus={() => setSearchResultsOpen(true)}
             />
             {globalSearchInput.value && (
               <button type="button" aria-label={t('Clear search')} onClick={() => globalSearchInput.commit('')} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink">
@@ -405,6 +427,7 @@ const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
           </div>
+          {searchResultsOpen && globalSearchInput.value.trim() && <GlobalSearchResults query={globalSearchValue} onClose={closeSearchResults} />}
         </form>
       )}
     </header>

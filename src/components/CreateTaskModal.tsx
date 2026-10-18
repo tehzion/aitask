@@ -21,6 +21,8 @@ import ModalShell from './ModalShell';
 import BackendFreshness from './BackendFreshness';
 import { modalFooter } from './uiTokens';
 import { useI18n } from './I18nProvider';
+import ContextualTutorialLink from './ContextualTutorialLink';
+import '../lib/uxEnhancementCopy';
 
 interface Props {
   isOpen: boolean;
@@ -64,6 +66,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const attachmentLinkId = React.useId();
   const attachmentNameId = React.useId();
   const notesId = React.useId();
+  const additionalDetailsRef = React.useRef<HTMLDetailsElement>(null);
+  const briefId = React.useId();
+  const facebookId = React.useId();
+  const websiteId = React.useId();
 
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectId, setProjectId] = useState('');
@@ -174,6 +180,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const recovery = useRecoverableForm('create-task', { projectId, title, description, clientName, customerDetails, facebookPage, website, department, assignedTo, serviceType, priority, visibility, startDate, dueDate, attachmentLink, attachmentName, notes, customServiceInput }, formEdited, isOpen && !pendingTaskId);
   const restoreDraft = () => {
     const value = recovery.restore(); if (!value || typeof value.title !== 'string') return;
+    if (additionalDetailsRef.current) additionalDetailsRef.current.open = true;
     setProjectId(value.projectId); setTitle(value.title); setDescription(value.description); setClientName(value.clientName); setCustomerDetails(value.customerDetails); setFacebookPage(value.facebookPage); setWebsite(value.website); setDepartment(value.department); setAssignedTo(value.assignedTo); setServiceType(value.serviceType); setPriority(value.priority); setVisibility(value.visibility); setStartDate(value.startDate); setDueDate(value.dueDate); setAttachmentLink(value.attachmentLink); setAttachmentName(value.attachmentName); setNotes(value.notes); setCustomServiceInput(value.customServiceInput); setFormEdited(true);
   };
   const closeAndReset = () => {
@@ -369,6 +376,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     if (![facebookPage, website, attachmentLink].every(isValidOptionalUrl)) {
       setFormError('Links must be valid HTTPS URLs.');
+      if (additionalDetailsRef.current) additionalDetailsRef.current.open = true;
       return;
     }
 
@@ -431,6 +439,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
           <div>
             <h2 id={titleId} className="text-xl font-semibold text-slate-950">{t('Create task')}</h2>
             <p id={descriptionId} className="mt-1 text-sm text-slate-600">{t('Assign work to a specific department or position.')}</p>
+            <ContextualTutorialLink tutorialId="create-task" label={t('Need help creating a task?')} />
           </div>
           <button 
             onClick={requestClose}
@@ -444,7 +453,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
         {/* Body */}
         <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
-          <form id="create-task-form" onSubmit={handleSubmit} className="space-y-6">
+          <form id="create-task-form" data-onboarding-target="create-task" onSubmit={handleSubmit} className="space-y-6">
             <fieldset disabled={isSubmitting || Boolean(pendingTaskId)} className="min-w-0 border-0 p-0 space-y-6">
             
             {/* Task Basic Info */}
@@ -495,15 +504,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">{t('Description')}</label>
-                <textarea 
-                  rows={3}
-                  value={description} onChange={e => setDescription(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm resize-none"
-                  placeholder={t('Describe the task requirements...')}
-                />
-              </div>
             </div>
 
             {/* Client & Customer Info */}
@@ -545,26 +545,6 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Facebook Page')}</label>
-                  <input 
-                    type="url"
-                    value={facebookPage} onChange={e => setFacebookPage(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
-                    placeholder="https://facebook.com/..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Company Website')}</label>
-                  <input 
-                    type="url"
-                    value={website} onChange={e => setWebsite(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
-                    placeholder="https://..."
-                  />
-                </div>
-              </div>
             </div>
 
             {/* Assignment & Scheduling */}
@@ -706,6 +686,16 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             </div>
 
             {/* Links and notes */}
+            <details ref={additionalDetailsRef} onInvalidCapture={() => { if (additionalDetailsRef.current) additionalDetailsRef.current.open = true; }}>
+              <summary className="min-h-11 cursor-pointer rounded-control py-3 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">{t('Additional details')}</summary>
+              <div className="space-y-4 py-4">
+                <label htmlFor={briefId} className="block text-sm font-medium text-ink">{t('Description')}</label>
+                <textarea id={briefId} rows={3} value={description} onChange={e => setDescription(e.target.value)} className="w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" placeholder={t('Describe the task requirements...')} />
+                <label htmlFor={facebookId} className="block text-sm font-medium text-ink">{t('Facebook Page')}</label>
+                <input id={facebookId} type="url" value={facebookPage} onChange={e => setFacebookPage(e.target.value)} className="w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" placeholder="https://facebook.com/..." />
+                <label htmlFor={websiteId} className="block text-sm font-medium text-ink">{t('Company Website')}</label>
+                <input id={websiteId} type="url" value={website} onChange={e => setWebsite(e.target.value)} className="w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" placeholder="https://..." />
+              </div>
             <div className="space-y-4 border-t border-slate-200/80 pt-5">
               <h3 className="text-sm font-semibold text-slate-900">{t('Links and notes')}</h3>
 
@@ -747,6 +737,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               </div>
             </div>
 
+            </details>
             </fieldset>
             {(formError || pendingResolution) && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">

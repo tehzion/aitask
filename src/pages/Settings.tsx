@@ -532,6 +532,7 @@ const Settings: React.FC = () => {
       <PageHeader
         title={mustResetPassword ? t('Account Setup') : t('Settings')}
         description={mustResetPassword ? t('Set your own password to unlock the workspace.') : scopeDescription}
+        onboardingTarget="settings-overview"
       />
 
       {mustResetPassword && (

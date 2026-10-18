@@ -11,10 +11,11 @@ interface PageHeaderProps {
   breadcrumb?: React.ReactNode;
   meta?: React.ReactNode;
   compact?: boolean;
+  onboardingTarget?: string;
 }
 
-export const PageHeader: React.FC<PageHeaderProps> = ({ title, description, action, breadcrumb, meta, compact = false }) => (
-  <header className={cn('app-page-header flex flex-col gap-5 border-b border-line/70', compact ? 'pb-4' : 'pb-6', 'sm:flex-row sm:items-end sm:justify-between')}>
+export const PageHeader: React.FC<PageHeaderProps> = ({ title, description, action, breadcrumb, meta, compact = false, onboardingTarget }) => (
+  <header {...(onboardingTarget ? { 'data-onboarding-target': onboardingTarget } : {})} className={cn('app-page-header flex flex-col gap-5 border-b border-line/70', compact ? 'pb-4' : 'pb-6', 'sm:flex-row sm:items-end sm:justify-between')}>
     <div className="min-w-0">
       {breadcrumb && <div className="mb-2 text-xs font-medium text-muted">{breadcrumb}</div>}
       <h1 className={cn('app-page-title text-balance font-semibold text-ink', compact ? 'text-2xl leading-8' : 'text-[1.75rem] leading-9 sm:text-[2rem] sm:leading-10')}>{title}</h1>

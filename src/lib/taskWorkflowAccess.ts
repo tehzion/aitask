@@ -1,6 +1,12 @@
 import type { CustomRole, Department, Task, User } from '../types';
-import { canEditTask, isBossKoo, isHodUser, isTaskInOwnedPortfolio, type VisibilityScope } from './access';
+import { canAssignTasksToOthers, canEditTask, isBossKoo, isHodUser, isTaskInOwnedPortfolio, type VisibilityScope } from './access';
 import { isEligibleTaskAssignee, isMemberInDepartment } from './departments';
+
+export const TASK_ASSIGNMENT_LOCKED_STATUSES = ['Waiting Approval', 'Approved', 'Completed', 'Cancelled'] as const;
+export type TaskAssignmentLockedStatus = typeof TASK_ASSIGNMENT_LOCKED_STATUSES[number];
+
+export const isTaskAssignmentLocked = (task: Pick<Task, 'status' | 'isCompleted'>) => task.isCompleted
+  || TASK_ASSIGNMENT_LOCKED_STATUSES.includes(task.status as TaskAssignmentLockedStatus);
 
 export const isIndependentTaskReviewer = (user: User, task: Partial<Task>) => user.id !== task.assignedTo && user.id !== task.workState?.reviewRequestedBy;
 export const canBeTaskReviewLead = (user: User, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => user.hasLogin !== false
@@ -59,6 +65,20 @@ export const getTaskStatusOptions = (user: User | null | undefined, task: Task, 
 // Task access still applies at every store/database mutation boundary.
 export const canApproveTaskInternally = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: Parameters<typeof canEditTask>[3] = {}) =>
   task.status === 'Waiting Approval' && canReviewTaskInternally(user, task, roles, scope) && canEditTask(user, task, roles, scope);
+
+export const getTaskAssignmentUnavailableReason = (
+  user: User | null | undefined,
+  task: Pick<Task, 'status' | 'isCompleted' | 'department'> & Partial<Task>,
+  customRoles: CustomRole[] = [],
+  scope: VisibilityScope = {},
+) => {
+  if (task.status === 'Waiting Approval') return 'This task is waiting for approval. Assignment changes are unavailable at this stage.';
+  if (task.status === 'Approved') return 'This task has been approved and can no longer be reassigned.';
+  if (task.status === 'Completed' || task.isCompleted) return 'This task has been completed and can no longer be reassigned.';
+  if (task.status === 'Cancelled') return 'This task has been cancelled and can no longer be reassigned.';
+  if (!canAssignTasksToOthers(user, customRoles, task as Task, scope)) return 'Your current role does not have permission to perform this action.';
+  return undefined;
+};
 
 export const TASK_HOD_REQUIRED = 'No reviewer is configured for this task. Ask your project manager to configure a reviewer before submitting.';
 export const TASK_HOD_ASSIGNMENT_REQUIRED = 'Assign this task to the department HOD first. The HOD then delegates it to staff.';

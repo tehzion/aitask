@@ -29,6 +29,7 @@ const Feedback = React.lazy(() => import('./pages/Feedback'));
 const FeedbackResults = React.lazy(() => import('./pages/FeedbackResults'));
 const Notifications = React.lazy(() => import('./pages/Notifications'));
 const Tasks = React.lazy(() => import('./pages/Tasks'));
+const Help = React.lazy(() => import('./pages/Help'));
 
 const RouteLoading = () => {
   const { t } = useI18n();
@@ -195,6 +196,7 @@ function AppContent() {
               <Route path="approvals" element={<RoleRoute path="/approvals"><Approvals /></RoleRoute>} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="settings" element={<RoleRoute path="/settings"><Settings /></RoleRoute>} />
+              <Route path="help" element={<Help />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

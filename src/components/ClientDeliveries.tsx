@@ -115,7 +115,7 @@ const ClientDeliveries = () => {
 
   return (
     <div className={pageShell}>
-      <PageHeader title={t('Deliveries')} description={t({ id: 'delivery.pageDescription', values: { company: currentUser?.companyName || t('your company') } })} />
+      <PageHeader onboardingTarget="clients-overview" title={t('Deliveries')} description={t({ id: 'delivery.pageDescription', values: { company: currentUser?.companyName || t('your company') } })} />
 
       {taskId && !selectedTask && (
         <div role="status" className="flex items-center justify-between gap-3 rounded-control border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">

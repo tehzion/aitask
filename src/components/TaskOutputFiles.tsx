@@ -13,6 +13,7 @@ import { useSaveAction } from '../hooks/useSaveAction';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useShallow } from 'zustand/react/shallow';
 import SystemMessage from './SystemMessage';
+import ContextualTutorialLink from './ContextualTutorialLink';
 
 const TaskReviewSettings = React.lazy(() => import('./TaskReviewSettings'));
 
@@ -106,8 +107,19 @@ export default function TaskOutputFiles({ task, onUploadStateChange }: { task: T
   };
 
   const canConfigure = canManageTaskReview(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
-  if (!files.length && !links.length && !canUpload && !canConfigure && !task.accountableLeadId) return null;
-  return <>{task.accountableLeadId && <p className="text-sm text-muted">{t('Accountable lead')}: <span data-i18n-skip>{state.users.find(user => user.id === task.accountableLeadId)?.name || t('Team member')}</span></p>}{canConfigure && <React.Suspense fallback={null}><TaskReviewSettings key={`${task.id}:${actorId}`} task={task} /></React.Suspense>}{canUpload && <section className="space-y-2" aria-label={t('Upload output')}>
+  const outputUnavailableReason = state.currentUser?.role !== 'Client' && !canUpload && (
+    ['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status)
+      ? 'This task has been submitted or closed. Output changes are unavailable at this stage.'
+      : !hasLinkedDeliverable
+        ? 'Output upload is available only when this task is linked to a delivery.'
+        : !access.canEdit
+          ? 'Your current role does not have permission to perform this action.'
+          : state.backend.mode !== 'supabase'
+            ? 'Private file uploads require the Supabase backend.'
+            : undefined
+  );
+  if (!files.length && !links.length && !canUpload && !canConfigure && !task.accountableLeadId && !outputUnavailableReason) return null;
+  return <>{task.accountableLeadId && <p className="text-sm text-muted">{t('Accountable lead')}: <span data-i18n-skip>{state.users.find(user => user.id === task.accountableLeadId)?.name || t('Team member')}</span></p>}{outputUnavailableReason && <div role="status" className="rounded-control border border-line/70 bg-inset/70 px-3 py-2.5 text-sm text-muted"><p className="font-semibold text-ink">{t('Output upload is unavailable')}</p><p className="mt-0.5 leading-5">{t(outputUnavailableReason)}</p><ContextualTutorialLink tutorialId="upload-deliverables" label={t('Need help uploading deliverables?')} /></div>}{canConfigure && <React.Suspense fallback={null}><TaskReviewSettings key={`${task.id}:${actorId}`} task={task} /></React.Suspense>}{canUpload && <section className="space-y-2" aria-label={t('Upload output')}>
     <label className="block text-sm font-semibold text-ink">{t('Upload output')}<input ref={input} type="file" accept=".pdf,image/jpeg,image/png,image/webp,image/gif" disabled={uploading || state.backend.hasLocalChanges || state.backend.upgradeRequired || state.backend.mode !== 'supabase'}
       onChange={event => { const file = event.target.files?.[0]; if (file) void upload(file); }} className="mt-2 block w-full text-sm text-muted file:mr-3 file:min-h-11 file:rounded-control file:border file:border-line file:bg-inset file:px-3 file:text-ink" /></label>
     <p className="text-xs text-muted">{t(state.backend.mode === 'supabase' ? 'PDF or image, up to 100 MB. This file becomes task output for review.' : 'Private file uploads require the Supabase backend.')}</p>

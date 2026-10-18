@@ -5,7 +5,7 @@ import { acknowledgeActionFeedback, canRetrySave, dismissActionFeedback } from '
 import SystemMessage from './SystemMessage';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
-import { assignableTaskAssignees, canApproveTaskInternally, canCompleteWithoutInternalApproval, canRequestTaskRevision } from '../lib/taskWorkflowAccess';
+import { assignableTaskAssignees, canApproveTaskInternally, canCompleteWithoutInternalApproval, canRequestTaskRevision, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { getTaskStatusControls } from '../lib/taskStatusControls';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import type { WorkspaceSessionToken } from '../lib/workspaceSession';
@@ -37,6 +37,8 @@ import { useI18n } from './I18nProvider';
 import { formatLocalizedDate, formatLocalizedDistanceToNow } from '../lib/i18n';
 import { Button, ProgressBar } from './ui';
 import { fieldLabel, inputBase } from './uiTokens';
+import ContextualTutorialLink from './ContextualTutorialLink';
+import ActionAvailabilityNotice from './ActionAvailabilityNotice';
 
 interface Props {
   isOpen: boolean;
@@ -267,7 +269,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const showCompletionAction = task.status === 'Approved' || canCompleteWithoutInternalApproval(task);
   // Reassignment is frozen once work is submitted, but non-reassignment scope
   // fields (Client/Brand, Service) stay editable until then.
-  const reassignmentLocked = ['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status) || task.isCompleted;
+  const reassignmentLocked = isTaskAssignmentLocked(task);
   const canEditScope = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canAssign;
   const canAssignOthers = canEditScope && !reassignmentLocked;
   const canDelegateAssignedTask = Boolean(
@@ -280,6 +282,18 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const unavailablePredecessorCount = getUnavailableTaskDependencyCount(task, visibleTasks);
   const workflowKind = getWorkflowStepKind(task, workflow.cycles, workflow.deliverables);
   const transitionError = (status: TaskStatus) => workflowTransitionError(task, { ...task, status, isCompleted: status === 'Completed' }, currentUser, visibleTasks, workflow.cycles, workflow.deliverables, rolePermissions, { users, clients, projects });
+  const assignmentUnavailableReason = !isClientTaskViewer && !canAssignOthers
+    ? getTaskAssignmentUnavailableReason(currentUser, task, rolePermissions, { users, clients, projects })
+    : undefined;
+  const internalReviewUnavailableReason = !isClientTaskViewer && workflowKind === 'internal_review' && task.status === 'Waiting Approval' && !canApproveInternalReview(currentUser, task, rolePermissions, { users, clients, projects })
+    ? transitionError('Approved') || INTERNAL_REVIEW_PERMISSION_MESSAGE
+    : undefined;
+  const revisionUnavailableReason = !isClientTaskViewer && ['Waiting Approval', 'Approved', 'Completed'].includes(task.status) && !canRequestTaskRevision(currentUser, task, rolePermissions, { users, clients, projects })
+    ? taskTransitionError(currentUser, task, { ...task, status: 'Revision', isCompleted: false }, rolePermissions, { users, clients, projects })
+    : undefined;
+  const clientReviewUnavailableReason = isClientTaskViewer && task.visibility !== 'internal' && !canClientReview
+    ? 'Client review actions are available when the agency publishes this task for review.'
+    : undefined;
   const assigneeOptions = canAssignOthers
     ? (() => {
         const options = assignableTaskAssignees(currentUser, editForm.department, users, rolePermissions);
@@ -693,7 +707,25 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </div>
               </div>
               {canEditTask && completionError && <p id={completionHintId} className="text-sm text-muted">{t(completionError)}</p>}
-              {workflowKind === 'internal_review' && <section className="mt-4 border-t border-line pt-4 text-sm" aria-label={t('Internal review')}>
+              {assignmentUnavailableReason && <ActionAvailabilityNotice
+                title={t('Assignment is unavailable')}
+                description={t(assignmentUnavailableReason)}
+                tutorialId="change-assigned-staff"
+                tutorialLabel={t('Need help changing the assignee?')}
+              />}
+              {revisionUnavailableReason && <ActionAvailabilityNotice
+                title={t('Revision is unavailable')}
+                description={t(revisionUnavailableReason)}
+                tutorialId="request-task-revision"
+                tutorialLabel={t('Need help requesting a revision?')}
+              />}
+              {clientReviewUnavailableReason && <ActionAvailabilityNotice
+                title={t('Client review is not ready')}
+                description={t(clientReviewUnavailableReason)}
+                tutorialId="review-client-deliverables"
+                tutorialLabel={t('How does the approval process work?')}
+              />}
+              {workflowKind === 'internal_review' && <section data-onboarding-target="task-review" className="mt-4 border-t border-line pt-4 text-sm" aria-label={t('Internal review')}>
                 <p className="font-semibold text-ink">{t('Internal review')}</p>
                 <p className="mt-1 text-muted">{task.internalReview ? t('Reviewed by {name}', { name: users.find(user => user.id === task.internalReview?.reviewedBy)?.name || t('Team member') }) : t('Waiting for review')}</p>
                 {task.status === 'Waiting Approval' && !isWorkflowTaskSatisfied(task, tasks) && canApproveInternalReview(currentUser, task, rolePermissions, { users, clients, projects }) && <button type="button" disabled={isSubmitting || !canEditTask || Boolean(transitionError('Approved'))} onClick={async () => {
@@ -702,7 +734,12 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   if (!result.ok) { setMutationError(t(result.error || 'Unable to update the task status.')); return; }
                   if (await confirmPendingMutation('task.update')) announceTaskStatusSaved('Approved');
                 }} className="mt-3 min-h-11 rounded-control bg-accent px-4 py-2 font-semibold text-white disabled:opacity-50">{t('Approve internal review')}</button>}
-                {!task.internalReview && !canApproveInternalReview(currentUser, task, rolePermissions, { users, clients, projects }) && <p className="mt-2 text-muted">{t(transitionError('Approved') || INTERNAL_REVIEW_PERMISSION_MESSAGE)}</p>}
+                {internalReviewUnavailableReason && <ActionAvailabilityNotice
+                  title={t('Approval is unavailable')}
+                  description={t(internalReviewUnavailableReason)}
+                  tutorialId="approve-work"
+                  tutorialLabel={t('How does the approval process work?')}
+                />}
               </section>}
 
               {!isClientTaskViewer && <div className="space-y-3">
@@ -985,7 +1022,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
               {task.generatedFromDeliverable && task.startDate && task.dueDate && task.dueDate < (task.workflowGeneratedAt || '').slice(0, 10) && <p className="rounded-control border border-line bg-inset p-3 text-sm text-muted">{t('Generated late; original deadlines are preserved.')}</p>}
 
               {canDelegateAssignedTask && (
-                <form onSubmit={handleTaskDelegation} className="rounded-lg border border-accent/20 bg-accent-soft p-4 space-y-3" aria-labelledby={`${titleId}-delegation-heading`}>
+                <form onSubmit={handleTaskDelegation} data-onboarding-target="task-delegation" className="rounded-lg border border-accent/20 bg-accent-soft p-4 space-y-3" aria-labelledby={`${titleId}-delegation-heading`}>
                   <div className="flex items-start gap-3">
                     <UsersRound className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
                     <div>
@@ -1021,10 +1058,11 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   ) : (
                     <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{t('No eligible team members in this department.')}</p>
                   )}
+                  <ContextualTutorialLink tutorialId="delegate-task-to-staff" label={t('Need help assigning this task?')} />
                 </form>
               )}
 
-              <TaskOutputFiles task={task} onUploadStateChange={setOutputUpload} />
+              <div data-onboarding-target="task-output"><TaskOutputFiles task={task} onUploadStateChange={setOutputUpload} /></div>
 
               {(task.facebookPage || task.website || task.attachmentLink || canEditTask) && (
                 <div className="pt-4 border-t border-slate-100">
@@ -1075,7 +1113,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
               )}
 
               {canEditTask && ['Waiting Approval', 'Approved', 'Completed'].includes(task.status) && canRequestTaskRevision(currentUser, task, rolePermissions, { users, clients, projects }) && (
-                <form onSubmit={handleRevisionRequest} className="pt-4 border-t border-slate-100 space-y-2">
+                <form onSubmit={handleRevisionRequest} data-onboarding-target="task-review" className="pt-4 border-t border-slate-100 space-y-2">
                   <label className="block text-xs font-medium text-slate-500">{t('Revision Control')}</label>
                   <textarea
                     value={revisionNote}
@@ -1087,11 +1125,12 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   <button type="submit" disabled={isSubmitting} className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
                     <RotateCcw className="w-4 h-4" /> {isSubmitting ? t('Requesting...') : t('Request Revision')}
                   </button>
+                  <ContextualTutorialLink tutorialId="request-task-revision" label={t('Need help requesting a revision?')} />
                 </form>
               )}
 
               {canClientReview && (
-                <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 p-4 space-y-3">
+                <div data-onboarding-target="delivery-review" className="rounded-lg border border-emerald-100 bg-emerald-50/70 p-4 space-y-3">
                   <div>
                     <label className="block text-sm font-semibold text-emerald-950">{t('Ready for your review')}</label>
                     <p className="mt-1 text-xs leading-5 text-emerald-800">{t('Approve the task or request changes. Add a note if the team needs context.')}</p>
@@ -1111,6 +1150,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                       <XCircle className="w-4 h-4" /> {t('Request changes')}
                     </button>
                   </div>
+                  <ContextualTutorialLink tutorialId="review-client-deliverables" label={t('How does the approval process work?')} />
                 </div>
               )}
             </div>

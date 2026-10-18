@@ -411,6 +411,7 @@ const Dashboard: React.FC = () => {
       <PageHeader
         title={t('Portfolio work')}
         description={t('Deadlines, review risk, active companies, and commercial records in your portfolio.')}
+        onboardingTarget="dashboard-overview"
         action={(
           <div className="flex flex-wrap items-center justify-end gap-2.5">
             <BackendFreshness />
@@ -419,7 +420,7 @@ const Dashboard: React.FC = () => {
               <ArrowRight className="h-4 w-4" />
             </Link>
             {canCreateTask && (
-              <Button onClick={() => setCreateTaskModalOpen(true)}>
+              <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}>
                 <Plus className="h-4 w-4" />
                 {t('Create task')}
               </Button>
@@ -436,6 +437,7 @@ const Dashboard: React.FC = () => {
     <div className={pageShell}>
       <PageHeader
         title={isBossKoo(currentUser) ? t('Agency operations') : currentUser?.role === 'Project Manager' ? t('Portfolio work') : showClientPortal ? t('Home') : t('Dashboard')}
+        onboardingTarget="dashboard-overview"
         description={showClientPortal
           ? <>{t('Deliveries waiting for review, upcoming work, and shared updates for')} <span data-i18n-skip>{currentUser?.companyName || 'your company'}</span>.</>
           : dashboardDescription}
@@ -449,7 +451,7 @@ const Dashboard: React.FC = () => {
               </Link>
             )}
             {canCreateTask && (
-              <Button onClick={() => setCreateTaskModalOpen(true)}>
+              <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}>
                 <Plus className="h-4 w-4" />
                 {t('Create task')}
               </Button>
