@@ -236,7 +236,7 @@ export type ClientPlanSetupInput = {
   contractEndDate?: string;
 };
 
-type ProjectUpdateInput = Partial<Pick<Project, 'clientId' | 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline'>>;
+type ProjectUpdateInput = Partial<Pick<Project, 'clientId' | 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline' | 'projectManagerIds' | 'hodMemberIds'>>;
 type ClientProfileInput = Partial<Pick<ClientProfile, 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes' | 'clientSince'>>;
 type ClientPlanInput = Omit<ClientPlanSetupInput, 'clientName' | 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes'>;
 type AddMemberInput = Omit<User, 'id' | 'avatar' | 'isSuperAdmin'> & {
@@ -633,10 +633,10 @@ const appendNotification = (notifications: AppNotification[], data: Notification
 };
 
 // Task update notices go to the people accountable for the task instead of a
-// role-wide Project Manager fan-out: Boss Koo (super admin, oversight) plus the
-// PM who assigned it (assignedBy), falling back to the creator, then the owning
-// PM of the task's client or project. This keeps a Staff member who works for
-// several PMs notifying only the right one for each task. Include the displayed
+// role-wide Project Manager fan-out: Boss Koo (super admin, oversight) plus
+// eligible PM contacts and the PMs explicitly assigned to the linked project.
+// Each PM is checked against the same project scope used for task visibility.
+// Include the displayed
 // task contact (the person who assigned or created the work) whenever they can
 // still view the task, so a department-scoped lead who delegated work is not
 // left dark. Reviewers get their own transactional handoff and are filtered by
@@ -657,16 +657,18 @@ const resolveTaskUpdateRecipientIds = (
     const user = id ? users.find(item => item.id === id) : undefined;
     return user && user.role === 'Project Manager' && !user.isSuperAdmin ? user.id : undefined;
   };
-  let ownerPm = resolvePm(task.assignedBy) || resolvePm(task.createdBy);
-  if (!ownerPm) {
+  const project = task.projectId ? projects.find(item => item.id === task.projectId) : undefined;
+  const candidatePmIds = [resolvePm(task.assignedBy), resolvePm(task.createdBy)];
+  if (project) {
+    candidatePmIds.push(...(project.projectManagerIds ?? [project.createdBy]).map(resolvePm));
+  } else {
     const client = clients.find(item => normalizeClientKey(item.clientName) === normalizeClientKey(task.clientName));
-    ownerPm = resolvePm(client?.createdBy);
+    candidatePmIds.push(resolvePm(client?.createdBy));
   }
-  if (!ownerPm && task.projectId) {
-    const project = projects.find(item => item.id === task.projectId);
-    ownerPm = resolvePm(project?.createdBy);
-  }
-  if (ownerPm) recipientIds.add(ownerPm);
+  [...new Set(candidatePmIds.filter((id): id is string => Boolean(id)))].forEach(id => {
+    const manager = users.find(user => user.id === id);
+    if (manager && canViewTask(manager, task, roles, { clients, projects })) recipientIds.add(id);
+  });
   const contact = users.find(user => user.id === taskWorkContactId(task));
   if (includeTaskContact && contact && contact.hasLogin !== false && contact.role !== 'Client'
     && canViewTask(contact, task, roles, { clients, projects })) recipientIds.add(contact.id);
@@ -688,7 +690,7 @@ const localHodReviewNotifications = (users: User[], roles: CustomRole[], before:
   if (after.status !== 'Waiting Approval' || before?.status === after.status) return [];
   return taskUpdateNotifications(getDepartmentReviewers(users, after, roles, scope).map(user => user.id), {
     title: 'Task Ready for Approval',
-    message: `"${after.title}" is ready for department review.`,
+    message: `"${after.title}" is ready for review.`,
     route: { page: 'tasks', entityId: after.id },
     iconType: 'status',
   }, actorId);
@@ -3344,6 +3346,10 @@ export const useStore = create<StoreState>()(
           services,
           startDate,
           deadline,
+          projectManagerIds: isBossKoo(currentUser)
+            ? Array.from(new Set((projectData.projectManagerIds || []).filter(id => state.users.some(user => user.id === id && user.role === 'Project Manager' && !isBossKoo(user)))))
+            : currentUser.role === 'Project Manager' ? [currentUser.id] : [],
+          hodMemberIds: Array.from(new Set((projectData.hodMemberIds || []).filter(id => state.users.some(user => user.id === id && isHodUser(user, state.rolePermissions))))),
           createdBy: currentUser.id,
           id: nowId('P'),
           updatedAt: new Date().toISOString(),
@@ -3360,6 +3366,12 @@ export const useStore = create<StoreState>()(
         const project = state.projects.find(item => item.id === projectId);
         if (!currentUser || !project || !canEditProject(currentUser, project, state.rolePermissions)) {
           return { ok: false, error: 'You do not have permission to edit this project.' };
+        }
+        if (data.projectManagerIds !== undefined && !isBossKoo(currentUser)) {
+          return { ok: false, error: 'Only Boss Koo can change Project Manager assignments.' };
+        }
+        if (data.hodMemberIds !== undefined && !isBossKoo(currentUser) && currentUser.role !== 'Project Manager') {
+          return { ok: false, error: 'Only Boss Koo or a Project Manager can change HOD project membership.' };
         }
 
         const clientName = data.clientName !== undefined ? data.clientName.trim() : project.clientName;
@@ -3403,6 +3415,12 @@ export const useStore = create<StoreState>()(
           services,
           startDate,
           deadline,
+          ...(data.projectManagerIds === undefined ? {} : {
+            projectManagerIds: Array.from(new Set(data.projectManagerIds.filter(id => state.users.some(user => user.id === id && user.role === 'Project Manager' && !isBossKoo(user))))),
+          }),
+          ...(data.hodMemberIds === undefined ? {} : {
+            hodMemberIds: Array.from(new Set(data.hodMemberIds.filter(id => state.users.some(user => user.id === id && isHodUser(user, state.rolePermissions))))),
+          }),
           updatedAt: new Date().toISOString(),
         };
 

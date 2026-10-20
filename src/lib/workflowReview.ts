@@ -4,7 +4,7 @@ import { canReviewTaskInternally } from './taskWorkflowAccess';
 import { isTaskCompleted } from './taskCompletion';
 import { getTaskProgress } from './taskProgress';
 
-export const INTERNAL_REVIEW_PERMISSION_MESSAGE = 'Only the authorized department reviewer or Boss Koo can approve internal review.';
+export const INTERNAL_REVIEW_PERMISSION_MESSAGE = 'Only an authorized project manager, department reviewer, or Boss Koo can approve internal review.';
 export const isWorkflowTask = (task: Task) => Boolean(task.generatedFromDeliverable || task.workflowStepId);
 
 export const getWorkflowStepKind = (task: Task, cycles: ServiceCycle[] = [], deliverables: Deliverable[] = []): WorkflowStepKind | undefined => {

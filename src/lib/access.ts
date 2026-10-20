@@ -5,9 +5,8 @@ import { getMemberDepartments, isMemberInDepartment } from './departments';
 export type DashboardPersona = 'boss' | 'projectManager' | 'operation' | 'account' | 'production' | 'client';
 
 /**
- * Optional ownership context for scoped-role visibility. When supplied, a
- * Project Managers also see tasks and projects that belong to the
- * companies they created. Boss Koo is never scoped.
+ * Optional membership context for scoped-role visibility. Project Managers
+ * need explicit project membership for linked work; Boss Koo is never scoped.
  */
 export type VisibilityScope = {
   users?: readonly User[];
@@ -47,23 +46,63 @@ const matchesOwnedClient = (user: User, task: Task, scope: VisibilityScope) => (
 
 const ownedProjectIds = (user: User, scope: VisibilityScope) => new Set(
   (scope.projects || [])
-    .filter(project => project.createdBy === user.id)
+    .filter(project => isProjectAssignedToUser(user, project))
     .map(project => project.id)
 );
 
-export const isTaskInOwnedPortfolio = (user: User, task: Task, scope: VisibilityScope) => (
-  matchesOwnedClient(user, task, scope)
-  || (Boolean(task.projectId) && ownedProjectIds(user, scope).has(task.projectId as string))
-);
+/**
+ * Project managers are scoped by project assignment, not company ownership.
+ * A missing membership array is treated as a legacy record whose creator was
+ * its original PM; an explicit empty array means that no PM is assigned.
+ */
+export const isProjectAssignedToUser = (user: User | null | undefined, project: Project) => {
+  if (!user) return false;
+  if (isBossKoo(user)) return true;
+  if (user.role === 'Project Manager') {
+    return project.projectManagerIds !== undefined
+      ? project.projectManagerIds.includes(user.id)
+      : project.createdBy === user.id;
+  }
+  if (user.role === 'HOD') {
+    return project.hodMemberIds !== undefined
+      ? project.hodMemberIds.includes(user.id)
+      : project.createdBy === user.id;
+  }
+  return false;
+};
+
+const isProjectInHodScope = (user: User, projectId: string, scope: VisibilityScope) => {
+  const project = scope.projects?.find(item => item.id === projectId);
+  return Boolean(project && isProjectAssignedToUser(user, project));
+};
+
+export const isTaskInOwnedPortfolio = (user: User, task: Task, scope: VisibilityScope) => {
+  if (task.projectId) return ownedProjectIds(user, scope).has(task.projectId);
+  return matchesOwnedClient(user, task, scope);
+};
 
 /**
- * Client keys a user owns outright: their own company records plus the clients
- * of their own projects. Deliberately excludes work they are merely assigned
- * to, so commercial and plan cards never surface another owner's company.
+ * Client keys available to a Project Manager through an assigned project, or
+ * a newly created company that has no project yet. This keeps company-level
+ * service cards from surfacing a company attached only to another PM's work.
  */
 export const getOwnedPortfolioClientKeys = (user: User, scope: VisibilityScope = {}) => {
-  const keys = ownedClientKeys(user, scope);
-  (scope.projects || [])
+  const keys = new Set<string>();
+  const projects = scope.projects || [];
+  if (user.role === 'Project Manager') {
+    projects
+      .filter(project => isProjectAssignedToUser(user, project))
+      .forEach(project => keys.add(project.clientName.trim().toLowerCase()));
+    (scope.clients || [])
+      .filter(client => client.createdBy === user.id
+        && !projects.some(project => getClientKey(project.clientName) === getClientKey(client.clientName)))
+      .forEach(client => keys.add(client.clientName.trim().toLowerCase()));
+    return keys;
+  }
+  (scope.clients || [])
+    .filter(client => client.createdBy === user.id)
+    .forEach(client => keys.add(client.clientName.trim().toLowerCase()));
+  projects
     .filter(project => project.createdBy === user.id)
     .forEach(project => keys.add(project.clientName.trim().toLowerCase()));
   return keys;
@@ -420,13 +459,15 @@ export const canOpenServiceClient = (
   if (isBossKoo(user)) return true;
   if (user.role === 'Project Manager') {
     if (!clientKey) return false;
-    const ownsProfile = profiles.some(profile => profile.createdBy === user.id && getClientKey(profile.clientName) === clientKey);
-    if (ownsProfile) return true;
-    return tasks.some(task => (
-      getClientKey(task.clientName) === clientKey
-      && (task.createdBy === user.id || task.assignedTo === user.id)
-    )) || getVisibleProjects(user, projects, tasks, customRoles, { clients: profiles })
-      .some(project => getClientKey(project.clientName) === clientKey);
+    const clientProjects = projects.filter(project => getClientKey(project.clientName) === clientKey);
+    if (clientProjects.length > 0) {
+      return getVisibleProjects(user, clientProjects, tasks, customRoles, { clients: profiles, projects })
+        .some(project => getClientKey(project.clientName) === clientKey);
+    }
+    const ownsProjectlessProfile = profiles.some(profile => profile.createdBy === user.id && getClientKey(profile.clientName) === clientKey);
+    if (ownsProjectlessProfile) return true;
+    return getVisibleTasks(user, tasks, customRoles, { clients: profiles, projects })
+      .some(task => getClientKey(task.clientName) === clientKey);
   }
   if (hasPermission(user, 'viewAllServiceClients', customRoles)) return true;
   if (!['Staff', 'HOD'].includes(user.role) || !hasPermission(user, 'viewAssignedServiceClients', customRoles)) return false;
@@ -556,13 +597,17 @@ export const canAssignTasksToOthers = (
   task?: Task,
   scope: VisibilityScope = {},
 ) => {
+  if (user?.role === 'Project Manager' && task?.projectId
+    && !ownedProjectIds(user, scope).has(task.projectId)) return false;
+  if (user?.role === 'HOD' && task?.projectId
+    && !isProjectInHodScope(user, task.projectId, scope)) return false;
   if (task && user && ['Staff', 'HOD'].includes(user.role)
     && !isBossKoo(user) && !isMemberInDepartment(user, task.department)) return false;
   return (
   isBossKoo(user)
   || (user?.role !== 'HOD' && hasPermission(user, 'editTasks', customRoles))
   || (user?.role === 'Project Manager' && Boolean(task)
-    && (task?.assignedTo === user.id || task?.createdBy === user.id || isTaskInOwnedPortfolio(user, task as Task, scope)))
+    && (task?.assignedTo === user.id || (!task?.assignedTo && task?.assignedBy === user.id) || task?.createdBy === user.id || isTaskInOwnedPortfolio(user, task as Task, scope)))
   || (isDepartmentScopedUser(user, customRoles)
     && Boolean(task)
     && task?.assignedTo === user?.id
@@ -583,14 +628,15 @@ export const canViewTask = (
   }
   if (isBossKoo(user)) return true;
   if (user.role === 'Project Manager') {
-    const projectIds = ownedProjectIds(user, scope);
+    if (task.projectId) return ownedProjectIds(user, scope).has(task.projectId);
     return task.assignedTo === user.id
+      || (!task.assignedTo && task.assignedBy === user.id)
       || task.createdBy === user.id
-      || matchesOwnedClient(user, task, scope)
-      || (Boolean(task.projectId) && projectIds.has(task.projectId as string));
+      || matchesOwnedClient(user, task, scope);
   }
   if (user.role !== 'HOD' && canViewAllTasks(user, customRoles)) return true;
   if (['Staff', 'HOD'].includes(user.role)) {
+    if (user.role === 'HOD' && task.projectId && !isProjectInHodScope(user, task.projectId, scope)) return false;
     return task.assignedTo === user.id
       || task.createdBy === user.id
       || (isDepartmentScopedUser(user, customRoles) && isMemberInDepartment(user, task.department));
@@ -603,14 +649,19 @@ export const canEditTask = (
   task: Task,
   customRoles: CustomRole[] = [],
   scope: VisibilityScope = {}
-) => (
-  isBossKoo(user) ||
-  (user?.role !== 'HOD' && hasPermission(user, 'editTasks', customRoles)) ||
-  (['Staff', 'HOD', 'Project Manager'].includes(user?.role || '') && task.assignedTo === user.id) ||
-  (['Staff', 'HOD', 'Project Manager'].includes(user?.role || '') && task.createdBy === user.id) ||
-  (user?.role === 'Project Manager' && isTaskInOwnedPortfolio(user, task, scope)) ||
-  (isDepartmentScopedUser(user, customRoles) && isMemberInDepartment(user, task.department))
-);
+) => {
+  if (!user) return false;
+  if (user.role === 'Project Manager' && task.projectId
+    && !ownedProjectIds(user, scope).has(task.projectId)) return false;
+  if (user.role === 'HOD' && task.projectId && !isProjectInHodScope(user, task.projectId, scope)) return false;
+  return isBossKoo(user)
+    || (user.role !== 'HOD' && hasPermission(user, 'editTasks', customRoles))
+    || (['Staff', 'HOD', 'Project Manager'].includes(user.role) && task.assignedTo === user.id)
+    || (['Staff', 'HOD', 'Project Manager'].includes(user.role) && task.createdBy === user.id)
+    || (user.role === 'Project Manager' && !task.projectId && !task.assignedTo && task.assignedBy === user.id)
+    || (user.role === 'Project Manager' && isTaskInOwnedPortfolio(user, task, scope))
+    || (isDepartmentScopedUser(user, customRoles) && isMemberInDepartment(user, task.department));
+};
 // Department oversight permits routine edits, but destructive actions require
 // the same ownership/assignment and management authority as delegation.
 export const canDeleteTask = (
@@ -642,7 +693,10 @@ export const canEditProject = (
   customRoles: CustomRole[] = []
 ) => {
   void customRoles;
-  return Boolean(user) && (isBossKoo(user) || project.createdBy === user.id);
+  if (!user) return false;
+  return isBossKoo(user)
+    || (user.role === 'Project Manager' && isProjectAssignedToUser(user, project))
+    || (user.role !== 'Project Manager' && project.createdBy === user.id);
 };
 export const canDeleteProject = canEditProject;
 export const canReviewTaskAsClient = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
@@ -748,16 +802,12 @@ export const getVisibleProjects = (
       .filter((id): id is string => Boolean(id))
   );
   if (user.role === 'Project Manager') {
-    const clientIds = ownedClientIds(user, scope);
-    const clientKeys = ownedClientKeys(user, scope);
-    return projects.filter(project => (
-      project.createdBy === user.id
-      || (project.clientId ? clientIds.has(project.clientId) : clientKeys.has(getClientKey(project.clientName)))
-      || visibleProjectIds.has(project.id)
-    ));
+    return projects.filter(project => isProjectAssignedToUser(user, project));
   }
   if (['Staff', 'HOD'].includes(user.role)) {
-    return projects.filter(project => project.createdBy === user.id || visibleProjectIds.has(project.id));
+    return projects.filter(project => user.role === 'HOD' && project.hodMemberIds !== undefined
+      ? project.hodMemberIds.includes(user.id)
+      : project.createdBy === user.id || visibleProjectIds.has(project.id));
   }
   return [];
 };
@@ -797,7 +847,7 @@ export const canLinkTaskToProject = (
   if (project.createdBy === user.id) return true;
 
   const linkedTasks = tasks.filter(task => task.projectId === project.id);
-  const hasVisibleProjectTask = getVisibleTasks(user, linkedTasks, customRoles).length > 0;
+  const hasVisibleProjectTask = getVisibleTasks(user, linkedTasks, customRoles, scope).length > 0;
   if (hasVisibleProjectTask) return true;
 
   // Curated project availability is independent of whether it already has

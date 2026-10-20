@@ -24,16 +24,16 @@ describe('independent reachable HOD review', () => {
       expect(canReviewTaskInternally(pm, owned, [], scope)).toBe(true);
     }
   });
-  it('ignores an unlinked HOD but retains synthetic local users', () => {
+  it('ignores an unlinked HOD while retaining HOD and responsible PM review authority', () => {
     expect(getDepartmentReviewers([pm, { ...hod, hasLogin: false }], task).map(user => user.id)).toEqual([pm.id]);
-    expect(getDepartmentReviewers([pm, hod], task).map(user => user.id)).toEqual([hod.id]);
+    expect(getDepartmentReviewers([pm, hod], task).map(user => user.id)).toEqual([hod.id, pm.id]);
   });
   it('gives temporary independent cover authority until expiry', () => {
     const covered = { ...task, reviewCover: { reviewerId: pm.id, expiresAt: new Date(Date.now() + 60000).toISOString() } };
     expect(getDepartmentReviewers(scope.users, covered, [], scope).map(user => user.id)).toEqual([pm.id]);
     expect(canReviewTaskInternally(hod, covered, [], scope)).toBe(false);
     expect(canReviewTaskInternally(pm, covered, [], scope)).toBe(true);
-    expect(getDepartmentReviewers(scope.users, { ...covered, reviewCover: { ...covered.reviewCover, expiresAt: '2000-01-01T00:00:00Z' } }).map(user => user.id)).toEqual([hod.id]);
+    expect(getDepartmentReviewers(scope.users, { ...covered, reviewCover: { ...covered.reviewCover, expiresAt: '2000-01-01T00:00:00Z' } }).map(user => user.id)).toEqual([hod.id, pm.id]);
   });
   it('denies out-of-department reviewer transitions while leaving routine editing available', () => {
     const foreign = { ...task, department: 'Video Editor' as const, assignedTo: hod.id, status: 'Waiting Approval' };

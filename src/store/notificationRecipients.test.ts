@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { CustomRole, Task, User } from '../types';
+import type { CustomRole, Project, Task, User } from '../types';
 import { defaultRolePermissions } from '../lib/access';
 import { shouldNotifyClientForTask, useStore } from './index';
 
@@ -59,6 +59,24 @@ describe('task update notification recipients', () => {
     expect(recipients).toEqual([boss.id, pmA.id].sort());
     expect(recipients).not.toContain(pmB.id);
     expect(statusNotices.every(notification => !notification.targetRole)).toBe(true);
+  });
+
+  it('notifies only the assigned PM when a task author belongs to another portfolio', () => {
+    const project: Project = {
+      id: 'project-notify-b', clientId: 'client-notify', clientName: 'Acme', projectName: 'Project B',
+      services: ['Design'], startDate: '2026-09-01', deadline: '', createdBy: pmA.id,
+      projectManagerIds: [pmB.id],
+    };
+    useStore.setState({
+      projects: [project],
+      tasks: [{ ...task, projectId: project.id, projectName: project.projectName, createdBy: pmA.id }],
+    });
+
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress').ok).toBe(true);
+    const recipients = useStore.getState().notifications
+      .filter(notification => notification.title === 'Task Status Updated')
+      .map(notification => notification.targetUserId).sort();
+    expect(recipients).toEqual([boss.id, pmB.id].sort());
   });
 
   it.each(['HOD', 'Staff'] as const)('notifies an assigning %s HOD contact and retains PM oversight', role => {

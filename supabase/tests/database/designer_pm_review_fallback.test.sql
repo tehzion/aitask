@@ -72,7 +72,7 @@ reset role;
 select is((select count(*)::integer from public.aitask_entities where workspace_id='pgtap-pm-fallback' and entity_type='notification' and parent_id='fallback-task' and data->>'targetUserId'='fallback-hod'),1,'configured HOD receives the next handoff');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001402',true);
 set local role authenticated;
-select is((pg_temp.patch_task('fallback-task','{"status":"Approved"}')->>'ok')::boolean,false,'PM fallback stops when a Designer HOD is configured');
+select is((pg_temp.patch_task('fallback-task','{"status":"Approved"}')->>'ok')::boolean,true,'responsible PM can approve when a Designer HOD is configured');
 reset role;
 select * from finish();
 rollback;

@@ -32,10 +32,10 @@ describe('department PM fallback reviewer', () => {
   it('cannot move another department into the PM fallback during approval', () => {
     expect(taskTransitionError(pm, { ...task, department: 'Video Editor' }, { ...task, status: 'Approved', isCompleted: false }, [], scope)).toBe('Reassign work before submitting it for review.');
   });
-  it('retains HOD authority once configured', () => {
+  it('keeps HOD review while preserving the responsible PM authority', () => {
     const users = [...scope.users, hod];
-    expect(getDepartmentReviewers(users, task, [], scope).map(u => u.id)).toEqual(['hod']);
-    expect(canReviewTaskInternally(pm, task, [], { ...scope, users })).toBe(false);
+    expect(getDepartmentReviewers(users, task, [], scope).map(u => u.id)).toEqual(['hod', 'pm']);
+    expect(canReviewTaskInternally(pm, task, [], { ...scope, users })).toBe(true);
     expect(canReviewTaskInternally(pm, { ...task, department: 'Video Editor' }, [], scope)).toBe(true);
   });
   it('uses canonical actor-bound context over a filtered roster', () => {

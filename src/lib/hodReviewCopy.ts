@@ -34,7 +34,7 @@ registerUiTranslations({
   "Approve with audited override": "特殊批准并记录原因",
   "Review override saved with your reason.": "特殊批准及原因已保存。",
   "Review cover and lead saved.": "代审和责任主管已保存。",
-  "Only an independent reviewer can approve submitted work.": "只有独立审核人可以批准已提交的成果。",
+  "Only an authorized project manager, department reviewer, or Boss Koo can approve submitted work.": "只有获授权的项目经理、所属部门审核人或 Boss Koo 可以批准已送审的工作。",
   "Only Boss Koo can record an explicit review override.": "只有Boss Koo可以记录特殊审核批准。",
   "Review decisions are managed by the server.": "审核决定由服务器管理。",
 });

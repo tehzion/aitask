@@ -107,17 +107,14 @@ describe('enforced internal workflow review', () => {
     expect(getTaskAccess(boss, task(1)).canDelete).toBe(false);
   });
 
-  it('requires the department HOD before a responsible PM can finalize review', () => {
+  it('lets the responsible PM override an internal-review decision within their portfolio', () => {
     complete(0); submit(1);
     useStore.setState({ currentUser: { ...hod, departments: ['Designer'] } });
     expect(useStore.getState().updateTaskStatus(ids[1], 'Approved').ok).toBe(false);
     const pm: User = { id: 'responsible-pm', name: 'PM', role: 'Project Manager', departments: ['Management'] };
     useStore.setState({ currentUser: pm, users: [...useStore.getState().users, pm], clients: useStore.getState().clients.map(item => ({ ...item, createdBy: pm.id })) });
-    expect(useStore.getState().updateTaskStatus(ids[1], 'Approved').ok).toBe(false);
-    expect(useStore.getState().updateTaskStatus(ids[1], 'Completed').ok).toBe(false);
-    approve(1);
-    useStore.setState({ currentUser: pm });
+    expect(useStore.getState().updateTaskStatus(ids[1], 'Approved').ok).toBe(true);
     expect(useStore.getState().updateTaskStatus(ids[1], 'Completed').ok).toBe(true);
-    expect(task(1).internalReview?.reviewedBy).toBe(hod.id);
+    expect(task(1).internalReview?.reviewedBy).toBe(pm.id);
   });
 });

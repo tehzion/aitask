@@ -12,16 +12,25 @@ export const isIndependentTaskReviewer = (user: User, task: Partial<Task>) => us
 export const canBeTaskReviewLead = (user: User, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => user.hasLogin !== false
   && ((isHodUser(user, roles) && isMemberInDepartment(user, task.department)) || user.role === 'Project Manager' && canEditTask(user, task, roles, scope));
 const isResponsibleProjectManager = (user: User | null | undefined, task: Task, scope: VisibilityScope) => Boolean(user && (isBossKoo(user) || user.role === 'Project Manager'
-  && (task.createdBy === user.id || task.assignedTo === user.id || isTaskInOwnedPortfolio(user, task, scope))));
+  && (task.projectId
+    ? isTaskInOwnedPortfolio(user, task, scope)
+    : task.createdBy === user.id || task.assignedTo === user.id || !task.assignedTo && task.assignedBy === user.id || isTaskInOwnedPortfolio(user, task, scope))));
 export const canManageTaskReview = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => Boolean(user && isResponsibleProjectManager(user, task, scope) && canEditTask(user, task, roles, scope));
 export const canReviewTaskInternally = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
-  if (!user || user.hasLogin === false || !isIndependentTaskReviewer(user, task)) return false;
-  if (isBossKoo(user)) return true;
+  if (!user || user.hasLogin === false) return false;
+  // Boss Koo must stay independent or provide an explicit self-approval reason.
+  if (isBossKoo(user)) return isIndependentTaskReviewer(user, task);
+  // Prefer the actor-bound server decision when a hosted context is present.
   if (task.reviewAccess && (!task.reviewAccess.expiresAt || Date.parse(task.reviewAccess.expiresAt) > Date.now())) return task.reviewAccess.actorId === user.id && task.reviewAccess.canApprove;
+  // The responsible PM is the project-scoped authority above the HOD lane,
+  // including when the PM requested or was assigned the review.
+  if (user.role === 'Project Manager' && canManageTaskReview(user, task, roles, scope)) return true;
+  if (!isIndependentTaskReviewer(user, task)) return false;
   const cover = task.reviewCover && Date.parse(task.reviewCover.expiresAt) > Date.now() ? task.reviewCover : undefined;
   if (cover && scope.users?.some(member => member.id === cover.reviewerId && canBeTaskReviewLead(member, task, roles, scope) && isIndependentTaskReviewer(member, task))) return user.id === cover.reviewerId;
-  return isHodUser(user, roles) && isMemberInDepartment(user, task.department)
-    || Boolean(scope.users && getDepartmentReviewers(scope.users, task, roles, scope).some(reviewer => reviewer.id === user.id));
+  return canEditTask(user, task, roles, scope)
+    && (isHodUser(user, roles) && isMemberInDepartment(user, task.department)
+      || Boolean(scope.users && getDepartmentReviewers(scope.users, task, roles, scope).some(reviewer => reviewer.id === user.id)));
 };
 
 export const canRequestTaskRevision = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => Boolean(user
@@ -43,11 +52,10 @@ export const taskTransitionError = (user: User | null | undefined, before: Task 
     && ['assignedTo', 'department'].some(field => Object.prototype.hasOwnProperty.call(after, field) && before[field as 'assignedTo' | 'department'] !== after[field as 'assignedTo' | 'department'])) return 'Reassign work before submitting it for review.';
   if (before?.status === after.status && before.isCompleted === after.isCompleted) return undefined;
   const override = Boolean(user && isBossKoo(user) && after.reviewOverrideReason?.trim() && after.reviewOverrideReason.trim().length <= 2000);
-  // Approval always belongs to the configured reviewer (department HOD or review
-  // cover). A PM who opted the task out of internal approval finalizes it
-  // directly via completion; they may not self-approve, matching the database.
+  // HODs and covers handle the department lane; the responsible PM can also
+  // approve within their portfolio. Boss Koo's self-approval needs a reason.
   if (after.status === 'Approved' && (!before || before.status !== 'Waiting Approval'
-    || (!canReviewTaskInternally(user, before, roles, scope) && !override))) return 'Only the department reviewer can approve submitted work.';
+    || (!canReviewTaskInternally(user, before, roles, scope) && !override))) return 'Only an authorized project manager, department reviewer, or Boss Koo can approve submitted work.';
   // Client review and PM finalization are independent. The responsible PM may
   // complete client-visible work at 100%; customer acceptance remains available
   // as a separate, audited decision and does not have to happen first.
@@ -129,9 +137,10 @@ export const assignableTaskAssignees = (
 export const getDepartmentReviewers = (users: readonly User[], task: Pick<Task, 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
   const eligible = users.filter(user => user.hasLogin !== false && isIndependentTaskReviewer(user, task));
   const cover = task.reviewCover && Date.parse(task.reviewCover.expiresAt) > Date.now() ? eligible.find(user => user.id === task.reviewCover?.reviewerId && canBeTaskReviewLead(user, task as Task, roles, scope)) : undefined;
-  if (cover) return [cover];
   const hods = eligible.filter(user => isHodUser(user, roles) && isMemberInDepartment(user, task.department));
-  if (hods.length) return hods;
   const pms = eligible.filter(user => user.role === 'Project Manager' && canEditTask(user, task as Task, roles, scope));
-  return pms.length ? pms : users.filter(user => user.hasLogin !== false && isBossKoo(user));
+  const fallback = cover ? [cover] : hods.length ? hods : pms.length ? pms : users.filter(user => user.hasLogin !== false && isBossKoo(user));
+  const responsiblePms = users.filter(user => user.hasLogin !== false && user.role === 'Project Manager'
+    && canManageTaskReview(user, task as Task, roles, scope));
+  return [...new Map([...fallback, ...responsiblePms].map(user => [user.id, user])).values()];
 };

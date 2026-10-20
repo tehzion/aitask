@@ -234,7 +234,6 @@ describe('staff permission matrix', () => {
     ]);
     expect(getAssignableProjects(admin, companySet, tasks, [], members).map(project => project.id)).toEqual([
       'project-acme',
-      'project-beta',
     ]);
   });
 
@@ -654,6 +653,45 @@ describe('staff permission matrix', () => {
     expect(canEditTask(admin, unrelated)).toBe(false);
   });
 
+  it('uses explicit project membership for PM access and ignores creator, task, and company ownership outside it', () => {
+    const otherPm: User = { ...admin, id: 'pm-b', name: 'Other PM' };
+    const scopeProjects: Project[] = [
+      { ...projects[0], id: 'pm-a-project', createdBy: otherPm.id, projectManagerIds: [admin.id] },
+      { ...projects[1], id: 'pm-b-project', createdBy: admin.id, projectManagerIds: [otherPm.id] },
+      { ...projects[1], id: 'unassigned-project', createdBy: admin.id, projectManagerIds: [] },
+    ];
+    const scopedTasks = [
+      makeTask({ id: 'pm-a-work', projectId: 'pm-a-project', createdBy: otherPm.id, assignedTo: otherStaff.id }),
+      makeTask({ id: 'pm-b-work', projectId: 'pm-b-project', createdBy: admin.id, assignedTo: admin.id }),
+      makeTask({ id: 'unassigned-work', projectId: 'unassigned-project', createdBy: admin.id, assignedTo: admin.id }),
+    ];
+    const scope = { clients: [{ id: 'owned-client', clientName: 'Acme', createdBy: admin.id, createdAt: '', updatedAt: '' }], projects: scopeProjects };
+
+    expect(getVisibleProjects(admin, scopeProjects, scopedTasks, [], scope).map(project => project.id)).toEqual(['pm-a-project']);
+    expect(getVisibleTasks(admin, scopedTasks, [], scope).map(task => task.id)).toEqual(['pm-a-work']);
+    expect(canEditTask(admin, scopedTasks[1], [], scope)).toBe(false);
+    expect(canEditTask(admin, scopedTasks[2], [], scope)).toBe(false);
+    expect(canEditProject(admin, scopeProjects[1])).toBe(false);
+    expect(canEditProject(admin, scopeProjects[2])).toBe(false);
+    expect(getVisibleProjects(superAdmin, scopeProjects, scopedTasks, [], scope).map(project => project.id)).toHaveLength(3);
+  });
+
+  it('limits HOD project-linked work to projects assigned to the HOD', () => {
+    const hod: User = { ...staff, id: 'hod-scope', role: 'HOD' };
+    const projectsForHod: Project[] = [
+      { ...projects[0], id: 'hod-project', hodMemberIds: [hod.id] },
+      { ...projects[1], id: 'other-hod-project', hodMemberIds: ['another-hod'] },
+    ];
+    const departmentTasks = [
+      makeTask({ id: 'hod-in-scope', projectId: 'hod-project', department: 'Designer', assignedTo: otherStaff.id }),
+      makeTask({ id: 'hod-out-of-scope', projectId: 'other-hod-project', department: 'Designer', assignedTo: otherStaff.id }),
+    ];
+    const scope = { projects: projectsForHod };
+
+    expect(getVisibleTasks(hod, departmentTasks, [], scope).map(task => task.id)).toEqual(['hod-in-scope']);
+    expect(getVisibleProjects(hod, projectsForHod, departmentTasks, [], scope).map(project => project.id)).toEqual(['hod-project']);
+  });
+
   it('keeps task-detail decisions aligned across Boss Koo, PM, HOD, and Staff', () => {
     const pmPortfolioTask = makeTask({ id: 'pm-portfolio', clientName: 'Owned Co', createdBy: otherStaff.id, assignedTo: otherStaff.id });
     const pmAssignedTask = makeTask({ id: 'pm-assigned', clientName: 'Other Co', createdBy: otherStaff.id, assignedTo: admin.id });
@@ -800,10 +838,15 @@ describe('project manager ownership follow-ups', () => {
     expect(canRenameClient(superAdmin, 'Acme', [ownedProfile])).toBe(true);
   });
 
-  it('scopes the service workspace to owned clients or owned tasks', () => {
+  it('scopes service workspaces to assigned projects, or a PM-owned company with no projects yet', () => {
     expect(canOpenServiceClient(admin, 'Acme', [], [], [ownedProfile])).toBe(true);
     expect(canOpenServiceClient(admin, 'Beta', [], [], [ownedProfile, otherProfile])).toBe(false);
     expect(canOpenServiceClient(superAdmin, 'Beta', [], [], [])).toBe(true);
+
+    const foreignProject: Project = { id: 'foreign-acme-project', clientName: 'Acme', projectName: 'Foreign project', services: ['Design'], startDate: '', deadline: '', createdBy: admin.id, projectManagerIds: ['admin-2'] };
+    const assignedProject: Project = { ...foreignProject, id: 'assigned-acme-project', projectName: 'Assigned project', projectManagerIds: [admin.id] };
+    expect(canOpenServiceClient(admin, 'Acme', [], [], [ownedProfile], [foreignProject])).toBe(false);
+    expect(canOpenServiceClient(admin, 'Acme', [], [], [ownedProfile], [assignedProject])).toBe(true);
 
     const ownTask = makeTask({ id: 'admin-own-service', clientName: 'Beta', createdBy: admin.id, assignedTo: otherStaff.id });
     expect(canOpenServiceClient(admin, 'Beta', [ownTask], [], [])).toBe(true);

@@ -263,6 +263,7 @@ describe('task store authorization', () => {
         services: ['Design'],
         startDate: '2026-07-13',
         deadline: '',
+        projectManagerIds: [owningPm.id],
       }],
     });
 

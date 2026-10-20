@@ -49,11 +49,11 @@ insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,d
 ('unlinked-hod','hod-handoff-test',null,'Unlinked HOD',null,'HOD','Management',array['Management'],false);
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
 ('hod-handoff-test','task','unlinked-review','{"id":"unlinked-review","clientName":"Company","title":"Work with an unlinked HOD","department":"Management","assignedTo":"audit-pm","createdBy":"audit-pm","status":"In Progress","isCompleted":false,"visibility":"internal","clientApprovalStatus":"Pending"}');
-select jsonb_build_object('probe','reviewer without login suppresses PM fallback','reviewers',(select jsonb_agg(id) from private.aitask_task_reviewers('hod-handoff-test',(select data from public.aitask_entities where workspace_id='hod-handoff-test' and entity_id='unlinked-review'))));
+select jsonb_build_object('probe','unlinked HOD does not suppress responsible PM review','reviewers',(select jsonb_agg(id) from private.aitask_task_reviewers('hod-handoff-test',(select data from public.aitask_entities where workspace_id='hod-handoff-test' and entity_id='unlinked-review'))));
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005364',true);
 set local role authenticated;
-select is((pg_temp.audit_update('unlinked-review','{"status":"Waiting Approval"}')->>'ok')::boolean,false,'PM cannot submit work when its only configured HOD is unlinked and PM would self-review');
-select is((pg_temp.audit_update('unlinked-review','{"status":"Approved"}')->>'ok')::boolean,false,'PM cannot self-approve');
+select is((pg_temp.audit_update('unlinked-review','{"status":"Waiting Approval"}')->>'ok')::boolean,true,'responsible PM may submit work when the department HOD is unavailable');
+select is((pg_temp.audit_update('unlinked-review','{"status":"Approved"}')->>'ok')::boolean,true,'responsible PM may approve work they submitted');
 reset role;
 
 select set_config('request.jwt.claim.sub','',true);
@@ -82,7 +82,7 @@ insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) valu
 ('hod-handoff-test','deliverable','file-output','{"id":"file-output","clientId":"file-client","clientName":"Company","cycleId":"file-cycle","taskIds":["file-task"],"attachments":[],"status":"In Progress"}'),
 ('hod-handoff-test','task','file-task','{"id":"file-task","clientId":"file-client","clientName":"Company","serviceCycleId":"file-cycle","deliverableId":"file-output","title":"File output","department":"Designer","assignedTo":"handoff-staff","createdBy":"audit-pm","status":"In Progress","visibility":"client-visible"}');
 insert into storage.objects(bucket_id,name,owner_id,metadata) values('client-service-files','hod-handoff-test/file-client/file-cycle/owned.pdf','00000000-0000-0000-0000-000000005361','{"mimetype":"application/pdf"}');
-select is((select string_agg(id,',') from private.aitask_task_reviewers('hod-handoff-test',(select data||jsonb_build_object('reviewCover',jsonb_build_object('reviewerId','audit-pm','expiresAt',now()-interval '1 second')) from public.aitask_entities where entity_id='file-task'))),'handoff-hod','expired cover restores the independent department reviewer');
+select ok((select array_agg(id) @> array['handoff-hod','audit-pm'] from private.aitask_task_reviewers('hod-handoff-test',(select data||jsonb_build_object('reviewCover',jsonb_build_object('reviewerId','audit-pm','expiresAt',now()-interval '1 second')) from public.aitask_entities where entity_id='file-task'))),'expired cover restores department review and preserves responsible PM authority');
 update auth.users set banned_until=now()+interval '1 day' where id='00000000-0000-0000-0000-000000005362';
 select ok(not exists(select 1 from private.aitask_task_reviewers('hod-handoff-test',(select data from public.aitask_entities where entity_id='file-task')) where id='handoff-hod'),'banned Auth account cannot receive review handoff');
 update auth.users set banned_until=null where id='00000000-0000-0000-0000-000000005362';

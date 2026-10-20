@@ -19,6 +19,7 @@ export const notificationCategoryLabel = (category: NotificationCategory, locale
 // Match complete system templates; captured names, titles, and notes stay verbatim.
 const patterns: [RegExp, (...values: string[]) => string][] = [
   [/^"([\s\S]+)" is ready for department review\.$/, title => `“${title}”已准备好进行部门审核。`],
+  [/^"([\s\S]+)" is ready for review\.$/, title => `“${title}”已准备好进行审核。`],
   [/^"([\s\S]+)" is ready for client review\.$/, title => `“${title}”已准备好供客户审阅。`],
   [/^"([\s\S]+)" was moved to (.+) by ([\s\S]+)\.$/, (title, status, name) => `${name}已将“${title}”移至${getLocalizedStatus(status, 'zh')}。`],
   [/^"([\s\S]+)" was approved by ([\s\S]+)\.$/, (title, name) => `${name}已通过“${title}”的审核。`],
@@ -53,8 +54,9 @@ export const presentNotification = (notification: AppNotification, locale: AppLo
     }
   }
   const departmentReview = notification.title === 'Task Ready for Approval' && / is ready for department review\.$/.test(notification.message);
+  const taskReview = notification.title === 'Task Ready for Approval' && / is ready for review\.$/.test(notification.message);
   const clientReview = notification.title === 'Task Ready for Approval' && / is ready for client review\.$/.test(notification.message);
-  const title = departmentReview ? (locale === 'zh' ? '任务待部门审核' : 'Ready for department review') : clientReview ? (locale === 'zh' ? '任务待客户审阅' : 'Ready for client review') : locale === 'zh' ? titles[notification.title] || notification.title : notification.title;
+  const title = departmentReview ? (locale === 'zh' ? '任务待部门审核' : 'Ready for department review') : taskReview ? (locale === 'zh' ? '任务待审核' : 'Ready for review') : clientReview ? (locale === 'zh' ? '任务待客户审阅' : 'Ready for client review') : locale === 'zh' ? titles[notification.title] || notification.title : notification.title;
   return {
     title,
     message,

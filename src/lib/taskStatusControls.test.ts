@@ -62,8 +62,8 @@ describe('PM completion controls', () => {
   it('allows the responsible PM to complete client-visible opt-out work before client acceptance', () => {
     const optional = makeTask({ requiresInternalApproval: false, visibility: 'client-visible' });
     expect(completion(pm, optional)).toEqual({ status: 'Completed', disabledReason: undefined });
-    // Approval stays with the department reviewer; PM self-approval is not offered.
-    expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).not.toContain('Approved');
+    // The responsible PM may approve or directly complete opted-out work.
+    expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).toContain('Approved');
     expect(getTaskStatusOptions(pm, optional, statuses, [], scope)).toContain('Completed');
     expect(completion(pm, { ...optional, status: 'Approved', clientApprovalStatus: 'Pending' })).toEqual({ status: 'Completed', disabledReason: undefined });
     expect(completion(pm, { ...optional, status: 'Approved', clientApprovalStatus: 'Approved' })).toEqual({ status: 'Completed', disabledReason: undefined });

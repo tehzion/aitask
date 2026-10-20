@@ -3,7 +3,7 @@ import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileCheck2, UsersRou
 import { Link } from 'react-router-dom';
 import { isBefore, isToday } from 'date-fns';
 import { useStore } from '../store';
-import { canViewServicePrices, getClientKey, getDashboardPersona, getOwnedPortfolioClientKeys, getVisibleClientNames, getVisibleTasks } from '../lib/access';
+import { canViewServicePrices, getClientKey, getDashboardPersona, getOwnedPortfolioClientKeys, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { formatMoney } from '../lib/serviceManagement';
 import { parseOptionalDate } from '../lib/utils';
 import { isTaskCompleted } from '../lib/taskCompletion';
@@ -13,7 +13,7 @@ import { formatLocalizedDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getPlanDeliverySummary, getCompanyTaskActivity } from '../lib/dashboardData';
-import { getPortfolioReviewQueues } from '../lib/pmDashboard';
+import { assessProjectHealth, getPortfolioReviewQueues } from '../lib/pmDashboard';
 
 type WorkspaceTask = ReturnType<typeof useStore.getState>['tasks'][number];
 
@@ -97,11 +97,14 @@ const ServiceRoleDashboard = () => {
     () => getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }),
     [store.currentUser, store.rolePermissions, store.tasks, store.clients, store.projects],
   );
+  const visibleProjects = React.useMemo(
+    () => getVisibleProjects(store.currentUser, store.projects, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }),
+    [store.currentUser, store.rolePermissions, store.tasks, store.clients, store.projects],
+  );
   const visibleClientKeys = React.useMemo(() => new Set(
     getVisibleClientNames(store.currentUser, store.tasks, store.projects, store.rolePermissions, { clients: store.clients, projects: store.projects }).map(getClientKey)
   ), [store.currentUser, store.projects, store.rolePermissions, store.tasks, store.clients]);
-  // Task queues may include work a PM is only assigned to, but plan, delivery,
-  // and commercial cards are limited to companies the PM actually owns.
+  // Assigned projects determine the PM's delivery and commercial scope.
   const commercialClientKeys = React.useMemo(
     () => persona === 'projectManager' && store.currentUser
       ? getOwnedPortfolioClientKeys(store.currentUser, { clients: store.clients, projects: store.projects })
@@ -181,6 +184,42 @@ const ServiceRoleDashboard = () => {
       <TaskQueue title={t('Ready to finalize')} tasks={portfolioReviews.completion} empty={t('No tasks awaiting final completion.')} />
       <TaskQueue title={t('Client review (optional)')} tasks={portfolioReviews.client} empty={t('No client review is pending.')} />
     </div>
+    <Surface className="overflow-hidden" aria-labelledby="project-health-title">
+      <div className="flex items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
+        <div><h3 id="project-health-title" className="font-semibold text-ink">{t('Project health')}</h3><p className="mt-1 text-sm text-muted">{t('Health uses project and task deadlines, open work, and pending internal reviews.')}</p></div>
+        <CountLabel>{visibleProjects.length}</CountLabel>
+      </div>
+      <div className="divide-y divide-line/60">
+        {visibleProjects.map(project => {
+          const health = assessProjectHealth(project, visibleTasks, now);
+          const tone = health.health === 'atRisk' ? 'red' : health.health === 'attentionRequired' ? 'amber' : 'emerald';
+          const label = health.health === 'atRisk' ? 'At risk' : health.health === 'attentionRequired' ? 'Attention required' : 'On track';
+          const teamNames = health.assignedMemberIds
+            .map(id => store.users.find(user => user.id === id)?.name)
+            .filter((name): name is string => Boolean(name));
+          return <div key={project.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(230px,0.9fr)] sm:items-center sm:px-5">
+            <div className="min-w-0">
+              <Link to={`/tasks?projectId=${encodeURIComponent(project.id)}`} className="truncate text-sm font-semibold text-ink hover:text-accent"><span data-i18n-skip>{project.projectName}</span></Link>
+              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{project.clientName}</span> · {t('Next deadline')}: {health.nextDueDate ? formatLocalizedDate(parseOptionalDate(health.nextDueDate)!, locale) : t('No deadline')}</p>
+              <p className="mt-1 truncate text-xs text-muted">{t('Assigned team')}: {teamNames.length ? <span data-i18n-skip>{teamNames.join(', ')}</span> : t('No staff assigned')}</p>
+            </div>
+            <div className="min-w-0">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <StatusChip tone={tone}>{t(label)}</StatusChip>
+                <span className="text-xs text-muted">{health.completedCount}/{health.taskCount} {t('tasks complete')}</span>
+              </div>
+              <ProgressBar label={`${t('Task progress')} ${health.progressPercent}%`} value={health.progressPercent} max={100} />
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+                <span>{health.openCount} {t('open tasks')}</span>
+                {health.overdueCount > 0 && <span className="text-red-700">{health.overdueCount} {t('overdue')}</span>}
+                {health.pendingApprovalCount > 0 && <span>{health.pendingApprovalCount} {t('pending reviews')}</span>}
+              </div>
+            </div>
+          </div>;
+        })}
+        {visibleProjects.length === 0 && <p className="px-5 py-8 text-center text-sm text-muted">{t('No projects are assigned to you yet.')}</p>}
+      </div>
+    </Surface>
     <Surface className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
         <div><h3 className="font-semibold text-ink">{t('Monthly deliverables')}</h3><p className="mt-1 text-sm text-muted">{t('Current cycle delivery progress for each active company.')}</p></div>

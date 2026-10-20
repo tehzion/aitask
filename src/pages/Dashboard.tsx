@@ -103,7 +103,9 @@ const Dashboard: React.FC = () => {
   const portfolioOwners = useMemo(() => {
     if (!showBossOperations) return [];
     const ownerIds = new Set<string>();
-    projects.forEach(project => { if (project.createdBy) ownerIds.add(project.createdBy); });
+    projects.forEach(project => {
+      (project.projectManagerIds ?? (project.createdBy ? [project.createdBy] : [])).forEach(id => ownerIds.add(id));
+    });
     clientProfiles.forEach(client => { if (client.createdBy) ownerIds.add(client.createdBy); });
     return users
       .filter(member => ownerIds.has(member.id))
@@ -119,7 +121,7 @@ const Dashboard: React.FC = () => {
         type: t('Company'),
         company: client.clientName,
         project: t('All projects'),
-        ownerId: client.createdBy,
+        ownerIds: client.createdBy ? [client.createdBy] : [],
         owner: ownerName(client.createdBy),
         to: `/clients/${encodeURIComponent(client.id)}`,
       })),
@@ -128,8 +130,9 @@ const Dashboard: React.FC = () => {
         type: t('Project'),
         company: project.clientName,
         project: project.projectName,
-        ownerId: project.createdBy,
-        owner: ownerName(project.createdBy),
+        ownerIds: project.projectManagerIds ?? (project.createdBy ? [project.createdBy] : []),
+        owner: (project.projectManagerIds ?? (project.createdBy ? [project.createdBy] : []))
+          .map(ownerName).join(', ') || t('Unassigned'),
         to: project.clientId ? `/clients/${encodeURIComponent(project.clientId)}` : '/projects',
       })),
     ];
@@ -139,7 +142,7 @@ const Dashboard: React.FC = () => {
     portfolioAllRows
       .filter(row => (
         portfolioOwner === 'All'
-        || (portfolioOwner === 'Unassigned' ? !row.ownerId : row.ownerId === portfolioOwner)
+        || (portfolioOwner === 'Unassigned' ? row.ownerIds.length === 0 : row.ownerIds.includes(portfolioOwner))
       ))
       .sort((left, right) => left.company.localeCompare(right.company) || left.project.localeCompare(right.project))
   ), [portfolioAllRows, portfolioOwner]);
@@ -164,14 +167,17 @@ const Dashboard: React.FC = () => {
   const portfolioOwnerCounts = useMemo(() => {
     const counts = new Map<string, number>();
     portfolioAllRows.forEach(row => {
-      const key = row.ownerId || 'Unassigned';
-      counts.set(key, (counts.get(key) || 0) + 1);
+      if (row.ownerIds.length === 0) {
+        counts.set('Unassigned', (counts.get('Unassigned') || 0) + 1);
+      } else {
+        row.ownerIds.forEach(ownerId => counts.set(ownerId, (counts.get(ownerId) || 0) + 1));
+      }
     });
     return counts;
   }, [portfolioAllRows]);
 
   const portfolioHasUnassigned = useMemo(
-    () => portfolioAllRows.some(row => !row.ownerId),
+    () => portfolioAllRows.some(row => row.ownerIds.length === 0),
     [portfolioAllRows]
   );
   const showStaffOperations = currentUser?.role === 'Staff' || currentUser?.role === 'HOD';

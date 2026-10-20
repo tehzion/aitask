@@ -149,6 +149,39 @@ describe('company store authorization', () => {
     })).toBe('');
   });
 
+  it('limits Project Managers to assigned projects and HOD membership changes to their own project', () => {
+    const pmA: User = { id: 'scope-pm-a', name: 'PM A', role: 'Project Manager', departments: [] };
+    const pmB: User = { id: 'scope-pm-b', name: 'PM B', role: 'Project Manager', departments: [] };
+    const hod: User = { id: 'scope-hod', name: 'HOD', role: 'HOD', departments: ['Designer'], department: 'Designer' };
+    const projectA: Project = { ...company, id: 'scope-project-a', projectName: 'Project A', projectManagerIds: [pmA.id], hodMemberIds: [] };
+    const projectB: Project = { ...company, id: 'scope-project-b', projectName: 'Project B', projectManagerIds: [pmB.id], hodMemberIds: [] };
+    useStore.setState({
+      ...initialState,
+      currentUser: pmA,
+      users: [pmA, pmB, hod],
+      projects: [projectA, projectB],
+      clients: [{ id: 'scope-client', clientName: 'Acme', createdBy: pmA.id, createdAt: '', updatedAt: '' }],
+      tasks: [],
+      rolePermissions: [],
+    }, true);
+
+    expect(useStore.getState().updateProject(projectA.id, { hodMemberIds: [hod.id] })).toMatchObject({ ok: true });
+    expect(useStore.getState().updateProject(projectB.id, { projectName: 'Hijack' }).ok).toBe(false);
+    expect(useStore.getState().updateProject(projectA.id, { projectManagerIds: [pmB.id] }).ok).toBe(false);
+    expect(useStore.getState().projects.find(project => project.id === projectA.id)?.hodMemberIds).toEqual([hod.id]);
+  });
+
+  it('does not let a non-PM project creator edit HOD project membership', () => {
+    const hod: User = { id: 'scope-hod-creator', name: 'HOD', role: 'HOD', departments: ['Designer'], department: 'Designer' };
+    const project: Project = { ...company, id: 'staff-created-hod-project', createdBy: staff.id, hodMemberIds: [] };
+    useStore.setState({ ...initialState, currentUser: staff, users: [staff, hod], projects: [project], tasks: [], rolePermissions: [] }, true);
+
+    expect(useStore.getState().updateProject(project.id, { hodMemberIds: [hod.id] })).toMatchObject({
+      ok: false,
+      error: 'Only Boss Koo or a Project Manager can change HOD project membership.',
+    });
+  });
+
   it('preserves custom project names when the client is renamed', () => {
     const admin: User = { id: 'admin-project-rename', name: 'Project Manager', role: 'Project Manager', departments: ['Management'], department: 'Management' };
     const client: ClientProfile = { id: 'client-project-rename', clientName: 'Acme', createdBy: admin.id, createdAt: '2026-09-10', updatedAt: '2026-09-10' };

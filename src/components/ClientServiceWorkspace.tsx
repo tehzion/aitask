@@ -78,7 +78,7 @@ const ClientServiceWorkspace = () => {
   const currentDeliverables = currentCycle ? deliverables.filter(item => item.cycleId === currentCycle.id) : [];
   const deliveredCount = currentDeliverables.filter(item => item.status === 'Delivered').length;
   const contractEndDate = parseOptionalDate(activePlan?.contractEndDate);
-  const tasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions).filter(task => task.clientName.trim().toLowerCase() === client.clientName.trim().toLowerCase() && Boolean(currentCycle) && (task.serviceCycleId === currentCycle?.id || currentDeliverables.some(item => item.taskIds.includes(task.id) || item.id === task.deliverableId)));
+  const tasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }).filter(task => task.clientName.trim().toLowerCase() === client.clientName.trim().toLowerCase() && Boolean(currentCycle) && (task.serviceCycleId === currentCycle?.id || currentDeliverables.some(item => item.taskIds.includes(task.id) || item.id === task.deliverableId)));
   const taskGroups = groupClientDeliveries(tasks, today);
   const focusTask = getClientFocusTask(tasks, today);
   const comments = [...store.cycleComments]

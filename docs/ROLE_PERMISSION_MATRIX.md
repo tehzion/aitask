@@ -1,5 +1,7 @@
 # Role × Module × Action × Data Access Matrix — AiTask
 
+> This audit predates explicit project membership. For the current implementation and remaining rollout limits, see [ROLE_PERMISSION_ENHANCEMENT_ASSESSMENT.md](ROLE_PERMISSION_ENHANCEMENT_ASSESSMENT.md). The matrix below is historical and should not be treated as the current Project Manager scope.
+
 **Date:** 2026-10-17 · **Source of truth:** `src/lib/access.ts` (frontend authz core) + `supabase/migrations/*` `aitask_has_permission` / `aitask_can_view_task` / `aitask_can_mutate_entity` (backend authz) + `src/lib/departments.ts` (department scoping).
 **Roles:** Super Admin (`isSuperAdmin` = "Boss Koo"), Project Manager, HOD, Staff. (Client exists but is out of scope for this four-role review.)
 

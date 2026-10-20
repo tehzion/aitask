@@ -415,6 +415,10 @@ export interface Project {
   workspaceId?: string;
   clientId?: string;
   createdBy?: string;
+  /** Project access is explicit; Boss Koo retains workspace-wide access. */
+  projectManagerIds?: string[];
+  /** HODs assigned to this project can oversee matching departmental work. */
+  hodMemberIds?: string[];
   clientName: string;
   projectName: string;
   services: ServiceType[];

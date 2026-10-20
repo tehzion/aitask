@@ -13,7 +13,7 @@ import { getServiceOptions, hasChoice, PRESET_SERVICES } from '../lib/choiceOpti
 import ModalShell from './ModalShell';
 import BackendFreshness from './BackendFreshness';
 import { fieldLabel, modalFooter } from './uiTokens';
-import { canCreateClientProfiles, canViewAllClients, getVisibleClientNames } from '../lib/access';
+import { canCreateClientProfiles, canViewAllClients, getVisibleClientNames, isBossKoo, isHodUser } from '../lib/access';
 import CreateClientProfileModal from './CreateClientProfileModal';
 import { useI18n } from './I18nProvider';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
@@ -30,12 +30,13 @@ interface Props {
 
 const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initialClientId, onClientCreated, onProjectCreated, onProjectUpdated }) => {
   const { t } = useI18n();
-  const { addProject, updateProject, projects, clients, tasks, currentUser, rolePermissions, retryPendingSave, backend } = useStore(useShallow(state => ({
+  const { addProject, updateProject, projects, clients, tasks, users, currentUser, rolePermissions, retryPendingSave, backend } = useStore(useShallow(state => ({
     addProject: state.addProject,
     updateProject: state.updateProject,
     projects: state.projects,
     clients: state.clients,
     tasks: state.tasks,
+    users: state.users,
     currentUser: state.currentUser,
     rolePermissions: state.rolePermissions,
     retryPendingSave: state.retryPendingSave,
@@ -65,6 +66,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const [startDate, setStartDate] = useState('');
   const [deadline, setDeadline] = useState('');
   const [selectedServices, setSelectedServices] = useState<ServiceType[]>([]);
+  const [projectManagerIds, setProjectManagerIds] = useState<string[]>([]);
+  const [hodMemberIds, setHodMemberIds] = useState<string[]>([]);
   const [customServices, setCustomServices] = useState<string[]>([]);
   const [customInput, setCustomInput]       = useState('');
   const [customError, setCustomError]       = useState('');
@@ -132,19 +135,28 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       setStartDate(project.startDate || getTodayInputDate());
       setDeadline(project.deadline || '');
       setSelectedServices(project.services || []);
+      const legacyManager = project.createdBy && users.some(user => user.id === project.createdBy && user.role === 'Project Manager' && !user.isSuperAdmin)
+        ? [project.createdBy]
+        : [];
+      setProjectManagerIds(project.projectManagerIds ?? legacyManager);
+      setHodMemberIds(project.hodMemberIds || []);
     } else {
       setClientId(initialClientId || '');
       setProjectName('');
       setStartDate(getTodayInputDate());
       setDeadline('');
       setSelectedServices([]);
+      setProjectManagerIds(currentUser?.role === 'Project Manager' && !isBossKoo(currentUser) ? [currentUser.id] : []);
+      setHodMemberIds([]);
     }
-  }, [clientOptions, initialClientId, isOpen, project]);
+  }, [clientOptions, currentUser, initialClientId, isOpen, project, users]);
 
-  const recovery = useRecoverableForm(`create-project:${initialClientId || 'all'}`, { clientId, projectName, startDate, deadline, selectedServices, customServices, customInput }, formEdited, isOpen && !project && !pendingProjectId);
+  const recovery = useRecoverableForm(`create-project:${initialClientId || 'all'}`, { clientId, projectName, startDate, deadline, selectedServices, customServices, customInput, projectManagerIds, hodMemberIds }, formEdited, isOpen && !project && !pendingProjectId);
   const restoreDraft = () => {
     const value = recovery.restore(); if (!value || typeof value.projectName !== 'string') return;
     setClientId(value.clientId); setProjectName(value.projectName); setStartDate(value.startDate); setDeadline(value.deadline); setSelectedServices(value.selectedServices); setCustomServices(value.customServices); setCustomInput(value.customInput); setFormEdited(true);
+    setProjectManagerIds(Array.isArray(value.projectManagerIds) ? value.projectManagerIds : []);
+    setHodMemberIds(Array.isArray(value.hodMemberIds) ? value.hodMemberIds : []);
   };
   if (!isOpen) return null;
 
@@ -195,6 +207,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     setStartDate('');
     setDeadline('');
     setSelectedServices([]);
+    setProjectManagerIds([]);
+    setHodMemberIds([]);
     setCustomServices([]);
     setCustomInput('');
     setCustomError('');
@@ -219,7 +233,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       if (!result.ok) { setFormError(result.error || 'The project is still waiting to be saved.'); return false; }
       const canonical = useStore.getState().projects.find(item => item.id === id);
       const submitted = pendingProjectSnapshot.current;
-      const fields = ['clientId', 'clientName', 'projectName', 'startDate', 'deadline', 'services'] as const;
+      const fields = ['clientId', 'clientName', 'projectName', 'startDate', 'deadline', 'services', 'projectManagerIds', 'hodMemberIds'] as const;
       if (!canonical || !submitted || !fields.every(key => JSON.stringify(canonical[key]) === JSON.stringify(submitted[key]))) {
         setPendingProjectId(''); pendingProjectSnapshot.current = null;
         setFormError('The pending project change is no longer available. Review your draft before saving again.');
@@ -285,6 +299,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         startDate: finalStartDate,
         deadline: finalDeadline,
         services: allServices,
+        ...(isBossKoo(currentUser) ? { projectManagerIds } : {}),
+        hodMemberIds,
       });
 
       if (!result.ok) {
@@ -307,6 +323,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       startDate: finalStartDate,
       deadline: finalDeadline,
       services: allServices,
+      projectManagerIds,
+      hodMemberIds,
     });
 
     if (!newProjectId) {
@@ -380,6 +398,52 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
               <label className={fieldLabel}>{t('Start date')} <span className="text-red-500">*</span><input type="date" required value={startDate} onChange={e => { setStartDate(e.target.value); setFormError(''); }} className="mt-1.5 w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg p-2.5 outline-none shadow-sm" /></label>
               <label className={fieldLabel}>{t('Deadline')}<input type="date" min={startDate || undefined} value={deadline} onChange={e => { setDeadline(e.target.value); setFormError(''); }} className="mt-1.5 w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg p-2.5 outline-none shadow-sm" /></label>
             </div>
+
+            {isBossKoo(currentUser) ? (
+              <fieldset className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+                <legend className="px-1 text-sm font-semibold text-slate-700">{t('Project managers')}</legend>
+                <p className="mb-2 text-xs leading-5 text-slate-500">{t('Only assigned Project Managers can manage this project.')}</p>
+                <div className="max-h-32 space-y-1 overflow-y-auto">
+                  {users.filter(user => user.role === 'Project Manager' && !user.isSuperAdmin).map(user => (
+                    <label key={user.id} className="flex min-h-9 items-center gap-2 rounded-md px-2 text-sm text-slate-700 hover:bg-white">
+                      <input type="checkbox" checked={projectManagerIds.includes(user.id)} onChange={() => {
+                        setProjectManagerIds(current => current.includes(user.id) ? current.filter(id => id !== user.id) : [...current, user.id]);
+                        setFormEdited(true);
+                      }} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                      <span>{user.name}</span>
+                    </label>
+                  ))}
+                  {!users.some(user => user.role === 'Project Manager' && !user.isSuperAdmin) && <p className="px-2 py-1 text-xs text-slate-500">{t('No Project Managers available.')}</p>}
+                </div>
+              </fieldset>
+            ) : (
+              <p className="-mt-2 text-xs leading-5 text-slate-500">
+                {t('Project managers')}: {projectManagerIds.map(id => users.find(user => user.id === id)?.name).filter(Boolean).join(', ') || t('Unassigned')}. {t('Only Boss Koo can change Project Manager assignments.')}
+              </p>
+            )}
+
+            {(isBossKoo(currentUser) || currentUser.role === 'Project Manager') ? (
+              <fieldset className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+                <legend className="px-1 text-sm font-semibold text-slate-700">{t('Department leads (HOD)')}</legend>
+                <p className="mb-2 text-xs leading-5 text-slate-500">{t('Choose the HODs who oversee work in this project.')}</p>
+                <div className="max-h-32 space-y-1 overflow-y-auto">
+                  {users.filter(user => isHodUser(user, rolePermissions)).map(user => (
+                    <label key={user.id} className="flex min-h-9 items-center gap-2 rounded-md px-2 text-sm text-slate-700 hover:bg-white">
+                      <input type="checkbox" checked={hodMemberIds.includes(user.id)} onChange={() => {
+                        setHodMemberIds(current => current.includes(user.id) ? current.filter(id => id !== user.id) : [...current, user.id]);
+                        setFormEdited(true);
+                      }} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                      <span>{user.name}</span>
+                    </label>
+                  ))}
+                  {!users.some(user => isHodUser(user, rolePermissions)) && <p className="px-2 py-1 text-xs text-slate-500">{t('No HOD accounts available.')}</p>}
+                </div>
+              </fieldset>
+            ) : (
+              <p className="-mt-2 text-xs leading-5 text-slate-500">
+                {t('Department leads (HOD)')}: {hodMemberIds.map(id => users.find(user => user.id === id)?.name).filter(Boolean).join(', ') || t('Unassigned')}.
+              </p>
+            )}
 
             {/* Required Services */}
             <div>
