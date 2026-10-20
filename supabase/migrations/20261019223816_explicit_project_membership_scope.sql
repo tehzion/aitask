@@ -3,6 +3,26 @@
 -- ownership and assignment relationships are backfilled once so existing work
 -- stays reachable without leaving future access implicit.
 
+-- This migration changes authorization helpers, persistent project JSON, and a
+-- trigger. Check the exact central-command shape before any of those changes
+-- occur, then run the entire migration in one transaction so a later failure
+-- cannot leave a partial permission rollout behind.
+begin;
+
+do $preflight$
+declare
+  signature regprocedure := 'private.aitask_can_mutate_entity(text,text,text,text,text,jsonb,jsonb)'::regprocedure;
+  definition text := pg_get_functiondef(signature);
+  anchor text := 'coalesce(p_old_data ->> ''createdBy'', '''') = v_member_id';
+  occurrences integer;
+begin
+  occurrences := (length(definition) - length(replace(definition, anchor, ''))) / length(anchor);
+  if occurrences < 2 then
+    raise exception 'Expected project create-owner checks were not found in aitask_can_mutate_entity.';
+  end if;
+end;
+$preflight$;
+
 create or replace function private.aitask_project_manager_id_is_assigned(
   p_workspace_id text,
   p_project_id text,
@@ -665,20 +685,15 @@ create trigger aitask_guard_project_membership_scope
   execute function private.aitask_guard_project_membership_scope();
 
 -- Use assignment-aware project access in the central command authorization as
--- well as the RLS read helpers. Fail the migration if the known guarded branch
--- has drifted instead of silently installing partial policy.
+-- well as the RLS read helpers. The equivalent preflight ran before any data or
+-- permission change, while the current definition still has its known shape.
 do $$
 declare
   signature regprocedure := 'private.aitask_can_mutate_entity(text,text,text,text,text,jsonb,jsonb)'::regprocedure;
   definition text := pg_get_functiondef(signature);
   anchor text := 'coalesce(p_old_data ->> ''createdBy'', '''') = v_member_id';
   replacement text := 'private.aitask_can_manage_project(p_workspace_id, p_entity_id)';
-  occurrences integer;
 begin
-  occurrences := (length(definition) - length(replace(definition, anchor, ''))) / length(anchor);
-  if occurrences < 2 then
-    raise exception 'Expected project create-owner checks were not found in aitask_can_mutate_entity.';
-  end if;
   definition := replace(definition, anchor, replacement);
   execute definition;
 end;
@@ -686,3 +701,5 @@ $$;
 
 -- Do not let a PM assign, remove, or reassign another PM by forging a secure
 -- command payload. Reads and project mutations now share the same predicate.
+
+commit;
