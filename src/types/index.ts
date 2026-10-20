@@ -419,12 +419,53 @@ export interface Project {
   projectManagerIds?: string[];
   /** HODs assigned to this project can oversee matching departmental work. */
   hodMemberIds?: string[];
+  /** Staff membership is independent from task assignment and may span projects. */
+  staffMemberIds?: string[];
+  /** Optional project-specific responsibility label for each assigned member. */
+  memberResponsibilities?: Record<string, string>;
   clientName: string;
   projectName: string;
   services: ServiceType[];
   startDate: string; // New field for Finance to track
   deadline: string;
+  status?: ProjectLifecycleStatus;
+  completedAt?: string;
+  completedBy?: string;
+  closedAt?: string;
+  closedBy?: string;
+  reopenedAt?: string;
+  reopenedBy?: string;
+  closureWarningsAcknowledged?: boolean;
+  closureWarningSnapshot?: ProjectClosureWarningSnapshot;
+  requireClearClosureChecklist?: boolean;
+  /** Existing projects omit this so their historical task approval behaviour is preserved. */
+  defaultApprovalMode?: ProjectApprovalMode;
+  milestones?: ProjectMilestone[];
   updatedAt?: string;
+}
+
+export type ProjectLifecycleStatus = 'Active' | 'Completed' | 'Closed';
+export type ProjectApprovalMode = 'none' | 'hod' | 'pm';
+export type TaskApprovalMode = 'inherit' | ProjectApprovalMode;
+export type ProjectMilestoneStatus = 'Not Started' | 'In Progress' | 'Completed' | 'Delayed';
+
+export interface ProjectMilestone {
+  id: string;
+  name: string;
+  description?: string;
+  targetDate: string;
+  responsiblePersonId?: string;
+  status: ProjectMilestoneStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectClosureWarningSnapshot {
+  outstandingTasks: number;
+  pendingApprovals: number;
+  overdueTasks: number;
+  incompleteMilestones: number;
+  confirmedAt: string;
 }
 
 export interface TaskWorkState {
@@ -453,6 +494,9 @@ export interface Task {
   outputAttachments?: AttachmentRef[];
   accountableLeadId?: string;
   requiresInternalApproval?: boolean; // Defaults to true; configured by the responsible PM.
+  /** Missing preserves legacy behaviour; `inherit` is the only mode that reads the project default. */
+  approvalMode?: TaskApprovalMode;
+  milestoneId?: string;
   reviewCover?: { reviewerId: string; expiresAt: string; configuredBy?: string; configuredAt?: string } | null;
   reviewOverrideReason?: string; // Submitted once; the server replaces it with decision provenance.
   reviewDecision?: { reviewedBy: string; reviewedAt: string; overrideReason?: string };

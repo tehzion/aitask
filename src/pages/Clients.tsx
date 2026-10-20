@@ -36,6 +36,7 @@ import CreateClientProfileModal from '../components/CreateClientProfileModal';
 import ContextualTutorialLink from '../components/ContextualTutorialLink';
 import CreateClientPlanModal from '../components/CreateClientPlanModal';
 import CreateProjectModal from '../components/CreateProjectModal';
+import ProjectManagementPanel from '../components/ProjectManagementPanel';
 import { useI18n } from '../components/I18nProvider';
 import { formatLocalizedDate, formatLocalizedDistanceToNow, type AppLocale } from '../lib/i18n';
 
@@ -203,6 +204,7 @@ const Clients: React.FC = () => {
   const [isCreateClientOpen, setIsCreateClientOpen] = React.useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = React.useState(false);
   const [editingProject, setEditingProject] = React.useState<Project | null>(null);
+  const [managedProjectId, setManagedProjectId] = React.useState('');
   const [initialProjectClientId, setInitialProjectClientId] = React.useState('');
   const [planClientId, setPlanClientId] = React.useState('');
   const [openMenuClientKey, setOpenMenuClientKey] = React.useState<string | null>(null);
@@ -1304,11 +1306,12 @@ const Clients: React.FC = () => {
                             <p data-i18n-skip className="truncate text-sm font-semibold text-slate-800">{project.projectName}</p>
                             <p className="mt-0.5 text-xs text-slate-500">{t('Start date')}: {project.startDate || '—'} · {t('Deadline')}: {project.deadline || '—'}</p>
                           </div>
-                          {canEditProject(currentUser, project, rolePermissions) && (
-                            <button type="button" onClick={() => openProjectEditor(project)} className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50">
-                              {t('Edit project')}
-                            </button>
-                          )}
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={() => setManagedProjectId(project.id)} className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-blue-700">{t('Open project')}</button>
+                            {canEditProject(currentUser, project, rolePermissions) && (
+                              <button type="button" onClick={() => openProjectEditor(project)} className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50">{t('Edit project')}</button>
+                            )}
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -1471,6 +1474,11 @@ const Clients: React.FC = () => {
         onClose={closeProjectEditor}
         onClientCreated={() => navigate('/projects', { replace: true })}
       />
+      {managedProjectId && <ProjectManagementPanel
+        projectId={managedProjectId}
+        onClose={() => setManagedProjectId('')}
+        onEdit={value => { setManagedProjectId(''); openProjectEditor(value); }}
+      />}
       {planClientId && <CreateClientPlanModal
         client={clientProfiles.find(client => client.id === planClientId)}
         onClose={() => setPlanClientId('')}

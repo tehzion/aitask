@@ -83,12 +83,12 @@ select is(
   'the Project Manager is still not a super admin'
 );
 
--- Project visibility follows the portfolio they participate in.
+-- Explicit project membership prevents task assignment from leaking a foreign portfolio.
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000922', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
-select is(private.aitask_can_view_project('pgtap-pm-security', 'sec-pm2-project'), true, 'a Project Manager can view a project holding their assigned task');
-select is(private.aitask_can_view_client('pgtap-pm-security', 'pm two co'), true, 'a Project Manager can view the client of that project');
+select is(private.aitask_can_view_project('pgtap-pm-security', 'sec-pm2-project'), false, 'a task assignment cannot expose another PM project');
+select is(private.aitask_can_view_client('pgtap-pm-security', 'pm two co'), false, 'a task assignment cannot expose another PM client');
 reset role;
 
 -- HOD company deletion requires edit access as well as visibility.

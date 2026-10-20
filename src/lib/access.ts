@@ -1,6 +1,7 @@
 import { AppNotification, ClientProfile, CustomRole, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
 import { isAwaitingClientReview } from './clientPortal';
 import { getMemberDepartments, isMemberInDepartment } from './departments';
+import { isClosedProject } from './projectManagement';
 
 export type DashboardPersona = 'boss' | 'projectManager' | 'operation' | 'account' | 'production' | 'client';
 
@@ -651,6 +652,7 @@ export const canEditTask = (
   scope: VisibilityScope = {}
 ) => {
   if (!user) return false;
+  if (task.projectId && isClosedProject(scope.projects?.find(project => project.id === task.projectId))) return false;
   if (user.role === 'Project Manager' && task.projectId
     && !ownedProjectIds(user, scope).has(task.projectId)) return false;
   if (user.role === 'HOD' && task.projectId && !isProjectInHodScope(user, task.projectId, scope)) return false;
@@ -736,6 +738,8 @@ export const canAccessPath = (user: User | null | undefined, path: string, custo
   const firstSegment = path.split('?')[0].replace(/^\/+/, '').split('/')[0];
   const route = (firstSegment ? `/${firstSegment}` : '/') as AppPath;
 
+  if (route === '/approvals' && user.role === 'Project Manager') return true;
+
   // Clients is the merged task workspace. Preserve access for custom roles
   // that were granted the former Tasks page but not the tracker page.
   if (route === '/clients') {
@@ -807,7 +811,7 @@ export const getVisibleProjects = (
   if (['Staff', 'HOD'].includes(user.role)) {
     return projects.filter(project => user.role === 'HOD' && project.hodMemberIds !== undefined
       ? project.hodMemberIds.includes(user.id)
-      : project.createdBy === user.id || visibleProjectIds.has(project.id));
+      : project.staffMemberIds?.includes(user.id) || project.createdBy === user.id || visibleProjectIds.has(project.id));
   }
   return [];
 };

@@ -280,11 +280,13 @@ const Approvals: React.FC = () => {
     currentUser,
     users,
     deleteUser,
+    requestMemberDeactivation,
     addUserBySuperAdmin,
     updateMemberDepartments,
     updateMemberPermissions,
     rolePermissions,
     clients,
+    projects,
     addCustomRole,
     updateCustomRole,
     deleteCustomRole,
@@ -299,11 +301,13 @@ const Approvals: React.FC = () => {
     currentUser: state.currentUser,
     users: state.users,
     deleteUser: state.deleteUser,
+    requestMemberDeactivation: state.requestMemberDeactivation,
     addUserBySuperAdmin: state.addUserBySuperAdmin,
     updateMemberDepartments: state.updateMemberDepartments,
     updateMemberPermissions: state.updateMemberPermissions,
     rolePermissions: state.rolePermissions,
     clients: state.clients,
+    projects: state.projects,
     addCustomRole: state.addCustomRole,
     updateCustomRole: state.updateCustomRole,
     deleteCustomRole: state.deleteCustomRole,
@@ -316,7 +320,7 @@ const Approvals: React.FC = () => {
   const [isMobileApprovalViewport, setIsMobileApprovalViewport] = useState(false);
   const [selectedBulkRegIds, setSelectedBulkRegIds] = useState<Set<string>>(new Set());
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = isApprovalTab(searchParams.get('tab')) ? searchParams.get('tab') as ApprovalTab : 'registrations';
+  const requestedTab = isApprovalTab(searchParams.get('tab')) ? searchParams.get('tab') as ApprovalTab : 'registrations';
   const registrationQueryId = searchParams.get('registrationId');
   const [registrationSearch, setRegistrationSearch] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
@@ -339,6 +343,7 @@ const Approvals: React.FC = () => {
     companyName: '',
     customRoleId: '',
     workerType: 'employee' as NonNullable<User['workerType']>,
+    projectIds: [] as string[],
   });
   const [approvalCustomRoleId, setApprovalCustomRoleId] = useState('');
   const [sendApprovalInvitation, setSendApprovalInvitation] = useState(false);
@@ -365,6 +370,9 @@ const Approvals: React.FC = () => {
   const [roleDeptPending, setRoleDeptPending] = useState<{ role: Role; customRoleId?: string } | null>(null);
   const [roleDeptValue, setRoleDeptValue] = useState<Department[]>([]);
   const superAdmin = isBossKoo(currentUser);
+  const projectManager = currentUser?.role === 'Project Manager' && !superAdmin;
+  const managedProjects = projects.filter(project => project.projectManagerIds?.includes(currentUser?.id || ''));
+  const activeTab: ApprovalTab = projectManager ? 'members' : requestedTab;
   const editingBuiltinRole = Boolean(roleEditorId && rolePermissions.find(role => role.id === roleEditorId)?.isBuiltin);
   const [roleForm, setRoleForm] = useState({
     name: '',
@@ -433,7 +441,9 @@ const Approvals: React.FC = () => {
     ].some(value => value?.toLowerCase().includes(query)));
   }, [pendingRegs, registrationSearchInput.value]);
   const agedRegistrationCount = pendingRegs.filter(registration => pendingDays(registration) >= 7).length;
-  const activeMemberCount = users.length;
+  const managedMemberIds = new Set(managedProjects.flatMap(project => [...(project.hodMemberIds || []), ...(project.staffMemberIds || [])]));
+  const scopedUsers = projectManager ? users.filter(user => managedMemberIds.has(user.id)) : users;
+  const activeMemberCount = scopedUsers.length;
   const memberPermissionsUser = memberPermissionsId
     ? users.find(user => user.id === memberPermissionsId)
     : undefined;
@@ -730,6 +740,7 @@ const Approvals: React.FC = () => {
       customRoleId: '',
       workerType: 'employee',
       password: secureAccounts ? '' : DEFAULT_USER_PASSWORD,
+      projectIds: [],
     });
     setSendNewUserInvitation(false);
     setAddUserError('');
@@ -1066,7 +1077,7 @@ const Approvals: React.FC = () => {
     });
   };
 
-  const visibleMembers = users.filter(user => {
+  const visibleMembers = scopedUsers.filter(user => {
     const normalizedSearch = memberSearchInput.value.trim().toLowerCase();
     const matchesSearch = !normalizedSearch || user.name.toLowerCase().includes(normalizedSearch) || (user.email || '').toLowerCase().includes(normalizedSearch);
     const matchesRole = memberRoleFilter === 'All' || user.role === memberRoleFilter;
@@ -1077,6 +1088,10 @@ const Approvals: React.FC = () => {
     e.preventDefault();
     if (isActionSaving) return;
     setAddUserError('');
+    if (projectManager && newUser.projectIds.length === 0) {
+      setAddUserError('Select at least one project for this member.');
+      return;
+    }
     const previousIds = new Set(useStore.getState().users.map(user => user.id));
     const result = await runAction(async isCurrent => {
       if (!pendingNewMember.current) {
@@ -1087,6 +1102,7 @@ const Approvals: React.FC = () => {
           customRoleId: newUser.customRoleId || undefined,
           workerType: ['Staff', 'HOD'].includes(newUser.role) ? newUser.workerType : undefined,
           sendInvitation: sendNewUserInvitation,
+          projectIds: newUser.projectIds,
         });
         if (!isCurrent() || !created.ok || secureAccounts) return created;
         pendingNewMember.current = useStore.getState().users.find(user => !previousIds.has(user.id)
@@ -1136,7 +1152,18 @@ const Approvals: React.FC = () => {
     setUserToDelete(null);
   };
 
-  if (!superAdmin) {
+  const handleRequestDeactivation = async (user: User) => {
+    const result = await runAction(() => requestMemberDeactivation(user.id));
+    if (!result) return;
+    if (!result.ok) {
+      setAssignmentError(result.error || 'Unable to request account deactivation.');
+      return;
+    }
+    setAssignmentError('');
+    useToastStore.getState().addToast(t('Deactivation request sent to Boss Koo.'), 'success');
+  };
+
+  if (!superAdmin && !projectManager) {
     return (
       <div className={pageShell}>
         <PageHeader
@@ -1163,7 +1190,7 @@ const Approvals: React.FC = () => {
         title={t('Approvals')}
         description={t('Review access requests and manage workspace members, roles, and decisions.')}
         onboardingTarget="approvals-overview"
-        action={superAdmin ? (
+        action={(superAdmin || projectManager) ? (
           <Button onClick={() => setIsAddUserOpen(true)} disabled={isActionSaving || backend.isSaving}>
             <UserPlus className="w-4 h-4" />
             {t('Add Member')}
@@ -1177,15 +1204,17 @@ const Approvals: React.FC = () => {
         </div>
       )}
 
-      <section aria-label={t('Approval overview')} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {superAdmin && <section aria-label={t('Approval overview')} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MetricCard title={t('Pending registrations')} value={pendingRegs.length} icon={UserCheck} tone="blue" footer={t('Awaiting review')} />
         <MetricCard title={t('Aging 7+ days')} value={agedRegistrationCount} icon={Clock3} tone={agedRegistrationCount > 0 ? 'red' : 'emerald'} footer={agedRegistrationCount > 0 ? t('Prioritize these requests') : t('Queue is current')} />
         <MetricCard title={t('Active members')} value={activeMemberCount} icon={Users} tone="purple" footer={t('Workspace accounts')} />
         <MetricCard title={t('Recent decisions')} value={historyRegs.length} icon={History} tone="slate" footer={t('Approved or rejected')} />
-      </section>
+      </section>}
+
+      {projectManager && <section className="rounded-panel border border-line bg-surface p-5"><h2 className="font-semibold text-ink">{t('Manage team')}</h2><p className="mt-1 text-sm leading-6 text-muted">{t('Invite HOD and Staff accounts, then assign them only to projects under your authority. Shared accounts keep their other project memberships.')}</p><div className="mt-3 flex flex-wrap gap-2">{managedProjects.map(project => <Badge key={project.id} tone="slate"><span data-i18n-skip>{project.projectName}</span></Badge>)}</div></section>}
 
       <SegmentedTabs
-        items={approvalTabItems.map(item => ({
+        items={(superAdmin ? approvalTabItems : approvalTabItems.filter(item => item.id === 'members')).map(item => ({
           ...item,
           count: item.id === 'registrations' ? pendingRegs.length : item.id === 'members' ? activeMemberCount : item.id === 'history' ? historyRegs.length : undefined,
         }))}
@@ -1826,6 +1855,9 @@ const Approvals: React.FC = () => {
               )}
               {!isBossKoo(u) && u.permissions && Object.keys(u.permissions).length > 0 && <Badge tone="indigo">{t('Custom access')}</Badge>}
               <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                {projectManager && ['HOD', 'Staff'].includes(u.role) && (
+                  <Button type="button" variant="secondary" onClick={() => void handleRequestDeactivation(u)} disabled={isActionSaving}>{t('Request deactivation')}</Button>
+                )}
                 {superAdmin && u.role !== 'Client' && !isBossKoo(u) && (
                   <Button type="button" variant="secondary" onClick={() => handleEditDepartments(u.id)} disabled={isActionSaving}>{t('Edit departments')}</Button>
                 )}
@@ -1953,6 +1985,9 @@ const Approvals: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {projectManager && ['HOD', 'Staff'].includes(u.role) && (
+                        <Button type="button" variant="secondary" onClick={() => void handleRequestDeactivation(u)} disabled={isActionSaving}>{t('Request deactivation')}</Button>
+                      )}
                       {superAdmin && u.role !== 'Client' && !isBossKoo(u) && (
                         <button
                           type="button"
@@ -2206,7 +2241,7 @@ const Approvals: React.FC = () => {
                       });
                     }}
                   >
-                    {ROLES.map(r => <option key={r} value={r}>{t(getRoleDisplayName(r))}</option>)}
+                    {(projectManager ? ROLES.filter(roleOption => roleOption === 'HOD' || roleOption === 'Staff') : ROLES).map(r => <option key={r} value={r}>{t(getRoleDisplayName(r))}</option>)}
                   </select>
                 </div>
                 <div>
@@ -2249,6 +2284,31 @@ const Approvals: React.FC = () => {
                     required
                   />
                 </div>
+              )}
+
+              {projectManager && (
+                <fieldset className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                  <legend className="px-1 text-sm font-medium text-slate-700">{t('Project access')}</legend>
+                  <p className="mb-3 text-xs leading-5 text-slate-500">{t('Choose the projects where this HOD or Staff member should work. Existing accounts keep memberships managed by other Project Managers.')}</p>
+                  <div className="space-y-2">
+                    {managedProjects.map(project => (
+                      <label key={project.id} className="flex min-h-11 items-center gap-3 rounded-control border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          checked={newUser.projectIds.includes(project.id)}
+                          onChange={event => setNewUser(current => ({
+                            ...current,
+                            projectIds: event.target.checked
+                              ? [...current.projectIds, project.id]
+                              : current.projectIds.filter(projectId => projectId !== project.id),
+                          }))}
+                        />
+                        <span data-i18n-skip>{project.projectName}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
               )}
 
               {secureAccounts ? (

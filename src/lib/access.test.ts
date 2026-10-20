@@ -388,7 +388,7 @@ describe('staff permission matrix', () => {
     };
     const pm: User = { ...admin, customRoleId: pmRole.id, permissions: {} as User['permissions'] };
     expect(canViewAllClients(pm, [pmRole])).toBe(false);
-    expect(canAccessPath(pm, '/approvals', [pmRole])).toBe(false);
+    expect(canAccessPath(pm, '/approvals', [pmRole])).toBe(true);
     expect(getVisibleClientNames(pm, [
       makeTask({ id: 'pm-owned', clientName: 'Acme', createdBy: pm.id }),
       makeTask({ id: 'other-client', clientName: 'Beta', createdBy: otherStaff.id, assignedTo: otherStaff.id }),

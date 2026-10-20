@@ -8,7 +8,7 @@ import { useSearchParams } from 'react-router-dom';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { Check, X, Plus } from 'lucide-react';
-import { Project, ServiceType } from '../types';
+import { Project, ProjectApprovalMode, ServiceType } from '../types';
 import { getServiceOptions, hasChoice, PRESET_SERVICES } from '../lib/choiceOptions';
 import ModalShell from './ModalShell';
 import BackendFreshness from './BackendFreshness';
@@ -68,6 +68,10 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const [selectedServices, setSelectedServices] = useState<ServiceType[]>([]);
   const [projectManagerIds, setProjectManagerIds] = useState<string[]>([]);
   const [hodMemberIds, setHodMemberIds] = useState<string[]>([]);
+  const [staffMemberIds, setStaffMemberIds] = useState<string[]>([]);
+  const [memberResponsibilities, setMemberResponsibilities] = useState<Record<string, string>>({});
+  const [defaultApprovalMode, setDefaultApprovalMode] = useState<ProjectApprovalMode>('none');
+  const [requireClearClosureChecklist, setRequireClearClosureChecklist] = useState(false);
   const [customServices, setCustomServices] = useState<string[]>([]);
   const [customInput, setCustomInput]       = useState('');
   const [customError, setCustomError]       = useState('');
@@ -140,6 +144,10 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         : [];
       setProjectManagerIds(project.projectManagerIds ?? legacyManager);
       setHodMemberIds(project.hodMemberIds || []);
+      setStaffMemberIds(project.staffMemberIds || []);
+      setMemberResponsibilities(project.memberResponsibilities || {});
+      setDefaultApprovalMode(project.defaultApprovalMode || 'none');
+      setRequireClearClosureChecklist(Boolean(project.requireClearClosureChecklist));
     } else {
       setClientId(initialClientId || '');
       setProjectName('');
@@ -148,15 +156,23 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       setSelectedServices([]);
       setProjectManagerIds(currentUser?.role === 'Project Manager' && !isBossKoo(currentUser) ? [currentUser.id] : []);
       setHodMemberIds([]);
+      setStaffMemberIds([]);
+      setMemberResponsibilities({});
+      setDefaultApprovalMode('none');
+      setRequireClearClosureChecklist(false);
     }
   }, [clientOptions, currentUser, initialClientId, isOpen, project, users]);
 
-  const recovery = useRecoverableForm(`create-project:${initialClientId || 'all'}`, { clientId, projectName, startDate, deadline, selectedServices, customServices, customInput, projectManagerIds, hodMemberIds }, formEdited, isOpen && !project && !pendingProjectId);
+  const recovery = useRecoverableForm(`create-project:${initialClientId || 'all'}`, { clientId, projectName, startDate, deadline, selectedServices, customServices, customInput, projectManagerIds, hodMemberIds, staffMemberIds, memberResponsibilities, defaultApprovalMode, requireClearClosureChecklist }, formEdited, isOpen && !project && !pendingProjectId);
   const restoreDraft = () => {
     const value = recovery.restore(); if (!value || typeof value.projectName !== 'string') return;
     setClientId(value.clientId); setProjectName(value.projectName); setStartDate(value.startDate); setDeadline(value.deadline); setSelectedServices(value.selectedServices); setCustomServices(value.customServices); setCustomInput(value.customInput); setFormEdited(true);
     setProjectManagerIds(Array.isArray(value.projectManagerIds) ? value.projectManagerIds : []);
     setHodMemberIds(Array.isArray(value.hodMemberIds) ? value.hodMemberIds : []);
+    setStaffMemberIds(Array.isArray(value.staffMemberIds) ? value.staffMemberIds : []);
+    setMemberResponsibilities(value.memberResponsibilities && typeof value.memberResponsibilities === 'object' ? value.memberResponsibilities : {});
+    setDefaultApprovalMode(['none', 'hod', 'pm'].includes(value.defaultApprovalMode) ? value.defaultApprovalMode : 'none');
+    setRequireClearClosureChecklist(Boolean(value.requireClearClosureChecklist));
   };
   if (!isOpen) return null;
 
@@ -209,6 +225,9 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     setSelectedServices([]);
     setProjectManagerIds([]);
     setHodMemberIds([]);
+    setStaffMemberIds([]);
+    setDefaultApprovalMode('none');
+    setRequireClearClosureChecklist(false);
     setCustomServices([]);
     setCustomInput('');
     setCustomError('');
@@ -233,7 +252,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       if (!result.ok) { setFormError(result.error || 'The project is still waiting to be saved.'); return false; }
       const canonical = useStore.getState().projects.find(item => item.id === id);
       const submitted = pendingProjectSnapshot.current;
-      const fields = ['clientId', 'clientName', 'projectName', 'startDate', 'deadline', 'services', 'projectManagerIds', 'hodMemberIds'] as const;
+      const fields = ['clientId', 'clientName', 'projectName', 'startDate', 'deadline', 'services', 'projectManagerIds', 'hodMemberIds', 'staffMemberIds', 'memberResponsibilities', 'defaultApprovalMode', 'requireClearClosureChecklist'] as const;
       if (!canonical || !submitted || !fields.every(key => JSON.stringify(canonical[key]) === JSON.stringify(submitted[key]))) {
         setPendingProjectId(''); pendingProjectSnapshot.current = null;
         setFormError('The pending project change is no longer available. Review your draft before saving again.');
@@ -301,6 +320,10 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         services: allServices,
         ...(isBossKoo(currentUser) ? { projectManagerIds } : {}),
         hodMemberIds,
+        staffMemberIds,
+        memberResponsibilities,
+        defaultApprovalMode,
+        requireClearClosureChecklist,
       });
 
       if (!result.ok) {
@@ -325,6 +348,10 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       services: allServices,
       projectManagerIds,
       hodMemberIds,
+      staffMemberIds,
+      memberResponsibilities,
+      defaultApprovalMode,
+      requireClearClosureChecklist,
     });
 
     if (!newProjectId) {
@@ -444,6 +471,57 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                 {t('Department leads (HOD)')}: {hodMemberIds.map(id => users.find(user => user.id === id)?.name).filter(Boolean).join(', ') || t('Unassigned')}.
               </p>
             )}
+
+            {(isBossKoo(currentUser) || currentUser.role === 'Project Manager') && (
+              <fieldset className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+                <legend className="px-1 text-sm font-semibold text-slate-700">{t('Project staff')}</legend>
+                <p className="mb-2 text-xs leading-5 text-slate-500">{t('Assign shared employee accounts to this project without affecting their other projects.')}</p>
+                <div className="max-h-36 space-y-1 overflow-y-auto">
+                  {users.filter(user => user.role === 'Staff' && !isHodUser(user, rolePermissions)).map(user => (
+                    <label key={user.id} className="flex min-h-9 items-center gap-2 rounded-md px-2 text-sm text-slate-700 hover:bg-white">
+                      <input type="checkbox" checked={staffMemberIds.includes(user.id)} onChange={() => {
+                        setStaffMemberIds(current => current.includes(user.id) ? current.filter(id => id !== user.id) : [...current, user.id]);
+                        setFormEdited(true);
+                      }} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                      <span data-i18n-skip>{user.name}</span>
+                    </label>
+                  ))}
+                  {!users.some(user => user.role === 'Staff' && !isHodUser(user, rolePermissions)) && <p className="px-2 py-1 text-xs text-slate-500">{t('No Staff accounts available.')}</p>}
+                </div>
+              </fieldset>
+            )}
+
+            {(isBossKoo(currentUser) || currentUser.role === 'Project Manager') && [...hodMemberIds, ...staffMemberIds].length > 0 && (
+              <fieldset className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+                <legend className="px-1 text-sm font-semibold text-slate-700">{t('Project responsibilities')}</legend>
+                <p className="mb-3 text-xs leading-5 text-slate-500">{t('Optional project-specific responsibility. This does not change the employee’s global role.')}</p>
+                <div className="space-y-3">
+                  {[...hodMemberIds, ...staffMemberIds].map(memberId => {
+                    const member = users.find(user => user.id === memberId);
+                    if (!member) return null;
+                    return <label key={memberId} className="block text-xs font-medium text-slate-600"><span data-i18n-skip>{member.name}</span>
+                      <input maxLength={160} value={memberResponsibilities[memberId] || ''} onChange={event => { setMemberResponsibilities(current => ({ ...current, [memberId]: event.target.value })); setFormEdited(true); }} placeholder={t('e.g. Delivery lead')} className="mt-1 min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900" />
+                    </label>;
+                  })}
+                </div>
+              </fieldset>
+            )}
+
+            <fieldset className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+              <legend className="px-1 text-sm font-semibold text-slate-700">{t('Approval and closure defaults')}</legend>
+              <label className="block text-sm text-slate-700">{t('Default task approval')}
+                <select value={defaultApprovalMode} onChange={event => setDefaultApprovalMode(event.target.value as ProjectApprovalMode)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm shadow-sm">
+                  <option value="none">{t('No approval')}</option>
+                  <option value="hod">{t('HOD approval')}</option>
+                  <option value="pm">{t('PM approval')}</option>
+                </select>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">{t('Only tasks set to Follow project default use this setting.')}</span>
+              </label>
+              <label className="flex items-start gap-3 text-sm text-slate-700">
+                <input type="checkbox" checked={requireClearClosureChecklist} onChange={event => setRequireClearClosureChecklist(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                <span>{t('Require all closure checklist warnings to be resolved before closing')}</span>
+              </label>
+            </fieldset>
 
             {/* Required Services */}
             <div>

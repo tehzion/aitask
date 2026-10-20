@@ -7,6 +7,7 @@ import { recordTaskWorkTransition } from '../lib/staffWorkflow';
 import { getWorkflowStepKind } from '../lib/workflowReview';
 import { isWorkspaceMutationLocked } from './index';
 import { SECURE_WORKSPACE_ID } from '../lib/secureWorkspace';
+import { getEffectiveTaskApprovalMode } from '../lib/projectManagement';
 
 export const attachTaskOutput = (state: StoreState, set: (patch: Partial<StoreState>) => void, pendingMessage: string, taskId: string, attachment: AttachmentRef): MutationActionResult => {
   const task = state.tasks.find(item => item.id === taskId); const actor = state.currentUser;
@@ -25,7 +26,7 @@ export const attachTaskOutput = (state: StoreState, set: (patch: Partial<StoreSt
   return { ok: true };
 };
 
-export const setTaskReviewConfig = (state: StoreState, set: (patch: Partial<StoreState>) => void, pendingMessage: string, notify: (ids: string[], data: { title: string; message: string; route: { page: 'tasks'; entityId: string }; iconType: 'status' }, exclude: string) => import('../types').AppNotification[], taskId: string, config: { cover?: Task['reviewCover'] | null; accountableLeadId?: string; requiresInternalApproval?: boolean }): MutationActionResult => {
+export const setTaskReviewConfig = (state: StoreState, set: (patch: Partial<StoreState>) => void, pendingMessage: string, notify: (ids: string[], data: { title: string; message: string; route: { page: 'tasks'; entityId: string }; iconType: 'status' }, exclude: string) => import('../types').AppNotification[], taskId: string, config: { cover?: Task['reviewCover'] | null; accountableLeadId?: string; requiresInternalApproval?: boolean; approvalMode?: Task['approvalMode'] }): MutationActionResult => {
   const task = state.tasks.find(item => item.id === taskId); const actor = state.currentUser;
   if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMessage };
   const scope = { users: state.users, clients: state.clients, projects: state.projects };
@@ -35,6 +36,13 @@ export const setTaskReviewConfig = (state: StoreState, set: (patch: Partial<Stor
     if (config.requiresInternalApproval !== (task.requiresInternalApproval !== false) && ['Completed', 'Cancelled'].includes(task.status)) return { ok: false, error: 'Reopen the task before changing its approval requirement.' };
     if (!config.requiresInternalApproval && getWorkflowStepKind(task, state.serviceCycles, state.deliverables) === 'internal_review') return { ok: false, error: 'Internal review workflow steps always require approval.' };
   }
+  if (config.approvalMode !== undefined && !['inherit', 'none', 'hod', 'pm'].includes(config.approvalMode)) {
+    return { ok: false, error: 'Choose a valid approval workflow.' };
+  }
+  const nextMode = config.approvalMode === undefined ? task.approvalMode : config.approvalMode;
+  const nextRequired = config.requiresInternalApproval === undefined
+    ? getEffectiveTaskApprovalMode({ ...task, approvalMode: nextMode }, state.projects) !== 'none'
+    : config.requiresInternalApproval;
   const cover = config.cover === undefined ? task.reviewCover : config.cover || undefined;
   if (cover) {
     const reviewer = state.users.find(user => user.id === cover.reviewerId);
@@ -45,7 +53,7 @@ export const setTaskReviewConfig = (state: StoreState, set: (patch: Partial<Stor
   const leadId = config.accountableLeadId ?? task.accountableLeadId;
   const lead = state.users.find(user => user.id === leadId);
   if (config.accountableLeadId && (!lead || !canBeTaskReviewLead(lead, task, state.rolePermissions, scope))) return { ok: false, error: 'Choose a department lead or responsible project manager.' };
-  const next = recordTaskWorkTransition(task, { ...task, ...(config.requiresInternalApproval === undefined ? {} : { requiresInternalApproval: config.requiresInternalApproval }), accountableLeadId: leadId, reviewCover: cover ? { ...cover, configuredBy: actor.id, configuredAt: new Date().toISOString() } : config.cover === null ? null : undefined, updatedAt: new Date().toISOString() }, actor.id);
+  const next = recordTaskWorkTransition(task, { ...task, ...(config.approvalMode === undefined ? {} : { approvalMode: config.approvalMode }), requiresInternalApproval: nextRequired, accountableLeadId: leadId, reviewCover: cover ? { ...cover, configuredBy: actor.id, configuredAt: new Date().toISOString() } : config.cover === null ? null : undefined, updatedAt: new Date().toISOString() }, actor.id);
   const notices = state.backend.mode === 'local' && next.status === 'Waiting Approval' && task.status !== 'Waiting Approval' ? notify(getDepartmentReviewers(state.users, next, state.rolePermissions, scope).map(user => user.id), { title: 'Task Ready for Approval', message: `"${task.title}" is ready for review.`, route: { page: 'tasks', entityId: task.id }, iconType: 'status' }, actor.id) : [];
   set({ tasks: state.tasks.map(item => item.id === task.id ? next : item), notifications: [...notices, ...state.notifications], ...(state.backend.mode === 'supabase' ? { backend: { ...state.backend, hasLocalChanges: true, pendingMutations: 1, pendingCommandType: 'task.update' as const } } : {}) });
   return { ok: true };

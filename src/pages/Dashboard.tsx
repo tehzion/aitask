@@ -23,6 +23,7 @@ import { getTrackedMonthlyCompletions, isTaskOpen } from '../lib/taskReporting';
 import { isTaskCompleted } from '../lib/taskCompletion';
 import ClientPortalDashboard from '../components/ClientPortalDashboard';
 import TeamWorkload from '../components/TeamWorkload';
+import { projectStatus } from '../lib/projectManagement';
 import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
 import StaffMyWork from '../components/StaffMyWork';
 import { useI18n } from '../components/I18nProvider';
@@ -95,6 +96,10 @@ const Dashboard: React.FC = () => {
     () => getVisibleProjects(currentUser, projects, allTasks, rolePermissions, { clients: clientProfiles, projects }),
     [allTasks, clientProfiles, currentUser, projects, rolePermissions]
   );
+  const activeWorkloadTasks = useMemo(() => {
+    const closedIds = new Set(projects.filter(project => projectStatus(project) === 'Closed').map(project => project.id));
+    return tasks.filter(task => !task.projectId || !closedIds.has(task.projectId));
+  }, [projects, tasks]);
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
   const companiesDashboardAction = getCompaniesDashboardAction(currentUser, rolePermissions);
   const hasTaskData = tasks.length > 0;
@@ -714,13 +719,13 @@ const Dashboard: React.FC = () => {
 
             {bossTab === 'pulse' && (
               <div id="boss-panel-pulse" role="tabpanel" aria-labelledby="boss-tab-pulse" tabIndex={0} className="space-y-6">
-                <OperationsGlance tasks={tasks} users={users} scope="agency" />
+                <OperationsGlance tasks={activeWorkloadTasks} users={users} scope="agency" />
               </div>
             )}
 
             {bossTab === 'workload' && (
               <div id="boss-panel-workload" role="tabpanel" aria-labelledby="boss-tab-workload" tabIndex={0}>
-                <TeamWorkload tasks={tasks} users={users} onCreateTaskFor={openCreateTaskFor} />
+                <TeamWorkload tasks={activeWorkloadTasks} users={users} onCreateTaskFor={openCreateTaskFor} />
               </div>
             )}
           </>

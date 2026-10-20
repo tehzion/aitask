@@ -150,7 +150,7 @@ const handleRequest = async (request: Request): Promise<Response> => {
   });
   const { data: actor, error: actorError } = await userClient
     .from('aitask_members')
-    .select('id,workspace_id,is_super_admin')
+    .select('id,workspace_id,is_super_admin,role')
     .eq('auth_user_id', authData.user.id)
     .maybeSingle();
   if (actorError) {
@@ -214,9 +214,30 @@ const handleRequest = async (request: Request): Promise<Response> => {
     return json(result);
   }
 
-  if (!actor.is_super_admin) {
+  const projectManagerActor = !actor.is_super_admin && actor.role === 'Project Manager';
+  const scopedProjectManager = projectManagerActor && action === 'invite_member';
+  if (!actor.is_super_admin && !(projectManagerActor && action === 'request_member_deactivation')) {
+    if (scopedProjectManager) {
+      // Invitation handling continues below.
+    } else {
     console.warn('Account management denied for non-Super-Admin member', { memberId: actor.id, action });
     return json({ error: 'Boss Koo Super Admin access is required. Sign in with the Boss Koo account.' }, 403);
+    }
+  }
+
+  if (action === 'request_member_deactivation') {
+    const targetMemberId = typeof body.memberId === 'string' ? body.memberId.trim() : '';
+    const requestCommandId = typeof body.commandId === 'string' ? body.commandId.trim().toLowerCase() : '';
+    if (!targetMemberId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestCommandId)) {
+      return json({ error: 'A valid member and request identifier are required.' }, 400);
+    }
+    const { data: result, error } = await adminClient.rpc('aitask_pm_request_member_deactivation', {
+      p_actor_member_id: actor.id,
+      p_member_id: targetMemberId,
+      p_command_id: requestCommandId,
+    });
+    if (error) return json({ error: error.message || 'Unable to request account deactivation.' }, 403);
+    return json(result);
   }
 
   if (action === 'delete_member') {
@@ -265,12 +286,36 @@ const handleRequest = async (request: Request): Promise<Response> => {
   let departments = normalizeDepartments(role, body.departments, body.department);
   const companyName = role === 'Client' && typeof body.companyName === 'string' ? body.companyName.trim() : null;
   const customRoleId = typeof body.customRoleId === 'string' && body.customRoleId.trim() ? body.customRoleId.trim() : null;
+  const projectIds = Array.isArray(body.projectIds)
+    ? [...new Set(body.projectIds.filter((value): value is string => typeof value === 'string').map(value => value.trim()).filter(Boolean))]
+    : [];
   const workerType = ['Staff', 'HOD'].includes(role) && ['employee', 'supplier', 'freelancer'].includes(body.workerType)
     ? body.workerType
     : 'employee';
   const sendInvitation = body.sendInvitation !== false;
   const temporaryPassword = typeof body.password === 'string' ? body.password.trim() : '';
   let onboardingMode: 'self_signup' | 'legacy_invite' | 'direct_invite' = 'direct_invite';
+
+  if (scopedProjectManager) {
+    if (registrationId) return json({ error: 'Project Managers cannot approve workspace registrations.' }, 403);
+    if (!['HOD', 'Staff'].includes(role)) return json({ error: 'Project Managers may only create HOD and Staff accounts.' }, 403);
+    if (customRoleId) return json({ error: 'Only Boss Koo can assign custom account roles.' }, 403);
+    if (projectIds.length === 0 || projectIds.length > 100) return json({ error: 'Choose at least one authorised project.' }, 400);
+    // Authorize before any Auth invitation or account-creation side effect.
+    // The final RPC repeats this check inside its membership transaction.
+    const { data: projects, error: projectError } = await userClient
+      .from('aitask_entities')
+      .select('entity_id,data')
+      .eq('workspace_id', actor.workspace_id)
+      .eq('entity_type', 'project')
+      .in('entity_id', projectIds);
+    if (projectError || projects?.length !== projectIds.length || projects.some(project => (
+      !Array.isArray(project.data?.projectManagerIds)
+      || !project.data.projectManagerIds.includes(actor.id)
+    ))) {
+      return json({ error: 'A selected project is outside your authority.' }, 403);
+    }
+  }
 
   if (registrationId) {
     const { data: registration, error } = await userClient
@@ -319,13 +364,15 @@ const handleRequest = async (request: Request): Promise<Response> => {
   }
 
   const payload = { name, email, role, departments, companyName, customRoleId, customRoleName,
-    memberId: memberId || null, registrationId: registrationId || null, workerType, sendInvitation };
+    memberId: memberId || null, registrationId: registrationId || null, workerType, sendInvitation, projectIds };
   const retryError = (message: string) => json({ code: 'ONBOARDING_RETRY_REQUIRED', error: message, commandId }, 409);
-  const { data: reserved, error: reserveError } = await adminClient.rpc('aitask_reserve_member_onboarding', {
-    p_actor_member_id: actor.id, p_command_id: commandId, p_payload: payload,
-  });
-  if (reserveError || !reserved?.ok) return retryError('Onboarding could not be reserved. Keep this draft and retry after the backend is available.');
-  if (reserved.result) return json(reserved.result);
+  if (!scopedProjectManager) {
+    const { data: reserved, error: reserveError } = await adminClient.rpc('aitask_reserve_member_onboarding', {
+      p_actor_member_id: actor.id, p_command_id: commandId, p_payload: payload,
+    });
+    if (reserveError || !reserved?.ok) return retryError('Onboarding could not be reserved. Keep this draft and retry after the backend is available.');
+    if (reserved.result) return json(reserved.result);
+  }
 
   const { users: authUsers, error: listError } = await listAllAuthUsers(adminClient);
   if (listError) return json({ error: 'Unable to verify the Auth user' }, 500);
@@ -398,7 +445,7 @@ const handleRequest = async (request: Request): Promise<Response> => {
       if (!authUser) return retryError(createError?.message || 'Account creation is not confirmed. Keep this draft and retry.');
     }
     createdAuthUser = true;
-  } else if (!registrationId && !ownsPreparedAccount(authUser)) {
+  } else if (!registrationId && !ownsPreparedAccount(authUser) && !scopedProjectManager) {
     return json({ error: 'An Auth account already exists for this email. Use its pending registration instead.' }, 409);
   }
 
@@ -411,10 +458,23 @@ const handleRequest = async (request: Request): Promise<Response> => {
   }
   if (!authUser) return json({ error: 'Unable to prepare the Auth user' }, 500);
 
-  const { data: result, error: finalizeError } = await adminClient.rpc('aitask_finalize_member_invitation_v3', {
-    p_actor_member_id: actor.id, p_command_id: commandId, p_auth_user_id: authUser.id, p_payload: payload,
-  });
+  const { data: result, error: finalizeError } = scopedProjectManager
+    ? await adminClient.rpc('aitask_pm_upsert_project_member', {
+        p_actor_member_id: actor.id,
+        p_auth_user_id: authUser.id,
+        p_name: name,
+        p_email: email,
+        p_role: role,
+        p_departments: departments,
+        p_worker_type: workerType,
+        p_project_ids: projectIds,
+        p_command_id: commandId,
+      })
+    : await adminClient.rpc('aitask_finalize_member_invitation_v3', {
+        p_actor_member_id: actor.id, p_command_id: commandId, p_auth_user_id: authUser.id, p_payload: payload,
+      });
   if (finalizeError) {
+    if (scopedProjectManager) return retryError(finalizeError.message || 'The project membership could not be confirmed. Keep this draft and retry.');
     // A transport error cannot establish whether the transaction committed.
     const { data: reconciled, error: reconcileError } = await adminClient.rpc('aitask_reserve_member_onboarding', {
       p_actor_member_id: actor.id, p_command_id: commandId, p_payload: payload,

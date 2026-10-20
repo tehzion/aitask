@@ -8,7 +8,7 @@ import React, { useState } from 'react';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { X, Plus, ChevronDown } from 'lucide-react';
-import { Department, Priority, ServiceType, TaskVisibility } from '../types';
+import { Department, Priority, ServiceType, TaskApprovalMode, TaskVisibility } from '../types';
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
 import { getServiceOptions, hasChoice } from '../lib/choiceOptions';
@@ -73,6 +73,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectId, setProjectId] = useState('');
+  const [milestoneId, setMilestoneId] = useState('');
+  const [approvalMode, setApprovalMode] = useState<TaskApprovalMode>('inherit');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [clientName, setClientName] = useState('');
@@ -150,6 +152,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const resetForm = React.useCallback(() => {
     setProjectId('');
+    setMilestoneId('');
+    setApprovalMode('inherit');
     setTitle('');
     setDescription('');
     setClientName('');
@@ -177,11 +181,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   React.useEffect(() => { resetForm(); }, [currentUser?.id, resetForm]);
 
-  const recovery = useRecoverableForm('create-task', { projectId, title, description, clientName, customerDetails, facebookPage, website, department, assignedTo, serviceType, priority, visibility, startDate, dueDate, attachmentLink, attachmentName, notes, customServiceInput }, formEdited, isOpen && !pendingTaskId);
+  const recovery = useRecoverableForm('create-task', { projectId, milestoneId, approvalMode, title, description, clientName, customerDetails, facebookPage, website, department, assignedTo, serviceType, priority, visibility, startDate, dueDate, attachmentLink, attachmentName, notes, customServiceInput }, formEdited, isOpen && !pendingTaskId);
   const restoreDraft = () => {
     const value = recovery.restore(); if (!value || typeof value.title !== 'string') return;
     if (additionalDetailsRef.current) additionalDetailsRef.current.open = true;
-    setProjectId(value.projectId); setTitle(value.title); setDescription(value.description); setClientName(value.clientName); setCustomerDetails(value.customerDetails); setFacebookPage(value.facebookPage); setWebsite(value.website); setDepartment(value.department); setAssignedTo(value.assignedTo); setServiceType(value.serviceType); setPriority(value.priority); setVisibility(value.visibility); setStartDate(value.startDate); setDueDate(value.dueDate); setAttachmentLink(value.attachmentLink); setAttachmentName(value.attachmentName); setNotes(value.notes); setCustomServiceInput(value.customServiceInput); setFormEdited(true);
+    setProjectId(value.projectId); setMilestoneId(typeof value.milestoneId === 'string' ? value.milestoneId : ''); setApprovalMode(['inherit', 'none', 'hod', 'pm'].includes(value.approvalMode) ? value.approvalMode : 'inherit'); setTitle(value.title); setDescription(value.description); setClientName(value.clientName); setCustomerDetails(value.customerDetails); setFacebookPage(value.facebookPage); setWebsite(value.website); setDepartment(value.department); setAssignedTo(value.assignedTo); setServiceType(value.serviceType); setPriority(value.priority); setVisibility(value.visibility); setStartDate(value.startDate); setDueDate(value.dueDate); setAttachmentLink(value.attachmentLink); setAttachmentName(value.attachmentName); setNotes(value.notes); setCustomServiceInput(value.customServiceInput); setFormEdited(true);
   };
   const closeAndReset = () => {
     recovery.clear(); markPristine(); setFormEdited(false); resetForm();
@@ -231,6 +235,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const selectProject = (id: string) => {
     setProjectId(id);
+    setMilestoneId('');
     if (!id) return;
 
     const project = assignableProjects.find(item => item.id === id);
@@ -384,6 +389,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       title: trimmedTitle,
       description: description.trim(),
       projectId: projectId || undefined,
+      milestoneId: milestoneId || undefined,
+      approvalMode,
       clientId: createTaskInitialClientId || selectedProject?.clientId || selectedClient?.id,
       serviceCycleId: createTaskInitialCycleId,
       deliverableId: createTaskInitialDeliverableId,
@@ -491,6 +498,25 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                 </div>
               </div>
+              )}
+
+              {selectedProject && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block text-sm font-medium text-slate-700">{t('Milestone')} {t('(Optional)')}
+                    <select value={milestoneId} onChange={event => setMilestoneId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm shadow-sm">
+                      <option value="">{t('No milestone')}</option>
+                      {(selectedProject.milestones || []).map(milestone => <option key={milestone.id} value={milestone.id} data-i18n-skip>{milestone.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700">{t('Approval workflow')}
+                    <select value={approvalMode} onChange={event => setApprovalMode(event.target.value as TaskApprovalMode)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm shadow-sm">
+                      <option value="inherit">{t('Follow project default')}</option>
+                      <option value="none">{t('No approval')}</option>
+                      <option value="hod">{t('HOD approval')}</option>
+                      <option value="pm">{t('PM approval')}</option>
+                    </select>
+                  </label>
+                </div>
               )}
 
               <div>

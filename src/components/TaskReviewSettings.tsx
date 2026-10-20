@@ -8,6 +8,8 @@ import { getTodayInputDate } from '../lib/utils';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { useI18n } from './I18nProvider';
 import SystemMessage from './SystemMessage';
+import type { TaskApprovalMode } from '../types';
+import { getEffectiveTaskApprovalMode } from '../lib/projectManagement';
 
 export default function TaskReviewSettings({ task }: { task: Task }) {
   const { t } = useI18n();
@@ -15,7 +17,8 @@ export default function TaskReviewSettings({ task }: { task: Task }) {
   const scope = { users: state.users, clients: state.clients, projects: state.projects };
   const candidates = state.users.filter(user => canBeTaskReviewLead(user, task, state.roles, scope));
   const [lead, setLead] = React.useState(task.accountableLeadId || '');
-  const [requiresApproval, setRequiresApproval] = React.useState(task.requiresInternalApproval !== false);
+  const savedApprovalMode: TaskApprovalMode = task.approvalMode || (task.requiresInternalApproval === false ? 'none' : 'hod');
+  const [approvalMode, setApprovalMode] = React.useState<TaskApprovalMode>(savedApprovalMode);
   const approvalHintId = React.useId();
   const [reviewer, setReviewer] = React.useState(task.reviewCover?.reviewerId || '');
   const [until, setUntil] = React.useState(task.reviewCover?.expiresAt ? getTodayInputDate(new Date(task.reviewCover.expiresAt)) : getTodayInputDate(new Date(Date.now() + 7 * 86400000)));
@@ -23,9 +26,9 @@ export default function TaskReviewSettings({ task }: { task: Task }) {
   const [message, setMessage] = React.useState('');
   const [error, setError] = React.useState('');
   const { busy, run } = useSaveAction(`review-config:${task.id}`);
-  const resetDefaults = React.useRef({ lead: task.accountableLeadId, cover: task.reviewCover, requiresApproval: task.requiresInternalApproval !== false });
-  resetDefaults.current = { lead: task.accountableLeadId, cover: task.reviewCover, requiresApproval: task.requiresInternalApproval !== false };
-  React.useEffect(() => { const { lead: savedLead, cover: savedCover, requiresApproval: savedApproval } = resetDefaults.current; setRequiresApproval(savedApproval); setLead(savedLead || ''); setReviewer(savedCover?.reviewerId || ''); setUntil(savedCover?.expiresAt ? getTodayInputDate(new Date(savedCover.expiresAt)) : getTodayInputDate(new Date(Date.now() + 7 * 86400000))); setReason(''); setMessage(''); setError(''); }, [task.id, task.requiresInternalApproval, state.currentUser?.id]);
+  const resetDefaults = React.useRef({ lead: task.accountableLeadId, cover: task.reviewCover, approvalMode: savedApprovalMode });
+  resetDefaults.current = { lead: task.accountableLeadId, cover: task.reviewCover, approvalMode: savedApprovalMode };
+  React.useEffect(() => { const { lead: savedLead, cover: savedCover, approvalMode: savedApproval } = resetDefaults.current; setApprovalMode(savedApproval); setLead(savedLead || ''); setReviewer(savedCover?.reviewerId || ''); setUntil(savedCover?.expiresAt ? getTodayInputDate(new Date(savedCover.expiresAt)) : getTodayInputDate(new Date(Date.now() + 7 * 86400000))); setReason(''); setMessage(''); setError(''); }, [task.id, task.approvalMode, task.requiresInternalApproval, state.currentUser?.id]);
   if (!canManageTaskReview(state.currentUser, task, state.roles, scope)) return null;
   const locked = busy || state.backend.isSaving || state.backend.isPulling || state.backend.upgradeRequired;
   const override = state.currentUser?.isSuperAdmin && task.status === 'Waiting Approval' && !canReviewTaskInternally(state.currentUser, task, state.roles, scope);
@@ -37,22 +40,31 @@ export default function TaskReviewSettings({ task }: { task: Task }) {
       if (!isCurrent()) return { ok: false };
       const result = isOverride
         ? useStore.getState().updateTask(task.id, { status: 'Approved', reviewOverrideReason: reason.trim() })
-        : await useStore.getState().setTaskReviewConfig(task.id, { ...(requiresApproval === (task.requiresInternalApproval !== false) ? {} : { requiresInternalApproval: requiresApproval }), accountableLeadId: lead || undefined, cover: reviewer ? { reviewerId: reviewer, expiresAt: new Date(`${until}T23:59:59`).toISOString() } : null });
+        : await useStore.getState().setTaskReviewConfig(task.id, {
+          ...(approvalMode === savedApprovalMode ? {} : {
+            approvalMode,
+            requiresInternalApproval: getEffectiveTaskApprovalMode({ ...task, approvalMode }, state.projects) !== 'none',
+          }),
+          accountableLeadId: lead || undefined,
+          cover: reviewer ? { reviewerId: reviewer, expiresAt: new Date(`${until}T23:59:59`).toISOString() } : null,
+        });
       if (!result.ok) return { ok: false, error: result.error ? t(result.error) : 'The change is waiting to be saved.' };
       const saved = await useStore.getState().commitPendingMutation('task.update');
       if (!saved.ok) return saved;
       return { ok: true };
-    }, result => { if (result.ok) { setMessage(t(isOverride ? 'Review override saved with your reason.' : requiresApproval !== (task.requiresInternalApproval !== false) ? 'Review responsibility saved.' : 'Review cover and lead saved.')); setReason(''); } else setError(result.error || 'The change is waiting to be saved.'); });
+    }, result => { if (result.ok) { setMessage(t(isOverride ? 'Review override saved with your reason.' : approvalMode !== savedApprovalMode ? 'Review responsibility saved.' : 'Review cover and lead saved.')); setReason(''); } else setError(result.error || 'The change is waiting to be saved.'); });
   };
   return <section aria-label={t('Review responsibility')} className="space-y-3 rounded-control border border-line p-4">
     <h3 className="text-sm font-semibold text-ink">{t('Review responsibility')}</h3>
-    <div>
-      <label className="flex min-h-11 items-center gap-3 text-sm font-medium text-ink">
-        <input type="checkbox" checked={requiresApproval} onChange={event => setRequiresApproval(event.target.checked)} disabled={locked || task.workflowStepKind === 'internal_review' || ['Completed', 'Cancelled'].includes(task.status)} aria-describedby={approvalHintId} className="h-4 w-4 accent-accent" />
-        {t('Require internal approval')}
-      </label>
-      <p id={approvalHintId} className="text-xs leading-5 text-muted">{t(task.workflowStepKind === 'internal_review' ? 'Internal review workflow steps always require approval.' : 'Turn off to let the responsible PM complete this task while it is waiting for review.')}</p>
-    </div>
+    <label className="block text-sm font-medium text-ink">{t('Approval workflow')}
+      <select value={approvalMode} onChange={event => setApprovalMode(event.target.value as TaskApprovalMode)} disabled={locked || task.workflowStepKind === 'internal_review' || ['Completed', 'Cancelled'].includes(task.status)} aria-describedby={approvalHintId} className="mt-1 min-h-11 w-full rounded-control border border-line bg-surface px-3">
+        <option value="inherit">{t('Follow project default')}</option>
+        <option value="none">{t('No approval')}</option>
+        <option value="hod">{t('HOD approval')}</option>
+        <option value="pm">{t('PM approval')}</option>
+      </select>
+      <span id={approvalHintId} className="mt-1 block text-xs leading-5 text-muted">{t(task.workflowStepKind === 'internal_review' ? 'Internal review workflow steps always require approval.' : 'Existing tasks keep their saved workflow until you explicitly choose project inheritance.')}</span>
+    </label>
     <p className="text-xs leading-5 text-muted">{t('The accountable lead stays with the task after delegation. Temporary cover expires automatically.')}</p>
     <label className="block text-sm text-ink">{t('Accountable lead')}<select value={lead} onChange={event => setLead(event.target.value)} disabled={locked} className="mt-1 min-h-11 w-full rounded-control border border-line bg-surface px-3"><option value="">{t('Keep the current lead')}</option>{candidates.map(user => <option key={user.id} value={user.id} data-i18n-skip>{user.name}</option>)}</select></label>
     <label className="block text-sm text-ink">{t('Temporary review cover')}<select value={reviewer} onChange={event => setReviewer(event.target.value)} disabled={locked} className="mt-1 min-h-11 w-full rounded-control border border-line bg-surface px-3"><option value="">{t('Use the independent department reviewer')}</option>{candidates.filter(user => isIndependentTaskReviewer(user, task)).map(user => <option key={user.id} value={user.id} data-i18n-skip>{user.name}</option>)}</select></label>

@@ -41,6 +41,8 @@ import {
   ServicePricingSnapshot,
   LoginResult,
   RolePermissions,
+  ProjectMilestone,
+  ProjectLifecycleStatus,
 } from '../types';
 import { legacyDemoTaskIds, mockUsers, mockProjects, mockTasks, retiredDemoUserIds } from '../mock';
 import {
@@ -52,6 +54,7 @@ import {
 } from '../mock/localServiceDemo';
 import { canLoginWithSeedAccount, classifyLoginFailure, DEFAULT_USER_PASSWORD, loginFailure, shouldShowDemoLogin } from '../lib/auth';
 import { msg, type MessageDescriptor } from '../lib/messages';
+import { canManageProjectLifecycle, getEffectiveTaskApprovalMode, getProjectClosureWarnings, hasProjectClosureWarnings, isClosedProject, makeMilestoneId } from '../lib/projectManagement';
 import { clearLocalUserPassword, getLocalUserPassword, setLocalUserPassword, verifyLocalUserPassword } from '../lib/localCredentials';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
 import type { PersistedWorkspaceState, SnapshotResult } from '../lib/supabaseSnapshot';
@@ -212,6 +215,7 @@ type TaskUpdateInput = Partial<Pick<
   | 'isRecurring'
   | 'recurrenceFrequency'
   | 'visibility'
+  | 'milestoneId'
 >>;
 
 export type ClientPlanSetupInput = {
@@ -236,13 +240,18 @@ export type ClientPlanSetupInput = {
   contractEndDate?: string;
 };
 
-type ProjectUpdateInput = Partial<Pick<Project, 'clientId' | 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline' | 'projectManagerIds' | 'hodMemberIds'>>;
+type ProjectUpdateInput = Partial<Pick<Project,
+  'clientId' | 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline'
+  | 'projectManagerIds' | 'hodMemberIds' | 'staffMemberIds' | 'memberResponsibilities'
+  | 'defaultApprovalMode' | 'requireClearClosureChecklist'
+>>;
 type ClientProfileInput = Partial<Pick<ClientProfile, 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes' | 'clientSince'>>;
 type ClientPlanInput = Omit<ClientPlanSetupInput, 'clientName' | 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes'>;
 type AddMemberInput = Omit<User, 'id' | 'avatar' | 'isSuperAdmin'> & {
   registrationId?: string;
   memberId?: string;
   sendInvitation?: boolean;
+  projectIds?: string[];
 };
 
 const BUILTIN_ROLE_DESCRIPTIONS: Record<Role, string> = {
@@ -348,7 +357,7 @@ export interface StoreState {
   updateTaskDueDate: (taskId: string, newDueDate: string) => MutationActionResult;
   updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => MutationActionResult;
   attachTaskOutput: (taskId: string, attachment: AttachmentRef) => Promise<MutationActionResult>;
-  setTaskReviewConfig: (taskId: string, config: { cover?: Task['reviewCover'] | null; accountableLeadId?: string; requiresInternalApproval?: boolean }) => Promise<MutationActionResult>;
+  setTaskReviewConfig: (taskId: string, config: { cover?: Task['reviewCover'] | null; accountableLeadId?: string; requiresInternalApproval?: boolean; approvalMode?: Task['approvalMode'] }) => Promise<MutationActionResult>;
   updateTask: (taskId: string, data: TaskUpdateInput) => { ok: boolean; error?: string };
   deleteTask: (taskId: string) => { ok: boolean; error?: string };
   reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => MutationActionResult;
@@ -356,6 +365,9 @@ export interface StoreState {
   addTask: (task: Omit<Task, 'id' | 'isCompleted' | 'completedAt' | 'revisionCount' | 'clientApprovalStatus' | 'dueReminderSent' | 'approvalHistory'>) => string;
   addProject: (project: Omit<Project, 'id'>) => string;
   updateProject: (projectId: string, data: ProjectUpdateInput) => { ok: boolean; error?: string };
+  setProjectStatus: (projectId: string, status: ProjectLifecycleStatus, confirmWarnings?: boolean) => { ok: boolean; error?: string };
+  saveProjectMilestone: (projectId: string, milestone: Omit<ProjectMilestone, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => { ok: boolean; id?: string; error?: string };
+  deleteProjectMilestone: (projectId: string, milestoneId: string) => { ok: boolean; error?: string };
   deleteProject: (projectId: string) => { ok: boolean; error?: string };
   createClientProfile: (data: { clientName: string } & ClientProfileInput) => { ok: boolean; id?: string; error?: string };
   upsertClientProfile: (clientName: string, data: ClientProfileInput) => { ok: boolean; id?: string; error?: string };
@@ -401,6 +413,7 @@ export interface StoreState {
   changeMemberRole: (userId: string, role: Role, options?: { customRoleId?: string; companyName?: string; departments?: Department[] }) => Promise<{ ok: boolean; error?: string }>;
   approveRegistration: (id: string, role: Role, departments: Department[], companyName?: string, customRoleId?: string) => { ok: boolean; error?: string };
   rejectRegistration: (id: string) => MutationActionResult;
+  requestMemberDeactivation: (userId: string) => Promise<{ ok: boolean; error?: string }>;
   deleteUser: (userId: string) => Promise<{ ok: boolean; error?: string }>;
   _forceSyncMockData: () => void;
   resetLocalServiceDemo: () => { ok: boolean; error?: string };
@@ -2700,7 +2713,7 @@ export const useStore = create<StoreState>()(
         if (requestedCreatorId !== undefined && requestedCreatorId !== task.createdBy) {
           return { ok: false, error: 'Task ownership cannot be changed.' };
         }
-        const workflowKeys = ['reviewEvidence', 'reviewAccess', 'reviewDecision', 'reviewCover', 'accountableLeadId', 'requiresInternalApproval', 'outputAttachments', 'workflowStepKind', 'workflowStepId', 'workflowStepOrder', 'workflowStepRequired', 'workflowTemplateId', 'workflowTemplateRevision', 'generatedFromDeliverable', 'predecessorTaskIds', 'workflowOutputVersion', 'workflowDependenciesReady', 'internalReview'];
+        const workflowKeys = ['reviewEvidence', 'reviewAccess', 'reviewDecision', 'reviewCover', 'accountableLeadId', 'requiresInternalApproval', 'approvalMode', 'outputAttachments', 'workflowStepKind', 'workflowStepId', 'workflowStepOrder', 'workflowStepRequired', 'workflowTemplateId', 'workflowTemplateRevision', 'generatedFromDeliverable', 'predecessorTaskIds', 'workflowOutputVersion', 'workflowDependenciesReady', 'internalReview'];
         if (workflowKeys.some(key => Object.prototype.hasOwnProperty.call(data, key))) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
         if (isWorkflowTask(task) && (['deliverableId', 'serviceCycleId', 'clientId', 'department', 'visibility'] as const).some(key => data[key] !== undefined && data[key] !== task[key])) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
 
@@ -2762,6 +2775,11 @@ export const useStore = create<StoreState>()(
           if (!assignableProjectIds.has(requestedProjectId)) {
             return { ok: false, error: 'You can only link tasks to projects you can access.' };
           }
+          if (data.milestoneId && !(project?.milestones || []).some(milestone => milestone.id === data.milestoneId)) {
+            return { ok: false, error: 'Choose a milestone from the selected project.' };
+          }
+        } else if (data.milestoneId) {
+          return { ok: false, error: 'Choose a project before linking a milestone.' };
         }
 
         const title = data.title !== undefined ? data.title.trim() : task.title;
@@ -3187,6 +3205,8 @@ export const useStore = create<StoreState>()(
           : undefined;
         if (taskData.projectId) {
           if (!project) return '';
+          if (isClosedProject(project)) return '';
+          if (taskData.milestoneId && !(project.milestones || []).some(milestone => milestone.id === taskData.milestoneId)) return '';
           const assignableProjectIds = new Set(
             getAssignableProjects(currentUser, state.projects, state.tasks, state.rolePermissions, state.users, { clients: state.clients, projects: state.projects }).map(item => item.id)
           );
@@ -3255,6 +3275,7 @@ export const useStore = create<StoreState>()(
             revisionCount: 0,
             clientApprovalStatus: 'Pending',
             visibility: taskData.visibility || 'client-visible',
+            requiresInternalApproval: getEffectiveTaskApprovalMode(taskData, state.projects) !== 'none',
             dueReminderSent: false,
             approvalHistory: [],
             workHistory: [],
@@ -3350,6 +3371,14 @@ export const useStore = create<StoreState>()(
             ? Array.from(new Set((projectData.projectManagerIds || []).filter(id => state.users.some(user => user.id === id && user.role === 'Project Manager' && !isBossKoo(user)))))
             : currentUser.role === 'Project Manager' ? [currentUser.id] : [],
           hodMemberIds: Array.from(new Set((projectData.hodMemberIds || []).filter(id => state.users.some(user => user.id === id && isHodUser(user, state.rolePermissions))))),
+          staffMemberIds: Array.from(new Set((projectData.staffMemberIds || []).filter(id => state.users.some(user => user.id === id && user.role === 'Staff' && !isHodUser(user, state.rolePermissions))))),
+          memberResponsibilities: Object.fromEntries(Object.entries(projectData.memberResponsibilities || {})
+            .filter(([id, responsibility]) => state.users.some(user => user.id === id) && typeof responsibility === 'string' && responsibility.trim())
+            .map(([id, responsibility]) => [id, responsibility.trim().slice(0, 160)])),
+          status: projectData.status || 'Active',
+          defaultApprovalMode: projectData.defaultApprovalMode,
+          requireClearClosureChecklist: Boolean(projectData.requireClearClosureChecklist),
+          milestones: projectData.milestones || [],
           createdBy: currentUser.id,
           id: nowId('P'),
           updatedAt: new Date().toISOString(),
@@ -3372,6 +3401,10 @@ export const useStore = create<StoreState>()(
         }
         if (data.hodMemberIds !== undefined && !isBossKoo(currentUser) && currentUser.role !== 'Project Manager') {
           return { ok: false, error: 'Only Boss Koo or a Project Manager can change HOD project membership.' };
+        }
+        if ((data.staffMemberIds !== undefined || data.memberResponsibilities !== undefined)
+          && !isBossKoo(currentUser) && currentUser.role !== 'Project Manager') {
+          return { ok: false, error: 'Only Boss Koo or an assigned Project Manager can change project team membership.' };
         }
 
         const clientName = data.clientName !== undefined ? data.clientName.trim() : project.clientName;
@@ -3421,6 +3454,16 @@ export const useStore = create<StoreState>()(
           ...(data.hodMemberIds === undefined ? {} : {
             hodMemberIds: Array.from(new Set(data.hodMemberIds.filter(id => state.users.some(user => user.id === id && isHodUser(user, state.rolePermissions))))),
           }),
+          ...(data.staffMemberIds === undefined ? {} : {
+            staffMemberIds: Array.from(new Set(data.staffMemberIds.filter(id => state.users.some(user => user.id === id && user.role === 'Staff' && !isHodUser(user, state.rolePermissions))))),
+          }),
+          ...(data.memberResponsibilities === undefined ? {} : {
+            memberResponsibilities: Object.fromEntries(Object.entries(data.memberResponsibilities)
+              .filter(([id, responsibility]) => state.users.some(user => user.id === id) && typeof responsibility === 'string' && responsibility.trim())
+              .map(([id, responsibility]) => [id, responsibility.trim().slice(0, 160)])),
+          }),
+          ...(data.defaultApprovalMode === undefined ? {} : { defaultApprovalMode: data.defaultApprovalMode }),
+          ...(data.requireClearClosureChecklist === undefined ? {} : { requireClearClosureChecklist: Boolean(data.requireClearClosureChecklist) }),
           updatedAt: new Date().toISOString(),
         };
 
@@ -3452,6 +3495,99 @@ export const useStore = create<StoreState>()(
             : current.tasks,
         }));
         useToastStore.getState().addToast(msg('project.updated', { name: projectName }), 'success');
+        return { ok: true };
+      },
+
+      setProjectStatus: (projectId, status, confirmWarnings = false) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        const project = state.projects.find(item => item.id === projectId);
+        if (!actor || !project || !canManageProjectLifecycle(actor, project)) {
+          return { ok: false, error: 'Only an assigned Project Manager or Boss Koo can change the project status.' };
+        }
+        const currentStatus = project.status || 'Active';
+        const valid = currentStatus === status
+          || (currentStatus === 'Active' && status === 'Completed')
+          || (currentStatus === 'Completed' && ['Active', 'Closed'].includes(status))
+          || (currentStatus === 'Closed' && status === 'Active');
+        if (!valid) return { ok: false, error: `Move the project through Active, Completed, and Closed in order.` };
+        if (currentStatus === status) return { ok: true };
+        const now = new Date().toISOString();
+        const warnings = getProjectClosureWarnings(project, state.tasks, new Date(now));
+        if (status === 'Closed' && hasProjectClosureWarnings(warnings) && project.requireClearClosureChecklist) {
+          return { ok: false, error: 'Resolve the configured closure checklist before closing this project.' };
+        }
+        if (status === 'Closed' && hasProjectClosureWarnings(warnings) && !confirmWarnings) {
+          return { ok: false, error: 'Confirm closure with the outstanding checklist warnings.' };
+        }
+        const updated: Project = {
+          ...project,
+          status,
+          ...(status === 'Completed' ? { completedAt: now, completedBy: actor.id } : {}),
+          ...(status === 'Closed' ? {
+            closedAt: now,
+            closedBy: actor.id,
+            closureWarningsAcknowledged: hasProjectClosureWarnings(warnings),
+            closureWarningSnapshot: { ...warnings, confirmedAt: now },
+          } : {}),
+          ...(currentStatus === 'Closed' && status === 'Active' ? {
+            reopenedAt: now,
+            reopenedBy: actor.id,
+            closedAt: undefined,
+            closedBy: undefined,
+          } : {}),
+          updatedAt: now,
+        };
+        set(current => ({ projects: current.projects.map(item => item.id === projectId ? updated : item) }));
+        return { ok: true };
+      },
+
+      saveProjectMilestone: (projectId, input) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        const project = state.projects.find(item => item.id === projectId);
+        if (!actor || !project || !canManageProjectLifecycle(actor, project)) return { ok: false, error: 'You cannot manage milestones for this project.' };
+        if (isClosedProject(project)) return { ok: false, error: 'Reopen the project before changing milestones.' };
+        const name = input.name.trim();
+        if (!name) return { ok: false, error: 'Milestone name is required.' };
+        if (!isValidIsoDate(input.targetDate)) return { ok: false, error: 'Choose a valid milestone target date.' };
+        if (input.responsiblePersonId && !state.users.some(user => user.id === input.responsiblePersonId)) return { ok: false, error: 'Choose a valid responsible person.' };
+        const now = new Date().toISOString();
+        const id = input.id || makeMilestoneId();
+        const existing = (project.milestones || []).find(item => item.id === id);
+        const milestone: ProjectMilestone = {
+          id,
+          name: name.slice(0, 160),
+          description: input.description?.trim().slice(0, 2000) || undefined,
+          targetDate: input.targetDate,
+          responsiblePersonId: input.responsiblePersonId || undefined,
+          status: input.status,
+          createdAt: existing?.createdAt || now,
+          updatedAt: now,
+        };
+        set(current => ({ projects: current.projects.map(item => item.id === projectId ? {
+          ...item,
+          milestones: existing
+            ? (item.milestones || []).map(value => value.id === id ? milestone : value)
+            : [...(item.milestones || []), milestone],
+          updatedAt: now,
+        } : item) }));
+        return { ok: true, id };
+      },
+
+      deleteProjectMilestone: (projectId, milestoneId) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        const project = state.projects.find(item => item.id === projectId);
+        if (!actor || !project || !canManageProjectLifecycle(actor, project)) return { ok: false, error: 'You cannot manage milestones for this project.' };
+        if (isClosedProject(project)) return { ok: false, error: 'Reopen the project before changing milestones.' };
+        if (state.tasks.some(task => task.projectId === projectId && task.milestoneId === milestoneId)) return { ok: false, error: 'Unlink related tasks before deleting this milestone.' };
+        set(current => ({ projects: current.projects.map(item => item.id === projectId
+          ? { ...item, milestones: (item.milestones || []).filter(milestone => milestone.id !== milestoneId), updatedAt: new Date().toISOString() }
+          : item) }));
         return { ok: true };
       },
 
@@ -4732,8 +4868,17 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
-        if (!canCreateUsers(currentUser, state.rolePermissions)) {
-          return { ok: false, error: 'Only Boss Koo can add members directly.' };
+        if (!currentUser || (!isBossKoo(currentUser) && currentUser.role !== 'Project Manager')) {
+          return { ok: false, error: 'You do not have permission to add members.' };
+        }
+        const scopedPm = currentUser?.role === 'Project Manager' && !isBossKoo(currentUser);
+        if (scopedPm && !['HOD', 'Staff'].includes(data.role)) return { ok: false, error: 'Project Managers can invite only HOD and Staff accounts.' };
+        const projectIds = Array.from(new Set(data.projectIds || []));
+        if (scopedPm) {
+          if (!projectIds.length) return { ok: false, error: 'Choose at least one project for this member.' };
+          if (projectIds.some(id => !state.projects.some(project => project.id === id && project.projectManagerIds?.includes(currentUser.id)))) {
+            return { ok: false, error: 'You can assign members only to projects under your authority.' };
+          }
         }
 
         const name = data.name.trim();
@@ -4765,13 +4910,13 @@ export const useStore = create<StoreState>()(
         }
 
         const { onboardingRequestKey, pendingOnboardingCommand, retainOnboardingCommand, clearOnboardingCommand } = await import('../lib/onboardingCommand');
-        const onboardingPayload = { name, email, role: data.role, departments, companyName,
+        const onboardingPayload = { name, email, role: data.role, departments, companyName, projectIds,
           customRoleId: data.customRoleId || null, workerType: ['Staff', 'HOD'].includes(data.role) ? data.workerType || 'employee' : 'employee',
           registrationId: data.registrationId || null, memberId: data.memberId || null, sendInvitation };
         const onboardingKey = shouldUseSecureSupabase() && currentUser.authUserId
           ? await onboardingRequestKey(currentUser.authUserId, onboardingPayload) : '';
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
-        const duplicate = !pendingOnboardingCommand(onboardingKey) && !data.memberId && !data.registrationId && get().users.some(user => (
+        const duplicate = !scopedPm && !pendingOnboardingCommand(onboardingKey) && !data.memberId && !data.registrationId && get().users.some(user => (
           user.name.toLowerCase() === name.toLowerCase() ||
           (email && user.email?.toLowerCase() === email.toLowerCase())
         ));
@@ -4838,6 +4983,7 @@ export const useStore = create<StoreState>()(
               memberId: data.memberId,
               sendInvitation,
               password: needsTemporaryPassword ? initialPassword : undefined,
+              projectIds,
             },
           });
           if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
@@ -4850,6 +4996,20 @@ export const useStore = create<StoreState>()(
         }
 
         const customRole = selectedCustomRole;
+
+        const existingMember = scopedPm && email
+          ? get().users.find(user => user.email?.toLowerCase() === email.toLowerCase())
+          : undefined;
+        if (existingMember) {
+          apply(current => ({ projects: current.projects.map(project => projectIds.includes(project.id) ? {
+            ...project,
+            ...(data.role === 'HOD'
+              ? { hodMemberIds: Array.from(new Set([...(project.hodMemberIds || []), existingMember.id])) }
+              : { staffMemberIds: Array.from(new Set([...(project.staffMemberIds || []), existingMember.id])) }),
+            updatedAt: new Date().toISOString(),
+          } : project) }));
+          return { ok: true };
+        }
 
         const userId = nowId('U');
         try {
@@ -4887,6 +5047,13 @@ export const useStore = create<StoreState>()(
 
           return {
           users: [...state.users, newUser],
+          projects: state.projects.map(project => projectIds.includes(project.id) ? {
+            ...project,
+            ...(data.role === 'HOD'
+              ? { hodMemberIds: Array.from(new Set([...(project.hodMemberIds || []), newUser.id])) }
+              : { staffMemberIds: Array.from(new Set([...(project.staffMemberIds || []), newUser.id])) }),
+            updatedAt: new Date().toISOString(),
+          } : project),
           notifications: [
             ...(notification ? [notification] : []),
             ...(state.notifications || [])
@@ -5489,6 +5656,36 @@ export const useStore = create<StoreState>()(
         };
         });
         return result;
+      },
+
+      requestMemberDeactivation: async (userId) => {
+        const state = get();
+        const actor = state.currentUser;
+        const target = state.users.find(user => user.id === userId);
+        if (!actor || actor.role !== 'Project Manager' || isBossKoo(actor)) return { ok: false, error: 'Project Manager access is required.' };
+        if (!target || !['HOD', 'Staff'].includes(target.role) || target.isSuperAdmin) return { ok: false, error: 'This account is not eligible for a deactivation request.' };
+        const actorProjects = state.projects.filter(project => project.projectManagerIds?.includes(actor.id));
+        if (!actorProjects.some(project => project.hodMemberIds?.includes(userId) || project.staffMemberIds?.includes(userId))) {
+          return { ok: false, error: 'This member is outside your assigned project scope.' };
+        }
+        if (shouldUseSecureSupabase()) {
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          if (sessionError || !session?.access_token) return { ok: false, error: 'Your secure session has expired. Sign out, then sign in again.' };
+          const { error } = await supabase.functions.invoke('invite-aitask-member', {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            body: { action: 'request_member_deactivation', memberId: userId, commandId: crypto.randomUUID() },
+          });
+          if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to request account deactivation.') };
+          return { ok: true };
+        }
+        set(current => ({ notifications: [...current.notifications, ...current.users.filter(isBossKoo).map(boss => makeNotification({
+          targetUserId: boss.id,
+          title: 'Account Deactivation Requested',
+          message: `${actor.name} requested deactivation of ${target.name}. Review all project memberships before acting.`,
+          route: { page: 'approvals', entityId: target.id },
+          iconType: 'alert',
+        }))] }));
+        return { ok: true };
       },
 
       deleteUser: async (userId) => {

@@ -8,7 +8,7 @@ from generate_series(1801,1805) n;
 
 insert into public.aitask_workspaces(id,name) values('pgtap-project-membership','Project membership');
 insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,department,departments,is_super_admin)
-select id,'pgtap-project-membership',('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,name,email,role,department,departments,is_super_admin
+select id,'pgtap-project-membership',('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,name,'project-scope-'||n||'@aitask.local',role,department,departments,is_super_admin
 from (values
   ('pm-a',1801,'PM A','Project Manager','Management',array['Management']::text[],false),
   ('pm-b',1802,'PM B','Project Manager','Management',array['Management']::text[],false),
@@ -32,7 +32,10 @@ select ok(private.aitask_can_view_task('pgtap-project-membership','task-a'),'PM 
 select ok(not private.aitask_can_view_task('pgtap-project-membership','task-b'),'assignment or authorship cannot bypass a foreign project boundary');
 select is((select count(*)::integer from public.aitask_entities where workspace_id='pgtap-project-membership' and entity_type='project'),1,'project RLS exposes only the assigned project');
 select is((select count(*)::integer from public.aitask_entities where workspace_id='pgtap-project-membership' and entity_type='task'),1,'task RLS exposes only tasks in the assigned project');
-select throws_ok($$update public.aitask_entities set data=jsonb_set(data,'{projectManagerIds}','["pm-b"]'::jsonb,true) where workspace_id='pgtap-project-membership' and entity_type='project' and entity_id='project-a'$$,'23514','Only Boss Koo can change Project Manager assignments.','PM cannot transfer an assigned project to another PM');
+select is((public.aitask_execute_command('pgtap-project-membership',gen_random_uuid(),'project.update',jsonb_build_array(jsonb_build_object(
+  'kind','entity','action','update','entityType','project','entityId','project-a',
+  'expectedVersion',(select version from public.aitask_entities where workspace_id='pgtap-project-membership' and entity_type='project' and entity_id='project-a'),
+  'data',jsonb_set((select data from public.aitask_entities where workspace_id='pgtap-project-membership' and entity_type='project' and entity_id='project-a'),'{projectManagerIds}','["pm-b"]'::jsonb,true))))->>'ok')::boolean,false,'PM cannot transfer an assigned project to another PM');
 reset role;
 
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001803',true);

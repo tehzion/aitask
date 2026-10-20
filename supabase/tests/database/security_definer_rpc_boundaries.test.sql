@@ -21,8 +21,8 @@ insert into public.aitask_members(
   permissions, is_super_admin, client_name
 ) values
   ('rpc-pm','pgtap-rpc-boundaries','00000000-0000-4000-8000-000000009901','PM','rpc-pm@aitask.local','Project Manager','Management','{}','{"manageServiceCycles":true}'::jsonb,false,null),
-  ('rpc-hod','pgtap-rpc-boundaries','00000000-0000-4000-8000-000000009902','HOD','rpc-hod@aitask.local','HOD','Design','{"Design"}','{}'::jsonb,false,null),
-  ('rpc-staff','pgtap-rpc-boundaries','00000000-0000-4000-8000-000000009903','Staff','rpc-staff@aitask.local','Staff','Design','{"Design"}','{}'::jsonb,false,null),
+  ('rpc-hod','pgtap-rpc-boundaries','00000000-0000-4000-8000-000000009902','HOD','rpc-hod@aitask.local','HOD','Designer','{"Designer"}','{}'::jsonb,false,null),
+  ('rpc-staff','pgtap-rpc-boundaries','00000000-0000-4000-8000-000000009903','Staff','rpc-staff@aitask.local','Staff','Designer','{"Designer"}','{}'::jsonb,false,null),
   ('rpc-client','pgtap-rpc-boundaries','00000000-0000-4000-8000-000000009904','Client','rpc-client@aitask.local','Client','Client','{"Client"}','{}'::jsonb,false,'Ambiguous Co');
 
 -- Catalog assertions cover the complete 19-function advisor set.

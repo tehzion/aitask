@@ -311,6 +311,26 @@ const parseProject = (value: unknown): Project | null => {
   const projectName = cleanText(value.projectName, 240);
   if (!id || !clientName || !projectName) return null;
   const today = getTodayInputDate();
+  const milestones = Array.isArray(value.milestones) ? value.milestones.filter(isRecord).slice(0, 100).map(item => {
+    const milestoneId = cleanText(item.id, 160);
+    const name = cleanText(item.name, 160);
+    const targetDate = safeIsoDate(item.targetDate, '');
+    const status = cleanText(item.status, 30);
+    if (!milestoneId || !name || !targetDate || !['Not Started', 'In Progress', 'Completed', 'Delayed'].includes(status)) return null;
+    return {
+      id: milestoneId,
+      name,
+      description: optionalText(item.description, 2000),
+      targetDate,
+      responsiblePersonId: optionalText(item.responsiblePersonId, 160),
+      status: status as NonNullable<Project['milestones']>[number]['status'],
+      createdAt: safeIsoTimestamp(item.createdAt) || new Date(0).toISOString(),
+      updatedAt: safeIsoTimestamp(item.updatedAt) || safeIsoTimestamp(item.createdAt) || new Date(0).toISOString(),
+    };
+  }).filter((item): item is NonNullable<typeof item> => Boolean(item)) : [];
+  const responsibilities = isRecord(value.memberResponsibilities)
+    ? Object.fromEntries(Object.entries(value.memberResponsibilities).filter(([id, responsibility]) => cleanText(id, 160) && typeof responsibility === 'string').map(([id, responsibility]) => [cleanText(id, 160), cleanText(responsibility, 160)]))
+    : undefined;
 
   return {
     id,
@@ -318,11 +338,33 @@ const parseProject = (value: unknown): Project | null => {
     clientId: optionalText(value.clientId, 160),
     workspaceId: optionalText(value.workspaceId, 160),
     createdBy: optionalText(value.createdBy, 160),
+    projectManagerIds: safeStringArray(value.projectManagerIds, 100, 160),
+    hodMemberIds: safeStringArray(value.hodMemberIds, 100, 160),
+    staffMemberIds: safeStringArray(value.staffMemberIds, 500, 160),
+    memberResponsibilities: responsibilities,
     clientName,
     projectName,
     services: safeStringArray(value.services, 50, 120),
     startDate: safeIsoDate(value.startDate, today),
     deadline: cleanText(value.deadline, 10) ? safeIsoDate(value.deadline, today) : '',
+    status: ['Active', 'Completed', 'Closed'].includes(cleanText(value.status, 20)) ? cleanText(value.status, 20) as Project['status'] : undefined,
+    completedAt: safeIsoTimestamp(value.completedAt),
+    completedBy: optionalText(value.completedBy, 160),
+    closedAt: safeIsoTimestamp(value.closedAt),
+    closedBy: optionalText(value.closedBy, 160),
+    reopenedAt: safeIsoTimestamp(value.reopenedAt),
+    reopenedBy: optionalText(value.reopenedBy, 160),
+    closureWarningsAcknowledged: typeof value.closureWarningsAcknowledged === 'boolean' ? value.closureWarningsAcknowledged : undefined,
+    closureWarningSnapshot: isRecord(value.closureWarningSnapshot) ? {
+      outstandingTasks: Math.max(0, Math.trunc(Number(value.closureWarningSnapshot.outstandingTasks) || 0)),
+      pendingApprovals: Math.max(0, Math.trunc(Number(value.closureWarningSnapshot.pendingApprovals) || 0)),
+      overdueTasks: Math.max(0, Math.trunc(Number(value.closureWarningSnapshot.overdueTasks) || 0)),
+      incompleteMilestones: Math.max(0, Math.trunc(Number(value.closureWarningSnapshot.incompleteMilestones) || 0)),
+      confirmedAt: safeIsoTimestamp(value.closureWarningSnapshot.confirmedAt) || new Date(0).toISOString(),
+    } : undefined,
+    requireClearClosureChecklist: typeof value.requireClearClosureChecklist === 'boolean' ? value.requireClearClosureChecklist : undefined,
+    defaultApprovalMode: ['none', 'hod', 'pm'].includes(cleanText(value.defaultApprovalMode, 10)) ? cleanText(value.defaultApprovalMode, 10) as Project['defaultApprovalMode'] : undefined,
+    milestones,
     updatedAt: safeIsoTimestamp(value.updatedAt),
   };
 };
@@ -357,6 +399,8 @@ export const parseTask = (value: unknown): Task | null => {
     deliverableId: optionalText(value.deliverableId, 160),
     accountableLeadId: optionalText(value.accountableLeadId, 160),
     requiresInternalApproval: typeof value.requiresInternalApproval === 'boolean' ? value.requiresInternalApproval : undefined,
+    approvalMode: ['inherit', 'none', 'hod', 'pm'].includes(cleanText(value.approvalMode, 10)) ? cleanText(value.approvalMode, 10) as Task['approvalMode'] : undefined,
+    milestoneId: optionalText(value.milestoneId, 160),
     outputAttachments: Array.isArray(value.outputAttachments) ? value.outputAttachments.filter(isRecord).filter(file => file.bucket === 'client-service-files' && cleanText(file.id, 160) && cleanText(file.path, 2048) && !String(file.path).includes('\\') && !String(file.path).split('/').some(part => part === '.' || part === '..')).slice(0, 50).map(file => ({ id: cleanText(file.id, 160), bucket: 'client-service-files', path: cleanText(file.path, 2048), fileName: cleanText(file.fileName, 240), mimeType: cleanText(file.mimeType, 120), sizeBytes: Math.max(0, Number(file.sizeBytes) || 0), uploadedBy: cleanText(file.uploadedBy, 160), uploadedAt: safeIsoTimestamp(file.uploadedAt) || '' })) : undefined,
     reviewCover: isRecord(value.reviewCover) && cleanText(value.reviewCover.reviewerId, 160) && safeIsoTimestamp(value.reviewCover.expiresAt) ? { reviewerId: cleanText(value.reviewCover.reviewerId, 160), expiresAt: safeIsoTimestamp(value.reviewCover.expiresAt)!, configuredBy: optionalText(value.reviewCover.configuredBy, 160), configuredAt: safeIsoTimestamp(value.reviewCover.configuredAt) } : undefined,
     reviewDecision: isRecord(value.reviewDecision) && cleanText(value.reviewDecision.reviewedBy, 160) && safeIsoTimestamp(value.reviewDecision.reviewedAt) ? { reviewedBy: cleanText(value.reviewDecision.reviewedBy, 160), reviewedAt: safeIsoTimestamp(value.reviewDecision.reviewedAt)!, overrideReason: optionalText(value.reviewDecision.overrideReason, 2000) } : undefined,

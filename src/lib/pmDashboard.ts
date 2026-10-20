@@ -4,6 +4,7 @@ import { isAwaitingClientReview, isAwaitingInternalReview } from './clientPortal
 import { isTaskCompleted } from './taskCompletion';
 import { isTaskOpen } from './taskReporting';
 import { parseOptionalDate } from './utils';
+import { effectiveMilestoneStatus, milestoneTaskProgress, projectStatus } from './projectManagement';
 
 // Internal submission, PM completion, and customer acceptance are distinct
 // stages. Visibility alone does not tell us who is waiting to review.
@@ -32,11 +33,18 @@ export const assessProjectHealth = (project: Project, allTasks: readonly Task[],
     return Boolean(due && isWithinInterval(due, { start: today, end: nextWeek }));
   });
   const pendingApprovals = openTasks.filter(isAwaitingInternalReview);
+  const milestones = project.milestones || [];
+  const incompleteMilestones = milestones.filter(milestone => effectiveMilestoneStatus(milestone, taskList) !== 'Completed');
+  const delayedMilestones = incompleteMilestones.filter(milestone => effectiveMilestoneStatus(milestone, taskList) === 'Delayed');
+  const upcomingMilestones = incompleteMilestones.filter(milestone => {
+    const target = parseOptionalDate(milestone.targetDate);
+    return Boolean(target && isWithinInterval(target, { start: today, end: nextWeek }));
+  });
   const projectDeadline = parseOptionalDate(project.deadline);
   const projectDeadlinePassed = Boolean(projectDeadline && isBefore(projectDeadline, today) && openTasks.length > 0);
-  const health: ProjectHealth = overdueTasks.length > 0 || projectDeadlinePassed
+  const health: ProjectHealth = overdueTasks.length > 0 || delayedMilestones.length > 0 || projectDeadlinePassed
     ? 'atRisk'
-    : upcomingTasks.length > 0 || pendingApprovals.length > 0
+    : upcomingTasks.length > 0 || upcomingMilestones.length > 0 || pendingApprovals.length > 0
       ? 'attentionRequired'
       : 'onTrack';
   const nextDueDate = [
@@ -58,7 +66,15 @@ export const assessProjectHealth = (project: Project, allTasks: readonly Task[],
     overdueCount: overdueTasks.length,
     upcomingCount: upcomingTasks.length,
     pendingApprovalCount: pendingApprovals.length,
-    progressPercent: taskList.length ? Math.round((completedTasks.length / taskList.length) * 100) : 0,
+    milestoneCount: milestones.length,
+    incompleteMilestoneCount: incompleteMilestones.length,
+    delayedMilestoneCount: delayedMilestones.length,
+    milestoneProgressPercent: milestones.length
+      ? Math.round(milestones.reduce((sum, milestone) => sum + (milestoneTaskProgress(milestone.id, taskList).percent
+        ?? (effectiveMilestoneStatus(milestone, taskList) === 'Completed' ? 100 : 0)), 0) / milestones.length)
+      : undefined,
+    progressPercent: taskList.length ? Math.round((completedTasks.length / taskList.length) * 100) : undefined,
+    projectStatus: projectStatus(project),
     nextDueDate,
     assignedMemberIds: Array.from(new Set(openTasks.map(task => task.assignedTo).filter((id): id is string => Boolean(id)))),
   };

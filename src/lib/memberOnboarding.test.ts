@@ -13,9 +13,12 @@ let loseConfirmation: boolean;
 let failBeforeCommit: boolean;
 const deleteUser = vi.fn();
 const createUser = vi.fn();
-const actor = { id: 'boss', workspace_id: 'aitask-main', is_super_admin: true };
+let actor: { id: string; workspace_id: string; is_super_admin: boolean; role?: string };
+let projectManagerIds: string[];
 beforeEach(() => {
   users = []; completed = null; loseConfirmation = false; failBeforeCommit = false;
+  actor = { id: 'boss', workspace_id: 'aitask-main', is_super_admin: true, role: 'Project Manager' };
+  projectManagerIds = ['pm-a'];
   deleteUser.mockReset(); createUser.mockReset();
   createUser.mockImplementation(async ({ email, app_metadata }) => {
     const user = { id: 'prepared-auth', email, email_confirmed_at: '2026-10-08', app_metadata };
@@ -26,6 +29,10 @@ beforeEach(() => {
       listUsers: async () => ({ data: { users }, error: null }), createUser, deleteUser,
     } },
     rpc: async (name: string, args: Record<string, unknown>) => {
+      if (name === 'aitask_pm_upsert_project_member') {
+        completed = { ok: true, memberId: 'shared-member', reused: users.some(user => user.id === args.p_auth_user_id) };
+        return { data: completed, error: null };
+      }
       if (name === 'aitask_reserve_member_onboarding') return { data: { ok: true, result: completed }, error: null };
       if (name !== 'aitask_finalize_member_invitation_v3') throw new Error('Unexpected RPC');
       if (failBeforeCommit) return { data: null, error: { message: 'network failure' } };
@@ -35,7 +42,8 @@ beforeEach(() => {
     },
   };
   const client = { from: () => {
-    const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: actor, error: null }) };
+    const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: actor, error: null }),
+      in: async (_key: string, ids: string[]) => ({ data: ids.map(entity_id => ({ entity_id, data: { projectManagerIds } })), error: null }) };
     return query;
   } };
   const deno = { env: { get: (key: string) => ({ SUPABASE_URL: 'https://example.test', SUPABASE_ANON_KEY: 'public', SUPABASE_SERVICE_ROLE_KEY: 'service', AITASK_PUBLIC_URL: 'https://app.test' }[key]) }, serve: (next: typeof handler) => { handler = next; } };
@@ -81,5 +89,28 @@ describe('actual onboarding Edge handler', () => {
   it('requires older clients to reload before making any account', async () => {
     expect((await handler(request({ commandId: undefined }))).status).toBe(409);
     expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('lets an assigned PM reuse an existing Auth account for scoped project membership', async () => {
+    actor = { id: 'pm-a', workspace_id: 'aitask-main', is_super_admin: false, role: 'Project Manager' };
+    users.push({ id: 'existing-auth', email: 'free@example.test', email_confirmed_at: '2026-10-08', app_metadata: {} });
+    const response = await handler(request({ projectIds: ['project-a'] }));
+    expect(response.status).toBe(200);
+    expect(createUser).not.toHaveBeenCalled();
+    expect(completed).toMatchObject({ ok: true, memberId: 'shared-member' });
+  });
+
+  it('rejects PM account creation outside HOD and Staff scope', async () => {
+    actor = { id: 'pm-a', workspace_id: 'aitask-main', is_super_admin: false, role: 'Project Manager' };
+    expect((await handler(request({ role: 'Project Manager', projectIds: ['project-a'] }))).status).toBe(403);
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects another PM project before creating any Auth account', async () => {
+    actor = { id: 'pm-a', workspace_id: 'aitask-main', is_super_admin: false, role: 'Project Manager' };
+    projectManagerIds = ['pm-b'];
+    expect((await handler(request({ projectIds: ['project-b'] }))).status).toBe(403);
+    expect(createUser).not.toHaveBeenCalled();
+    expect(completed).toBeNull();
   });
 });
