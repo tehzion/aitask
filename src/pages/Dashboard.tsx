@@ -26,6 +26,8 @@ import TeamWorkload from '../components/TeamWorkload';
 import { projectStatus } from '../lib/projectManagement';
 import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
 import StaffMyWork from '../components/StaffMyWork';
+import ManagementOverview from '../components/ManagementOverview';
+import NeedsMyAttention from '../components/NeedsMyAttention';
 import { useI18n } from '../components/I18nProvider';
 import { isLocalServiceDemoEnabled, LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID } from '../mock/localServiceDemo';
 import { useLocalToday } from '../hooks/useLocalToday';
@@ -439,7 +441,7 @@ const Dashboard: React.FC = () => {
           </div>
         )}
       />
-      <div className="mt-6"><ServiceRoleDashboard /></div>
+      <div className="mt-6 space-y-6"><NeedsMyAttention /><ServiceRoleDashboard /></div>
     </div>
   );
 
@@ -607,6 +609,9 @@ const Dashboard: React.FC = () => {
                     </Link>
                   </div>
                 )}
+
+                <ManagementOverview />
+                <NeedsMyAttention />
 
                 <ServiceRoleDashboard />
 
