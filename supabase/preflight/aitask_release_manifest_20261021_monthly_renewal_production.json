@@ -1,0 +1,74 @@
+{
+  "manifestVersion": "2026-10-21.1",
+  "manifestKind": "aitask-applied-production-release",
+  "supersedes": "aitask_release_manifest_20261017_production.json",
+  "immutable": true,
+  "capturedAt": "2026-10-21T06:49:38Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "Production verified through 20261021110000_monthly_plan_renewal_integrity.",
+  "validatedMigrationTail": [
+    "20261019222619_pm_project_approval_authority",
+    "20261019223816_explicit_project_membership_scope",
+    "20261020131544_project_management_completion",
+    "20261021110000_monthly_plan_renewal_integrity"
+  ],
+  "pendingProductionMigrations": [],
+  "productionVerification": {
+    "historyAligned": false,
+    "historyThrough": "20261021110000_monthly_plan_renewal_integrity",
+    "migrationResolution": {
+      "status": "connector_aliases_verified",
+      "repositoryToProduction": [
+        {
+          "repository": "20261019222619_pm_project_approval_authority",
+          "production": "20261020030644_pm_project_approval_authority"
+        },
+        {
+          "repository": "20261019223816_explicit_project_membership_scope",
+          "production": "20261020030745_explicit_project_membership_scope"
+        },
+        {
+          "repository": "20261020131544_project_management_completion",
+          "production": "20261020131544_project_management_completion"
+        },
+        {
+          "repository": "20261021110000_monthly_plan_renewal_integrity",
+          "production": "20261021110000_monthly_plan_renewal_integrity"
+        }
+      ]
+    },
+    "businessEntityRows": 1882,
+    "businessDataUnchanged": true,
+    "duplicatePendingPlanRevisions": 0,
+    "renewalIndexPresent": true,
+    "renewalGuardTriggerPresent": true,
+    "renewalGuardPublicExecution": false
+  },
+  "recovery": {
+    "backupDirectory": "/Users/user/Documents/AiTask Backups/aitask-monthly-renewal-20261021.E46h0U",
+    "schemaSha256": "499222bb9f336374f86eb2d11dc1f2410560912c1eefb8ea23e9a8ac848a6cae",
+    "dataSha256": "e35707ba7cb59596377065e6315f9235ef295c947888cc9b07dee6349f0b1660",
+    "rolesSha256": "4350a72b5ec109888e740c17f3eb4da2fcd95ab73af26499538ed0bf615db543",
+    "restoreVerifiedAt": "2026-10-21T06:44:00Z",
+    "restoredRowCounts": {
+      "entities": 1882,
+      "members": 11,
+      "authUsers": 10,
+      "storageObjects": 1
+    }
+  },
+  "qualityGates": {
+    "unitTests": 877,
+    "pgTapAssertions": 1096,
+    "typecheckLintI18nBuild": "PASS",
+    "isolatedMigrationDryRun": "PASS: exactly 20261021110000_monthly_plan_renewal_integrity",
+    "productionPostflight": "PASS: index and trigger present; no pending-revision duplicates; guard not executable by anon or authenticated"
+  },
+  "vercel": {
+    "projectId": "prj_uzWREguA16aYjlhTHPw9hE8DRLSM",
+    "productionUrl": "https://aitask-virid.vercel.app",
+    "deploymentId": "dpl_CWtCRAC1mqRWWy7yh8GgjZUeAuxt",
+    "commit": "1f3156ad6b11095584651331a8908c3e9a967395",
+    "provenanceVerified": true
+  }
+}

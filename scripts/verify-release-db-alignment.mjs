@@ -3,12 +3,15 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const manifestPath = join(
-  projectRoot,
-  'supabase',
-  'preflight',
-  'aitask_release_manifest_20261017_production.json',
-);
+const preflightPath = join(projectRoot, 'supabase', 'preflight');
+const manifestName = readdirSync(preflightPath)
+  .filter((name) => /^aitask_release_manifest_.*_production\.json$/.test(name))
+  .sort()
+  .at(-1);
+if (!manifestName) {
+  throw new Error('No applied-production release manifest was found.');
+}
+const manifestPath = join(preflightPath, manifestName);
 const migrationsPath = join(projectRoot, 'supabase', 'migrations');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 
