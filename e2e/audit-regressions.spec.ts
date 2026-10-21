@@ -187,6 +187,42 @@ test('a failed save does not mistake its own optimistic draft for a remote confl
   await expect(page.getByLabel('Plan name', { exact: true })).toHaveValue('Pending own draft');
 });
 
+test('a draft save waiting for synchronization offers retry without duplicating the revision', async ({ page }) => {
+  const { draftId } = await seedPlan(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const update = useStore.getState().updateDraftClientPlan;
+    let stages = 0;
+    (window as unknown as { draftSaveStages: () => number }).draftSaveStages = () => stages;
+    useStore.setState({
+      updateDraftClientPlan: (...args) => { stages++; return update(...args); },
+      commitPendingMutation: async () => ({ ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' }),
+      retryPendingSave: () => new Promise(resolve => {
+        (window as unknown as { confirmDraftRetry: () => void }).confirmDraftRetry = () => resolve({ ok: true });
+      }),
+    });
+  });
+  const editor = page.getByRole('region', { name: 'Next month’s plan', exact: true });
+  await editor.getByLabel('Plan name', { exact: true }).fill('Retained monthly draft');
+  await editor.getByLabel('Unit price (MYR)', { exact: true }).fill('9180');
+  await editor.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(editor.getByRole('alert')).toContainText('Another synchronization request is still running.');
+  await expect(editor.getByRole('button', { name: 'Review service fields', exact: true })).toHaveCount(0);
+  await expect(editor.getByRole('button', { name: 'Review changes', exact: true })).toBeDisabled();
+  await expect(editor.getByLabel('Unit price (MYR)', { exact: true })).toHaveValue('9180');
+  await editor.getByRole('button', { name: 'Retry saved change', exact: true }).click();
+  await expect(editor.getByLabel('Plan name', { exact: true })).toBeDisabled();
+  await expect(editor.getByText('Your plan change was saved.', { exact: true })).toHaveCount(0);
+  await page.evaluate(() => (window as unknown as { confirmDraftRetry: () => void }).confirmDraftRetry());
+  await expect(editor.getByText('Your plan change was saved.', { exact: true })).toBeVisible();
+  await expect(editor.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
+  expect(await page.evaluate(() => (window as unknown as { draftSaveStages: () => number }).draftSaveStages())).toBe(1);
+  expect(await page.evaluate(async id => {
+    const state = (await import('/src/store/index.ts')).useStore.getState();
+    return state.clientPlans.filter(plan => plan.id === id).map(plan => ({ name: plan.name, unitPriceMinor: plan.serviceItems[0].unitPriceMinor }));
+  }, draftId)).toEqual([{ name: 'Retained monthly draft', unitPriceMinor: 918000 }]);
+});
+
 
 test('browser back and programmatic palette navigation preserve a declined draft', async ({ page }) => {
   const { clientId } = await seedPlan(page);

@@ -1361,7 +1361,7 @@ export const useStore = create<StoreState>()(
                   status: state.backend.status === 'conflict'
                     ? 'conflict'
                     : state.backend.hasLocalChanges
-                      ? 'retry_required'
+                      ? 'saving'
                       : 'live',
                   isPulling: false,
                   upgradeRequired: false,
@@ -1396,7 +1396,10 @@ export const useStore = create<StoreState>()(
               return;
             }
 
-            const secure = await loadSecureWorkspace(capabilityUser, { preserveRetainedCommand: true });
+            const secure = await loadSecureWorkspace(capabilityUser, {
+              preserveRetainedCommand: true,
+              shouldApplySnapshot: () => localMutationEpoch === epochBeforeLoad,
+            });
             if (!isWorkspaceSessionCurrent(sessionToken)) return;
             const latest = get();
             if (localMutationEpoch !== epochBeforeLoad) {
@@ -1826,6 +1829,17 @@ export const useStore = create<StoreState>()(
           if (typeof window !== 'undefined' && browserPersistFailed) return { ok: false, error: 'This change could not be saved on this device. Keep this page open and try again.' };
           acknowledgeActionFeedback(get()); return { ok: true };
         }
+        // A form stages its local edit before requesting confirmation. A
+        // background pull (or an earlier save) must finish before we send it;
+        // syncBackendNow intentionally returns immediately while either is busy.
+        if (isSyncBusy(get())) {
+          if (commandType && get().backend.hasLocalChanges && !hasRetainedSecureMutation()) {
+            set(state => ({ backend: { ...state.backend, pendingCommandType: state.backend.pendingCommandType || commandType } }));
+          }
+          const idle = await waitForSyncIdle();
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
+          if (!idle) return { ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' };
+        }
         const before = get().backend;
         if (before.status === 'upgrade_required') {
           return { ok: false, error: BACKEND_UPGRADE_REQUIRED_MESSAGE };
@@ -1843,6 +1857,13 @@ export const useStore = create<StoreState>()(
           };
         }
         await get().syncBackendNow(commandType);
+        // An acknowledged write may have queued newer local edits. Wait for
+        // that write too instead of reporting a generic false save failure.
+        if (isSyncBusy(get())) {
+          const idle = await waitForSyncIdle();
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
+          if (!idle) return { ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' };
+        }
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         const backend = get().backend;
         if (!backend.hasLocalChanges && backend.pendingMutations === 0 && ['live', 'refresh_required'].includes(backend.status)) { acknowledgeActionFeedback(get()); return { ok: true }; }

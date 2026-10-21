@@ -1653,7 +1653,8 @@ const loadClientPortalPayload = async (expectedClientName?: string): Promise<Cli
 };
 
 export const WORKSPACE_LOAD_TIMEOUT_MS = 90000;
-export const loadSecureWorkspace = async (authUser: User, options: { preserveRetainedCommand?: boolean; consistencyAttempt?: number } = {}) => {
+type WorkspaceLoadOptions = { preserveRetainedCommand?: boolean; consistencyAttempt?: number; shouldApplySnapshot?: () => boolean };
+export const loadSecureWorkspace = async (authUser: User, options: WorkspaceLoadOptions = {}) => {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -1664,7 +1665,7 @@ export const loadSecureWorkspace = async (authUser: User, options: { preserveRet
   } finally { if (timer) clearTimeout(timer); controller.abort(); }
 };
 
-const loadSecureWorkspaceInternal = async (authUser: User, options: { preserveRetainedCommand?: boolean; consistencyAttempt?: number; loadSignal: AbortSignal }) => {
+const loadSecureWorkspaceInternal = async (authUser: User, options: WorkspaceLoadOptions & { loadSignal: AbortSignal }) => {
   const captured = captureWorkspaceSession();
   const sessionToken = { ...captured, signal: AbortSignal.any([captured.signal, options.loadSignal]) };
   const revisionBefore = await loadSecureWorkspaceRevision();
@@ -1834,6 +1835,10 @@ const loadSecureWorkspaceInternal = async (authUser: User, options: { preserveRe
     if (attempt >= 2) throw new Error('Workspace changed during loading. Please retry.');
     return loadSecureWorkspaceInternal(authUser, { ...options, consistencyAttempt: attempt + 1 });
   }
+  // A refresh superseded by a local edit must not replace the command
+  // baseline either. Keep original row versions so concurrent remote edits
+  // still conflict rather than becoming accidental local overwrites.
+  if (options.shouldApplySnapshot?.() === false) return { state, currentUser, revision, notificationFeed };
   rowsToBaseline(
     currentUser.role === 'Client' && authenticatedMemberRow ? [authenticatedMemberRow] : memberRows,
     effectiveEntityRows,

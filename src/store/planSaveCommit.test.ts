@@ -459,6 +459,31 @@ describe('retryPendingSave', () => {
     expect(useStore.getState().backend.status).toBe('live');
   });
 
+  it('sends a monthly draft and its pricing through the service RPC after a background refresh', async () => {
+    const created = useStore.getState().createClientWithPlan(planInput);
+    expect(created.ok).toBe(true);
+    expect(useStore.getState().updateDraftClientPlan(created.planId!, {
+      name: 'Reviewed monthly draft',
+      serviceItems: [{ ...planInput.serviceItems[0], name: 'Updated service scope', unitPriceMinor: 918000 }],
+    }).ok).toBe(true);
+    useStore.setState(state => ({ backend: { ...state.backend, isPulling: true } }));
+    rpc.mockResolvedValueOnce({ data: { ok: true, commandId: '00000000-0000-4000-8000-000000000222', workspaceVersion: 6, changed: [] }, error: null });
+    const result = useStore.getState().commitPendingMutation('client_plan.manage');
+    expect(rpc).not.toHaveBeenCalled();
+    setTimeout(() => useStore.setState(state => ({ backend: { ...state.backend, isPulling: false } })), 60);
+    expect(await result).toEqual({ ok: true });
+    expect(rpc).toHaveBeenCalledOnce();
+    expect(rpc).toHaveBeenCalledWith('aitask_execute_service_command', expect.objectContaining({
+      p_command_type: 'client_plan.manage',
+      p_operations: expect.arrayContaining([expect.objectContaining({ entityType: 'client_plan', entityId: created.planId,
+        data: expect.objectContaining({ name: 'Reviewed monthly draft', serviceItems: expect.arrayContaining([expect.objectContaining({ name: 'Updated service scope' })]) }),
+      }), expect.objectContaining({ entityType: 'service_pricing_snapshot', parentId: created.planId,
+        data: expect.objectContaining({ totalMinor: 918000, itemPrices: expect.arrayContaining([expect.objectContaining({ unitPriceMinor: 918000 })]) }),
+      })]),
+    }));
+    expect(useStore.getState().backend).toMatchObject({ status: 'live', hasLocalChanges: false, pendingMutations: 0 });
+  });
+
   it('skips a background pull while a local change is pending', async () => {
     useStore.setState(state => ({ backend: { ...state.backend, hasLocalChanges: true } }));
 

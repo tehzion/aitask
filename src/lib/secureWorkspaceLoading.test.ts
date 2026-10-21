@@ -69,6 +69,19 @@ describe('consistent cancellable workspace paging', () => {
     expect(entityFilters).not.toContain('notification');
     expect(buildOperations(loaded.state)).toEqual([]);
   });
+  it('keeps original row versions when a local edit supersedes a refresh', async () => {
+    const original = await loadSecureWorkspace({ id: authId } as never);
+    const row = entities[0];
+    const originalTitle = row.data.title;
+    try {
+      row.version = 2; row.data.title = 'Concurrent remote edit';
+      await loadSecureWorkspace({ id: authId } as never, { preserveRetainedCommand: true, shouldApplySnapshot: () => false });
+      const edited = { ...original.state, tasks: original.state.tasks.map((task, index) => index ? task : { ...task, title: 'Local draft' }) };
+      const operations = buildOperations(edited);
+      expect(operations).toHaveLength(1);
+      expect(operations[0]).toMatchObject({ action: 'update', entityId: row.entity_id, expectedVersion: 1, data: { title: 'Local draft' } });
+    } finally { row.version = 1; row.data.title = originalTitle; }
+  });
   it('rejects missing canonical context rather than trusting old review metadata', async () => {
     const data = entities[0].data as Record<string, unknown>;
     data.generatedFromDeliverable = true;

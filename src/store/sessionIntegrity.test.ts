@@ -27,6 +27,60 @@ const seed = () => useStore.setState({ ...initial, currentUser: actor, users: [a
 beforeEach(() => { vi.clearAllMocks(); seed(); mocks.retained.mockReturnValue(null); mocks.capabilities.mockResolvedValue({ compatible: true }); mocks.getUser.mockResolvedValue({ data: { user: { id: actor.authUserId } }, error: null }); });
 const input = { clientName: 'Integrity Client', planName: 'Integrity Plan', origin: 'custom' as const, serviceItems: [{ id: 'item', name: 'Design', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 100 }], startDate: '2026-09-01', billingDay: 1, discountType: 'none' as const, discountValue: 0, taxRateBps: 0 };
 describe('session and acknowledgement integrity', () => {
+  it('waits for a background refresh before confirming a plan draft save', async () => {
+    mocks.save.mockResolvedValueOnce({ ok: true, commandId: 'saved-draft', workspaceVersion: 2 });
+    expect(useStore.getState().createClientWithPlan(input).ok).toBe(true);
+    useStore.setState(state => ({ backend: { ...state.backend, isPulling: true } }));
+    const request = useStore.getState().commitPendingMutation('client_plan.manage');
+    expect(mocks.save).not.toHaveBeenCalled();
+    setTimeout(() => useStore.setState(state => ({ backend: { ...state.backend, isPulling: false } })), 60);
+    expect(await request).toEqual({ ok: true });
+    expect(mocks.save).toHaveBeenCalledOnce();
+    expect(mocks.save.mock.calls[0][1]).toBe('client_plan.manage');
+  });
+  it('saves edits staged during a revision check without inventing a retry failure', async () => {
+    let finish!: (value: unknown) => void;
+    mocks.getUser.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    mocks.save.mockResolvedValueOnce({ ok: true, commandId: 'checked-draft', workspaceVersion: 3 });
+    useStore.setState(state => ({ backend: { ...state.backend, workspaceVersion: 2 } }));
+    const refresh = useStore.getState().pullBackendNow({ silent: true });
+    await vi.waitFor(() => expect(mocks.getUser).toHaveBeenCalledOnce());
+    expect(useStore.getState().createClientWithPlan(input).ok).toBe(true);
+    const save = useStore.getState().commitPendingMutation('client_plan.manage');
+    finish({ data: { user: { id: actor.authUserId } }, error: null });
+    await refresh;
+    expect(await save).toEqual({ ok: true });
+    expect(mocks.save).toHaveBeenCalledOnce();
+    expect(useStore.getState().backend).toMatchObject({ status: 'live', hasLocalChanges: false });
+  });
+  it('does not report success while another save is awaiting its acknowledgement', async () => {
+    let finish!: (value: unknown) => void;
+    mocks.save.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    useStore.getState().createClientWithPlan(input);
+    const first = useStore.getState().commitPendingMutation('client_plan.manage');
+    await vi.waitFor(() => expect(mocks.save).toHaveBeenCalledOnce());
+    const second = useStore.getState().commitPendingMutation('client_plan.manage');
+    finish({ ok: true, commandId: 'one-save', workspaceVersion: 2 });
+    expect(await first).toEqual({ ok: true });
+    expect(await second).toEqual({ ok: true });
+    expect(mocks.save).toHaveBeenCalledOnce();
+  });
+  it('retains unsaved changes and offers an explicit retry after a busy wait expires', async () => {
+    vi.useFakeTimers();
+    try {
+      useStore.getState().createClientWithPlan(input);
+      useStore.setState(state => ({ backend: { ...state.backend, isPulling: true } }));
+      const request = useStore.getState().commitPendingMutation('client_plan.manage');
+      await vi.advanceTimersByTimeAsync(5001);
+      expect(await request).toMatchObject({ ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' });
+      expect(mocks.save).not.toHaveBeenCalled();
+      expect(useStore.getState().backend).toMatchObject({ hasLocalChanges: true, pendingMutations: 1, pendingCommandType: 'client_plan.manage' });
+      useStore.setState(state => ({ backend: { ...state.backend, isPulling: false } }));
+      mocks.save.mockResolvedValueOnce({ ok: true, commandId: 'retry-draft', workspaceVersion: 2 });
+      expect(await useStore.getState().retryPendingSave('client_plan.manage')).toEqual({ ok: true });
+      expect(mocks.save).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
+  });
   it('keeps a failed refresh visible without inventing a pending save or locking future edits', async () => {
     mocks.load.mockRejectedValueOnce(new Error('canceling statement due to statement timeout'));
     await useStore.getState().pullBackendNow({ force: true });

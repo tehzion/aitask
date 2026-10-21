@@ -34,7 +34,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   const [busy, setBusy] = React.useState(false);
   const busyRef = React.useRef(false);
   const mounted = React.useRef(true);
-  const [feedback, setFeedback] = React.useState<{ text: string; error: boolean } | null>(null);
+  const [feedback, setFeedback] = React.useState<{ text: string; error: boolean; fieldError?: boolean } | null>(null);
   const alertRef = React.useRef<HTMLDivElement>(null);
   const formId = React.useId();
   const contractHelpId = React.useId();
@@ -77,7 +77,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   }, [plan, busy]);
   React.useEffect(() => { setReview(null); }, [plan, effectiveDate]);
 
-  const error = (text: string) => setFeedback({ text: t(text), error: true });
+  const error = (text: string, fieldError = false) => setFeedback({ text: t(text), error: true, fieldError });
   const update = (patch: Partial<Draft>) => { setDraft(current => ({ ...current, ...patch })); setReview(null); setFeedback(null); };
   const updateItem = (id: string, patch: Partial<ServiceItem>) => {
     setDraft(current => ({ ...current, serviceItems: current.serviceItems.map(item => item.id === id ? { ...item, ...patch } : item) })); setReview(null); setFeedback(null);
@@ -134,9 +134,9 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
     const latest = useStore.getState().clientPlans.find(item => item.id === plan.id);
     if (JSON.stringify(latest) !== fingerprint.current && JSON.stringify(latest) !== optimistic.current) { setConflict(true); return; }
     const validation = validateRevisionItems(draft.serviceItems);
-    if (!draft.name.trim()) return error('Plan name is required.');
-    if (validation) return error(validation);
-    if (draft.contractEndDate && draft.contractEndDate < contractStartDate) return error('Contract end date cannot be before the start date.');
+    if (!draft.name.trim()) return error('Plan name is required.', true);
+    if (validation) return error(validation, true);
+    if (draft.contractEndDate && draft.contractEndDate < contractStartDate) return error('Contract end date cannot be before the start date.', true);
     void commit('save', () => store.updateDraftClientPlan(plan.id, draft));
   };
   const retry = async () => {
@@ -223,8 +223,8 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
       {canSeePrices && <p className="mt-3 text-sm font-semibold text-ink">{t('Monthly total')}: {formatMoney(currentTotals.total, 'MYR', locale)} → {formatMoney(totals.total, 'MYR', locale)}</p>}
       <div className="mt-5 flex flex-wrap gap-2"><Button disabled={busy || blocked} onClick={schedule}>{t(busy ? 'Saving…' : source.status === 'Ended' ? 'Activate next month' : 'Schedule for')} {!busy && dateLabel(review.date)}</Button><Button variant="secondary" disabled={busy} onClick={() => setReview(null)}>{t('Back to draft')}</Button></div>
     </section>}
-    {blocked && <div className="border-t border-line px-5 py-4"><BackendFreshness compact /><Button className="mt-3" variant="secondary" disabled={busy} onClick={() => void retry()}>{t('Retry saved change')}</Button></div>}
-    {feedback && <div ref={alertRef} tabIndex={-1} className="border-t border-line px-5 py-3 text-sm font-medium text-ink" role={feedback.error ? 'alert' : 'status'}><SystemMessage message={feedback.text} />{feedback.error && draft.serviceItems.length > 0 && <button type="button" className="mt-2 block min-h-11 text-accent underline" onClick={() => document.getElementById(`${formId}-quantity-0`)?.focus()}>{t('Review service fields')}</button>}</div>}
+    {(blocked || (pending.current && feedback?.error)) && <div className="border-t border-line px-5 py-4">{blocked && <BackendFreshness compact />}<Button className="mt-3" variant="secondary" disabled={busy} onClick={() => void retry()}>{t('Retry saved change')}</Button></div>}
+    {feedback && <div ref={alertRef} tabIndex={-1} className="border-t border-line px-5 py-3 text-sm font-medium text-ink" role={feedback.error ? 'alert' : 'status'}><SystemMessage message={feedback.text} />{feedback.fieldError && draft.serviceItems.length > 0 && <button type="button" className="mt-2 block min-h-11 text-accent underline" onClick={() => document.getElementById(`${formId}-quantity-0`)?.focus()}>{t('Review service fields')}</button>}</div>}
   </section>;
 };
 export default DraftServicePlanEditor;
