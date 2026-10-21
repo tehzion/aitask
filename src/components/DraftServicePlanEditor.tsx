@@ -165,7 +165,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   };
   const conflictValue = (value: unknown) => value == null ? t('Removed') : typeof value === 'object' ? Array.isArray(value) ? value.map(item => typeof item === 'string' ? item : t('Plan details')).join(', ') : t('Task workflow') : String(value);
 
-  return <section aria-label={t('Next month’s plan')} className={cn(cardBase, 'overflow-hidden')}>
+  return <section id="next-month-plan" aria-label={t('Next month’s plan')} className={cn(cardBase, 'overflow-hidden')}>
     <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-inset px-5 py-4">
       <div><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-ink">{t('Next month’s plan')}</h2><Badge tone={scheduled ? 'emerald' : 'amber'}>{t(scheduled ? 'Scheduled' : 'Draft')}</Badge></div>
         <p className="mt-2 text-sm leading-6 text-muted">{t(scheduled ? 'Scheduled for' : 'Proposed start')}: {dateLabel(scheduled ? plan.effectiveFromCycleStart! : effectiveDate)} · {t('Revision')} {plan.revision}</p>

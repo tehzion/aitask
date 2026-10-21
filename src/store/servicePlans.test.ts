@@ -232,4 +232,30 @@ describe('client service plan store', () => {
     expect(useStore.getState().clientPlans.find(plan => plan.id === active.id)?.serviceItems[0].quantity).toBe(2);
     expect(useStore.getState().serviceCycles[0]).toEqual(historicalCycle);
   });
+
+  it('makes a single copied next-month plan when renewal is requested twice', () => {
+    const created = useStore.getState().createClientWithPlan({
+      clientName: 'Manual Renewal Client', planName: 'October Social Plan', origin: 'custom',
+      serviceItems: [{ id: 'social-service', name: 'Social management', platforms: ['Instagram'], unit: 'month', quantity: 1, unitPriceMinor: 200000 }],
+      startDate: '2026-09-30', billingDay: 30, discountType: 'none', discountValue: 0, taxRateBps: 0,
+    });
+    const activated = useStore.getState().activateClientPlan(created.planId!);
+    const active = useStore.getState().clientPlans.find(plan => plan.id === created.planId)!;
+    const existingCycle = structuredClone(useStore.getState().serviceCycles.find(cycle => cycle.id === activated.cycleId)!);
+
+    const first = useStore.getState().createClientPlanRevision(active.id);
+    const second = useStore.getState().createClientPlanRevision(active.id);
+
+    expect(first).toMatchObject({ ok: true });
+    expect(second).toEqual(first);
+    const nextPlans = useStore.getState().clientPlans.filter(plan => plan.supersedesPlanId === active.id && plan.status === 'Draft');
+    expect(nextPlans).toHaveLength(1);
+    expect(nextPlans[0]).toMatchObject({
+      effectiveFromCycleStart: '2026-10-30',
+      billingDay: 30,
+      serviceItems: active.serviceItems,
+    });
+    expect(useStore.getState().serviceCycles).toEqual([existingCycle]);
+    expect(useStore.getState().servicePricingSnapshots.some(snapshot => snapshot.parentId === nextPlans[0].id)).toBe(true);
+  });
 });

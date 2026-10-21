@@ -25,7 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { Link, Navigate, useParams, useSearchParams, useLocation } from "react-router-dom";
-import { useStore } from "../store";
+import { isPendingMutationResolution, useStore } from "../store";
 import type {
   AddonBillingMode,
   AttachmentRef,
@@ -124,6 +124,7 @@ const OperationsClientWorkspace = () => {
   const [activityCycleId, setActivityCycleId] = React.useState<string | null>(null);
   const [planModalOpen, setPlanModalOpen] = React.useState(false);
   const [planDatesOpen, setPlanDatesOpen] = React.useState(false);
+  const [planSavePending, setPlanSavePending] = React.useState(false);
   const [comment, setComment] = React.useState("");
   const [visibility, setVisibility] =
     React.useState<CommentVisibility>("internal");
@@ -184,7 +185,7 @@ const OperationsClientWorkspace = () => {
     targetCycleId: "",
   });
   React.useEffect(() => {
-    pendingAddon.current = null; setAddonSheetOpen(false); setPlanAction(null); setMessage(''); setDownloadingFileId(null);
+    pendingAddon.current = null; setAddonSheetOpen(false); setPlanAction(null); setPlanSavePending(false); setMessage(''); setDownloadingFileId(null);
     setAddon({ name: '', platforms: '', quantity: 1, unitPrice: 0, billingMode: 'one_off', effectiveFrom: addonDefaultDate, targetCycleId: '' });
   }, [clientId, store.currentUser?.id, addonDefaultDate]);
   useUnsavedChanges(addonSaving || Boolean(addon.name.trim() || addon.platforms.trim() || addon.quantity !== 1 || addon.unitPrice !== 0 || addon.billingMode !== 'one_off' || addon.targetCycleId || addon.effectiveFrom !== addonDefaultDate));
@@ -232,14 +233,17 @@ const OperationsClientWorkspace = () => {
   const plans = store.clientPlans
     .filter((item) => item.clientId === client.id)
     .sort((a, b) => b.revision - a.revision);
-  const activePlan =
+  const activeOrPausedPlan =
     plans.find((item) => item.status === "Active") ||
-    plans.find((item) => item.status === "Paused") ||
-    plans[0];
+    plans.find((item) => item.status === "Paused");
   const scheduledRevision = plans.find(
     (item) =>
-      item.status === "Draft" && item.supersedesPlanId === activePlan?.id,
+      item.status === "Draft" && Boolean(item.supersedesPlanId),
   );
+  const activePlan = activeOrPausedPlan || scheduledRevision || plans[0];
+  const revisionSource = scheduledRevision?.supersedesPlanId
+    ? plans.find(item => item.id === scheduledRevision.supersedesPlanId)
+    : activeOrPausedPlan;
   const allCycles = store.serviceCycles
     .filter((item) => item.clientId === client.id)
     .sort((a, b) => b.periodStart.localeCompare(a.periodStart));
@@ -264,7 +268,7 @@ const OperationsClientWorkspace = () => {
     ...(capturedPlan || activePlan), id: selectedCycle.planId, name: capturedPlan?.name || `${t('Plan revision')} ${selectedCycle.planRevision}`,
     revision: selectedCycle.planRevision, serviceItems: selectedCycle.serviceItems,
     discountType: selectedCycle.discountType, discountValue: selectedCycle.discountValue, taxRateBps: selectedCycle.taxRateBps,
-  } : !monthly.unavailable && !monthly.available.length && activePlan?.status === 'Draft' && !activePlan.supersedesPlanId ? activePlan : undefined;
+  } : !monthly.unavailable && activePlan?.status === 'Draft' ? activePlan : undefined;
   const selectMonth = (id: string | null) => setSearchParams(current => { const query = new URLSearchParams(current); if (id) query.set('cycleId', id); else query.delete('cycleId'); return query; });
   const deliverables = store.deliverables.filter(
     (item) => item.clientId === client.id,
@@ -300,6 +304,7 @@ const OperationsClientWorkspace = () => {
     }
     const saved = await runServiceAction(() => store.commitPendingMutation(command));
     if (!saved) return false;
+    setPlanSavePending(!saved.ok && isPendingMutationResolution(useStore.getState().backend));
     setMessage(
       saved.ok ? msg('feedback.changesSaved') : saved.error || "The change is waiting to be saved.",
       saved.ok ? 'success' : 'error',
@@ -455,9 +460,17 @@ const OperationsClientWorkspace = () => {
   };
 
   const createRevision = async () => {
-    if (!activePlan || addonSaving) return;
-    const result = store.createClientPlanRevision(activePlan.id);
-    await saveAndCommit(result, "client_plan.manage");
+    if (!activeOrPausedPlan || addonSaving) return;
+    const result = store.createClientPlanRevision(activeOrPausedPlan.id);
+    const saved = await saveAndCommit(result, "client_plan.manage");
+    if (saved) requestAnimationFrame(() => document.getElementById('next-month-plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
+  const viewNextPlan = () => requestAnimationFrame(() => document.getElementById('next-month-plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  const retryPlanSave = async () => {
+    const saved = await runServiceAction(() => store.retryPendingSave('client_plan.manage'));
+    if (!saved) return;
+    setPlanSavePending(!saved.ok && isPendingMutationResolution(useStore.getState().backend));
+    setMessage(saved.ok ? msg('feedback.changesSaved') : saved.error || 'The change is waiting to be saved.', saved.ok ? 'success' : 'error');
   };
   const generateTaskChain = async (deliverableId: string) => {
     if (addonSaving) return;
@@ -532,13 +545,14 @@ const OperationsClientWorkspace = () => {
       <MonthlyRecordPicker records={monthly.available} selected={selectedCycle} current={monthly.current} unavailable={monthly.unavailable} onChange={selectMonth} />
       {canManagePlans && <RevisionRecoveryNotice plans={plans} activePlan={activePlan} />}
       {message && !addonSheetOpen && (
-        <p
+        <div
           className="rounded-control border border-line bg-inset px-4 py-3 text-sm font-medium text-ink"
           role={feedback?.tone === 'error' ? 'alert' : 'status'}
           aria-live={feedback?.tone === 'error' ? 'assertive' : 'polite'}
         >
           <SystemMessage message={message} />
-        </p>
+          {planSavePending && <Button className="mt-3" variant="secondary" onClick={() => void retryPlanSave()}>{t('Retry plan save')}</Button>}
+        </div>
       )}
 
       {(
@@ -560,7 +574,7 @@ const OperationsClientWorkspace = () => {
 
       {tab === "plan" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-plan`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-plan`} tabIndex={0} className="scroll-mt-36 space-y-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} />}
+          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} canManagePlans={canManagePlans} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => setTab('cycles')} />}
           <section className={cn(cardBase, "overflow-hidden")}>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
               <div>
@@ -649,7 +663,7 @@ const OperationsClientWorkspace = () => {
             )}
             {selectedCycle && selectedCycle.addonSnapshots.length > 0 && <div className="border-t border-line px-5 py-4"><h3 className="text-sm font-semibold text-ink">{t('Add-ons in this period')}</h3>{selectedCycle.addonSnapshots.map(item => <p key={item.id} data-i18n-skip className="mt-2 text-sm text-muted">{item.name} · {item.quantity}{canSeePrices ? ` · ${formatMoney(item.unitPriceMinor, 'MYR', locale)}` : ''}</p>)}</div>}
             {canManagePlans && activePlan && ['Active', 'Paused'].includes(activePlan.status) && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4"><p className="text-sm text-muted">{t('Plan settings apply to future billing cycles.')}</p><Button variant="secondary" onClick={() => setPlanDatesOpen(true)}>{t('Edit plan dates')}</Button></div>}
-            {canManagePlans && activePlan?.status === "Active" && (
+            {canManagePlans && activeOrPausedPlan?.status === "Active" && (
               <div className="flex flex-wrap justify-end gap-2 border-t p-4">
                 {!scheduledRevision && (
                   <Button
@@ -692,15 +706,15 @@ const OperationsClientWorkspace = () => {
               </div>
             )}
           </section>
-          {canManagePlans && scheduledRevision && (
-            <DraftServicePlanEditor key={scheduledRevision.id} plan={scheduledRevision} source={activePlan!} />
+          {canManagePlans && scheduledRevision && revisionSource && (
+            <DraftServicePlanEditor key={scheduledRevision.id} plan={scheduledRevision} source={revisionSource} />
           )}
         </div>
       )}
 
       {tab === "cycles" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-cycles`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-cycles`} tabIndex={0} className="scroll-mt-36 space-y-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} />}
+          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} canManagePlans={canManagePlans} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => setTab('cycles')} />}
           {(selectedCycle ? [selectedCycle] : []).map((cycle) => {
             const cycleDeliverables = deliverables.filter(
               (item) => item.cycleId === cycle.id,
