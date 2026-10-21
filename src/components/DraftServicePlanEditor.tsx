@@ -48,7 +48,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   const scheduled = plan.revisionScheduleStatus === 'scheduled';
   const blocked = isPendingMutationResolution(store.backend);
   const canSeePrices = canViewServicePrices(store.currentUser, store.rolePermissions);
-  const effectiveDate = source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay);
+  const effectiveDate = plan.effectiveFromCycleStart || source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay);
   const contractStartDate = getPlanContractStartDate(plan, store.clientPlans);
   const dateLabel = (value: string) => formatLocalizedDate(parseOptionalDate(value)!, locale);
   const totals = calculatePlanTotalMinor(draft.serviceItems, draft.discountType, draft.discountValue, draft.taxRateBps);
@@ -154,6 +154,13 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   };
   const schedule = () => {
     if (!review || review.fingerprint !== JSON.stringify(plan) || review.date !== effectiveDate || dirty) return error('The billing date changed. Refresh and review the next cycle before scheduling.');
+    if (source.status === 'Ended') {
+      // A deliberately ended plan has no active source for the hosted cycle
+      // scheduler. Activation creates the reviewed next-month snapshot and
+      // its draft cycle atomically, while the ended history remains intact.
+      void commit('schedule', () => store.activateClientPlan(plan.id));
+      return;
+    }
     void commit('schedule', () => store.scheduleClientPlanRevision(plan.id, review.date, plan.version));
   };
   const itemSummary = (item?: ServiceItem) => item ? `${item.quantity} ${item.unit} · ${item.platforms.join(', ') || t('No platform')}${canSeePrices ? ` · ${formatMoney(item.unitPriceMinor, 'MYR', locale)} ${t('each')}` : ''}${item.workflow ? ` · ${item.workflow.name}` : ''}` : t('Not included');
@@ -205,16 +212,16 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
       </fieldset>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line p-5">
         {canSeePrices && <p className="text-sm font-semibold text-ink">{t('Monthly total')}: {formatMoney(totals.total, 'MYR', locale)}</p>}
-        {!review && <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy || conflict || blocked}>{t(busy ? 'Saving…' : 'Save draft')}</Button><Button variant="secondary" disabled={dirty || busy || conflict || blocked || source.status !== 'Active'} onClick={() => setReview({ fingerprint: JSON.stringify(plan), date: effectiveDate })}>{t('Review changes')}</Button></div>}
+        {!review && <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy || conflict || blocked}>{t(busy ? 'Saving…' : 'Save draft')}</Button><Button variant="secondary" disabled={dirty || busy || conflict || blocked || !['Active', 'Ended'].includes(source.status)} onClick={() => setReview({ fingerprint: JSON.stringify(plan), date: effectiveDate })}>{t('Review changes')}</Button></div>}
         {dirty && <p className="w-full text-sm text-muted" role="status">{t('Unsaved changes. Save the draft before reviewing.')}</p>}
-        {source.status !== 'Active' && <p className="w-full text-sm text-muted">{t('Resume the active plan before scheduling a revision.')}</p>}
+        {source.status === 'Paused' && <p className="w-full text-sm text-muted">{t('Resume the active plan before scheduling a revision.')}</p>}
       </div>
     </form>}
     {review && !scheduled && <section aria-label={t('Review next month’s plan')} className="border-t border-line p-5">
       <h3 className="font-semibold text-ink">{t('Review changes')} · {dateLabel(review.date)}</h3><p className="mt-2 text-sm text-muted">{t('Only the next billing cycle will use these changes.')}</p>
       <div className="mt-4 divide-y divide-line">{[...new Set([...source.serviceItems.map(item => item.id), ...draft.serviceItems.map(item => item.id)])].map(id => { const before = source.serviceItems.find(item => item.id === id); const after = draft.serviceItems.find(item => item.id === id); return <div key={id} className="py-4"><p data-i18n-skip className="text-sm font-semibold text-ink">{after?.name || before?.name}</p><div className="mt-2 grid gap-3 sm:grid-cols-2"><div><p className="text-xs text-muted">{t('Current plan')}</p><p data-i18n-skip className="mt-1 text-sm text-ink">{itemSummary(before)}</p></div><div><p className="text-xs text-muted">{t('Next month’s plan')}</p><p data-i18n-skip className="mt-1 text-sm text-ink">{itemSummary(after)}</p></div></div></div>; })}</div>
       {canSeePrices && <p className="mt-3 text-sm font-semibold text-ink">{t('Monthly total')}: {formatMoney(currentTotals.total, 'MYR', locale)} → {formatMoney(totals.total, 'MYR', locale)}</p>}
-      <div className="mt-5 flex flex-wrap gap-2"><Button disabled={busy || blocked} onClick={schedule}>{t(busy ? 'Saving…' : 'Schedule for')} {!busy && dateLabel(review.date)}</Button><Button variant="secondary" disabled={busy} onClick={() => setReview(null)}>{t('Back to draft')}</Button></div>
+      <div className="mt-5 flex flex-wrap gap-2"><Button disabled={busy || blocked} onClick={schedule}>{t(busy ? 'Saving…' : source.status === 'Ended' ? 'Activate next month' : 'Schedule for')} {!busy && dateLabel(review.date)}</Button><Button variant="secondary" disabled={busy} onClick={() => setReview(null)}>{t('Back to draft')}</Button></div>
     </section>}
     {blocked && <div className="border-t border-line px-5 py-4"><BackendFreshness compact /><Button className="mt-3" variant="secondary" disabled={busy} onClick={() => void retry()}>{t('Retry saved change')}</Button></div>}
     {feedback && <div ref={alertRef} tabIndex={-1} className="border-t border-line px-5 py-3 text-sm font-medium text-ink" role={feedback.error ? 'alert' : 'status'}><SystemMessage message={feedback.text} />{feedback.error && draft.serviceItems.length > 0 && <button type="button" className="mt-2 block min-h-11 text-accent underline" onClick={() => document.getElementById(`${formId}-quantity-0`)?.focus()}>{t('Review service fields')}</button>}</div>}

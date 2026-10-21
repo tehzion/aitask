@@ -393,6 +393,7 @@ export interface StoreState {
   linkTaskToDeliverable: (taskId: string, cycleId?: string, deliverableId?: string) => { ok: boolean; error?: string };
   unlinkInvalidTaskDelivery: (taskId: string) => { ok: boolean; error?: string };
   generateDeliverableTaskChain: (deliverableId: string) => { ok: boolean; taskIds?: string[]; error?: string };
+  carryForwardTaskToCycle: (taskId: string, targetCycleId: string, targetDeliverableId?: string) => { ok: boolean; taskId?: string; error?: string };
   addCycleComment: (cycleId: string, text: string, visibility: CommentVisibility) => { ok: boolean; id?: string; error?: string };
   addCycleCommentAttachment: (commentId: string, attachment: AttachmentRef) => { ok: boolean; error?: string };
   addAddon: (data: Omit<Addon, 'id' | 'createdAt' | 'updatedAt'>) => { ok: boolean; id?: string; error?: string };
@@ -4148,14 +4149,19 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot revise client plans.' };
         const source = state.clientPlans.find(item => item.id === planId);
-        if (!source || source.status !== 'Active') return { ok: false, error: 'Only an active plan can be revised.' };
+        if (!source || !['Active', 'Ended'].includes(source.status)) return { ok: false, error: 'Only an active or ended plan can be renewed.' };
         if (!isServiceClientInScope(state, source.clientId)) return { ok: false, error: serviceClientScopeError };
         const pending = state.clientPlans.find(item => item.supersedesPlanId === source.id && item.status === 'Draft');
         if (pending) return { ok: true, planId: pending.id };
         const now = new Date().toISOString();
         const nextPlanId = nowId('PLN');
         const revision = Math.max(0, ...state.clientPlans.filter(item => item.clientId === source.clientId).map(item => item.revision)) + 1;
-        const effectiveFromCycleStart = source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay);
+        const latestCycle = state.serviceCycles
+          .filter(cycle => cycle.clientId === source.clientId && cycle.planId === source.id)
+          .sort((left, right) => right.periodStart.localeCompare(left.periodStart))[0];
+        const effectiveFromCycleStart = source.nextCycleStart
+          || (latestCycle ? nextBillingDate(latestCycle.periodStart, source.billingDay) : undefined)
+          || nextBillingDate(getBillingToday(), source.billingDay);
         const nextPlan: ClientServicePlan = {
           ...source,
           id: nextPlanId,
@@ -4309,7 +4315,10 @@ export const useStore = create<StoreState>()(
         if (!plan) return { ok: false, error: 'Plan not found.' };
         if (!isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
         if (plan.status !== 'Draft' && plan.status !== 'Paused') return { ok: false, error: 'Only draft or paused plans can be activated.' };
-        if (plan.status === 'Draft' && plan.supersedesPlanId) return { ok: false, error: 'Review and schedule this revision for the next billing cycle.' };
+        if (plan.status === 'Draft' && plan.supersedesPlanId) {
+          const sourcePlan = state.clientPlans.find(item => item.id === plan.supersedesPlanId && item.clientId === plan.clientId);
+          if (sourcePlan?.status !== 'Ended') return { ok: false, error: 'Review and schedule this revision for the next billing cycle.' };
+        }
         if (state.clientPlans.some(item => item.clientId === plan.clientId && item.id !== plan.id && item.status === 'Active')) {
           return { ok: false, error: 'This client already has an active plan.' };
         }
@@ -4559,6 +4568,97 @@ export const useStore = create<StoreState>()(
         } : item);
         set({ tasks: [...state.tasks, ...tasks], ...deriveServiceProgress([...state.tasks, ...tasks], nextDeliverables, state.serviceCycles) });
         return { ok: true, taskIds };
+      },
+
+      carryForwardTaskToCycle: (taskId, targetCycleId, targetDeliverableId) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        const source = state.tasks.find(task => task.id === taskId);
+        const targetCycle = state.serviceCycles.find(cycle => cycle.id === targetCycleId);
+        if (!actor || !source || !targetCycle) return { ok: false, error: 'The source task or target cycle is no longer available.' };
+        if (!canManageServiceCycles(actor, state.rolePermissions) || !canCreateTasks(actor, state.rolePermissions)) {
+          return { ok: false, error: 'Only authorised internal users can carry work into a new cycle.' };
+        }
+        if (source.clientId !== targetCycle.clientId || !source.serviceCycleId) {
+          return { ok: false, error: 'The source task and target cycle must belong to the same client.' };
+        }
+        if (!isServiceClientInScope(state, targetCycle.clientId)) return { ok: false, error: serviceClientScopeError };
+        const sourceCycle = state.serviceCycles.find(cycle => cycle.id === source.serviceCycleId && cycle.clientId === source.clientId);
+        if (!sourceCycle || targetCycle.periodStart <= sourceCycle.periodStart) {
+          return { ok: false, error: 'Choose a later service cycle for carry-forward.' };
+        }
+        if (!isTaskOpen(source)) return { ok: false, error: 'Only unresolved tasks can be carried forward.' };
+        if (targetCycle.status === 'Cancelled') return { ok: false, error: 'Cancelled cycles cannot receive carried work.' };
+        const sourceDeliverable = source.deliverableId
+          ? state.deliverables.find(item => item.id === source.deliverableId && item.clientId === source.clientId && item.cycleId === source.serviceCycleId)
+          : undefined;
+        const targetDeliverable = targetDeliverableId
+          ? state.deliverables.find(item => item.id === targetDeliverableId && item.clientId === targetCycle.clientId && item.cycleId === targetCycle.id)
+          : sourceDeliverable
+            ? state.deliverables
+              .filter(item => item.clientId === targetCycle.clientId && item.cycleId === targetCycle.id && item.serviceItemId === sourceDeliverable.serviceItemId)
+              .sort((left, right) => left.sequence - right.sequence)[0]
+            : undefined;
+        if (targetDeliverableId && !targetDeliverable) return { ok: false, error: 'The target deliverable is not part of the selected cycle.' };
+        const existing = state.tasks.find(task => task.carriedFromTaskId === source.id && task.serviceCycleId === targetCycle.id);
+        if (existing) return { ok: true, taskId: existing.id };
+        if (targetDeliverable?.status === 'Delivered') return { ok: false, error: 'Reopen the target delivery before carrying work into it.' };
+
+        const now = new Date().toISOString();
+        const safeIdPart = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120);
+        const carriedId = `T-CARRY-${safeIdPart(source.id)}-${safeIdPart(targetCycle.id)}`;
+        const assignee = state.users.find(user => user.id === source.assignedTo && user.role !== 'Client' && isEligibleTaskAssignee(user, source.department));
+        const carried: Task = {
+          ...source,
+          id: carriedId,
+          version: undefined,
+          updatedAt: now,
+          serviceCycleId: targetCycle.id,
+          deliverableId: targetDeliverable?.id,
+          startDate: targetCycle.periodStart,
+          dueDate: targetCycle.periodEnd,
+          assignedTo: assignee?.id || '',
+          createdBy: actor.id,
+          assignedBy: assignee ? actor.id : undefined,
+          assignedAt: assignee ? now : undefined,
+          status: 'Pending',
+          completionPercentage: 0,
+          isCompleted: false,
+          completedAt: undefined,
+          revisionCount: 0,
+          clientApprovalStatus: 'Pending',
+          isRecurring: false,
+          dueReminderSent: false,
+          attachmentLink: undefined,
+          attachmentName: undefined,
+          outputAttachments: [],
+          reviewDecision: undefined,
+          reviewOverrideReason: undefined,
+          reviewEvidence: undefined,
+          reviewAccess: undefined,
+          internalReview: undefined,
+          comments: [],
+          approvalHistory: [],
+          workState: {},
+          workHistory: [],
+          predecessorTaskIds: [],
+          generatedFromDeliverable: false,
+          workflowGeneratedAt: undefined,
+          carriedFromTaskId: source.id,
+          carriedFromCycleId: source.serviceCycleId,
+          carriedForwardAt: now,
+          notes: [source.notes, `Carried forward from ${sourceCycle.periodStart} – ${sourceCycle.periodEnd}.`].filter(Boolean).join('\n'),
+        };
+        const tasks = [...state.tasks, carried];
+        const deliverables = targetDeliverable
+          ? state.deliverables.map(item => item.id === targetDeliverable.id
+            ? { ...item, taskIds: Array.from(new Set([...item.taskIds, carried.id])), updatedAt: now }
+            : item)
+          : state.deliverables;
+        set({ tasks, ...deriveServiceProgress(tasks, deliverables, state.serviceCycles) });
+        queueActionFeedback(actor.id, `task:${carried.id}:create`, msg('task.created', { title: carried.title }), saved => saved.tasks.some(item => item.id === carried.id && item.carriedFromTaskId === source.id));
+        return { ok: true, taskId: carried.id };
       },
 
       addCycleComment: (cycleId, text, visibility) => {

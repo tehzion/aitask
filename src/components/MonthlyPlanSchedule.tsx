@@ -25,7 +25,7 @@ const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upco
     .filter(item => item.clientId === plan.clientId && item.periodEnd < todayKey)
     .sort((left, right) => right.periodEnd.localeCompare(left.periodEnd))[0];
   const history = cycles
-    .filter(item => item.clientId === plan.clientId)
+    .filter(item => item.clientId === plan.clientId && item.id !== cycle?.id)
     .sort((left, right) => right.periodStart.localeCompare(left.periodStart))
     .slice(0, 6);
   const dateLabel = (value: string) => {
@@ -47,7 +47,7 @@ const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upco
       </div>
       <div className="flex flex-wrap gap-2">
         {upcomingPlan ? <Button variant="secondary" onClick={onViewNextPlan}><Eye aria-hidden="true" className="h-4 w-4" />{t('View Next Month’s Plan')}</Button>
-          : canManagePlans && plan.status === 'Active' && <Button onClick={onCreateNextPlan}><Plus aria-hidden="true" className="h-4 w-4" />{t("Create Next Month's Plan")}</Button>}
+          : canManagePlans && (plan.status === 'Active' || plan.status === 'Ended') && <Button onClick={onCreateNextPlan}><Plus aria-hidden="true" className="h-4 w-4" />{t("Create Next Month's Plan")}</Button>}
         {history.length > 0 && <Button variant="secondary" onClick={onViewHistory}><History aria-hidden="true" className="h-4 w-4" />{t('View Plan History')}</Button>}
       </div>
     </div>

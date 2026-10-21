@@ -51,6 +51,8 @@ import {
   getCycleServiceProgress,
   canSetDeliverableStatus,
 } from "../lib/serviceManagement";
+import { getMonthlyCycleCloseout } from "../lib/monthlyCloseout";
+import { isTaskOpen } from "../lib/taskReporting";
 import {
   canEditTask,
   canManageClientPlans,
@@ -142,6 +144,8 @@ const OperationsClientWorkspace = () => {
   const { busy: addonSaving, run: runServiceAction } = useSaveAction(clientId);
   const pendingAddon = React.useRef<(typeof store.addons)[number] | null>(null);
   const [activitySaving, setActivitySaving] = React.useState(false);
+  const [carryPending, setCarryPending] = React.useState<string | null>(null);
+  const [carrySavePending, setCarrySavePending] = React.useState(false);
   const activityContext = React.useRef({ clientId, actorId: store.currentUser?.id });
   activityContext.current = { clientId, actorId: store.currentUser?.id };
   const activityDraft = React.useRef({ comment, file, visibility });
@@ -185,7 +189,7 @@ const OperationsClientWorkspace = () => {
     targetCycleId: "",
   });
   React.useEffect(() => {
-    pendingAddon.current = null; setAddonSheetOpen(false); setPlanAction(null); setPlanSavePending(false); setMessage(''); setDownloadingFileId(null);
+    pendingAddon.current = null; setAddonSheetOpen(false); setPlanAction(null); setPlanSavePending(false); setCarrySavePending(false); setMessage(''); setDownloadingFileId(null);
     setAddon({ name: '', platforms: '', quantity: 1, unitPrice: 0, billingMode: 'one_off', effectiveFrom: addonDefaultDate, targetCycleId: '' });
   }, [clientId, store.currentUser?.id, addonDefaultDate]);
   useUnsavedChanges(addonSaving || Boolean(addon.name.trim() || addon.platforms.trim() || addon.quantity !== 1 || addon.unitPrice !== 0 || addon.billingMode !== 'one_off' || addon.targetCycleId || addon.effectiveFrom !== addonDefaultDate));
@@ -236,6 +240,7 @@ const OperationsClientWorkspace = () => {
   const activeOrPausedPlan =
     plans.find((item) => item.status === "Active") ||
     plans.find((item) => item.status === "Paused");
+  const renewalSourcePlan = activeOrPausedPlan || plans.find((item) => item.status === "Ended");
   const scheduledRevision = plans.find(
     (item) =>
       item.status === "Draft" && Boolean(item.supersedesPlanId),
@@ -304,7 +309,7 @@ const OperationsClientWorkspace = () => {
     }
     const saved = await runServiceAction(() => store.commitPendingMutation(command));
     if (!saved) return false;
-    setPlanSavePending(!saved.ok && isPendingMutationResolution(useStore.getState().backend));
+    setPlanSavePending(command === 'client_plan.manage' && !saved.ok && isPendingMutationResolution(useStore.getState().backend));
     setMessage(
       saved.ok ? msg('feedback.changesSaved') : saved.error || "The change is waiting to be saved.",
       saved.ok ? 'success' : 'error',
@@ -460,8 +465,8 @@ const OperationsClientWorkspace = () => {
   };
 
   const createRevision = async () => {
-    if (!activeOrPausedPlan || addonSaving) return;
-    const result = store.createClientPlanRevision(activeOrPausedPlan.id);
+    if (!renewalSourcePlan || addonSaving) return;
+    const result = store.createClientPlanRevision(renewalSourcePlan.id);
     const saved = await saveAndCommit(result, "client_plan.manage");
     if (saved) requestAnimationFrame(() => document.getElementById('next-month-plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
@@ -476,6 +481,33 @@ const OperationsClientWorkspace = () => {
     if (addonSaving) return;
     const result = store.generateDeliverableTaskChain(deliverableId);
     await saveAndCommit(result, "deliverable.workflow.generate");
+  };
+  const carryForward = async (taskId: string, targetCycleId: string, targetDeliverableId?: string) => {
+    if (addonSaving || carryPending) return;
+    setCarryPending(taskId);
+    try {
+      const result = store.carryForwardTaskToCycle(taskId, targetCycleId, targetDeliverableId);
+      const saved = await saveAndCommit(result, "task.create");
+      setCarrySavePending(!saved && isPendingMutationResolution(useStore.getState().backend));
+      if (saved) setMessage(msg('feedback.taskCarriedForward'), 'success');
+    } finally {
+      setCarryPending(null);
+    }
+  };
+  const retryCarryForward = async () => {
+    if (carryPending) return;
+    setCarryPending('retry');
+    try {
+      const saved = await runServiceAction(() => store.retryPendingSave('task.create'));
+      if (saved.ok) {
+        setCarrySavePending(false);
+        setMessage(msg('feedback.taskCarriedForward'), 'success');
+      } else {
+        setMessage(saved.error || 'The carried work is waiting to be saved.');
+      }
+    } finally {
+      setCarryPending(null);
+    }
   };
   const changeAddonState = async (addonId: string, isActive: boolean) => {
     if (addonSaving) return;
@@ -552,6 +584,7 @@ const OperationsClientWorkspace = () => {
         >
           <SystemMessage message={message} />
           {planSavePending && <Button className="mt-3" variant="secondary" onClick={() => void retryPlanSave()}>{t('Retry plan save')}</Button>}
+          {carrySavePending && <Button className="mt-3" variant="secondary" onClick={() => void retryCarryForward()}>{t('Retry carried work')}</Button>}
         </div>
       )}
 
@@ -719,7 +752,11 @@ const OperationsClientWorkspace = () => {
             const cycleDeliverables = deliverables.filter(
               (item) => item.cycleId === cycle.id,
             );
+            const nextCycle = allCycles
+              .filter(item => item.clientId === cycle.clientId && item.status !== 'Cancelled' && item.periodStart > cycle.periodStart)
+              .sort((left, right) => left.periodStart.localeCompare(right.periodStart))[0];
             const progress = getCycleServiceProgress(cycle, cycleDeliverables);
+            const closeout = getMonthlyCycleCloseout(cycle, cycleDeliverables, tasks, today);
             const includedTotal = progress.reduce((sum, item) => sum + item.included, 0);
             const completedTotal = progress.reduce((sum, item) => sum + item.completed, 0);
             return (
@@ -767,6 +804,19 @@ const OperationsClientWorkspace = () => {
                   <DeliveryProgress published={cycle.status === 'Published' || cycle.status === 'Completed'} total={includedTotal} delivered={completedTotal} draft={cycle.status === 'Draft'} />
                   {cycle.status === 'Draft' && <p className="mt-2 text-sm text-muted">{t('Planned deliverables')}: {includedTotal}</p>}
                   {progress.length > 1 && <p className="mt-4 text-xs text-muted">{progress.map((item) => item.name).join(" · ")}</p>}
+                  <section aria-label={t('Monthly cycle closeout')} className="mt-5 border-t border-line/70 pt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div><h3 className="text-sm font-semibold text-ink">{t('Cycle closeout')}</h3><p className="mt-1 text-xs text-muted">{closeout.isReadyToClose ? t('All deliverables and tasks are complete.') : t('Resolve the remaining work before closing this cycle.')}</p></div>
+                      <Badge tone={closeout.isReadyToClose ? 'emerald' : closeout.overdueTasks > 0 ? 'red' : 'amber'}>{t(closeout.isReadyToClose ? 'Ready to close' : 'In progress')}</Badge>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-muted sm:grid-cols-5">
+                      <div><span className="calm-number block text-lg font-semibold text-ink">{closeout.completionPercent}%</span>{t('Delivery completion')}</div>
+                      <div><span className="calm-number block text-lg font-semibold text-ink">{closeout.openTasks}</span>{t('Open tasks')}</div>
+                      <div><span className="calm-number block text-lg font-semibold text-ink">{closeout.overdueTasks}</span>{t('Overdue tasks')}</div>
+                      <div><span className="calm-number block text-lg font-semibold text-ink">{closeout.waitingApproval}</span>{t('Waiting approval')}</div>
+                      <div><span className="calm-number block text-lg font-semibold text-ink">{closeout.delivered}/{closeout.deliverables}</span>{t('Delivered')}</div>
+                    </div>
+                  </section>
                 </div>
                 <div className="divide-y divide-line/70">
                   {cycleDeliverables.map((deliverable) => {
@@ -805,6 +855,8 @@ const OperationsClientWorkspace = () => {
                                     !tasks.find((value) => value.id === id)
                                       ?.isCompleted,
                                 );
+                                const alreadyCarried = Boolean(nextCycle && tasks.some(candidate => candidate.carriedFromTaskId === task.id && candidate.serviceCycleId === nextCycle.id));
+                                const targetDeliverable = nextCycle && deliverables.find(item => item.cycleId === nextCycle.id && item.serviceItemId === deliverable.serviceItemId);
                                 return (
                                   <li
                                     key={task.id}
@@ -828,6 +880,13 @@ const OperationsClientWorkspace = () => {
                                       {task.title.replace(/^\d+\.\s*/, "")}
                                     </Link>
                                     <span className={cn("font-medium", task.isCompleted ? "text-[rgb(var(--calm-success))]" : waiting ? "text-[rgb(var(--calm-warning))]" : "text-muted")}>{task.isCompleted ? t("Completed") : waiting ? t("Waiting on previous step") : t("Current / ready")}</span>
+                                    {!isClient && canManageCycles && nextCycle && isTaskOpen(task) && (
+                                      alreadyCarried
+                                        ? <span className="text-xs font-medium text-[rgb(var(--calm-success))]">{t('Carried forward')}</span>
+                                        : <Button variant="secondary" className="min-h-9 px-2.5 py-1 text-xs" disabled={carryPending === task.id || Boolean(carryPending)} onClick={() => void carryForward(task.id, nextCycle.id, targetDeliverable?.id)}>
+                                            {carryPending === task.id ? t('Saving…') : t('Carry forward')}
+                                          </Button>
+                                    )}
                                   </li>
                                 );
                               })}

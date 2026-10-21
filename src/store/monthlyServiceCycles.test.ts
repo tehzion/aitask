@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { User } from '../types';
+import type { Task, User } from '../types';
 import { useStore } from './index';
 
 const initial = useStore.getState();
@@ -135,5 +135,68 @@ describe('monthly service cycle rollover', () => {
     });
     setDay(2026, 10, 9); useStore.getState().generateDueLocalServiceCycles();
     expect(useStore.getState().serviceCycles[1].addonSnapshots.map(item => item.name)).toEqual(['monthly']);
+  });
+
+  it('carries unresolved work into the next cycle without changing the source task', () => {
+    const id = createPlan();
+    const activated = useStore.getState().activateClientPlan(id);
+    setDay(2026, 10, 9);
+    useStore.getState().generateDueLocalServiceCycles();
+    const state = useStore.getState();
+    const sourceCycle = state.serviceCycles.find(cycle => cycle.id === activated.cycleId)!;
+    const targetCycle = state.serviceCycles.find(cycle => cycle.id !== sourceCycle.id)!;
+    const sourceDeliverable = state.deliverables.find(item => item.cycleId === sourceCycle.id)!;
+    const sourceTask: Task = {
+      id: 'carry-source', clientId: sourceCycle.clientId, clientName: sourceCycle.clientName,
+      serviceCycleId: sourceCycle.id, deliverableId: sourceDeliverable.id, serviceType: 'Management',
+      title: 'Unresolved handoff', description: 'Needs another cycle', department: 'Operation',
+      assignedTo: '', createdBy: pm.id, startDate: sourceCycle.periodStart, dueDate: sourceCycle.periodEnd,
+      priority: 'High', status: 'In Progress', completionPercentage: 40, isCompleted: false,
+      revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false,
+    };
+    useStore.setState(current => ({ tasks: [...current.tasks, sourceTask] }));
+
+    const first = useStore.getState().carryForwardTaskToCycle(sourceTask.id, targetCycle.id);
+    const second = useStore.getState().carryForwardTaskToCycle(sourceTask.id, targetCycle.id);
+    expect(first.ok).toBe(true);
+    expect(second).toEqual(first);
+    const carried = useStore.getState().tasks.find(task => task.id === first.taskId)!;
+    expect(carried).toMatchObject({ carriedFromTaskId: sourceTask.id, carriedFromCycleId: sourceCycle.id, serviceCycleId: targetCycle.id, status: 'Pending', completionPercentage: 0 });
+    expect(useStore.getState().tasks.find(task => task.id === sourceTask.id)).toEqual(sourceTask);
+    expect(useStore.getState().tasks.filter(task => task.carriedFromTaskId === sourceTask.id)).toHaveLength(1);
+  });
+
+  it('renews an ended plan as a new reviewed snapshot', () => {
+    const id = createPlan('2026-09-30', 30);
+    useStore.getState().activateClientPlan(id);
+    expect(useStore.getState().setClientPlanStatus(id, 'Ended').ok).toBe(true);
+    const source = structuredClone(useStore.getState().clientPlans.find(plan => plan.id === id)!);
+    const renewal = useStore.getState().createClientPlanRevision(id);
+    expect(renewal.ok).toBe(true);
+    const draft = useStore.getState().clientPlans.find(plan => plan.id === renewal.planId)!;
+    expect(draft).toMatchObject({ status: 'Draft', supersedesPlanId: source.id, startDate: '2026-10-30', billingDay: 30 });
+    expect(useStore.getState().activateClientPlan(draft.id)).toMatchObject({ ok: true });
+    const latest = useStore.getState().clientPlans.find(plan => plan.id === draft.id)!;
+    expect(latest.status).toBe('Active');
+    expect(useStore.getState().clientPlans.find(plan => plan.id === source.id)).toEqual(source);
+    expect(useStore.getState().serviceCycles.map(cycle => cycle.periodStart)).toEqual(['2026-09-30', '2026-10-30']);
+  });
+
+  it('keeps carry-forward restricted to authorised cycle managers', () => {
+    const id = createPlan();
+    const activated = useStore.getState().activateClientPlan(id);
+    setDay(2026, 10, 9);
+    useStore.getState().generateDueLocalServiceCycles();
+    const state = useStore.getState();
+    const sourceCycle = state.serviceCycles.find(cycle => cycle.id === activated.cycleId)!;
+    const targetCycle = state.serviceCycles.find(cycle => cycle.id !== sourceCycle.id)!;
+    const sourceTask: Task = {
+      id: 'restricted-carry-source', clientId: sourceCycle.clientId, clientName: sourceCycle.clientName,
+      serviceCycleId: sourceCycle.id, serviceType: 'Management', title: 'Restricted handoff', description: '', department: 'Operation',
+      assignedTo: '', createdBy: pm.id, startDate: sourceCycle.periodStart, dueDate: sourceCycle.periodEnd, priority: 'Medium',
+      status: 'In Progress', completionPercentage: 20, isCompleted: false, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false,
+    };
+    useStore.setState(current => ({ tasks: [...current.tasks, sourceTask], currentUser: { ...pm, role: 'Staff' } }));
+    expect(useStore.getState().carryForwardTaskToCycle(sourceTask.id, targetCycle.id).ok).toBe(false);
   });
 });

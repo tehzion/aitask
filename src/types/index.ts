@@ -518,6 +518,10 @@ export interface Task {
     inputVersions: { taskId: string; outputVersion: number }[];
   };
   predecessorTaskIds?: string[];
+  /** Immutable lineage for work intentionally carried into a later service cycle. */
+  carriedFromTaskId?: string;
+  carriedFromCycleId?: string;
+  carriedForwardAt?: string;
   generatedFromDeliverable?: boolean;
   workflowGeneratedAt?: string;
   clientName: string;
