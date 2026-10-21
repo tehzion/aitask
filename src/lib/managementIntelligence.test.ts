@@ -156,6 +156,32 @@ describe('management intelligence', () => {
     expect(items.some(item => item.id === 'renewal:a')).toBe(true);
   });
 
+  it('keeps PM signals scoped and surfaces waiting reviews for production roles', () => {
+    const pmItems = getManagementAttentionItems({
+      persona: 'projectManager',
+      userId: 'pm-a',
+      projects: [project('a')],
+      tasks: [task('review', 'a', { status: 'Waiting Approval', dueDate: '2026-10-25' })],
+      deliverables: [],
+      clientPlans: [plan('a')],
+      serviceCycles: [],
+      now,
+    });
+    expect(pmItems.every(item => !item.title.includes('Project b'))).toBe(true);
+
+    const staffItems = getManagementAttentionItems({
+      persona: 'production',
+      userId: 'staff-a',
+      projects: [],
+      tasks: [task('review', 'a', { status: 'Waiting Approval', dueDate: '2026-11-20' })],
+      deliverables: [],
+      clientPlans: [],
+      serviceCycles: [],
+      now,
+    });
+    expect(staffItems.some(item => item.id === 'task:review' && item.detail === 'Waiting review')).toBe(true);
+  });
+
   it('keeps shared workload aggregate and labels deadline pressure as estimated', () => {
     const summaries = getSharedEmployeeWorkload(
       [task('one', 'a', { assignedTo: 'staff-a', dueDate: '2026-10-22' }), task('two', 'b', { assignedTo: 'staff-a', dueDate: '2026-10-23' })],

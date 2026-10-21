@@ -244,14 +244,14 @@ export const getManagementAttentionItems = ({
     }));
   } else {
     visibleTasks
-      .filter(task => isTaskOpen(task) && (isTaskOverdue(task, now) || parseOptionalDate(task.dueDate) && parseOptionalDate(task.dueDate)! <= inThreeDays || task.revisionCount > 0 || task.workState?.blocker))
+      .filter(task => isTaskOpen(task) && (isTaskOverdue(task, now) || parseOptionalDate(task.dueDate) && parseOptionalDate(task.dueDate)! <= inThreeDays || task.revisionCount > 0 || task.workState?.blocker || task.status === 'Waiting Approval'))
       .sort((left, right) => Number(isTaskOverdue(right, now)) - Number(isTaskOverdue(left, now))
         || (parseOptionalDate(left.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER) - (parseOptionalDate(right.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER))
       .forEach(task => add({
         id: `task:${task.id}`,
         severity: isTaskOverdue(task, now) || task.workState?.blocker ? 'critical' : 'attention',
         title: task.title,
-        detail: task.workState?.blocker ? 'Blocked work' : task.revisionCount > 0 ? `Revision ${task.revisionCount}` : task.clientName,
+        detail: task.workState?.blocker ? 'Blocked work' : task.status === 'Waiting Approval' ? 'Waiting review' : task.revisionCount > 0 ? `Revision ${task.revisionCount}` : task.clientName,
         to: `/tasks?taskId=${encodeURIComponent(task.id)}`,
         dueDate: task.dueDate,
       }));
