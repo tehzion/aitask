@@ -14,7 +14,6 @@ import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const supabaseSource = join(projectRoot, 'supabase');
-const manifestPath = join(supabaseSource, 'preflight', 'aitask_release_manifest_20261017_production.json');
 const supabaseCli = join(projectRoot, 'node_modules', '.bin', 'supabase');
 const expectedProjectRef = 'ohjhwyiffgzyatcmmdql';
 const databaseTestPath = process.env.AITASK_DATABASE_TEST_PATH || 'supabase/tests/database';
@@ -23,6 +22,16 @@ const fail = (message) => {
   console.error(`[rollout] ${message}`);
   process.exit(1);
 };
+
+// Always validate against the newest immutable applied-production manifest.
+// Keeping this lookup dynamic prevents the rollout gate from silently
+// validating a superseded migration tail after a later production release.
+const manifestName = readdirSync(join(supabaseSource, 'preflight'))
+  .filter((name) => /^aitask_release_manifest_.*_production\.json$/.test(name))
+  .sort()
+  .at(-1);
+if (!manifestName) fail('No applied-production release manifest was found.');
+const manifestPath = join(supabaseSource, 'preflight', manifestName);
 
 if (!process.versions.node.startsWith('22.')) {
   fail(`Node 22 is required; found ${process.version}.`);
