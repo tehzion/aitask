@@ -12,6 +12,7 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  */
 const zhCopy: Record<string, string> = {
   'Closed': '已关闭',
+  'Refresh required': '需要刷新',
   'Team': '团队',
   'Milestones': '里程碑',
   'Project sections': '项目分区',

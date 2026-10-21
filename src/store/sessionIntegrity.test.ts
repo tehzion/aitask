@@ -19,7 +19,7 @@ vi.mock('../lib/secureWorkspace', async importOriginal => ({
   retrySecureWorkspaceCommand: mocks.retry,
   loadSecureWorkspaceRevision: async () => ({ version: 2 }),
 }));
-import { clearWorkspaceSession, useStore } from './index';
+import { clearWorkspaceSession, isPendingMutationResolution, isWorkspaceMutationLocked, useStore } from './index';
 import type { User } from '../types';
 const initial = useStore.getState();
 const actor: User = { id: 'integrity-admin', authUserId: 'integrity-auth', name: 'Admin', role: 'Project Manager', departments: ['Management'], isSuperAdmin: true };
@@ -27,6 +27,42 @@ const seed = () => useStore.setState({ ...initial, currentUser: actor, users: [a
 beforeEach(() => { vi.clearAllMocks(); seed(); mocks.retained.mockReturnValue(null); mocks.capabilities.mockResolvedValue({ compatible: true }); mocks.getUser.mockResolvedValue({ data: { user: { id: actor.authUserId } }, error: null }); });
 const input = { clientName: 'Integrity Client', planName: 'Integrity Plan', origin: 'custom' as const, serviceItems: [{ id: 'item', name: 'Design', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 100 }], startDate: '2026-09-01', billingDay: 1, discountType: 'none' as const, discountValue: 0, taxRateBps: 0 };
 describe('session and acknowledgement integrity', () => {
+  it('keeps a failed refresh visible without inventing a pending save or locking future edits', async () => {
+    mocks.load.mockRejectedValueOnce(new Error('canceling statement due to statement timeout'));
+    await useStore.getState().pullBackendNow({ force: true });
+    expect(useStore.getState().backend).toMatchObject({ status: 'refresh_required', hasLocalChanges: false, pendingMutations: 0 });
+    expect(useStore.getState().backend.error).toBeTruthy();
+    expect(isPendingMutationResolution(useStore.getState().backend)).toBe(false);
+    expect(isWorkspaceMutationLocked(useStore.getState())).toBe(false);
+    expect(useStore.getState().createClientWithPlan(input).ok).toBe(true);
+  });
+  it('recovers a refresh-only failure from an older tab through retry without issuing a save', async () => {
+    mocks.load.mockResolvedValue({ currentUser: actor, state: { ...initial, users: [actor], tasks: [] }, revision: { version: 2 }, notificationFeed: { items: [], unreadCount: 0 } });
+    useStore.setState(state => ({ backend: { ...state.backend, status: 'retry_required', error: 'Refresh timed out.', hasLocalChanges: false, pendingMutations: 0 } }));
+    expect(await useStore.getState().retryPendingSave()).toEqual({ ok: true });
+    expect(mocks.load).toHaveBeenCalledOnce();
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(mocks.retry).not.toHaveBeenCalled();
+    expect(useStore.getState().backend).toMatchObject({ status: 'live', hasLocalChanges: false });
+  });
+  it('preserves the pending-save lock when a refresh fails with local edits', async () => {
+    mocks.load.mockRejectedValueOnce(new Error('Refresh timed out.'));
+    useStore.setState(state => ({ backend: { ...state.backend, hasLocalChanges: true, pendingMutations: 1 } }));
+    await useStore.getState().pullBackendNow({ force: true });
+    expect(useStore.getState().backend).toMatchObject({ status: 'retry_required', hasLocalChanges: true, pendingMutations: 1 });
+    expect(isWorkspaceMutationLocked(useStore.getState())).toBe(true);
+  });
+  it('reports a confirmed save correctly when only its follow-up refresh times out', async () => {
+    mocks.save.mockResolvedValueOnce({ ok: true, commandId: 'saved-plan', workspaceVersion: 2 });
+    mocks.load.mockRejectedValueOnce(new Error('canceling statement due to statement timeout'));
+    expect(useStore.getState().createClientWithPlan(input).ok).toBe(true);
+    useStore.setState(state => ({ backend: { ...state.backend, hasRemoteUpdate: true } }));
+    expect(await useStore.getState().commitPendingMutation('client_plan.manage')).toEqual({ ok: true });
+    expect(useStore.getState().backend).toMatchObject({ status: 'refresh_required', hasLocalChanges: false, pendingMutations: 0, workspaceVersion: 2 });
+    expect(useStore.getState().backend.lastSavedAt).toBeTruthy();
+    expect(useStore.getState().backend.error).toBeTruthy();
+    expect(isWorkspaceMutationLocked(useStore.getState())).toBe(false);
+  });
   it('clears a rejected save code after loading canonical data', async () => {
     mocks.load.mockResolvedValue({ currentUser: actor, state: { ...initial, users: [actor], tasks: [] }, revision: { version: 2 }, notificationFeed: { items: [], unreadCount: 0 } });
     useStore.setState(state => ({ backend: { ...state.backend, status: 'retry_required', errorCode: 'FORBIDDEN', error: 'Rejected change.', pendingCommandType: 'task.update' } }));

@@ -45,6 +45,15 @@ export const BACKEND_UPGRADE_REQUIRED_MESSAGE = enMessages['errors.workspaceUpgr
 export const BACKEND_RETRY_REQUIRED_MESSAGE = enMessages['errors.workspaceRetry'];
 const SYNC_REQUEST_TIMEOUT_MS = 20_000;
 const WORKSPACE_PAGE_SIZE = 500;
+// Equality filters let PostgreSQL use the (workspace_id, entity_type, entity_id)
+// index before running the scoped RLS checks. A broad `<> notification` scan
+// evaluates expensive portfolio checks across the entire workspace and can hit
+// PostgREST's statement timeout even when only a few rows are visible.
+export const WORKSPACE_ENTITY_TYPES = [
+  'task', 'project', 'client', 'comment', 'approval', 'task_status', 'custom_role',
+  'registration', 'service_package', 'client_plan', 'service_cycle', 'deliverable',
+  'cycle_comment', 'addon', 'service_workflow_template', 'service_pricing_snapshot',
+] as const;
 const PENDING_COMMAND_STORAGE_VERSION = 1;
 const PENDING_COMMAND_STORAGE_PREFIX = 'aitask:secure-pending-command';
 const PENDING_MEMBER_MUTATION_STORAGE_VERSION = 1;
@@ -1705,14 +1714,28 @@ const loadSecureWorkspaceInternal = async (authUser: User, options: { preserveRe
       if (!query.range || page.length < WORKSPACE_PAGE_SIZE) return rows;
     }
   };
+  const loadEntities = async () => {
+    const groups: EntityRow[][] = new Array(WORKSPACE_ENTITY_TYPES.length);
+    let nextType = 0;
+    // Bound concurrency to avoid flooding the database with one request per
+    // collection, while keeping each collection's pagination independent.
+    await Promise.all(Array.from({ length: 3 }, async () => {
+      while (nextType < WORKSPACE_ENTITY_TYPES.length) {
+        assertWorkspaceSession(sessionToken);
+        const index = nextType++;
+        const entityType = WORKSPACE_ENTITY_TYPES[index];
+        groups[index] = await loadPages<EntityRow>(() => supabase.from('aitask_entities')
+          .select('workspace_id,entity_type,entity_id,parent_id,data,version,updated_at')
+          .eq('workspace_id', SECURE_WORKSPACE_ID)
+          .eq('entity_type', entityType)
+          .order('entity_id'));
+      }
+    }));
+    return groups.flatMap((rows, index) => rows.filter(row => row.entity_type === WORKSPACE_ENTITY_TYPES[index]));
+  };
   const [members, entities, revision, notificationFeed] = await Promise.all([
     loadPages<MemberRow>(() => supabase.from('aitask_members').select('*').eq('workspace_id', SECURE_WORKSPACE_ID).order('id')),
-    loadPages<EntityRow>(() => supabase.from('aitask_entities')
-      .select('workspace_id,entity_type,entity_id,parent_id,data,version,updated_at')
-      .eq('workspace_id', SECURE_WORKSPACE_ID)
-      .neq('entity_type', 'notification')
-      .order('entity_type')
-      .order('entity_id')),
+    loadEntities(),
     loadSecureWorkspaceRevision(),
     loadSecureNotificationPage({ limit: 50 }),
   ]);

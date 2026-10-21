@@ -620,7 +620,7 @@ const Clients: React.FC = () => {
     if (!saved.ok) return false;
     const backend = useStore.getState().backend;
     return backend.mode !== 'supabase' || !backend.isConfigured
-      || (backend.status === 'live' && !backend.hasLocalChanges && backend.pendingMutations === 0);
+      || (['live', 'refresh_required'].includes(backend.status) && !backend.hasLocalChanges && backend.pendingMutations === 0);
   };
 
   const getClientSaveError = (saved: { error?: string }, fallback: string) => (

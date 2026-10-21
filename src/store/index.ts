@@ -161,7 +161,7 @@ import {
   SHORT_VIDEO_WORKFLOW_TEMPLATE,
 } from '../lib/serviceManagement';
 
-export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required' | 'upgrade_required';
+export type SyncStatus = 'local' | 'loading' | 'live' | 'saving' | 'offline' | 'conflict' | 'retry_required' | 'refresh_required' | 'upgrade_required';
 
 interface BackendRuntimeState {
   mode: 'local' | 'supabase';
@@ -1471,7 +1471,11 @@ export const useStore = create<StoreState>()(
           apply((state) => ({
             backend: {
               ...state.backend,
-              status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
+              status: typeof navigator !== 'undefined' && navigator.onLine === false
+                ? 'offline'
+                : state.backend.hasLocalChanges || state.backend.pendingMutations > 0 || hasRetainedSecureMutation()
+                  ? state.backend.conflict ? 'conflict' : 'retry_required'
+                  : 'refresh_required',
               isPulling: false,
               message: 'Unable to check for the latest updates.',
               error: userFacingText(error, "We couldn't load your workspace. Please try again."),
@@ -1796,14 +1800,20 @@ export const useStore = create<StoreState>()(
           return get().retryMutation();
         }
         if (!before.hasLocalChanges) {
-          return before.status === 'live'
+          if (before.status === 'live') return { ok: true };
+          // A failed read has no command to replay. Recover by refreshing;
+          // resending a non-existent save leaves older tabs stuck forever.
+          await get().pullBackendNow({ force: true, silent: false });
+          if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
+          const refreshed = get().backend;
+          return refreshed.status === 'live' && !refreshed.hasLocalChanges && !refreshed.error
             ? { ok: true }
-            : { ok: false, code: before.errorCode, error: before.error || before.message || 'The change has not been saved yet.' };
+            : { ok: false, code: refreshed.errorCode, error: refreshed.error || refreshed.message || 'Unable to reload saved data. Try again.' };
         }
         await get().syncBackendNow(commandType || before.pendingCommandType);
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         const after = get().backend;
-        return !after.hasLocalChanges && after.status === 'live'
+        return !after.hasLocalChanges && after.pendingMutations === 0 && ['live', 'refresh_required'].includes(after.status)
           ? { ok: true }
           : { ok: false, code: after.errorCode, error: after.error || before.error || after.message || 'The change has not been saved yet.' };
       },
@@ -1835,7 +1845,7 @@ export const useStore = create<StoreState>()(
         await get().syncBackendNow(commandType);
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         const backend = get().backend;
-        if (!backend.hasLocalChanges && backend.status === 'live') { acknowledgeActionFeedback(get()); return { ok: true }; }
+        if (!backend.hasLocalChanges && backend.pendingMutations === 0 && ['live', 'refresh_required'].includes(backend.status)) { acknowledgeActionFeedback(get()); return { ok: true }; }
         return {
           ok: false,
           code: backend.errorCode,

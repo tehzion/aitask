@@ -73,6 +73,8 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           ? t('shell.conflict')
           : backend.status === 'retry_required'
             ? t('shell.retryRequired')
+            : backend.status === 'refresh_required'
+              ? t('Refresh required')
             : backend.status === 'offline'
               ? t('shell.offline')
               : backend.status === 'loading'

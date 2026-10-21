@@ -2,7 +2,7 @@ import { BACKEND_UPGRADE_REQUIRED_MESSAGE } from './secureWorkspace';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
 vi.mock('./supabaseClient', () => ({ supabase: { from: mocks.from, rpc: mocks.rpc, auth: { refreshSession: vi.fn() } }, shouldUseSecureSupabase: () => true }));
-import { buildOperations, loadSecureWorkspace } from './secureWorkspace';
+import { buildOperations, loadSecureWorkspace, WORKSPACE_ENTITY_TYPES } from './secureWorkspace';
 import { invalidateWorkspaceSession } from './workspaceSession';
 const authId = '00000000-0000-4000-8000-000000000001';
 const member = { id: 'loading-admin', workspace_id: 'aitask-main', auth_user_id: authId, name: 'Loading Admin', email: 'admin@example.com', role: 'Project Manager', departments: ['Management'], department: 'Management', is_super_admin: true, version: 1, updated_at: '2026-09-30T00:00:00Z' };
@@ -12,20 +12,26 @@ let reads: number;
 let memberReads: number;
 let stalled: boolean;
 const signals: AbortSignal[] = [];
+const entityFilters: string[] = [];
 beforeEach(() => {
-  invalidateWorkspaceSession(); vi.useRealTimers(); revisions = [1, 1, 1]; reads = 0; memberReads = 0; stalled = false; signals.length = 0;
+  invalidateWorkspaceSession(); vi.useRealTimers(); revisions = [1, 1, 1]; reads = 0; memberReads = 0; stalled = false; signals.length = 0; entityFilters.length = 0;
   mocks.rpc.mockReset(); mocks.from.mockReset();
   mocks.rpc.mockResolvedValue({ data: { ok: true, memberId: member.id, tasks: [], items: [], unreadCount: 0 }, error: null });
   mocks.from.mockImplementation((table: string) => {
     const query: Record<string, (...args: never[]) => unknown> = {};
-    for (const method of ['select', 'eq', 'neq', 'order']) query[method] = () => query;
+    let entityType: string | undefined;
+    for (const method of ['select', 'neq', 'order']) query[method] = () => query;
+    query.eq = (column: string, value: string) => {
+      if (column === 'entity_type') { entityType = value; entityFilters.push(value); }
+      return query;
+    };
     query.abortSignal = (signal: AbortSignal) => { signals.push(signal); return query; };
     query.single = () => Promise.resolve({ data: { version: revisions.shift() || 1, updated_at: '2026-09-30T00:00:00Z', sync_protocol_version: 1 }, error: null });
     query.range = (from: number, to: number) => {
       if (table === 'aitask_members') { memberReads += 1; return Promise.resolve({ data: [member], error: null }); }
       reads += 1;
       if (stalled) return new Promise(() => undefined);
-      return Promise.resolve({ data: entities.slice(from, to + 1), error: null });
+      return Promise.resolve({ data: entities.filter(row => row.entity_type === entityType).slice(from, to + 1), error: null });
     };
     return query;
   });
@@ -58,7 +64,9 @@ describe('consistent cancellable workspace paging', () => {
     const loaded = await loadSecureWorkspace({ id: authId } as never);
     expect(loaded.state.tasks).toHaveLength(501);
     expect(new Set(loaded.state.tasks.map(task => task.id)).size).toBe(501);
-    expect(reads).toBe(2);
+    expect(reads).toBe(WORKSPACE_ENTITY_TYPES.length + 1);
+    expect(new Set(entityFilters)).toEqual(new Set(WORKSPACE_ENTITY_TYPES));
+    expect(entityFilters).not.toContain('notification');
     expect(buildOperations(loaded.state)).toEqual([]);
   });
   it('rejects missing canonical context rather than trusting old review metadata', async () => {
@@ -75,7 +83,7 @@ describe('consistent cancellable workspace paging', () => {
     revisions = [1, 1, 2, 2, 2, 2];
     const loaded = await loadSecureWorkspace({ id: authId } as never);
     expect(loaded.revision.version).toBe(2);
-    expect(reads).toBe(4);
+    expect(reads).toBe((WORKSPACE_ENTITY_TYPES.length + 1) * 2);
     expect(memberReads).toBe(2);
   });
   it('stops after two consistency retries and offers a recoverable error', async () => {
@@ -87,7 +95,7 @@ describe('consistent cancellable workspace paging', () => {
     stalled = true;
     const request = loadSecureWorkspace({ id: authId } as never);
     const rejection = expect(request).rejects.toThrow('Workspace session changed.');
-    await vi.waitFor(() => expect(reads).toBe(1));
+    await vi.waitFor(() => expect(reads).toBe(3));
     invalidateWorkspaceSession();
     await rejection;
     expect(signals.at(-1)?.aborted).toBe(true);
