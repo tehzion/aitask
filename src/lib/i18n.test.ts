@@ -4,12 +4,12 @@ import { join } from 'node:path';
 import {
   formatLocalizedDate,
   formatLocalizedDateTime,
-  formatLocalizedDistanceToNow,
   formatLocalizedMonth,
   formatLocalizedSyncTime,
   formatLocalizedWeekdayDate,
   translateUiText,
 } from './i18n';
+import { formatLocalizedDistanceToNow } from './relativeTime';
 import { isMessageId } from './messages';
 // The whole-app audit includes copy that is registered by lazy workflow routes.
 import './staffWorkflowCopy';

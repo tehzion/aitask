@@ -1,4 +1,7 @@
-import { addDays, endOfDay, startOfDay, startOfWeek } from 'date-fns';
+import { addDays } from 'date-fns/addDays';
+import { endOfDay } from 'date-fns/endOfDay';
+import { startOfDay } from 'date-fns/startOfDay';
+import { startOfWeek } from 'date-fns/startOfWeek';
 
 /**
  * AiTask runs on a Monday-to-Saturday work week. Sunday is never part of a

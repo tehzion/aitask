@@ -8,7 +8,6 @@ import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { useToastStore } from './useToastStore';
 import { deliverableLinkError, hasInvalidDeliveryLink } from '../lib/deliveryLinks';
-import { isTaskOpen } from '../lib/taskReporting';
 import { applyTaskWorkIntent, recordTaskWorkTransition, taskEvidenceError, taskWorkContactId, type TaskWorkIntent } from '../lib/staffWorkflow';
 import {
   User,
@@ -146,7 +145,7 @@ import {
   isEligibleTaskAssignee,
   normalizeMemberDepartments,
 } from '../lib/departments';
-import { isTaskCompleted, resolveTaskCompletedAt } from '../lib/taskCompletion';
+import { isTaskCompleted, isTaskOpen, resolveTaskCompletedAt } from '../lib/taskCompletion';
 import { isWorkflowTask, prepareWorkflowTasks, workflowTransitionError } from '../lib/workflowReview';
 import { enrichNotificationMetadata } from '../lib/notificationCenter';
 import {
@@ -170,6 +169,7 @@ interface BackendRuntimeState {
   isLoading: boolean;
   isSaving: boolean;
   isPulling: boolean;
+  isRestoring?: boolean;
   lastSyncedAt?: string;
   lastSavedAt?: string;
   lastPulledAt?: string;
@@ -445,6 +445,7 @@ export const isWorkspaceMutationLocked = (state: StoreState) => (
   shouldUseSecureSupabase()
   && (
     state.backend.upgradeRequired === true
+    || state.backend.isRestoring === true
     || hasRetainedSecureMutation()
     || isPendingMutationResolution(state.backend)
   )
@@ -452,7 +453,7 @@ export const isWorkspaceMutationLocked = (state: StoreState) => (
 const isTerminalMemberMutationError = (code?: MutationErrorCode) => (
   code === 'VALIDATION' || code === 'FORBIDDEN' || code === 'NOT_FOUND'
 );
-const isSyncBusy = (state: StoreState) => state.backend.isSaving || state.backend.isPulling;
+const isSyncBusy = (state: StoreState) => state.backend.isSaving || state.backend.isPulling || state.backend.isRestoring === true;
 const isPullBlockedByPendingChange = (state: StoreState) => (
   shouldUseSecureSupabase()
   && (
@@ -1191,6 +1192,7 @@ export const useStore = create<StoreState>()(
         const pendingCommandType = commandType || current.backend.pendingCommandType;
         if (
           current.backend.upgradeRequired === true
+          || current.backend.isRestoring
           || current.backend.isLoading
           || current.backend.isPulling
           || current.backend.isSaving
@@ -1747,40 +1749,59 @@ export const useStore = create<StoreState>()(
       },
 
       discardMutation: async (options = {}) => {
-        clearActionFeedback();
         const sessionToken = captureWorkspaceSession();
         const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
-
-        const discardedCommandId = getRetainedSecureCommand()?.id;
-        discardSecureWorkspaceCommand();
-        discardRetainedSecureMemberMutation();
-        const actorId = get().currentUser?.id;
-        apply((state) => ({
-          backend: {
-            ...state.backend,
-            status: options.reload === false
-              ? (typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'live')
-              : 'loading',
-            conflict: undefined,
-            error: undefined,
-            hasRemoteUpdate: false,
-            hasLocalChanges: false,
-            pendingMutations: 0,
-            pendingCommandType: undefined,
-            errorCode: undefined,
-            message: options.reload === false ? 'Pending change discarded.' : 'Loading the latest saved workspace.',
-          },
-        }));
-        if (options.reload !== false || shouldUseSecureSupabase()) {
-          await get().pullBackendNow({ force: true, silent: false });
+        if (isSyncBusy(get())) {
+          const idle = await waitForSyncIdle();
+          if (!isWorkspaceSessionCurrent(sessionToken)) return;
+          if (!idle) throw new Error('Another synchronization request is still running.');
         }
-        if (!isWorkspaceSessionCurrent(sessionToken) || !actorId) return;
-        if (shouldUseSecureSupabase() && get().backend.status !== 'live') return;
-        const { cleanupPendingServiceFiles, reconcilePendingServiceFiles } = await import('../lib/serviceFiles');
-        if (!isWorkspaceSessionCurrent(sessionToken)) return;
-        reconcilePendingServiceFiles(actorId, selectPersistedWorkspaceState(get()));
-        const cleanup = await cleanupPendingServiceFiles(actorId, { abandonSubmitted: true, commandIds: discardedCommandId ? [discardedCommandId] : [], includeUnsubmitted: false });
-        if (!cleanup.ok) apply(state => ({ backend: { ...state.backend, error: cleanup.error, message: cleanup.error } }));
+        apply(state => ({ backend: { ...state.backend, isRestoring: true } }));
+        const discardedCommandId = getRetainedSecureCommand()?.id;
+        try {
+          // Keep the overlay, retry identity and mutation lock until the canonical
+          // reload succeeds. A failed restore must never turn abandoned edits into
+          // apparently clean data that can leak into an unrelated later save.
+          if (shouldUseSecureSupabase()) {
+            await get().pullBackendNow({ force: true, silent: false });
+            if (!isWorkspaceSessionCurrent(sessionToken)) return;
+            if (get().backend.status !== 'live' || get().backend.hasLocalChanges) {
+              apply(state => ({ backend: { ...state.backend,
+                status: state.backend.upgradeRequired ? 'upgrade_required' : state.backend.status === 'offline' ? 'offline' : state.backend.conflict ? 'conflict' : 'retry_required',
+                error: state.backend.error || 'Unable to reload saved data. Try again.',
+              } }));
+              return;
+            }
+          }
+          clearActionFeedback();
+          discardSecureWorkspaceCommand({ preserveSession: true });
+          discardRetainedSecureMemberMutation();
+          const actorId = get().currentUser?.id;
+          apply((state) => ({
+            backend: {
+              ...state.backend,
+              status: shouldUseSecureSupabase() ? 'live' : state.backend.mode === 'local' ? 'local' : 'loading',
+              conflict: undefined,
+              error: undefined,
+              hasRemoteUpdate: false,
+              hasLocalChanges: false,
+              pendingMutations: 0,
+              pendingCommandType: undefined,
+              errorCode: undefined,
+              message: options.reload === false ? 'Pending change discarded.' : 'Loading the latest saved workspace.',
+            },
+          }));
+          if (!shouldUseSecureSupabase() && options.reload !== false) {
+            await get().pullBackendNow({ force: true, silent: false });
+          }
+          if (!isWorkspaceSessionCurrent(sessionToken) || !actorId) return;
+          if (shouldUseSecureSupabase() && get().backend.status !== 'live') return;
+          const { cleanupPendingServiceFiles, reconcilePendingServiceFiles } = await import('../lib/serviceFiles');
+          if (!isWorkspaceSessionCurrent(sessionToken)) return;
+          reconcilePendingServiceFiles(actorId, selectPersistedWorkspaceState(get()));
+          const cleanup = await cleanupPendingServiceFiles(actorId, { abandonSubmitted: true, commandIds: discardedCommandId ? [discardedCommandId] : [], includeUnsubmitted: false });
+          if (!cleanup.ok) apply(state => ({ backend: { ...state.backend, error: cleanup.error, message: cleanup.error } }));
+        } finally { apply(state => ({ backend: { ...state.backend, isRestoring: false } })); }
       },
 
       retryPendingSave: async (commandType) => {
@@ -6410,7 +6431,7 @@ export const clearWorkspaceSession = (options: { discardPending?: boolean } = {}
       deletedUserIds: [], deletedRoleIds: [], deletedTaskStatuses: [], deletedClientIds: [],
     } : {}),
     isCreateTaskModalOpen: false,
-    backend: { ...state.backend, isLoading: false, isSaving: false, isPulling: false, hasLocalChanges: false, hasRemoteUpdate: false, pendingMutations: 0, pendingCommandType: undefined, conflict: undefined, status: shouldUseSupabase() ? 'live' : 'local' },
+    backend: { ...state.backend, isLoading: false, isSaving: false, isPulling: false, isRestoring: false, hasLocalChanges: false, hasRemoteUpdate: false, pendingMutations: 0, pendingCommandType: undefined, conflict: undefined, status: shouldUseSupabase() ? 'live' : 'local' },
   }));
 };
 

@@ -6,6 +6,9 @@ export const isTaskCompleted = (task: Pick<Task, 'isCompleted' | 'status'>) => (
   task.isCompleted || task.status === 'Completed'
 );
 
+// Keep this store-level predicate independent of reporting/date-formatting code.
+export const isTaskOpen = (task: Pick<Task, 'isCompleted' | 'status'>) => !isTaskCompleted(task) && task.status !== 'Cancelled';
+
 export const resolveTaskCompletedAt = (
   task: CompletionState,
   nextIsCompleted: boolean,

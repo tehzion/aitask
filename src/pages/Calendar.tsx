@@ -2,22 +2,20 @@ import { acknowledgeActionFeedback, queueActionFeedback } from '../lib/actionFee
 import { msg, type MessageDescriptor } from '../lib/messages';
 import SystemMessage from '../components/SystemMessage';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  addDays,
-  addMonths,
-  addWeeks,
-  endOfMonth,
-  format,
-  isAfter,
-  isBefore,
-  isSameDay,
-  isSameMonth,
-  isToday,
-  parseISO,
-  startOfMonth,
-  subMonths,
-  subWeeks,
-} from 'date-fns';
+import { addDays } from 'date-fns/addDays';
+import { addMonths } from 'date-fns/addMonths';
+import { addWeeks } from 'date-fns/addWeeks';
+import { endOfMonth } from 'date-fns/endOfMonth';
+import { format } from 'date-fns/format';
+import { isAfter } from 'date-fns/isAfter';
+import { isBefore } from 'date-fns/isBefore';
+import { isSameDay } from 'date-fns/isSameDay';
+import { isSameMonth } from 'date-fns/isSameMonth';
+import { isToday } from 'date-fns/isToday';
+import { parseISO } from 'date-fns/parseISO';
+import { startOfMonth } from 'date-fns/startOfMonth';
+import { subMonths } from 'date-fns/subMonths';
+import { subWeeks } from 'date-fns/subWeeks';
 import {
   ArrowRight,
   Calendar as CalendarIcon,

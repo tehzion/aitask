@@ -1,5 +1,6 @@
 import { User, Project, Task } from '../types';
-import { addDays, subDays } from 'date-fns';
+import { addDays } from 'date-fns/addDays';
+import { subDays } from 'date-fns/subDays';
 import { getTodayInputDate } from '../lib/utils';
 import { DEFAULT_USER_PASSWORD } from '../lib/auth';
 import { LOCAL_SERVICE_DEMO_USER_IDS } from './localServiceDemo';

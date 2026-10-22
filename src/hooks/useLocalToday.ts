@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { startOfDay } from 'date-fns';
+import { startOfDay } from 'date-fns/startOfDay';
 
 /** Stable local-day value for date-dependent metrics, including suspended tabs. */
 export const useLocalToday = () => {

@@ -15,7 +15,7 @@ interface BackendFreshnessProps {
   compact?: boolean;
   className?: string;
   onRetry?: () => Promise<void>;
-  onDiscard?: () => void;
+  onDiscard?: () => void | Promise<void>;
 }
 
 const conflictFieldLabels: Record<string, string> = {
@@ -54,7 +54,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
         if (saved.ok) acknowledgeActionFeedback(useStore.getState());
         return saved;
       }
-      if (kind === 'restore' && onDiscard) { onDiscard(); return { ok: true }; }
+      if (kind === 'restore' && onDiscard) { await onDiscard(); return { ok: true }; }
       if (kind === 'restore') await discardMutation(); else await pullBackendNow({ silent: false });
       const latest = useStore.getState().backend;
       return latest.mode === 'supabase' && (latest.status !== 'live' || latest.error) ? { ok: false, error: latest.error || 'Unable to reload saved data. Try again.' } : { ok: true };
@@ -118,7 +118,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
         <Button
           variant="secondary"
           onClick={() => void resolve('refresh')}
-          disabled={busy || backend.isPulling || backend.isSaving}
+          disabled={busy || backend.isPulling || backend.isSaving || backend.isRestoring}
           className="h-11 w-11 p-0 rounded-md flex items-center justify-center shrink-0 border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm"
           title={t('shell.refreshSyncStatus')}
           aria-label={t('shell.refreshSyncStatus')}
@@ -131,7 +131,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           {canRetrySave(backend) && <Button
             variant="secondary"
             onClick={() => void resolve('retry')}
-            disabled={busy || backend.isPulling || backend.isSaving || backend.status === 'offline'}
+            disabled={busy || backend.isPulling || backend.isSaving || backend.isRestoring || backend.status === 'offline'}
             className="min-h-11 px-3 py-2 text-xs"
             title={t('shell.retryPendingChanges')}
           >
@@ -141,7 +141,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           <Button
             variant="secondary"
             onClick={() => void resolve('restore')}
-            disabled={busy || backend.isPulling || backend.isSaving || backend.status === 'offline'}
+            disabled={busy || backend.isPulling || backend.isSaving || backend.isRestoring || backend.status === 'offline'}
             className="min-h-11 px-3 py-2 text-xs"
             title={t('shell.discardPendingChanges')}
           >

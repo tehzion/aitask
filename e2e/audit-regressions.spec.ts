@@ -72,7 +72,7 @@ test('saving locks the submitted draft and later edits block PWA reload', async 
   await expect(page.getByRole('button', { name: 'Refresh now' })).toBeDisabled();
 });
 
-test('a remote revision arriving during a locked save becomes the canonical draft', async ({ page }) => {
+test('a conflicting remote revision during saving preserves the submitted draft for review', async ({ page }) => {
   const { draftId } = await seedPlan(page);
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -92,8 +92,9 @@ test('a remote revision arriving during a locked save becomes the canonical draf
       : plan) }));
     (window as unknown as { finishAuditSave: () => void }).finishAuditSave();
   }, draftId);
-  await expect(name).toHaveValue('Remote after submission');
-  await expect(page.getByLabel('Tax rate (%)', { exact: true })).toHaveValue('9');
+  await expect(name).toHaveValue('Submitted');
+  await expect(page.getByLabel('Tax rate (%)', { exact: true })).toHaveValue('0');
+  await expect(page.getByRole('alert')).toContainText('Your draft has been kept.');
   await expect(page.getByRole('button', { name: 'Save draft' })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Keep my draft' })).toHaveCount(0);
 });

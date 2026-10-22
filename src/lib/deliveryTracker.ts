@@ -1,14 +1,12 @@
-import {
-  addMonths,
-  addWeeks,
-  endOfMonth,
-  isAfter,
-  isBefore,
-  isEqual,
-  isValid,
-  parseISO,
-  startOfMonth,
-} from 'date-fns';
+import { addMonths } from 'date-fns/addMonths';
+import { addWeeks } from 'date-fns/addWeeks';
+import { endOfMonth } from 'date-fns/endOfMonth';
+import { isAfter } from 'date-fns/isAfter';
+import { isBefore } from 'date-fns/isBefore';
+import { isEqual } from 'date-fns/isEqual';
+import { isValid } from 'date-fns/isValid';
+import { parseISO } from 'date-fns/parseISO';
+import { startOfMonth } from 'date-fns/startOfMonth';
 import type { Deliverable, ServiceCycle, Task, User } from '../types';
 import { getClientTaskStage, isAwaitingClientReview, isAwaitingInternalReview } from './clientPortal';
 import { averageTaskProgress } from './taskProgress';

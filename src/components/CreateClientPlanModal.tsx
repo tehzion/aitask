@@ -14,9 +14,11 @@ import { inputBase } from './uiTokens';
 import { cn, getTodayInputDate } from '../lib/utils';
 import { calculatePlanTotalMinor, formatMoney, snapshotWorkflow } from '../lib/serviceManagement';
 import { useI18n } from './I18nProvider';
+import { planSaveSnapshot, sameSavedValue, PLAN_SUBMISSION_MISSING } from '../lib/saveConfirmation';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 
 const blankItem = (): ServiceItem => ({ id: crypto.randomUUID(), name: '', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 0 });
-const WIZARD_BLOCKED_MESSAGE = 'An earlier change is still waiting to sync. Use “Retry my changes” or “Restore saved data” in the banner above this dialog, then save this draft again.';
+const WIZARD_BLOCKED_MESSAGE = 'An earlier change is still waiting to sync. Retry it below, then save this draft. Restore saved data discards the pending changes.';
 
 const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; client?: ClientProfile }) => {
   const navigate = useNavigate();
@@ -40,6 +42,10 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
   const [error, setError] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const createdClientIdRef = React.useRef('');
+  const pendingPlan = React.useRef<ReturnType<typeof planSaveSnapshot> | null>(null);
+  const savingRef = React.useRef(false);
+  const mounted = React.useRef(true);
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const titleId = React.useId();
   const selectedPackage = servicePackages.find(item => item.id === packageId);
   const readOnlyItems = mode === 'standard';
@@ -71,7 +77,7 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
   }, []);
 
   const chooseMode = (value: PlanOrigin) => {
-    if (saving) return;
+    if (savingRef.current) return;
     setMode(value);
     const pkg = servicePackages.find(item => item.id === packageId) || servicePackages.find(item => item.isActive);
     if (value === 'custom') {
@@ -130,7 +136,7 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
     setStep(value => Math.min(5, value + 1));
   };
   const save = async () => {
-    if (saving) return;
+    if (savingRef.current) return;
     if (backend.upgradeRequired && !createdClientIdRef.current) {
       setError(backend.error || backend.message);
       return;
@@ -143,7 +149,9 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
         return;
       }
     }
-    setSaving(true);
+    const session = captureWorkspaceSession();
+    const isCurrent = () => mounted.current && isWorkspaceSessionCurrent(session);
+    savingRef.current = true; setSaving(true);
     setError('');
     try {
       if (!createdClientIdRef.current) {
@@ -171,6 +179,7 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
         let resultClientId = 'clientId' in result && typeof result.clientId === 'string' ? result.clientId : undefined;
         if (!client && !result.ok && result.error === pendingMutationMessage) {
           const recovered = await retryPendingSave();
+          if (!isCurrent()) return;
           if (recovered.ok) {
             result = createClientWithPlan(planInput);
             resultClientId = 'clientId' in result && typeof result.clientId === 'string' ? result.clientId : undefined;
@@ -183,8 +192,12 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
           return;
         }
         createdClientIdRef.current = client?.id || resultClientId || '';
+        const staged = useStore.getState().clientPlans.find(item => item.id === result.planId);
+        if (!staged) { createdClientIdRef.current = ''; setError(t(PLAN_SUBMISSION_MISSING)); return; }
+        pendingPlan.current = structuredClone(planSaveSnapshot(staged));
       }
       const committed = await retryPendingSave('client_plan.manage');
+      if (!isCurrent()) return;
       if (!committed.ok) {
         setError(committed.error === pendingMutationMessage
           ? t(WIZARD_BLOCKED_MESSAGE)
@@ -192,14 +205,23 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
         return;
       }
       const createdClientId = createdClientIdRef.current;
+      const canonical = useStore.getState().clientPlans.find(item => item.id === pendingPlan.current?.id);
+      if (!canonical || !pendingPlan.current || !sameSavedValue(planSaveSnapshot(canonical), pendingPlan.current)
+        || !useStore.getState().clients.some(item => item.id === createdClientId)) {
+        createdClientIdRef.current = ''; pendingPlan.current = null;
+        setError(t(PLAN_SUBMISSION_MISSING)); return;
+      }
       if (!createdClientId) {
         setError(t('The client was saved without a valid workspace destination.'));
         return;
       }
       recovery.clear(); markPristine(); setDirty(false); onClose();
       navigate(`/clients/${encodeURIComponent(createdClientId)}`);
+    } catch (failure) {
+      if (isCurrent()) setError(failure instanceof Error ? failure.message : t('Unable to save this change.'));
     } finally {
-      setSaving(false);
+      savingRef.current = false;
+      if (isCurrent()) setSaving(false);
     }
   };
   const totals = calculatePlanTotalMinor(items, plan.discountType, plan.discountValue, plan.taxRateBps);
@@ -226,6 +248,7 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
         </aside>
 
         <main className="custom-scrollbar min-h-0 overflow-y-auto p-5 sm:p-6 lg:p-8">
+          <fieldset disabled={saving || Boolean(pendingPlan.current)}>
           <div className="mb-5 flex gap-1 lg:hidden" aria-hidden="true">{steps.map((_, index) => <span key={index} className={cn('h-1.5 flex-1 rounded-full', index + 1 <= step ? 'bg-accent' : 'bg-line')} />)}</div>
           {step === 1 && <section aria-labelledby="client-details-step"><h3 id="client-details-step" className="text-lg font-semibold text-ink">{t(client ? 'Company' : 'Client details')}</h3><p className="mt-1 text-sm text-muted">{t(client ? 'This plan will be attached to the selected company.' : 'Start with the primary business and contact information.')}</p><div className="mt-6 grid gap-4 md:grid-cols-2">{([['clientName','Client / company name'],['contactPerson','Contact person'],['email','Email'],['phone','Phone'],['address','Address'],['website','Website'],['facebookPage','Facebook page']] as const).map(([key,label]) => <label key={key} className="text-sm font-medium text-ink">{t(label)}{key === 'clientName' && ' *'}<input disabled={Boolean(client)} className={cn(inputBase, 'mt-1.5 px-3 py-2.5')} value={profile[key]} onChange={e => setProfile({ ...profile, [key]: e.target.value })} /></label>)}<label className="text-sm font-medium text-ink md:col-span-2">{t('Notes')}<textarea disabled={Boolean(client)} className={cn(inputBase, 'mt-1.5 min-h-28 px-3 py-2.5')} value={profile.notes} onChange={e => setProfile({ ...profile, notes: e.target.value })} /></label></div></section>}
 
@@ -236,9 +259,11 @@ const CreateClientPlanModal = ({ onClose, client }: { onClose: () => void; clien
           {step === 4 && <section aria-labelledby="plan-terms-step"><h3 id="plan-terms-step" className="text-lg font-semibold text-ink">{t('Plan terms')}</h3><p className="mt-1 text-sm text-muted">{t('Set the operating dates and internal pricing rules.')}</p><div className="mt-6 grid gap-4 md:grid-cols-2"><label className="text-sm font-medium text-ink">{t('Plan name')}<input className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.name} onChange={e=>setPlan({...plan,name:e.target.value})}/></label><label className="text-sm font-medium text-ink">{t('Start date')}<input type="date" className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.startDate} onChange={e=>setPlan({...plan,startDate:e.target.value})}/></label><label className="text-sm font-medium text-ink">{t('Monthly billing day')}<input type="number" min="1" max="31" className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.billingDay} onChange={e=>setPlan({...plan,billingDay:Number(e.target.value)})}/></label><label className="text-sm font-medium text-ink">{t('Contract end date (reminder only)')}<input type="date" min={plan.startDate} className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.contractEndDate} onChange={e=>setPlan({...plan,contractEndDate:e.target.value})}/></label><label className="text-sm font-medium text-ink">{t('Tax rate (%)')}<input type="number" min="0" max="100" step="0.01" className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.taxRateBps/100} onChange={e=>setPlan({...plan,taxRateBps:Math.round(Number(e.target.value)*100)})}/></label><label className="text-sm font-medium text-ink">{t('Discount type')}<select className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.discountType} onChange={e=>setPlan({...plan,discountType:e.target.value as typeof plan.discountType,discountValue:0})}><option value="none">{t('None')}</option><option value="percent">{t('Percent')}</option><option value="fixed">{t('Fixed MYR')}</option></select></label><label className="text-sm font-medium text-ink">{t('Discount value')}<input type="number" min="0" step="0.01" disabled={plan.discountType==='none'} className={cn(inputBase,'mt-1.5 px-3 py-2.5')} value={plan.discountValue/100} onChange={e=>setPlan({...plan,discountValue:Math.round(Number(e.target.value)*100)})}/></label></div></section>}
 
           {step === 5 && <section aria-labelledby="review-step"><h3 id="review-step" className="text-lg font-semibold text-ink">{t('Review the Draft plan')}</h3><div className="mt-5 rounded-panel bg-accent-soft p-5 text-ink ring-1 ring-accent/25"><p className="font-semibold">{t('Ready to save as Draft')}</p><p className="mt-1 text-sm text-muted"><span data-i18n-skip>{profile.clientName}</span> · {mode} · {items.length} {t('services')} · {t('starts')} {plan.startDate}</p></div><div className="mt-4 grid gap-px overflow-hidden rounded-panel bg-line sm:grid-cols-4">{Object.entries(totals).map(([key,value])=><div key={key} className="bg-surface p-4"><p className="text-xs capitalize text-muted">{key}</p><p className="calm-number mt-2 font-semibold text-ink">{formatMoney(value, 'MYR', locale)}</p></div>)}</div><p className="mt-5 text-sm text-muted">{t('No service cycle is created until Boss Koo activates the plan.')}</p>{backend.upgradeRequired && !createdClientIdRef.current && <p className="mt-5 rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900" role="status"><SystemMessage message={backend.message} /></p>}</section>}
+          </fieldset>
           {(error || pendingResolution) && (
             <div className="mt-6 rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
               <p><SystemMessage message={error || t(WIZARD_BLOCKED_MESSAGE)} /></p>
+              {pendingResolution && backend.error && backend.error !== error && <p className="mt-2"><SystemMessage message={backend.error} /></p>}
               {pendingResolution && <BackendFreshness compact className="mt-3" />}
             </div>
           )}

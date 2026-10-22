@@ -12,7 +12,8 @@ import {
   getClientLatestUpdates,
   groupClientDeliveries,
 } from '../lib/clientPortal';
-import { formatLocalizedDate, formatLocalizedDistanceToNow, type AppLocale } from '../lib/i18n';
+import { formatLocalizedDate, type AppLocale } from '../lib/i18n';
+import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { getLocalizedDeliveryStage } from '../lib/localeLabels';
 import { parseOptionalDate } from '../lib/utils';
 import { useStore } from '../store';

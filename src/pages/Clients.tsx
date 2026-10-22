@@ -38,7 +38,8 @@ import CreateClientPlanModal from '../components/CreateClientPlanModal';
 import CreateProjectModal from '../components/CreateProjectModal';
 import ProjectManagementPanel from '../components/ProjectManagementPanel';
 import { useI18n } from '../components/I18nProvider';
-import { formatLocalizedDate, formatLocalizedDistanceToNow, type AppLocale } from '../lib/i18n';
+import { formatLocalizedDate, type AppLocale } from '../lib/i18n';
+import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 
 type ClientSource = 'Profile' | 'Task' | 'Company' | 'Account';
 

@@ -1,12 +1,10 @@
-import {
-  addDays,
-  endOfMonth,
-  endOfDay,
-  isBefore,
-  isWithinInterval,
-  startOfDay,
-  startOfMonth,
-} from 'date-fns';
+import { addDays } from 'date-fns/addDays';
+import { endOfMonth } from 'date-fns/endOfMonth';
+import { endOfDay } from 'date-fns/endOfDay';
+import { isBefore } from 'date-fns/isBefore';
+import { isWithinInterval } from 'date-fns/isWithinInterval';
+import { startOfDay } from 'date-fns/startOfDay';
+import { startOfMonth } from 'date-fns/startOfMonth';
 import type {
   ClientServicePlan,
   Deliverable,

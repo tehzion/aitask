@@ -1,4 +1,5 @@
-import { differenceInCalendarDays, startOfDay } from 'date-fns';
+import { differenceInCalendarDays } from 'date-fns/differenceInCalendarDays';
+import { startOfDay } from 'date-fns/startOfDay';
 import type { ClientProfile, ClientServicePlan, ServiceCycle, Deliverable, Task, User } from '../types';
 import { parseOptionalDate } from './utils';
 import { isTaskCompleted } from './taskCompletion';

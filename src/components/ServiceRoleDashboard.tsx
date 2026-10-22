@@ -1,7 +1,8 @@
 import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileCheck2, UsersRound, WalletCards } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { isBefore, isToday } from 'date-fns';
+import { isBefore } from 'date-fns/isBefore';
+import { isToday } from 'date-fns/isToday';
 import { useStore } from '../store';
 import { canViewServicePrices, getClientKey, getDashboardPersona, getOwnedPortfolioClientKeys, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { formatMoney } from '../lib/serviceManagement';

@@ -1,4 +1,6 @@
-import { isBefore, isSameDay, startOfDay } from 'date-fns';
+import { isBefore } from 'date-fns/isBefore';
+import { isSameDay } from 'date-fns/isSameDay';
+import { startOfDay } from 'date-fns/startOfDay';
 import type { Task } from '../types';
 import { isTaskCompleted } from './taskCompletion';
 import { parseDateOnlyLocal } from './utils';

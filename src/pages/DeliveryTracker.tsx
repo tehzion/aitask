@@ -11,7 +11,8 @@ import {
   Plus,
   UsersRound,
 } from 'lucide-react';
-import { isValid, parseISO } from 'date-fns';
+import { isValid } from 'date-fns/isValid';
+import { parseISO } from 'date-fns/parseISO';
 import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';

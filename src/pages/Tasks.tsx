@@ -7,7 +7,7 @@ import { isPendingMutationResolution, useStore } from '../store';
 import { useI18n } from '../components/I18nProvider';
 import { useShallow } from 'zustand/react/shallow';
 import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone, Plus } from 'lucide-react';
-import { format } from 'date-fns';
+import { format } from 'date-fns/format';
 import { Priority, Task, TaskStatus } from '../types';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import { Link, useSearchParams } from 'react-router-dom';

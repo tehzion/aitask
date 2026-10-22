@@ -35,7 +35,7 @@ import {
 import { loadNotificationFeedPage } from '../lib/notificationFeed';
 import { notificationRouteToPath } from '../lib/security';
 import { cn } from '../lib/utils';
-import { formatLocalizedDistanceToNow } from '../lib/i18n';
+import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { useI18n } from '../components/I18nProvider';
 import { useStore } from '../store';
 import type { AppNotification, NotificationCategory, NotificationCursor } from '../types';

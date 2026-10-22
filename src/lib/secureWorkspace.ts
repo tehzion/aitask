@@ -2046,7 +2046,7 @@ export const rebaseRetryableCommand = (conflict: MutationConflict) => {
   return true;
 };
 
-export const discardSecureWorkspaceCommand = () => {
+export const discardSecureWorkspaceCommand = (options: { preserveSession?: boolean } = {}) => {
   retryableCommand = null;
   retryableBatch = null;
   clearPersistedRetryableCommand();
@@ -2055,7 +2055,7 @@ export const discardSecureWorkspaceCommand = () => {
   retryableMemberRole = null;
   clearPersistedRetryableMemberMutation();
   setRetryableNotificationMutation(null);
-  activeSecureAuthUserId = null;
+  if (!options.preserveSession) activeSecureAuthUserId = null;
 };
 
 export const getRetainedSecureCommand = (): SecureCommand | null => retryableCommand;

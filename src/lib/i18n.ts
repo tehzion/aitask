@@ -1,7 +1,3 @@
-import { formatDistanceToNow } from 'date-fns';
-import { enUS } from 'date-fns/locale/en-US';
-import { zhCN } from 'date-fns/locale/zh-CN';
-
 export type AppLocale = 'en' | 'zh';
 
 export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
@@ -11,6 +7,10 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  'The submitted plan change is no longer available. Your draft has been kept. Review and save again.': '之前提交的方案更改已不存在。您的草稿已保留，请检查后重新保存。',
+  'Synchronization restored. Review and save your draft.': '同步已恢复。请检查并保存您的草稿。',
+  'An earlier change is still waiting to sync. Retry it below, then save this draft. Restore saved data discards the pending changes.': '之前的更改仍在等待同步。请先在下方重试，再保存此草稿。“恢复已保存数据”会放弃待同步的更改。',
+  'The pending delivery change is no longer available. Review and save again.': '待保存的交付更改已不存在。请检查后重新保存。',
   'Closed': '已关闭',
   'Refresh required': '需要刷新',
   'Team': '团队',
@@ -2438,12 +2438,7 @@ const MONTH_ABBREVIATIONS: Array<[RegExp, string]> = [
   [/\bDec\b/g, '12月'],
 ];
 
-// Calendar labels use the browser's locale formatter. Keep only distance
-// formatting from date-fns so calendar/token parsers do not enter startup.
-const DISTANCE_LOCALES = {
-  en: { formatDistance: enUS.formatDistance },
-  zh: { formatDistance: zhCN.formatDistance },
-} as const;
+// Calendar labels use the browser's locale formatter without loading date-fns locales.
 const shortMonth = new Intl.DateTimeFormat('en-US', { month: 'short' });
 const longMonth = new Intl.DateTimeFormat('en-US', { month: 'long' });
 const weekdays = {
@@ -2487,11 +2482,6 @@ export const formatLocalizedSyncTime = (value: Date, locale: AppLocale, now = ne
   if (!isValidDate(value)) return '';
   const sameDay = value.getFullYear() === now.getFullYear() && value.getMonth() === now.getMonth() && value.getDate() === now.getDate();
   return sameDay ? clockTime(value) : formatLocalizedDateTime(value, locale);
-};
-
-export const formatLocalizedDistanceToNow = (value: Date, locale: AppLocale) => {
-  if (!isValidDate(value)) return '';
-  return formatDistanceToNow(value, { addSuffix: true, locale: DISTANCE_LOCALES[locale] });
 };
 
 const translateInlineDate = (value: string) => {

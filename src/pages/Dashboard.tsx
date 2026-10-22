@@ -6,7 +6,9 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
-import { isSameDay, isWithinInterval, isBefore } from 'date-fns';
+import { isSameDay } from 'date-fns/isSameDay';
+import { isWithinInterval } from 'date-fns/isWithinInterval';
+import { isBefore } from 'date-fns/isBefore';
 import { AlertCircle, LayoutList, Calendar, ArrowRight, Plus, FolderKanban, UserPlus, Users, FileCheck2, CalendarClock } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, PageHeader, SegmentedTabs } from '../components/ui';

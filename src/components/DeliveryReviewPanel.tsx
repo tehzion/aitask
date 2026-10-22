@@ -14,8 +14,10 @@ import { useI18n } from './I18nProvider';
 import { Button } from './ui';
 import { inputBase } from './uiTokens';
 import ConfirmDialog from './ConfirmDialog';
+import { sameSavedValue } from '../lib/saveConfirmation';
 
-type PendingReview = { command: 'service_cycle.manage' | 'task.update'; taskId?: string; deliverableId?: string };
+type PendingReview = { command: 'service_cycle.manage' | 'task.update'; taskId?: string; deliverableId?: string; cycleId?: string;
+  expected?: { id: string; serviceCycleId?: string; deliverableId?: string; status?: string } };
 
 const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?: string; includeOpenTasks?: boolean }) => {
   const store = useStore();
@@ -43,14 +45,30 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   const canPublish = canManageServiceCycles(store.currentUser, store.rolePermissions);
   const canLink = reviewTasks.some(task => canEditTask(store.currentUser, task, store.rolePermissions, { clients: store.clients, projects: store.projects }));
   const date = (value: string) => { const parsed = parseOptionalDate(value); return parsed ? formatLocalizedDate(parsed, locale) : t('Date to be confirmed'); };
-  const save = (operation: () => { ok: boolean; error?: string }, command: PendingReview['command'], submitted?: { taskId: string; deliverableId: string }) => {
+  const save = (operation: () => { ok: boolean; error?: string }, command: PendingReview['command'], submitted?: { taskId?: string; deliverableId?: string; cycleId?: string }) => {
     const receipt = pending || { command, ...submitted };
-    return run(async () => {
-      if (pending) return useStore.getState().retryPendingSave(pending.command);
-      const result = operation();
-      if (!result.ok) return result;
-      setPending(receipt);
-      return useStore.getState().commitPendingMutation(command);
+    return run(async isCurrent => {
+      if (!pending) {
+        const result = operation();
+        if (!result.ok) return result;
+        const state = useStore.getState();
+        const task = state.tasks.find(item => item.id === receipt.taskId);
+        const cycle = state.serviceCycles.find(item => item.id === receipt.cycleId);
+        receipt.expected = structuredClone(task ? { id: task.id, serviceCycleId: task.serviceCycleId, deliverableId: task.deliverableId }
+          : cycle ? { id: cycle.id, status: cycle.status } : undefined);
+        setPending(receipt);
+      }
+      const result = pending ? await useStore.getState().retryPendingSave(pending.command) : await useStore.getState().commitPendingMutation(command);
+      if (!isCurrent() || !result.ok) return result;
+      const state = useStore.getState();
+      const task = state.tasks.find(item => item.id === receipt.taskId);
+      const cycle = state.serviceCycles.find(item => item.id === receipt.cycleId);
+      const actual = task ? { id: task.id, serviceCycleId: task.serviceCycleId, deliverableId: task.deliverableId } : cycle ? { id: cycle.id, status: cycle.status } : undefined;
+      if (!receipt.expected || !sameSavedValue(actual, receipt.expected)) {
+        setPending(null);
+        return { ok: false, error: 'The pending delivery change is no longer available. Review and save again.' };
+      }
+      return result;
     }, result => {
       setMessage(result.ok ? t('Saved.') : t(result.error || 'The change is waiting to be saved.'));
       if (result.ok) {
@@ -74,7 +92,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
       {records.draftCycles.map(cycle => <div key={cycle.id} className="flex flex-wrap items-center justify-between gap-3 text-sm">
         <div><Link className="font-medium text-accent" to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=cycles&cycleId=${encodeURIComponent(cycle.id)}#cycle-${encodeURIComponent(cycle.id)}`}><span data-i18n-skip>{cycle.clientName}</span></Link>
           <p className="text-xs text-muted">{t('Awaiting publication')} · {date(cycle.periodStart)} – {date(cycle.periodEnd)}</p></div>
-        {canPublish && <Button disabled={busy || Boolean(pending)} onClick={() => save(() => useStore.getState().setServiceCycleStatus(cycle.id, 'Published'), 'service_cycle.manage')}>{t('Publish')}</Button>}
+        {canPublish && <Button disabled={busy || Boolean(pending)} onClick={() => save(() => useStore.getState().setServiceCycleStatus(cycle.id, 'Published'), 'service_cycle.manage', { cycleId: cycle.id })}>{t('Publish')}</Button>}
       </div>)}
       {records.expiredDraftCycles.length > 0 && <div>
         <Button variant="secondary" aria-expanded={showOlderDrafts} onClick={() => setShowOlderDrafts(value => !value)}>{t('Older unpublished cycles')} ({records.expiredDraftCycles.length})</Button>
@@ -113,7 +131,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
       busy={busy}
       onClose={() => { if (!busy) setUnlinkTask(null); }}
       onConfirm={async () => {
-        const result = await save(() => useStore.getState().unlinkInvalidTaskDelivery(unlinkTask.id), 'task.update');
+        const result = await save(() => useStore.getState().unlinkInvalidTaskDelivery(unlinkTask.id), 'task.update', { taskId: unlinkTask.id });
         if (result?.ok) setUnlinkTask(null);
       }}
     />}

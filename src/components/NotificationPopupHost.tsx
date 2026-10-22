@@ -21,7 +21,7 @@ import { cn } from '../lib/utils';
 import { NotificationReadActions } from '../hooks/useNotificationReadActions';
 import { useAppNoticeState } from '../hooks/useAppNoticeState';
 import { useI18n } from './I18nProvider';
-import { formatLocalizedDistanceToNow } from '../lib/i18n';
+import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 
 interface NotificationPopupHostProps {
   currentUser: User | null;

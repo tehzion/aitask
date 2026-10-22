@@ -568,6 +568,12 @@ describe('secure command retry identity', () => {
     expect(result).toMatchObject({ ok: false, code: 'RETRY_REQUIRED' });
     expect(sessionStorage.length).toBe(1);
     expect(restoreSecureWorkspaceCommand('auth-user-9')).not.toBeNull();
+    discardSecureWorkspaceCommand({ preserveSession: true });
+    expect(sessionStorage.length).toBe(0);
+    rpc.mockRejectedValueOnce(new Error('another uncertain save after restore'));
+    await saveSecureWorkspace(stateWithUser('after-restore'));
+    expect(sessionStorage.length).toBe(1);
+    expect(restoreSecureWorkspaceCommand('auth-user-9')?.operations.some(operation => operation.entityId === 'after-restore')).toBe(true);
     discardSecureWorkspaceCommand();
     expect(sessionStorage.length).toBe(0);
   });

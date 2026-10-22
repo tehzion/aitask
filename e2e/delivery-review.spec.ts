@@ -96,3 +96,28 @@ test('invalid links and expired drafts require explicit scoped review', async ({
   });
   expect(state).toEqual({ taskExists: true, taskLink: undefined, foreignLinks: [], oldCycle: 'Draft' });
 });
+
+for (const action of ['link', 'publication']) test(`a restored-away delivery ${action} cannot report saved on retry`, async ({ page }) => {
+  await seedReview(page, 'en');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Delivery confirmation timed out.' }), retryPendingSave: async () => ({ ok: true }) });
+  });
+  const panel = page.getByRole('region', { name: 'Delivery records need review' });
+  if (action === 'link') {
+    await panel.getByRole('combobox').first().selectOption('review-deliverable');
+    await panel.getByRole('button', { name: 'Link task', exact: true }).first().click();
+  } else await panel.getByRole('button', { name: 'Publish', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('Delivery confirmation timed out.');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ tasks: state.tasks.map(task => ({ ...task, serviceCycleId: undefined, deliverableId: undefined })),
+      deliverables: state.deliverables.map(item => ({ ...item, taskIds: [], status: 'Planned' as const })),
+      serviceCycles: state.serviceCycles.map(cycle => ({ ...cycle, status: 'Draft' as const })),
+      backend: { ...state.backend, hasLocalChanges: false, pendingMutations: 0 } }));
+  });
+  await panel.getByRole('button', { name: 'Retry pending save', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('The pending delivery change is no longer available.');
+  await expect(panel.getByText('Saved.', { exact: true })).toHaveCount(0);
+  if (action === 'link') await expect(panel.getByRole('combobox').first()).toHaveValue('review-deliverable');
+});

@@ -16,6 +16,7 @@ import { Badge, Button } from './ui';
 import { cardBase, inputBase } from './uiTokens';
 import BackendFreshness from './BackendFreshness';
 import SystemMessage from './SystemMessage';
+import { planSaveSnapshot, sameSavedValue, PLAN_SUBMISSION_MISSING } from '../lib/saveConfirmation';
 
 type Draft = ReturnType<typeof revisionDraftOf>;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -42,7 +43,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   const formKey = `service-plan:${plan.id}`;
   const [recovery, setRecovery] = React.useState(() => account ? readRecoveredDraft<Draft>(account, formKey) : null);
   const optimistic = React.useRef<string | null>(null);
-  const pending = React.useRef<{ kind: 'save' | 'schedule' | 'draft'; submitted: Draft } | null>(null);
+  const pending = React.useRef<{ kind: 'save' | 'schedule' | 'draft'; submitted: Draft; expected: ReturnType<typeof planSaveSnapshot> } | null>(null);
   const dirty = !same(draft, baseline);
   const dirtyRef = React.useRef(dirty); dirtyRef.current = dirty;
   const scheduled = plan.revisionScheduleStatus === 'scheduled';
@@ -53,7 +54,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   const dateLabel = (value: string) => formatLocalizedDate(parseOptionalDate(value)!, locale);
   const totals = calculatePlanTotalMinor(draft.serviceItems, draft.discountType, draft.discountValue, draft.taxRateBps);
   const currentTotals = calculatePlanTotalMinor(source.serviceItems, source.discountType, source.discountValue, source.taxRateBps);
-  useUnsavedChanges(dirty || busy);
+  useUnsavedChanges(dirty || busy || Boolean(pending.current));
 
   React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   React.useEffect(() => { if (feedback?.error) alertRef.current?.focus(); }, [feedback]);
@@ -111,6 +112,19 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
     setDraft(recovery.value); setConflict(true); merge({}); setRecovery(null);
   };
 
+  const confirmSubmission = (canonical?: ClientServicePlan) => {
+    const submitted = pending.current;
+    if (!submitted || !canonical || !sameSavedValue(planSaveSnapshot(canonical), submitted.expected)) {
+      pending.current = null; optimistic.current = null;
+      if (canonical) { fingerprint.current = JSON.stringify(canonical); setBaseline(revisionDraftOf(canonical)); }
+      error(PLAN_SUBMISSION_MISSING);
+      return false;
+    }
+    acceptSaved(canonical, submitted.submitted);
+    pending.current = null;
+    return true;
+  };
+
   const commit = async (kind: 'save' | 'schedule' | 'draft', mutate: () => { ok: boolean; error?: string }) => {
     if (busyRef.current) return;
     const session = captureWorkspaceSession();
@@ -118,14 +132,15 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
     try {
       const result = mutate();
       if (!result.ok) { error(result.error || 'Unable to update this revision.'); return; }
-      optimistic.current = JSON.stringify(useStore.getState().clientPlans.find(item => item.id === plan.id));
-      pending.current = { kind, submitted: draft };
+      const staged = useStore.getState().clientPlans.find(item => item.id === plan.id);
+      if (!staged) { error(PLAN_SUBMISSION_MISSING); return; }
+      optimistic.current = JSON.stringify(staged);
+      pending.current = { kind, submitted: draft, expected: structuredClone(planSaveSnapshot(staged)) };
       const saved = await store.commitPendingMutation('client_plan.manage');
       if (!mounted.current || !isWorkspaceSessionCurrent(session)) return;
       if (!saved.ok) { error(saved.error || 'The revision is waiting to be saved.'); return; }
       const canonical = useStore.getState().clientPlans.find(item => item.id === plan.id);
-      if (canonical) acceptSaved(canonical, draft);
-      pending.current = null;
+      if (!confirmSubmission(canonical)) return;
       setFeedback({ text: t(kind === 'save' ? 'Draft saved. Review the changes before scheduling.' : kind === 'schedule' ? 'Next month’s plan is scheduled.' : 'Plan returned to draft. Review and schedule it again when ready.'), error: false });
     } catch (failure) { if (mounted.current && isWorkspaceSessionCurrent(session)) error(failure instanceof Error ? failure.message : 'Unable to update this revision.'); }
     finally { busyRef.current = false; if (mounted.current && isWorkspaceSessionCurrent(session)) setBusy(false); }
@@ -146,9 +161,9 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
       const result = await store.retryPendingSave('client_plan.manage');
       if (!mounted.current || !isWorkspaceSessionCurrent(session)) return;
       if (!result.ok) { error(result.error || 'The revision is waiting to be saved.'); return; }
+      if (!pending.current) { setFeedback({ text: t('Synchronization restored. Review and save your draft.'), error: false }); return; }
       const saved = useStore.getState().clientPlans.find(item => item.id === plan.id);
-      if (saved && pending.current) acceptSaved(saved, pending.current.submitted);
-      pending.current = null; setFeedback({ text: t('Your plan change was saved.'), error: false });
+      if (confirmSubmission(saved)) setFeedback({ text: t('Your plan change was saved.'), error: false });
     } catch (failure) { if (isWorkspaceSessionCurrent(session)) error(failure instanceof Error ? failure.message : 'Unable to update this revision.'); }
     finally { busyRef.current = false; if (mounted.current && isWorkspaceSessionCurrent(session)) setBusy(false); }
   };

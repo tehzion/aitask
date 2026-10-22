@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { parseISO, differenceInDays, startOfDay } from 'date-fns'
+import { parseISO } from 'date-fns/parseISO';
+import { differenceInDays } from 'date-fns/differenceInDays';
+import { startOfDay } from 'date-fns/startOfDay';
 import type { AppLocale } from './i18n'
 import { formatMessage, msg } from './messages'
 import { isTaskCompleted } from './taskCompletion'

@@ -1,16 +1,15 @@
-import {
-  endOfDay,
-  format,
-  isSameMonth,
-  isWithinInterval,
-  startOfDay,
-  subMonths,
-  subWeeks,
-} from 'date-fns';
+import { endOfDay } from 'date-fns/endOfDay';
+import { format } from 'date-fns/format';
+import { isSameMonth } from 'date-fns/isSameMonth';
+import { isWithinInterval } from 'date-fns/isWithinInterval';
+import { startOfDay } from 'date-fns/startOfDay';
+import { subMonths } from 'date-fns/subMonths';
+import { subWeeks } from 'date-fns/subWeeks';
 import type { Department, Task, User } from '../types';
 import { getMemberDepartments, normalizeDepartment } from './departments';
 import { parseOptionalDate } from './utils';
-import { isTaskCompleted } from './taskCompletion';
+import { isTaskCompleted, isTaskOpen } from './taskCompletion';
+export { isTaskOpen } from './taskCompletion';
 import { getWorkWeekRange } from './workWeek';
 import { formatLocalizedDate, formatLocalizedMonth, type AppLocale } from './i18n';
 
@@ -91,7 +90,6 @@ export interface DepartmentWorkloadSummary extends TeamWorkloadSummary {
 }
 
 const isCancelled = (task: Task) => task.status === 'Cancelled';
-export const isTaskOpen = (task: Task) => !isTaskCompleted(task) && !isCancelled(task);
 
 export const isTaskOverdue = (task: Task, now = new Date()) => {
   const due = parseOptionalDate(task.dueDate);

@@ -1,4 +1,7 @@
-import { addDays, isBefore, isWithinInterval, startOfDay } from 'date-fns';
+import { addDays } from 'date-fns/addDays';
+import { isBefore } from 'date-fns/isBefore';
+import { isWithinInterval } from 'date-fns/isWithinInterval';
+import { startOfDay } from 'date-fns/startOfDay';
 import type { Project, Task } from '../types';
 import { isAwaitingClientReview, isAwaitingInternalReview } from './clientPortal';
 import { isTaskCompleted } from './taskCompletion';
