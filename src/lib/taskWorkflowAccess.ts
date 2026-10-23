@@ -1,4 +1,4 @@
-import type { CustomRole, Department, Task, User } from '../types';
+import type { CustomRole, Department, Project, Task, User } from '../types';
 import { canAssignTasksToOthers, canEditTask, isBossKoo, isHodUser, isTaskInOwnedPortfolio, type VisibilityScope } from './access';
 import { isEligibleTaskAssignee, isMemberInDepartment } from './departments';
 import { getEffectiveTaskApprovalMode } from './projectManagement';
@@ -99,6 +99,52 @@ export const TASK_HOD_ASSIGNMENT_REQUIRED = 'Assign this task to the department 
 /** True when the task's department has at least one active HOD to delegate through. */
 export const departmentHasHod = (department: Department | undefined, users: readonly User[], roles: CustomRole[] = []) =>
   Boolean(department) && users.some(user => user.hasLogin !== false && isHodUser(user, roles) && isMemberInDepartment(user, department!));
+
+/**
+ * Resolves HODs who may receive a new task handoff. Project-linked tasks use
+ * the project's explicit HOD membership; projectless tasks retain the
+ * workspace department fallback used by legacy tasks.
+ */
+export const eligibleTaskHods = (
+  department: Department | undefined,
+  project: Project | undefined,
+  users: readonly User[],
+  roles: CustomRole[] = [],
+) => {
+  if (!department) return [];
+  const projectHodIds = project?.hodMemberIds;
+  return users
+    .filter(user => user.hasLogin !== false && isHodUser(user, roles) && isMemberInDepartment(user, department))
+    .filter(user => !project || projectHodIds === undefined || projectHodIds.includes(user.id))
+    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+};
+
+export const resolveTaskAssignmentState = (
+  assignedTo: string | undefined,
+  responsibleHodId: string | undefined,
+  assignedUser?: User,
+): Task['assignmentState'] => {
+  if (!assignedTo && !responsibleHodId) return 'needs_hod';
+  if (assignedTo && responsibleHodId && assignedTo === responsibleHodId) return 'pending_hod';
+  if (assignedTo && assignedUser && !isHodUser(assignedUser)) return 'assigned_staff';
+  return responsibleHodId ? 'pending_hod' : 'needs_hod';
+};
+
+/** Staff eligible for HOD delegation within a project and department. */
+export const eligibleTaskStaff = (
+  department: Department | undefined,
+  project: Project | undefined,
+  users: readonly User[],
+  roles: CustomRole[] = [],
+) => {
+  if (!department) return [];
+  const projectStaffIds = project?.staffMemberIds;
+  return users
+    .filter(user => user.hasLogin !== false && user.role === 'Staff' && !isHodUser(user, roles))
+    .filter(user => isEligibleTaskAssignee(user, department))
+    .filter(user => !project || projectStaffIds === undefined || projectStaffIds.includes(user.id))
+    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+};
 
 /**
  * Stage 1 of the workflow: a Project Manager hands work to the department HOD,

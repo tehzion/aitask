@@ -3,7 +3,7 @@ import { isWorkflowTaskSatisfied } from './workflowReview';
 import { safeHttpsUrl } from './security';
 
 export const TASK_EVIDENCE_REQUIRED = 'Add an output link or upload a deliverable file before sending this linked task for review or completing it.';
-export const TASK_HISTORY_FIELDS = ['title', 'description', 'notes', 'dueDate', 'startDate', 'assignedTo', 'department', 'status', 'priority', 'attachmentLink', 'outputAttachments', 'reviewCover', 'accountableLeadId', 'requiresInternalApproval', 'acceptedBy', 'blocker'] as const;
+export const TASK_HISTORY_FIELDS = ['title', 'description', 'notes', 'dueDate', 'startDate', 'assignedTo', 'responsibleHodId', 'assignmentState', 'assignmentOverride', 'department', 'status', 'priority', 'attachmentLink', 'outputAttachments', 'reviewCover', 'accountableLeadId', 'requiresInternalApproval', 'acceptedBy', 'blocker'] as const;
 
 export const isTaskLinkedToDeliverable = (task: Pick<Task, 'id' | 'deliverableId'>, deliverables: readonly Deliverable[]) =>
   Boolean(task.deliverableId || deliverables.some(item => item.taskIds?.includes(task.id)));

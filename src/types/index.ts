@@ -22,6 +22,8 @@ export type PresetServiceType = 'Social Media' | 'Design' | 'Video' | 'Website' 
 export type ServiceType = PresetServiceType | (string & {});
 export type Priority = 'Low' | 'Medium' | 'High' | 'Urgent';
 export type TaskStatus = string;
+/** Assignment ownership is tracked independently from execution status. */
+export type TaskAssignmentState = 'needs_hod' | 'pending_hod' | 'assigned_staff';
 export type ClientApprovalStatus = 'Pending' | 'Approved' | 'Rejected';
 export type RecurrenceFrequency = 'None' | 'Daily' | 'Weekly' | 'Monthly';
 export type RolePermissionKey =
@@ -483,6 +485,12 @@ export interface TaskWorkEvent {
   fields: string[];
 }
 
+export interface TaskAssignmentOverride {
+  actorId: string;
+  reason: string;
+  createdAt: string;
+}
+
 export interface Task {
   id: string;
   version?: number;
@@ -534,6 +542,12 @@ export interface Task {
   description: string;
   department: Department;
   assignedTo: string; // User ID
+  /** The HOD responsible for the department handoff, retained after Staff assignment. */
+  responsibleHodId?: string;
+  /** Assignment routing state; omitted on legacy records until they are touched. */
+  assignmentState?: TaskAssignmentState;
+  /** Server-owned record for an explicit PM direct-to-Staff override. */
+  assignmentOverride?: TaskAssignmentOverride;
   createdBy: string; // User ID
   assignedBy?: string; // User ID of the member who last set assignedTo
   assignedAt?: string; // ISO timestamp of the last assignment change

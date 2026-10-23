@@ -47,18 +47,22 @@ const TaskQueue = ({ title, tasks, empty }: { title: string; tasks: WorkspaceTas
 
 const TaskQueueContent = ({ title, tasks, empty }: { title: string; tasks: WorkspaceTask[]; empty: string }) => {
   const { locale, t } = useI18n();
+  const users = useStore(state => state.users);
   return <Surface className="overflow-hidden">
     <div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{title}</h3><CountLabel>{tasks.length}</CountLabel></div>
     <div className="divide-y divide-line/60">
       {tasks.slice(0, 6).map(task => {
         const dueDate = parseOptionalDate(task.dueDate);
+        const assignmentOverdue = task.assignmentState === 'pending_hod' && Boolean(dueDate && isBefore(dueDate, new Date()) && isTaskOpen(task));
         return <DataRow
           key={task.id}
           titleI18nSkip={false}
           descriptionI18nSkip={false}
           title={<Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="hover:text-accent"><span data-i18n-skip>{task.title}</span></Link>}
           description={<><span data-i18n-skip>{task.clientName}</span> · {dueDate ? formatLocalizedDate(dueDate, locale) : t('No deadline')}</>}
-          meta={task.assignedTo ? t('Assigned') : t('Unassigned')}
+          meta={task.responsibleHodId
+            ? `${t('Responsible HOD')}: ${users.find(user => user.id === task.responsibleHodId)?.name || t('Unavailable member')} · ${t(task.assignmentState === 'assigned_staff' ? 'Assigned to Staff' : task.assignmentState === 'pending_hod' ? 'Pending HOD Assignment' : 'Awaiting HOD')}${assignmentOverdue ? ` · ${t('Overdue assignment')}` : ''}`
+            : task.assignedTo ? t('Assigned') : t('Unassigned')}
           action={<StatusChip tone={task.isCompleted ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{t(task.status)}</StatusChip>}
         />;
       })}
@@ -130,6 +134,9 @@ const ServiceRoleDashboard = () => {
   const portfolioReviews = getPortfolioReviewQueues(scopeTasks);
   const waitingInternal = portfolioReviews.internal;
   const waitingClient = portfolioReviews.client;
+  const awaitingHod = scopeTasks.filter(task => isTaskOpen(task)
+    && (task.assignmentState === 'needs_hod' || (!task.assignmentState && !task.assignedTo)));
+  const awaitingStaffAssignment = scopeTasks.filter(task => isTaskOpen(task) && task.assignmentState === 'pending_hod');
   const revisions = scopeTasks.filter(task => task.revisionCount > 0 && isTaskOpen(task));
   const completed = scopeTasks.filter(isTaskCompleted);
   const renewalPlans = activePlans.filter(plan => plan.contractEndDate).sort((a, b) => (a.contractEndDate || '').localeCompare(b.contractEndDate || ''));
@@ -184,6 +191,8 @@ const ServiceRoleDashboard = () => {
       <TaskQueue title={t('Awaiting internal review')} tasks={portfolioReviews.internal} empty={t('No submitted work is waiting for internal review.')} />
       <TaskQueue title={t('Ready to finalize')} tasks={portfolioReviews.completion} empty={t('No tasks awaiting final completion.')} />
       <TaskQueue title={t('Client review (optional)')} tasks={portfolioReviews.client} empty={t('No client review is pending.')} />
+      <TaskQueue title={t('Awaiting HOD Assignment')} tasks={awaitingHod} empty={t('No tasks are waiting for HOD assignment.')} />
+      <TaskQueue title={t('Awaiting Staff Assignment')} tasks={awaitingStaffAssignment} empty={t('No tasks are waiting for Staff assignment.')} />
     </div>
     <Surface className="overflow-hidden" aria-labelledby="project-health-title">
       <div className="flex items-center justify-between gap-3 border-b border-line/70 px-5 py-4">

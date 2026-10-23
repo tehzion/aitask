@@ -57,6 +57,14 @@ const StaffMyWork: React.FC = () => {
     [accessibleTasks, currentUser?.id, isDepartmentLead],
   );
   const tasks = React.useMemo(() => isHod ? getHodScopeTasks(visibleTasks, currentUser?.id, scope) : visibleTasks, [currentUser?.id, isHod, scope, visibleTasks]);
+  const awaitingStaffAssignment = React.useMemo(
+    () => isHod && currentUser
+      ? visibleTasks.filter(task => task.assignmentState === 'pending_hod'
+        && (task.responsibleHodId === currentUser.id || task.assignedTo === currentUser.id)
+        && isTaskOpen(task))
+      : [],
+    [currentUser, isHod, visibleTasks],
+  );
   const departmentTasks = React.useMemo(() => visibleTasks.filter(task => isMemberInDepartment(currentUser, task.department)), [currentUser, visibleTasks]);
   const workload = React.useMemo(() => {
     if (!isDepartmentLead || !currentUser) return [];
@@ -143,6 +151,18 @@ const StaffMyWork: React.FC = () => {
         variant="underline"
       />}
       <div id="hod-dashboard-work" role={isHod ? 'tabpanel' : undefined} aria-labelledby={isHod ? `hod-dashboard-scope-tab-${scope}` : undefined} tabIndex={isHod ? 0 : undefined} className="space-y-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+      {isHod && awaitingStaffAssignment.length > 0 && <section aria-labelledby="hod-awaiting-staff-title">
+        <div className="flex items-end justify-between gap-3">
+          <div><h2 id="hod-awaiting-staff-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">{t('Tasks Awaiting Staff Assignment')}</h2><p className="mt-1 text-sm text-muted">{t('Review each task and assign an eligible Staff member.')}</p></div>
+          <StatusChip tone="amber">{awaitingStaffAssignment.length}</StatusChip>
+        </div>
+        <Surface className="mt-4 divide-y divide-line/70 overflow-hidden">
+          {awaitingStaffAssignment.slice(0, 8).map(task => <button key={task.id} type="button" onClick={() => openTask(task.id)} className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left hover:bg-inset/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40">
+            <span className="min-w-0"><span data-i18n-skip className="block truncate font-semibold text-ink">{task.title}</span><span className="mt-1 block text-xs text-muted"><span data-i18n-skip>{task.projectName || task.clientName}</span> · {t('Priority')}: {t(task.priority)}</span></span>
+            <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" />
+          </button>)}
+        </Surface>
+      </section>}
       {focusTask ? (
         <section aria-labelledby="staff-focus-title" className="calm-raised border-l-2 border-accent p-5 sm:p-6">
           <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">

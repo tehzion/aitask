@@ -1,7 +1,7 @@
 import { acknowledgeActionFeedback, clearActionFeedback, queueActionFeedback, taskStatusMessage } from '../lib/actionFeedback';
 import { recordDiagnostic } from '../lib/diagnostics';
 import { getTaskProgress } from '../lib/taskProgress';
-import { canRequestTaskRevision, getDepartmentReviewers, TASK_HOD_REQUIRED, taskAssignmentStageError, taskTransitionError } from '../lib/taskWorkflowAccess';
+import { canRequestTaskRevision, eligibleTaskHods, eligibleTaskStaff, getDepartmentReviewers, resolveTaskAssignmentState, TASK_HOD_REQUIRED, taskAssignmentStageError, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { clearRecoveredDrafts } from '../lib/draftRecovery';
 import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { create } from 'zustand';
@@ -354,6 +354,7 @@ export interface StoreState {
   updateTaskWork: (taskId: string, intent: TaskWorkIntent) => MutationActionResult;
   updateTaskPriority: (taskId: string, priority: Priority) => MutationActionResult;
   updateTaskAssignee: (taskId: string, assignedTo: string) => MutationActionResult;
+  overrideTaskAssignee: (taskId: string, assignedTo: string, reason: string) => MutationActionResult;
   updateTaskDueDate: (taskId: string, newDueDate: string) => MutationActionResult;
   updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => MutationActionResult;
   attachTaskOutput: (taskId: string, attachment: AttachmentRef) => Promise<MutationActionResult>;
@@ -2605,6 +2606,33 @@ export const useStore = create<StoreState>()(
           result = { ok: false, error: 'Choose a valid internal assignee.' };
           return state;
         }
+        const project = task.projectId ? state.projects.find(item => item.id === task.projectId) : undefined;
+        const responsibleHodId = task.responsibleHodId
+          || (task.assignedTo && isHodUser(state.users.find(user => user.id === task.assignedTo), state.rolePermissions)
+            ? task.assignedTo
+            : undefined);
+        const eligibleHods = eligibleTaskHods(task.department, project, state.users, state.rolePermissions);
+        if (assigneeUser && isHodUser(assigneeUser, state.rolePermissions)
+          && currentUser.role === 'Project Manager'
+          && !eligibleHods.some(user => user.id === assigneeUser.id)) {
+          result = { ok: false, error: 'Choose an HOD assigned to this project and department.' };
+          return state;
+        }
+        if (assigneeUser && assigneeUser.role === 'Staff' && !isHodUser(assigneeUser, state.rolePermissions)
+          && isHodUser(currentUser, state.rolePermissions)) {
+          const eligibleStaff = eligibleTaskStaff(task.department, project, state.users, state.rolePermissions);
+          if (!eligibleStaff.some(user => user.id === assigneeUser.id)
+            || (responsibleHodId && responsibleHodId !== currentUser.id)) {
+            result = { ok: false, error: 'Choose Staff assigned to this project and department.' };
+            return state;
+          }
+        }
+        if (!assignedTo && isHodUser(currentUser, state.rolePermissions) && responsibleHodId) {
+          assignedTo = responsibleHodId;
+        }
+        if (!assignedTo && task.assignmentState === 'pending_hod' && responsibleHodId) {
+          assignedTo = responsibleHodId;
+        }
         if (assigneeUser && !isEligibleTaskAssignee(assigneeUser, task.department)) {
           useToastStore.getState().addToast(msg('errors.assigneeDepartment', { name: assigneeUser.name, department: task.department }), 'warning');
           result = { ok: false, error: `${assigneeUser.name} is not in the ${task.department} department.` };
@@ -2625,10 +2653,28 @@ export const useStore = create<StoreState>()(
           return state;
         }
 
+        const nextAssigneeUser = assignedTo ? state.users.find(user => user.id === assignedTo) : undefined;
+        const nextResponsibleHodId = nextAssigneeUser && isHodUser(nextAssigneeUser, state.rolePermissions)
+          ? nextAssigneeUser.id
+          : responsibleHodId;
+        const shouldPersistAssignmentRouting = Boolean(task.assignmentState || task.responsibleHodId || nextResponsibleHodId);
+        const nextAssignmentState = shouldPersistAssignmentRouting
+          ? resolveTaskAssignmentState(assignedTo, nextResponsibleHodId, nextAssigneeUser)
+          : task.assignmentState;
         const newTasks = state.tasks.map(t => {
           if (t.id !== taskId) return t;
           const now = new Date().toISOString();
-          const updated = recordTaskWorkTransition(t, { ...t, assignedTo, status: ['Completed', 'Cancelled'].includes(t.status) ? t.status : 'Pending', clientApprovalStatus: ['Completed', 'Cancelled'].includes(t.status) ? t.clientApprovalStatus : 'Pending', assignedBy: currentUser?.id || t.assignedBy, assignedAt: now, updatedAt: now }, currentUser!.id, now);
+          const updated = recordTaskWorkTransition(t, {
+            ...t,
+            assignedTo,
+            responsibleHodId: nextResponsibleHodId,
+            assignmentState: nextAssignmentState,
+            status: ['Completed', 'Cancelled'].includes(t.status) ? t.status : 'Pending',
+            clientApprovalStatus: ['Completed', 'Cancelled'].includes(t.status) ? t.clientApprovalStatus : 'Pending',
+            assignedBy: currentUser?.id || t.assignedBy,
+            assignedAt: now,
+            updatedAt: now,
+          }, currentUser!.id, now);
           return { ...updated, completionPercentage: getTaskProgress(updated, state.users) };
         });
 
@@ -2643,7 +2689,7 @@ export const useStore = create<StoreState>()(
           });
         }
 
-        queueActionFeedback(currentUser!.id, `task:${taskId}:assignee`, assigneeUser ? msg('task.assignedTo', { name: assigneeUser.name }) : msg('task.unassigned'), saved => saved.tasks.some(item => item.id === taskId && item.assignedTo === assignedTo));
+        queueActionFeedback(currentUser!.id, `task:${taskId}:assignee`, nextAssigneeUser ? msg('task.assignedTo', { name: nextAssigneeUser.name }) : msg('task.unassigned'), saved => saved.tasks.some(item => item.id === taskId && item.assignedTo === assignedTo));
 
         result = { ok: true };
         return {
@@ -2651,6 +2697,69 @@ export const useStore = create<StoreState>()(
           notifications: [...newNotifs, ...(state.notifications || [])],
           ...deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles),
         };
+        });
+        return result;
+      },
+
+      overrideTaskAssignee: (taskId, assignedTo, reason) => {
+        let result: MutationActionResult = { ok: false, error: 'Unable to override the task assignee.' };
+        set((state) => {
+          if (isWorkspaceMutationLocked(state)) {
+            result = { ok: false, error: pendingMutationMessage };
+            return state;
+          }
+          const currentUser = state.currentUser;
+          const task = state.tasks.find(item => item.id === taskId);
+          const trimmedReason = reason.trim().slice(0, 2000);
+          if (!currentUser || currentUser.role !== 'Project Manager' || !task || !trimmedReason) {
+            result = { ok: false, error: 'A Project Manager override reason is required.' };
+            return state;
+          }
+          if (!canEditTask(currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })
+            || !canAssignTasksToOthers(currentUser, state.rolePermissions, task, { users: state.users, clients: state.clients, projects: state.projects })) {
+            result = { ok: false, error: 'You do not have permission to override this task assignment.' };
+            return state;
+          }
+          const target = state.users.find(user => user.id === assignedTo && user.role === 'Staff' && !isHodUser(user, state.rolePermissions));
+          const project = task.projectId ? state.projects.find(item => item.id === task.projectId) : undefined;
+          if (!target || !eligibleTaskStaff(task.department, project, state.users, state.rolePermissions).some(user => user.id === target.id)) {
+            result = { ok: false, error: 'Choose Staff assigned to this project and department.' };
+            return state;
+          }
+          if (['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status) || task.isCompleted) {
+            result = { ok: false, error: 'Return this work for revision before reassigning it.' };
+            return state;
+          }
+          const now = new Date().toISOString();
+          const updatedTask = recordTaskWorkTransition(task, {
+            ...task,
+            assignedTo: target.id,
+            assignmentState: 'assigned_staff',
+            assignedBy: currentUser.id,
+            assignedAt: now,
+            assignmentOverride: { actorId: currentUser.id, reason: trimmedReason, createdAt: now },
+            status: 'Pending',
+            clientApprovalStatus: 'Pending',
+            updatedAt: now,
+          }, currentUser.id, now);
+          const newTasks = state.tasks.map(item => item.id === taskId
+            ? { ...updatedTask, completionPercentage: getTaskProgress(updatedTask, state.users) }
+            : item);
+          const notices: AppNotification[] = [];
+          appendNotification(notices, {
+            targetUserId: target.id,
+            title: 'Task Assigned To You',
+            message: `"${task.title}" was assigned to you by ${currentUser.name}.`,
+            route: { page: 'tasks', entityId: taskId },
+            iconType: 'task',
+          });
+          queueActionFeedback(currentUser.id, `task:${taskId}:assignee-override`, msg('task.assignedTo', { name: target.name }), saved => saved.tasks.some(item => item.id === taskId && item.assignedTo === target.id));
+          result = { ok: true };
+          return {
+            tasks: newTasks,
+            notifications: [...notices, ...(state.notifications || [])],
+            ...deriveServiceProgress(newTasks, state.deliverables, state.serviceCycles),
+          };
         });
         return result;
       },
@@ -2798,6 +2907,28 @@ export const useStore = create<StoreState>()(
         if (assignmentChanged && assignee && !isEligibleTaskAssignee(assignee, nextDepartment)) {
           return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
         }
+        const nextProjectForAssignment = (data.projectId ?? task.projectId)
+          ? state.projects.find(item => item.id === (data.projectId ?? task.projectId))
+          : undefined;
+        const nextEligibleHods = eligibleTaskHods(nextDepartment, nextProjectForAssignment, state.users, state.rolePermissions);
+        const currentResponsibleHodId = task.responsibleHodId
+          || (task.assignedTo && isHodUser(state.users.find(user => user.id === task.assignedTo), state.rolePermissions) ? task.assignedTo : undefined);
+        const nextResponsibleHodId = assignee && isHodUser(assignee, state.rolePermissions)
+          ? assignee.id
+          : currentResponsibleHodId;
+        const shouldPersistAssignmentRouting = Boolean(task.assignmentState || task.responsibleHodId || nextResponsibleHodId);
+        if (nextResponsibleHodId && !nextEligibleHods.some(user => user.id === nextResponsibleHodId)) {
+          return { ok: false, error: 'Choose an HOD assigned to this project and department.' };
+        }
+        if (assignmentChanged && assignee && assignee.role === 'Staff' && !isHodUser(assignee, state.rolePermissions)
+          && isHodUser(currentUser, state.rolePermissions)
+          && !eligibleTaskStaff(nextDepartment, nextProjectForAssignment, state.users, state.rolePermissions).some(user => user.id === assignee.id)) {
+          return { ok: false, error: 'Choose Staff assigned to this project and department.' };
+        }
+        if (assignmentChanged && currentUser.role === 'Project Manager' && assignee && isHodUser(assignee, state.rolePermissions)
+          && !nextEligibleHods.some(user => user.id === assignee.id)) {
+          return { ok: false, error: 'Choose an HOD assigned to this project and department.' };
+        }
         if (assignmentChanged) {
           // Submitted, approved, finished or cancelled work cannot change hands,
           // matching updateTaskAssignee.
@@ -2923,6 +3054,10 @@ export const useStore = create<StoreState>()(
           facebookPage: safeFacebookPage || undefined,
           website: safeWebsite || undefined,
           assignedTo: nextAssigneeId,
+          responsibleHodId: nextResponsibleHodId,
+          assignmentState: shouldPersistAssignmentRouting
+            ? resolveTaskAssignmentState(nextAssigneeId, nextResponsibleHodId, assignee)
+            : task.assignmentState,
           assignedBy: assignmentChanged ? currentUser.id : task.assignedBy,
           assignedAt: assignmentChanged ? now : task.assignedAt,
           startDate,
@@ -3244,20 +3379,40 @@ export const useStore = create<StoreState>()(
         if (!currentUser || !canCreateTasks(currentUser, state.rolePermissions)) return '';
         if (taskData.createdBy !== undefined && taskData.createdBy !== currentUser.id) return '';
         if (['Staff', 'HOD'].includes(currentUser.role) && !isMemberInDepartment(currentUser, taskData.department)) return '';
-        const assignee = taskData.assignedTo ? state.users.find(user => user.id === taskData.assignedTo && user.role !== 'Client') : undefined;
-        if (taskData.assignedTo && !assignee) return '';
+        const project = taskData.projectId
+          ? state.projects.find(item => item.id === taskData.projectId)
+          : undefined;
+        if (taskData.projectId && !project) return '';
+        const projectHods = eligibleTaskHods(taskData.department, project, state.users, state.rolePermissions);
+        const requestedHodId = taskData.responsibleHodId || (taskData.assignedTo && isHodUser(state.users.find(user => user.id === taskData.assignedTo), state.rolePermissions) ? taskData.assignedTo : undefined);
+        let resolvedAssigneeId = taskData.assignedTo;
+        let resolvedResponsibleHodId = requestedHodId;
+        let resolvedAssignmentState = taskData.assignmentState;
+        if (currentUser.role === 'Project Manager' && resolveTaskStatus(taskData.status, state.taskStatuses) !== 'Waiting Approval') {
+          // UI-created tasks carry the explicit pending_hod marker and must
+          // resolve a HOD. Older programmatic/import paths without that marker
+          // remain compatible when no HOD has ever been configured.
+          if (!projectHods.length && (taskData.assignmentState !== undefined || taskData.responsibleHodId !== undefined)) return '';
+          if (!projectHods.length) {
+            resolvedAssignmentState = taskData.assignmentState || 'needs_hod';
+          } else {
+          if (projectHods.length > 1 && !requestedHodId) return '';
+          if (requestedHodId && !projectHods.some(user => user.id === requestedHodId)) return '';
+          resolvedResponsibleHodId = requestedHodId || projectHods[0].id;
+          resolvedAssigneeId = resolvedResponsibleHodId;
+          resolvedAssignmentState = 'pending_hod';
+          }
+        }
+        const assignee = resolvedAssigneeId ? state.users.find(user => user.id === resolvedAssigneeId && user.role !== 'Client') : undefined;
+        if (resolvedAssigneeId && !assignee) return '';
         if (assignee && !canAssignTasksToOthers(currentUser, state.rolePermissions, undefined, { users: state.users, clients: state.clients, projects: state.projects }) && assignee.id !== currentUser.id) return '';
         if (assignee && !isEligibleTaskAssignee(assignee, taskData.department)) return '';
         // Creating a task already submitted for review is the PM handing work to
         // the reviewer directly, so the HOD-first assignment rule does not apply.
-        const stageError = taskAssignmentStageError(currentUser, taskData, taskData.assignedTo, state.users, state.rolePermissions, { allowDirectStaff: resolveTaskStatus(taskData.status, state.taskStatuses) === 'Waiting Approval' });
+        const stageError = taskAssignmentStageError(currentUser, taskData, resolvedAssigneeId, state.users, state.rolePermissions, { allowDirectStaff: resolveTaskStatus(taskData.status, state.taskStatuses) === 'Waiting Approval' });
         if (stageError) { useToastStore.getState().addToast(stageError, 'warning'); return ''; }
 
-        const project = taskData.projectId
-          ? state.projects.find(item => item.id === taskData.projectId)
-          : undefined;
         if (taskData.projectId) {
-          if (!project) return '';
           if (isClosedProject(project)) return '';
           if (taskData.milestoneId && !(project.milestones || []).some(milestone => milestone.id === taskData.milestoneId)) return '';
           const assignableProjectIds = new Set(
@@ -3313,6 +3468,9 @@ export const useStore = create<StoreState>()(
             ...taskData,
             id: taskId,
             createdBy: currentUser.id,
+            assignedTo: resolvedAssigneeId || '',
+            responsibleHodId: resolvedResponsibleHodId,
+            assignmentState: resolvedAssignmentState || resolveTaskAssignmentState(resolvedAssigneeId, resolvedResponsibleHodId, assignee),
             assignedBy: currentUser.id,
             assignedAt: now,
             clientId,
@@ -3361,10 +3519,10 @@ export const useStore = create<StoreState>()(
                     currentUser.id,
                   )
                 : []),
-              ...(taskData.assignedTo
+              ...(resolvedAssigneeId
                 ? (() => {
                     const assignmentNotification = makeNotification({
-                      targetUserId: taskData.assignedTo,
+                      targetUserId: resolvedAssigneeId,
                       title: 'New Task Assigned',
                       message: `You have been assigned a new task: "${title}".`,
                       route: { page: 'tasks', entityId: taskId },
@@ -3378,7 +3536,7 @@ export const useStore = create<StoreState>()(
           };
         });
 
-        queueActionFeedback(currentUser!.id, `task:${taskId}:create`, msg('task.created', { title: taskData.title }), saved => saved.tasks.some(item => item.id === taskId && item.title === title && item.assignedTo === taskData.assignedTo));
+        queueActionFeedback(currentUser!.id, `task:${taskId}:create`, msg('task.created', { title: taskData.title }), saved => saved.tasks.some(item => item.id === taskId && item.title === title && item.assignedTo === (resolvedAssigneeId || '')));
         return taskId;
       },
 

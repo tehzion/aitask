@@ -16,7 +16,7 @@ import { canAssignTasksToOthers, canCreateTasks, canManageProjects, getAssignabl
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
 import { assignableDepartments, getMemberDepartments } from '../lib/departments';
-import { assignableTaskAssignees } from '../lib/taskWorkflowAccess';
+import { assignableTaskAssignees, eligibleTaskHods } from '../lib/taskWorkflowAccess';
 import ModalShell from './ModalShell';
 import BackendFreshness from './BackendFreshness';
 import { modalFooter } from './uiTokens';
@@ -83,6 +83,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [website, setWebsite] = useState('');
   const [department, setDepartment] = useState<Department | ''>('');
   const [assignedTo, setAssignedTo] = useState('');
+  const [responsibleHodId, setResponsibleHodId] = useState('');
   const [serviceType, setServiceType] = useState<ServiceType>('Design');
   const [isAddingCustomService, setIsAddingCustomService] = useState(false);
   const [customServiceInput, setCustomServiceInput] = useState('');
@@ -109,14 +110,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const canCreateProjects = canManageProjects(currentUser, rolePermissions);
   const isStaffTaskCreator = currentUser?.role === 'Staff' || currentUser?.role === 'HOD';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
+  const isProjectManager = currentUser?.role === 'Project Manager';
   const departmentChoices = React.useMemo(
     () => assignableDepartments(currentUser),
     [currentUser],
   );
-  const filteredUsers = department
-    ? assignableTaskAssignees(currentUser, department, users, rolePermissions)
-        .filter(user => canAssignOthers || user.id === currentUser?.id)
-    : [];
   const assignableProjects = React.useMemo(
     () => getAssignableProjects(currentUser, projects, tasks, rolePermissions, users, { clients, projects }),
     [clients, currentUser, projects, rolePermissions, tasks, users]
@@ -126,6 +124,14 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     [clients, currentUser, projects, rolePermissions, tasks],
   );
   const selectedProject = projectId ? assignableProjects.find(project => project.id === projectId) : undefined;
+  const eligibleHods = React.useMemo(
+    () => eligibleTaskHods(department || undefined, selectedProject, users, rolePermissions),
+    [department, rolePermissions, selectedProject, users],
+  );
+  const filteredUsers = department
+    ? assignableTaskAssignees(currentUser, department, users, rolePermissions)
+        .filter(user => canAssignOthers || user.id === currentUser?.id)
+    : [];
   const linkedTaskContext = Boolean(createTaskInitialClientId || createTaskInitialClientName);
   const showCompanyLink = currentUser?.role !== 'Client' || linkedTaskContext;
   const clientOptions = React.useMemo(() => {
@@ -162,6 +168,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setWebsite('');
     setDepartment('');
     setAssignedTo('');
+    setResponsibleHodId('');
     setServiceType('Design');
     setIsAddingCustomService(false);
     setCustomServiceInput('');
@@ -181,11 +188,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   React.useEffect(() => { resetForm(); }, [currentUser?.id, resetForm]);
 
-  const recovery = useRecoverableForm('create-task', { projectId, milestoneId, approvalMode, title, description, clientName, customerDetails, facebookPage, website, department, assignedTo, serviceType, priority, visibility, startDate, dueDate, attachmentLink, attachmentName, notes, customServiceInput }, formEdited, isOpen && !pendingTaskId);
+  const recovery = useRecoverableForm('create-task', { projectId, milestoneId, approvalMode, title, description, clientName, customerDetails, facebookPage, website, department, assignedTo, responsibleHodId, serviceType, priority, visibility, startDate, dueDate, attachmentLink, attachmentName, notes, customServiceInput }, formEdited, isOpen && !pendingTaskId);
   const restoreDraft = () => {
     const value = recovery.restore(); if (!value || typeof value.title !== 'string') return;
     if (additionalDetailsRef.current) additionalDetailsRef.current.open = true;
-    setProjectId(value.projectId); setMilestoneId(typeof value.milestoneId === 'string' ? value.milestoneId : ''); setApprovalMode(['inherit', 'none', 'hod', 'pm'].includes(value.approvalMode) ? value.approvalMode : 'inherit'); setTitle(value.title); setDescription(value.description); setClientName(value.clientName); setCustomerDetails(value.customerDetails); setFacebookPage(value.facebookPage); setWebsite(value.website); setDepartment(value.department); setAssignedTo(value.assignedTo); setServiceType(value.serviceType); setPriority(value.priority); setVisibility(value.visibility); setStartDate(value.startDate); setDueDate(value.dueDate); setAttachmentLink(value.attachmentLink); setAttachmentName(value.attachmentName); setNotes(value.notes); setCustomServiceInput(value.customServiceInput); setFormEdited(true);
+    setProjectId(value.projectId); setMilestoneId(typeof value.milestoneId === 'string' ? value.milestoneId : ''); setApprovalMode(['inherit', 'none', 'hod', 'pm'].includes(value.approvalMode) ? value.approvalMode : 'inherit'); setTitle(value.title); setDescription(value.description); setClientName(value.clientName); setCustomerDetails(value.customerDetails); setFacebookPage(value.facebookPage); setWebsite(value.website); setDepartment(value.department); setAssignedTo(value.assignedTo); setResponsibleHodId(typeof value.responsibleHodId === 'string' ? value.responsibleHodId : ''); setServiceType(value.serviceType); setPriority(value.priority); setVisibility(value.visibility); setStartDate(value.startDate); setDueDate(value.dueDate); setAttachmentLink(value.attachmentLink); setAttachmentName(value.attachmentName); setNotes(value.notes); setCustomServiceInput(value.customServiceInput); setFormEdited(true);
   };
   const closeAndReset = () => {
     recovery.clear(); markPristine(); setFormEdited(false); resetForm();
@@ -206,6 +213,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       setFormError('');
       setAssignmentError('');
       setAssignedTo(initialMember?.id || '');
+      setResponsibleHodId(initialMember && initialMember.role === 'HOD' ? initialMember.id : '');
       if (createTaskInitialClientName) {
         const initialProject = assignableProjects.find(project => project.clientId === createTaskInitialClientId || project.clientName.toLowerCase() === createTaskInitialClientName.toLowerCase());
         setProjectId(initialProject?.id || '');
@@ -220,6 +228,13 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       ));
     }
   }, [assignableProjects, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialDate, createTaskInitialServiceType, departmentChoices, isOpen, users]);
+
+  React.useEffect(() => {
+    if (!isProjectManager || !department) return;
+    setResponsibleHodId(current => eligibleHods.some(user => user.id === current)
+      ? current
+      : eligibleHods.length === 1 ? eligibleHods[0].id : '');
+  }, [department, eligibleHods, isProjectManager]);
 
   if (!isOpen) return null;
 
@@ -236,6 +251,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const selectProject = (id: string) => {
     setProjectId(id);
     setMilestoneId('');
+    if (isProjectManager) {
+      const nextProject = id ? assignableProjects.find(item => item.id === id) : undefined;
+      const nextHods = eligibleTaskHods(department || undefined, nextProject, users, rolePermissions);
+      setResponsibleHodId(nextHods.length === 1 ? nextHods[0].id : '');
+    }
     if (!id) return;
 
     const project = assignableProjects.find(item => item.id === id);
@@ -374,6 +394,17 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
+    if (isProjectManager) {
+      if (!eligibleHods.length) {
+        setAssignmentError('No eligible HOD is configured for this project and department. Assign an HOD to the project before creating this task.');
+        return;
+      }
+      if (!responsibleHodId || !eligibleHods.some(user => user.id === responsibleHodId)) {
+        setAssignmentError('Choose the responsible HOD for this task.');
+        return;
+      }
+    }
+
     if (finalStartDate && finalDueDate && new Date(finalDueDate) < new Date(finalStartDate)) {
       setFormError('Due date cannot be earlier than the start date.');
       return;
@@ -385,6 +416,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
+    const resolvedAssignedTo = isProjectManager ? responsibleHodId : assignedTo;
     const taskId = addTask({
       title: trimmedTitle,
       description: description.trim(),
@@ -401,7 +433,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       website: safeHttpsUrl(website) || undefined,
       visibility,
       department,
-      assignedTo,
+      assignedTo: resolvedAssignedTo,
+      responsibleHodId: isProjectManager ? responsibleHodId : undefined,
+      assignmentState: isProjectManager ? 'pending_hod' : undefined,
       serviceType: trimmedServiceType,
       priority,
       startDate: finalStartDate,
@@ -598,23 +632,22 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor={assigneeId} className="block text-sm font-medium text-slate-700 mb-1">{t('Assignee')}</label>
+                  <label htmlFor={assigneeId} className="block text-sm font-medium text-slate-700 mb-1">{t(isProjectManager ? 'Responsible HOD' : 'Assignee')}</label>
                   <div className="relative">
                     <select
                       id={assigneeId}
-                      value={assignedTo}
-                      onChange={e => setAssignedTo(e.target.value)}
+                      value={isProjectManager ? responsibleHodId : assignedTo}
+                      onChange={e => isProjectManager ? setResponsibleHodId(e.target.value) : setAssignedTo(e.target.value)}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
-                      <option value="">
-                        {t('Unassigned')}
-                      </option>
-                      {filteredUsers.map(u => (
+                      <option value="">{t(isProjectManager ? (eligibleHods.length ? 'Choose responsible HOD' : 'No eligible HOD configured') : 'Unassigned')}</option>
+                      {(isProjectManager ? eligibleHods : filteredUsers).map(u => (
                         <option key={u.id} data-i18n-skip value={u.id}>{u.name}</option>
                       ))}
                     </select>
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                   </div>
+                  {isProjectManager && eligibleHods.length > 0 && <p className="mt-1 text-xs text-slate-500">{t('The HOD will assign Staff after reviewing this task.')}</p>}
                   {assignmentError && (
                     <p className="text-xs text-red-500 mt-1"><SystemMessage message={assignmentError} /></p>
                   )}

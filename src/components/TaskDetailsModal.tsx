@@ -5,7 +5,7 @@ import { acknowledgeActionFeedback, canRetrySave, dismissActionFeedback } from '
 import SystemMessage from './SystemMessage';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
-import { assignableTaskAssignees, canApproveTaskInternally, canCompleteWithoutInternalApproval, canRequestTaskRevision, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../lib/taskWorkflowAccess';
+import { assignableTaskAssignees, canApproveTaskInternally, canCompleteWithoutInternalApproval, canRequestTaskRevision, eligibleTaskStaff, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { getTaskStatusControls } from '../lib/taskStatusControls';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import type { WorkspaceSessionToken } from '../lib/workspaceSession';
@@ -98,6 +98,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     updateTaskStatus,
     updateTask,
     updateTaskAssignee,
+    overrideTaskAssignee,
     deleteTask,
     addComment,
     updateTaskAttachment,
@@ -119,6 +120,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     updateTaskStatus: state.updateTaskStatus,
     updateTask: state.updateTask,
     updateTaskAssignee: state.updateTaskAssignee,
+    overrideTaskAssignee: state.overrideTaskAssignee,
     deleteTask: state.deleteTask,
     addComment: state.addComment,
     updateTaskAttachment: state.updateTaskAttachment,
@@ -153,6 +155,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const isSubmitting = isMutationSubmitting || isDeletionSaving || outputUpload.busy;
   const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
   const [delegationAssignee, setDelegationAssignee] = useState('');
+  const [overrideReason, setOverrideReason] = useState('');
   const titleId = React.useId();
   const descriptionId = React.useId();
   const confirmationTitleId = React.useId();
@@ -278,6 +281,14 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     && isDepartmentScopedUser(currentUser, rolePermissions)
     && task.assignedTo === currentUser?.id
   );
+  const canOverrideAssignment = Boolean(
+    canAssignOthers
+    && currentUser?.role === 'Project Manager'
+    && task.status !== 'Waiting Approval'
+    && task.status !== 'Approved'
+    && task.status !== 'Completed'
+    && !task.isCompleted
+  );
   const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { users, clients, projects });
   const incompletePredecessors = getTaskBlockers(task, visibleTasks);
   const unavailablePredecessorCount = getUnavailableTaskDependencyCount(task, visibleTasks);
@@ -304,11 +315,9 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
           : options;
       })()
     : users.filter(user => user.id === editForm.assignedTo);
-  const delegationOptions = users.filter(user => (
-    user.role !== 'Client'
-    && user.id !== currentUser?.id
-    && isMemberInDepartment(user, task.department)
-  ));
+  const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) : undefined;
+  const delegationOptions = eligibleTaskStaff(task.department, taskProject, users, rolePermissions)
+    .filter(user => user.id !== currentUser?.id);
 
   const delegationWorkloads = getTeamWorkloadSummaries(visibleTasks, delegationOptions, 'overall');
 
@@ -435,6 +444,25 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     }
     if (await confirmPendingMutation('task.update')) {
       setDelegationAssignee('');
+    }
+  };
+
+  const handleAssignmentOverride = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!delegationAssignee || !overrideReason.trim() || isSubmitting || !canOverrideAssignment) return;
+    const target = delegationOptions.find(user => user.id === delegationAssignee);
+    if (!target) {
+      setMutationError(t('Choose a valid internal assignee.'));
+      return;
+    }
+    const localResult = overrideTaskAssignee(task.id, target.id, overrideReason);
+    if (!localResult.ok) {
+      setMutationError(String(t(localResult.error || 'Unable to override the task assignee.')));
+      return;
+    }
+    if (await confirmPendingMutation('task.update')) {
+      setDelegationAssignee('');
+      setOverrideReason('');
     }
   };
 
@@ -996,6 +1024,14 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                     <span data-i18n-skip className="text-sm font-medium text-slate-800">{assignee?.name || 'Agency team'}</span>
                   </div>
                 </div>
+                {!isClientTaskViewer && task.responsibleHodId && <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{t('Responsible HOD')}</label>
+                  <span data-i18n-skip className="text-sm font-medium text-slate-800">{users.find(user => user.id === task.responsibleHodId)?.name || t('Unavailable member')}</span>
+                </div>}
+                {!isClientTaskViewer && task.assignmentState && <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{t('Assignment state')}</label>
+                  <span className="text-sm font-medium text-slate-800">{t(task.assignmentState === 'pending_hod' ? 'Pending HOD Assignment' : task.assignmentState === 'assigned_staff' ? 'Assigned to Staff' : 'Awaiting HOD')}</span>
+                </div>}
                 {!isClientTaskViewer && <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">{t('Created By')}</label>
                   <span data-i18n-skip className="text-sm font-medium text-slate-800">{creator?.name || 'Unknown'}</span>
@@ -1060,6 +1096,29 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                     <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{t('No eligible team members in this department.')}</p>
                   )}
                   <ContextualTutorialLink tutorialId="delegate-task-to-staff" label={t('Need help assigning this task?')} />
+                </form>
+              )}
+
+              {canOverrideAssignment && (
+                <form onSubmit={handleAssignmentOverride} className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3" aria-labelledby={`${titleId}-override-heading`}>
+                  <div>
+                    <h3 id={`${titleId}-override-heading`} className="text-sm font-semibold text-amber-950">{t('PM assignment override')}</h3>
+                    <p className="mt-1 text-xs leading-5 text-amber-900">{t('Use this only when the HOD handoff must be bypassed. A reason is recorded in task history.')}</p>
+                  </div>
+                  <label className="block text-xs font-medium text-amber-950">
+                    {t('Staff member')}
+                    <select value={delegationAssignee} onChange={event => setDelegationAssignee(event.target.value)} disabled={isSubmitting} className={cn(inputBase, 'mt-1 appearance-none px-2.5 py-2.5')}>
+                      <option value="">{t('Choose a team member')}</option>
+                      {delegationOptions.map(member => <option key={member.id} data-i18n-skip value={member.id}>{member.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-xs font-medium text-amber-950">
+                    {t('Override reason')}
+                    <textarea value={overrideReason} onChange={event => setOverrideReason(event.target.value)} maxLength={2000} rows={2} disabled={isSubmitting} className={cn(inputBase, 'mt-1 px-2.5 py-2.5')} />
+                  </label>
+                  <button type="submit" disabled={!delegationAssignee || !overrideReason.trim() || isSubmitting} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60">
+                    <Send className="h-4 w-4" /> {isSubmitting ? t('Saving...') : t('Override assignment')}
+                  </button>
                 </form>
               )}
 

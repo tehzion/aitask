@@ -15,10 +15,13 @@ const deleteUser = vi.fn();
 const createUser = vi.fn();
 let actor: { id: string; workspace_id: string; is_super_admin: boolean; role?: string };
 let projectManagerIds: string[];
+let rpcRequests: Array<{ name: string; args: Record<string, unknown> }>;
+const journalKeys = ['name', 'email', 'role', 'departments', 'companyName', 'customRoleId', 'customRoleName', 'memberId', 'registrationId', 'workerType', 'sendInvitation'];
 beforeEach(() => {
   users = []; completed = null; loseConfirmation = false; failBeforeCommit = false;
   actor = { id: 'boss', workspace_id: 'aitask-main', is_super_admin: true, role: 'Project Manager' };
   projectManagerIds = ['pm-a'];
+  rpcRequests = [];
   deleteUser.mockReset(); createUser.mockReset();
   createUser.mockImplementation(async ({ email, app_metadata }) => {
     const user = { id: 'prepared-auth', email, email_confirmed_at: '2026-10-08', app_metadata };
@@ -29,11 +32,17 @@ beforeEach(() => {
       listUsers: async () => ({ data: { users }, error: null }), createUser, deleteUser,
     } },
     rpc: async (name: string, args: Record<string, unknown>) => {
+      rpcRequests.push({ name, args });
       if (name === 'aitask_pm_upsert_project_member') {
         completed = { ok: true, memberId: 'shared-member', reused: users.some(user => user.id === args.p_auth_user_id) };
         return { data: completed, error: null };
       }
-      if (name === 'aitask_reserve_member_onboarding') return { data: { ok: true, result: completed }, error: null };
+      if (name === 'aitask_reserve_member_onboarding') {
+        // Match the real SQL allowlist; a permissive mock hid the projectIds
+        // contract mismatch until native Auth/REST UAT executed the handler.
+        if (Object.keys(args.p_payload as object).some(key => !journalKeys.includes(key))) return { data: null, error: { message: 'Invalid onboarding payload' } };
+        return { data: { ok: true, result: completed }, error: null };
+      }
       if (name !== 'aitask_finalize_member_invitation_v3') throw new Error('Unexpected RPC');
       if (failBeforeCommit) return { data: null, error: { message: 'network failure' } };
       const payload = args.p_payload as Record<string, unknown>;
@@ -51,6 +60,12 @@ beforeEach(() => {
 });
 const request = (changes: Record<string, unknown> = {}) => new Request('https://app.test/invite', { method: 'POST', headers: { Authorization: 'Bearer fake-actor', 'Content-Type': 'application/json' }, body: JSON.stringify({ commandId, name: 'Freelancer', email: 'free@example.test', role: 'Staff', departments: ['Designer'], workerType: 'freelancer', sendInvitation: false, password: 'temporary-password', ...changes }) });
 describe('actual onboarding Edge handler', () => {
+  it('keeps the Super Admin v3 journal payload compatible with its SQL contract', async () => {
+    expect((await handler(request({ projectIds: [] }))).status).toBe(201);
+    const journal = rpcRequests.filter(call => ['aitask_reserve_member_onboarding', 'aitask_finalize_member_invitation_v3'].includes(call.name));
+    expect(journal).toHaveLength(2);
+    for (const call of journal) expect(Object.keys(call.args.p_payload as object).sort()).toEqual([...journalKeys].sort());
+  });
   it('saves the requested worker type and replays one confirmed member', async () => {
     expect((await handler(request())).status).toBe(201);
     expect((await handler(request())).status).toBe(200);
@@ -98,6 +113,8 @@ describe('actual onboarding Edge handler', () => {
     expect(response.status).toBe(200);
     expect(createUser).not.toHaveBeenCalled();
     expect(completed).toMatchObject({ ok: true, memberId: 'shared-member' });
+    expect(rpcRequests.find(call => call.name === 'aitask_pm_upsert_project_member')?.args.p_project_ids).toEqual(['project-a']);
+    expect(rpcRequests.some(call => call.name === 'aitask_reserve_member_onboarding')).toBe(false);
   });
 
   it('rejects PM account creation outside HOD and Staff scope', async () => {

@@ -19,6 +19,10 @@ let loseConfirmation = false;
 const evidencePath = 'aitask-main/file-client/file-cycle/department-output.pdf';
 globalThis.fetch = async (...args) => {
   const response = await originalFetch(...args);
+  if (String(args[0]).includes('/rpc/aitask_execute_command')) {
+    const error = await response.clone().json().catch(() => ({}));
+    if (!response.ok || error.ok === false) console.error('[staff-saves] Local RPC rejection:', JSON.stringify({ status: response.status, code: error.code, error: error.error, message: error.message, details: error.details, hint: error.hint }));
+  }
   if (loseConfirmation && String(args[0]).includes('/rpc/aitask_execute_command')) {
     loseConfirmation = false;
     await response.arrayBuffer();
@@ -42,7 +46,7 @@ try {
   for (const status of ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled']) insert('task_status', { id: status, status });
   insert('client', { id: 'client', clientName: 'Save QA', createdBy: 'pm', createdAt: '2026-10-01', updatedAt: '2026-10-01' });
   const baseTask = { id: 'task', clientId: 'client', clientName: 'Save QA', title: 'Assigned work', description: '', serviceType: 'Design', department: 'Designer', assignedTo: 'staff', assignedBy: 'pm', createdBy: 'pm', startDate: '2026-10-01', dueDate: '2026-10-30', status: 'Pending', priority: 'Medium', completionPercentage: 0, isCompleted: false, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false, recurrenceFrequency: 'None', visibility: 'internal', serviceCycleId: 'cycle', deliverableId: 'deliverable' };
-  insert('project', { id: 'curated', clientName: 'Save QA', projectName: 'Curated', createdBy: 'boss', departments: ['Designer'], createdAt: '2026-10-01', updatedAt: '2026-10-01' });
+  insert('project', { id: 'curated', clientId: 'client', clientName: 'Save QA', projectName: 'Curated', createdBy: 'boss', projectManagerIds: ['pm'], hodMemberIds: ['hod'], staffMemberIds: ['staff', 'other'], departments: ['Designer'], createdAt: '2026-10-01', updatedAt: '2026-10-01' });
   insert('task', baseTask);
   insert('task', { ...baseTask, id: 'delegate', title: 'HOD assigned work', assignedTo: 'hod', serviceCycleId: undefined, deliverableId: undefined });
   insert('service_cycle', { id: 'cycle', clientId: 'client', clientName: 'Save QA', planId: 'plan', planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Published', publishedAt: '2026-10-01', currency: 'MYR', serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' });
@@ -99,6 +103,7 @@ try {
   assert.equal(useStore.getState().tasks.find(item => item.id === 'task').completionPercentage, 60);
   await save('HOD approval', useStore.getState().updateTaskStatus('task', 'Approved'), 'task.update');
   await login('pm');
+  assert.equal(useStore.getState().projects.some(project => project.id === 'curated' && project.projectManagerIds.includes('pm')), true, 'PM completion fixture must belong to the assigned portfolio');
   assert.equal(useStore.getState().tasks.find(item => item.id === 'task').completionPercentage, 80);
   await save('PM final completion and derived progress', useStore.getState().updateTaskStatus('task', 'Completed'), 'task.update');
   await login('staff');

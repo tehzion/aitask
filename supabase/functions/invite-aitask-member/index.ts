@@ -363,8 +363,10 @@ const handleRequest = async (request: Request): Promise<Response> => {
     customRoleName = typeof customRole.data?.name === 'string' ? customRole.data.name : null;
   }
 
+  // The v3 Super Admin journal has a fixed payload schema. Project assignments
+  // belong only to the separate scoped-PM RPC below, not this reservation.
   const payload = { name, email, role, departments, companyName, customRoleId, customRoleName,
-    memberId: memberId || null, registrationId: registrationId || null, workerType, sendInvitation, projectIds };
+    memberId: memberId || null, registrationId: registrationId || null, workerType, sendInvitation };
   const retryError = (message: string) => json({ code: 'ONBOARDING_RETRY_REQUIRED', error: message, commandId }, 409);
   if (!scopedProjectManager) {
     const { data: reserved, error: reserveError } = await adminClient.rpc('aitask_reserve_member_onboarding', {

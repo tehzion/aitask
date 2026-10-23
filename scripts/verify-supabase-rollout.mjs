@@ -84,6 +84,14 @@ const run = (command, args, options = {}) => {
   if (result.status !== 0) {
     if (options.capture) {
       if (result.stdout && !options.suppressStdoutOnError) process.stdout.write(result.stdout);
+      if (result.stdout && options.suppressStdoutOnError) {
+        // Newer CLI versions emit startup failures on stdout alongside local
+        // credentials. Retain only failure lines and redact credential formats.
+        const failures = result.stdout.split(/\r?\n/).filter(line => /error|failed|unhealthy|timed out|already allocated|address.*use/i.test(line));
+        for (const line of failures) console.error(line
+          .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[redacted JWT]')
+          .replace(/sb_(?:secret|publishable)_[A-Za-z0-9_-]+/g, '[redacted API key]'));
+      }
       if (result.stderr) process.stderr.write(result.stderr);
     }
     throw new Error(`${basename(command)} ${args.join(' ')} exited with ${result.status}.`);
@@ -136,7 +144,9 @@ const supabase = (...args) => run(supabaseCli, ['--workdir', validationRoot, ...
 
 try {
   console.log(`[rollout] Validating ${validatedMigrations.join(', ')} in ${validationRoot}`);
-  run(supabaseCli, ['--workdir', validationRoot, 'start', '--exclude', 'realtime,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor'], {
+  const excludedServices = ['imgproxy', 'postgres-meta', 'studio', 'edge-runtime', 'logflare', 'vector', 'supavisor'];
+  if (process.env.AITASK_PHASE5_UAT !== 'true') excludedServices.unshift('realtime');
+  run(supabaseCli, ['--workdir', validationRoot, 'start', '--exclude', excludedServices.join(',')], {
     cwd: validationRoot, capture: true, suppressStdoutOnError: true,
   });
   // Startup output includes disposable service keys; never retain it in CI artifacts.
@@ -177,6 +187,14 @@ try {
     AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
   } });
   run(process.execPath, [join(projectRoot, 'scripts', 'verify-hod-output-ui.mjs')], { env: {
+    ...process.env, AITASK_LOCAL_TEST_URL: status.API_URL, AITASK_LOCAL_TEST_PUBLIC: status.PUBLISHABLE_KEY || status.ANON_KEY,
+    AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
+  } });
+  run(process.execPath, [join(projectRoot, 'scripts', 'verify-security-audit-leads.mjs')], { env: {
+    ...process.env, AITASK_LOCAL_TEST_URL: status.API_URL, AITASK_LOCAL_TEST_PUBLIC: status.PUBLISHABLE_KEY || status.ANON_KEY,
+    AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
+  } });
+  if (process.env.AITASK_PHASE5_UAT === 'true') run(process.execPath, [join(projectRoot, 'scripts', 'verify-phase5-uat.mjs')], { env: {
     ...process.env, AITASK_LOCAL_TEST_URL: status.API_URL, AITASK_LOCAL_TEST_PUBLIC: status.PUBLISHABLE_KEY || status.ANON_KEY,
     AITASK_LOCAL_TEST_SECRET: status.SECRET_KEY || status.SERVICE_ROLE_KEY, AITASK_LOCAL_TEST_DB: databaseContainer,
   } });

@@ -434,6 +434,20 @@ export const parseTask = (value: unknown): Task | null => {
     department,
     assignedTo,
     createdBy,
+    responsibleHodId: optionalText(value.responsibleHodId, 160),
+    assignmentState: ['needs_hod', 'pending_hod', 'assigned_staff'].includes(cleanText(value.assignmentState, 30))
+      ? cleanText(value.assignmentState, 30) as Task['assignmentState']
+      : undefined,
+    assignmentOverride: isRecord(value.assignmentOverride)
+      && cleanText(value.assignmentOverride.actorId, 160)
+      && cleanText(value.assignmentOverride.reason, 2000)
+      && safeIsoTimestamp(value.assignmentOverride.createdAt)
+      ? {
+          actorId: cleanText(value.assignmentOverride.actorId, 160),
+          reason: cleanText(value.assignmentOverride.reason, 2000),
+          createdAt: safeIsoTimestamp(value.assignmentOverride.createdAt)!,
+        }
+      : undefined,
     assignedBy: optionalText(value.assignedBy, 160),
     assignedAt: safeIsoTimestamp(value.assignedAt),
     startDate: safeIsoDate(value.startDate, today),

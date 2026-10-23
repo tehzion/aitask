@@ -1,0 +1,31 @@
+{
+  "manifestVersion": "2026-10-23.1",
+  "manifestKind": "aitask-release-candidate",
+  "supersedes": "aitask_release_manifest_20261021_monthly_renewal_production.json",
+  "immutable": false,
+  "capturedAt": "2026-10-23T00:00:00Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "Local disposable validation candidate only; production deployment is still gated through 20261023120000_pm_hod_staff_assignment_state.",
+  "validatedMigrationTail": [
+    "20261019222619_pm_project_approval_authority",
+    "20261019223816_explicit_project_membership_scope",
+    "20261020131544_project_management_completion",
+    "20261021110000_monthly_plan_renewal_integrity",
+    "20261023120000_pm_hod_staff_assignment_state"
+  ],
+  "pendingProductionMigrations": [
+    "20261023120000_pm_hod_staff_assignment_state"
+  ],
+  "productionVerification": {
+    "historyAligned": false,
+    "historyThrough": "20261021110000_monthly_plan_renewal_integrity",
+    "migrationResolution": {
+      "status": "pending_local_validation",
+      "repositoryToProduction": []
+    }
+  },
+  "qualityGates": {
+    "applicationChecks": "PASS: pnpm check, pnpm test, pnpm build, pnpm verify:i18n:strict, pnpm verify:migrations",
+    "disposableSupabaseStack": "PENDING: requires local Docker daemon"
+  }
+}
