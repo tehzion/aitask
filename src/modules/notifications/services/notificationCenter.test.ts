@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AppNotification, User } from '../types';
+import type { AppNotification, User } from '../../../types';
 import {
   classifyNotification,
   getNotificationDateSection,

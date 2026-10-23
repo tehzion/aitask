@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AppNotification } from '../types';
+import type { AppNotification } from '../../../types';
 import {
   captureNotificationReadState,
   createNotificationMutationLock,

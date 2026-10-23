@@ -1,7 +1,7 @@
-import SystemMessage from './SystemMessage';
-import type { MessageDescriptor } from '../lib/messages';
+import SystemMessage from '../../../components/SystemMessage';
+import type { MessageDescriptor } from '../../../lib/messages';
 import { useSoundNotifications } from '../hooks/useSoundNotifications';
-import { presentNotification } from '../lib/notificationPresentation';
+import { presentNotification } from '../services/notificationPresentation';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -13,15 +13,15 @@ import {
   Info,
   X,
 } from 'lucide-react';
-import { AppNotification, User } from '../types';
-import { getUnreadNotifications } from '../lib/access';
-import { getIncomingUnreadNotificationIds, seedSeenNotificationIds } from '../lib/notificationPopups';
-import { notificationRouteToPath } from '../lib/security';
-import { cn } from '../lib/utils';
+import { AppNotification, User } from '../../../types';
+import { getUnreadNotifications } from '../../../lib/access';
+import { getIncomingUnreadNotificationIds, seedSeenNotificationIds } from '../services/notificationPopups';
+import { notificationRouteToPath } from '../../../lib/security';
+import { cn } from '../../../lib/utils';
 import { NotificationReadActions } from '../hooks/useNotificationReadActions';
-import { useAppNoticeState } from '../hooks/useAppNoticeState';
-import { useI18n } from './I18nProvider';
-import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
+import { useAppNoticeState } from '../../../hooks/useAppNoticeState';
+import { useI18n } from '../../../components/I18nProvider';
+import { formatLocalizedDistanceToNow } from '../../../lib/relativeTime';
 
 interface NotificationPopupHostProps {
   currentUser: User | null;
@@ -78,12 +78,16 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const presentation = presentNotification(notification, locale);
+  const isActionNotification = notification.importance === 'action';
 
   useEffect(() => {
-    if (hovered || focused || isMarkingRead || isReadUpdating || readError) return;
+    // Action notifications represent work that still needs a user's decision.
+    // They must not disappear while the user is reading another system notice
+    // or recovering connectivity; dismissing them remains an explicit action.
+    if (isActionNotification || hovered || focused || isMarkingRead || isReadUpdating || readError) return;
     const timeout = window.setTimeout(() => onDismiss(notification.id), 6000);
     return () => window.clearTimeout(timeout);
-  }, [notification.id, onDismiss, hovered, focused, isMarkingRead, isReadUpdating, readError]);
+  }, [notification.id, onDismiss, isActionNotification, hovered, focused, isMarkingRead, isReadUpdating, readError]);
 
   const handleMarkRead = async () => {
     if (isMarkingRead || isReadUpdating) return;

@@ -1,5 +1,5 @@
 import SystemMessage from './SystemMessage';
-import { notificationIconType } from '../lib/notificationCenter';
+import { notificationIconType } from '../modules/notifications/services/notificationCenter';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
@@ -10,7 +10,7 @@ import { IconButton } from './ui';
 import { inputBase } from './uiTokens';
 import { cn } from '../lib/utils';
 import { getEffectiveRoleName, getUnreadNotifications, isBossKoo } from '../lib/access';
-import { NotificationReadActions } from '../hooks/useNotificationReadActions';
+import { NotificationReadActions } from '../modules/notifications/hooks/useNotificationReadActions';
 import { getSoundEnabled, setSoundEnabled, SOUND_PREF_EVENT } from '../lib/sounds';
 import { notificationRouteToPath } from '../lib/security';
 import { shouldUseSecureSupabase } from '../lib/supabaseClient';
@@ -19,7 +19,7 @@ import { LanguageSwitcher, useI18n } from './I18nProvider';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import GlobalSearchResults from './GlobalSearchResults';
 
-const NotificationPreviewText = React.lazy(() => import('./NotificationPreviewText'));
+const NotificationPreviewText = React.lazy(() => import('../modules/notifications/components/NotificationPreviewText'));
 
 interface NavbarProps {
   onMenuClick: () => void;

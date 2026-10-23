@@ -1,6 +1,6 @@
-import type { NotificationCategory, AppNotification } from '../types';
-import { type AppLocale } from './i18n';
-import { getLocalizedStatus, getLocalizedRole } from './localeLabels';
+import type { NotificationCategory, AppNotification } from '../../../types';
+import { type AppLocale } from '../../../lib/i18n';
+import { getLocalizedStatus, getLocalizedRole } from '../../../lib/localeLabels';
 import { classifyNotification, notificationCategoryLabels, notificationIconType } from './notificationCenter';
 
 const titles: Record<string, string> = {

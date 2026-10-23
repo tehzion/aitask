@@ -1,22 +1,23 @@
 {
-  "manifestVersion": "2026-10-23.1",
+  "manifestVersion": "2026-10-23.2",
   "manifestKind": "aitask-release-candidate",
   "supersedes": "aitask_release_manifest_20261021_monthly_renewal_production.json",
   "immutable": false,
   "capturedAt": "2026-10-23T00:00:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "Production verified through repository 20261023170000_task_workflow_action_guards via connector-generated migration aliases.",
+  "status": "Production verified through repository 20261023180000_bind_service_command_entity_types via connector-generated migration aliases.",
   "validatedMigrationTail": [
     "20261020131544_project_management_completion",
     "20261021110000_monthly_plan_renewal_integrity",
     "20261023120000_pm_hod_staff_assignment_state",
     "20261023150000_hod_task_execution_permissions",
-    "20261023170000_task_workflow_action_guards"
+    "20261023170000_task_workflow_action_guards",
+    "20261023180000_bind_service_command_entity_types"
   ],
   "pendingProductionMigrations": [],
   "productionVerification": {
     "historyAligned": false,
-    "historyThrough": "20261023063344_task_workflow_action_guards",
+    "historyThrough": "20261023154255_bind_service_command_entity_types",
     "migrationResolution": {
       "status": "connector_aliases_verified",
       "repositoryToProduction": [
@@ -39,12 +40,16 @@
         {
           "repository": "20261023170000_task_workflow_action_guards",
           "production": "20261023063344_task_workflow_action_guards"
+        },
+        {
+          "repository": "20261023180000_bind_service_command_entity_types",
+          "production": "20261023154255_bind_service_command_entity_types"
         }
       ]
     }
   },
   "qualityGates": {
-    "applicationChecks": "PASS: pnpm check, pnpm test, pnpm build, pnpm verify:i18n:strict, pnpm verify:migrations",
+    "applicationChecks": "PASS: pnpm check, pnpm lint, pnpm test (120 files / 919 tests), pnpm build, pnpm verify:bundle, pnpm verify:i18n, pnpm verify:migrations, focused accessibility/app smoke (2 passed)",
     "disposableSupabaseStack": "PENDING: requires local Docker daemon"
   }
 }

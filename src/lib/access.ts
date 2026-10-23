@@ -66,7 +66,7 @@ const ownedProjectIds = (user: User, scope: VisibilityScope, customRoles: Custom
 export const isProjectAssignedToUser = (user: User | null | undefined, project: Project, customRoles: CustomRole[] = []) => {
   if (!user) return false;
   if (isBossKoo(user)) return true;
-  if (user.role === 'Project Manager') {
+  if (user.role === 'Project Manager' && !isBossKoo(user)) {
     return project.projectManagerIds !== undefined
       ? project.projectManagerIds.includes(user.id)
       : project.createdBy === user.id;
@@ -802,6 +802,37 @@ export const getVisibleTasks = (
   scope: VisibilityScope = {}
 ) => {
   if (!user) return [];
+  // Project Manager visibility is evaluated for every task on the dashboard,
+  // task list, and delivery tracker. The generic predicate is intentionally
+  // safe for one-off checks, but rebuilding portfolio/client Sets inside that
+  // predicate turns a large task list into an avoidable O(tasks × projects)
+  // operation. Build the same authorization inputs once for this collection
+  // operation; the rules remain identical to canViewTask below.
+  if (user.role === 'Project Manager' && !isBossKoo(user)) {
+    const ownedProjects = new Set(
+      (scope.projects || [])
+        .filter(project => isProjectAssignedToUser(user, project, customRoles))
+        .map(project => project.id),
+    );
+    const ownedClientIds = new Set(
+      (scope.clients || [])
+        .filter(client => client.createdBy === user.id && Boolean(client.id))
+        .map(client => client.id),
+    );
+    const ownedClientKeys = new Set(
+      (scope.clients || [])
+        .filter(client => client.createdBy === user.id)
+        .map(client => getClientKey(client.clientName))
+        .filter(Boolean),
+    );
+    return tasks.filter(task => {
+      if (task.projectId) return ownedProjects.has(task.projectId);
+      return task.assignedTo === user.id
+        || (!task.assignedTo && task.assignedBy === user.id)
+        || task.createdBy === user.id
+        || (task.clientId ? ownedClientIds.has(task.clientId) : ownedClientKeys.has(getClientKey(task.clientName)));
+    });
+  }
   return tasks.filter(task => canViewTask(user, task, customRoles, scope));
 };
 
@@ -815,14 +846,14 @@ export const getVisibleProjects = (
   if (!user) return [];
   if (user.role === 'Client') return projects.filter(project => getClientKey(project.clientName) === getClientKey(user.companyName));
   if (isBossKoo(user)) return projects;
+  if (user.role === 'Project Manager') {
+    return projects.filter(project => isProjectAssignedToUser(user, project));
+  }
   const visibleProjectIds = new Set(
     getVisibleTasks(user, tasks, customRoles, scope)
       .map(task => task.projectId)
       .filter((id): id is string => Boolean(id))
   );
-  if (user.role === 'Project Manager') {
-    return projects.filter(project => isProjectAssignedToUser(user, project));
-  }
   if (['Staff', 'HOD'].includes(user.role)) {
     return projects.filter(project => isHodUser(user, customRoles) && project.hodMemberIds !== undefined
       ? project.hodMemberIds.includes(user.id)

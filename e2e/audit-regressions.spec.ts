@@ -122,8 +122,8 @@ test('unknown links show a localized recovery page', async ({ page }) => {
 
 test('a delayed All pagination response cannot contaminate the Unread filter', async ({ page }) => {
   // Substitute only the feed transport to deterministically order its responses.
-  await page.route('**/src/lib/notificationFeed.ts', route => route.fulfill({ contentType: 'application/javascript', body: `
-    import { loadNotificationFeedPage as original } from '/src/lib/notificationFeed.ts?audit-original';
+  await page.route('**/src/modules/notifications/services/notificationFeed.ts', route => route.fulfill({ contentType: 'application/javascript', body: `
+    import { loadNotificationFeedPage as original } from '/src/modules/notifications/services/notificationFeed.ts?audit-original';
     export const loadNotificationFeedPage = (...args) => window.auditFeed ? window.auditFeed(...args) : original(...args);
   ` }));
   await seedPlan(page);

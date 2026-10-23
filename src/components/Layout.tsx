@@ -7,7 +7,7 @@ import { useShallow } from 'zustand/react/shallow';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import { isPendingMutationResolution, useStore } from '../store';
-import { useNotificationReadActions } from '../hooks/useNotificationReadActions';
+import { useNotificationReadActions } from '../modules/notifications/hooks/useNotificationReadActions';
 import { canAccessPath, canCreateTasks, getUnreadNotifications } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { X, AlertCircle, RefreshCw, RotateCcw, Menu } from 'lucide-react';
@@ -23,7 +23,7 @@ const CreateTaskModal = React.lazy(() => import('./CreateTaskModal'));
 const KeyboardShortcutsDialog = React.lazy(() => import('./KeyboardShortcutsDialog'));
 const CommandPalette = React.lazy(() => import('./CommandPalette'));
 const ReleaseNotice = React.lazy(() => import('./ReleaseNotice'));
-const NotificationPopupHost = React.lazy(() => import('./NotificationPopupHost').then(module => ({ default: module.NotificationPopupHost })));
+const NotificationPopupHost = React.lazy(() => import('../modules/notifications/components/NotificationPopupHost').then(module => ({ default: module.NotificationPopupHost })));
 const ToastContainer = React.lazy(() => import('./Toast').then(module => ({ default: module.ToastContainer })));
 
 export interface LayoutOutletContext {
@@ -390,7 +390,7 @@ const Layout: React.FC = () => {
         </nav>
       </div>
 
-      {currentUser && !backend.isLoading && backend.status !== 'loading' && (
+      {currentUser && !backend.isLoading && (
         <React.Suspense fallback={null}>
           <NotificationPopupHost
             currentUser={currentUser}
@@ -400,7 +400,7 @@ const Layout: React.FC = () => {
           />
         </React.Suspense>
       )}
-      {currentUser && !backend.isLoading && backend.status !== 'loading' && (
+      {currentUser && !backend.isLoading && (
         <React.Suspense fallback={null}>
           <ReleaseNotice currentUser={currentUser} isReady />
         </React.Suspense>

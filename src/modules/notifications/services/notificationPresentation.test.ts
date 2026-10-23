@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AppNotification } from '../types';
+import type { AppNotification } from '../../../types';
 import { presentNotification, notificationCategoryLabel } from './notificationPresentation';
 import { getNotificationImportance } from './notificationCenter';
 const notification = (title: string, message: string): AppNotification => ({ id: 'notice', title, message, route: { page: 'tasks', entityId: 'task' }, targetUserId: 'hod', createdAt: '2026-10-14T00:00:00Z', isRead: false, iconType: 'alert' });

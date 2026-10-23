@@ -1,19 +1,19 @@
-import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../../../lib/workspaceSession';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getUnreadNotifications } from '../lib/access';
+import { getUnreadNotifications } from '../../../lib/access';
 import {
   captureNotificationReadState,
   createNotificationMutationLock,
   restoreNotificationReadState,
-} from '../lib/notificationReads';
+} from '../services/notificationReads';
 import {
   BACKEND_UPGRADE_REQUIRED_MESSAGE,
   setSecureNotificationsRead,
-} from '../lib/secureWorkspace';
-import { shouldUseSecureSupabase } from '../lib/supabaseClient';
-import { useStore } from '../store';
-import { useToastStore } from '../store/useToastStore';
-import { msg, type MessageDescriptor } from '../lib/messages';
+} from '../../../lib/secureWorkspace';
+import { shouldUseSecureSupabase } from '../../../lib/supabaseClient';
+import { useStore } from '../../../store';
+import { useToastStore } from '../../../store/useToastStore';
+import { msg, type MessageDescriptor } from '../../../lib/messages';
 
 export interface NotificationReadActions {
   markRead: (notificationIds: string | string[]) => Promise<boolean>;

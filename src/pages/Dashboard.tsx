@@ -247,28 +247,35 @@ const Dashboard: React.FC = () => {
       : <>{t('Welcome back,')} <span data-i18n-skip>{currentUser?.name}</span>{t('! Your live workspace is ready.')}</>;
 
   const stats = useMemo(() => {
-    
-    const activeProjects = visibleProjects.length;
-      
-    const pendingTasks = tasks.filter(isTaskOpen).length;
-    const completedTasks = tasks.filter(isTaskCompleted).length;
-    
-    const overdueTasks = tasks.filter(t => {
-      const dueDate = parseOptionalDate(t.dueDate);
-      return Boolean(dueDate && isTaskOpen(t) && isBefore(dueDate, today));
-    }).length;
-    
-    const dueTodayTasks = tasks.filter(t => {
-      const dueDate = parseOptionalDate(t.dueDate);
-      return Boolean(dueDate && isTaskOpen(t) && isSameDay(dueDate, today));
-    }).length;
-    
-    const dueThisWeekTasks = tasks.filter(t => {
-      const dueDate = parseOptionalDate(t.dueDate);
-      return Boolean(dueDate && isTaskOpen(t) && isWithinInterval(dueDate, getWorkWeekRange(today)));
-    }).length;
+    const weekRange = getWorkWeekRange(today);
+    let pendingTasks = 0;
+    let completedTasks = 0;
+    let overdueTasks = 0;
+    let dueTodayTasks = 0;
+    let dueThisWeekTasks = 0;
 
-    return { activeProjects, pendingTasks, completedTasks, overdueTasks, dueTodayTasks, dueThisWeekTasks };
+    // Keep the dashboard metrics in one pass. In particular, calculate the
+    // work-week range once instead of once per task on large workspaces.
+    tasks.forEach(task => {
+      const open = isTaskOpen(task);
+      if (open) pendingTasks += 1;
+      if (isTaskCompleted(task)) completedTasks += 1;
+      if (!open) return;
+      const dueDate = parseOptionalDate(task.dueDate);
+      if (!dueDate) return;
+      if (isBefore(dueDate, today)) overdueTasks += 1;
+      if (isSameDay(dueDate, today)) dueTodayTasks += 1;
+      if (isWithinInterval(dueDate, weekRange)) dueThisWeekTasks += 1;
+    });
+
+    return {
+      activeProjects: visibleProjects.length,
+      pendingTasks,
+      completedTasks,
+      overdueTasks,
+      dueTodayTasks,
+      dueThisWeekTasks,
+    };
   }, [tasks, visibleProjects, today]);
 
   const tasksByTeamData = useMemo(() => {

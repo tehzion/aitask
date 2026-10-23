@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { isBefore } from 'date-fns/isBefore';
 import { isToday } from 'date-fns/isToday';
 import { useStore } from '../store';
+import { useShallow } from 'zustand/react/shallow';
 import { canViewServicePrices, getClientKey, getDashboardPersona, getOwnedPortfolioClientKeys, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { formatMoney } from '../lib/serviceManagement';
 import { parseOptionalDate } from '../lib/utils';
@@ -93,7 +94,18 @@ const CompanyTaskActivity = ({ activity }: { activity: ReturnType<typeof getComp
 };
 
 const ServiceRoleDashboard = () => {
-  const store = useStore();
+  const store = useStore(useShallow(state => ({
+    currentUser: state.currentUser,
+    rolePermissions: state.rolePermissions,
+    tasks: state.tasks,
+    clients: state.clients,
+    projects: state.projects,
+    clientPlans: state.clientPlans,
+    servicePricingSnapshots: state.servicePricingSnapshots,
+    deliverables: state.deliverables,
+    serviceCycles: state.serviceCycles,
+    users: state.users,
+  })));
   const { locale, t } = useI18n();
   const persona = getDashboardPersona(store.currentUser);
   const canSeePrices = canViewServicePrices(store.currentUser, store.rolePermissions);

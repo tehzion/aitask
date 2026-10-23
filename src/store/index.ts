@@ -148,7 +148,7 @@ import {
 } from '../lib/departments';
 import { isTaskCompleted, isTaskOpen, resolveTaskCompletedAt } from '../lib/taskCompletion';
 import { isWorkflowTask, prepareWorkflowTasks, workflowTransitionError } from '../lib/workflowReview';
-import { enrichNotificationMetadata } from '../lib/notificationCenter';
+import { enrichNotificationMetadata } from '../modules/notifications/services/notificationCenter';
 import {
   addDaysClamped,
   applyPricingSnapshot,

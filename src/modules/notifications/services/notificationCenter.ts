@@ -5,8 +5,8 @@ import type {
   NotificationCategory,
   NotificationImportance,
   User,
-} from '../types';
-import { isNotificationReadByUser } from './access';
+} from '../../../types';
+import { isNotificationReadByUser } from '../../../lib/access';
 
 export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   'assignment',

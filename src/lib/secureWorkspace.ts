@@ -1625,7 +1625,7 @@ export type SecureNotificationRuntime = ReturnType<typeof notificationRuntime>;
 
 export const loadSecureNotificationPage = async (query: NotificationFeedQuery = {}): Promise<NotificationFeedPage> => {
   const sessionToken = captureWorkspaceSession();
-  const module = await import('./secureNotifications');
+  const module = await import('../modules/notifications/services/secureNotifications');
   assertWorkspaceSession(sessionToken);
   return module.createSecureNotifications(notificationRuntime()).loadSecureNotificationPage(query);
 };
@@ -1633,7 +1633,7 @@ export const loadSecureNotificationPage = async (query: NotificationFeedQuery = 
 export const setSecureNotificationsRead = async (notificationIds: string[], isRead: boolean, markAll = false): Promise<MutationResult<NotificationReadResponse>> => {
   const sessionToken = captureWorkspaceSession();
   try {
-    const module = await import('./secureNotifications');
+    const module = await import('../modules/notifications/services/secureNotifications');
     if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
     return module.createSecureNotifications(notificationRuntime()).setSecureNotificationsRead(notificationIds, isRead, markAll);
   } catch {

@@ -407,10 +407,13 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(desktopNotificationPreview.getByText('Center QA 6', { exact: true })).toHaveCount(0);
   await headerNotificationButton.click();
 
-  await page.getByLabel('Search notifications').fill('Center QA 7');
+  const notificationSearch = page.getByLabel('Search notifications');
+  await notificationSearch.fill('Center QA 7');
+  await expect.poll(() => new URL(page.url()).searchParams.get('search')).toBe('Center QA 7');
   await expect(page.getByText('Center QA 7', { exact: true })).toBeVisible();
   await expect(page.getByText('Center QA 1', { exact: true })).toHaveCount(0);
-  await page.getByLabel('Search notifications').fill('');
+  await notificationSearch.fill('');
+  await expect.poll(() => new URL(page.url()).searchParams.get('search')).toBeNull();
   await page.getByLabel('Filter notification category').selectOption('status');
   await expect(page.getByText('Center QA 1', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Unread (6)' }).click();
@@ -790,6 +793,10 @@ test('first login reaches the app and critical responsive routes remain usable',
         clientReview: false,
       },
     };
+    stored.state.users = [
+      ...stored.state.users.filter((user: { id: string }) => user.id !== stored.state.currentUser.id),
+      stored.state.currentUser,
+    ];
     localStorage.setItem(
       'aitask:release-notice:2026-08-service-operations:e2e-task-only-role',
       'acknowledged',

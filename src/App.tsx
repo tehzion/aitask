@@ -1,249 +1,30 @@
-import NavigationGuard from './components/NavigationGuard';
-import NotFound from './components/NotFound';
-import { configurePendingWork, hasBlockingUnsavedChanges, hasUnsavedChanges, subscribeUnsavedChanges } from './lib/unsavedChanges';
-import React, { useEffect } from 'react';
-import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { clearWorkspaceSession, startBackendAutoSync, stopBackendAutoSync, useStore } from './store';
-import { canAccessPath } from './lib/access';
-import { hasPasswordResetBypass } from './lib/auth';
-import { RefreshCw, WifiOff } from 'lucide-react';
-import { shouldUseSecureSupabase, supabase } from './lib/supabaseClient';
-import { useAppNoticeState } from './hooks/useAppNoticeState';
+import React from 'react';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { useI18n } from './components/I18nProvider';
-import { msg } from './lib/messages';
-import { useMonthlyServiceCycles } from './hooks/useMonthlyServiceCycles';
 
-const Layout = React.lazy(() => import('./components/Layout'));
-const Dashboard = React.lazy(() => import('./pages/Dashboard'));
-const AccessDenied = React.lazy(() => import('./components/AccessDenied'));
-const Login = React.lazy(() => import('./pages/Login'));
-const Calendar = React.lazy(() => import('./pages/Calendar'));
-const DeliveryTracker = React.lazy(() => import('./pages/DeliveryTracker'));
-const ClientWorkspace = React.lazy(() => import('./pages/ClientWorkspace'));
-const Companies = React.lazy(() => import('./pages/Clients'));
-const Reports = React.lazy(() => import('./pages/Reports'));
-const Approvals = React.lazy(() => import('./pages/Approvals'));
-const Settings = React.lazy(() => import('./pages/Settings'));
-const AccountPassword = React.lazy(() => import('./pages/AccountPassword'));
-const Feedback = React.lazy(() => import('./pages/Feedback'));
-const FeedbackResults = React.lazy(() => import('./pages/FeedbackResults'));
-const Notifications = React.lazy(() => import('./pages/Notifications'));
-const Tasks = React.lazy(() => import('./pages/Tasks'));
-const Help = React.lazy(() => import('./pages/Help'));
+// Keep the authenticated runtime (store, Supabase client, and workspace
+// components) out of the entry graph. The runtime is still loaded immediately
+// for the application shell, but public entry points can paint the loading
+// state without parsing the full workspace store first.
+const AppContent = React.lazy(() => import('./app/AppContent'));
 
-const RouteLoading = () => {
+const AppLoading = () => {
   const { t } = useI18n();
   return (
-  <div className="flex min-h-[40vh] items-center justify-center px-4 text-sm font-medium text-slate-500" role="status">
-    {t('common.loading')}
-  </div>
+    <div className="flex min-h-[40vh] items-center justify-center px-4 text-sm font-medium text-slate-500" role="status">
+      {t('common.loading')}
+    </div>
   );
 };
 
-const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const currentUser = useStore((state) => state.currentUser);
-  const backend = useStore((state) => state.backend);
-  const location = useLocation();
-  if (backend.isLoading) return <RouteLoading />;
-  if (!currentUser) {
-    const returnTo = `${location.pathname}${location.search}${location.hash}`;
-    return <Navigate to="/login" replace state={{ returnTo }} />;
-  }
-  if (currentUser.mustResetPassword && !hasPasswordResetBypass(currentUser.id) && location.pathname !== '/settings') {
-    return <Navigate to="/settings" replace />;
-  }
-  return <>{children}</>;
-};
+const router = createBrowserRouter([{ path: '*', element: <AppContent /> }]);
 
-const RoleRoute: React.FC<{ path: string; children: React.ReactNode }> = ({ path, children }) => {
-  const currentUser = useStore((state) => state.currentUser);
-  const rolePermissions = useStore((state) => state.rolePermissions);
-  const isRequiredAccountSetup = path === '/settings'
-    && Boolean(currentUser?.mustResetPassword);
-  if (canAccessPath(currentUser, path, rolePermissions) || isRequiredAccountSetup) return <>{children}</>;
+function App() {
   return (
-    <AccessDenied
-      message={path === '/approvals'
-        ? msg('shell.approvalsRestricted')
-        : undefined}
-    />
-  );
-};
-
-function AppContent() {
-  useMonthlyServiceCycles();
-  const { t } = useI18n();
-  const { isOnline, isUpdateReady } = useAppNoticeState();
-  const [hasDrafts, setHasDrafts] = React.useState(hasUnsavedChanges);
-  useEffect(() => {
-    configurePendingWork(() => {
-      const backend = useStore.getState().backend;
-      return backend.hasLocalChanges || backend.pendingMutations > 0 || backend.isSaving;
-    });
-    const update = () => setHasDrafts(hasUnsavedChanges());
-    const unsubscribe = subscribeUnsavedChanges(update);
-    const unsubscribeStore = useStore.subscribe(update);
-    const beforeUnload = (event: BeforeUnloadEvent) => { if (hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; } };
-    const beforeNavigate = (event: MouseEvent) => {
-      const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
-      if (!(anchor instanceof HTMLAnchorElement) || anchor.target === '_blank' || anchor.hasAttribute('download') || !hasUnsavedChanges()) return;
-      if (anchor.href === window.location.href || new URL(anchor.href).origin === window.location.origin) return;
-      if (hasBlockingUnsavedChanges() || !window.confirm(t('feedback.leaveUnsaved'))) { event.preventDefault(); event.stopPropagation(); }
-    };
-    window.addEventListener('beforeunload', beforeUnload);
-    document.addEventListener('click', beforeNavigate, true);
-    update();
-    return () => { unsubscribe(); unsubscribeStore(); window.removeEventListener('beforeunload', beforeUnload); document.removeEventListener('click', beforeNavigate, true); };
-  }, [t]);
-  const initializeBackend = useStore(state => state.initializeBackend);
-  const sessionMemberId = useStore(state => state.currentUser?.id);
-  useEffect(() => {
-    if (sessionMemberId) startBackendAutoSync(); else stopBackendAutoSync();
-    return stopBackendAutoSync;
-  }, [sessionMemberId]);
-  const forceSyncMockData = useStore(state => state._forceSyncMockData);
-  const sendDueDateReminders = useStore(state => state.sendDueDateReminders);
-
-  useEffect(() => {
-    if (!shouldUseSecureSupabase()) return;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session?.user) {
-        clearWorkspaceSession();
-        return;
-      }
-
-      const currentUser = useStore.getState().currentUser;
-      if (currentUser && currentUser.authUserId !== session.user.id) {
-        clearWorkspaceSession();
-        useStore.setState((state) => ({
-          currentUser: null,
-          backend: {
-            ...state.backend,
-            status: 'loading',
-            isLoading: true,
-            message: t('shell.refreshingAccount'),
-          },
-        }));
-        queueMicrotask(() => void useStore.getState().initializeBackend());
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [t]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const boot = async () => {
-      if (['/feedback', '/feedback/results'].includes(window.location.pathname)) return;
-      await initializeBackend();
-      if (!isMounted) return;
-      startBackendAutoSync();
-      forceSyncMockData();
-      let store = useStore.getState();
-      if (!shouldUseSecureSupabase()) {
-        sendDueDateReminders();
-        store = useStore.getState();
-      }
-      if (store.backend.hasLocalChanges && !store.backend.hasRemoteUpdate) {
-        await store.commitPendingMutation();
-      }
-    };
-
-    void boot();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [forceSyncMockData, initializeBackend, sendDueDateReminders]);
-
-  useEffect(() => {
-    if (shouldUseSecureSupabase()) return;
-    const remind = () => {
-      if (document.visibilityState === 'visible') sendDueDateReminders();
-    };
-    const interval = window.setInterval(remind, 15 * 60 * 1000);
-    document.addEventListener('visibilitychange', remind);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', remind);
-    };
-  }, [sendDueDateReminders]);
-
-  return (
-    <>
-      <NavigationGuard />
-        <React.Suspense fallback={<RouteLoading />}>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/account/password" element={<AccountPassword />} />
-            <Route path="/feedback" element={<Feedback />} />
-            <Route path="/feedback/results" element={<FeedbackResults />} />
-            <Route path="/dashboard" element={<Navigate to="/" replace />} />
-
-            <Route path="/" element={
-              <PrivateRoute>
-                <Layout />
-              </PrivateRoute>
-            }>
-              <Route index element={<RoleRoute path="/"><Dashboard /></RoleRoute>} />
-              <Route path="tasks" element={<RoleRoute path="/tasks"><Tasks /></RoleRoute>} />
-              <Route path="calendar" element={<RoleRoute path="/calendar"><Calendar /></RoleRoute>} />
-              <Route path="clients" element={<RoleRoute path="/clients"><DeliveryTracker /></RoleRoute>} />
-              {/* ClientWorkspace performs client ownership and assigned-staff checks itself. */}
-              <Route path="clients/:clientId" element={<ClientWorkspace />} />
-              <Route path="projects" element={<RoleRoute path="/projects"><Companies /></RoleRoute>} />
-              <Route path="reports" element={<RoleRoute path="/reports"><Reports /></RoleRoute>} />
-              <Route path="approvals" element={<RoleRoute path="/approvals"><Approvals /></RoleRoute>} />
-              <Route path="notifications" element={<Notifications />} />
-              <Route path="settings" element={<RoleRoute path="/settings"><Settings /></RoleRoute>} />
-              <Route path="help" element={<Help />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </React.Suspense>
-
-
-      {!isOnline && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 right-4 z-[70] mx-auto flex max-w-xl items-start gap-3 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white shadow-xl shadow-slate-950/20 md:bottom-auto md:left-auto md:right-5 md:top-20"
-        >
-          <WifiOff className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
-          <div>
-          <p className="text-sm font-semibold">{t('shell.offlineTitle')}</p>
-            <p className="mt-0.5 text-xs leading-5 text-slate-300">
-              {t('shell.offlineDescription')}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {isUpdateReady && isOnline && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 right-4 z-[70] mx-auto flex max-w-xl items-center gap-3 rounded-lg border border-blue-200 bg-white px-4 py-3 text-slate-900 shadow-xl shadow-slate-950/10 md:bottom-5 md:left-auto md:right-5"
-        >
-          <RefreshCw className="h-5 w-5 shrink-0 text-blue-600" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">{t('App update available')}</p>
-            <p className="mt-0.5 text-xs leading-5 text-slate-500">{hasDrafts ? t('Save or discard your changes before updating.') : t('Refresh to use the latest AiTask fixes.')}</p>
-          </div>
-          <button
-            type="button"
-            disabled={hasDrafts}
-            onClick={() => { if (!hasUnsavedChanges()) window.location.reload(); }}
-            className="shrink-0 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
-            {t('Refresh now')}
-          </button>
-        </div>
-      )}
-    </>
+    <React.Suspense fallback={<AppLoading />}>
+      <RouterProvider router={router} />
+    </React.Suspense>
   );
 }
 
-const router = createBrowserRouter([{ path: '*', element: <AppContent /> }]);
-function App() { return <RouterProvider router={router} />; }
 export default App;

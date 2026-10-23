@@ -1,6 +1,6 @@
-import { notificationCategoryLabel, presentNotification } from '../lib/notificationPresentation';
-import SystemMessage from '../components/SystemMessage';
-import '../lib/staffWorkflowCopy';
+import { notificationCategoryLabel, presentNotification } from '../services/notificationPresentation';
+import SystemMessage from '../../../components/SystemMessage';
+import '../../../lib/staffWorkflowCopy';
 import React from 'react';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
@@ -20,25 +20,25 @@ import {
   ShieldCheck,
   UserRoundPlus,
 } from 'lucide-react';
-import { Badge, Button, PageHeader } from '../components/ui';
-import type { LayoutOutletContext } from '../components/Layout';
-import { cardBase, inputBase, pageShell } from '../components/uiTokens';
-import { getVisibleTasks, isNotificationReadByUser } from '../lib/access';
-import { isTaskOpen } from '../lib/taskReporting';
+import { Badge, Button, PageHeader } from '../../../components/ui';
+import type { LayoutOutletContext } from '../../../components/Layout';
+import { cardBase, inputBase, pageShell } from '../../../components/uiTokens';
+import { getVisibleTasks, isNotificationReadByUser } from '../../../lib/access';
+import { isTaskOpen } from '../../../lib/taskReporting';
 import {
   groupNotifications,
   mergeNotificationPages,
   NOTIFICATION_CATEGORIES,
   sectionNotificationGroups,
   type NotificationGroup,
-} from '../lib/notificationCenter';
-import { loadNotificationFeedPage } from '../lib/notificationFeed';
-import { notificationRouteToPath } from '../lib/security';
-import { cn } from '../lib/utils';
-import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
-import { useI18n } from '../components/I18nProvider';
-import { useStore } from '../store';
-import type { AppNotification, NotificationCategory, NotificationCursor } from '../types';
+} from '../services/notificationCenter';
+import { loadNotificationFeedPage } from '../services/notificationFeed';
+import { notificationRouteToPath } from '../../../lib/security';
+import { cn } from '../../../lib/utils';
+import { formatLocalizedDistanceToNow } from '../../../lib/relativeTime';
+import { useI18n } from '../../../components/I18nProvider';
+import { useStore } from '../../../store';
+import type { AppNotification, NotificationCategory, NotificationCursor } from '../../../types';
 
 type NotificationTab = 'all' | 'unread';
 

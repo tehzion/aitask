@@ -1,6 +1,5 @@
 import { endOfDay } from 'date-fns/endOfDay';
 import { format } from 'date-fns/format';
-import { isSameMonth } from 'date-fns/isSameMonth';
 import { isWithinInterval } from 'date-fns/isWithinInterval';
 import { startOfDay } from 'date-fns/startOfDay';
 import { subMonths } from 'date-fns/subMonths';
@@ -330,18 +329,30 @@ export const getTeamMemberTaskGroups = (
   return { overdue, today, thisWeek, later, noDueDate, completedThisWeek };
 };
 
-export const getTrackedMonthlyCompletions = (tasks: Task[], now = new Date(), months = 6, locale: AppLocale = 'en') => (
-  Array.from({ length: months }, (_, index) => months - index - 1).map(offset => {
-    const month = subMonths(now, offset);
+export const getTrackedMonthlyCompletions = (tasks: Task[], now = new Date(), months = 6, locale: AppLocale = 'en') => {
+  const visibleMonths = Array.from({ length: months }, (_, index) => subMonths(now, months - index - 1));
+  const monthKeys = new Set(visibleMonths.map(month => month.getFullYear() + '-' + month.getMonth()));
+  const counts = new Map<string, number>();
+
+  // The previous implementation parsed every completion once per displayed
+  // month. A single pass keeps the same local-calendar semantics while making
+  // dashboard refreshes linear in the task count instead of months × tasks.
+  tasks.forEach(task => {
+    if (!isTaskCompleted(task)) return;
+    const completedAt = parseOptionalDate(task.completedAt);
+    if (!completedAt) return;
+    const key = completedAt.getFullYear() + '-' + completedAt.getMonth();
+    if (monthKeys.has(key)) counts.set(key, (counts.get(key) || 0) + 1);
+  });
+
+  return visibleMonths.map(month => {
+    const key = month.getFullYear() + '-' + month.getMonth();
     return {
       name: formatLocalizedMonth(month, locale),
-      completed: tasks.filter(task => {
-        const completedAt = parseOptionalDate(task.completedAt);
-        return Boolean(isTaskCompleted(task) && completedAt && isSameMonth(completedAt, month));
-      }).length,
+      completed: counts.get(key) || 0,
     };
-  })
-);
+  });
+};
 
 export const getTrackedWeeklyCompletions = (tasks: Task[], now = new Date(), weeks = 4, locale: AppLocale = 'en') => {
   const currentStart = getWorkWeekRange(now).start;

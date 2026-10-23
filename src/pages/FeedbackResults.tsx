@@ -40,25 +40,35 @@ const FeedbackResults: React.FC = () => {
   const [roleFilter, setRoleFilter] = React.useState<'All' | FeedbackRole>('All');
   const [issueOnly, setIssueOnly] = React.useState(false);
   const [hasSession, setHasSession] = React.useState(false);
+  const [isRequestingLink, setIsRequestingLink] = React.useState(false);
+  const loadGeneration = React.useRef(0);
 
   const loadResults = React.useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    const isCurrent = () => generation === loadGeneration.current;
     setIsLoading(true);
     setError('');
-    const { data: sessionData } = await supabase.auth.getSession();
-    setHasSession(Boolean(sessionData.session));
-    if (!sessionData.session) {
-      setIsLoading(false);
-      return;
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (!isCurrent()) return;
+      if (sessionError) throw sessionError;
+      setHasSession(Boolean(sessionData.session));
+      if (!sessionData.session) return;
+
+      const { data, error: resultError } = await supabase.functions.invoke('aitask-feedback', { body: { action: 'results' } });
+      if (!isCurrent()) return;
+      if (resultError || !data?.ok) {
+        setError(t(data?.error || resultError?.message || 'Unable to load feedback results.'));
+        return;
+      }
+      setRows(data.submissions || []);
+      setReviewer(data.reviewer);
+    } catch (loadError) {
+      if (!isCurrent()) return;
+      setError(t(loadError instanceof Error ? loadError.message : 'Unable to load feedback results.'));
+    } finally {
+      if (isCurrent()) setIsLoading(false);
     }
-    const { data, error: resultError } = await supabase.functions.invoke('aitask-feedback', { body: { action: 'results' } });
-    if (resultError || !data?.ok) {
-      setError(t(data?.error || resultError?.message || 'Unable to load feedback results.'));
-      setIsLoading(false);
-      return;
-    }
-    setRows(data.submissions || []);
-    setReviewer(data.reviewer);
-    setIsLoading(false);
   }, [t]);
 
   React.useEffect(() => {
@@ -69,16 +79,25 @@ const FeedbackResults: React.FC = () => {
 
   const requestLink = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (isRequestingLink) return;
+    setIsRequestingLink(true);
     setError('');
-    const { error: loginError } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: { emailRedirectTo: `${window.location.origin}/feedback/results`, shouldCreateUser: false },
-    });
-    if (loginError && /fetch|network/i.test(loginError.message)) {
-      setError(t('The reviewer login service could not be reached.'));
-      return;
+    setMessage('');
+    try {
+      const { error: loginError } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: { emailRedirectTo: `${window.location.origin}/feedback/results`, shouldCreateUser: false },
+      });
+      if (loginError) {
+        setError(t(loginError.message || 'The reviewer login service could not be reached.'));
+        return;
+      }
+      setMessage(t('If this email is an approved feedback reviewer, a secure sign-in link has been sent.'));
+    } catch (loginFailure) {
+      setError(t(loginFailure instanceof Error ? loginFailure.message : 'The reviewer login service could not be reached.'));
+    } finally {
+      setIsRequestingLink(false);
     }
-    setMessage(t('If this email is an approved feedback reviewer, a secure sign-in link has been sent.'));
   };
 
   const filtered = rows.filter(row => {
@@ -115,7 +134,7 @@ const FeedbackResults: React.FC = () => {
           <LockKeyhole className="h-8 w-8 text-blue-600" />
           <h1 className="mt-4 text-2xl font-semibold text-slate-950">{t('feedback.reviewerLogin')}</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">{t('feedback.reviewerDescription')}</p>
-          {!hasSession && <form className="mt-6 space-y-4" onSubmit={requestLink}><label className="block text-sm font-medium text-slate-700">{t('feedback.reviewerEmail')}<input required type="email" className={cn(inputBase, 'mt-2 px-3 py-2.5')} value={email} onChange={event => setEmail(event.target.value)} /></label><Button type="submit" className="w-full">{t('feedback.sendLink')}</Button></form>}
+          {!hasSession && <form className="mt-6 space-y-4" onSubmit={requestLink}><label className="block text-sm font-medium text-slate-700">{t('feedback.reviewerEmail')}<input required type="email" className={cn(inputBase, 'mt-2 px-3 py-2.5')} value={email} onChange={event => setEmail(event.target.value)} /></label><Button type="submit" className="w-full" disabled={isRequestingLink} aria-busy={isRequestingLink}>{t('feedback.sendLink')}</Button></form>}
           {message && <p className="mt-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700" role="status"><SystemMessage message={message} /></p>}
           {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert"><SystemMessage message={error} /></p>}
           {hasSession && <div className="mt-5 flex gap-3"><Button onClick={() => void loadResults()}><RefreshCw className="h-4 w-4" />{t('feedback.retry')}</Button><Button variant="secondary" onClick={async () => { await supabase.auth.signOut({ scope: 'local' }); setHasSession(false); setError(''); }}><LogOut className="h-4 w-4" />{t('feedback.signOut')}</Button></div>}

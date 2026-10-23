@@ -1,8 +1,8 @@
-import type { AppNotification, NotificationFeedPage } from '../types';
-import type { MutationResult, NotificationFeedQuery, NotificationReadResponse, SecureNotificationRuntime } from './secureWorkspace';
-import { parseNotification } from './security';
+import type { AppNotification, NotificationFeedPage } from '../../../types';
+import type { MutationResult, NotificationFeedQuery, NotificationReadResponse, SecureNotificationRuntime } from '../../../lib/secureWorkspace';
+import { parseNotification } from '../../../lib/security';
 import { enrichNotificationMetadata } from './notificationCenter';
-import { userFacingText } from './userFacingMessage';
+import { userFacingText } from '../../../lib/userFacingMessage';
 
 export const createSecureNotifications = (runtime: SecureNotificationRuntime) => {
   const { captureWorkspaceSession, isWorkspaceSessionCurrent, isRecord, cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, entityKey, stable, commandId, commandErrorCode, SyncRequestTimeoutError } = runtime;

@@ -1,7 +1,7 @@
-import type { AppNotification } from '../types';
-import { presentNotification } from '../lib/notificationPresentation';
-import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
-import { useI18n } from './I18nProvider';
+import type { AppNotification } from '../../../types';
+import { presentNotification } from '../services/notificationPresentation';
+import { formatLocalizedDistanceToNow } from '../../../lib/relativeTime';
+import { useI18n } from '../../../components/I18nProvider';
 
 export default function NotificationPreviewText({ notification }: { notification: AppNotification }) {
   const { locale } = useI18n();
