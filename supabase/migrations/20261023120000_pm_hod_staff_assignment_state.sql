@@ -164,7 +164,7 @@ begin
       return false;
     end if;
   end if;
-  if p_action = 'update' and v_actor_role = 'Staff'
+  if p_action = 'update' and v_actor_role = 'Staff' and not v_actor_is_hod
     and (v_new_assignee <> v_old_assignee or v_new_hod <> v_old_hod or v_new_state <> v_old_state) then
     return false;
   end if;
@@ -268,6 +268,20 @@ begin
         and client.client_key = v_client_key
         and client.created_by = v_member_id
     );
+  end if;
+  -- HODs are represented as Staff by the historical member-role projection.
+  -- Handle an explicit route handoff before the legacy edit gate so an HOD
+  -- who currently owns the task can delegate it without gaining broad Staff
+  -- mutation authority.
+  if p_action = 'update' and p_entity_type = 'task'
+    and private.aitask_is_hod(p_workspace_id)
+    and (p_old_data ->> 'assignedTo' = v_member_id or p_old_data ->> 'responsibleHodId' = v_member_id)
+    and (
+      p_old_data ->> 'assignedTo' is distinct from p_new_data ->> 'assignedTo'
+      or p_old_data ->> 'responsibleHodId' is distinct from p_new_data ->> 'responsibleHodId'
+      or p_old_data ->> 'assignmentState' is distinct from p_new_data ->> 'assignmentState'
+    ) then
+    return private.aitask_task_assignment_is_valid(p_workspace_id, p_action, p_old_data, p_new_data);
   end if;
   return private.aitask_can_mutate_entity_legacy(
     p_workspace_id, p_action, p_entity_type, p_entity_id, p_parent_id, p_old_data, p_new_data

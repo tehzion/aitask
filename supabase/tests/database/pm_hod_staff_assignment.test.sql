@@ -54,13 +54,6 @@ select is((pg_temp.route_task('insert', 'routing-task', jsonb_build_object(
   'assignmentState', 'pending_hod', 'createdBy', 'routing-pm', 'status', 'Pending',
   'visibility', 'internal', 'isCompleted', false
 ))->>'ok')::boolean, true, 'PM creation is accepted only with the eligible HOD as owner');
-select diag(pg_temp.route_task('insert', 'routing-debug', jsonb_build_object(
-  'id', 'routing-debug', 'clientId', 'routing-client', 'clientName', 'Routing Co',
-  'projectId', 'routing-project', 'projectName', 'Routing Project', 'title', 'Debug route',
-  'department', 'Designer', 'assignedTo', 'routing-hod', 'responsibleHodId', 'routing-hod',
-  'assignmentState', 'pending_hod', 'createdBy', 'routing-pm', 'status', 'Pending',
-  'visibility', 'internal', 'isCompleted', false
-))::text);
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000009902', true);
 select is((pg_temp.route_task('update', 'routing-task', (select data from public.aitask_entities where workspace_id = 'pgtap-pm-hod-staff-routing' and entity_type = 'task' and entity_id = 'routing-task') || jsonb_build_object(
