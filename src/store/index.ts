@@ -128,6 +128,7 @@ import {
   resolveAuthEmail,
   shouldUseSecureSupabase,
   subscribeToCurrentMemberAccessChanges,
+  subscribeToWorkspaceTaskChanges,
   subscribeToWorkspaceRevisionChanges,
   supabase,
 } from '../lib/supabaseClient';
@@ -6382,6 +6383,12 @@ export const startBackendAutoSync = () => {
   let accessRealtimeKey: string | null = null;
   let workspaceRealtimeCleanup: (() => void) | null = null;
   let workspaceRealtimeKey: string | null = null;
+  let taskRealtimeCleanup: (() => void) | null = null;
+  let taskRealtimeKey: string | null = null;
+  let localStorageSyncCleanup: (() => void) | null = null;
+  let realtimeRetryTimer: number | null = null;
+  let realtimeRetryAttempt = 0;
+  let lastRealtimeFailureToastAt = 0;
   const accessRefresh = createAccessRefreshCoordinator(
     () => {
       const state = useStore.getState();
@@ -6395,11 +6402,30 @@ export const startBackendAutoSync = () => {
     () => useStore.getState().pullBackendNow({ force: true, silent: true }),
   );
   const reportRealtimeFailure = () => {
-    useToastStore.getState().addToast(msg('errors.realtimeUnavailable'), 'warning');
+    const now = Date.now();
+    if (now - lastRealtimeFailureToastAt > 30_000) {
+      lastRealtimeFailureToastAt = now;
+      useToastStore.getState().addToast(msg('errors.realtimeUnavailable'), 'warning');
+    }
     // Realtime is an invalidation accelerator, not the source of truth. Pull
     // immediately after a channel failure so a missed event does not wait for
     // the fifteen-second safety poll.
     accessRefresh.request();
+    if (realtimeRetryTimer === null) {
+      const delay = Math.min(30_000, 1_000 * (2 ** realtimeRetryAttempt));
+      realtimeRetryAttempt = Math.min(realtimeRetryAttempt + 1, 5);
+      realtimeRetryTimer = window.setTimeout(() => {
+        realtimeRetryTimer = null;
+        if (!useStore.getState().currentUser || !shouldUseSecureSupabase()) return;
+        accessRealtimeKey = null;
+        workspaceRealtimeKey = null;
+        taskRealtimeKey = null;
+        syncAccessRealtime();
+        syncWorkspaceRealtime();
+        syncTaskRealtime();
+        accessRefresh.request();
+      }, delay);
+    }
   };
 
   const syncAccessRealtime = () => {
@@ -6432,6 +6458,32 @@ export const startBackendAutoSync = () => {
     if (!key) return;
     workspaceRealtimeCleanup = subscribeToWorkspaceRevisionChanges(key, accessRefresh.request, reportRealtimeFailure);
   };
+
+  const syncTaskRealtime = () => {
+    const currentUser = useStore.getState().currentUser;
+    const key = shouldUseSecureSupabase() && currentUser ? SECURE_WORKSPACE_ID : null;
+    if (key === taskRealtimeKey) return;
+    taskRealtimeCleanup?.();
+    taskRealtimeCleanup = null;
+    taskRealtimeKey = key;
+    if (!key) return;
+    taskRealtimeCleanup = subscribeToWorkspaceTaskChanges(key, accessRefresh.request, reportRealtimeFailure);
+  };
+
+  // Local mode is intentionally browser-only, but two open tabs should still
+  // see a saved task without requiring a manual reload. The storage event is
+  // emitted by the browser in every other tab after Zustand persists the
+  // workspace; secure Supabase mode does not persist workspace rows here.
+  if (!shouldUseSupabase()) {
+    const handleLocalStorage = (event: StorageEvent) => {
+      if (event.key !== PERSIST_KEY || !event.newValue || (event.storageArea && event.storageArea !== window.localStorage)) return;
+      const state = useStore.getState();
+      if (!state.currentUser || isSyncBusy(state)) return;
+      void useStore.persist.rehydrate();
+    };
+    window.addEventListener('storage', handleLocalStorage);
+    localStorageSyncCleanup = () => window.removeEventListener('storage', handleLocalStorage);
+  }
 
   // A role, permission, department, or custom-role change can invalidate a
   // pending command that was built under the previous access level. When that
@@ -6466,6 +6518,7 @@ export const startBackendAutoSync = () => {
 
   syncAccessRealtime();
   syncWorkspaceRealtime();
+  syncTaskRealtime();
   const unsubscribeAccessRealtime = useStore.subscribe((state, previousState) => {
     if (
       state.currentUser?.authUserId !== previousState.currentUser?.authUserId
@@ -6475,6 +6528,7 @@ export const startBackendAutoSync = () => {
 
     if (state.currentUser?.authUserId !== previousState.currentUser?.authUserId) {
       syncWorkspaceRealtime();
+      syncTaskRealtime();
     }
 
     const previousSignature = accessSignature(previousState.currentUser);
@@ -6609,6 +6663,19 @@ export const startBackendAutoSync = () => {
         },
       };
     });
+    if (shouldUseSecureSupabase()) {
+      if (realtimeRetryTimer !== null) {
+        window.clearTimeout(realtimeRetryTimer);
+        realtimeRetryTimer = null;
+      }
+      realtimeRetryAttempt = 0;
+      accessRealtimeKey = null;
+      workspaceRealtimeKey = null;
+      taskRealtimeKey = null;
+      syncAccessRealtime();
+      syncWorkspaceRealtime();
+      syncTaskRealtime();
+    }
     const state = useStore.getState();
     if (!shouldUseSecureSupabase() || state.currentUser) {
       void state.pullBackendNow({ silent: true });
@@ -6630,7 +6697,17 @@ export const startBackendAutoSync = () => {
     workspaceRealtimeCleanup?.();
     workspaceRealtimeCleanup = null;
     workspaceRealtimeKey = null;
+    taskRealtimeCleanup?.();
+    taskRealtimeCleanup = null;
+    taskRealtimeKey = null;
     accessRefresh.reset();
+    localStorageSyncCleanup?.();
+    localStorageSyncCleanup = null;
+    if (realtimeRetryTimer !== null) {
+      window.clearTimeout(realtimeRetryTimer);
+      realtimeRetryTimer = null;
+    }
+    realtimeRetryAttempt = 0;
     window.clearInterval(pullInterval);
     window.removeEventListener('focus', pullLatest);
     document.removeEventListener('visibilitychange', pullLatest);

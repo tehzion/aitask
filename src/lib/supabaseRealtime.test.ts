@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ channel: vi.fn(), removeChannel: vi.fn() }));
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ channel: mocks.channel, removeChannel: mocks.removeChannel }) }));
-import { subscribeToCurrentMemberAccessChanges, subscribeToWorkspaceRevisionChanges } from './supabaseClient';
+import { subscribeToCurrentMemberAccessChanges, subscribeToWorkspaceRevisionChanges, subscribeToWorkspaceTaskChanges } from './supabaseClient';
 
 type Watcher = { filter: { table: string; filter: string }; callback: (payload: { new: Record<string, unknown> }) => void };
 let watchers: Watcher[];
@@ -48,6 +48,13 @@ describe('effective access realtime subscription', () => {
 });
 
 describe('workspace revision realtime subscription', () => {
+  it('waits for Supabase to confirm the Postgres Changes binding', () => {
+    subscribeToWorkspaceRevisionChanges('aitask-main', vi.fn());
+    expect(mocks.channel.mock.calls[0]?.[1]).toEqual({
+      config: { postgres_changes_options: { wait: true, timeout: 10_000 } },
+    });
+  });
+
   it('subscribes to the RLS-protected workspace revision row', () => {
     const refresh = vi.fn();
     subscribeToWorkspaceRevisionChanges('aitask-main', refresh);
@@ -75,5 +82,26 @@ describe('workspace revision realtime subscription', () => {
     const subscribe = mocks.channel.mock.results[0]?.value.subscribe as ReturnType<typeof vi.fn>;
     subscribe.mock.calls[0]?.[0]?.('TIMED_OUT');
     expect(onError).toHaveBeenCalledOnce();
+  });
+});
+
+describe('workspace task realtime fallback', () => {
+  it('subscribes to visible task inserts and updates with metadata only', () => {
+    const refresh = vi.fn();
+    subscribeToWorkspaceTaskChanges('aitask-main', refresh);
+    expect(watchers.map(watcher => watcher.filter.filter)).toEqual([
+      'workspace_id=eq.aitask-main,entity_type=eq.task',
+      'workspace_id=eq.aitask-main,entity_type=eq.task',
+    ]);
+    expect((mocks.channel.mock.results[0]?.value.on as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]).toMatchObject({
+      select: ['workspace_id', 'entity_type', 'entity_id', 'version', 'updated_at'],
+    });
+    watchers[0].callback({ new: {} });
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it('rejects unsafe workspace identifiers', () => {
+    subscribeToWorkspaceTaskChanges('aitask-main,other', vi.fn());
+    expect(mocks.channel).not.toHaveBeenCalled();
   });
 });

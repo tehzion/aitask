@@ -8,7 +8,7 @@ import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
 import { getTaskStatusControls } from '../lib/taskStatusControls';
 import React from 'react';
-import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, ExternalLink, FileText, History, MessageSquare, Send, UsersRound } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, ExternalLink, FileText, History, MessageSquare, RotateCcw, Send, UsersRound } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task, TaskStatus } from '../types';
 import { isPendingMutationResolution, useStore } from '../store';
@@ -23,6 +23,7 @@ import { useI18n } from './I18nProvider';
 import { formatLocalizedDate } from '../lib/i18n';
 import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { getVisibleTasks, getTaskAccess } from '../lib/access';
+import { canRequestTaskRevision } from '../lib/taskWorkflowAccess';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from './ConfirmDialog';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
@@ -53,6 +54,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
     backend,
     updateTaskStatus,
     updateTaskWork,
+    requestRevision,
     addComment,
     commitPendingMutation,
     rolePermissions,
@@ -68,6 +70,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
     backend: state.backend,
     updateTaskStatus: state.updateTaskStatus,
     updateTaskWork: state.updateTaskWork,
+    requestRevision: state.requestRevision,
     addComment: state.addComment,
     commitPendingMutation: state.commitPendingMutation,
     rolePermissions: state.rolePermissions,
@@ -77,12 +80,14 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const [outputUpload, setOutputUpload] = React.useState<OutputUploadState>({ busy: false, pending: false });
   const [error, setError] = React.useState('');
   const [pendingStatus, setPendingStatus] = React.useState<TaskStatus | null>(null);
-  const [pendingSave, setPendingSave] = React.useState<{ taskId: string; commentId?: string; text?: string; status?: TaskStatus; workIntent?: TaskWorkIntent; reviewUpdate?: boolean; failed?: boolean; rejected?: boolean } | null>(null);
+  const [pendingSave, setPendingSave] = React.useState<{ taskId: string; commentId?: string; text?: string; status?: TaskStatus; workIntent?: TaskWorkIntent; reviewUpdate?: boolean; revisionRequest?: boolean; revisionCount?: number; revisionNote?: string; failed?: boolean; rejected?: boolean } | null>(null);
   const [helpReason, setHelpReason] = React.useState('');
+  const [revisionNote, setRevisionNote] = React.useState('');
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [helpMode, setHelpMode] = React.useState<'help' | 'review'>('help');
   const commentRef = React.useRef(comment); commentRef.current = comment;
   const helpRef = React.useRef(helpReason); helpRef.current = helpReason;
+  const revisionNoteRef = React.useRef(revisionNote); revisionNoteRef.current = revisionNote;
   const recovery = useRecoverableForm(`staff-task:${task?.id || ''}`, { text: comment, helpReason, helpMode, pendingCommentId: pendingSave?.commentId, pendingText: pendingSave?.text }, Boolean(comment.trim() || helpReason.trim()), isOpen && Boolean(task && currentUser));
   const [exitAction, setExitAction] = React.useState<(() => void) | null>(null);
   const [isDiscarding, setIsDiscarding] = React.useState(false);
@@ -94,7 +99,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   pendingSaveRef.current = pendingSave;
   const observedResolution = React.useRef(false);
   const operationGeneration = React.useRef(0);
-  const clearUnsaved = useUnsavedChanges(isOpen && Boolean(comment.trim() || helpReason.trim() || isSaving || pendingSave || outputUpload.busy || outputUpload.pending));
+  const clearUnsaved = useUnsavedChanges(isOpen && Boolean(comment.trim() || helpReason.trim() || revisionNote.trim() || isSaving || pendingSave || outputUpload.busy || outputUpload.pending));
   const liveTask = task ? tasks.find(item => item.id === task.id) || null : null;
   useReviewCoverExpiry(liveTask?.reviewCover?.expiresAt);
 
@@ -106,6 +111,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
     setPendingSave(null);
     setExitAction(null);
     setIsDiscarding(false);
+    setRevisionNote('');
     setHelpReason(''); setHelpOpen(false); setHelpMode('help');
     operationGeneration.current++;
   }, [task?.id, currentUser?.id]);
@@ -115,6 +121,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
     if (currentTaskId.current !== submitted.taskId) return;
     if (submitted.reviewUpdate && helpRef.current === submitted.text) { setHelpReason(''); setHelpOpen(false); recovery.clear(); }
     if (submitted.text !== undefined && !submitted.reviewUpdate) setComment(current => current === submitted.text ? '' : current);
+    if (submitted.revisionRequest && revisionNoteRef.current === submitted.revisionNote) setRevisionNote('');
     if (submitted.workIntent?.kind === 'block' && helpRef.current === submitted.workIntent.reason) { setHelpReason(''); setHelpOpen(false); }
     if ((submitted.reviewUpdate || submitted.text === undefined || commentRef.current === submitted.text) && (!helpRef.current.trim() || helpRef.current === submitted.workIntent?.reason)) recovery.clear();
     acknowledgeActionFeedback(useStore.getState());
@@ -132,6 +139,8 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
       ? workIntentApplied(savedTask, pendingSave.workIntent, currentUser?.id)
       : pendingSave.commentId
       ? savedTask?.comments?.some(item => item.id === pendingSave.commentId)
+      : pendingSave.revisionRequest
+      ? savedTask?.status === 'In Progress' && savedTask.revisionCount === pendingSave.revisionCount
       : savedTask?.status === pendingSave.status;
     if (acknowledged) finishSave(pendingSave);
     else { setPendingSave(null); setError(t('The pending update was not saved. Review your draft before sending it again.')); observedResolution.current = false; }
@@ -171,11 +180,13 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
     setError('');
     setPendingSave(submitted);
     try {
-      const result = retry ? await useStore.getState().retryPendingSave() : await commitPendingMutation(submitted.commentId ? 'comment.add' : 'task.update');
+      const result = retry ? await useStore.getState().retryPendingSave() : await commitPendingMutation(submitted.commentId ? 'comment.add' : submitted.revisionRequest ? 'approval.revision' : 'task.update');
       if (!isCurrent()) return;
       const saved = useStore.getState().tasks.find(item => item.id === submitted.taskId);
       const applied = saved && (submitted.workIntent ? workIntentApplied(saved, submitted.workIntent, currentUser?.id)
-        : submitted.commentId ? saved.comments?.some(item => item.id === submitted.commentId) : saved.status === submitted.status);
+        : submitted.commentId ? saved.comments?.some(item => item.id === submitted.commentId)
+        : submitted.revisionRequest ? saved.status === 'In Progress' && saved.revisionCount === submitted.revisionCount
+        : saved.status === submitted.status);
       if (result.ok && applied) finishSave(submitted);
       else {
         setPendingSave({ ...submitted, failed: true, rejected: ['FORBIDDEN', 'VALIDATION', 'NOT_FOUND'].includes(result.code || useStore.getState().backend.errorCode || '') });
@@ -194,7 +205,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
 
   const requestExit = (action: () => void) => {
     if (isSaving || outputUpload.busy) return;
-    if (comment.trim() || helpReason.trim() || pendingSave || outputUpload.pending) setExitAction(() => action);
+    if (comment.trim() || helpReason.trim() || revisionNote.trim() || pendingSave || outputUpload.pending) setExitAction(() => action);
     else { clearUnsaved(); action(); }
   };
 
@@ -212,7 +223,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
       if (!isWorkspaceSessionCurrent(session) || currentTaskId.current !== taskId) return;
       operationGeneration.current++;
       setComment(''); setPendingSave(null); setError('');
-      setHelpReason(''); recovery.clear();
+      setHelpReason(''); setRevisionNote(''); recovery.clear();
       observedResolution.current = false;
       clearUnsaved();
       exitAction();
@@ -263,6 +274,23 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
     await performSave({ taskId: liveTask.id, commentId, text, reviewUpdate: true });
   };
 
+  const revisionAvailable = canEdit
+    && ['Waiting Approval', 'Approved', 'Completed'].includes(liveTask.status)
+    && canRequestTaskRevision(currentUser, liveTask, rolePermissions, { users, clients, projects });
+
+  const submitRevision = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!revisionAvailable || isSaving || pendingSave || mutationLocked) return;
+    const note = revisionNote.trim();
+    const localResult = requestRevision(liveTask.id, note);
+    if (!localResult.ok) {
+      setError(String(t(localResult.error || 'Unable to request a revision.')));
+      return;
+    }
+    const updatedTask = useStore.getState().tasks.find(item => item.id === liveTask.id);
+    await performSave({ taskId: liveTask.id, revisionRequest: true, revisionCount: updatedTask?.revisionCount, revisionNote: note });
+  };
+
   const footer = canEdit ? (
     <div className="space-y-2">
       {guidedActionError && <p id={completionHintId} className="text-sm text-muted">{t(guidedActionError)}</p>}
@@ -295,6 +323,22 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           >{getLocalizedTaskStatus(option.status, locale)}</Button>)}
         </div> : null}
       </div>
+      {revisionAvailable && <form onSubmit={submitRevision} className="space-y-2 border-t border-line pt-3" data-onboarding-target="task-review">
+        <label className="block text-xs font-medium text-muted">
+          {t('Revision Control')}
+          <textarea
+            value={revisionNote}
+            onChange={event => setRevisionNote(event.target.value)}
+            rows={2}
+            maxLength={2000}
+            placeholder={t('Optional revision note...')}
+            className={`${inputBase} mt-2 resize-none px-3 py-2`}
+          />
+        </label>
+        <Button type="submit" variant="secondary" disabled={mutationLocked || isSaving || Boolean(pendingSave)}>
+          <RotateCcw className="h-4 w-4" />{isSaving ? t('Requesting...') : t('Request Revision')}
+        </Button>
+      </form>}
     </div>
   ) : null;
 

@@ -5,23 +5,42 @@
   "immutable": false,
   "capturedAt": "2026-10-23T00:00:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "Local disposable validation candidate only; production deployment is still gated through 20261023120000_pm_hod_staff_assignment_state.",
+  "status": "Production verified through repository 20261023170000_task_workflow_action_guards via connector-generated migration aliases.",
   "validatedMigrationTail": [
-    "20261019222619_pm_project_approval_authority",
-    "20261019223816_explicit_project_membership_scope",
     "20261020131544_project_management_completion",
     "20261021110000_monthly_plan_renewal_integrity",
-    "20261023120000_pm_hod_staff_assignment_state"
+    "20261023120000_pm_hod_staff_assignment_state",
+    "20261023150000_hod_task_execution_permissions",
+    "20261023170000_task_workflow_action_guards"
   ],
-  "pendingProductionMigrations": [
-    "20261023120000_pm_hod_staff_assignment_state"
-  ],
+  "pendingProductionMigrations": [],
   "productionVerification": {
     "historyAligned": false,
-    "historyThrough": "20261021110000_monthly_plan_renewal_integrity",
+    "historyThrough": "20261023063344_task_workflow_action_guards",
     "migrationResolution": {
-      "status": "pending_local_validation",
-      "repositoryToProduction": []
+      "status": "connector_aliases_verified",
+      "repositoryToProduction": [
+        {
+          "repository": "20261020131544_project_management_completion",
+          "production": "20261020131544_project_management_completion"
+        },
+        {
+          "repository": "20261021110000_monthly_plan_renewal_integrity",
+          "production": "20261021110000_monthly_plan_renewal_integrity"
+        },
+        {
+          "repository": "20261023120000_pm_hod_staff_assignment_state",
+          "production": "20261023040256_pm_hod_staff_assignment_state"
+        },
+        {
+          "repository": "20261023150000_hod_task_execution_permissions",
+          "production": "20261023063131_hod_task_execution_permissions"
+        },
+        {
+          "repository": "20261023170000_task_workflow_action_guards",
+          "production": "20261023063344_task_workflow_action_guards"
+        }
+      ]
     }
   },
   "qualityGates": {

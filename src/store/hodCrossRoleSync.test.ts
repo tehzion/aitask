@@ -4,13 +4,14 @@ vi.hoisted(() => {
   process.env.VITE_SUPABASE_URL = 'https://example.supabase.co';
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = 'test-publishable-key';
 });
-const mocks = vi.hoisted(() => ({ load: vi.fn(), getUser: vi.fn(), save: vi.fn(), revision: vi.fn(), subscribe: vi.fn(), subscribeWorkspace: vi.fn() }));
+const mocks = vi.hoisted(() => ({ load: vi.fn(), getUser: vi.fn(), save: vi.fn(), revision: vi.fn(), subscribe: vi.fn(), subscribeWorkspace: vi.fn(), subscribeTask: vi.fn() }));
 vi.mock('../lib/supabaseClient', () => ({
   supabase: { auth: { getUser: mocks.getUser } },
   shouldUseSecureSupabase: () => true,
   resolveAuthEmail: (value: string) => value,
   subscribeToCurrentMemberAccessChanges: mocks.subscribe,
   subscribeToWorkspaceRevisionChanges: mocks.subscribeWorkspace,
+  subscribeToWorkspaceTaskChanges: mocks.subscribeTask,
 }));
 vi.mock('../lib/secureWorkspace', async importOriginal => ({
   ...await importOriginal<typeof import('../lib/secureWorkspace')>(),
@@ -39,6 +40,7 @@ beforeEach(() => {
   clearWorkspaceSession();
   mocks.subscribe.mockReturnValue(() => undefined);
   mocks.subscribeWorkspace.mockReturnValue(() => undefined);
+  mocks.subscribeTask.mockReturnValue(() => undefined);
   useStore.setState({ ...initial, currentUser: hod, users: [hod], tasks: [task], clients: [], projects: [], notifications: [], rolePermissions: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], backend: { ...initial.backend, mode: 'supabase', status: 'live', isConfigured: true, isLoading: false, isSaving: false, isPulling: false, hasLocalChanges: false, pendingMutations: 0, workspaceVersion: 1 } }, true);
   mocks.getUser.mockResolvedValue({ data: { user: { id: hod.authUserId } }, error: null });
   mocks.revision.mockResolvedValue({ version: 2 });

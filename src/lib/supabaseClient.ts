@@ -21,6 +21,17 @@ const isSafeRealtimeFilterValue = (value: string | undefined, maxLength = 160) =
   typeof value === 'string' && /^[A-Za-z0-9_-]+$/.test(value) && value.length <= maxLength
 );
 
+// Do not report a channel as ready until Supabase has confirmed that the
+// Postgres Changes binding is active. Without this, a channel can be marked
+// SUBSCRIBED while the replication subscription is still missing (or the
+// table is not in supabase_realtime), leaving the UI apparently connected but
+// silently waiting for the fifteen-second safety pull.
+const realtimeChannelOptions = {
+  config: {
+    postgres_changes_options: { wait: true, timeout: 10_000 },
+  },
+} as const;
+
 /**
  * Refresh only when the signed-in member's effective access can have changed.
  * The database remains the authorization boundary; Realtime shortens the UI
@@ -37,7 +48,7 @@ export const subscribeToCurrentMemberAccessChanges = (
   let active = true;
   const notify = () => { if (active) onChange(); };
   const channel = supabase
-    .channel(`aitask-member-access:${authUserId}`)
+    .channel(`aitask-member-access:${authUserId}`, realtimeChannelOptions)
     .on('postgres_changes', {
       event: 'UPDATE',
       schema: 'public',
@@ -87,12 +98,54 @@ export const subscribeToWorkspaceRevisionChanges = (
   let active = true;
   const notify = () => { if (active) onChange(); };
   const channel = supabase
-    .channel(`aitask-workspace-revision:${workspaceId}`)
+    .channel(`aitask-workspace-revision:${workspaceId}`, realtimeChannelOptions)
     .on('postgres_changes', {
       event: 'UPDATE',
       schema: 'public',
       table: 'aitask_workspaces',
       filter: `id=eq.${workspaceId}`,
+    }, notify);
+
+  channel.subscribe(status => {
+    if (active && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED')) onError?.();
+  });
+  return () => {
+    active = false;
+    void supabase.removeChannel(channel);
+  };
+};
+
+/**
+ * Subscribe to visible task-row changes as a low-latency fallback for the
+ * workspace revision signal. The payload is deliberately reduced to metadata
+ * and is never applied directly; the client always reloads the RLS-filtered
+ * snapshot after an event. INSERT and UPDATE are used here because Realtime
+ * cannot apply RLS to DELETE events.
+ */
+export const subscribeToWorkspaceTaskChanges = (
+  workspaceId: string,
+  onChange: () => void,
+  onError?: () => void,
+) => {
+  if (!isSafeRealtimeFilterValue(workspaceId)) return () => undefined;
+  let active = true;
+  const notify = () => { if (active) onChange(); };
+  const filter = `workspace_id=eq.${workspaceId},entity_type=eq.task`;
+  const channel = supabase
+    .channel(`aitask-task-changes:${workspaceId}`, realtimeChannelOptions)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'aitask_entities',
+      filter,
+      select: ['workspace_id', 'entity_type', 'entity_id', 'version', 'updated_at'],
+    }, notify)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'aitask_entities',
+      filter,
+      select: ['workspace_id', 'entity_type', 'entity_id', 'version', 'updated_at'],
     }, notify);
 
   channel.subscribe(status => {

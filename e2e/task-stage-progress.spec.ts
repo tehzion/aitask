@@ -37,7 +37,7 @@ test('milestone progress follows role actions from assignment through revision a
   await page.getByRole('button', { name: 'Accept assignment', exact: true }).click();
   await expect(progress).toHaveAttribute('aria-valuenow', '30');
   await page.getByRole('button', { name: 'Start work', exact: true }).click();
-  await page.getByRole('button', { name: 'Send for review', exact: true }).click();
+  await page.getByRole('button', { name: /^(Send|Resubmit) for review$/ }).click();
   await expect(progress).toHaveAttribute('aria-valuenow', '60');
   await expect(page.getByRole('button', { name: 'Complete task', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
@@ -45,7 +45,7 @@ test('milestone progress follows role actions from assignment through revision a
   await page.getByRole('button', { name: 'Request Revision', exact: true }).click();
   await expect(progress).toHaveAttribute('aria-valuenow', '50');
   await openAs(page, 'stage-staff');
-  await page.getByRole('button', { name: 'Send for review', exact: true }).click();
+  await page.getByRole('button', { name: /^(Send|Resubmit) for review$/ }).click();
   await expect(progress).toHaveAttribute('aria-valuenow', '60');
   await openAs(page, 'stage-hod');
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
