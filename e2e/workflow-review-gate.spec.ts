@@ -44,10 +44,10 @@ test('Staff cannot complete internal review in either editor', async ({ page }) 
   await page.goto(`/tasks?taskId=${fixture.reviewId}`);
   const dialog = page.getByRole('dialog', { name: fixture.reviewTitle });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('combobox', { name: 'All task statuses' }).locator('option[value="Completed"]')).toHaveCount(0);
+  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: 'Approve internal review', exact: true })).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Full edit', exact: true }).click();
-  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true }).locator('option[value="Completed"]')).toHaveCount(0);
+  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
 });
 
@@ -73,8 +73,8 @@ test('unfinished predecessors disable HOD approval and the completion option', a
   await page.goto(`/tasks?taskId=${fixture.reviewId}`);
   const dialog = page.getByRole('dialog', { name: fixture.reviewTitle });
   await expect(dialog.getByRole('button', { name: 'Approve internal review', exact: true })).toHaveCount(0);
-  await expect(dialog.getByRole('combobox', { name: 'All task statuses' }).locator('option[value="Waiting Approval"]')).toHaveJSProperty('disabled', true);
-  await expect(dialog.getByRole('combobox', { name: 'All task statuses' }).locator('option[value="Completed"]')).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Approve internal review', exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
   await expect(dialog.getByText('Dependency status for 1 earlier step is unavailable. Confirm with the task owner before starting.')).toBeVisible();
 });
 

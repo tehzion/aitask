@@ -102,7 +102,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await staffWorkloadDialog.getByRole('button', { name: 'Create task for Staff' }).click();
   const preassignedTaskDialog = page.getByRole('dialog', { name: 'Create task' });
   await expect(preassignedTaskDialog.getByLabel('Assign to Position/Department *')).toHaveValue('Designer');
-  await expect(preassignedTaskDialog.getByLabel('Assignee')).toHaveValue('u-staff-demo-local');
+  await expect(preassignedTaskDialog.getByLabel('Responsible HOD')).toHaveValue('u-hod-demo-local');
   await page.keyboard.press('Escape');
   for (const viewport of publicViewports) {
     await page.setViewportSize(viewport);

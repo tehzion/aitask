@@ -197,14 +197,30 @@ describe('task store authorization', () => {
       createdAt: '2026-09-07T00:00:00.000Z',
       updatedAt: '2026-09-07T00:00:00.000Z',
     };
+    const hodUser: User = { ...staff, name: 'HOD', role: 'HOD', customRoleId: hodRole.id, customRoleName: hodRole.name };
+    const delegate: User = { ...otherStaff, id: 'staff-task-delegate', name: 'Delegate' };
     useStore.setState({
-      currentUser: { ...staff, role: 'HOD', customRoleId: hodRole.id, customRoleName: hodRole.name },
+      currentUser: hodUser,
+      users: [hodUser, otherStaff, delegate],
       rolePermissions: [hodRole],
     });
 
     expect(useStore.getState().updateTask(creatorOnlyTask.id, { priority: 'High' })).toEqual({ ok: true });
     // Department scoping lets the HOD edit work in their own department...
     expect(useStore.getState().updateTask(unrelatedTask.id, { priority: 'High' }).ok).toBe(true);
+    expect(useStore.getState().updateTask(unrelatedTask.id, { assignedTo: delegate.id }).ok).toBe(true);
+    expect(useStore.getState().updateTask(unrelatedTask.id, { clientName: 'Different company' })).toEqual({
+      ok: false,
+      error: 'HODs can edit task execution details, but not project, company, service, or department ownership.',
+    });
+    expect(useStore.getState().updateTask(unrelatedTask.id, {
+      description: 'Updated execution brief',
+      startDate: '2026-07-14',
+      dueDate: '2026-07-20',
+    }).ok).toBe(true);
+    expect(useStore.getState().notifications.some(notification => (
+      notification.targetUserId === delegate.id && notification.title === 'Task Dates Updated'
+    ))).toBe(true);
     // ...but not work owned by another department.
     const otherDepartmentTask = makeTask({
       id: 'task-scope-other-dept',

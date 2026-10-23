@@ -172,7 +172,7 @@ test('HOD work search, assigned updates, and unassigned visibility are server-en
   await page.goto(`/tasks?taskId=${encodeURIComponent(fixture.hodTaskId)}`);
   const dialog = page.getByRole('dialog', { name: 'Release QA HOD review' });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel('Task status').selectOption('In Progress');
+  await dialog.getByRole('button', { name: 'Send for review', exact: true }).click();
   await dialog.getByPlaceholder('Write a comment or update...').fill('HOD staging update.');
   await dialog.getByRole('button', { name: 'Send comment' }).click();
   await expect(dialog.getByText('HOD staging update.', { exact: true })).toBeVisible();
@@ -207,7 +207,7 @@ test('a stale task version returns a conflict while preserving the draft comment
 
   const draft = 'Keep this draft while the task is refreshed.';
   await dialog.getByPlaceholder('Write a comment or update...').fill(draft);
-  await dialog.getByLabel('Task status').selectOption('In Progress');
+  await dialog.getByRole('button', { name: /^(Start work|Send for review)$/ }).click();
   await expect(dialog.getByRole('alert')).toContainText(/newer|conflict|save/i);
   await expect(dialog.getByPlaceholder('Write a comment or update...')).toHaveValue(draft);
   await page.unroute('**/rest/v1/rpc/aitask_execute_command');

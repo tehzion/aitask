@@ -81,7 +81,7 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
 
   useEffect(() => {
     if (hovered || focused || isMarkingRead || isReadUpdating || readError) return;
-    const timeout = window.setTimeout(() => onDismiss(notification.id), 8000);
+    const timeout = window.setTimeout(() => onDismiss(notification.id), 6000);
     return () => window.clearTimeout(timeout);
   }, [notification.id, onDismiss, hovered, focused, isMarkingRead, isReadUpdating, readError]);
 
@@ -95,8 +95,12 @@ const NotificationPopupCard: React.FC<NotificationPopupCardProps> = ({
     <article
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false); }}
+      onClick={event => {
+        if (event.target instanceof Element && event.target.closest('button')) return;
+        onView(notification);
+      }}
       aria-label={t('notifications.newWithTitle', { title: presentation.title })}
-      className="pointer-events-auto overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.14)] "
+      className="pointer-events-auto cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.14)] "
     >
       <div className="flex items-start gap-3 p-4">
         <div className={cn(
@@ -240,7 +244,7 @@ export const NotificationPopupHost: React.FC<NotificationPopupHostProps> = ({
       aria-atomic="false"
       data-popup-ready={readyUserId === currentUser?.id ? 'true' : 'false'}
       className={cn(
-        'pointer-events-none fixed left-4 right-4 z-[65] flex flex-col gap-2.5 md:bottom-5 md:left-[17.25rem] md:right-auto md:w-[360px]',
+        'pointer-events-none fixed left-4 right-4 z-[65] flex flex-col gap-2.5 md:bottom-5 md:left-auto md:right-5 md:w-[360px]',
         hasBottomNotice
           ? 'bottom-[calc(13rem+env(safe-area-inset-bottom))]'
           : 'bottom-[calc(5rem+env(safe-area-inset-bottom))]',

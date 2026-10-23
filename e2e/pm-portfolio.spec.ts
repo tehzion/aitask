@@ -18,7 +18,7 @@ const seedPM = async (page: Page) => {
     useStore.setState({
       currentUser: { ...pm, mustResetPassword: false }, rolePermissions: [],
       clients: [{ id: 'pm-company', clientName: 'PM Company', createdBy: pm.id, createdAt: '2026-10-01', updatedAt: '2026-10-01' }],
-      projects: [{ id: 'pm-project', clientId: 'pm-company', clientName: 'PM Company', projectName: 'Inherited campaign', services: ['Design'], startDate: '2026-10-01', deadline: '', totalTasks: 4, completedTasks: 1, createdBy: boss.id }],
+      projects: [{ id: 'pm-project', clientId: 'pm-company', clientName: 'PM Company', projectName: 'Inherited campaign', services: ['Design'], startDate: '2026-10-01', deadline: '', totalTasks: 4, completedTasks: 1, createdBy: boss.id, projectManagerIds: [pm.id] }],
       tasks: [
         { ...base, id: 'pm-submit', title: 'Department submission', status: 'Waiting Approval', completionPercentage: 70 },
         { ...base, id: 'pm-final', title: 'Signed portfolio work', status: 'Approved', completionPercentage: 80 },
@@ -72,16 +72,12 @@ test('PM sees completion in both task views while review is pending', async ({ p
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/tasks?taskId=pm-submit');
   const dialog = page.getByRole('dialog', { name: 'Department submission' });
-  const explanation = 'Only a project manager can confirm completion after internal approval.';
-  const guidedStatus = dialog.getByRole('combobox', { name: 'All task statuses' });
-  await expect(guidedStatus.locator('option[value="Completed"]')).toHaveJSProperty('disabled', true);
-  await expect(guidedStatus).toHaveAccessibleDescription(explanation);
-  await expect(dialog.getByText(explanation, { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('Status').getByText('Waiting for review', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Confirm completion', exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await dialog.getByRole('button', { name: 'Full edit', exact: true }).click();
-  const fullStatus = dialog.getByRole('combobox', { name: 'Task status', exact: true });
-  await expect(fullStatus.locator('option[value="Completed"]')).toHaveJSProperty('disabled', true);
-  await expect(fullStatus).toHaveAccessibleDescription(explanation);
+  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
   const result = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     return useStore.getState().updateTaskStatus('pm-submit', 'Completed');
@@ -89,22 +85,18 @@ test('PM sees completion in both task views while review is pending', async ({ p
   expect(result.ok).toBe(false);
 });
 
-test('PM may make approval optional for one waiting task and complete it directly', async ({ page }) => {
+test('PM can complete a waiting task with explicit no-approval mode', async ({ page }) => {
   await seedPM(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'pm-submit' ? { ...task, approvalMode: 'none', requiresInternalApproval: false } : task) }));
+  });
   await page.goto('/tasks?taskId=pm-submit');
   const dialog = page.getByRole('dialog', { name: 'Department submission' });
-  await dialog.getByRole('button', { name: 'Full edit', exact: true }).click();
-  const setting = dialog.getByRole('checkbox', { name: 'Require internal approval' });
-  await expect(setting).toBeChecked();
-  await setting.uncheck();
-  await dialog.getByRole('button', { name: 'Save review responsibility' }).click();
-  await expect(dialog.getByText('Review responsibility saved.', { exact: true })).toBeVisible();
-  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true }).locator('option[value="Completed"]')).toHaveJSProperty('disabled', false);
+  await expect(dialog.getByRole('button', { name: 'Confirm completion', exact: true })).toBeEnabled();
   await page.reload();
   const reopened = page.getByRole('dialog', { name: 'Department submission' });
-  await reopened.getByRole('button', { name: 'Full edit', exact: true }).click();
-  await expect(reopened.getByRole('checkbox', { name: 'Require internal approval' })).not.toBeChecked();
-  await reopened.getByRole('combobox', { name: 'Task status', exact: true }).selectOption('Completed');
+  await reopened.getByRole('button', { name: 'Confirm completion', exact: true }).click();
   await expect.poll(() => page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const task = useStore.getState().tasks.find(item => item.id === 'pm-submit');
@@ -121,16 +113,15 @@ test('PM completes approved work from the full status picker with a custom statu
   await page.goto('/tasks?taskId=pm-final');
   const dialog = page.getByRole('dialog', { name: 'Signed portfolio work' });
   await expect(dialog.getByRole('button', { name: 'Confirm completion', exact: true })).toBeEnabled();
-  await expect(dialog.getByRole('combobox', { name: 'All task statuses' }).locator('option[value="Completed"]')).toBeEnabled();
-  await dialog.getByRole('button', { name: 'Full edit', exact: true }).click();
-  await dialog.getByRole('combobox', { name: 'Task status', exact: true }).selectOption('Completed');
+  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Confirm completion', exact: true }).click();
   await expect.poll(() => page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const task = useStore.getState().tasks.find(task => task.id === 'pm-final')!;
     return { status: task.status, completed: task.isCompleted, progress: task.completionPercentage, timestamp: Boolean(task.completedAt) };
   })).toEqual({ status: 'Completed', completed: true, progress: 100, timestamp: true });
   await page.reload();
-  await expect(dialog.getByRole('combobox', { name: 'All task statuses' })).toHaveValue('Completed');
+  await expect(page.getByRole('dialog', { name: 'Signed portfolio work' }).getByLabel('Status').getByText('Completed', { exact: true })).toBeVisible();
 });
 
 test('PM saves a routine edit to a task in an inherited project', async ({ page }) => {

@@ -105,7 +105,7 @@ test.describe('task detail authorization matrix', () => {
     await expect(bossDialog.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
     await expect(bossDialog.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
     await expect(bossDialog.getByPlaceholder('Write a comment or update...')).toBeVisible();
-    await expect(bossDialog.getByRole('combobox', { name: 'Task status', exact: true })).toBeVisible();
+    await expect(bossDialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
 
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Logout' }).click();
@@ -161,7 +161,7 @@ test.describe('task detail authorization matrix', () => {
     const hodEditor = page.getByRole('dialog', { name: hodDepartmentTask.title });
     await expect(hodEditor.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
     await hodEditor.getByRole('button', { name: 'Edit', exact: true }).click();
-    await expect(hodEditor.locator('select').filter({ has: page.locator('option[value="u-staff-demo-local"]') })).toBeDisabled();
+    await expect(hodEditor.locator('select').filter({ has: page.locator('option[value="u-staff-demo-local"]') })).toBeEnabled();
 
     const staffAssignedTask = makeTask({
       id: 'e2e-staff-assigned',

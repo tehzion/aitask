@@ -76,6 +76,12 @@ describe('staff guided task actions', () => {
     expect(getStaffGuidedAction(task({ status: 'Waiting Approval' }), statuses)).toMatchObject({ label: 'Waiting for review', disabled: true });
   });
 
+  it('lets the assigned Staff member complete an explicit no-approval task', () => {
+    const actor = { id: 'staff-1', name: 'Staff', role: 'Staff', departments: ['Video Editor'] } as User;
+    expect(getStaffGuidedAction(task({ status: 'In Progress', requiresInternalApproval: false }), statuses, actor, [], { users: [actor] }))
+      .toMatchObject({ label: 'Complete task', targetStatus: 'Completed', disabled: false });
+  });
+
   it('falls back to the status picker for custom or incomplete workflows', () => {
     expect(getStaffGuidedAction(task({ status: 'QA review' }), statuses)).toMatchObject({ kind: 'picker', label: 'Update status' });
     expect(getStaffGuidedAction(task({ status: 'Pending' }), ['Pending', 'Completed'])).toMatchObject({ kind: 'picker' });

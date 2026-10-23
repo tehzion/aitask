@@ -20,6 +20,7 @@ vi.mock('../lib/secureWorkspace', async importOriginal => ({
   loadSecureWorkspaceRevision: async () => ({ version: 2 }),
 }));
 import { clearWorkspaceSession, isPendingMutationResolution, isWorkspaceMutationLocked, useStore } from './index';
+import { canRetrySave } from '../lib/actionFeedback';
 import type { User } from '../types';
 const initial = useStore.getState();
 const actor: User = { id: 'integrity-admin', authUserId: 'integrity-auth', name: 'Admin', role: 'Project Manager', departments: ['Management'], isSuperAdmin: true };
@@ -105,6 +106,30 @@ describe('session and acknowledgement integrity', () => {
     await useStore.getState().pullBackendNow({ force: true });
     expect(useStore.getState().backend).toMatchObject({ status: 'retry_required', hasLocalChanges: true, pendingMutations: 1 });
     expect(isWorkspaceMutationLocked(useStore.getState())).toBe(true);
+  });
+  it('keeps a permanent save rejection available for restore without offering a retry', async () => {
+    mocks.save.mockResolvedValueOnce({ ok: false, code: 'FORBIDDEN', error: 'You do not have permission to make this change.' });
+    expect(useStore.getState().createClientWithPlan(input).ok).toBe(true);
+
+    const result = await useStore.getState().commitPendingMutation('client_plan.manage');
+
+    expect(result).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+    expect(useStore.getState().backend).toMatchObject({
+      status: 'refresh_required',
+      errorCode: 'FORBIDDEN',
+      hasLocalChanges: true,
+      pendingMutations: 1,
+    });
+    expect(isPendingMutationResolution(useStore.getState().backend)).toBe(true);
+    expect(isWorkspaceMutationLocked(useStore.getState())).toBe(true);
+    expect(canRetrySave(useStore.getState().backend)).toBe(false);
+    expect(await useStore.getState().retryPendingSave()).toMatchObject({ ok: false, code: 'FORBIDDEN' });
+    expect(mocks.save).toHaveBeenCalledOnce();
+
+    mocks.load.mockResolvedValueOnce({ currentUser: actor, state: { ...initial, users: [actor], tasks: [] }, revision: { version: 2 }, notificationFeed: { items: [], unreadCount: 0 } });
+    await useStore.getState().discardMutation();
+    expect(useStore.getState().backend).toMatchObject({ status: 'live', hasLocalChanges: false, pendingMutations: 0 });
+    expect(isWorkspaceMutationLocked(useStore.getState())).toBe(false);
   });
   it('reports a confirmed save correctly when only its follow-up refresh times out', async () => {
     mocks.save.mockResolvedValueOnce({ ok: true, commandId: 'saved-plan', workspaceVersion: 2 });

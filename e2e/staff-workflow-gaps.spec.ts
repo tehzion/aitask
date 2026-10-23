@@ -107,14 +107,15 @@ test('discarded help retry retains the draft and cannot announce acknowledgement
 for (const status of ['Waiting Approval']) test(`linked tasks need evidence before ${status}`, async ({ page }) => {
   await seed(page, true);
   const sheet = page.getByRole('dialog', { name: title });
-  await sheet.getByRole('combobox', { name: 'All task statuses' }).selectOption(status);
+  await sheet.getByRole('button', { name: 'Start work', exact: true }).click();
+  await sheet.getByRole('button', { name: 'Send for review', exact: true }).click();
   await expect(sheet.getByRole('alert')).toContainText('Add an output link');
-  expect((await saved(page)).status).toBe('Pending');
+  expect((await saved(page)).status).toBe('In Progress');
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.getState().updateTaskAttachment('workflow-artwork', 'https://example.com/output');
   });
-  await sheet.getByRole('combobox', { name: 'All task statuses' }).selectOption(status);
+  await sheet.getByRole('button', { name: 'Send for review', exact: true }).click();
   await expect.poll(async () => (await saved(page)).status).toBe(status);
   if (status === 'Waiting Approval') {
     await expect(sheet.getByText('Sent for review', { exact: false }).first()).toBeVisible();
@@ -205,5 +206,5 @@ test('Staff completion remains restricted even when linked output evidence exist
   expect(result.ok).toBe(false);
   expect(result.error).toContain('Only a project manager can confirm completion');
   expect((await saved(page)).status).toBe('Pending');
-  await expect(page.getByRole('combobox', { name: 'All task statuses' }).locator('option[value="Completed"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Complete task', exact: true })).toHaveCount(0);
 });

@@ -8,7 +8,7 @@ import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
 import { getTaskStatusControls } from '../lib/taskStatusControls';
 import React from 'react';
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock3, ExternalLink, FileText, History, MessageSquare, Send, UsersRound } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, ExternalLink, FileText, History, MessageSquare, Send, UsersRound } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task, TaskStatus } from '../types';
 import { isPendingMutationResolution, useStore } from '../store';
@@ -95,7 +95,6 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const observedResolution = React.useRef(false);
   const operationGeneration = React.useRef(0);
   const clearUnsaved = useUnsavedChanges(isOpen && Boolean(comment.trim() || helpReason.trim() || isSaving || pendingSave || outputUpload.busy || outputUpload.pending));
-  const statusPickerRef = React.useRef<HTMLSelectElement>(null);
   const liveTask = task ? tasks.find(item => item.id === task.id) || null : null;
   useReviewCoverExpiry(liveTask?.reviewCover?.expiresAt);
 
@@ -145,8 +144,6 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const unavailablePredecessorCount = getUnavailableTaskDependencyCount(liveTask, visibleTasks);
   const guidedAction = getStaffGuidedAction(liveTask, taskStatuses, currentUser, rolePermissions, { users, clients, projects });
   const statusOptions = getTaskStatusControls(currentUser, liveTask, taskStatuses, rolePermissions, { users, clients, projects }, { tasks, cycles: serviceCycles, deliverables });
-  const completionError = currentUser?.role === 'Project Manager' && liveTask.status !== 'Completed'
-    ? statusOptions.find(option => option.status === 'Completed')?.disabledReason : undefined;
   const guidedActionError = statusOptions.find(option => option.status === guidedAction.targetStatus)?.disabledReason;
   const taskProgress = getTaskProgress(liveTask, users);
   const workflowKind = getWorkflowStepKind(liveTask, serviceCycles, deliverables);
@@ -268,37 +265,35 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
 
   const footer = canEdit ? (
     <div className="space-y-2">
-      {completionError && <p id={completionHintId} className="text-sm text-muted">{t(completionError)}</p>}
+      {guidedActionError && <p id={completionHintId} className="text-sm text-muted">{t(guidedActionError)}</p>}
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
         {canEdit && onOpenFullEditor && <Button variant="secondary" disabled={isSaving || outputUpload.busy || Boolean(pendingSave)} onClick={() => requestExit(onOpenFullEditor)}>{t('Full edit')}</Button>}
-        <label className="relative min-w-0 flex-1">
-          <span className="sr-only">{t('All task statuses')}</span>
-          <select
-            ref={statusPickerRef}
-            aria-label={t('All task statuses')}
-            aria-describedby={completionError ? completionHintId : undefined}
-            value={liveTask.status}
-            disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || pendingStatus !== null}
-            onChange={event => void persistStatus(event.target.value)}
-            className={`${inputBase} min-h-11 appearance-none px-3 pr-9`}
-          >
-            {statusOptions.map(({ status, disabledReason }) => <option key={status} value={status} disabled={Boolean(disabledReason)}>{getLocalizedTaskStatus(status, locale)}</option>)}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-        </label>
-        <Button
+        {reviewAction ? <Button
           className="sm:min-w-44"
-          disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || (reviewAction ? Boolean(transitionError('Approved')) : guidedAction.disabled || Boolean(guidedActionError)) || pendingStatus !== null}
-          aria-describedby={guidedAction.targetStatus === 'Completed' && completionError ? completionHintId : undefined}
-          onClick={() => {
-            if (reviewAction) void persistStatus('Approved');
-            else if (guidedAction.kind === 'advance' && guidedAction.targetStatus) void persistStatus(guidedAction.targetStatus);
-            else statusPickerRef.current?.focus();
-          }}
+          disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || Boolean(transitionError('Approved')) || pendingStatus !== null}
+          onClick={() => void persistStatus('Approved')}
         >
-          {guidedAction.kind === 'waiting' ? <Clock3 className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-          {isSaving ? t('Saving…') : t(reviewAction ? 'Approve internal review' : guidedAction.label)}
-        </Button>
+          <CheckCircle2 className="h-4 w-4" />{isSaving ? t('Saving…') : t('Approve internal review')}
+        </Button> : guidedAction.kind === 'advance' && guidedAction.targetStatus ? <Button
+          className="sm:min-w-44"
+          disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || guidedAction.disabled || Boolean(guidedActionError) || pendingStatus !== null}
+          aria-describedby={guidedActionError ? completionHintId : undefined}
+          onClick={() => void persistStatus(guidedAction.targetStatus!)}
+        >
+          <CheckCircle2 className="h-4 w-4" />{isSaving ? t('Saving…') : t(guidedAction.label)}
+        </Button> : guidedAction.kind === 'waiting' ? <span role="status" className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line bg-inset px-4 py-2 text-sm font-semibold text-muted">
+          <Clock3 className="h-4 w-4" />{t(liveTask.status === 'Waiting Approval' ? 'Awaiting Review' : guidedAction.label)}
+        </span> : guidedAction.kind === 'terminal' ? <span role="status" className="inline-flex min-h-11 items-center gap-2 rounded-control border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+          <CheckCircle2 className="h-4 w-4" />{t(guidedAction.label)}
+        </span> : guidedAction.kind === 'picker' ? <div className="flex flex-wrap gap-2" role="group" aria-label={t('Available task actions')}>
+          {statusOptions.filter(option => option.status !== liveTask.status).map(option => <Button
+            key={option.status}
+            variant="secondary"
+            disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || Boolean(option.disabledReason) || pendingStatus !== null}
+            title={option.disabledReason ? t(option.disabledReason) : undefined}
+            onClick={() => void persistStatus(option.status as TaskStatus)}
+          >{getLocalizedTaskStatus(option.status, locale)}</Button>)}
+        </div> : null}
       </div>
     </div>
   ) : null;

@@ -32,6 +32,16 @@ describe('department PM fallback reviewer', () => {
   it('cannot move another department into the PM fallback during approval', () => {
     expect(taskTransitionError(pm, { ...task, department: 'Video Editor' }, { ...task, status: 'Approved', isCompleted: false }, [], scope)).toBe('Reassign work before submitting it for review.');
   });
+
+  it('binds submission and no-approval completion to the assigned executor', () => {
+    const staff: User = { id: 'staff', name: 'Staff', role: 'Staff', departments: ['Designer'] };
+    const otherStaff: User = { ...staff, id: 'other-staff' };
+    const working = { ...task, status: 'In Progress', assignedTo: staff.id, approvalMode: 'none' as const, requiresInternalApproval: false };
+    expect(taskTransitionError(otherStaff, working, { ...working, status: 'Completed', isCompleted: true }, [], { users: [staff, otherStaff] })).toBe('Only a project manager can confirm completion after internal approval.');
+    expect(taskTransitionError(staff, working, { ...working, status: 'Completed', isCompleted: true }, [], { users: [staff] })).toBeUndefined();
+    const reviewTask = { ...working, approvalMode: 'hod' as const, requiresInternalApproval: true };
+    expect(taskTransitionError(otherStaff, reviewTask, { ...reviewTask, status: 'Waiting Approval', isCompleted: false }, [], { users: [staff, otherStaff] })).toBe('Only the assigned executor can submit this task for review.');
+  });
   it('keeps HOD review while preserving the responsible PM authority', () => {
     const users = [...scope.users, hod];
     expect(getDepartmentReviewers(users, task, [], scope).map(u => u.id)).toEqual(['hod', 'pm']);

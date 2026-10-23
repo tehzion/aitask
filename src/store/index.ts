@@ -218,6 +218,17 @@ type TaskUpdateInput = Partial<Pick<
   | 'milestoneId'
 >>;
 
+// HODs manage execution inside an authorized project/department. These fields
+// remain owned by the PM/project boundary even when a HOD can see the task and
+// edit its brief, dates, priority, or assignee.
+const HOD_RESTRICTED_TASK_FIELDS = [
+  'projectId', 'projectName', 'clientId', 'clientName', 'serviceType',
+  'serviceCycleId', 'deliverableId', 'milestoneId', 'department', 'visibility',
+  'customerDetails', 'facebookPage', 'website', 'isRecurring',
+  'recurrenceFrequency', 'assignedBy', 'assignedAt', 'responsibleHodId',
+  'assignmentState', 'assignmentOverride',
+] as const;
+
 export type ClientPlanSetupInput = {
   clientName: string;
   contactPerson?: string;
@@ -425,17 +436,28 @@ export interface StoreState {
 
 const nowId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const pendingMutationMessage = 'Changes are temporarily unavailable while AiTask resolves a pending save or completes a system update.';
+const isTerminalMutationError = (code?: MutationErrorCode) => (
+  code === 'VALIDATION' || code === 'FORBIDDEN' || code === 'NOT_FOUND'
+);
 export const isPendingMutationResolution = (backend: {
   status: SyncStatus;
   upgradeRequired?: boolean;
   hasLocalChanges: boolean;
   pendingMutations: number;
+  errorCode?: MutationErrorCode;
 }) => (
   !backend.upgradeRequired
   && (
     backend.status === 'conflict'
     || backend.status === 'retry_required'
     || (backend.status === 'offline' && (backend.hasLocalChanges || backend.pendingMutations > 0))
+    // A permanent rejection still needs an explicit restore before the
+    // optimistic projection can be used for another save, but it must never
+    // be presented as retryable. The rejected request has already been
+    // cleared by the command batch runner.
+    || (backend.status === 'refresh_required'
+      && (backend.hasLocalChanges || backend.pendingMutations > 0)
+      && isTerminalMutationError(backend.errorCode))
   )
 );
 const hasRetainedSecureMutation = () => (
@@ -451,9 +473,7 @@ export const isWorkspaceMutationLocked = (state: StoreState) => (
     || isPendingMutationResolution(state.backend)
   )
 );
-const isTerminalMemberMutationError = (code?: MutationErrorCode) => (
-  code === 'VALIDATION' || code === 'FORBIDDEN' || code === 'NOT_FOUND'
-);
+const isTerminalMemberMutationError = isTerminalMutationError;
 const isSyncBusy = (state: StoreState) => state.backend.isSaving || state.backend.isPulling || state.backend.isRestoring === true;
 const isPullBlockedByPendingChange = (state: StoreState) => (
   shouldUseSecureSupabase()
@@ -1245,6 +1265,8 @@ export const useStore = create<StoreState>()(
                     ? 'conflict'
                     : result.code === 'OFFLINE'
                       ? 'offline'
+                      : isTerminalMutationError(result.code)
+                        ? 'refresh_required'
                       : 'retry_required',
                   upgradeRequired,
                   isSaving: false,
@@ -1578,16 +1600,16 @@ export const useStore = create<StoreState>()(
               backend: {
                 ...state.backend,
                 status: terminal
-                  ? 'live'
+                  ? 'refresh_required'
                   : result.code === 'CONFLICT'
                     ? 'conflict'
                     : result.code === 'OFFLINE'
                       ? 'offline'
                       : 'retry_required',
                 isSaving: false,
-                hasLocalChanges: terminal ? false : state.backend.hasLocalChanges,
-                pendingMutations: terminal ? 0 : Math.max(1, state.backend.pendingMutations),
-                pendingCommandType: terminal ? undefined : state.backend.pendingCommandType,
+                hasLocalChanges: terminal ? true : state.backend.hasLocalChanges,
+                pendingMutations: terminal ? 1 : Math.max(1, state.backend.pendingMutations),
+                pendingCommandType: state.backend.pendingCommandType,
                 conflict: result.conflict,
                 errorCode: result.code,
                 error: result.error,
@@ -1703,6 +1725,8 @@ export const useStore = create<StoreState>()(
                 ? 'conflict'
                 : result.code === 'OFFLINE'
                   ? 'offline'
+                  : isTerminalMutationError(result.code)
+                    ? 'refresh_required'
                   : 'retry_required',
               upgradeRequired,
               isSaving: false,
@@ -1821,6 +1845,11 @@ export const useStore = create<StoreState>()(
           }
         }
         const before = get().backend;
+        if (before.status === 'refresh_required'
+          && (before.hasLocalChanges || before.pendingMutations > 0)
+          && isTerminalMutationError(before.errorCode)) {
+          return { ok: false, code: before.errorCode, error: before.error || pendingMutationMessage };
+        }
         if (getRetainedSecureCommand() || getRetainedSecureMemberMutation()) {
           return get().retryMutation();
         }
@@ -1871,7 +1900,8 @@ export const useStore = create<StoreState>()(
         }
         if (
           before.hasLocalChanges &&
-          (before.status === 'conflict' || before.status === 'retry_required' || before.status === 'offline')
+          (before.status === 'conflict' || before.status === 'retry_required' || before.status === 'offline'
+            || (before.status === 'refresh_required' && isTerminalMutationError(before.errorCode)))
         ) {
           return {
             ok: false,
@@ -2610,7 +2640,9 @@ export const useStore = create<StoreState>()(
         const responsibleHodId = task.responsibleHodId
           || (task.assignedTo && isHodUser(state.users.find(user => user.id === task.assignedTo), state.rolePermissions)
             ? task.assignedTo
-            : undefined);
+            : isHodUser(currentUser, state.rolePermissions) && isMemberInDepartment(currentUser, task.department)
+              ? currentUser.id
+              : undefined);
         const eligibleHods = eligibleTaskHods(task.department, project, state.users, state.rolePermissions);
         if (assigneeUser && isHodUser(assigneeUser, state.rolePermissions)
           && currentUser.role === 'Project Manager'
@@ -2671,8 +2703,12 @@ export const useStore = create<StoreState>()(
             assignmentState: nextAssignmentState,
             status: ['Completed', 'Cancelled'].includes(t.status) ? t.status : 'Pending',
             clientApprovalStatus: ['Completed', 'Cancelled'].includes(t.status) ? t.clientApprovalStatus : 'Pending',
+            // The database trigger stamps the authoritative assignment actor
+            // and time. HOD route updates must not send a client-controlled
+            // timestamp through the HOD permission boundary; keep the local
+            // timestamp stable until the server response is pulled.
             assignedBy: currentUser?.id || t.assignedBy,
-            assignedAt: now,
+            assignedAt: isHodUser(currentUser, state.rolePermissions) ? t.assignedAt : now,
             updatedAt: now,
           }, currentUser!.id, now);
           return { ...updated, completionPercentage: getTaskProgress(updated, state.users) };
@@ -2880,6 +2916,16 @@ export const useStore = create<StoreState>()(
         if (isWorkflowTask(task) && (['deliverableId', 'serviceCycleId', 'clientId', 'department', 'visibility'] as const).some(key => data[key] !== undefined && data[key] !== task[key])) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
 
         const canAssignOthers = canAssignTasksToOthers(currentUser, state.rolePermissions, task, { users: state.users, clients: state.clients, projects: state.projects });
+        if (isHodUser(currentUser, state.rolePermissions)) {
+          const requested = data as Record<string, unknown>;
+          const restrictedFieldChanged = HOD_RESTRICTED_TASK_FIELDS.some(field => (
+            Object.prototype.hasOwnProperty.call(requested, field)
+            && JSON.stringify(requested[field] ?? null) !== JSON.stringify((task as unknown as Record<string, unknown>)[field] ?? null)
+          ));
+          if (restrictedFieldChanged) {
+            return { ok: false, error: 'HODs can edit task execution details, but not project, company, service, or department ownership.' };
+          }
+        }
         const nextAssigneeId = data.assignedTo ?? task.assignedTo;
         if (!canAssignOthers && nextAssigneeId !== task.assignedTo) {
           return { ok: false, error: 'You do not have permission to reassign this task.' };
@@ -2912,7 +2958,8 @@ export const useStore = create<StoreState>()(
           : undefined;
         const nextEligibleHods = eligibleTaskHods(nextDepartment, nextProjectForAssignment, state.users, state.rolePermissions);
         const currentResponsibleHodId = task.responsibleHodId
-          || (task.assignedTo && isHodUser(state.users.find(user => user.id === task.assignedTo), state.rolePermissions) ? task.assignedTo : undefined);
+          || (task.assignedTo && isHodUser(state.users.find(user => user.id === task.assignedTo), state.rolePermissions) ? task.assignedTo : undefined)
+          || (assignmentChanged && isHodUser(currentUser, state.rolePermissions) && isMemberInDepartment(currentUser, task.department) ? currentUser.id : undefined);
         const nextResponsibleHodId = assignee && isHodUser(assignee, state.rolePermissions)
           ? assignee.id
           : currentResponsibleHodId;
@@ -3059,7 +3106,7 @@ export const useStore = create<StoreState>()(
             ? resolveTaskAssignmentState(nextAssigneeId, nextResponsibleHodId, assignee)
             : task.assignmentState,
           assignedBy: assignmentChanged ? currentUser.id : task.assignedBy,
-          assignedAt: assignmentChanged ? now : task.assignedAt,
+          assignedAt: assignmentChanged && !isHodUser(currentUser, state.rolePermissions) ? now : task.assignedAt,
           startDate,
           dueDate,
           status,
@@ -3116,6 +3163,32 @@ export const useStore = create<StoreState>()(
         if (state.backend.mode === 'local') notifications.push(...localHodReviewNotifications(
           state.users, state.rolePermissions, task, updatedTask, currentUser.id, { clients: state.clients, projects: state.projects },
         ));
+        const datesChanged = task.startDate !== updatedTask.startDate || task.dueDate !== updatedTask.dueDate;
+        const instructionsChanged = ['title', 'description', 'notes', 'priority'].some(field => (
+          JSON.stringify(task[field as keyof Task] ?? null) !== JSON.stringify(updatedTask[field as keyof Task] ?? null)
+        ));
+        if (datesChanged || instructionsChanged) {
+          const accountableRecipients = [...new Set([
+            ...resolveTaskUpdateRecipientIds(state.users, updatedTask, state.clients, state.projects, state.rolePermissions),
+            updatedTask.assignedTo,
+          ].filter((id): id is string => Boolean(id)))];
+          if (datesChanged) notifications.push(...taskUpdateNotifications(accountableRecipients, {
+            title: 'Task Dates Updated',
+            message: `The start date or due date for "${updatedTask.title}" was updated by ${currentUser.name}.`,
+            route: { page: 'tasks', entityId: taskId },
+            iconType: 'status',
+            category: 'deadline',
+            importance: 'action',
+          }, currentUser.id));
+          if (instructionsChanged && !statusChanged && task.status !== 'Waiting Approval') notifications.push(...taskUpdateNotifications(accountableRecipients, {
+            title: 'Task Instructions Updated',
+            message: `The brief or execution details for "${updatedTask.title}" were updated by ${currentUser.name}.`,
+            route: { page: 'tasks', entityId: taskId },
+            iconType: 'task',
+            category: 'feedback',
+            importance: 'action',
+          }, currentUser.id));
+        }
         if (task.status !== updatedTask.status && updatedTask.status === 'Approved') notifications.push(...taskUpdateNotifications(
           resolveTaskUpdateRecipientIds(state.users, updatedTask, state.clients, state.projects, state.rolePermissions), {
             title: 'Task Status Updated', message: `"${updatedTask.title}" was approved by ${currentUser.name}.`,
@@ -6321,7 +6394,13 @@ export const startBackendAutoSync = () => {
     },
     () => useStore.getState().pullBackendNow({ force: true, silent: true }),
   );
-  const reportRealtimeFailure = () => useToastStore.getState().addToast(msg('errors.realtimeUnavailable'), 'warning');
+  const reportRealtimeFailure = () => {
+    useToastStore.getState().addToast(msg('errors.realtimeUnavailable'), 'warning');
+    // Realtime is an invalidation accelerator, not the source of truth. Pull
+    // immediately after a channel failure so a missed event does not wait for
+    // the fifteen-second safety poll.
+    accessRefresh.request();
+  };
 
   const syncAccessRealtime = () => {
     const currentUser = useStore.getState().currentUser;

@@ -1,21 +1,48 @@
 import { describe, expect, it } from 'vitest';
-import { canAccessPath, canAssignTasksToOthers, canDeleteClientProfile, canEditTask, canOpenServiceClient, canLinkTaskToProject, defaultRolePermissions, getEffectivePermissions, getTaskAccess } from './access';
+import { canAccessPath, canAssignTasksToOthers, canDeleteClientProfile, canEditTask, canOpenServiceClient, canLinkTaskToProject, canViewTask, defaultRolePermissions, getEffectivePermissions, getTaskAccess } from './access';
 import type { CustomRole, Project, Task, User } from '../types';
 
 const hod: User = { id: 'hod', name: 'HOD', role: 'HOD', department: 'Video Shooting', departments: ['Video Shooting', 'Video Editor'] };
 const task = (values: Partial<Task> = {}) => ({ id: 'task', clientName: 'Visible Co', department: 'Video Editor', createdBy: 'pm', assignedTo: 'editor', ...values } as Task);
 
 describe('HOD permission parity', () => {
-  it.each(['Editor', 'video-editor', 'video editing', 'editing'])('recognizes the legacy department %s without granting delegation of somebody else’s task', department => {
+  it.each(['Editor', 'video-editor', 'video editing', 'editing'])('recognizes the legacy department %s and grants scoped HOD execution management', department => {
     const work = task({ department: department as Task['department'] });
-    expect(getTaskAccess(hod, work)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: false, canAssign: false });
+    expect(getTaskAccess(hod, work)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: false, canAssign: true });
   });
-  it('separates department oversight from assignment authority', () => {
-    expect(canAssignTasksToOthers(hod, [], task())).toBe(false);
+  it('keeps HOD delegation inside the member department', () => {
+    expect(canAssignTasksToOthers(hod, [], task())).toBe(true);
     expect(canAssignTasksToOthers(hod, [], task({ assignedTo: hod.id }))).toBe(true);
     expect(canAssignTasksToOthers(hod, [], task({ createdBy: hod.id }))).toBe(true);
     expect(canAssignTasksToOthers({ ...hod, permissions: { ...defaultRolePermissions.HOD, manageCreatedTasks: false } }, [], task({ assignedTo: hod.id }))).toBe(false);
     expect(canEditTask(hod, task({ department: 'Designer' }))).toBe(false);
+  });
+  it('keeps a Staff-shaped HOD inside explicitly assigned projects', () => {
+    const customHodRole: CustomRole = {
+      id: 'custom-hod',
+      name: 'Custom HOD',
+      baseRole: 'HOD',
+      isBuiltin: true,
+      departmentScoped: true,
+      permissions: { ...defaultRolePermissions.HOD },
+      createdAt: '',
+      updatedAt: '',
+    };
+    const staffShapedHod: User = { ...hod, role: 'Staff', customRoleId: customHodRole.id };
+    const projectBase = { services: ['Video Editing'], startDate: '2026-10-01', deadline: '' };
+    const projects: Project[] = [
+      { ...projectBase, id: 'owned-project', clientName: 'Visible Co', projectName: 'Owned', hodMemberIds: [staffShapedHod.id] },
+      { ...projectBase, id: 'foreign-project', clientName: 'Visible Co', projectName: 'Foreign', hodMemberIds: ['other-hod'] },
+    ];
+    const owned = task({ id: 'owned-task', projectId: 'owned-project' });
+    const foreign = task({ id: 'foreign-task', projectId: 'foreign-project' });
+    const scope = { projects };
+
+    expect(canViewTask(staffShapedHod, owned, [customHodRole], scope)).toBe(true);
+    expect(canEditTask(staffShapedHod, owned, [customHodRole], scope)).toBe(true);
+    expect(canViewTask(staffShapedHod, foreign, [customHodRole], scope)).toBe(false);
+    expect(canEditTask(staffShapedHod, foreign, [customHodRole], scope)).toBe(false);
+    expect(canAssignTasksToOthers(staffShapedHod, [customHodRole], foreign, scope)).toBe(false);
   });
   it('requires delegation authority for deletion without revoking department edits', () => {
     expect(getTaskAccess(hod, task())).toMatchObject({ canEdit: true, canDelete: false });

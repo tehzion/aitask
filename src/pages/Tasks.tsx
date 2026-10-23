@@ -1,14 +1,13 @@
 import '../lib/actionFeedbackCopy';
 import SystemMessage from '../components/SystemMessage';
 import { getTaskProgress } from '../lib/taskProgress';
-import { getTaskStatusControls } from '../lib/taskStatusControls';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useI18n } from '../components/I18nProvider';
 import { useShallow } from 'zustand/react/shallow';
 import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone, Plus } from 'lucide-react';
 import { format } from 'date-fns/format';
-import { Priority, Task, TaskStatus } from '../types';
+import { Priority, Task } from '../types';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Badge, Button, PageHeader } from '../components/ui';
@@ -24,7 +23,6 @@ import { getClientTaskStage } from '../lib/clientPortal';
 import { getLocalizedDepartment, getLocalizedPriority, getLocalizedStatus } from '../lib/localeLabels';
 import { formatLocalizedDate } from '../lib/i18n';
 import StaffAllWork from '../components/StaffAllWork';
-import { announceTaskStatusSaved } from '../lib/taskStatusFeedback';
 import ClientDeliveries from '../components/ClientDeliveries';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import { useLocalToday } from '../hooks/useLocalToday';
@@ -64,14 +62,11 @@ const priorityColors: Record<Priority, string> = {
 const TasksWorkspace: React.FC = () => {
   const { locale, t } = useI18n();
   const today = useLocalToday();
-  const { tasks: allTasks, clients: clientProfiles, users, projects, serviceCycles, deliverables, updateTaskStatus, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore(useShallow(state => ({
+  const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore(useShallow(state => ({
     tasks: state.tasks,
     clients: state.clients,
     users: state.users,
     projects: state.projects,
-    serviceCycles: state.serviceCycles,
-    deliverables: state.deliverables,
-    updateTaskStatus: state.updateTaskStatus,
     updateTaskPriority: state.updateTaskPriority,
     updateTaskAssignee: state.updateTaskAssignee,
     currentUser: state.currentUser,
@@ -81,7 +76,6 @@ const TasksWorkspace: React.FC = () => {
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
     commitPendingMutation: state.commitPendingMutation,
   })));
-  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [activeQuickEdit, setActiveQuickEdit] = useState<{ taskId: string; x: number; y: number } | null>(null);
   const [quickSyncError, setQuickSyncError] = useState('');
   const pendingResolution = isPendingMutationResolution(backend);
@@ -95,9 +89,6 @@ const TasksWorkspace: React.FC = () => {
     catch (error) { result = { ok: false, error: error instanceof Error ? error.message : 'Unable to save this change.' }; }
     if (!isWorkspaceSessionCurrent(session) || useStore.getState().currentUser?.id !== actorId) return false;
     if (result.ok) {
-      const saved = useStore.getState().tasks.find(task => task.id === previousTask.id);
-      if (saved && submittedTask && submittedTask.status !== previousTask.status
-        && saved.status === submittedTask.status) announceTaskStatusSaved(saved.status);
       setQuickSyncError('');
       return true;
     }
@@ -136,39 +127,6 @@ const TasksWorkspace: React.FC = () => {
       x: e.clientX,
       y: e.clientY + 4,
     });
-  };
-
-  const handleDragStart = (e: React.DragEvent, taskId: string) => {
-    e.dataTransfer.setData('text/plain', taskId);
-    e.dataTransfer.effectAllowed = 'move';
-    setDraggingTaskId(taskId);
-  };
-
-  const handleDragEnd = () => {
-    setDraggingTaskId(null);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDrop = async (e: React.DragEvent, targetStatus: TaskStatus) => {
-    e.preventDefault();
-    const taskId = e.dataTransfer.getData('text/plain');
-    setDraggingTaskId(null);
-    if (!taskId) return;
-
-    const task = allTasks.find(t => t.id === taskId);
-    if (!task) return;
-    if (!canEditTask(task)) return;
-
-    const localResult = updateTaskStatus(taskId, targetStatus);
-    if (!localResult.ok) {
-      setQuickSyncError(String(t(localResult.error || 'Unable to update the task status.')));
-      return;
-    }
-    await persistQuickChange(task);
   };
 
   const getDeptBadge = (dept: string) => {
@@ -459,33 +417,9 @@ const TasksWorkspace: React.FC = () => {
   };
 
   const renderStatusControl = (task: Task) => (
-    canEditTask(task) ? (
-      <div className="relative inline-block">
-        <select
-          aria-label={t('task.changeStatusFor', { title: task.title })}
-          className={`text-xs pl-2.5 pr-6 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none ${getStatusColor(task.status)}`}
-          value={task.status}
-          disabled={backend.isSaving}
-          onChange={async (e) => {
-            const localResult = updateTaskStatus(task.id, e.target.value as TaskStatus);
-            if (!localResult.ok) {
-              setQuickSyncError(String(t(localResult.error || 'Unable to update the task status.')));
-              return;
-            }
-            await persistQuickChange(task);
-          }}
-        >
-        {getTaskStatusControls(currentUser, task, taskStatuses, rolePermissions, { users, clients: clientProfiles, projects }, { tasks: allTasks, cycles: serviceCycles, deliverables }).map(({ status, disabledReason }) => (
-            <option key={status} value={status} disabled={Boolean(disabledReason)} title={disabledReason ? t(disabledReason) : undefined} className="bg-white text-slate-900">{getLocalizedStatus(status, locale)}</option>
-          ))}
-        </select>
-        <ChevronDown className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 text-current" />
-      </div>
-    ) : (
-      <span className={`text-xs px-2.5 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
-        {isClientUser ? t(clientStatusLabel(task)) : getLocalizedStatus(task.status, locale)}
-      </span>
-    )
+    <span className={`inline-flex text-xs px-2.5 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
+      {isClientUser ? t(clientStatusLabel(task)) : getLocalizedStatus(task.status, locale)}
+    </span>
   );
 
   return (
@@ -1041,9 +975,7 @@ const TasksWorkspace: React.FC = () => {
                 return (
                   <div
                     key={status}
-                    onDragOver={isClientUser ? undefined : handleDragOver}
-                    onDrop={isClientUser ? undefined : (e) => handleDrop(e, status as TaskStatus)}
-                            className={cn('flex max-h-[700px] flex-col rounded-lg border border-slate-200 bg-slate-50 p-3', !isClientUser && 'min-w-[260px] flex-1')}
+                    className={cn('flex max-h-[700px] flex-col rounded-lg border border-slate-200 bg-slate-50 p-3', !isClientUser && 'min-w-[260px] flex-1')}
                   >
                     {/* Column Header */}
                     <div className="flex justify-between items-center mb-3 pb-2 border-b border-line shrink-0">
@@ -1065,20 +997,15 @@ const TasksWorkspace: React.FC = () => {
                         columnTasks.map(task => {
                           const dueDateParsed = parseOptionalDate(task.dueDate);
                           const isOverdue = isTaskOverdue(task, today);
-                          const canDrag = canEditTask(task);
 
                           return (
                             <div
                               key={task.id}
-                              draggable={canDrag}
-                              onDragStart={canDrag ? (e) => handleDragStart(e, task.id) : undefined}
-                              onDragEnd={handleDragEnd}
                               onClick={() => setSelectedTask(task)}
                               className={cn(
                                 "relative cursor-pointer select-none rounded-lg border border-slate-200 bg-white p-3.5 text-left transition-colors hover:border-slate-300 hover:bg-slate-50",
                                 isOverdue && "border-red-200 bg-red-50/10 hover:bg-red-50/20",
-                                draggingTaskId === task.id && "opacity-40 scale-[0.97]",
-                                canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+                                "cursor-pointer"
                               )}
                             >
                               {isOverdue && (
@@ -1214,26 +1141,9 @@ const TasksWorkspace: React.FC = () => {
               {/* Status */}
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 mb-1">{t('Status')}</label>
-                <div className="relative">
-                  <select
-                    className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white appearance-none cursor-pointer")}
-                    value={currentTask.status}
-                    onChange={(e) => {
-                      const localResult = updateTaskStatus(currentTask.id, e.target.value as TaskStatus);
-                      if (!localResult.ok) {
-                        setQuickSyncError(String(t(localResult.error || 'Unable to update the task status.')));
-                        return;
-                      }
-                      void persistQuickChange(currentTask);
-                      setActiveQuickEdit(null);
-                    }}
-                  >
-                    {getTaskStatusControls(currentUser, currentTask, taskStatuses, rolePermissions, { users, clients: clientProfiles, projects }, { tasks: allTasks, cycles: serviceCycles, deliverables }).map(({ status, disabledReason }) => (
-                      <option key={status} value={status} disabled={Boolean(disabledReason)} title={disabledReason ? t(disabledReason) : undefined}>{getLocalizedStatus(status, locale)}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-                </div>
+                <span className={`inline-flex rounded-md px-2.5 py-1.5 text-xs font-semibold ${getStatusColor(currentTask.status)}`}>
+                  {getLocalizedStatus(currentTask.status, locale)}
+                </span>
               </div>
 
               {/* Priority */}

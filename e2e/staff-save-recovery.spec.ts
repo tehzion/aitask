@@ -114,7 +114,12 @@ for (const status of ['In Progress', 'Waiting Approval']) {
       useStore.setState({ users: [...useStore.getState().users, { id: 'status-recovery-hod', name: 'Review HOD', role: 'HOD', department: 'Designer', departments: ['Designer'] }], commitPendingMutation: async () => ({ ok: false, error: 'Status was not confirmed.' }), retryPendingSave: async () => ({ ok: true }) });
     });
     const sheet = page.getByRole('dialog', { name: titleA });
-    await sheet.getByRole('combobox', { name: 'All task statuses' }).selectOption(status);
+    if (status === 'In Progress') {
+      await sheet.getByRole('button', { name: 'Start work', exact: true }).click();
+    } else {
+      await sheet.getByRole('button', { name: 'Start work', exact: true }).click();
+      await sheet.getByRole('button', { name: 'Send for review', exact: true }).click();
+    }
     await expect(sheet.getByRole('alert')).toContainText('Status was not confirmed.');
     const successIds = () => page.evaluate(async () => {
       const { useToastStore } = await import('/src/store/useToastStore.ts');

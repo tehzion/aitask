@@ -67,6 +67,15 @@ describe('role-controlled task milestones', () => {
     actor(client);
     expect(useStore.getState().reviewClientApproval(task.id, 'Approved').ok).toBe(false);
   });
+
+  it('lets the assigned Staff member finish a no-approval task without a review hop', () => {
+    useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Pending', approvalMode: 'none', requiresInternalApproval: false }] });
+    actor(staff);
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress').ok).toBe(true);
+    expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval')).toEqual({ ok: false, error: 'This task does not require internal approval. Complete the task instead.' });
+    expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
+    expect(current()).toMatchObject({ status: 'Completed', isCompleted: true, completionPercentage: 100 });
+  });
   it('returning approved work through the status selector also sets revision to 50%', () => {
     useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Approved', completionPercentage: 80 }] });
     actor(hod);

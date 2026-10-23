@@ -40,13 +40,31 @@ export const canReviewTaskInternally = (user: User | null | undefined, task: Tas
 export const canRequestTaskRevision = (user: User | null | undefined, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => Boolean(user
   && (isResponsibleProjectManager(user, task, scope) || canReviewTaskInternally(user, task, roles, scope)));
 
-// A task whose responsible project manager opted it out of the internal-approval
-// checkpoint. Internal-review workflow steps can never be opted out.
-const isApprovalOptOut = (task: Partial<Task> | undefined) => task?.requiresInternalApproval === false
-  && task.workflowStepKind !== 'internal_review';
-const canSkipInternalApproval = (task: Partial<Task> | undefined) => task?.status === 'Waiting Approval' && isApprovalOptOut(task);
+const getTaskApprovalMode = (task: Partial<Task>, scope: VisibilityScope = {}) => getEffectiveTaskApprovalMode(
+  task as Pick<Task, 'approvalMode' | 'requiresInternalApproval' | 'projectId'>,
+  scope.projects || [],
+);
+const canSkipInternalApproval = (task: Partial<Task> | undefined, scope: VisibilityScope = {}) => Boolean(
+  task?.status === 'Waiting Approval'
+  && task.workflowStepKind !== 'internal_review'
+  && getTaskApprovalMode(task, scope) === 'none'
+);
 
-export const canCompleteWithoutInternalApproval = (task: Partial<Task> | undefined) => canSkipInternalApproval(task);
+const canStaffCompleteNoApproval = (
+  user: User | null | undefined,
+  task: Partial<Task> | undefined,
+  roles: CustomRole[] = [],
+  scope: VisibilityScope = {},
+) => Boolean(
+  user?.role === 'Staff'
+  && !isHodUser(user, roles)
+  && task?.status === 'In Progress'
+  && task.assignedTo === user.id
+  && getTaskApprovalMode(task || {}, scope) === 'none'
+  && task?.workflowStepKind !== 'internal_review',
+);
+
+export const canCompleteWithoutInternalApproval = (task: Partial<Task> | undefined, scope: VisibilityScope = {}) => canSkipInternalApproval(task, scope);
 
 export const taskTransitionError = (user: User | null | undefined, before: Task | undefined, after: Pick<Task, 'status' | 'isCompleted' | 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
   const protectedOutput = before?.status === 'Approved' ? ['title', 'description', 'notes', 'attachmentLink', 'attachmentName', 'outputAttachments'] as const
@@ -55,18 +73,36 @@ export const taskTransitionError = (user: User | null | undefined, before: Task 
   if (before && before.status !== after.status && ['Approved', 'Completed'].includes(after.status)
     && ['assignedTo', 'department'].some(field => Object.prototype.hasOwnProperty.call(after, field) && before[field as 'assignedTo' | 'department'] !== after[field as 'assignedTo' | 'department'])) return 'Reassign work before submitting it for review.';
   if (before?.status === after.status && before.isCompleted === after.isCompleted) return undefined;
+  const ordinaryStaff = user?.role === 'Staff' && !isHodUser(user, roles);
+  if (before && before.status !== after.status && after.status === 'In Progress'
+    && ['Pending', 'Revision'].includes(before.status) && ordinaryStaff && before.assignedTo !== user?.id) {
+    return 'Only the assigned staff member can start this task.';
+  }
+  if (before && before.status !== after.status && after.status === 'Waiting Approval'
+    && before.workflowStepKind !== 'internal_review'
+    && getTaskApprovalMode(before, scope) === 'none') {
+    return 'This task does not require internal approval. Complete the task instead.';
+  }
+  if (before && before.status !== after.status && after.status === 'Waiting Approval'
+    && !isBossKoo(user) && before.assignedTo !== user?.id
+    && !isResponsibleProjectManager(user, before, scope)) {
+    return 'Only the assigned executor can submit this task for review.';
+  }
   const override = Boolean(user && isBossKoo(user) && after.reviewOverrideReason?.trim() && after.reviewOverrideReason.trim().length <= 2000);
   // HODs and covers handle the department lane; the responsible PM can also
   // approve within their portfolio. Boss Koo's self-approval needs a reason.
   if (after.status === 'Approved' && (!before || before.status !== 'Waiting Approval'
     || (!canReviewTaskInternally(user, before, roles, scope) && !override
-      && !(isApprovalOptOut(before) && isResponsibleProjectManager(user, before, scope))))) return 'Only an authorized project manager, department reviewer, or Boss Koo can approve submitted work.';
+      && !(before.workflowStepKind !== 'internal_review'
+        && getTaskApprovalMode(before, scope) === 'none'
+        && isResponsibleProjectManager(user, before, scope))))) return 'Only an authorized project manager, department reviewer, or Boss Koo can approve submitted work.';
   // Client review and PM finalization are independent. The responsible PM may
   // complete client-visible work at 100%; customer acceptance remains available
   // as a separate, audited decision and does not have to happen first.
   if ((after.status === 'Completed' || after.isCompleted) && !isBossKoo(user)
+    && !canStaffCompleteNoApproval(user, before, roles, scope)
     && (user?.role !== 'Project Manager' || !before || !isResponsibleProjectManager(user, before, scope)
-      || (before.status !== 'Approved' && !canCompleteWithoutInternalApproval(before)))) return 'Only a project manager can confirm completion after internal approval.';
+      || (before.status !== 'Approved' && !canCompleteWithoutInternalApproval(before, scope)))) return 'Only a project manager can confirm completion after internal approval.';
   if (before && ['Waiting Approval', 'Approved', 'Completed'].includes(before.status) && !canRequestTaskRevision(user, before, roles, scope)) return 'Ask the HOD or project manager to return approved work for revision.';
   if (before && after.status === 'Revision' && !canRequestTaskRevision(user, before, roles, scope)) return 'Ask the HOD or project manager to return approved work for revision.';
   return undefined;
@@ -127,7 +163,11 @@ export const resolveTaskAssignmentState = (
   if (!assignedTo && !responsibleHodId) return 'needs_hod';
   if (assignedTo && responsibleHodId && assignedTo === responsibleHodId) return 'pending_hod';
   if (assignedTo && assignedUser && !isHodUser(assignedUser)) return 'assigned_staff';
-  return responsibleHodId ? 'pending_hod' : 'needs_hod';
+  // A legacy or non-PM task may already have an owner without having gone
+  // through the HOD-first route. Keep its routing fields omitted so the
+  // server can preserve that historical assignment rather than falsely
+  // labelling it as an unassigned `needs_hod` task.
+  return responsibleHodId ? 'pending_hod' : undefined;
 };
 
 /** Staff eligible for HOD delegation within a project and department. */

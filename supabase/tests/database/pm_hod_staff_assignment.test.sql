@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(9);
+select plan(10);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -61,6 +61,9 @@ select is((pg_temp.route_task('update', 'routing-task', (select data from public
 ))->>'ok')::boolean, true, 'HOD can delegate to project Staff while retaining the responsible HOD');
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000009903', true);
+select is((pg_temp.route_task('update', 'routing-task', (select data from public.aitask_entities where workspace_id = 'pgtap-pm-hod-staff-routing' and entity_type = 'task' and entity_id = 'routing-task') || jsonb_build_object(
+  'status', 'In Progress', 'completionPercentage', 30, 'notes', 'Assigned Staff progress update'
+))->>'ok')::boolean, true, 'Assigned Staff can update execution progress without Full Edit or PM permissions');
 select is((pg_temp.route_task('update', 'routing-task', (select data from public.aitask_entities where workspace_id = 'pgtap-pm-hod-staff-routing' and entity_type = 'task' and entity_id = 'routing-task') || jsonb_build_object(
   'assignedTo', 'foreign-staff', 'assignmentState', 'assigned_staff'
 ))->>'ok')::boolean, false, 'Staff cannot self-assign or switch to a foreign project member');

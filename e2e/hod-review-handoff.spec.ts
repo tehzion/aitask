@@ -15,16 +15,18 @@ test('staff submission reaches the department HOD inbox and opens pending work',
     useStore.setState({ currentUser: staff, users: [staff, hod], rolePermissions: [], clients: [], projects: [], clientPlans: [], deliverables: [], serviceCycles: [], notifications: [], tasks: [{ ...state.tasks[0], generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined, internalReview: undefined, id: 'handoff-task', title: 'Artwork for HOD review', clientName: 'Handoff Company', clientId: undefined, projectId: undefined, department: 'Designer', assignedTo: staff.id, assignedBy: hod.id, createdBy: hod.id, status: 'In Progress', isCompleted: false, revisionCount: 0, completionPercentage: 50, predecessorTaskIds: [], deliverableId: undefined, serviceCycleId: undefined, visibility: 'internal', comments: [], approvalHistory: [] }], backend: { ...state.backend, mode: 'local', status: 'local', pendingMutations: 0, hasLocalChanges: false } });
   });
   await page.goto('/tasks?taskId=handoff-task');
+  const welcome = page.getByRole('dialog', { name: 'Welcome to AiTask' });
+  if (await welcome.isVisible().catch(() => false)) await welcome.getByRole('button', { name: 'Explore on my own' }).click();
   await page.getByRole('button', { name: 'Send for review', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Waiting for review', exact: true })).toBeDisabled();
+  await expect(page.getByRole('status').filter({ hasText: 'Awaiting Review' })).toBeVisible();
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ currentUser: useStore.getState().users.find(user => user.id === 'handoff-hod')! });
   });
   await page.goto('/notifications');
-  await expect(page.getByRole('heading', { name: 'Ready for department review', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'View', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Ready for review', exact: true })).toBeVisible();
+  await page.getByRole('article').filter({ hasText: 'Ready for review' }).getByRole('button', { name: 'View', exact: true }).click();
   await expect(page).toHaveURL(/taskId=handoff-task/);
   await expect(page.getByRole('dialog', { name: 'Artwork for HOD review' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'All task statuses' })).toHaveValue('Waiting Approval');
+  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible();
 });

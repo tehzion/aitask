@@ -5,8 +5,9 @@ import { acknowledgeActionFeedback, canRetrySave, dismissActionFeedback } from '
 import SystemMessage from './SystemMessage';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
-import { assignableTaskAssignees, canApproveTaskInternally, canCompleteWithoutInternalApproval, canRequestTaskRevision, eligibleTaskStaff, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../lib/taskWorkflowAccess';
+import { assignableTaskAssignees, canRequestTaskRevision, eligibleTaskStaff, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { getTaskStatusControls } from '../lib/taskStatusControls';
+import { getStaffGuidedAction } from '../lib/staffWorkspace';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import type { WorkspaceSessionToken } from '../lib/workspaceSession';
 import { useSaveAction } from '../hooks/useSaveAction';
@@ -25,10 +26,10 @@ import { isPendingMutationResolution, useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { X, Send, MessageSquare, Paperclip, Clock, Calendar, CheckCircle2, XCircle, RotateCcw, History, Pencil, Trash2, Save, ChevronDown, AlertTriangle, UsersRound } from 'lucide-react';
 import { Department, Priority, Task, TaskStatus } from '../types';
-import { canViewTask, getVisibleTasks, getTaskAccess, canReviewTaskAsClient, isDepartmentScopedUser } from '../lib/access';
+import { canViewTask, getVisibleTasks, getTaskAccess, canReviewTaskAsClient, isDepartmentScopedUser, isHodUser } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate, parseOptionalDate, cn } from '../lib/utils';
-import { assignableDepartments, isMemberInDepartment } from '../lib/departments';
+import { assignableDepartments } from '../lib/departments';
 import type { SecureCommandType } from '../lib/secureWorkspace';
 import ClientDeliveryFocus from './ClientDeliveryFocus';
 import ModalShell from './ModalShell';
@@ -268,13 +269,17 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const isClientTaskViewer = currentUser?.role === 'Client';
   const taskProgress = getTaskProgress(task, users, isClientTaskViewer);
   const statusOptions = getTaskStatusControls(currentUser, task, taskStatuses, rolePermissions, { users, clients, projects }, { tasks, cycles: workflow.cycles, deliverables: workflow.deliverables });
-  const completionError = currentUser?.role === 'Project Manager' && task.status !== 'Completed'
-    ? statusOptions.find(option => option.status === 'Completed')?.disabledReason : undefined;
-  const showCompletionAction = task.status === 'Approved' || canCompleteWithoutInternalApproval(task);
-  // Reassignment is frozen once work is submitted, but non-reassignment scope
-  // fields (Client/Brand, Service) stay editable until then.
+  const guidedAction = getStaffGuidedAction(task, taskStatuses, currentUser, rolePermissions, { users, clients, projects });
+  const guidedActionError = guidedAction.targetStatus
+    ? statusOptions.find(option => option.status === guidedAction.targetStatus)?.disabledReason
+    : undefined;
+  // Reassignment is frozen once work is submitted. HODs can edit execution
+  // fields and route work to eligible Staff, but project/company/service and
+  // department ownership stay outside their form authority.
   const reassignmentLocked = isTaskAssignmentLocked(task);
   const canEditScope = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canAssign;
+  const isHodTaskEditor = isHodUser(currentUser, rolePermissions);
+  const canEditAdministrativeScope = canEditScope && !isHodTaskEditor;
   const canAssignOthers = canEditScope && !reassignmentLocked;
   const canDelegateAssignedTask = Boolean(
     canAssignOthers
@@ -519,6 +524,37 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     if (await confirmPendingMutation('approval.revision')) setRevisionNote('');
   };
 
+  const handleStatusAction = async (nextStatus: TaskStatus) => {
+    if (isSubmitting || !canEditTask) return;
+    if (guidedActionError && nextStatus === guidedAction.targetStatus) {
+      setMutationError(String(t(guidedActionError)));
+      return;
+    }
+    if (incompletePredecessors.length > 0 && !['Pending', 'Cancelled'].includes(nextStatus)) {
+      setConfirmation({
+        title: t('Earlier steps are unfinished'),
+        description: t('Unfinished earlier steps: {count}. Change this task to {status}?', { count: incompletePredecessors.length, status: getLocalizedTaskStatus(nextStatus, locale) }),
+        confirmLabel: t('Continue'),
+        tone: 'primary',
+        action: async () => {
+          const localResult = updateTaskStatus(task.id, nextStatus);
+          if (!localResult.ok) {
+            setMutationError(String(t(localResult.error || 'Unable to update the task status.')));
+            return;
+          }
+          if (await confirmPendingMutation('task.update')) announceTaskStatusSaved(nextStatus);
+        },
+      });
+      return;
+    }
+    const localResult = updateTaskStatus(task.id, nextStatus);
+    if (!localResult.ok) {
+      setMutationError(String(t(localResult.error || 'Unable to update the task status.')));
+      return;
+    }
+    if (await confirmPendingMutation('task.update')) announceTaskStatusSaved(nextStatus);
+  };
+
   const handleDetailsSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -675,67 +711,20 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
               <div className="flex items-center justify-between">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">{t('Current Status')}</label>
-                  {!canEditTask ? (
-                    <span className={`text-sm px-3 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
-                      {currentUser?.role === 'Client' ? t(task.status) : getLocalizedTaskStatus(task.status, locale)}
-                    </span>
-                  ) : (
-                    <div className="relative inline-block">
-                      <select
-                        aria-label={t('Task status')}
-                        aria-describedby={completionError ? completionHintId : undefined}
-                        disabled={isSubmitting}
-                        className={`min-h-11 text-sm pl-3 pr-7 py-1 rounded-md font-semibold outline-none cursor-pointer appearance-none border-none shadow-sm disabled:cursor-not-allowed disabled:opacity-60 ${getStatusColor(task.status)}`}
-                        value={task.status}
-                        onChange={async (e) => {
-                          if (isSubmitting) return;
-                          const nextStatus = e.target.value as TaskStatus;
-                          if (incompletePredecessors.length > 0 && nextStatus !== 'Pending' && nextStatus !== 'Cancelled') {
-                            setConfirmation({
-                              title: t('Earlier steps are unfinished'),
-                              description: t('Unfinished earlier steps: {count}. Change this task to {status}?', { count: incompletePredecessors.length, status: getLocalizedTaskStatus(nextStatus, locale) }),
-                              confirmLabel: t('Continue'),
-                              tone: 'primary',
-                              action: async () => {
-                                const localResult = updateTaskStatus(task.id, nextStatus);
-                                if (!localResult.ok) {
-                                  setMutationError(String(t(localResult.error || 'Unable to update the task status.')));
-                                  return;
-                                }
-                                if (await confirmPendingMutation()) announceTaskStatusSaved(nextStatus);
-                              },
-                            });
-                            return;
-                          }
-                          const localResult = updateTaskStatus(task.id, nextStatus);
-                          if (!localResult.ok) {
-                            setMutationError(String(t(localResult.error || 'Unable to update the task status.')));
-                            return;
-                          }
-                          if (await confirmPendingMutation()) announceTaskStatusSaved(nextStatus);
-                        }}
-                      >
-                        {statusOptions.map(({ status, disabledReason }) => (
-                          <option key={status} value={status} disabled={Boolean(disabledReason)} className="bg-white text-slate-900">{currentUser?.role === 'Client' ? t(status) : getLocalizedTaskStatus(status, locale)}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-80 text-current" />
-                    </div>
-                  )}
+                  <span className={`inline-flex min-h-11 items-center text-sm px-3 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
+                    {currentUser?.role === 'Client' ? t(task.status) : getLocalizedTaskStatus(task.status, locale)}
+                  </span>
                 </div>
                 <div className="text-right">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">{t(isClientTaskViewer ? 'Progress' : 'Priority')}</label>
-                  {isClientTaskViewer ? (
-                    <div className="flex items-center justify-end gap-2">
-                      <ProgressBar className="w-24" label={t('Task progress')} value={taskProgress} max={100} />
-                      <span className="text-sm font-bold text-slate-800">{taskProgress}%</span>
-                    </div>
-                  ) : (
-                    <span className="text-sm font-bold text-slate-800">{t(task.priority)}</span>
-                  )}
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{t('Progress')}</label>
+                  <div className="flex items-center justify-end gap-2">
+                    <ProgressBar className="w-24" label={t('Task progress')} value={taskProgress} max={100} />
+                    <span className="text-sm font-bold text-slate-800">{taskProgress}%</span>
+                  </div>
+                  {!isClientTaskViewer && <span className="mt-1 block text-xs font-medium text-slate-500">{t('Priority')}: <span className="font-bold text-slate-800">{t(task.priority)}</span></span>}
                 </div>
               </div>
-              {canEditTask && completionError && <p id={completionHintId} className="text-sm text-muted">{t(completionError)}</p>}
+              {canEditTask && guidedActionError && <p id={completionHintId} className="text-sm text-muted">{t(guidedActionError)}</p>}
               {assignmentUnavailableReason && <ActionAvailabilityNotice
                 title={t('Assignment is unavailable')}
                 description={t(assignmentUnavailableReason)}
@@ -773,17 +762,28 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
 
               {!isClientTaskViewer && <div className="space-y-3">
                 <ProgressBar label={t('Task progress')} value={taskProgress} />
-                {canEditTask && (workflowKind !== 'internal_review' && canApproveTaskInternally(currentUser, task, rolePermissions, { users, clients, projects })
-                  || (showCompletionAction && statusOptions.some(option => option.status === 'Completed'))) && <Button
-                  type="button" disabled={isSubmitting || Boolean(showCompletionAction ? completionError : transitionError('Approved'))}
-                  aria-describedby={showCompletionAction && completionError ? completionHintId : undefined}
-                  onClick={async () => {
-                    const status = showCompletionAction ? 'Completed' : 'Approved';
-                    const result = updateTaskStatus(task.id, status);
-                    if (!result.ok) { setMutationError(t(result.error || 'Unable to update the task status.')); return; }
-                    if (await confirmPendingMutation('task.update')) announceTaskStatusSaved(status);
-                  }}
-                ><CheckCircle2 className="h-4 w-4" />{t(showCompletionAction ? 'Confirm completion' : 'Approve')}</Button>}
+                {canEditTask && workflowKind !== 'internal_review' && guidedAction.kind === 'advance' && guidedAction.targetStatus && <Button
+                  type="button"
+                  disabled={isSubmitting || Boolean(guidedActionError)}
+                  aria-describedby={guidedActionError ? completionHintId : undefined}
+                  onClick={() => void handleStatusAction(guidedAction.targetStatus!)}
+                ><CheckCircle2 className="h-4 w-4" />{t(guidedAction.label)}</Button>}
+                {canEditTask && guidedAction.kind === 'waiting' && <span role="status" className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line bg-inset px-4 py-2 text-sm font-semibold text-muted">
+                  <Clock className="h-4 w-4" />{t(task.status === 'Waiting Approval' ? 'Awaiting Review' : guidedAction.label)}
+                </span>}
+                {canEditTask && guidedAction.kind === 'terminal' && <span role="status" className="inline-flex min-h-11 items-center gap-2 rounded-control border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                  <CheckCircle2 className="h-4 w-4" />{t(guidedAction.label)}
+                </span>}
+                {canEditTask && guidedAction.kind === 'picker' && <div className="flex flex-wrap gap-2" role="group" aria-label={t('Available task actions')}>
+                  {statusOptions.filter(option => option.status !== task.status).map(option => <Button
+                    key={option.status}
+                    type="button"
+                    variant="secondary"
+                    disabled={isSubmitting || Boolean(option.disabledReason)}
+                    title={option.disabledReason ? t(option.disabledReason) : undefined}
+                    onClick={() => void handleStatusAction(option.status as TaskStatus)}
+                  >{getLocalizedTaskStatus(option.status, locale)}</Button>)}
+                </div>}
               </div>}
 
               {incompletePredecessors.length > 0 && !isClientTaskViewer && (
@@ -818,7 +818,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                       <input
                         type="text"
                         value={editForm.clientName}
-                        disabled={!canEditScope}
+                        disabled={!canEditAdministrativeScope}
                         onChange={(e) => setEditForm({ ...editForm, clientName: e.target.value })}
                         className={cn(inputBase, 'px-2.5 py-2.5')}
                       />
@@ -828,7 +828,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                       <input
                         type="text"
                         value={editForm.serviceType}
-                        disabled={!canEditScope}
+                        disabled={!canEditAdministrativeScope}
                         onChange={(e) => setEditForm({ ...editForm, serviceType: e.target.value })}
                         className={cn(inputBase, 'px-2.5 py-2.5')}
                       />
@@ -838,7 +838,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                       <span className="relative block">
                         <select
                           value={editForm.department}
-                          disabled={!canAssignOthers}
+                          disabled={!canAssignOthers || isHodTaskEditor}
                           onChange={(e) => {
                             const nextDepartment = e.target.value as Department;
                             // Default to a stage-eligible assignee so a Project

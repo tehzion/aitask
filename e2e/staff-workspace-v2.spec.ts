@@ -71,7 +71,6 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   const taskRow = page.getByRole('button', { name: /6\. Video Editing/ });
   await expect(taskRow.getByText('Dependency status unavailable', { exact: true })).toBeVisible();
   await taskRow.click();
-  await expect(page.getByRole('combobox', { name: 'All task statuses' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Send for review' })).toBeVisible();
   const taskFocusAxe = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
   expect(taskFocusAxe.violations, `Staff task focus: ${taskFocusAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
@@ -101,7 +100,6 @@ test('staff mobile keeps focus, task actions and secondary creation reachable', 
   }
 
   await openTask.click();
-  await expect(page.getByRole('combobox', { name: 'All task statuses' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Send for review' })).toBeVisible();
   if (hasCommittedVisualBaseline) {
     await expect(page).toHaveScreenshot('staff-v2-task-focus-mobile-light.png', screenshotOptions(page));

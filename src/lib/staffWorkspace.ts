@@ -2,6 +2,7 @@ import type { CustomRole, Deliverable, Priority, ServiceCycle, Task, TaskStatus,
 import type { VisibilityScope } from './access';
 import { getTaskStatusOptions } from './taskWorkflowAccess';
 import { getTaskStatusControls } from './taskStatusControls';
+import { getEffectiveTaskApprovalMode } from './projectManagement';
 import { isTaskOpen } from './taskReporting';
 import type { MessageId } from './messages';
 
@@ -119,7 +120,8 @@ export const getStaffFocusTask = (queue: StaffWorkQueue) => queue.needs_action[0
 
 export const getStaffGuidedAction = (task: Task, taskStatuses: TaskStatus[], actor?: User | null, roles: CustomRole[] = [], scope: VisibilityScope = {}): StaffGuidedAction => {
   const options = actor ? getTaskStatusOptions(actor, task, taskStatuses, roles, scope) : taskStatuses;
-  if (task.status === 'Waiting Approval' && task.requiresInternalApproval === false && actor?.role === 'Project Manager' && options.includes('Completed')) return { kind: 'advance', label: 'Confirm completion', targetStatus: 'Completed', disabled: false };
+  const approvalMode = getEffectiveTaskApprovalMode(task, scope.projects || []);
+  if (task.status === 'Waiting Approval' && approvalMode === 'none' && actor?.role === 'Project Manager' && options.includes('Completed')) return { kind: 'advance', label: 'Confirm completion', targetStatus: 'Completed', disabled: false };
   if (task.status === 'Waiting Approval' && actor && options.includes('Approved')) return { kind: 'advance', label: 'Approve', targetStatus: 'Approved', disabled: false };
   if (task.status === 'Approved') return actor && options.includes('Completed')
     ? { kind: 'advance', label: 'Confirm completion', targetStatus: 'Completed', disabled: false }
@@ -141,10 +143,18 @@ export const getStaffGuidedAction = (task: Task, taskStatuses: TaskStatus[], act
       disabled: false,
     };
   }
+  if (task.status === 'In Progress' && approvalMode === 'none' && actor?.role === 'Staff' && task.assignedTo === actor.id && options.includes('Completed')) {
+    return {
+      kind: 'advance',
+      label: 'Complete task',
+      targetStatus: 'Completed',
+      disabled: false,
+    };
+  }
   if (task.status === 'In Progress' && options.includes('Waiting Approval')) {
     return {
       kind: 'advance',
-      label: 'Send for review',
+      label: task.revisionCount > 0 ? 'Resubmit for review' : 'Send for review',
       targetStatus: 'Waiting Approval',
       disabled: false,
     };

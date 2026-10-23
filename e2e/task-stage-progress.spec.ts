@@ -39,10 +39,10 @@ test('milestone progress follows role actions from assignment through revision a
   await page.getByRole('button', { name: 'Start work', exact: true }).click();
   await page.getByRole('button', { name: 'Send for review', exact: true }).click();
   await expect(progress).toHaveAttribute('aria-valuenow', '60');
-  await expect(page.getByRole('combobox', { name: 'All task statuses' }).locator('option[value="Completed"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Complete task', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
   await openAs(page, 'stage-hod');
-  await page.getByRole('combobox', { name: 'All task statuses' }).selectOption('In Progress');
+  await page.getByRole('button', { name: 'Request Revision', exact: true }).click();
   await expect(progress).toHaveAttribute('aria-valuenow', '50');
   await openAs(page, 'stage-staff');
   await page.getByRole('button', { name: 'Send for review', exact: true }).click();
@@ -50,7 +50,7 @@ test('milestone progress follows role actions from assignment through revision a
   await openAs(page, 'stage-hod');
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
   await expect(progress).toHaveAttribute('aria-valuenow', '80');
-  await expect(page.getByRole('combobox', { name: 'All task statuses' }).locator('option[value="Completed"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Confirm completion', exact: true })).toHaveCount(0);
   await openAs(page, 'stage-client');
   await page.getByRole('button', { name: 'Approve delivery', exact: true }).click();
   await expect(page.getByRole('progressbar', { name: 'Delivery progress', exact: true })).toHaveAttribute('aria-valuenow', '80');
