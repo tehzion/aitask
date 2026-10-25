@@ -4,7 +4,7 @@ const urbanWorkspace = '/clients/demo-service-client-urban';
 
 const setDemoUser = async (page: import('@playwright/test').Page, userId: string) => {
   await page.evaluate(async id => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const user = useStore.getState().users.find(candidate => candidate.id === id)!;
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...user, mustResetPassword: false } });
@@ -18,7 +18,7 @@ test('local service demo makes plans, delivery, files, roles, and price isolatio
   await expect(page.getByRole('button', { name: 'Use Operation Demo' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Use Account Demo' })).toBeVisible();
   const seeded = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     return {
       clients: state.clients.map(client => client.clientName),

@@ -16,7 +16,7 @@ values ('pgtap-hod-execution', 'HOD execution permissions');
 
 insert into public.aitask_members(id, workspace_id, auth_user_id, name, email, role, department, departments, permissions)
 values
-  ('hod-execution', 'pgtap-hod-execution', '00000000-0000-0000-0000-000000001301', 'Execution HOD', 'pgtap-hod-execution@aitask.local', 'HOD', 'Video Editor', array['Video Editor'], '{"manageCreatedTasks":true}'),
+  ('hod-execution', 'pgtap-hod-execution', '00000000-0000-0000-0000-000000001301', 'Execution HOD', 'pgtap-hod-execution@aitask.local', 'HOD', 'Video Editor', array['Video Editor'], '{}'),
   ('staff-execution-a', 'pgtap-hod-execution', '00000000-0000-0000-0000-000000001302', 'Staff A', 'pgtap-hod-staff-a@aitask.local', 'Staff', 'Video Editor', array['Video Editor'], '{}'),
   ('staff-execution-b', 'pgtap-hod-execution', '00000000-0000-0000-0000-000000001303', 'Staff B', 'pgtap-hod-staff-b@aitask.local', 'Staff', 'Video Editor', array['Video Editor'], '{}'),
   ('pm-execution', 'pgtap-hod-execution', '00000000-0000-0000-0000-000000001304', 'Portfolio PM', 'pgtap-hod-pm@aitask.local', 'Project Manager', 'Management', array['Management'], '{}'),
@@ -42,6 +42,15 @@ values
     'status', 'Pending', 'priority', 'Medium', 'startDate', '2026-10-23',
     'dueDate', '2026-10-30', 'description', 'Initial brief', 'notes', 'Initial notes'
   )),
+  ('pgtap-hod-execution', 'task', 'hod-department-route-task', jsonb_build_object(
+    'id', 'hod-department-route-task', 'title', 'Department scoped brief',
+    'projectId', 'hod-execution-project', 'projectName', 'Execution Project',
+    'clientId', 'execution-client', 'clientName', 'Execution Co',
+    'serviceType', 'Video editing', 'department', 'Video Editor',
+    'assignedTo', 'staff-execution-a', 'createdBy', 'pm-execution',
+    'status', 'Pending', 'priority', 'Medium', 'startDate', '2026-10-23',
+    'dueDate', '2026-10-30', 'description', 'Unassigned HOD route'
+  )),
   ('pgtap-hod-execution', 'project', 'hod-other-project', jsonb_build_object(
     'id', 'hod-other-project', 'projectName', 'Other HOD Project',
     'clientName', 'Execution Co', 'createdBy', 'pm-execution',
@@ -65,21 +74,70 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 
 select ok(private.aitask_is_hod('pgtap-hod-execution'), 'HOD identity is recognized');
 select ok(private.aitask_can_edit_task('pgtap-hod-execution', 'hod-execution-task'), 'HOD can edit an authorized project task');
+select ok(not private.aitask_can_edit_task('pgtap-hod-execution', 'hod-other-task'), 'HOD cannot edit a task in a project outside the HOD scope');
 select ok(private.aitask_hod_task_execution_patch_is_valid(
   'pgtap-hod-execution',
   (select data from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task'),
   (select data || jsonb_build_object('description', 'Updated brief', 'startDate', '2026-10-24', 'dueDate', '2026-10-31', 'priority', 'High') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
 ), 'HOD execution fields pass the patch guard');
+select ok(private.aitask_hod_task_execution_patch_is_valid(
+  'pgtap-hod-execution',
+  (select data || jsonb_build_object(
+    'accountableLeadId', 'pm-execution',
+    'reviewCover', jsonb_build_object('reviewerId', 'other-hod-execution', 'expiresAt', '2026-12-01T00:00:00Z')
+  ) from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task'),
+  (select data || jsonb_build_object('description', 'Updated brief') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
+), 'HOD edit tolerates stale snapshots that omit server-managed review configuration');
+select ok(private.aitask_hod_task_execution_patch_is_valid(
+  'pgtap-hod-execution',
+  (select data || jsonb_build_object(
+    'workflowStepKind', 'internal_review',
+    'workflowOutputVersion', 3,
+    'workflowDependenciesReady', true,
+    'internalReview', jsonb_build_object('decisionId', 'server-decision')
+  ) from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task'),
+  (select data || jsonb_build_object('description', 'Updated workflow brief') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
+), 'HOD snapshot may omit canonical workflow context without changing it');
+select ok(not private.aitask_hod_task_execution_patch_is_valid(
+  'pgtap-hod-execution',
+  (select data || jsonb_build_object('workflowStepKind', 'internal_review', 'workflowOutputVersion', 3) from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task'),
+  (select data || jsonb_build_object('description', 'Updated workflow brief', 'workflowStepKind', 'work') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
+), 'HOD cannot forge a canonical workflow step when context fields are present');
+select ok(not private.aitask_hod_task_execution_patch_is_valid(
+  'pgtap-hod-execution',
+  (select data || jsonb_build_object('accountableLeadId', 'pm-execution') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task'),
+  (select data || jsonb_build_object('description', 'Updated brief', 'accountableLeadId', 'other-hod-execution') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
+), 'HOD cannot explicitly change the server-managed accountable lead');
 select ok(not private.aitask_hod_task_execution_patch_is_valid(
   'pgtap-hod-execution',
   (select data from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task'),
   (select data || jsonb_build_object('clientName', 'Different Co') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
 ), 'HOD cannot change the company through a crafted payload');
+select ok(not private.aitask_hod_task_execution_patch_is_valid(
+  'pgtap-hod-execution',
+  (select data from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task'),
+  (select data || jsonb_build_object('approvalHistory', jsonb_build_array('forged')) from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
+), 'HOD cannot introduce an unlisted authorization field');
+select ok(not private.aitask_hod_task_execution_patch_is_valid(
+  'pgtap-hod-execution',
+  (select data from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task'),
+  (select data || jsonb_build_object('clientApprovalStatus', 'Rejected') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
+), 'HOD cannot forge a rejection without returning the task to revision');
+select ok(private.aitask_hod_task_execution_patch_is_valid(
+  'pgtap-hod-execution',
+  (select data || jsonb_build_object('status', 'Waiting Approval', 'clientApprovalStatus', 'Pending') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task'),
+  (select data || jsonb_build_object('status', 'Revision', 'clientApprovalStatus', 'Rejected') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
+), 'HOD may return work to revision with a rejection');
 select ok(private.aitask_task_assignment_is_valid(
   'pgtap-hod-execution', 'update',
   (select data from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task'),
   (select data || jsonb_build_object('assignedTo', 'staff-execution-b', 'assignedBy', 'hod-execution', 'assignmentState', 'assigned_staff') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
 ), 'HOD can route pending work to project-authorized Staff');
+select ok(private.aitask_task_assignment_is_valid(
+  'pgtap-hod-execution', 'update',
+  (select data from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-department-route-task'),
+  (select data || jsonb_build_object('assignedTo', 'staff-execution-b', 'assignedBy', 'hod-execution', 'responsibleHodId', 'hod-execution', 'assignmentState', 'assigned_staff') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-department-route-task')
+), 'HOD may route same-department work without prior task assignment when explicitly assigned to the project');
 select ok(not private.aitask_hod_task_execution_patch_is_valid(
   'pgtap-hod-execution',
   (select data from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task'),
@@ -111,6 +169,26 @@ select is((public.aitask_execute_command(
   'pgtap-hod-execution', gen_random_uuid(), 'task.update',
   jsonb_build_array(jsonb_build_object(
     'kind', 'entity', 'action', 'update', 'entityType', 'task',
+    'entityId', 'hod-department-route-task',
+    'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-department-route-task'),
+    'data', (select data || jsonb_build_object('description', 'Updated department brief') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-department-route-task')
+  ))
+)->>'ok')::boolean, true, 'HOD can save department-scoped execution work without a task-creator permission');
+
+select is((public.aitask_execute_command(
+  'pgtap-hod-execution', gen_random_uuid(), 'task.update',
+  jsonb_build_array(jsonb_build_object(
+    'kind', 'entity', 'action', 'update', 'entityType', 'task',
+    'entityId', 'hod-other-task',
+    'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-other-task'),
+    'data', (select data || jsonb_build_object('description', 'Out of scope change') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-other-task')
+  ))
+)->>'ok')::boolean, false, 'HOD execution edits remain denied outside the HOD project scope');
+
+select is((public.aitask_execute_command(
+  'pgtap-hod-execution', gen_random_uuid(), 'task.update',
+  jsonb_build_array(jsonb_build_object(
+    'kind', 'entity', 'action', 'update', 'entityType', 'task',
     'entityId', 'hod-execution-task',
     'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task'),
     'data', (select data || jsonb_build_object('clientName', 'Different Co') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
@@ -127,6 +205,16 @@ select is((public.aitask_execute_command(
              from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
   ))
 )->>'ok')::boolean, true, 'HOD can route project-authorized Staff through the command boundary');
+
+select is((public.aitask_execute_command(
+  'pgtap-hod-execution', gen_random_uuid(), 'task.update',
+  jsonb_build_array(jsonb_build_object(
+    'kind', 'entity', 'action', 'update', 'entityType', 'task',
+    'entityId', 'hod-department-route-task',
+    'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-department-route-task'),
+      'data', (select data || jsonb_build_object('assignedTo', 'staff-execution-b', 'assignedBy', 'hod-execution', 'responsibleHodId', 'hod-execution', 'assignmentState', 'assigned_staff') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-department-route-task')
+  ))
+)->>'ok')::boolean, true, 'the authenticated command allows the same department and explicitly scoped HOD route');
 
 select is((public.aitask_execute_command(
   'pgtap-hod-execution', gen_random_uuid(), 'task.update',

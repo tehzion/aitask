@@ -57,6 +57,9 @@ jobs:
       - name: Typecheck
         run: pnpm check
 
+      - name: Verify module boundaries
+        run: pnpm verify:architecture
+
       - name: Lint
         run: pnpm lint
 

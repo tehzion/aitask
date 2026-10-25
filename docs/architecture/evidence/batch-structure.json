@@ -1,0 +1,28 @@
+{
+  "workspaceStoreLines": {
+    "before": 6760,
+    "after": 1463
+  },
+  "secureWorkspaceAdapterLines": {
+    "before": 2072,
+    "after": 1535
+  },
+  "tasksPageLines": {
+    "before": 1227,
+    "after": 847
+  },
+  "userAdministrationPageLines": {
+    "before": 2478,
+    "after": 1335
+  },
+  "jsxNodesUnchanged": {
+    "tasks": 274,
+    "userAdministrationAndReviewPanel": 533
+  },
+  "extractedFeatureActionsCompared": 77,
+  "featureActionFactories": 7,
+  "demoActionFactories": 1,
+  "dependencyUpgrades": 0,
+  "refactorDatabaseMigrations": 0,
+  "refactorDeployments": 0
+}

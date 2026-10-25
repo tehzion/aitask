@@ -23,14 +23,15 @@ values
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
  ('pgtap-review-gate','client','gate-company','{"id":"gate-company","clientName":"Gate Company","createdBy":"gate-pm"}'),
  ('pgtap-review-gate','service_cycle','gate-cycle','{"id":"gate-cycle","clientId":"gate-company","clientName":"Gate Company","planId":"gate-plan","status":"Published","periodStart":"2026-10-01","periodEnd":"2026-10-31","serviceItems":[{"id":"gate-service","name":"Design","quantity":1,"unitPriceMinor":0,"workflow":{"templateId":"gate-template","templateRevision":1,"steps":[{"id":"work-step","order":1,"department":"Designer","kind":"work","required":true,"clientVisible":false},{"id":"review-step","order":2,"department":"Video Editor","kind":"internal_review","required":true,"clientVisible":false},{"id":"optional-step","order":3,"department":"Designer","kind":"work","required":false,"clientVisible":false},{"id":"publish-step","order":4,"department":"Designer","kind":"publishing","required":true,"clientVisible":true}]}}]}'),
- ('pgtap-review-gate','deliverable','gate-output','{"id":"gate-output","clientId":"gate-company","clientName":"Gate Company","planId":"gate-plan","cycleId":"gate-cycle","serviceItemId":"gate-service","status":"Planned","taskIds":[]}');
+ ('pgtap-review-gate','deliverable','gate-output','{"id":"gate-output","clientId":"gate-company","clientName":"Gate Company","planId":"gate-plan","cycleId":"gate-cycle","serviceItemId":"gate-service","status":"Planned","taskIds":[]}'),
+ ('pgtap-review-gate','deliverable','gate-output-unsafe','{"id":"gate-output-unsafe","clientId":"gate-company","clientName":"Gate Company","planId":"gate-plan","cycleId":"gate-cycle","serviceItemId":"gate-service","status":"Planned","taskIds":[]}');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000981',true);
 select set_config('request.jwt.claim.role','authenticated',true);
 
 -- Generate through the real service endpoint, so metadata and identity guards
 -- exercise the same ordered insert path used by the frontend.
 set local role authenticated;
-select is((public.aitask_generate_deliverable_task_chain('pgtap-review-gate',gen_random_uuid(),(
+select is((public.aitask_generate_deliverable_task_chain('pgtap-review-gate',gen_random_uuid(),((
  select jsonb_agg(jsonb_build_object('kind','entity','action','insert','entityType','task','entityId',id,'expectedVersion',0,'data',jsonb_build_object(
   'id',id,'clientId','gate-company','clientName','Gate Company','serviceType','Design','title',title,'department',department,
   'createdBy','gate-boss','assignedTo','','attachmentLink',case when step='review-step' then '' else 'https://example.com/output.pdf' end,'serviceCycleId','gate-cycle','deliverableId','gate-output','generatedFromDeliverable',true,
@@ -39,9 +40,23 @@ select is((public.aitask_generate_deliverable_task_chain('pgtap-review-gate',gen
  from (values ('gate-work','Hidden predecessor title','Designer','work-step',1,'[]'::jsonb,'internal'),
   ('gate-review','Internal review','Video Editor','review-step',2,'["gate-work"]'::jsonb,'internal'),
   ('gate-optional','Optional revision','Designer','optional-step',3,'["gate-review"]'::jsonb,'internal'),
-  ('gate-publish','Publish','Designer','publish-step',4,'["gate-optional"]'::jsonb,'client-visible')) fixtures(id,title,department,step,ordering,dependencies,visibility)
-))->>'ok')::boolean,true,'canonical workflow generation succeeds');
+  ('gate-publish','Publish','Designer','publish-step',4,'["gate-optional"]'::jsonb,'client-visible')) fixtures(id,title,department,step,ordering,dependencies,visibility))
+  || jsonb_build_array(jsonb_build_object(
+    'kind','entity','action','update','entityType','deliverable','entityId','gate-output',
+    'expectedVersion',(select version from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_type='deliverable' and entity_id='gate-output'),
+    'data',(select data || jsonb_build_object('taskIds',jsonb_build_array('gate-work','gate-review','gate-optional','gate-publish'),
+      'workflowGeneratedAt',now()::text,'workflowGenerationId','gate-generation','updatedAt',now()::text)
+      from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_type='deliverable' and entity_id='gate-output')
+  )))
+, (select version from public.aitask_workspaces where id='pgtap-review-gate'))->>'ok')::boolean,true,'canonical workflow generation succeeds');
+select is((public.aitask_generate_deliverable_task_chain('pgtap-review-gate',gen_random_uuid(),jsonb_build_array(jsonb_build_object(
+  'kind','entity','action','update','entityType','deliverable','entityId','gate-output-unsafe',
+  'expectedVersion',(select version from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_type='deliverable' and entity_id='gate-output-unsafe'),
+  'data',(select data || jsonb_build_object('clientName','Forged client','taskIds','[]'::jsonb,'workflowGeneratedAt',now()::text,'workflowGenerationId','forged-generation')
+    from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_type='deliverable' and entity_id='gate-output-unsafe')
+)),(select version from public.aitask_workspaces where id='pgtap-review-gate'))->>'ok')::boolean,false,'workflow generation cannot change unrelated deliverable data');
 reset role;
+select set_config('aitask.command_type', '', true);
 update public.aitask_entities set data=data||'{"assignedTo":"gate-worker"}'::jsonb where workspace_id='pgtap-review-gate' and entity_type='task';
 
 create function pg_temp.patch_task(p_id text,p_patch jsonb) returns jsonb language plpgsql as $$
@@ -71,7 +86,7 @@ select is((pg_temp.patch_task('gate-work','{"status":"Completed","isCompleted":t
 reset role;
 insert into storage.objects(bucket_id,name,owner_id,metadata) values('client-service-files','pgtap-review-gate/gate-company/gate-cycle/work.pdf','00000000-0000-0000-0000-000000000982','{"mimetype":"application/pdf"}');
 set local role authenticated;
-select is((pg_temp.patch_task('gate-work','{"attachmentLink":"","outputAttachments":[{"id":"gate-file","bucket":"client-service-files","path":"pgtap-review-gate/gate-company/gate-cycle/work.pdf","fileName":"Private predecessor.pdf","uploadedBy":"gate-worker"}]}')->>'ok')::boolean,true,'Staff saves file-only frozen output before submission');
+select is((pg_temp.patch_task('gate-work','{"attachmentLink":"","outputAttachments":[{"id":"gate-file","bucket":"client-service-files","path":"pgtap-review-gate/gate-company/gate-cycle/work.pdf","fileName":"Private predecessor.pdf","uploadedBy":"gate-worker"}],"status":"In Progress"}')->>'ok')::boolean,true,'Staff starts work and saves file-only frozen output before submission');
 select is((pg_temp.patch_task('gate-work','{"status":"Waiting Approval","isCompleted":false}')->>'ok')::boolean,true,'assigned Staff submits ordinary workflow work');
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000986',true);
@@ -95,6 +110,7 @@ select ok(not private.aitask_workflow_task_satisfied('pgtap-review-gate',(select
 set local role authenticated;
 select is((pg_temp.patch_task('gate-review','{"status":"Completed","isCompleted":true,"internalReview":{"reviewedBy":"gate-hod"},"workflowStepKind":"work"}')->>'ok')::boolean,false,'forged reviewer and kind cannot bypass authorization');
 select is((pg_temp.patch_task('gate-review','{"predecessorTaskIds":[],"status":"Completed","isCompleted":true}')->>'ok')::boolean,false,'removing predecessors cannot bypass the gate');
+select is((pg_temp.patch_task('gate-review','{"status":"In Progress"}')->>'ok')::boolean,true,'Staff starts the internal review task after its predecessor is complete');
 select is((pg_temp.patch_task('gate-review','{"status":"Waiting Approval","isCompleted":false}')->>'ok')::boolean,true,'Staff can submit completed work for internal review');
 select is((pg_temp.patch_task('gate-publish','{"status":"Completed","isCompleted":true}')->>'ok')::boolean,false,'publication waits for a signed review');
 reset role;
@@ -145,6 +161,14 @@ select is((select data->>'status' from public.aitask_entities where workspace_id
 select is((select data->'internalReview'->>'reviewedBy' from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_id='gate-review'),'gate-hod','forged decision is ignored');
 select is((pg_temp.patch_task('gate-work','{"dueDate":"2026-10-29"}')->>'ok')::boolean,true,'scheduling edits remain permitted');
 select is((select data->>'status' from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_id='gate-review'),'Completed','scheduling edits do not invalidate approved output');
+reset role;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000984',true);
+set local role authenticated;
+select is((pg_temp.patch_task('gate-publish','{"assignedTo":"gate-worker"}')->>'ok')::boolean,true,'responsible PM assigns publication work');
+reset role;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000982',true);
+set local role authenticated;
+select is((pg_temp.patch_task('gate-publish','{"status":"In Progress"}')->>'ok')::boolean,true,'Staff starts publication work');
 select is((pg_temp.patch_task('gate-publish','{"status":"Waiting Approval","isCompleted":false}')->>'ok')::boolean,true,'publication submits after signed review');
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000986',true);

@@ -15,7 +15,7 @@ const login = async (page: import('@playwright/test').Page, time: string) => {
 
 const setSingleTask = async (page: import('@playwright/test').Page) => {
   await page.evaluate(async () => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
     stopBackendAutoSync();
     const state = useStore.getState();
     const template = state.tasks[0];
@@ -55,7 +55,7 @@ test('Calendar does not render a seventh Sunday task column', async ({page}) => 
   await login(page,'2026-10-07T17:30:00Z');
   await setSingleTask(page);
   await page.evaluate(async () => {
-    const {useStore}=await import('/src/store/index.ts');
+    const {useStore}=await import('/src/app/store/workspaceStore.ts');
     const template=useStore.getState().tasks[0];
     useStore.setState({tasks:[{...template,id:'audit-sunday',title:'Sunday-only fixture',startDate:'2026-10-11',dueDate:'2026-10-11'},{...template,id:'audit-mon-sun',title:'Full week fixture',startDate:'2026-10-05',dueDate:'2026-10-11'}]});
   });

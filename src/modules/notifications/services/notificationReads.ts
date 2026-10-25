@@ -1,4 +1,4 @@
-import type { AppNotification } from '../../../types';
+import type { AppNotification } from '../../../shared/types/index';
 
 export interface NotificationReadState {
   id: string;

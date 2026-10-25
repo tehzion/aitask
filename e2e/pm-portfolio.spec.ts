@@ -6,8 +6,8 @@ const seedPM = async (page: Page) => {
   await page.goto('/login');
   await expect(page.getByLabel('Email or username')).toBeVisible();
   await page.evaluate(async () => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const pm = state.users.find(user => user.role === 'Project Manager' && !user.isSuperAdmin)!;
     const boss = state.users.find(user => user.isSuperAdmin)!;
@@ -58,7 +58,7 @@ test('PM can follow signed portfolio work through final completion', async ({ pa
   await expect(guided).toBeVisible();
   await guided.getByRole('button', { name: 'Confirm completion', exact: true }).click();
   await expect.poll(() => page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const task = useStore.getState().tasks.find(task => task.id === 'pm-final');
     return { status: task?.status, progress: task?.completionPercentage };
   })).toEqual({ status: 'Completed', progress: 100 });
@@ -79,7 +79,7 @@ test('PM sees completion in both task views while review is pending', async ({ p
   await dialog.getByRole('button', { name: 'Full edit', exact: true }).click();
   await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
   const result = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     return useStore.getState().updateTaskStatus('pm-submit', 'Completed');
   });
   expect(result.ok).toBe(false);
@@ -88,7 +88,7 @@ test('PM sees completion in both task views while review is pending', async ({ p
 test('PM can complete a waiting task with explicit no-approval mode', async ({ page }) => {
   await seedPM(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'pm-submit' ? { ...task, approvalMode: 'none', requiresInternalApproval: false } : task) }));
   });
   await page.goto('/tasks?taskId=pm-submit');
@@ -98,7 +98,7 @@ test('PM can complete a waiting task with explicit no-approval mode', async ({ p
   const reopened = page.getByRole('dialog', { name: 'Department submission' });
   await reopened.getByRole('button', { name: 'Confirm completion', exact: true }).click();
   await expect.poll(() => page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const task = useStore.getState().tasks.find(item => item.id === 'pm-submit');
     return { status: task?.status, percent: task?.completionPercentage, completedAt: Boolean(task?.completedAt), signed: Boolean(task?.reviewDecision) };
   })).toEqual({ status: 'Completed', percent: 100, completedAt: true, signed: false });
@@ -107,7 +107,7 @@ test('PM can complete a waiting task with explicit no-approval mode', async ({ p
 test('PM completes approved work from the full status picker with a custom status list', async ({ page }) => {
   await seedPM(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ taskStatuses: ['Pending', 'In Progress', 'Waiting Approval', 'Cancelled'] });
   });
   await page.goto('/tasks?taskId=pm-final');
@@ -116,7 +116,7 @@ test('PM completes approved work from the full status picker with a custom statu
   await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
   await dialog.getByRole('button', { name: 'Confirm completion', exact: true }).click();
   await expect.poll(() => page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const task = useStore.getState().tasks.find(task => task.id === 'pm-final')!;
     return { status: task.status, completed: task.isCompleted, progress: task.completionPercentage, timestamp: Boolean(task.completedAt) };
   })).toEqual({ status: 'Completed', completed: true, progress: 100, timestamp: true });
@@ -134,7 +134,7 @@ test('PM saves a routine edit to a task in an inherited project', async ({ page 
   await editor.getByRole('combobox', { name: 'Priority', exact: true }).selectOption('High');
   await editor.getByRole('button', { name: 'Save Changes', exact: true }).click();
   await expect.poll(() => page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     return useStore.getState().tasks.find(task => task.id === 'pm-edit')?.priority;
   })).toBe('High');
   await expect(editor.getByRole('alert')).toHaveCount(0);
@@ -143,7 +143,7 @@ test('PM saves a routine edit to a task in an inherited project', async ({ page 
 test('PM delegates assigned work to the department HOD through the full editor', async ({ page }) => {
   await seedPM(page);
   const hodId = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const source = state.tasks.find(task => task.id === 'pm-edit')!;
     useStore.setState({ tasks: [...state.tasks, { ...source, id: 'pm-direct', title: 'Directly assigned PM work', clientId: undefined, clientName: 'Assigned company', projectId: undefined, projectName: undefined, assignedTo: state.currentUser!.id }] });
@@ -158,7 +158,7 @@ test('PM delegates assigned work to the department HOD through the full editor',
   await editor.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption(hodId);
   await editor.getByRole('button', { name: 'Save Changes', exact: true }).click();
   await expect.poll(() => page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     return useStore.getState().tasks.find(task => task.id === 'pm-direct')?.assignedTo;
   })).toBe(hodId);
   await page.goto('/');
@@ -168,7 +168,7 @@ test('PM delegates assigned work to the department HOD through the full editor',
 test('PM company edits reject foreign scope and save the accessible company ID', async ({ page }) => {
   await seedPM(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     useStore.setState({
       clients: [...state.clients, { id: 'pm-second', clientName: 'Second PM company', createdBy: state.currentUser!.id, createdAt: '', updatedAt: '' }],
@@ -185,7 +185,7 @@ test('PM company edits reject foreign scope and save the accessible company ID',
   await editor.getByRole('textbox', { name: 'Client / Brand', exact: true }).fill('Second PM company');
   await editor.getByRole('button', { name: 'Save Changes', exact: true }).click();
   await expect.poll(() => page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const task = useStore.getState().tasks.find(task => task.id === 'pm-edit');
     return { id: task?.clientId, name: task?.clientName };
   })).toEqual({ id: 'pm-second', name: 'Second PM company' });

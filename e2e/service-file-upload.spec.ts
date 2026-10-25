@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 const openOperationsWorkspace = async (page: import('@playwright/test').Page) => {
   await page.goto('/login');
+  await waitForWorkspaceHydration(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const user = useStore.getState().users.find(candidate => candidate.id === 'u-boss');
     if (user) useStore.setState({ currentUser: { ...user, mustResetPassword: false } });
     localStorage.setItem('aitask:release-notice:2026-08-service-operations:u-boss', 'acknowledged');

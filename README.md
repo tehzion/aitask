@@ -34,6 +34,10 @@ This app is Vercel-ready as a Vite SPA. `vercel.json` configures the build outpu
 
 For deployment steps and required Supabase environment variables, see `DEPLOYMENT.md`.
 
+## Architecture
+
+See [the modular architecture guide](docs/architecture/README.md) for module ownership, public entry points, data access, and verification. Run `pnpm verify:architecture` before adding cross-module imports.
+
 ## Development
 
 ```bash

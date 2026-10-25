@@ -3,9 +3,9 @@ import { expect, test, type Page } from '@playwright/test';
 const seed = async (page: Page) => {
   await page.goto('/login');
   await page.evaluate(async () => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
-    const { useToastStore } = await import('/src/store/useToastStore.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
+    const { useToastStore } = await import('/src/shared/feedback/useToastStore.ts');
     stopBackendAutoSync();
     const state = useStore.getState();
     const client = { id: 'role-client', name: 'Customer', role: 'Client', companyName: 'Customer Co', department: 'Client', departments: ['Client'], mustResetPassword: false };
@@ -23,7 +23,7 @@ test('Customer retries one failed feedback save without duplicating it or wiping
   await seed(page);
   const dialog = await open(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Customer save failed' }), retryPendingSave: async () => ({ ok: true }) });
   });
   const feedback = dialog.getByRole('textbox', { name: 'Share feedback' });
@@ -35,7 +35,7 @@ test('Customer retries one failed feedback save without duplicating it or wiping
   await expect(dialog.getByRole('alert')).toHaveCount(0);
   await expect(feedback).toHaveValue('New unsent feedback');
   const texts = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     return useStore.getState().tasks.find(task => task.id === 'customer-a')?.comments?.map(comment => comment.text);
   });
   expect(texts).toEqual(['Submitted feedback']);
@@ -45,7 +45,7 @@ test('Customer approval does not announce success until persistence is confirmed
   await seed(page);
   const dialog = await open(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Approval not saved' }), retryPendingSave: async () => ({ ok: true }) });
   });
   await dialog.getByRole('button', { name: 'Approve delivery' }).click();
@@ -53,7 +53,7 @@ test('Customer approval does not announce success until persistence is confirmed
   await expect(dialog.getByText('Needs your review', { exact: true })).toBeVisible();
   await expect(dialog.getByText('Delivered', { exact: true })).toHaveCount(0);
   const successes = () => page.evaluate(async () => {
-    const { useToastStore } = await import('/src/store/useToastStore.ts');
+    const { useToastStore } = await import('/src/shared/feedback/useToastStore.ts');
     return useToastStore.getState().toasts.filter(toast => toast.type === 'success').map(toast => toast.message);
   });
   expect(await successes()).toEqual([]);
@@ -65,7 +65,7 @@ test('Customer thrown save errors leave the form available for retry', async ({ 
   await seed(page);
   const dialog = await open(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => { throw new Error('Customer network interruption'); }, retryPendingSave: async () => ({ ok: true }) });
   });
   await dialog.getByRole('textbox', { name: 'Share feedback' }).fill('Keep this feedback');
@@ -86,7 +86,7 @@ test('Customer keeps newer approval context after a slow save acknowledgement', 
   await seed(page);
   const dialog = await open(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: () => new Promise(resolve => { (window as unknown as { finishCustomerSave: () => void }).finishCustomerSave = () => resolve({ ok: true }); }) });
   });
   const note = dialog.getByRole('textbox', { name: 'Decision note' });
@@ -101,15 +101,15 @@ test('Customer late approval acknowledgement cannot affect another account', asy
   await seed(page);
   const dialog = await open(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: () => new Promise(resolve => { (window as unknown as { finishCustomerSave: () => void }).finishCustomerSave = () => resolve({ ok: true }); }) });
   });
   await dialog.getByRole('button', { name: 'Approve delivery' }).click();
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const current = useStore.getState();
     const client = { ...current.currentUser!, id: 'other-customer' };
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     enablePasswordResetBypass(client.id);
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${client.id}`, 'acknowledged');
     useStore.setState({ currentUser: client, users: [client, ...current.users.filter(user => user.role !== 'Client')], tasks: current.tasks.map(task => ({ ...task, clientApprovalStatus: 'Pending', status: 'Approved', isCompleted: false, approvalHistory: [] })) });
@@ -118,14 +118,14 @@ test('Customer late approval acknowledgement cannot affect another account', asy
   await note.fill('Another account draft');
   await page.evaluate(() => (window as unknown as { finishCustomerSave: () => void }).finishCustomerSave());
   await expect(note).toHaveValue('Another account draft');
-  expect(await page.evaluate(async () => { const { useToastStore } = await import('/src/store/useToastStore.ts'); return useToastStore.getState().toasts.filter(toast => toast.type === 'success').length; })).toBe(0);
+  expect(await page.evaluate(async () => { const { useToastStore } = await import('/src/shared/feedback/useToastStore.ts'); return useToastStore.getState().toasts.filter(toast => toast.type === 'success').length; })).toBe(0);
 });
 
 test('Customer Use latest discards a failed approval and retains newer context', async ({ page }) => {
   await seed(page);
   const dialog = await open(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const original = useStore.getState().tasks;
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Approval not saved' }), discardMutation: async () => { useStore.setState({ tasks: original }); } });
   });
@@ -146,7 +146,7 @@ test('Customer Use latest discards a failed approval and retains newer context',
 test('Customer delivery stages refresh automatically at midnight', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-10-07T23:59:00') });
   await seed(page);
-  await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ tasks: useStore.getState().tasks.map(task => task.id === 'customer-a' ? { ...task, status: 'Pending', dueDate: '2026-10-07' } : task) }); });
+  await page.evaluate(async () => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); useStore.setState({ tasks: useStore.getState().tasks.map(task => task.id === 'customer-a' ? { ...task, status: 'Pending', dueDate: '2026-10-07' } : task) }); });
   await page.goto('/tasks?stage=timing_changed');
   await expect(page.getByRole('link', { name: 'Customer artwork A', exact: true })).toHaveCount(0);
   await page.clock.fastForward(120_000);
@@ -159,7 +159,7 @@ test('Customer progress uses the current plan and period while preserving delive
   await page.clock.install({ time: new Date('2026-10-07T12:00:00') });
   await seed(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const plan = { id: 'current-plan', clientId: 'role-company', clientName: 'Customer Co', name: 'Customer Plan', status: 'Active', revision: 2, origin: 'custom', currency: 'MYR', serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0, startDate: '2026-10-01', billingDay: 1, createdBy: 'role-staff', createdAt: '2026-10-01', updatedAt: '2026-10-01' };
     const cycle = { id: 'current-cycle', clientId: plan.clientId, clientName: plan.clientName, planId: plan.id, planRevision: 2, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Published', createdBy: 'role-staff', createdAt: '2026-10-01', updatedAt: '2026-10-01' };
     const cycles = [{ ...cycle, id: 'old-plan-cycle', planId: 'old-plan' }, { ...cycle, id: 'past-cycle', periodStart: '2026-09-01', periodEnd: '2026-09-30', status: 'Completed' }, { ...cycle, id: 'future-cycle', periodStart: '2026-11-01', periodEnd: '2026-11-30' }, cycle];
@@ -170,7 +170,7 @@ test('Customer progress uses the current plan and period while preserving delive
   await expect(page.getByText('50%', { exact: true }).first()).toBeVisible();
   await page.goto('/clients/role-company');
   await expect(page.getByText('50%', { exact: true }).first()).toBeVisible();
-  await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ serviceCycles: useStore.getState().serviceCycles.filter(item => item.id !== 'current-cycle') }); });
+  await page.evaluate(async () => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); useStore.setState({ serviceCycles: useStore.getState().serviceCycles.filter(item => item.id !== 'current-cycle') }); });
   await expect(page.getByText('No current published cycle', { exact: true })).toBeVisible();
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.goto('/');
@@ -182,7 +182,7 @@ test('Customer workspace retry reconciles submitted feedback while retaining a n
   await seed(page);
   const dialog = await open(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => {
       useStore.setState(state => ({ backend: { ...state.backend, mode: 'supabase', status: 'retry_required', hasLocalChanges: true, pendingMutations: 1 } }));
       return { ok: false, error: 'Awaiting confirmation' };
@@ -194,7 +194,7 @@ test('Customer workspace retry reconciles submitted feedback while retaining a n
   await expect(dialog.getByRole('alert')).toContainText('Awaiting confirmation');
   await feedback.fill('New draft after failure');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ backend: { ...state.backend, status: 'live', hasLocalChanges: false, pendingMutations: 0 } }));
   });
   await expect(dialog.getByRole('alert')).toHaveCount(0);
@@ -207,7 +207,7 @@ test('Customer failed approval requires confirmation and canonical reload before
   await page.evaluate(() => localStorage.setItem('aitask-color-theme', 'dark'));
   const dialog = await open(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Approval not saved' }), discardMutation: async () => { throw new Error('Reload unavailable'); } });
   });
   await dialog.getByRole('button', { name: 'Approve delivery' }).click();
@@ -234,14 +234,14 @@ test('Customer long notes and feedback stay editable without queuing or losing t
   await dialog.getByRole('button', { name: 'Approve delivery' }).click();
   await expect(dialog.getByRole('alert')).toContainText('Decision notes must be 2,000 characters or less.');
   await expect(note).toHaveValue(longText);
-  expect(await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); return useStore.getState().tasks.find(task => task.id === 'customer-a')?.approvalHistory; })).toEqual([]);
+  expect(await page.evaluate(async () => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); return useStore.getState().tasks.find(task => task.id === 'customer-a')?.approvalHistory; })).toEqual([]);
   await note.fill('Shortened decision');
   const feedback = dialog.getByRole('textbox', { name: 'Share feedback' });
   await feedback.fill(longText);
   await dialog.getByRole('button', { name: 'Send feedback' }).click();
   await expect(dialog.getByRole('alert')).toContainText('Feedback must be 2,000 characters or less.');
   await expect(feedback).toHaveValue(longText);
-  expect(await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); return useStore.getState().tasks.find(task => task.id === 'customer-a')?.comments; })).toEqual([]);
+  expect(await page.evaluate(async () => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); return useStore.getState().tasks.find(task => task.id === 'customer-a')?.comments; })).toEqual([]);
   await feedback.fill('Full feedback after correction');
   await dialog.getByRole('button', { name: 'Send feedback' }).click();
   await expect(dialog.getByRole('alert')).toHaveCount(0);
@@ -252,7 +252,7 @@ test('Customer malformed due dates appear as undated rather than overdue or this
   await page.clock.install({ time: new Date('2026-10-07T12:00:00') });
   await seed(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => ({ ...task, status: 'In Progress', dueDate: task.id === 'customer-a' ? '2026-10-99' : '0000-invalid' })) }));
   });
   await page.goto('/tasks?date=no_date');
@@ -266,7 +266,7 @@ test('Customer malformed due dates appear as undated rather than overdue or this
 test('Customer malformed published periods and contract dates do not break the workspace', async ({ page }) => {
   await seed(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const plan = { id: 'bad-date-plan', clientId: 'role-company', clientName: 'Customer Co', name: 'Customer Plan', status: 'Active', revision: 1, origin: 'custom', currency: 'MYR', serviceItems: [], startDate: '2026-10-01', contractEndDate: 'invalid', billingDay: 1, createdAt: '2026-10-01', updatedAt: '2026-10-01' };
     const cycle = { id: 'bad-date-cycle', clientId: plan.clientId, clientName: plan.clientName, planId: plan.id, planRevision: 1, periodStart: 'invalid', periodEnd: '2026-10-31', status: 'Published', createdAt: '2026-10-01', updatedAt: '2026-10-01' };
     useStore.setState({ clientPlans: [plan], serviceCycles: [cycle, { ...cycle, id: 'reversed', periodStart: '2026-11-01', periodEnd: '2026-10-01' }] });

@@ -1,0 +1,4 @@
+[bundle] initial index JS: 13.0 kB raw, 5.4 kB gzip (budgets 488/146 kB)
+[bundle] report chart JS: 381.8 kB raw, 107.4 kB gzip (budgets 410/122 kB)
+[bundle] Eager JS graph (4 chunks): 1019.7 KiB raw, 294.1 KiB gzip (300 KiB gzip cap).
+[bundle] Bundle-size budgets passed.

@@ -4,7 +4,7 @@ for (const locale of ['en', 'zh']) test(`a task-free management fee can be put i
   await page.addInitScript(value => localStorage.setItem('aitask:locale', value), locale);
   await page.goto('/login');
   const clientId = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
@@ -49,8 +49,8 @@ for (const locale of ['en', 'zh']) test(`a task-free management fee can be put i
 test('a frozen workflow exposes only statuses allowed by its required task progress', async ({ page }) => {
   await page.goto('/login');
   const clientId = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } = await import('/src/lib/serviceManagement.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } = await import('/src/modules/services/domain/serviceManagement.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');

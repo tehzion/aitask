@@ -15,7 +15,7 @@ for (const refresh of ['midnight', 'resume'] as const) {
     await page.getByRole('button', { name: 'Happy working' }).click();
     await expect(page.getByRole('heading', { name: 'Agency operations' })).toBeVisible();
     await page.evaluate(async () => {
-      const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
+      const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
       stopBackendAutoSync();
       const state = useStore.getState();
       const template = state.tasks[0];

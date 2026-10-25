@@ -5,8 +5,8 @@ for (const mobile of [false, true]) {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 });
     await page.goto('/login');
     await page.evaluate(async () => {
-      const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-      const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+      const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+      const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
       stopBackendAutoSync();
       const state = useStore.getState();
       const pm = { id: 'release-pm', name: 'Release PM', role: 'Project Manager', department: 'Management', departments: ['Management'], mustResetPassword: false };

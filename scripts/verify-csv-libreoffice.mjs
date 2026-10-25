@@ -8,7 +8,7 @@ const executable = process.env.AITASK_LIBREOFFICE || '/Applications/LibreOffice.
 const root = mkdtempSync(join(tmpdir(), 'aitask-csv-qa-'));
 try {
   // Exercise the actual application serializer, not a duplicate in the test.
-  const source = ts.transpileModule(readFileSync(new URL('../src/lib/csv.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  const source = ts.transpileModule(readFileSync(new URL('../src/shared/utils/csv.ts', import.meta.url), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
   const { createCsvBlob } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
   const inputs = ['=1+1', '+1+1', '-1+1', '@SUM(1,1)', '\t=1+1', '\r=1+1', '  =1+1', '"quoted"', 'first\nsecond', 'Unicode 中文'];
   const csv = join(root, 'export.csv');

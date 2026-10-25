@@ -5,8 +5,8 @@ const seedBoss = async (page: Page) => {
   await page.goto('/login');
   await page.evaluate(async () => {
     localStorage.setItem('aitask:locale', 'en');
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
@@ -21,7 +21,7 @@ test('approval rejection preserves a newer registration and unrelated new member
   await seedBoss(page);
   await page.goto('/approvals?registrationId=remaining-registration');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => {
       useStore.setState(state => ({ registrations: state.registrations.map(reg => ({ ...reg, phone: '+60129999999' })),
         users: [...state.users, { id: 'new-remote-member', name: 'New remote member', role: 'Staff', departments: ['Designer'] }] }));
@@ -30,7 +30,7 @@ test('approval rejection preserves a newer registration and unrelated new member
   });
   await page.getByRole('button', { name: 'Confirm & approve', exact: true }).click();
   await expect.poll(() => page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     return { phone: useStore.getState().registrations[0].phone,
       newMember: useStore.getState().users.some(user => user.id === 'new-remote-member') };
   })).toEqual({ phone: '+60129999999', newMember: true });
@@ -41,7 +41,7 @@ test('role save exception leaves usable retry without a second role', async ({ p
   await page.goto('/approvals?tab=roles');
   await page.getByPlaceholder('e.g. Account Manager').fill('Remaining Retry Role');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     let calls = 0;
     useStore.setState({ commitPendingMutation: async () => {
       if (++calls === 1) throw new Error('Injected role exception');
@@ -52,7 +52,7 @@ test('role save exception leaves usable retry without a second role', async ({ p
   await expect(page.getByText('Injected role exception', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Retry save', exact: true }).click();
   await expect(page.getByPlaceholder('e.g. Account Manager')).toHaveValue('');
-  expect(await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().rolePermissions.filter(role => role.name === 'Remaining Retry Role').length)).toBe(1);
+  expect(await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().rolePermissions.filter(role => role.name === 'Remaining Retry Role').length)).toBe(1);
 });
 
 test('profile rejection preserves a newer canonical profile and submitted retry draft', async ({ page }) => {
@@ -60,7 +60,7 @@ test('profile rejection preserves a newer canonical profile and submitted retry 
   await page.goto('/settings');
   await page.getByLabel('Name', { exact: true }).fill('Submitted profile name');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => {
       useStore.setState(state => ({ currentUser: { ...state.currentUser!, name: 'Newer canonical profile' },
         users: state.users.map(user => user.id === state.currentUser!.id ? { ...user, name: 'Newer canonical profile' } : user) }));
@@ -69,7 +69,7 @@ test('profile rejection preserves a newer canonical profile and submitted retry 
   });
   await page.getByRole('button', { name: 'Save profile', exact: true }).click();
   await expect(page.getByText('Injected profile failure', { exact: true })).toBeVisible();
-  expect(await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().currentUser?.name)).toBe('Newer canonical profile');
+  expect(await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().currentUser?.name)).toBe('Newer canonical profile');
   await expect(page.getByRole('button', { name: 'Retry save', exact: true })).toBeVisible();
 });
 
@@ -78,7 +78,7 @@ test('profile save exception restores controls and retains the submitted draft',
   await page.goto('/settings');
   await page.getByLabel('Name', { exact: true }).fill('Recoverable profile');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => { throw new Error('Injected profile exception'); } });
   });
   await page.getByRole('button', { name: 'Save profile', exact: true }).click();
@@ -93,7 +93,7 @@ test('status save exception retries one status and keeps newer input', async ({ 
   const input = page.getByPlaceholder('e.g. Under QA, Draft');
   await input.fill('Remaining status');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     let calls = 0;
     useStore.setState({ commitPendingMutation: async () => {
       if (++calls === 1) throw new Error('Injected status exception');
@@ -105,5 +105,5 @@ test('status save exception retries one status and keeps newer input', async ({ 
   await input.fill('Newer status draft');
   await page.getByRole('button', { name: 'Retry save', exact: true }).click();
   await expect(input).toHaveValue('Newer status draft');
-  expect(await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().taskStatuses.filter(status => status === 'Remaining status').length)).toBe(1);
+  expect(await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().taskStatuses.filter(status => status === 'Remaining status').length)).toBe(1);
 });

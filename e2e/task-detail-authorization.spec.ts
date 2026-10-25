@@ -36,8 +36,8 @@ const signIn = async (page: Page, username: string) => {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.evaluate(async name => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const user = useStore.getState().users.find(member => member.name === name);
     if (!user) throw new Error(`Missing authorization fixture account: ${name}`);
     enablePasswordResetBypass(user.id);
@@ -48,7 +48,7 @@ const signIn = async (page: Page, username: string) => {
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   await page.evaluate(async () => {
-    const { stopBackendAutoSync } = await import('/src/store/index.ts');
+    const { stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
     stopBackendAutoSync();
   });
 };
@@ -56,7 +56,7 @@ const signIn = async (page: Page, username: string) => {
 const seedTasks = async (page: Page, tasks: ReturnType<typeof makeTask>[], ownedClientNames: string[] = []) => {
   await page.evaluate(({ tasks: nextTasks, ownedClientNames: nextOwnedClientNames }) => (
     (async () => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       const state = useStore.getState();
       const seededIds = new Set(nextTasks.map(task => task.id));
       const seededClients = nextOwnedClientNames.map((clientName, index) => ({

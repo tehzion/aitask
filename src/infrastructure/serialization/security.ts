@@ -1,0 +1,592 @@
+import { getLegacyDepartmentMirror, normalizeDepartment, normalizeMemberDepartments } from '../../shared/authorization/departments';
+import type {
+	Addon,
+	AppNotification,
+	ClientApprovalStatus,
+	ClientProfile,
+	ClientServicePlan,
+	CustomRole,
+	CycleComment,
+	Deliverable,
+	NotificationRoute,
+	Priority,
+	Project,
+	RecurrenceFrequency,
+	Registration,
+	Role,
+	ServiceCycle,
+	ServicePackage,
+	ServicePricingSnapshot,
+	ServiceWorkflowTemplate,
+	Task,
+	TaskApprovalEvent,
+	TaskComment,
+	User,
+} from '../../shared/types/index';
+import { getTodayInputDate } from '../../shared/utils/utils';
+
+const roles = new Set<Role>(['Project Manager', 'HOD', 'Staff', 'Client']);
+const priorities = new Set<Priority>(['Low', 'Medium', 'High', 'Urgent']);
+const approvalStatuses = new Set<ClientApprovalStatus>(['Pending', 'Approved', 'Rejected']);
+const recurrenceFrequencies = new Set<RecurrenceFrequency>(['None', 'Daily', 'Weekly', 'Monthly']);
+const routePages = new Set<NotificationRoute['page']>([
+  'dashboard',
+  'tasks',
+  'calendar',
+  'clients',
+  'projects',
+  'reports',
+  'approvals',
+  'settings',
+]);
+const iconTypes = new Set<AppNotification['iconType']>(['task', 'status', 'success', 'alert']);
+const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+
+type UnknownRecord = Record<string, unknown>;
+
+export interface SafeWorkspaceState {
+  users: User[];
+  clients: ClientProfile[];
+  projects: Project[];
+  tasks: Task[];
+  notifications: AppNotification[];
+  registrations: Registration[];
+  rolePermissions: CustomRole[];
+  taskStatuses: string[];
+  deletedUserIds: string[];
+  deletedRoleIds: string[];
+  deletedTaskStatuses: string[];
+  deletedClientIds: string[];
+  servicePackages: ServicePackage[];
+  clientPlans: ClientServicePlan[];
+  serviceCycles: ServiceCycle[];
+  deliverables: Deliverable[];
+  cycleComments: CycleComment[];
+  addons: Addon[];
+  serviceWorkflowTemplates: ServiceWorkflowTemplate[];
+  servicePricingSnapshots: ServicePricingSnapshot[];
+}
+
+const isRecord = (value: unknown): value is UnknownRecord => (
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+);
+
+const stripControlCharacters = (value: string) => {
+  let cleanValue = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    const isAllowedWhitespace = code === 0x09 || code === 0x0a || code === 0x0d;
+    if (code === 0x7f || (code < 0x20 && !isAllowedWhitespace)) continue;
+    cleanValue += value[index];
+  }
+  return cleanValue;
+};
+
+const cleanText = (value: unknown, maxLength: number, fallback = '') => {
+  if (typeof value !== 'string') return fallback;
+  return stripControlCharacters(value).trim().slice(0, maxLength);
+};
+
+const optionalText = (value: unknown, maxLength: number) => cleanText(value, maxLength) || undefined;
+
+const safeIsoDate = (value: unknown, fallback: string) => {
+  const date = cleanText(value, 10);
+  if (!isoDate.test(date)) return fallback;
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  // Date.parse rolls impossible days over (e.g. 2026-02-31T00:00:00Z becomes
+  // 2026-03-03), so require the round-trip to match the input exactly.
+  return parsed.toISOString().slice(0, 10) === date ? date : fallback;
+};
+
+const safeIsoTimestamp = (value: unknown) => {
+  const timestamp = cleanText(value, 40);
+  return timestamp && !Number.isNaN(Date.parse(timestamp)) ? new Date(timestamp).toISOString() : undefined;
+};
+
+const safeStringArray = (value: unknown, maxItems = 500, maxLength = 120) => (
+  Array.isArray(value)
+    ? value.slice(0, maxItems).map(item => cleanText(item, maxLength)).filter(Boolean)
+    : []
+);
+
+export const safeHttpsUrl = (value: unknown): string | null => {
+  const candidate = cleanText(value, 2048);
+  if (!candidate || /[\\\s]/.test(candidate)) return null;
+
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password) return null;
+    return parsed.href;
+  } catch {
+    return null;
+  }
+};
+
+export const safeAvatarSource = (value: unknown): string | undefined => {
+  const candidate = cleanText(value, 64_000);
+  if (!candidate) return undefined;
+  if (/^data:image\/(?:png|jpe?g|webp);base64,[a-z0-9+/=]+$/i.test(candidate)) return candidate;
+  if (candidate.startsWith('/') && !candidate.startsWith('//') && !candidate.includes('\\')) return candidate;
+  const avatarUrl = safeHttpsUrl(candidate);
+  if (!avatarUrl) return undefined;
+
+  try {
+    const parsed = new URL(avatarUrl);
+    if (parsed.hostname === 'i.pravatar.cc' || parsed.hostname.endsWith('.supabase.co')) return avatarUrl;
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+};
+
+export const parseNotificationRoute = (value: unknown): NotificationRoute | null => {
+  if (!isRecord(value)) return null;
+  const page = cleanText(value.page, 24) as NotificationRoute['page'];
+  if (!routePages.has(page)) return null;
+  const entityId = optionalText(value.entityId, 160);
+  return entityId ? { page, entityId } : { page };
+};
+
+export const legacyLinkToNotificationRoute = (value: unknown): NotificationRoute | null => {
+  const link = cleanText(value, 512);
+  if (!link || !link.startsWith('/') || link.startsWith('//') || link.includes('\\')) return null;
+
+  try {
+    const parsed = new URL(link, 'https://aitask.invalid');
+    if (parsed.origin !== 'https://aitask.invalid' || parsed.hash) return null;
+
+    const routeMap: Record<string, NotificationRoute['page']> = {
+      '/': 'dashboard',
+      '/dashboard': 'dashboard',
+      '/tasks': 'tasks',
+      '/calendar': 'calendar',
+      '/clients': 'clients',
+      '/projects': 'projects',
+      '/reports': 'reports',
+      '/approvals': 'approvals',
+      '/settings': 'settings',
+    };
+    const page = routeMap[parsed.pathname];
+    if (!page) return null;
+
+    const allowedQuery = page === 'tasks' ? new Set(['taskId', 'client']) : new Set<string>();
+    if ([...parsed.searchParams.keys()].some(key => !allowedQuery.has(key))) return null;
+    const entityId = page === 'tasks' ? optionalText(parsed.searchParams.get('taskId'), 160) : undefined;
+    return entityId ? { page, entityId } : { page };
+  } catch {
+    return null;
+  }
+};
+
+export const notificationRouteToPath = (route: unknown): string => {
+  const parsedRoute = parseNotificationRoute(route) || legacyLinkToNotificationRoute(route);
+  if (!parsedRoute) return '/';
+
+  const basePaths: Record<NotificationRoute['page'], string> = {
+    dashboard: '/',
+    tasks: '/tasks',
+    calendar: '/calendar',
+    clients: '/clients',
+    projects: '/projects',
+    reports: '/reports',
+    approvals: '/approvals',
+    settings: '/settings',
+  };
+  const base = basePaths[parsedRoute.page] || '/';
+  return parsedRoute.page === 'tasks' && parsedRoute.entityId
+    ? `${base}?taskId=${encodeURIComponent(parsedRoute.entityId)}`
+    : base;
+};
+
+const parseComment = (value: unknown): TaskComment | null => {
+  if (!isRecord(value)) return null;
+  const id = cleanText(value.id, 160);
+  const userId = cleanText(value.userId, 160);
+  const text = cleanText(value.text, 10_000);
+  const createdAt = safeIsoTimestamp(value.createdAt);
+  return id && userId && text && createdAt ? {
+    id,
+    userId,
+    text,
+    createdAt,
+    version: Math.max(1, Number(value.version) || 1),
+    updatedAt: safeIsoTimestamp(value.updatedAt),
+  } : null;
+};
+
+const parseApprovalEvent = (value: unknown): TaskApprovalEvent | null => {
+  if (!isRecord(value)) return null;
+  const id = cleanText(value.id, 160);
+  const userId = cleanText(value.userId, 160);
+  const status = cleanText(value.status, 20) as ClientApprovalStatus;
+  const createdAt = safeIsoTimestamp(value.createdAt);
+  if (!id || !userId || !approvalStatuses.has(status) || !createdAt) return null;
+  return {
+    id,
+    userId,
+    status,
+    note: optionalText(value.note, 5000),
+    createdAt,
+    version: Math.max(1, Number(value.version) || 1),
+    updatedAt: safeIsoTimestamp(value.updatedAt),
+  };
+};
+
+const parseUser = (value: unknown): User | null => {
+  if (!isRecord(value)) return null;
+  const id = cleanText(value.id, 160);
+  const name = cleanText(value.name, 160);
+  const rawRole = cleanText(value.role, 40);
+  const rawCustomRoleId = cleanText(value.customRoleId, 160);
+  const isLegacyHod = rawCustomRoleId === 'system-hod' || rawCustomRoleId === 'builtin-hod'
+    || (rawRole === 'Staff' && cleanText(value.customRoleName, 160)?.toLowerCase() === 'hod');
+  const role = (rawRole === 'Admin' ? 'Project Manager' : isLegacyHod ? 'HOD' : rawRole) as Role;
+  if (!id || !name || !roles.has(role)) return null;
+  const departments = normalizeMemberDepartments(role, value.departments, cleanText(value.department, 80));
+  if (departments.length === 0 && role !== 'Project Manager') return null;
+
+  return {
+    id,
+    version: Math.max(1, Number(value.version) || 1),
+    authUserId: optionalText(value.authUserId, 160),
+    hasLogin: typeof value.hasLogin === 'boolean' ? value.hasLogin : undefined,
+    workspaceId: optionalText(value.workspaceId, 160),
+    name,
+    email: optionalText(value.email, 320),
+    phone: optionalText(value.phone, 80),
+    jobPosition: optionalText(value.jobPosition, 160),
+    role,
+    departments,
+    department: getLegacyDepartmentMirror(role, departments),
+    avatar: safeAvatarSource(value.avatar),
+    companyName: optionalText(value.companyName, 240),
+    isSuperAdmin: value.isSuperAdmin === true,
+    mustResetPassword: value.mustResetPassword === true,
+    // The legacy system-hod/builtin-hod references are normalized away. A
+    // regular editable custom role based on HOD remains assignable.
+    customRoleId: isLegacyHod ? undefined : optionalText(value.customRoleId, 160),
+    customRoleName: isLegacyHod ? undefined : optionalText(value.customRoleName, 160),
+    permissions: isRecord(value.permissions) ? value.permissions as User['permissions'] : undefined,
+    workerType: ['employee', 'supplier', 'freelancer'].includes(cleanText(value.workerType, 20))
+      ? cleanText(value.workerType, 20) as NonNullable<User['workerType']>
+      : 'employee',
+    updatedAt: safeIsoTimestamp(value.updatedAt),
+  };
+};
+
+const parseClientProfile = (value: unknown): ClientProfile | null => {
+  if (!isRecord(value)) return null;
+  const clientName = cleanText(value.clientName, 240);
+  if (!clientName) return null;
+
+  const now = new Date().toISOString();
+  const id = cleanText(value.id, 160) || `CL-${clientName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'client'}`;
+  const createdAt = safeIsoTimestamp(value.createdAt) || safeIsoTimestamp(value.updatedAt) || now;
+
+  return {
+    id,
+    version: Math.max(1, Number(value.version) || 1),
+    clientName,
+    createdBy: optionalText(value.createdBy, 160),
+    awaitingPublication: typeof value.awaitingPublication === 'boolean' ? value.awaitingPublication : undefined,
+    clientSince: safeIsoDate(value.clientSince, '') || undefined,
+    contactPerson: optionalText(value.contactPerson, 160),
+    email: optionalText(value.email, 320),
+    phone: optionalText(value.phone, 80),
+    address: optionalText(value.address, 1000),
+    website: safeHttpsUrl(value.website) || undefined,
+    facebookPage: safeHttpsUrl(value.facebookPage) || undefined,
+    notes: optionalText(value.notes, 5000),
+    createdAt,
+    updatedAt: safeIsoTimestamp(value.updatedAt) || createdAt,
+  };
+};
+
+const parseProject = (value: unknown): Project | null => {
+  if (!isRecord(value)) return null;
+  const id = cleanText(value.id, 160);
+  const clientName = cleanText(value.clientName, 240);
+  const projectName = cleanText(value.projectName, 240);
+  if (!id || !clientName || !projectName) return null;
+  const today = getTodayInputDate();
+  const milestones = Array.isArray(value.milestones) ? value.milestones.filter(isRecord).slice(0, 100).map(item => {
+    const milestoneId = cleanText(item.id, 160);
+    const name = cleanText(item.name, 160);
+    const targetDate = safeIsoDate(item.targetDate, '');
+    const status = cleanText(item.status, 30);
+    if (!milestoneId || !name || !targetDate || !['Not Started', 'In Progress', 'Completed', 'Delayed'].includes(status)) return null;
+    return {
+      id: milestoneId,
+      name,
+      description: optionalText(item.description, 2000),
+      targetDate,
+      responsiblePersonId: optionalText(item.responsiblePersonId, 160),
+      status: status as NonNullable<Project['milestones']>[number]['status'],
+      createdAt: safeIsoTimestamp(item.createdAt) || new Date(0).toISOString(),
+      updatedAt: safeIsoTimestamp(item.updatedAt) || safeIsoTimestamp(item.createdAt) || new Date(0).toISOString(),
+    };
+  }).filter((item): item is NonNullable<typeof item> => Boolean(item)) : [];
+  const responsibilities = isRecord(value.memberResponsibilities)
+    ? Object.fromEntries(Object.entries(value.memberResponsibilities).filter(([id, responsibility]) => cleanText(id, 160) && typeof responsibility === 'string').map(([id, responsibility]) => [cleanText(id, 160), cleanText(responsibility, 160)]))
+    : undefined;
+
+  return {
+    id,
+    version: Math.max(1, Number(value.version) || 1),
+    clientId: optionalText(value.clientId, 160),
+    workspaceId: optionalText(value.workspaceId, 160),
+    createdBy: optionalText(value.createdBy, 160),
+    projectManagerIds: Array.isArray(value.projectManagerIds) ? safeStringArray(value.projectManagerIds, 100, 160) : undefined,
+    hodMemberIds: Array.isArray(value.hodMemberIds) ? safeStringArray(value.hodMemberIds, 100, 160) : undefined,
+    staffMemberIds: Array.isArray(value.staffMemberIds) ? safeStringArray(value.staffMemberIds, 500, 160) : undefined,
+    memberResponsibilities: responsibilities,
+    clientName,
+    projectName,
+    services: safeStringArray(value.services, 50, 120),
+    startDate: safeIsoDate(value.startDate, today),
+    deadline: cleanText(value.deadline, 10) ? safeIsoDate(value.deadline, today) : '',
+    status: ['Active', 'Completed', 'Closed'].includes(cleanText(value.status, 20)) ? cleanText(value.status, 20) as Project['status'] : undefined,
+    completedAt: safeIsoTimestamp(value.completedAt),
+    completedBy: optionalText(value.completedBy, 160),
+    closedAt: safeIsoTimestamp(value.closedAt),
+    closedBy: optionalText(value.closedBy, 160),
+    reopenedAt: safeIsoTimestamp(value.reopenedAt),
+    reopenedBy: optionalText(value.reopenedBy, 160),
+    closureWarningsAcknowledged: typeof value.closureWarningsAcknowledged === 'boolean' ? value.closureWarningsAcknowledged : undefined,
+    closureWarningSnapshot: isRecord(value.closureWarningSnapshot) ? {
+      outstandingTasks: Math.max(0, Math.trunc(Number(value.closureWarningSnapshot.outstandingTasks) || 0)),
+      pendingApprovals: Math.max(0, Math.trunc(Number(value.closureWarningSnapshot.pendingApprovals) || 0)),
+      overdueTasks: Math.max(0, Math.trunc(Number(value.closureWarningSnapshot.overdueTasks) || 0)),
+      incompleteMilestones: Math.max(0, Math.trunc(Number(value.closureWarningSnapshot.incompleteMilestones) || 0)),
+      confirmedAt: safeIsoTimestamp(value.closureWarningSnapshot.confirmedAt) || new Date(0).toISOString(),
+    } : undefined,
+    requireClearClosureChecklist: typeof value.requireClearClosureChecklist === 'boolean' ? value.requireClearClosureChecklist : undefined,
+    defaultApprovalMode: ['none', 'hod', 'pm'].includes(cleanText(value.defaultApprovalMode, 10)) ? cleanText(value.defaultApprovalMode, 10) as Project['defaultApprovalMode'] : undefined,
+    milestones,
+    updatedAt: safeIsoTimestamp(value.updatedAt),
+  };
+};
+
+export const parseTask = (value: unknown): Task | null => {
+  if (!isRecord(value)) return null;
+  const id = cleanText(value.id, 160);
+  const clientName = cleanText(value.clientName, 240);
+  const serviceType = cleanText(value.serviceType, 120);
+  const title = cleanText(value.title, 500);
+  const department = normalizeDepartment(cleanText(value.department, 80));
+  const assignedTo = cleanText(value.assignedTo, 160);
+  const createdBy = cleanText(value.createdBy, 160);
+  const priority = cleanText(value.priority, 20) as Priority;
+  const status = cleanText(value.status, 80);
+  const clientApprovalStatus = cleanText(value.clientApprovalStatus, 20) as ClientApprovalStatus;
+  const recurrenceFrequency = cleanText(value.recurrenceFrequency, 20) as RecurrenceFrequency;
+  const generatedFromDeliverable = value.generatedFromDeliverable === true;
+  // Unassigned tasks are a supported state (the create form offers "Unassigned"
+  // and deliverable-generated chains can start without an assignee), so do not
+  // drop a task just because it has no assignee.
+  if (!id || !clientName || !serviceType || !title || !department || !createdBy || !priorities.has(priority) || !status) return null;
+  const today = getTodayInputDate();
+
+  return {
+    id,
+    version: Math.max(1, Number(value.version) || 1),
+    workspaceId: optionalText(value.workspaceId, 160),
+    clientId: optionalText(value.clientId, 160),
+    projectId: optionalText(value.projectId, 160),
+    serviceCycleId: optionalText(value.serviceCycleId, 160),
+    deliverableId: optionalText(value.deliverableId, 160),
+    accountableLeadId: optionalText(value.accountableLeadId, 160),
+    requiresInternalApproval: typeof value.requiresInternalApproval === 'boolean' ? value.requiresInternalApproval : undefined,
+    approvalMode: ['inherit', 'none', 'hod', 'pm'].includes(cleanText(value.approvalMode, 10)) ? cleanText(value.approvalMode, 10) as Task['approvalMode'] : undefined,
+    milestoneId: optionalText(value.milestoneId, 160),
+    outputAttachments: Array.isArray(value.outputAttachments) ? value.outputAttachments.filter(isRecord).filter(file => file.bucket === 'client-service-files' && cleanText(file.id, 160) && cleanText(file.path, 2048) && !String(file.path).includes('\\') && !String(file.path).split('/').some(part => part === '.' || part === '..')).slice(0, 50).map(file => ({ id: cleanText(file.id, 160), bucket: 'client-service-files', path: cleanText(file.path, 2048), fileName: cleanText(file.fileName, 240), mimeType: cleanText(file.mimeType, 120), sizeBytes: Math.max(0, Number(file.sizeBytes) || 0), uploadedBy: cleanText(file.uploadedBy, 160), uploadedAt: safeIsoTimestamp(file.uploadedAt) || '' })) : undefined,
+    reviewCover: isRecord(value.reviewCover) && cleanText(value.reviewCover.reviewerId, 160) && safeIsoTimestamp(value.reviewCover.expiresAt) ? { reviewerId: cleanText(value.reviewCover.reviewerId, 160), expiresAt: safeIsoTimestamp(value.reviewCover.expiresAt)!, configuredBy: optionalText(value.reviewCover.configuredBy, 160), configuredAt: safeIsoTimestamp(value.reviewCover.configuredAt) } : undefined,
+    reviewDecision: isRecord(value.reviewDecision) && cleanText(value.reviewDecision.reviewedBy, 160) && safeIsoTimestamp(value.reviewDecision.reviewedAt) ? { reviewedBy: cleanText(value.reviewDecision.reviewedBy, 160), reviewedAt: safeIsoTimestamp(value.reviewDecision.reviewedAt)!, overrideReason: optionalText(value.reviewDecision.overrideReason, 2000) } : undefined,
+    visibility: cleanText(value.visibility, 30) === 'internal' ? 'internal' : 'client-visible',
+    workflowTemplateId: optionalText(value.workflowTemplateId, 160),
+    workflowTemplateRevision: value.workflowTemplateRevision === undefined ? undefined : Math.max(1, Number(value.workflowTemplateRevision) || 1),
+    workflowStepId: optionalText(value.workflowStepId, 160),
+    workflowStepOrder: value.workflowStepOrder === undefined ? undefined : Math.max(1, Number(value.workflowStepOrder) || 1),
+    workflowStepRequired: value.workflowStepRequired === undefined ? undefined : Boolean(value.workflowStepRequired),
+    workflowStepKind: ['work', 'internal_review', 'client_approval', 'publishing'].includes(String(value.workflowStepKind)) ? value.workflowStepKind as Task['workflowStepKind'] : undefined,
+    workflowOutputVersion: value.workflowOutputVersion === undefined ? undefined : Math.max(1, Math.trunc(Number(value.workflowOutputVersion) || 1)),
+    workflowDependenciesReady: typeof value.workflowDependenciesReady === 'boolean' ? value.workflowDependenciesReady : undefined,
+    reviewAccess: isRecord(value.reviewAccess) && cleanText(value.reviewAccess.actorId, 160) && typeof value.reviewAccess.canApprove === 'boolean' ? { actorId: cleanText(value.reviewAccess.actorId, 160), canApprove: value.reviewAccess.canApprove, expiresAt: safeIsoTimestamp(value.reviewAccess.expiresAt), ...(typeof value.reviewAccess.canReadInputs === 'boolean' ? { canReadInputs: value.reviewAccess.canReadInputs } : {}) } : undefined,
+    internalReview: isRecord(value.internalReview) && cleanText(value.internalReview.reviewedBy, 160) && safeIsoTimestamp(value.internalReview.reviewedAt) ? {
+      decisionId: optionalText(value.internalReview.decisionId, 160),
+      reviewedBy: cleanText(value.internalReview.reviewedBy, 160),
+      reviewedAt: safeIsoTimestamp(value.internalReview.reviewedAt)!,
+      inputVersions: Array.isArray(value.internalReview.inputVersions) ? value.internalReview.inputVersions.filter(isRecord).slice(0, 50).map(input => ({ taskId: cleanText(input.taskId, 160), outputVersion: Math.max(1, Math.trunc(Number(input.outputVersion) || 1)) })).filter(input => input.taskId) : [],
+    } : undefined,
+    predecessorTaskIds: safeStringArray(value.predecessorTaskIds, 50, 160),
+    generatedFromDeliverable,
+    workflowGeneratedAt: typeof value.workflowGeneratedAt === 'string' ? value.workflowGeneratedAt.slice(0, 80) : undefined,
+    clientName,
+    customerDetails: optionalText(value.customerDetails, 5000),
+    facebookPage: safeHttpsUrl(value.facebookPage) || undefined,
+    website: safeHttpsUrl(value.website) || undefined,
+    projectName: optionalText(value.projectName, 240),
+    serviceType,
+    title,
+    description: cleanText(value.description, 20_000),
+    department,
+    assignedTo,
+    createdBy,
+    responsibleHodId: optionalText(value.responsibleHodId, 160),
+    assignmentState: ['needs_hod', 'pending_hod', 'assigned_staff'].includes(cleanText(value.assignmentState, 30))
+      ? cleanText(value.assignmentState, 30) as Task['assignmentState']
+      : undefined,
+    assignmentOverride: isRecord(value.assignmentOverride)
+      && cleanText(value.assignmentOverride.actorId, 160)
+      && cleanText(value.assignmentOverride.reason, 2000)
+      && safeIsoTimestamp(value.assignmentOverride.createdAt)
+      ? {
+          actorId: cleanText(value.assignmentOverride.actorId, 160),
+          reason: cleanText(value.assignmentOverride.reason, 2000),
+          createdAt: safeIsoTimestamp(value.assignmentOverride.createdAt)!,
+        }
+      : undefined,
+    assignedBy: optionalText(value.assignedBy, 160),
+    assignedAt: safeIsoTimestamp(value.assignedAt),
+    startDate: safeIsoDate(value.startDate, today),
+    dueDate: cleanText(value.dueDate, 10) ? safeIsoDate(value.dueDate, '') : '',
+    priority,
+    status,
+    completionPercentage: Math.min(100, Math.max(0, Number(value.completionPercentage) || 0)),
+    attachmentLink: safeHttpsUrl(value.attachmentLink) || undefined,
+    attachmentName: optionalText(value.attachmentName, 240),
+    notes: optionalText(value.notes, 20_000),
+    isCompleted: value.isCompleted === true,
+    completedAt: safeIsoTimestamp(value.completedAt),
+    revisionCount: Math.max(0, Number(value.revisionCount) || 0),
+    clientApprovalStatus: approvalStatuses.has(clientApprovalStatus) ? clientApprovalStatus : 'Pending',
+    isRecurring: value.isRecurring === true,
+    recurrenceFrequency: recurrenceFrequencies.has(recurrenceFrequency) ? recurrenceFrequency : 'None',
+    dueReminderSent: value.dueReminderSent === true,
+    comments: Array.isArray(value.comments) ? value.comments.map(parseComment).filter((item): item is TaskComment => Boolean(item)) : [],
+    approvalHistory: Array.isArray(value.approvalHistory) ? value.approvalHistory.map(parseApprovalEvent).filter((item): item is TaskApprovalEvent => Boolean(item)) : [],
+    workState: isRecord(value.workState) ? {
+      acceptedBy: optionalText(value.workState.acceptedBy, 160),
+      acceptedAt: safeIsoTimestamp(value.workState.acceptedAt),
+      reviewRequestedBy: optionalText(value.workState.reviewRequestedBy, 160),
+      reviewRequestedAt: safeIsoTimestamp(value.workState.reviewRequestedAt),
+      blocker: isRecord(value.workState.blocker) && cleanText(value.workState.blocker.reason, 2000) && safeIsoTimestamp(value.workState.blocker.openedAt) ? {
+        reason: cleanText(value.workState.blocker.reason, 2000), openedBy: cleanText(value.workState.blocker.openedBy, 160), openedAt: safeIsoTimestamp(value.workState.blocker.openedAt)!,
+      } : undefined,
+    } : undefined,
+    workHistory: Array.isArray(value.workHistory) ? value.workHistory.filter(isRecord).slice(-50).flatMap(event => {
+      const createdAt = safeIsoTimestamp(event.createdAt);
+      const id = cleanText(event.id, 160);
+      return createdAt && id ? [{ id, userId: cleanText(event.userId, 160), createdAt, fields: safeStringArray(event.fields, 15, 80) }] : [];
+    }) : [],
+    updatedAt: safeIsoTimestamp(value.updatedAt),
+  };
+};
+
+export const parseNotification = (value: unknown): AppNotification | null => {
+  if (!isRecord(value)) return null;
+  const id = cleanText(value.id, 160);
+  const title = cleanText(value.title, 240);
+  const message = cleanText(value.message, 2000);
+  const createdAt = safeIsoTimestamp(value.createdAt);
+  const route = parseNotificationRoute(value.route) || legacyLinkToNotificationRoute(value.link);
+  const iconType = cleanText(value.iconType, 20) as AppNotification['iconType'];
+  const category = cleanText(value.category, 24) as AppNotification['category'];
+  const importance = cleanText(value.importance, 24) as AppNotification['importance'];
+  if (!id || !title || !message || !createdAt || !route || !iconTypes.has(iconType)) return null;
+
+  return {
+    id,
+    version: Math.max(1, Number(value.version) || 1),
+    updatedAt: safeIsoTimestamp(value.updatedAt),
+    targetUserId: optionalText(value.targetUserId, 160),
+    targetRole: roles.has(value.targetRole as Role) ? value.targetRole as Role : undefined,
+    targetClient: optionalText(value.targetClient, 240),
+    title,
+    message,
+    route,
+    isRead: value.isRead === true,
+    readByUserIds: Array.isArray(value.readByUserIds)
+      ? safeStringArray(value.readByUserIds, 1000, 160)
+      : undefined,
+    unreadByUserIds: Array.isArray(value.unreadByUserIds)
+      ? safeStringArray(value.unreadByUserIds, 1000, 160)
+      : undefined,
+    createdAt,
+    iconType,
+    category: ['assignment', 'deadline', 'review', 'feedback', 'account', 'status', 'system'].includes(category || '')
+      ? category
+      : undefined,
+    importance: importance === 'action' || importance === 'informational' ? importance : undefined,
+    visibleToCurrentUser: value.visibleToCurrentUser === true || undefined,
+  };
+};
+
+const parseRegistration = (value: unknown): Registration | null => {
+  if (!isRecord(value)) return null;
+  const id = cleanText(value.id, 160);
+  const name = cleanText(value.name, 160);
+  const email = cleanText(value.email, 320);
+  const requestedRole = cleanText(value.requestedRole, 20) as Role;
+  const status = cleanText(value.status, 20) as Registration['status'];
+  const onboardingMode = cleanText(value.onboardingMode, 24) as Registration['onboardingMode'];
+  const createdAt = safeIsoTimestamp(value.createdAt);
+  if (!id || !name || !email || !roles.has(requestedRole) || !['Pending', 'Approved', 'Rejected'].includes(status) || !createdAt) return null;
+  return {
+    id,
+    version: Math.max(1, Number(value.version) || 1),
+    name,
+    email,
+    phone: cleanText(value.phone, 80),
+    jobPosition: cleanText(value.jobPosition, 160),
+    requestedRole,
+    status,
+    onboardingMode: onboardingMode === 'self_signup' || onboardingMode === 'legacy_invite'
+      ? onboardingMode
+      : undefined,
+    createdAt,
+    updatedAt: safeIsoTimestamp(value.updatedAt),
+  };
+};
+
+// Service-domain and role collections arrive as free-form JSONB. Entries without
+// a usable string identity are dropped so downstream Map/key lookups can never
+// receive an undefined id. Field-level coercion for these shapes stays light by
+// design; the database remains the authoritative shape.
+const parseIdentifiedRecords = <T>(items: unknown): T[] => (
+  Array.isArray(items)
+    ? (items.filter(isRecord).filter(item => typeof item.id === 'string' && item.id.trim().length > 0) as unknown as T[])
+    : []
+);
+
+export const parseWorkspaceSnapshot = (value: unknown): SafeWorkspaceState => {
+  const record = isRecord(value) ? value : {};
+  const mapValid = <T>(items: unknown, parser: (item: unknown) => T | null): T[] => (
+    Array.isArray(items) ? items.map(parser).filter((item): item is T => Boolean(item)) : []
+  );
+
+  return {
+    users: mapValid(record.users, parseUser),
+    clients: mapValid(record.clients, parseClientProfile),
+    projects: mapValid(record.projects, parseProject),
+    tasks: mapValid(record.tasks, parseTask),
+    notifications: mapValid(record.notifications, parseNotification),
+    registrations: mapValid(record.registrations, parseRegistration),
+    rolePermissions: parseIdentifiedRecords<CustomRole>(record.rolePermissions),
+    taskStatuses: safeStringArray(record.taskStatuses, 100, 80),
+    deletedUserIds: safeStringArray(record.deletedUserIds, 2000, 160),
+    deletedRoleIds: safeStringArray(record.deletedRoleIds, 2000, 160),
+    deletedTaskStatuses: safeStringArray(record.deletedTaskStatuses, 2000, 80),
+    deletedClientIds: safeStringArray(record.deletedClientIds, 2000, 160),
+    servicePackages: parseIdentifiedRecords<ServicePackage>(record.servicePackages),
+    clientPlans: parseIdentifiedRecords<ClientServicePlan>(record.clientPlans),
+    serviceCycles: parseIdentifiedRecords<ServiceCycle>(record.serviceCycles),
+    deliverables: parseIdentifiedRecords<Deliverable>(record.deliverables),
+    cycleComments: parseIdentifiedRecords<CycleComment>(record.cycleComments),
+    addons: parseIdentifiedRecords<Addon>(record.addons),
+    serviceWorkflowTemplates: parseIdentifiedRecords<ServiceWorkflowTemplate>(record.serviceWorkflowTemplates),
+    servicePricingSnapshots: parseIdentifiedRecords<ServicePricingSnapshot>(record.servicePricingSnapshots),
+  };
+};

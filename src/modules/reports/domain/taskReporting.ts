@@ -1,0 +1,459 @@
+import { endOfDay } from 'date-fns/endOfDay';
+import { format } from 'date-fns/format';
+import { isWithinInterval } from 'date-fns/isWithinInterval';
+import { startOfDay } from 'date-fns/startOfDay';
+import { subMonths } from 'date-fns/subMonths';
+import { subWeeks } from 'date-fns/subWeeks';
+import { getMemberDepartments, normalizeDepartment } from '../../../shared/authorization/departments';
+import { formatLocalizedDate, formatLocalizedMonth, type AppLocale } from '../../../shared/i18n/i18n';
+import { isTaskCompleted, isTaskOpen } from '../../../shared/rules/taskCompletion';
+import type { Department, Task, User } from '../../../shared/types/index';
+import { parseOptionalDate } from '../../../shared/utils/utils';
+import { getWorkWeekRange } from '../../../shared/utils/workWeek';
+export { isTaskOpen } from '../../../shared/rules/taskCompletion';
+
+export interface OperationsPeriod {
+  start: Date;
+  end: Date;
+  label: string;
+}
+
+export type DueWorkOutcome = 'onTime' | 'late' | 'upcoming' | 'open' | 'overdue' | 'untracked';
+
+export interface DueWorkWeek {
+  start: Date;
+  end: Date;
+  label: string;
+  isCurrent: boolean;
+  tasks: Task[];
+  outcomes: Array<{ task: Task; outcome: DueWorkOutcome }>;
+  onTime: number;
+  late: number;
+  upcoming: number;
+  open: number;
+  overdue: number;
+  untracked: number;
+  tracked: number;
+  completionRate: number;
+}
+
+export interface AgencyPulseMetrics {
+  period: OperationsPeriod;
+  today: {
+    completed: number;
+    due: number;
+    open: number;
+  };
+  week: {
+    completed: number;
+    due: number;
+    remaining: number;
+    overdue: number;
+  };
+  overall: {
+    open: number;
+    inProgress: number;
+    waitingApproval: number;
+    completed: number;
+  };
+  untrackedHistoricalCompletions: number;
+}
+
+export type TeamWorkloadPeriod = 'today' | 'week' | 'overall';
+export type TeamWorkloadSignal = 'available' | 'balanced' | 'busy' | 'attention';
+
+export interface TeamWorkloadSummary {
+  member: User;
+  dueToday: number;
+  dueThisWeek: number;
+  open: number;
+  overdue: number;
+  waitingApproval: number;
+  completedThisWeek: number;
+  periodOpen: number;
+  signal: TeamWorkloadSignal;
+}
+
+export interface TeamTaskGroups {
+  overdue: Task[];
+  today: Task[];
+  thisWeek: Task[];
+  later: Task[];
+  noDueDate: Task[];
+  completedThisWeek: Task[];
+}
+
+export interface DepartmentWorkloadSummary extends TeamWorkloadSummary {
+  department: Department;
+  members: number;
+}
+
+const isCancelled = (task: Task) => task.status === 'Cancelled';
+
+export const isTaskOverdue = (task: Task, now = new Date()) => {
+  const due = parseOptionalDate(task.dueDate);
+  return Boolean(isTaskOpen(task) && due && due < startOfDay(now));
+};
+
+const isInPeriod = (value: string | undefined, start: Date, end: Date) => {
+  const date = parseOptionalDate(value);
+  return Boolean(date && isWithinInterval(date, { start, end }));
+};
+
+const sortByDueDate = (left: Task, right: Task) => (
+  (parseOptionalDate(left.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER)
+  - (parseOptionalDate(right.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER)
+);
+
+export const getWorkloadSignal = (
+  period: TeamWorkloadPeriod,
+  periodOpen: number,
+  overdue: number,
+): TeamWorkloadSignal => {
+  if (overdue > 0) return 'attention';
+  const busyThreshold = period === 'today' ? 4 : period === 'week' ? 8 : 12;
+  const balancedThreshold = period === 'today' ? 1 : period === 'week' ? 3 : 5;
+  if (periodOpen >= busyThreshold) return 'busy';
+  if (periodOpen >= balancedThreshold) return 'balanced';
+  return 'available';
+};
+
+export const getOperationsPeriod = (now = new Date(), locale: AppLocale = 'en'): OperationsPeriod => {
+  const { start, end } = getWorkWeekRange(now);
+  return {
+    start,
+    end,
+    label: locale === 'zh'
+      ? `${formatLocalizedDate(start, locale)} - ${formatLocalizedDate(end, locale)}`
+      : `${format(start, 'd MMM')} - ${format(end, 'd MMM yyyy')}`,
+  };
+};
+
+export const getAgencyPulseMetrics = (tasks: Task[], now = new Date(), locale: AppLocale = 'en'): AgencyPulseMetrics => {
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+  const period = getOperationsPeriod(now, locale);
+  // "Due" reports outstanding work only, so a task completed today is never
+  // counted as both Due and Completed.
+  const dueToday = tasks.filter(task => !isCancelled(task) && isTaskOpen(task) && isInPeriod(task.dueDate, todayStart, todayEnd));
+  const dueThisWeek = tasks.filter(task => !isCancelled(task) && isTaskOpen(task) && isInPeriod(task.dueDate, period.start, period.end));
+
+  return {
+    period,
+    today: {
+      completed: tasks.filter(task => isTaskCompleted(task) && isInPeriod(task.completedAt, todayStart, todayEnd)).length,
+      due: dueToday.length,
+      open: dueToday.filter(isTaskOpen).length,
+    },
+    week: {
+      completed: tasks.filter(task => isTaskCompleted(task) && isInPeriod(task.completedAt, period.start, period.end)).length,
+      due: dueThisWeek.length,
+      remaining: dueThisWeek.filter(isTaskOpen).length,
+      overdue: tasks.filter(task => {
+        const dueDate = parseOptionalDate(task.dueDate);
+        return Boolean(isTaskOpen(task) && dueDate && dueDate < todayStart);
+      }).length,
+    },
+    overall: {
+      open: tasks.filter(isTaskOpen).length,
+      inProgress: tasks.filter(task => isTaskOpen(task) && task.status === 'In Progress').length,
+      waitingApproval: tasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length,
+      completed: tasks.filter(isTaskCompleted).length,
+    },
+    untrackedHistoricalCompletions: tasks.filter(task => isTaskCompleted(task) && !parseOptionalDate(task.completedAt)).length,
+  };
+};
+
+export const getNeedsAttentionTasks = (tasks: Task[], now = new Date()) => {
+  const todayStart = startOfDay(now);
+  const overdue = tasks
+    .filter(task => {
+      const dueDate = parseOptionalDate(task.dueDate);
+      return Boolean(isTaskOpen(task) && dueDate && dueDate < todayStart);
+    })
+    .sort((a, b) => (parseOptionalDate(a.dueDate)?.getTime() || 0) - (parseOptionalDate(b.dueDate)?.getTime() || 0));
+  const overdueIds = new Set(overdue.map(task => task.id));
+  const waitingApproval = tasks
+    .filter(task => isTaskOpen(task) && task.status === 'Waiting Approval' && !overdueIds.has(task.id))
+    .sort((a, b) => (parseOptionalDate(a.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER) - (parseOptionalDate(b.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER));
+  return [...overdue, ...waitingApproval];
+};
+
+export type CompletionSegment = 'today' | 'week' | 'all';
+
+export const getRecentCompletionTasks = (
+  tasks: Task[],
+  segment: CompletionSegment,
+  now = new Date(),
+) => {
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+  const week = getOperationsPeriod(now);
+  return tasks
+    .filter(task => {
+      if (!isTaskCompleted(task)) return false;
+      const completedAt = parseOptionalDate(task.completedAt);
+      if (!completedAt) return false;
+      if (segment === 'today') return isWithinInterval(completedAt, { start: todayStart, end: todayEnd });
+      if (segment === 'week') return isWithinInterval(completedAt, { start: week.start, end: week.end });
+      return true;
+    })
+    .sort((a, b) => (parseOptionalDate(b.completedAt)?.getTime() || 0) - (parseOptionalDate(a.completedAt)?.getTime() || 0));
+};
+
+export const getTeamWorkloadSummaries = (
+  tasks: Task[],
+  users: User[],
+  period: TeamWorkloadPeriod,
+  now = new Date(),
+): TeamWorkloadSummary[] => {
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+  const week = getOperationsPeriod(now);
+
+  return users
+    .filter(member => member.role !== 'Client' && !member.directoryOnly)
+    .map(member => {
+      const assignedTasks = tasks.filter(task => task.assignedTo === member.id);
+      const openTasks = assignedTasks.filter(isTaskOpen);
+      const dueToday = openTasks.filter(task => isInPeriod(task.dueDate, todayStart, todayEnd)).length;
+      const dueThisWeek = openTasks.filter(task => isInPeriod(task.dueDate, week.start, week.end)).length;
+      const overdue = openTasks.filter(task => {
+        const dueDate = parseOptionalDate(task.dueDate);
+        return Boolean(dueDate && dueDate < todayStart);
+      }).length;
+      const completedThisWeek = assignedTasks.filter(task => (
+        isTaskCompleted(task) && isInPeriod(task.completedAt, week.start, week.end)
+      )).length;
+      const periodOpen = period === 'today'
+        ? dueToday
+        : period === 'week'
+          ? dueThisWeek
+          : openTasks.length;
+
+      return {
+        member,
+        dueToday,
+        dueThisWeek,
+        open: openTasks.length,
+        overdue,
+        waitingApproval: openTasks.filter(task => task.status === 'Waiting Approval').length,
+        completedThisWeek,
+        periodOpen,
+        signal: getWorkloadSignal(period, periodOpen, overdue),
+      };
+    });
+};
+
+/** Each assigned task belongs to its own department, irrespective of the
+ * assignee's department order. The caller supplies the authorized task scope. */
+export const getDepartmentWorkloadSummaries = (
+  tasks: Task[],
+  users: User[],
+  period: TeamWorkloadPeriod,
+  now = new Date(),
+): DepartmentWorkloadSummary[] => {
+  const members = users.filter(member => member.role !== 'Client' && !member.directoryOnly);
+  const memberIds = new Set(members.map(member => member.id));
+  const assignedTasks = tasks.filter(task => memberIds.has(task.assignedTo));
+  const departments = new Set(members.flatMap(getMemberDepartments));
+  assignedTasks.forEach(task => {
+    const department = normalizeDepartment(task.department);
+    if (department) departments.add(department);
+  });
+  return Array.from(departments).map(department => {
+    const departmentTasks = assignedTasks.filter(task => normalizeDepartment(task.department) === department);
+    const summaries = getTeamWorkloadSummaries(departmentTasks, members, period, now);
+    const totals = summaries.reduce((total, summary) => ({
+      dueToday: total.dueToday + summary.dueToday,
+      dueThisWeek: total.dueThisWeek + summary.dueThisWeek,
+      open: total.open + summary.open,
+      overdue: total.overdue + summary.overdue,
+      waitingApproval: total.waitingApproval + summary.waitingApproval,
+      completedThisWeek: total.completedThisWeek + summary.completedThisWeek,
+      periodOpen: total.periodOpen + summary.periodOpen,
+    }), { dueToday: 0, dueThisWeek: 0, open: 0, overdue: 0, waitingApproval: 0, completedThisWeek: 0, periodOpen: 0 });
+    const assignedIds = new Set(departmentTasks.map(task => task.assignedTo));
+    return {
+      ...totals,
+      department,
+      member: { id: `department:${department}`, name: department, role: 'Staff', departments: [department] },
+      members: members.filter(member => getMemberDepartments(member).includes(department) || assignedIds.has(member.id)).length,
+      signal: getWorkloadSignal(period, totals.periodOpen, totals.overdue),
+    };
+  });
+};
+
+export const getTeamMemberTaskGroups = (
+  tasks: Task[],
+  memberId: string,
+  now = new Date(),
+): TeamTaskGroups => {
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+  const week = getOperationsPeriod(now);
+  const assignedTasks = tasks.filter(task => task.assignedTo === memberId);
+  const openTasks = assignedTasks.filter(isTaskOpen);
+
+  const overdue = openTasks
+    .filter(task => {
+      const dueDate = parseOptionalDate(task.dueDate);
+      return Boolean(dueDate && dueDate < todayStart);
+    })
+    .sort(sortByDueDate);
+  const today = openTasks
+    .filter(task => isInPeriod(task.dueDate, todayStart, todayEnd))
+    .sort(sortByDueDate);
+  const thisWeek = openTasks
+    .filter(task => {
+      const dueDate = parseOptionalDate(task.dueDate);
+      return Boolean(dueDate && dueDate > todayEnd && dueDate <= week.end);
+    })
+    .sort(sortByDueDate);
+  const later = openTasks
+    .filter(task => {
+      const dueDate = parseOptionalDate(task.dueDate);
+      return Boolean(dueDate && dueDate > week.end);
+    })
+    .sort(sortByDueDate);
+  const noDueDate = openTasks
+    .filter(task => !parseOptionalDate(task.dueDate))
+    .sort((left, right) => left.title.localeCompare(right.title));
+  const completedThisWeek = assignedTasks
+    .filter(task => isTaskCompleted(task) && isInPeriod(task.completedAt, week.start, week.end))
+    .sort((left, right) => (
+      (parseOptionalDate(right.completedAt)?.getTime() || 0)
+      - (parseOptionalDate(left.completedAt)?.getTime() || 0)
+    ));
+
+  return { overdue, today, thisWeek, later, noDueDate, completedThisWeek };
+};
+
+export const getTrackedMonthlyCompletions = (tasks: Task[], now = new Date(), months = 6, locale: AppLocale = 'en') => {
+  const visibleMonths = Array.from({ length: months }, (_, index) => subMonths(now, months - index - 1));
+  const monthKeys = new Set(visibleMonths.map(month => month.getFullYear() + '-' + month.getMonth()));
+  const counts = new Map<string, number>();
+
+  // The previous implementation parsed every completion once per displayed
+  // month. A single pass keeps the same local-calendar semantics while making
+  // dashboard refreshes linear in the task count instead of months × tasks.
+  tasks.forEach(task => {
+    if (!isTaskCompleted(task)) return;
+    const completedAt = parseOptionalDate(task.completedAt);
+    if (!completedAt) return;
+    const key = completedAt.getFullYear() + '-' + completedAt.getMonth();
+    if (monthKeys.has(key)) counts.set(key, (counts.get(key) || 0) + 1);
+  });
+
+  return visibleMonths.map(month => {
+    const key = month.getFullYear() + '-' + month.getMonth();
+    return {
+      name: formatLocalizedMonth(month, locale),
+      completed: counts.get(key) || 0,
+    };
+  });
+};
+
+export const getTrackedWeeklyCompletions = (tasks: Task[], now = new Date(), weeks = 4, locale: AppLocale = 'en') => {
+  const currentStart = getWorkWeekRange(now).start;
+  return Array.from({ length: weeks }, (_, index) => weeks - index - 1).map(offset => {
+    const { start, end } = getWorkWeekRange(subWeeks(currentStart, offset));
+    const dueTasks = tasks.filter(task => isInPeriod(task.dueDate, start, end));
+    return {
+      name: formatLocalizedDate(start, locale),
+      completed: tasks.filter(task => isTaskCompleted(task) && isInPeriod(task.completedAt, start, end)).length,
+      pending: dueTasks.filter(task => isTaskOpen(task)).length,
+    };
+  });
+};
+
+export const classifyDueWork = (task: Task, now = new Date()): DueWorkOutcome => {
+  if (!isTaskCompleted(task)) {
+    const due = parseOptionalDate(task.dueDate);
+    if (!due || due >= startOfDay(now) && due <= endOfDay(now)) return 'open';
+    return due > endOfDay(now) ? 'upcoming' : 'overdue';
+  }
+  const due = parseOptionalDate(task.dueDate);
+  const completedAt = parseOptionalDate(task.completedAt);
+  if (!due || !completedAt) return 'untracked';
+  return completedAt <= endOfDay(due) ? 'onTime' : 'late';
+};
+
+/** Groups due work into Monday-to-Saturday cohorts for performance reporting. */
+export const getDueWorkPerformance = (tasks: Task[], now = new Date(), weeks = 4, locale: AppLocale = 'en'): DueWorkWeek[] => {
+  const currentStart = getWorkWeekRange(now).start;
+  return Array.from({ length: weeks }, (_, index) => weeks - index - 1).map(offset => {
+    const { start, end } = getWorkWeekRange(subWeeks(currentStart, offset));
+    const cohort = tasks.filter(task => {
+      if (isCancelled(task)) return false;
+      const due = parseOptionalDate(task.dueDate);
+      return Boolean(due && isWithinInterval(due, { start, end }));
+    });
+    const outcomes = cohort.map(task => ({ task, outcome: classifyDueWork(task, now) }));
+    const countOf = (outcome: DueWorkOutcome) => outcomes.filter(item => item.outcome === outcome).length;
+    const onTime = countOf('onTime');
+    const late = countOf('late');
+    const tracked = onTime + late;
+    return {
+      start,
+      end,
+      label: `${formatLocalizedDate(start, locale)}–${formatLocalizedDate(end, locale)}`,
+      isCurrent: offset === 0,
+      tasks: cohort,
+      outcomes,
+      onTime,
+      late,
+      upcoming: countOf('upcoming'),
+      open: countOf('open'),
+      overdue: countOf('overdue'),
+      untracked: countOf('untracked'),
+      tracked,
+      completionRate: tracked ? Math.round((onTime / tracked) * 100) : 0,
+    };
+  });
+};
+
+export interface DepartmentDueWorkPerformance {
+  name: string;
+  total: number;
+  onTime: number;
+  late: number;
+  upcoming: number;
+  open: number;
+  overdue: number;
+  untracked: number;
+  tracked: number;
+  completionRate: number;
+}
+
+/** Department totals derived from the same cohort outcomes so totals reconcile. */
+export const getDueWorkDepartmentPerformance = (weeks: DueWorkWeek[]): DepartmentDueWorkPerformance[] => {
+  const stats = new Map<string, DepartmentDueWorkPerformance>();
+  weeks.forEach(week => week.outcomes.forEach(({ task, outcome }) => {
+    const name = task.department || 'Unassigned';
+    const entry = stats.get(name) || {
+      name,
+      total: 0,
+      onTime: 0,
+      late: 0,
+      upcoming: 0,
+      open: 0,
+      overdue: 0,
+      untracked: 0,
+      tracked: 0,
+      completionRate: 0,
+    };
+    entry.total += 1;
+    if (outcome === 'onTime') entry.onTime += 1;
+    else if (outcome === 'late') entry.late += 1;
+    else if (outcome === 'upcoming') entry.upcoming += 1;
+    else if (outcome === 'overdue') entry.overdue += 1;
+    else if (outcome === 'untracked') entry.untracked += 1;
+    else entry.open += 1;
+    entry.tracked = entry.onTime + entry.late;
+    stats.set(name, entry);
+  }));
+  return Array.from(stats.values())
+    .map(entry => ({ ...entry, completionRate: entry.tracked ? Math.round((entry.onTime / entry.tracked) * 100) : 0 }))
+    .sort((a, b) => b.total - a.total);
+};

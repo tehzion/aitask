@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(21);
 
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 values ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000001301','authenticated','authenticated','review-client@aitask.local','','{}','{}',now(),now());
@@ -13,6 +13,7 @@ insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) valu
 ('pgtap-review-privacy','client','review-co','{"id":"review-co","clientName":"Review Co"}'),
 ('pgtap-review-privacy','client_plan','review-plan','{"id":"review-plan","clientId":"review-co","clientName":"Review Co","status":"Active","revision":1}'),
 ('pgtap-review-privacy','task','review-task','{"id":"review-task","clientId":"review-co","clientName":"Review Co","title":"Shared task","assignedTo":"review-staff","visibility":"client-visible","status":"Pending"}'),
+('pgtap-review-privacy','task','completed-review-task','{"id":"completed-review-task","clientId":"review-co","clientName":"Review Co","title":"Completed shared task","assignedTo":"review-staff","visibility":"client-visible","status":"Completed","isCompleted":true,"completionPercentage":100,"clientApprovalStatus":"Pending","completedAt":"2026-10-20T12:00:00Z"}'),
 ('pgtap-review-privacy','service_cycle','review-draft',jsonb_build_object('id','review-draft','clientId','review-co','clientName','Review Co','planId','review-plan','status','Draft','periodStart',to_char(timezone('Asia/Kuala_Lumpur',now())::date-1,'YYYY-MM-DD'),'periodEnd',to_char(timezone('Asia/Kuala_Lumpur',now())::date+1,'YYYY-MM-DD')));
 
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001301',true);
@@ -46,6 +47,15 @@ create function pg_temp.review_operations(overrides jsonb) returns jsonb languag
     jsonb_build_object('kind','entity','action','insert','entityType','approval','entityId','review-event','parentId','review-task','data','{"id":"review-event","taskId":"review-task","userId":"review-client","status":"Approved","note":"Approved"}'::jsonb))
   from public.aitask_entities where workspace_id='pgtap-review-privacy' and entity_id='review-task';
 $$;
+create function pg_temp.completed_review_operations() returns jsonb language sql as $$
+  select jsonb_build_array(
+    jsonb_build_object('kind','entity','action','update','entityType','task','entityId','completed-review-task','expectedVersion',version,
+      'data',private.aitask_client_task_projection(data)||'{"status":"Completed","isCompleted":true,"completionPercentage":100,"clientApprovalStatus":"Approved"}'::jsonb),
+    jsonb_build_object('kind','entity','action','insert','entityType','approval','entityId','completed-review-event','parentId','completed-review-task',
+      'data','{"id":"completed-review-event","taskId":"completed-review-task","userId":"review-client","status":"Approved","note":"Approved"}'::jsonb))
+  from public.aitask_entities where workspace_id='pgtap-review-privacy' and entity_type='task' and entity_id='completed-review-task';
+$$;
+select set_config('pgtap.original_completed_at',coalesce((select data->>'completedAt' from public.aitask_entities where workspace_id='pgtap-review-privacy' and entity_type='task' and entity_id='completed-review-task'),''),true);
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001301',true);
 select ok(private.aitask_client_command_allowed('pgtap-review-privacy','approval.review',pg_temp.review_operations('{}')),'Projected approval can omit internal revision and assignment fields');
 select ok(private.aitask_client_command_allowed('pgtap-review-privacy','approval.review',pg_temp.review_operations('{"assignedTo":""}')),'Older masked clients may submit a blank assignee without changing canonical assignment');
@@ -58,5 +68,13 @@ select is((public.aitask_execute_command('pgtap-review-privacy',gen_random_uuid(
 reset role;
 select is((select data->>'assignedTo' from public.aitask_entities where workspace_id='pgtap-review-privacy' and entity_id='review-task'),'review-staff','Masked approval preserves canonical Staff assignment');
 select is((select data->>'clientApprovalStatus' from public.aitask_entities where workspace_id='pgtap-review-privacy' and entity_id='review-task'),'Approved','Customer decision persists');
+select set_config('pgtap.completed_review_operations',pg_temp.completed_review_operations()::text,true);
+set local role authenticated;
+select is((public.aitask_execute_command('pgtap-review-privacy',gen_random_uuid(),'approval.review',current_setting('pgtap.completed_review_operations')::jsonb)->>'ok')::boolean,true,'Client acceptance saves after PM completion');
+reset role;
+select is((select data->>'clientApprovalStatus' from public.aitask_entities where workspace_id='pgtap-review-privacy' and entity_id='completed-review-task'),'Approved','Completed task acceptance persists');
+select is((select data->>'status' from public.aitask_entities where workspace_id='pgtap-review-privacy' and entity_id='completed-review-task'),'Completed','Client acceptance preserves PM task status');
+select ok((select (data->>'isCompleted')::boolean and data->>'completionPercentage'='100' from public.aitask_entities where workspace_id='pgtap-review-privacy' and entity_id='completed-review-task'),'Client acceptance preserves PM completion state and percentage');
+select is(coalesce((select data->>'completedAt' from public.aitask_entities where workspace_id='pgtap-review-privacy' and entity_id='completed-review-task'),''),current_setting('pgtap.original_completed_at'),'Client acceptance preserves the PM completion timestamp');
 select * from finish();
 rollback;

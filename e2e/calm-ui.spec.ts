@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 // Visual references capture the settled layout, independent of entry motion.
 test.use({ reducedMotion: 'reduce' });
@@ -19,6 +20,7 @@ const routes = [
 const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   await page.clock.install({ time: new Date('2026-08-16T00:00:00.000Z') });
   await page.goto('/login');
+  await waitForWorkspaceHydration(page);
   await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
@@ -29,6 +31,7 @@ const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
   await expect(releaseNotice).toBeVisible();
   await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
+  await waitForWorkspaceHydration(page);
   await expect(page.getByRole('heading', { name: 'Portfolio work' })).toBeVisible();
 };
 
@@ -88,6 +91,8 @@ test('core operations screens keep their semantic layout in light and dark modes
       }
 
       await page.goto('/projects');
+      await expect(page.locator('main')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Companies' })).toBeVisible();
       const axeResults = await new AxeBuilder({ page }).include('main').analyze();
       expect(axeResults.violations, `${viewport.name} ${theme} Projects: ${axeResults.violations.map(item => item.id).join(', ')}`).toEqual([]);
 

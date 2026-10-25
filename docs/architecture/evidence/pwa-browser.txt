@@ -1,0 +1,4 @@
+  ✓  1 e2e/pwa-install.spec.ts:3:1 › production PWA installs and restores its offline shell (1.6s)
+  ✓  2 e2e/pwa-install.spec.ts:23:1 › a first-time offline Reports deep link renders the report shell and data fallback (4.0s)
+  ✓  3 e2e/pwa-install.spec.ts:84:1 › a real service-worker replacement preserves a dirty form and enables refresh after save (4.4s)
+  3 passed (14.2s)

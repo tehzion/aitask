@@ -1,14 +1,20 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 const seedAdminAndPackage = async (page: Page) => {
   await page.goto('/login');
+  await waitForWorkspaceHydration(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
+    const readyBoss = { ...boss, mustResetPassword: false };
+    enablePasswordResetBypass(boss.id);
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
     useStore.setState({
-      currentUser: { ...boss, mustResetPassword: false },
+      currentUser: readyBoss,
+      users: state.users.map(user => user.id === boss.id ? readyBoss : user),
       clients: [],
       clientPlans: [],
       serviceCycles: [],
@@ -37,14 +43,19 @@ const seedAdminAndPackage = async (page: Page) => {
 
 const seedProjectManager = async (page: Page) => {
   await page.goto('/login');
+  await waitForWorkspaceHydration(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const pm = state.users.find(user => user.name === 'Project Manager Demo' && !user.isSuperAdmin);
     if (!pm) throw new Error('Project Manager demo account is missing.');
+    const readyPm = { ...pm, mustResetPassword: false };
+    enablePasswordResetBypass(pm.id);
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${pm.id}`, 'acknowledged');
     useStore.setState({
-      currentUser: { ...pm, mustResetPassword: false },
+      currentUser: readyPm,
+      users: state.users.map(user => user.id === pm.id ? readyPm : user),
       clients: [],
       clientPlans: [],
       serviceCycles: [],
@@ -103,10 +114,23 @@ test('creates a client profile first, then a named project', async ({ page }) =>
   await expect(page.getByText('Projects: Q4 Launch', { exact: true }).last()).toBeVisible();
 
   const project = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     return useStore.getState().projects.find(item => item.projectName === 'Q4 Launch');
   });
   expect(project).toMatchObject({ clientName: 'Flow Test Company', projectName: 'Q4 Launch' });
+
+  // Project-linked PM task creation requires a project-scoped HOD handoff.
+  // This test covers the client → project → task flow, so establish that
+  // prerequisite explicitly instead of weakening the assignment rule.
+  const projectHodId = await page.evaluate(async projectId => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const state = useStore.getState();
+    const hod = state.users.find(user => user.role === 'HOD' && user.departments?.includes('Designer'));
+    if (!hod) throw new Error('The Designer HOD fixture is missing.');
+    useStore.setState({ projects: state.projects.map(item => item.id === projectId ? { ...item, hodMemberIds: [hod.id] } : item) });
+    return hod.id;
+  }, project!.id);
+  expect(projectHodId).toBeTruthy();
 
   await page.getByRole('button', { name: 'New task' }).click();
   const taskDialog = page.getByRole('dialog', { name: 'Create task' });
@@ -119,7 +143,7 @@ test('creates a client profile first, then a named project', async ({ page }) =>
   await expect(page.getByRole('dialog', { name: 'Launch creative brief' })).toBeVisible();
 
   const task = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     return useStore.getState().tasks.find(item => item.title === 'Launch creative brief');
   });
   expect(task).toMatchObject({ clientId: project!.clientId, clientName: 'Flow Test Company', projectId: project!.id, projectName: 'Q4 Launch' });

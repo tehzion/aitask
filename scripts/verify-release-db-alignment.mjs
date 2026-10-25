@@ -4,16 +4,26 @@ import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const preflightPath = join(projectRoot, 'supabase', 'preflight');
-const manifestName = readdirSync(preflightPath)
-  .filter((name) => /^aitask_release_manifest_.*_production\.json$/.test(name))
-  .sort()
+const manifests = readdirSync(preflightPath)
+  .filter((name) => /^aitask_release_.*\.json$/.test(name))
+  .map((name) => ({
+    name,
+    manifest: JSON.parse(readFileSync(join(preflightPath, name), 'utf8')),
+  }));
+const releaseCandidate = manifests
+  .filter(({ manifest }) => manifest.manifestKind === 'aitask-release-candidate' && manifest.immutable === false)
+  .sort((left, right) => (left.manifest.capturedAt || '').localeCompare(right.manifest.capturedAt || ''))
   .at(-1);
-if (!manifestName) {
-  throw new Error('No applied-production release manifest was found.');
+const appliedProduction = manifests
+  .filter(({ manifest }) => manifest.manifestKind === 'aitask-applied-production-release' && manifest.immutable === true)
+  .sort((left, right) => left.name.localeCompare(right.name))
+  .at(-1);
+const selected = releaseCandidate || appliedProduction;
+if (!selected) {
+  throw new Error('No release candidate or immutable applied-production manifest was found.');
 }
-const manifestPath = join(preflightPath, manifestName);
+const { name: manifestName, manifest } = selected;
 const migrationsPath = join(projectRoot, 'supabase', 'migrations');
-const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 
 const fail = (message) => {
   console.error(`[release-db] ${message}`);

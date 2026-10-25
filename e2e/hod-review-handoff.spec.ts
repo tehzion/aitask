@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 test('staff submission reaches the department HOD inbox and opens pending work', async ({ page }) => {
   await page.goto('/login');
+  await waitForWorkspaceHydration(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const staff = { ...state.users.find(user => user.name === 'Staff Demo')!, id: 'handoff-staff', department: 'Designer', departments: ['Designer'], mustResetPassword: false };
     const hod = { ...staff, id: 'handoff-hod', name: 'Review HOD', role: 'HOD', customRoleId: undefined, customRoleName: undefined };
@@ -20,7 +22,7 @@ test('staff submission reaches the department HOD inbox and opens pending work',
   await page.getByRole('button', { name: 'Send for review', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Awaiting Review' })).toBeVisible();
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ currentUser: useStore.getState().users.find(user => user.id === 'handoff-hod')! });
   });
   await page.goto('/notifications');

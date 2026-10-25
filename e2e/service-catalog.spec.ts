@@ -19,7 +19,7 @@ test('service catalog: template and package creation, frozen plan and delete gua
   await setBoss(page);
   await page.goto('/settings');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ servicePackages: [], serviceWorkflowTemplates: [] });
   });
 

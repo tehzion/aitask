@@ -10,6 +10,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,15 +24,18 @@ const fail = (message) => {
   process.exit(1);
 };
 
-// Always validate against the newest immutable applied-production manifest.
-// Keeping this lookup dynamic prevents the rollout gate from silently
-// validating a superseded migration tail after a later production release.
-const manifestName = readdirSync(join(supabaseSource, 'preflight'))
+// Select by manifest contents as well as filename. A release-candidate file
+// once carried a `_production.json` suffix, which made a filename-only lookup
+// mistake it for an immutable production baseline.
+const preflightPath = join(supabaseSource, 'preflight');
+const productionManifests = readdirSync(preflightPath)
   .filter((name) => /^aitask_release_manifest_.*_production\.json$/.test(name))
-  .sort()
-  .at(-1);
-if (!manifestName) fail('No applied-production release manifest was found.');
-const manifestPath = join(supabaseSource, 'preflight', manifestName);
+  .map((name) => ({ name, manifest: JSON.parse(readFileSync(join(preflightPath, name), 'utf8')) }))
+  .filter(({ manifest }) => manifest.manifestKind === 'aitask-applied-production-release' && manifest.immutable === true)
+  .sort((left, right) => left.name.localeCompare(right.name));
+const productionManifest = productionManifests.at(-1);
+if (!productionManifest) fail('No immutable applied-production release manifest was found.');
+const { name: manifestName, manifest } = productionManifest;
 
 if (!process.versions.node.startsWith('22.')) {
   fail(`Node 22 is required; found ${process.version}.`);
@@ -46,7 +50,6 @@ if (!existsSync(supabaseCli)) {
   fail('The repository-pinned Supabase CLI is missing. Run pnpm install --frozen-lockfile first.');
 }
 
-const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 if (manifest.projectRef !== expectedProjectRef) {
   fail(`Manifest project ref ${manifest.projectRef || '(missing)'} does not match ${expectedProjectRef}.`);
 }
@@ -68,10 +71,17 @@ const migrationNames = readdirSync(join(supabaseSource, 'migrations'))
   .filter((name) => name.endsWith('.sql'))
   .map((name) => name.slice(0, -4))
   .sort();
-const migrationTail = migrationNames.slice(-validatedMigrations.length);
-if (JSON.stringify(migrationTail) !== JSON.stringify(validatedMigrations)) {
-  fail(`Migration tail does not match the repair manifest. Found: ${migrationTail.join(', ')}`);
+const baselineIndexes = validatedMigrations.map((migration) => migrationNames.indexOf(migration));
+if (baselineIndexes.some((index) => index < 0)) {
+  fail(`The applied-production manifest references missing local migrations: ${validatedMigrations.filter((_, index) => baselineIndexes[index] < 0).join(', ')}`);
 }
+if (baselineIndexes.some((index, position) => position > 0 && index !== baselineIndexes[position - 1] + 1)) {
+  fail('The applied-production manifest migration tail is not contiguous in repository order.');
+}
+const productionBaselineThrough = baselineIndexes.at(-1);
+const candidateMigrations = migrationNames.slice(productionBaselineThrough + 1);
+console.log(`[rollout] Applied-production baseline ${manifestName} is contiguous through ${validatedMigrations.at(-1)}.`);
+console.log(`[rollout] The disposable stack will replay all ${migrationNames.length} repository migrations${candidateMigrations.length ? `; ${candidateMigrations.length} follow the applied-production baseline: ${candidateMigrations.join(', ')}` : '.'}`);
 
 const run = (command, args, options = {}) => {
   const result = spawnSync(command, args, {
@@ -106,7 +116,23 @@ const validationRoot = mkdtempSync(join(tmpdir(), 'aitask-supabase-validation-')
 const validationSupabase = join(validationRoot, 'supabase');
 const validationProjectId = basename(validationRoot);
 const databaseContainer = `supabase_db_${validationProjectId}`;
-const validationPortBase = 55000 + (process.pid % 500);
+const canBindPort = (port) => new Promise((resolvePort) => {
+  const server = createServer();
+  server.once('error', () => resolvePort(false));
+  server.listen({ host: '0.0.0.0', port, exclusive: true }, () => {
+    server.close(() => resolvePort(true));
+  });
+});
+let validationPortBase;
+for (let attempt = 0; attempt < 900; attempt += 1) {
+  const candidate = 55000 + ((process.pid + attempt * 17) % 9000);
+  const available = await Promise.all(Array.from({ length: 8 }, (_, offset) => canBindPort(candidate + offset)));
+  if (available.every(Boolean)) {
+    validationPortBase = candidate;
+    break;
+  }
+}
+if (!validationPortBase) fail('Could not find a free port block for the disposable Supabase stack.');
 let rolloutError;
 
 cpSync(supabaseSource, validationSupabase, {
@@ -130,8 +156,11 @@ port = ${validationPortBase + 1}
 [studio]
 port = ${validationPortBase + 2}
 
-[inbucket]
+[local_smtp]
+enabled = true
 port = ${validationPortBase + 3}
+smtp_port = ${validationPortBase + 6}
+pop3_port = ${validationPortBase + 7}
 
 [analytics]
 port = ${validationPortBase + 4}

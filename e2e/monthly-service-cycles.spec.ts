@@ -6,7 +6,7 @@ test('monthly plans roll over on their billing date and retain previous months a
   await page.clock.install({ time: new Date('2026-10-08T04:00:00Z') });
   await page.goto('/login');
   const clientId = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
@@ -56,7 +56,7 @@ test('monthly plans roll over on their billing date and retain previous months a
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: 'tmp/monthly-update-mobile.png', fullPage: true, animations: 'disabled' });
   expect(await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     return useStore.getState().serviceCycles.length;
   })).toBe(2);
 });

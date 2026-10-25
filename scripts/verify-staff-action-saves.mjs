@@ -55,9 +55,9 @@ try {
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = process.env.AITASK_LOCAL_TEST_PUBLIC;
   process.env.VITE_AITASK_BACKEND = 'supabase';
   server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
-  ({ supabase } = await server.ssrLoadModule('/src/lib/supabaseClient.ts'));
-  const secure = await server.ssrLoadModule('/src/lib/secureWorkspace.ts');
-  const { useStore, clearWorkspaceSession } = await server.ssrLoadModule('/src/store/index.ts');
+  ({ supabase } = await server.ssrLoadModule('/src/infrastructure/database/supabaseClient.ts'));
+  const secure = await server.ssrLoadModule('/src/infrastructure/api/secureWorkspace.ts');
+  const { useStore, clearWorkspaceSession } = await server.ssrLoadModule('/src/app/store/workspaceStore.ts');
   const initial = useStore.getState();
   let loaded;
   const login = async id => {
@@ -72,8 +72,33 @@ try {
   const snapshot = () => Object.fromEntries(Object.keys(loaded.state).map(key => [key, useStore.getState()[key]]));
   const save = async (label, result, type) => {
     assert.equal(result.ok, true, `${label}: local action rejected: ${result.error}`);
-    const saved = await secure.saveSecureWorkspace(snapshot(), type, undefined, { actorMemberId: useStore.getState().currentUser.id, excludeSuperAdminEntities: true });
+    const current = snapshot();
+    const actorMemberId = useStore.getState().currentUser.id;
+    const saveOptions = { actorMemberId, excludeSuperAdminEntities: true };
+    const saved = await secure.saveSecureWorkspace(current, type, undefined, saveOptions);
     if (!saved.ok && saved.conflict) console.log('[staff-saves] Conflict diagnostic:', JSON.stringify({ label, entityType: saved.conflict.entityType, entityId: saved.conflict.entityId, expected: saved.conflict.expectedVersion, actual: saved.conflict.actualVersion }));
+    if (!saved.ok && label === 'File-only department HOD approval') {
+      const taskOperation = secure.buildOperations(current, saveOptions).find(operation => operation.entityType === 'task' && operation.entityId === 'file-review');
+      const nextData = JSON.stringify(taskOperation?.data ?? {}).replaceAll("'", "''");
+      const actorAuthId = accounts.find(account => account.id === actorMemberId)?.authId;
+      const diagnostic = sql(`begin;
+        select set_config('request.jwt.claim.sub','${actorAuthId}',true);
+        select set_config('request.jwt.claim.role','authenticated',true);
+        select set_config('aitask.command_type','task.update',true);
+        select private.aitask_member_role('aitask-main'), private.aitask_is_hod('aitask-main'),
+          private.aitask_can_edit_task('aitask-main','file-review'),
+          private.aitask_hod_task_execution_patch_is_valid('aitask-main', task.data, '${nextData}'::jsonb),
+          (select array_agg(keys.key order by keys.key)
+           from jsonb_object_keys(task.data || '${nextData}'::jsonb) as keys(key)
+           where task.data -> keys.key is distinct from ('${nextData}'::jsonb) -> keys.key
+             and keys.key = any(array['projectId','projectName','clientId','clientName','serviceType','serviceCycleId','deliverableId','milestoneId','department','visibility','customerDetails','facebookPage','website','isRecurring','recurrenceFrequency','assignedBy','assignedAt','responsibleHodId','assignmentState','assignmentOverride','clientApprovalStatus','reviewEvidence','reviewAccess','reviewDecision','reviewCover','accountableLeadId','requiresInternalApproval','approvalMode','outputAttachments','workflowStepKind','workflowStepId','workflowStepOrder','workflowStepRequired','workflowTemplateId','workflowTemplateRevision','generatedFromDeliverable','predecessorTaskIds','workflowOutputVersion','workflowDependenciesReady','internalReview','reviewOverrideReason'])) as restricted_changes,
+          private.aitask_task_assignment_is_valid('aitask-main','update',task.data,'${nextData}'::jsonb),
+          private.aitask_can_mutate_entity_legacy('aitask-main','update','task','file-review',null,task.data,'${nextData}'::jsonb),
+          private.aitask_can_mutate_entity('aitask-main','update','task','file-review',null,task.data,'${nextData}'::jsonb)
+        from public.aitask_entities task where task.workspace_id='aitask-main' and task.entity_type='task' and task.entity_id='file-review';
+        rollback;`);
+      console.error('[staff-saves] HOD approval mutation diagnostics:', JSON.stringify({ taskOperation, databasePredicates: diagnostic }));
+    }
     assert.equal(saved.ok, true, `${label}: save rejected: ${saved.code} ${saved.error}`);
   };
   await login('staff');
@@ -209,7 +234,7 @@ try {
   assert.ifError((await admin.storage.from('client-service-files').upload(evidencePath, Buffer.from('%PDF-1.4\nReviewer output\n%%EOF'), { contentType: 'application/pdf' })).error);
   const fileRef = { id: 'department-output', bucket: 'client-service-files', path: evidencePath, fileName: 'department-output.pdf', mimeType: 'application/pdf', sizeBytes: 32, uploadedBy: 'staff', uploadedAt: new Date().toISOString() };
   insert('deliverable', { id: 'file-output', clientId: 'file-client', clientName: 'File Review QA', cycleId: 'file-cycle', planId: 'file-plan', serviceItemId: 'file-service', title: 'File-only output', sequence: 1, status: 'In Progress', taskIds: ['file-review'], attachments: [fileRef], createdAt: '2026-10-01', updatedAt: '2026-10-01' });
-  insert('task', { ...baseTask, id: 'file-review', clientId: 'file-client', clientName: 'File Review QA', serviceCycleId: 'file-cycle', deliverableId: 'file-output', status: 'Waiting Approval', completionPercentage: 60 });
+  insert('task', { ...baseTask, id: 'file-review', clientId: 'file-client', clientName: 'File Review QA', serviceCycleId: 'file-cycle', deliverableId: 'file-output', requiresInternalApproval: true, generatedFromDeliverable: false, predecessorTaskIds: [], status: 'Waiting Approval', completionPercentage: 60 });
   await login('hod');
   const fileTask = useStore.getState().tasks.find(task => task.id === 'file-review');
   assert.equal(useStore.getState().deliverables.some(item => item.id === 'file-output'), false, 'HOD does not acquire general service access');

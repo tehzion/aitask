@@ -20,6 +20,12 @@ $block$;
         v_boss
         or (v_role='Project Manager' and v_old->>'status'='Approved')
         or (
+          v_role='Project Manager'
+          and v_old->>'status'='Waiting Approval'
+          and coalesce((v_old->>'requiresInternalApproval')::boolean, true)=false
+          and coalesce(v_old->>'workflowStepKind','') <> 'internal_review'
+        )
+        or (
           v_role='Staff'
           and not v_hod
           and v_old->>'status'='In Progress'
@@ -57,7 +63,7 @@ $block$;
     ) then raise check_violation using message='Ask the HOD or project manager to return approved work for revision.'; end if;
 $block$;
   new_staff_guard text := $block$
-    if v_role='Staff' and not v_hod and not v_boss and not v_system_reopen and v_changed
+    if tg_op='UPDATE' and v_role='Staff' and not v_hod and not v_boss and not v_system_reopen and v_changed
       and not (
         (v_old->>'status' in ('Pending','Revision')
           and new.data->>'status'='In Progress'

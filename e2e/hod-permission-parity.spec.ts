@@ -3,9 +3,9 @@ import { expect, test, type Page } from '@playwright/test';
 const seedHod = async (page: Page, options: { recipients?: boolean; manage?: boolean } = {}) => {
   await page.goto('/login');
   await page.evaluate(async ({ recipients, manage }) => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
-    const { defaultRolePermissions } = await import('/src/lib/access.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
+    const { defaultRolePermissions } = await import('/src/shared/authorization/access.ts');
     stopBackendAutoSync();
     const state = useStore.getState();
     const hod = { id: 'audit-hod', name: 'Audit HOD', role: 'HOD', department: 'Video Editor', departments: ['Video Shooting', 'Video Editor'], permissions: { ...defaultRolePermissions.HOD, manageCreatedTasks: manage !== false }, mustResetPassword: false };
@@ -42,7 +42,7 @@ test('HOD delegates assigned work only to an eligible staff member and preserves
   await choices.selectOption('audit-editor');
   await dialog.getByRole('button', { name: 'Assign Task', exact: true }).click();
   await expect.poll(() => page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const task = useStore.getState().tasks.find(task => task.id === 'hod-assigned');
     return { assignedTo: task?.assignedTo, createdBy: task?.createdBy };
   })).toEqual({ assignedTo: 'audit-editor', createdBy: 'audit-pm' });
@@ -70,7 +70,7 @@ test('revoked delegation permissions and empty recipient lists have usable mobil
   await seedHod(page);
   const revoked = await openDetails(page, 'hod-assigned', 'Assigned delegation work');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const currentUser = { ...state.currentUser!, permissions: { ...state.currentUser!.permissions, manageCreatedTasks: false } };
     useStore.setState({ currentUser, users: state.users.map(user => user.id === currentUser.id ? currentUser : user) });
@@ -81,7 +81,7 @@ test('revoked delegation permissions and empty recipient lists have usable mobil
 test('HOD task creation includes populated Boss-curated projects while excluding unrelated PM projects', async ({ page }) => {
   await seedHod(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const boss = { id: 'audit-boss', name: 'Audit Boss', role: 'Project Manager', isSuperAdmin: true, department: 'Management', departments: ['Management'] };
     const base = { clientId: 'audit-client', clientName: 'Curated Co', projectName: 'Curated Project', startDate: '2026-10-01', deadline: '', services: ['Video Editing'] };
@@ -98,7 +98,7 @@ test('HOD task creation includes populated Boss-curated projects while excluding
 test('HOD can edit foreign-department assigned work without exposing delegation', async ({ page }) => {
   await seedHod(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     useStore.setState({ tasks: state.tasks.map(task => task.id === 'hod-foreign' ? { ...task, assignedTo: state.currentUser!.id } : task) });
   });
@@ -111,7 +111,7 @@ test('HOD can edit foreign-department assigned work without exposing delegation'
 test('HOD workload links preserve filters and separate personal and delegated work', async ({ page }) => {
   await seedHod(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const oversight = state.tasks.find(task => task.id === 'hod-oversight');
     useStore.setState({ tasks: [
@@ -171,7 +171,7 @@ test('HOD keeps delegated task details open in the personal scope', async ({ pag
   await dialog.getByRole('button', { name: 'Assign Task', exact: true }).click();
   await expect(dialog).toBeVisible();
   await expect.poll(() => page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     return useStore.getState().tasks.find(task => task.id === 'hod-assigned')?.assignedTo;
   })).toBe('audit-editor');
 });
@@ -202,7 +202,7 @@ test('HOD filters canonical departments across legacy task names', async ({ page
 test('HOD sees an unavailable dependency warning without hidden task details', async ({ page }) => {
   await seedHod(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ tasks: useStore.getState().tasks.map(task => task.id === 'hod-assigned' ? { ...task, predecessorTaskIds: ['hod-foreign', 'hod-foreign'] } : task) });
   });
   await page.goto('/tasks?taskId=hod-assigned');
@@ -218,7 +218,7 @@ test('HOD sees an unavailable dependency warning without hidden task details', a
 test('HOD dashboard distinguishes work waiting for review from an empty queue', async ({ page }) => {
   await seedHod(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ tasks: useStore.getState().tasks.filter(task => task.id === 'hod-assigned').map(task => ({ ...task, status: 'Waiting Approval' })) });
   });
   await page.goto('/');
@@ -231,7 +231,7 @@ test('HOD queue refreshes its deadline buckets after the local day changes', asy
   await page.clock.install({ time: new Date('2026-10-07T23:59:00') });
   await seedHod(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ tasks: useStore.getState().tasks.filter(task => task.id === 'hod-assigned').map(task => ({ ...task, dueDate: '2026-10-08' })) });
   });
   await page.goto('/tasks?queue=needs_action');

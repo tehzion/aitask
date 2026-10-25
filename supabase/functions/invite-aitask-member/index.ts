@@ -192,26 +192,14 @@ const handleRequest = async (request: Request): Promise<Response> => {
     const duplicate = authUsers.some(user => user.id !== authData.user.id && user.email?.toLowerCase() === nextEmail);
     if (duplicate) return json({ error: 'Another account already uses this email address' }, 409);
 
-    const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(authData.user.id, {
-      email: nextEmail,
-      email_confirm: true,
-    });
-    if (updateAuthError) return json({ error: updateAuthError.message || 'Unable to update the login email' }, 400);
+    // Let Supabase Auth own the email-change challenge. This sends the
+    // confirmation flow to the current and new addresses according to the
+    // project's secure-email-change settings; the member row is synchronized
+    // only after Auth confirms the new address (see the migration trigger).
+    const { error: updateAuthError } = await verifier.auth.updateUser({ email: nextEmail });
+    if (updateAuthError) return json({ error: updateAuthError.message || 'Unable to start the login email change' }, 400);
 
-    const { data: result, error: memberError } = await adminClient.rpc('aitask_update_member_email', {
-      p_actor_member_id: actor.id,
-      p_email: nextEmail,
-    });
-    if (memberError) {
-      const { error: rollbackError } = await adminClient.auth.admin.updateUserById(authData.user.id, {
-        email: oldEmail,
-        email_confirm: true,
-      });
-      if (rollbackError) console.error('Auth email rollback failed', { memberId: actor.id, message: rollbackError.message });
-      return json({ error: memberError.message || 'Unable to update the workspace email' }, 400);
-    }
-
-    return json(result);
+    return json({ ok: true, pendingEmail: nextEmail, emailConfirmationRequired: true });
   }
 
   const projectManagerActor = !actor.is_super_admin && actor.role === 'Project Manager';

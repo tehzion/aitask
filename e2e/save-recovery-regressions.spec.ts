@@ -4,8 +4,8 @@ import { expect, test, type Page } from '@playwright/test';
 async function seed(page: Page) {
   await page.goto('/login');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
@@ -19,7 +19,7 @@ async function seed(page: Page) {
 test('draft retry preserves unpersisted edits after its submission was restored away', async ({ page }) => {
   await seed(page);
   const fixture = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const store = useStore.getState();
     const result = store.createClientWithPlan({ clientName: 'Audit plan company', planName: 'Original saved scope', origin: 'custom',
       serviceItems: [{ id: 'scope', name: 'Design', platforms: [], unit: 'post', quantity: 1, unitPriceMinor: 100 }],
@@ -32,7 +32,7 @@ test('draft retry preserves unpersisted edits after its submission was restored 
   const editor = page.getByRole('region', { name: 'Next month’s plan', exact: true });
   await expect(editor).toBeVisible();
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Unconfirmed audit submission.' }) });
   });
   const name = editor.getByLabel('Plan name', { exact: true });
@@ -41,7 +41,7 @@ test('draft retry preserves unpersisted edits after its submission was restored 
   await editor.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(editor.getByRole('alert')).toContainText('Unconfirmed audit submission.');
   await page.evaluate(async ({ revisionId, originalName }) => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === revisionId ? { ...plan, name: originalName } : plan),
       backend: { ...state.backend, status: 'live', hasLocalChanges: false, pendingMutations: 0 } }));
   }, { ...fixture, originalName });
@@ -49,13 +49,13 @@ test('draft retry preserves unpersisted edits after its submission was restored 
   await expect(editor.getByText('Your plan change was saved.', { exact: true })).toHaveCount(0);
   await expect(editor.getByRole('alert')).toContainText('Your draft has been kept.');
   await expect(name).toHaveValue('Submitted but abandoned scope');
-  expect(await page.evaluate(async id => (await import('/src/store/index.ts')).useStore.getState().clientPlans.find(plan => plan.id === id)?.name, fixture.revisionId)).toBe(originalName);
+  expect(await page.evaluate(async id => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().clientPlans.find(plan => plan.id === id)?.name, fixture.revisionId)).toBe(originalName);
 });
 
 async function openMilestones(page: Page) {
   await seed(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const actor = state.currentUser!;
     useStore.setState({ clients: [{ id: 'audit-company', clientName: 'Audit company', createdBy: actor.id, createdAt: '2026-10-01', updatedAt: '2026-10-01' }],
@@ -76,13 +76,13 @@ async function openMilestones(page: Page) {
 test('retrying a busy milestone submission reuses the pending milestone', async ({ page }) => {
   const panel = await openMilestones(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' }), retryPendingSave: async () => ({ ok: true }) });
   });
   await panel.getByRole('button', { name: 'Save milestone', exact: true }).click();
   await expect(panel.getByRole('alert')).toContainText('Another synchronization request is still running.');
   await panel.getByRole('button', { name: 'Retry pending save', exact: true }).click();
-  const milestones = await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().projects.find(project => project.id === 'audit-project')!.milestones!);
+  const milestones = await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().projects.find(project => project.id === 'audit-project')!.milestones!);
   expect(milestones).toHaveLength(1);
   expect(milestones.map(item => item.name)).toEqual(['Milestone A']);
 });
@@ -90,7 +90,7 @@ test('retrying a busy milestone submission reuses the pending milestone', async 
 test('milestone fields are locked until the submission is acknowledged', async ({ page }) => {
   const panel = await openMilestones(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: () => new Promise(resolve => {
       (window as unknown as { confirmAuditMilestone: () => void }).confirmAuditMilestone = () => resolve({ ok: true });
     }) });
@@ -101,13 +101,13 @@ test('milestone fields are locked until the submission is acknowledged', async (
   await expect(panel.getByPlaceholder('Milestone name')).toHaveValue('Milestone A');
   await page.evaluate(() => (window as unknown as { confirmAuditMilestone: () => void }).confirmAuditMilestone());
   await expect(panel.getByPlaceholder('Milestone name')).toHaveValue('');
-  expect(await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().projects.find(project => project.id === 'audit-project')!.milestones!.map(item => item.name))).toEqual(['Milestone A']);
+  expect(await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().projects.find(project => project.id === 'audit-project')!.milestones!.map(item => item.name))).toEqual(['Milestone A']);
 });
 
 test('a thrown milestone save preserves its pending identity and permits retry', async ({ page }) => {
   const panel = await openMilestones(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => { throw new Error('Network interrupted.'); }, retryPendingSave: async () => ({ ok: true }) });
   });
   await panel.getByRole('button', { name: 'Save milestone', exact: true }).click();
@@ -115,13 +115,13 @@ test('a thrown milestone save preserves its pending identity and permits retry',
   await expect(panel.getByPlaceholder('Milestone name')).toHaveValue('Milestone A');
   await panel.getByRole('button', { name: 'Retry pending save', exact: true }).click();
   await expect(panel.getByPlaceholder('Milestone name')).toHaveValue('');
-  expect(await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().projects[0].milestones?.length)).toBe(1);
+  expect(await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().projects[0].milestones?.length)).toBe(1);
 });
 
 test('a plan-creation retry preserves its form when the pending plan was discarded', async ({ page }) => {
   await seed(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ clients: [{ id: 'audit-company', clientName: 'Audit company', createdAt: '2026-10-01', updatedAt: '2026-10-01' }] });
   });
   await page.goto('/clients/audit-company?tab=plan');
@@ -136,14 +136,14 @@ test('a plan-creation retry preserves its form when the pending plan was discard
   await dialog.getByLabel('Plan name', { exact: true }).fill('Unconfirmed plan');
   await dialog.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     let calls = 0;
     useStore.setState({ retryPendingSave: async () => ++calls === 1 ? { ok: false, error: 'Unconfirmed audit plan.' } : { ok: true } });
   });
   await dialog.getByRole('button', { name: 'Save draft plan', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('Unconfirmed audit plan.');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ clientPlans: [], servicePricingSnapshots: [], backend: { ...state.backend, status: 'live', hasLocalChanges: false, pendingMutations: 0 } }));
   });
   await dialog.getByRole('button', { name: 'Retry save', exact: true }).click();
@@ -151,5 +151,5 @@ test('a plan-creation retry preserves its form when the pending plan was discard
   await expect(dialog.getByRole('alert')).toContainText('Your draft has been kept.');
   await dialog.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(dialog.getByLabel('Plan name', { exact: true })).toHaveValue('Unconfirmed plan');
-  expect(await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().clientPlans)).toEqual([]);
+  expect(await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().clientPlans)).toEqual([]);
 });

@@ -22,6 +22,14 @@ create function pg_temp.work_update(p_id text, p_patch jsonb) returns jsonb lang
  'expectedVersion',(select version from public.aitask_entities where workspace_id='staff-workflow-test' and entity_type='task' and entity_id=p_id),
  'data',(select data from public.aitask_entities where workspace_id='staff-workflow-test' and entity_type='task' and entity_id=p_id) || p_patch)))
 $$;
+create function pg_temp.submit_with_evidence() returns jsonb language plpgsql as $$
+declare result jsonb;
+begin
+  result := pg_temp.work_update('workflow-task','{"status":"In Progress","attachmentLink":"https://example.com/artwork"}');
+  if not coalesce((result->>'ok')::boolean,false) then return result; end if;
+  return pg_temp.work_update('workflow-task','{"status":"Waiting Approval"}');
+end;
+$$;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001301',true);
 select set_config('request.jwt.claim.role','authenticated',true);
 set local role authenticated;
@@ -33,7 +41,7 @@ select isnt((select data->'workState'->>'acceptedAt' from public.aitask_entities
 select is((pg_temp.work_update('workflow-task','{"workState":{"acceptedBy":"workflow-staff","blocker":{"reason":"Need assets","openedBy":"forged","openedAt":"2000-01-01T00:00:00Z"}},"workHistory":[]}')->>'ok')::boolean,true,'assignee can request help without erasing history');
 select is((select data->'workState'->'blocker'->>'openedBy' from public.aitask_entities where entity_id='workflow-task'),'workflow-staff','blocker is attributed to authenticated actor');
 select is((select jsonb_array_length(data->'workHistory') from public.aitask_entities where entity_id='workflow-task'),2,'provided history cannot erase server events');
-select is((pg_temp.work_update('workflow-task','{"status":"Waiting Approval","attachmentLink":"https://example.com/artwork"}')->>'ok')::boolean,true,'evidence permits review');
+select is((pg_temp.submit_with_evidence()->>'ok')::boolean,true,'safe evidence permits review after Staff starts work');
 select is((select data->'workState'->>'reviewRequestedBy' from public.aitask_entities where entity_id='workflow-task'),'workflow-staff','review submission has authenticated actor');
 select is((pg_temp.work_update('workflow-admin-task','{"status":"Completed","isCompleted":true}')->>'ok')::boolean,false,'Staff administrative work still requires final PM completion');
 reset role;

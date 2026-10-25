@@ -1,0 +1,365 @@
+✓ e2e/accessibility.spec.ts:26:1 › day/night mode and keyboard shortcuts remain accessible
+✓ e2e/action-save-gaps.spec.ts:31:3 › package acknowledgement preserves edits typed during saving
+✓ e2e/action-save-gaps.spec.ts:56:3 › package save exception leaves an error and usable retry
+✓ e2e/action-save-gaps.spec.ts:71:3 › package retry confirms one record and saves newer input as its next revision
+✓ e2e/action-save-gaps.spec.ts:100:3 › package switching editors asks before discarding a draft
+✓ e2e/action-save-gaps.spec.ts:113:3 › package late acknowledgement cannot reset another account’s draft
+✓ e2e/action-save-gaps.spec.ts:140:3 › package failed deletion retries without deleting the same record twice
+✓ e2e/action-save-gaps.spec.ts:31:3 › workflow acknowledgement preserves edits typed during saving
+✓ e2e/action-save-gaps.spec.ts:56:3 › workflow save exception leaves an error and usable retry
+✓ e2e/action-save-gaps.spec.ts:71:3 › workflow retry confirms one record and saves newer input as its next revision
+✓ e2e/action-save-gaps.spec.ts:100:3 › workflow switching editors asks before discarding a draft
+✓ e2e/action-save-gaps.spec.ts:113:3 › workflow late acknowledgement cannot reset another account’s draft
+✓ e2e/action-save-gaps.spec.ts:140:3 › workflow failed deletion retries without deleting the same record twice
+✓ e2e/action-save-gaps.spec.ts:167:1 › discarded company creation is not acknowledged as a saved company
+✓ e2e/action-save-gaps.spec.ts:188:1 › project save locks its submitted form, recovers exceptions and detects discarded creation
+✓ e2e/action-save-gaps.spec.ts:220:1 › plan date save locks submitted dates and recovers a rejected promise
+✘ e2e/action-save-gaps.spec.ts:251:3 › task quick rejection preserves a newer canonical task
+✘ e2e/action-save-gaps.spec.ts:251:3 › task quick exception preserves a newer canonical task
+✓ e2e/app-smoke.spec.ts:16:1 › first login reaches the app and critical responsive routes remain usable
+✓ e2e/approvals-responsive.spec.ts:76:3 › approvals responsive workspace › prioritizes the queue and restores the selected review
+✓ e2e/approvals-responsive.spec.ts:119:3 › approvals responsive workspace › uses a mobile sheet with a sticky action footer and no overflow
+✓ e2e/audit-regressions.spec.ts:24:1 › saved drafts accept newer canonical data and dirty drafts require reconciliation
+✓ e2e/audit-regressions.spec.ts:50:1 › saving locks the submitted draft and later edits block PWA reload
+✓ e2e/audit-regressions.spec.ts:75:1 › a conflicting remote revision during saving preserves the submitted draft for review
+✓ e2e/audit-regressions.spec.ts:102:1 › modified shortcuts open the palette without hijacking browser commands
+✓ e2e/audit-regressions.spec.ts:116:1 › unknown links show a localized recovery page
+✓ e2e/audit-regressions.spec.ts:123:1 › a delayed All pagination response cannot contaminate the Unread filter
+✓ e2e/audit-regressions.spec.ts:151:1 › sidebar logout and same-tab login restart synchronization listeners
+✓ e2e/audit-regressions.spec.ts:165:1 › a dirty revision requires confirmation before changing tabs
+✓ e2e/audit-regressions.spec.ts:178:1 › a failed save does not mistake its own optimistic draft for a remote conflict
+✓ e2e/audit-regressions.spec.ts:191:1 › a draft save waiting for synchronization offers retry without duplicating the revision
+✓ e2e/audit-regressions.spec.ts:228:1 › browser back and programmatic palette navigation preserve a declined draft
+✓ e2e/audit-regressions.spec.ts:253:1 › recoverable drafts survive reload and reconcile against the latest baseline
+✓ e2e/audit-regressions.spec.ts:268:1 › field-level service reconciliation preserves independent remote changes
+✓ e2e/audit-regressions.spec.ts:282:1 › two tabs retain independent recovery copies and account changes clear owned drafts
+✓ e2e/audit-regressions.spec.ts:298:1 › upload recovery observes command ownership and acknowledgements from another tab
+✓ e2e/boss-admin-recovery.spec.ts:39:1 › desktop restored client registration initializes its requested role
+✓ e2e/boss-admin-recovery.spec.ts:49:1 › desktop failed approval keeps the selected review, department and error
+✓ e2e/boss-admin-recovery.spec.ts:39:1 › mobile restored client registration initializes its requested role
+✓ e2e/boss-admin-recovery.spec.ts:49:1 › mobile failed approval keeps the selected review, department and error
+✓ e2e/boss-admin-recovery.spec.ts:66:1 › bulk approval assigns Staff even when an applicant requested Project Manager
+✓ e2e/boss-admin-recovery.spec.ts:82:1 › bulk approval assigns Staff and reports only confirmed approvals
+✓ e2e/boss-admin-recovery.spec.ts:106:1 › bulk approval follows its Staff confirmation for Client applicants
+✓ e2e/boss-admin-recovery.spec.ts:119:1 › role save locks edits and repeated submissions while awaiting persistence
+✓ e2e/boss-admin-recovery.spec.ts:133:1 › failed role creation retries persistence without creating the role twice
+✓ e2e/boss-admin-recovery.spec.ts:153:1 › failed Client role assignment preserves the company draft for retry
+✓ e2e/boss-hod-blindspots.spec.ts:33:3 › desktop workload includes secondary departments and counts tasks once
+✓ e2e/boss-hod-blindspots.spec.ts:33:3 › mobile workload includes secondary departments and counts tasks once
+✓ e2e/boss-hod-blindspots.spec.ts:58:1 › HOD department oversight has edit controls without deletion; delegation removes destructive authority
+✓ e2e/calendar-date-refresh.spec.ts:6:3 › Calendar metrics and the selected filter refresh at midnight
+✓ e2e/calendar-date-refresh.spec.ts:6:3 › Calendar metrics and the selected filter refresh at resume
+✓ e2e/calendar-overview.spec.ts:42:3 › Calendar overview and navigation › keeps role-scoped calendar scanning usable across desktop and mobile
+✓ e2e/calendar-overview.spec.ts:93:3 › Calendar overview and navigation › localizes Calendar controls and keeps the dark reduced-motion surface accessible
+✘ e2e/calm-ui.spec.ts:55:1 › core operations screens keep their semantic layout in light and dark modes
+✓ e2e/client-role-recovery.spec.ts:22:1 › Customer retries one failed feedback save without duplicating it or wiping newer text
+✓ e2e/client-role-recovery.spec.ts:44:1 › Customer approval does not announce success until persistence is confirmed
+✓ e2e/client-role-recovery.spec.ts:64:1 › Customer thrown save errors leave the form available for retry
+✓ e2e/client-role-recovery.spec.ts:77:1 › Customer date and service filters survive reload without exposing hidden deliveries
+✓ e2e/client-role-recovery.spec.ts:85:1 › Customer keeps newer approval context after a slow save acknowledgement
+✓ e2e/client-role-recovery.spec.ts:100:1 › Customer late approval acknowledgement cannot affect another account
+✓ e2e/client-role-recovery.spec.ts:124:1 › Customer Use latest discards a failed approval and retains newer context
+✓ e2e/client-role-recovery.spec.ts:146:1 › Customer delivery stages refresh automatically at midnight
+✓ e2e/client-role-recovery.spec.ts:158:1 › Customer progress uses the current plan and period while preserving delivery history
+✓ e2e/client-role-recovery.spec.ts:181:1 › Customer workspace retry reconciles submitted feedback while retaining a newer draft
+✓ e2e/client-role-recovery.spec.ts:204:1 › Customer failed approval requires confirmation and canonical reload before closing
+✓ e2e/client-role-recovery.spec.ts:228:1 › Customer long notes and feedback stay editable without queuing or losing text
+✓ e2e/client-role-recovery.spec.ts:251:1 › Customer malformed due dates appear as undated rather than overdue or this month
+✓ e2e/client-role-recovery.spec.ts:266:1 › Customer malformed published periods and contract dates do not break the workspace
+✓ e2e/client-service-workspace.spec.ts:9:1 › service plans, frozen workflow tasks and role workbenches remain isolated
+✘ e2e/client-wizard.spec.ts:60:1 › shows a company added through project creation while a company search is active
+✘ e2e/client-wizard.spec.ts:83:1 › creates a client profile first, then a named project
+✓ e2e/client-wizard.spec.ts:128:1 › can add a client inside project creation and continue the same form
+✘ e2e/client-workspace-v2.spec.ts:5:1 › Client 2.0 is approval-first, mobile-safe, and fails closed
+✘ e2e/client-workspace-v2.spec.ts:192:1 › Client tracker statistics reconcile approvals, cancellations and filtered totals
+✘ e2e/client-workspace-v2.spec.ts:233:1 › Client Home counts the entire review queue and Reports separate completion from approval
+✓ e2e/company-profile-actions.spec.ts:58:3 › desktop menu saves company info across reload and deletes its linked records
+✓ e2e/company-profile-actions.spec.ts:58:3 › mobile details saves company info across reload and deletes its linked records
+✓ e2e/company-profile-actions.spec.ts:136:1 › a rejected save keeps the company form open with the entered details and an error
+✓ e2e/company-profile-actions.spec.ts:152:1 › the company menu stays reachable in a short viewport and supports keyboard dismissal
+✓ e2e/company-profile-actions.spec.ts:173:1 › a linked client account does not recreate a deleted company in the Companies list
+✓ e2e/company-profile-actions.spec.ts:193:3 › a rejected company delete keeps its dialog and retries without applying the action twice
+✓ e2e/company-profile-actions.spec.ts:193:3 › a rejected company rename keeps its dialog and retries without applying the action twice
+✓ e2e/company-profile-actions.spec.ts:243:1 › contact edits typed during saving stay dirty and can be saved afterward
+✓ e2e/company-profile-actions.spec.ts:279:1 › failed contact saves have no success toast and retry the submitted form before newer edits
+✓ e2e/company-profile-actions.spec.ts:308:3 › desktop protects unsaved company details and labels every contact field
+✓ e2e/company-profile-actions.spec.ts:308:3 › mobile protects unsaved company details and labels every contact field
+✘ e2e/company-profile-actions.spec.ts:334:1 › deletion confirmation lists linked record counts before any records are changed
+✓ e2e/company-profile-actions.spec.ts:354:1 › a queued scroll with an unchanged menu anchor does not dismiss the menu
+✓ e2e/company-profile-actions.spec.ts:363:1 › discarding a rejected company deletion reloads saved data before closing
+✓ e2e/company-profile-actions.spec.ts:395:1 › View tasks confirms a dirty company draft once before navigating
+✘ e2e/creation-action-gaps.spec.ts:36:1 › task creation exception retries the staged task without creating a duplicate
+✘ e2e/creation-action-gaps.spec.ts:55:1 › discarded task creation keeps its draft and avoids opening an absent task
+✓ e2e/creation-action-gaps.spec.ts:75:1 › add-on creation exception locks its submitted draft and retries one record
+✓ e2e/creation-action-gaps.spec.ts:99:1 › discarded add-on creation retains its draft with review feedback
+✘ e2e/dashboard-accuracy.spec.ts:51:3 › desktop overview and pulse reconcile overdue totals and exclude old monthly cycles
+✘ e2e/dashboard-accuracy.spec.ts:51:3 › mobile overview and pulse reconcile overdue totals and exclude old monthly cycles
+✘ e2e/dashboard-accuracy.spec.ts:74:1 › overview updates renewals, overdue totals and the current billing cycle at midnight
+✓ e2e/dashboard-accuracy.spec.ts:89:1 › agency pulse updates at midnight without a task mutation
+✓ e2e/dashboard-accuracy.spec.ts:97:1 › team workload resets its week and selected member groups at Monday midnight
+✘ e2e/dashboard-accuracy.spec.ts:122:1 › a resumed tab catches up after its clock changes without running timers
+✘ e2e/dashboard-accuracy.spec.ts:136:3 › daylight-saving day boundary › refreshes at the next midnight after a 23-hour day
+✘ e2e/dashboard-followthrough.spec.ts:48:1 › dashboard overdue drilldown and task quick filters use the same task set
+✓ e2e/dashboard-followthrough.spec.ts:72:1 › today task links update to the new day at midnight
+✓ e2e/dashboard-followthrough.spec.ts:84:1 › weekly task links update to the new work week on Monday
+✓ e2e/dashboard-followthrough.spec.ts:104:1 › reports recalculate open and overdue outcomes at midnight without new task data
+✓ e2e/dashboard-followthrough.spec.ts:117:1 › the report cohort window advances on Monday
+✓ e2e/dashboard-followthrough.spec.ts:136:1 › historical completed tasks do not have overdue styling in recent completions
+✓ e2e/dashboard-followthrough.spec.ts:170:1 › company operations keeps current draft planning separate from confirmed progress
+✓ e2e/dashboard-followthrough.spec.ts:190:1 › company operations progresses to the next dated cycle at midnight
+✘ e2e/deletion-owner-recovery.spec.ts:55:3 › task deletion rejection keeps recovery visible and retries one deletion
+✘ e2e/deletion-owner-recovery.spec.ts:55:3 › task deletion exception keeps recovery visible and retries one deletion
+✘ e2e/deletion-owner-recovery.spec.ts:83:1 › task deletion use latest preserves a newer canonical task
+✘ e2e/deletion-owner-recovery.spec.ts:103:1 › task deletion refuses a false retry acknowledgement when the task reappears
+✘ e2e/deletion-owner-recovery.spec.ts:123:1 › closing a failed deletion confirms discard and closes after reloading saved data
+✓ e2e/deletion-owner-recovery.spec.ts:139:1 › owner save exception shows feedback and retries the same owner without a premature success
+✓ e2e/deletion-owner-recovery.spec.ts:166:1 › owner acknowledgement verifies the retained owner against the canonical company
+✓ e2e/deletion-owner-recovery.spec.ts:183:3 › owner late save response cannot affect a different account
+✘ e2e/deletion-owner-recovery.spec.ts:183:3 › deletion late save response cannot affect a different account
+✓ e2e/delivery-review.spec.ts:28:36 › delivery review preserves pending actions and empty progress (en)
+✓ e2e/delivery-review.spec.ts:28:36 › delivery review preserves pending actions and empty progress (zh)
+✓ e2e/delivery-review.spec.ts:67:1 › invalid links and expired drafts require explicit scoped review
+✓ e2e/delivery-review.spec.ts:100:47 › a restored-away delivery link cannot report saved on retry
+✓ e2e/delivery-review.spec.ts:100:47 › a restored-away delivery publication cannot report saved on retry
+✓ e2e/hod-permission-parity.spec.ts:35:1 › HOD delegates assigned work only to an eligible staff member and preserves task ownership
+✓ e2e/hod-permission-parity.spec.ts:52:1 › department oversight permits edits but does not grant reassignment or foreign task access
+✓ e2e/hod-permission-parity.spec.ts:62:1 › revoked delegation permissions and empty recipient lists have usable mobile feedback
+✓ e2e/hod-permission-parity.spec.ts:81:1 › HOD task creation includes populated Boss-curated projects while excluding unrelated PM projects
+✓ e2e/hod-permission-parity.spec.ts:98:1 › HOD can edit foreign-department assigned work without exposing delegation
+✓ e2e/hod-permission-parity.spec.ts:111:1 › HOD workload links preserve filters and separate personal and delegated work
+✓ e2e/hod-permission-parity.spec.ts:164:1 › HOD keeps delegated task details open in the personal scope
+✓ e2e/hod-permission-parity.spec.ts:179:1 › HOD can open an authorized deep link outside the selected list scope
+✓ e2e/hod-permission-parity.spec.ts:189:1 › HOD filters canonical departments across legacy task names
+✓ e2e/hod-permission-parity.spec.ts:202:1 › HOD sees an unavailable dependency warning without hidden task details
+✓ e2e/hod-permission-parity.spec.ts:218:1 › HOD dashboard distinguishes work waiting for review from an empty queue
+✓ e2e/hod-permission-parity.spec.ts:230:1 › HOD queue refreshes its deadline buckets after the local day changes
+✘ e2e/hod-remediation.spec.ts:24:1 › HOD-owned review uses an independent PM and retains accountable ownership
+✘ e2e/hod-remediation.spec.ts:42:1 › Boss self-review requires a reason and stores explicit override provenance
+✘ e2e/hod-remediation.spec.ts:55:1 › department controls recover when an actor-bound cover snapshot expires
+✘ e2e/hod-review-handoff.spec.ts:3:1 › staff submission reaches the department HOD inbox and opens pending work
+✓ e2e/hod-status-recovery.spec.ts:30:5 › HOD en FORBIDDEN status rejection requires restore before a fresh save
+✓ e2e/hod-status-recovery.spec.ts:30:5 › HOD en VALIDATION status rejection requires restore before a fresh save
+✓ e2e/hod-status-recovery.spec.ts:30:5 › HOD en NOT_FOUND status rejection requires restore before a fresh save
+✓ e2e/hod-status-recovery.spec.ts:30:5 › HOD zh FORBIDDEN status rejection requires restore before a fresh save
+✓ e2e/hod-status-recovery.spec.ts:30:5 › HOD zh VALIDATION status rejection requires restore before a fresh save
+✓ e2e/hod-status-recovery.spec.ts:30:5 › HOD zh NOT_FOUND status rejection requires restore before a fresh save
+✓ e2e/hod-status-recovery.spec.ts:72:1 › HOD transient status failure can retry and unlock the editor after confirmation
+✓ e2e/i18n.spec.ts:12:1 › the interface can switch between English and Simplified Chinese and remembers the choice
+✓ e2e/i18n.spec.ts:31:1 › the client profile dialog localizes its staged-save state in Chinese
+✓ e2e/i18n.spec.ts:50:1 › user-authored task content stays exactly as typed in Chinese mode
+✓ e2e/i18n.spec.ts:109:1 › client portal and workspace keep user-authored names untouched in Chinese mode
+✓ e2e/i18n.spec.ts:195:1 › client delivery search preserves Chinese IME composition without repeating Latin input
+✓ e2e/i18n.spec.ts:273:1 › public feedback keeps its language control touch-safe in Chinese
+✓ e2e/local-service-demo.spec.ts:14:1 › local service demo makes plans, delivery, files, roles, and price isolation explorable
+✓ e2e/manual-deliverable-status.spec.ts:3:36 › a task-free management fee can be put in progress and stays saved after reload (en)
+✓ e2e/manual-deliverable-status.spec.ts:3:36 › a task-free management fee can be put in progress and stays saved after reload (zh)
+✓ e2e/manual-deliverable-status.spec.ts:49:1 › a frozen workflow exposes only statuses allowed by its required task progress
+✓ e2e/member-action-gaps.spec.ts:20:1 › member creation cannot close during saving and retries one account after an exception
+✓ e2e/member-action-gaps.spec.ts:48:1 › department submission locks its choices and recovers an exception
+✓ e2e/member-action-gaps.spec.ts:68:1 › permission submission locks its choices and restores controls after an exception
+✓ e2e/monthly-service-cycles.spec.ts:5:1 › monthly plans roll over on their billing date and retain previous months after reload
+✓ e2e/onboarding.spec.ts:4:3 › first-login onboarding leaves navigation usable at 320px
+✓ e2e/onboarding.spec.ts:4:3 › first-login onboarding leaves navigation usable at 375px
+✓ e2e/onboarding.spec.ts:4:3 › first-login onboarding leaves navigation usable at 390px
+✓ e2e/onboarding.spec.ts:4:3 › first-login onboarding leaves navigation usable at 414px
+✓ e2e/onboarding.spec.ts:4:3 › first-login onboarding leaves navigation usable at 768px
+✓ e2e/onboarding.spec.ts:4:3 › first-login onboarding leaves navigation usable at 1024px
+✓ e2e/onboarding.spec.ts:51:1 › role onboarding can be started, skipped, restarted, and persisted per user
+✓ e2e/onboarding.spec.ts:81:1 › role onboarding supports Back and Finish, then remains completed after refresh
+✓ e2e/onboarding.spec.ts:109:1 › client onboarding stays scoped to client-visible guidance
+✓ e2e/plan-revision-dates.spec.ts:3:36 › revision saves an inherited contract reminder before its effective date (en)
+✓ e2e/plan-revision-dates.spec.ts:3:36 › revision saves an inherited contract reminder before its effective date (zh)
+✓ e2e/pm-portfolio.spec.ts:39:1 › PM dashboard separates department, final completion, and customer review
+✓ e2e/pm-portfolio.spec.ts:54:1 › PM can follow signed portfolio work through final completion
+✓ e2e/pm-portfolio.spec.ts:70:1 › PM sees completion in both task views while review is pending
+✓ e2e/pm-portfolio.spec.ts:88:1 › PM can complete a waiting task with explicit no-approval mode
+✓ e2e/pm-portfolio.spec.ts:107:1 › PM completes approved work from the full status picker with a custom status list
+✓ e2e/pm-portfolio.spec.ts:127:1 › PM saves a routine edit to a task in an inherited project
+✓ e2e/pm-portfolio.spec.ts:143:1 › PM delegates assigned work to the department HOD through the full editor
+✓ e2e/pm-portfolio.spec.ts:168:1 › PM company edits reject foreign scope and save the accessible company ID
+✓ e2e/prelive-date-regressions.spec.ts:28:37 › Delivery tracker refreshes at midnight
+✓ e2e/prelive-date-regressions.spec.ts:28:37 › Delivery tracker refreshes at resume
+✓ e2e/prelive-date-regressions.spec.ts:42:2 › Asia/Jakarta › New plan wizard defaults to local today
+✓ e2e/prelive-date-regressions.spec.ts:42:2 › America/New_York › New plan wizard defaults to local today
+✓ e2e/prelive-date-regressions.spec.ts:54:1 › Calendar does not render a seventh Sunday task column
+✓ e2e/profile-photo.spec.ts:19:1 › profile photo upload validates, previews, saves, and remains usable on mobile
+✓ e2e/project-management-release.spec.ts:4:3 › desktop PM manages milestones and closes and reopens an assigned project
+✓ e2e/project-management-release.spec.ts:4:3 › mobile PM manages milestones and closes and reopens an assigned project
+✓ e2e/release-notice.spec.ts:26:1 › each account receives the service operations update once
+✓ e2e/release-notice.spec.ts:46:1 › release notice content follows the existing role workbench rules
+✓ e2e/release-notice.spec.ts:73:1 › the notice is Chinese, dark-mode readable, and usable on mobile
+✓ e2e/remaining-action-gaps.spec.ts:20:1 › approval rejection preserves a newer registration and unrelated new member
+✓ e2e/remaining-action-gaps.spec.ts:39:1 › role save exception leaves usable retry without a second role
+✓ e2e/remaining-action-gaps.spec.ts:58:1 › profile rejection preserves a newer canonical profile and submitted retry draft
+✓ e2e/remaining-action-gaps.spec.ts:76:1 › profile save exception restores controls and retains the submitted draft
+✓ e2e/remaining-action-gaps.spec.ts:90:1 › status save exception retries one status and keeps newer input
+✘ e2e/responsive-audit.spec.ts:88:3 › responsive role and route audit › covers every role fixture across the responsive route matrix
+- e2e/responsive-audit.spec.ts:110:3 › responsive role and route audit › audits representative changed surfaces for accessibility across roles
+- e2e/responsive-audit.spec.ts:132:3 › responsive role and route audit › covers desktop, landscape, Chinese, dark mode and reduced motion without overflow
+- e2e/responsive-audit.spec.ts:160:3 › responsive role and route audit › keeps approvals Boss-only and exposes the HOD workbench copy
+- e2e/responsive-audit.spec.ts:173:3 › responsive role and route audit › keeps the password setup gate usable across narrow and rotated layouts
+✓ e2e/role-reports.spec.ts:4:1 › Account reports include assigned work and exclude other departments
+✓ e2e/role-ux-stabilization.spec.ts:22:1 › Staff Chinese workspace localizes dynamic copy and preserves work content
+✓ e2e/role-ux-stabilization.spec.ts:50:1 › Boss and Staff queues move focus with keyboard tabs
+✓ e2e/role-ux-stabilization.spec.ts:75:1 › Chinese Staff filters keep canonical task values
+✓ e2e/role-ux-stabilization.spec.ts:89:1 › Staff collapsed navigation is labelled and mobile layout remains accessible
+✓ e2e/role-ux-stabilization.spec.ts:116:1 › Staff and Boss dashboards stay accessible across desktop and mobile
+✓ e2e/role-ux-stabilization.spec.ts:139:1 › Staff sees a clear approvals denial while Boss Koo keeps the Project Manager workspace
+✓ e2e/route-focus-recovery.spec.ts:3:1 › deferred navigation focus preserves a control the user already selected
+✓ e2e/save-recovery-regressions.spec.ts:19:1 › draft retry preserves unpersisted edits after its submission was restored away
+✓ e2e/save-recovery-regressions.spec.ts:76:1 › retrying a busy milestone submission reuses the pending milestone
+✓ e2e/save-recovery-regressions.spec.ts:90:1 › milestone fields are locked until the submission is acknowledged
+✓ e2e/save-recovery-regressions.spec.ts:107:1 › a thrown milestone save preserves its pending identity and permits retry
+✓ e2e/save-recovery-regressions.spec.ts:121:1 › a plan-creation retry preserves its form when the pending plan was discarded
+✓ e2e/service-catalog.spec.ts:17:1 › service catalog: template and package creation, frozen plan and delete guard
+✘ e2e/service-file-upload.spec.ts:15:1 › service activity upload shows file context and preserves retry state when backend is unavailable
+✓ e2e/session-action-gaps.spec.ts:17:1 › an old role response cannot clear another account’s in-flight role draft
+✘ e2e/session-action-gaps.spec.ts:48:1 › password exception retains fields and releases its save control
+✓ e2e/session-action-gaps.spec.ts:64:1 › discarded status creation keeps its newer draft and shows review feedback
+✓ e2e/staff-audit-regressions.spec.ts:24:1 › All work refreshes urgency and due labels at local midnight
+✓ e2e/staff-audit-regressions.spec.ts:36:1 › All work catches up on focus after a suspended date boundary
+✓ e2e/staff-audit-regressions.spec.ts:46:1 › Staff review enquiry notifies the displayed HOD contact and PM
+✓ e2e/staff-audit-regressions.spec.ts:59:1 › All work HOD scope and queue tablists control distinct panels
+✓ e2e/staff-dashboard-accuracy.spec.ts:50:1 › assigned queue totals and basic open-task metrics match the role scope
+✓ e2e/staff-dashboard-accuracy.spec.ts:62:2 › Operation dashboard counts an accessible predecessor assigned to another member
+✓ e2e/staff-dashboard-accuracy.spec.ts:62:2 › Designer dashboard counts an accessible predecessor assigned to another member
+✓ e2e/staff-dashboard-accuracy.spec.ts:78:1 › assigned clients excludes work only created by Staff
+✓ e2e/staff-dashboard-accuracy.spec.ts:88:1 › early-morning renewals includes the contract exactly 30 local calendar days away
+✓ e2e/staff-dashboard-accuracy.spec.ts:95:1 › dashboard metrics and queues advance across midnight
+✓ e2e/staff-dashboard-accuracy.spec.ts:113:1 › blocker metrics do not expose an inaccessible predecessor
+✓ e2e/staff-dashboard-accuracy.spec.ts:125:1 › account metrics use company IDs across stale and duplicate saved names
+✓ e2e/staff-dashboard-accuracy.spec.ts:142:1 › canonical profiles resolve legacy assignments without merging ambiguous companies
+✓ e2e/staff-dashboard-accuracy.spec.ts:162:1 › unavailable dependency notices clear when visible and exclude closed tasks
+✓ e2e/staff-dashboard-accuracy.spec.ts:190:1 › account metrics and queue counts react to reassignment and plan changes
+✓ e2e/staff-dashboard-accuracy.spec.ts:205:1 › renewal metrics refresh at midnight when a day-31 contract enters the window
+✓ e2e/staff-dashboard-accuracy.spec.ts:216:1 › a resumed Staff tab updates its date-dependent metrics on focus
+✓ e2e/staff-dashboard-accuracy.spec.ts:225:1 › mobile Staff dashboard counts remain scoped and advance at midnight
+✓ e2e/staff-dashboard-accuracy.spec.ts:236:1 › HOD dependency context follows department work across personal scope changes
+✘ e2e/staff-deep-recovery.spec.ts:42:2 › desktop Staff date draft requires confirmation before Escape
+✘ e2e/staff-deep-recovery.spec.ts:42:2 › mobile Staff date draft requires confirmation before Escape
+✘ e2e/staff-deep-recovery.spec.ts:57:1 › Staff calendar locks submitted dates and task navigation during save
+✘ e2e/staff-deep-recovery.spec.ts:69:1 › Staff calendar handles a rejected save promise without leaving controls stuck
+✘ e2e/staff-deep-recovery.spec.ts:83:3 › Staff calendar failure preserves newer pulled dates
+✘ e2e/staff-deep-recovery.spec.ts:83:3 › Staff calendar failure preserves another session dates
+✘ e2e/staff-deep-recovery.spec.ts:98:1 › Staff Full edit preserves a newer details draft when earlier details save completes
+✘ e2e/staff-deep-recovery.spec.ts:110:1 › Staff date retry applies the retained attempt once and clears the editor
+✘ e2e/staff-deep-recovery.spec.ts:128:1 › Staff date retry with no applied command never claims the dates were saved
+✘ e2e/staff-deep-recovery.spec.ts:143:1 › Staff date recovery catches retry and reload exceptions and can use latest afterward
+✘ e2e/staff-deep-recovery.spec.ts:164:1 › Staff Full edit catches save exceptions and retries the original details while keeping newer input
+✘ e2e/staff-deep-recovery.spec.ts:186:1 › Staff cancelling Full edit asks before resetting the details draft
+✘ e2e/staff-deep-recovery.spec.ts:200:1 › Staff Full edit retry preserves a draft whose original command was discarded
+✘ e2e/staff-deep-recovery.spec.ts:219:3 › Calendar en recovery describes saved dates and explains a permission rejection
+✘ e2e/staff-deep-recovery.spec.ts:219:3 › Calendar zh recovery describes saved dates and explains a permission rejection
+✘ e2e/staff-hod-ui-feedback.spec.ts:36:3 › Staff details show one confirmation after a slow acknowledgement and preserve later input
+✘ e2e/staff-hod-ui-feedback.spec.ts:56:5 › Staff en review enquiry stays a comment and does not mark work blocked
+✘ e2e/staff-hod-ui-feedback.spec.ts:77:5 › Staff en missing work links explain the outcome without revealing records
+✘ e2e/staff-hod-ui-feedback.spec.ts:56:5 › Staff zh review enquiry stays a comment and does not mark work blocked
+✘ e2e/staff-hod-ui-feedback.spec.ts:77:5 › Staff zh missing work links explain the outcome without revealing records
+✘ e2e/staff-hod-ui-feedback.spec.ts:36:3 › HOD details show one confirmation after a slow acknowledgement and preserve later input
+✘ e2e/staff-hod-ui-feedback.spec.ts:56:5 › HOD en review enquiry stays a comment and does not mark work blocked
+✘ e2e/staff-hod-ui-feedback.spec.ts:77:5 › HOD en missing work links explain the outcome without revealing records
+✘ e2e/staff-hod-ui-feedback.spec.ts:56:5 › HOD zh review enquiry stays a comment and does not mark work blocked
+✘ e2e/staff-hod-ui-feedback.spec.ts:77:5 › HOD zh missing work links explain the outcome without revealing records
+✘ e2e/staff-hod-ui-feedback.spec.ts:87:1 › draft storage failure is explained without losing the current work update
+✘ e2e/staff-hod-ui-feedback.spec.ts:102:1 › local save failure never shows success and can retry after storage is available
+✘ e2e/staff-hod-ui-feedback.spec.ts:121:3 › notification popup en preserves titles and stays open while focused
+✘ e2e/staff-hod-ui-feedback.spec.ts:121:3 › notification popup zh preserves titles and stays open while focused
+✘ e2e/staff-save-recovery.spec.ts:43:1 › Staff slow comment acknowledgement preserves newer input
+✘ e2e/staff-save-recovery.spec.ts:60:1 › Staff retry acknowledges one comment, clears its error and keeps newer text
+✘ e2e/staff-save-recovery.spec.ts:91:1 › retrying an unchanged comment clears the submitted draft and prevents a duplicate send
+✘ e2e/staff-save-recovery.spec.ts:108:3 › Staff rejected In Progress save does not emit success or completion toasts
+✘ e2e/staff-save-recovery.spec.ts:108:3 › Staff rejected Waiting Approval save does not emit success or completion toasts
+✘ e2e/staff-save-recovery.spec.ts:135:3 › desktop Staff draft requires confirmation on Escape and Full edit
+✘ e2e/staff-save-recovery.spec.ts:135:3 › mobile Staff draft requires confirmation on Escape and Full edit
+✘ e2e/staff-save-recovery.spec.ts:156:1 › late task A acknowledgement cannot erase task B draft
+✘ e2e/staff-save-recovery.spec.ts:179:3 › Staff activity save retains a newer note, visibility and file
+✘ e2e/staff-save-recovery.spec.ts:179:3 › Staff activity retry retains a newer note, visibility and file
+✘ e2e/staff-save-recovery.spec.ts:211:1 › Staff full editor also retains comments typed during saving
+✘ e2e/staff-save-recovery.spec.ts:224:1 › a retry completed outside the Staff sheet reconciles its submitted comment and error
+✘ e2e/staff-save-recovery.spec.ts:247:1 › discarding a failed Staff comment restores saved records before closing
+✘ e2e/staff-save-recovery.spec.ts:266:1 › activity retry does not claim a discarded comment was saved or wipe its draft
+✘ e2e/staff-save-recovery.spec.ts:285:1 › a pending activity can be retried even when its newer draft is empty or has an invalid file
+✘ e2e/staff-save-recovery.spec.ts:303:1 › Use latest still resolves a workspace operation started outside the Staff sheet
+✘ e2e/staff-workflow-gaps.spec.ts:22:1 › staff drafts survive reload and a successful send removes their recovery copy
+✘ e2e/staff-workflow-gaps.spec.ts:36:1 › recovered newer input is preserved after a lost earlier acknowledgement
+✘ e2e/staff-workflow-gaps.spec.ts:48:1 › recovering an already staged comment cannot offer a duplicate submission
+✘ e2e/staff-workflow-gaps.spec.ts:60:1 › staff accepts an assignment, requests help, resolves it, and sees attributed history after reload
+✘ e2e/staff-workflow-gaps.spec.ts:77:1 › slow help acknowledgement retains a newer help draft
+✘ e2e/staff-workflow-gaps.spec.ts:91:1 › discarded help retry retains the draft and cannot announce acknowledgement
+✘ e2e/staff-workflow-gaps.spec.ts:107:44 › linked tasks need evidence before Waiting Approval
+✘ e2e/staff-workflow-gaps.spec.ts:126:1 › help and unaccepted filters follow current task state
+✘ e2e/staff-workflow-gaps.spec.ts:138:1 › read inbox updates remain discoverable while linked work is open
+✘ e2e/staff-workflow-gaps.spec.ts:154:1 › mobile staff ownership/help controls remain accessible
+✘ e2e/staff-workflow-gaps.spec.ts:163:1 › Full edit recovery merges newer untouched fields and confirms overlapping changes
+✘ e2e/staff-workflow-gaps.spec.ts:181:1 › Full edit recovery requires a choice for overlapping manager changes
+✘ e2e/staff-workflow-gaps.spec.ts:199:1 › Staff completion remains restricted even when linked output evidence exists
+✘ e2e/staff-workspace-v2.spec.ts:32:1 › staff v2 puts assigned action ahead of manager controls
+✘ e2e/staff-workspace-v2.spec.ts:91:1 › staff mobile keeps focus, task actions and secondary creation reachable
+✓ e2e/staff-workspace-v2.spec.ts:116:1 › staff v2 remains readable in Chinese dark mode
+✓ e2e/task-detail-authorization.spec.ts:94:3 › task detail authorization matrix › Boss Koo keeps full controls and responsible PMs can manage their portfolio tasks
+✓ e2e/task-detail-authorization.spec.ts:130:3 › task detail authorization matrix › PM owned work, HOD department work, and Staff assignments expose matching actions
+✓ e2e/task-detail-authorization.spec.ts:186:3 › task detail authorization matrix › deep links fail closed for unrelated tasks and preserve Client isolation
+✘ e2e/task-role-readiness.spec.ts:29:1 › legacy HOD can delegate and approve through the full editor without completing for the PM
+✘ e2e/task-role-readiness.spec.ts:50:1 › customer revision returns to Staff and requires another HOD approval before PM completion
+✘ e2e/task-role-readiness.spec.ts:74:1 › a missing department HOD shows an actionable error and does not claim a successful submission
+✘ e2e/task-role-readiness.spec.ts:94:1 › responsible PM receives Designer review without a Designer HOD and approves before finalizing
+✘ e2e/task-role-readiness.spec.ts:134:3 › Staff cannot delete Waiting Approval work while the portfolio PM retains management
+✘ e2e/task-role-readiness.spec.ts:134:3 › Staff cannot delete Approved work while the portfolio PM retains management
+✘ e2e/task-role-readiness.spec.ts:134:3 › Staff cannot delete Completed work while the portfolio PM retains management
+✘ e2e/task-role-readiness.spec.ts:150:3 › desktop department reviewer sees file-only evidence without service management
+✘ e2e/task-role-readiness.spec.ts:150:3 › mobile department reviewer sees file-only evidence without service management
+✘ e2e/task-role-readiness.spec.ts:195:1 › a pending evidence download recovers after session reset and cannot start for another account
+✘ e2e/task-role-readiness.spec.ts:246:1 › PM assignments remain available across departments and signed output fields explain revision
+✘ e2e/task-role-readiness.spec.ts:271:1 › an internal reviewer can open the earlier output without its private brief
+✘ e2e/task-stage-progress.spec.ts:12:1 › milestone progress follows role actions from assignment through revision and PM completion
+✓ e2e/tutorial-centre.spec.ts:16:1 › project managers can search, read, and safely launch a practical guide
+✓ e2e/tutorial-centre.spec.ts:43:1 › client tutorial search stays limited to client-visible workflows and supports Chinese search
+✓ e2e/tutorial-guides-exhaustive.spec.ts:42:1 › every live guide completes safely or explains an unavailable record-specific target
+✓ e2e/tutorial-release-audit.spec.ts:15:1 › internal workflow maps render, while linked tutorials remain role-specific
+✓ e2e/tutorial-release-audit.spec.ts:29:1 › client tutorial navigation never opens internal related content or injected guides
+✓ e2e/tutorial-release-audit.spec.ts:55:1 › role-relevant catalogue search and the compact tutorial overlay remain usable
+✓ e2e/tutorial-release-audit.spec.ts:89:1 › an active guide remains usable after switching to Simplified Chinese
+✓ e2e/ui-message-audit.spec.ts:27:5 › Boss en: accessible pages render without unexpected errors
+✓ e2e/ui-message-audit.spec.ts:27:5 › HOD en: accessible pages render without unexpected errors
+✓ e2e/ui-message-audit.spec.ts:27:5 › Project Manager en: accessible pages render without unexpected errors
+✓ e2e/ui-message-audit.spec.ts:27:5 › Staff en: accessible pages render without unexpected errors
+✓ e2e/ui-message-audit.spec.ts:27:5 › Client en: accessible pages render without unexpected errors
+✘ e2e/ui-message-audit.spec.ts:48:5 › Calendar en: network failure explains recovery and preserves attempted dates
+✘ e2e/ui-message-audit.spec.ts:48:5 › Calendar en: permission failure explains recovery and preserves attempted dates
+✓ e2e/ui-message-audit.spec.ts:74:3 › Toast en: database rejection is localized
+✘ e2e/ui-message-audit.spec.ts:85:3 › Full edit en: raw save errors are localized while task content stays unchanged
+✘ e2e/ui-message-audit.spec.ts:102:3 › App update en: software refresh is distinct from saved-data recovery
+✘ e2e/ui-message-audit.spec.ts:110:3 › Conflict en: field names are readable and recovery uses saved data
+✓ e2e/ui-message-audit.spec.ts:126:3 › Render recovery en: a crash explains reload without showing a runtime stack
+✓ e2e/ui-message-audit.spec.ts:27:5 › Boss zh: accessible pages render without unexpected errors
+✓ e2e/ui-message-audit.spec.ts:27:5 › HOD zh: accessible pages render without unexpected errors
+✓ e2e/ui-message-audit.spec.ts:27:5 › Project Manager zh: accessible pages render without unexpected errors
+✓ e2e/ui-message-audit.spec.ts:27:5 › Staff zh: accessible pages render without unexpected errors
+✓ e2e/ui-message-audit.spec.ts:27:5 › Client zh: accessible pages render without unexpected errors
+✘ e2e/ui-message-audit.spec.ts:48:5 › Calendar zh: network failure explains recovery and preserves attempted dates
+✘ e2e/ui-message-audit.spec.ts:48:5 › Calendar zh: permission failure explains recovery and preserves attempted dates
+✓ e2e/ui-message-audit.spec.ts:74:3 › Toast zh: database rejection is localized
+✘ e2e/ui-message-audit.spec.ts:85:3 › Full edit zh: raw save errors are localized while task content stays unchanged
+✘ e2e/ui-message-audit.spec.ts:102:3 › App update zh: software refresh is distinct from saved-data recovery
+✘ e2e/ui-message-audit.spec.ts:110:3 › Conflict zh: field names are readable and recovery uses saved data
+✓ e2e/ui-message-audit.spec.ts:126:3 › Render recovery zh: a crash explains reload without showing a runtime stack
+✓ e2e/ux-enhancements.spec.ts:16:3 › quick creation for Project Manager at 320px
+✘ e2e/ux-enhancements.spec.ts:54:3 › global search keyboard and navigation at 320px
+✓ e2e/ux-enhancements.spec.ts:16:3 › quick creation for HOD at 375px
+✘ e2e/ux-enhancements.spec.ts:54:3 › global search keyboard and navigation at 375px
+✓ e2e/ux-enhancements.spec.ts:16:3 › quick creation for Staff at 390px
+✘ e2e/ux-enhancements.spec.ts:54:3 › global search keyboard and navigation at 390px
+✓ e2e/ux-enhancements.spec.ts:16:3 › quick creation for Project Manager at 414px
+✘ e2e/ux-enhancements.spec.ts:54:3 › global search keyboard and navigation at 414px
+✓ e2e/ux-enhancements.spec.ts:16:3 › quick creation for HOD at 768px
+✘ e2e/ux-enhancements.spec.ts:54:3 › global search keyboard and navigation at 768px
+✓ e2e/ux-enhancements.spec.ts:16:3 › quick creation for Staff at 1024px
+✘ e2e/ux-enhancements.spec.ts:54:3 › global search keyboard and navigation at 1024px
+✓ e2e/ux-enhancements.spec.ts:87:1 › saved personal views restore URL filters, update, delete, and preserve the table preference
+✓ e2e/ux-enhancements.spec.ts:109:1 › Boss table and board preference stays URL-backed and persists per user
+✓ e2e/ux-enhancements.spec.ts:137:1 › My Work and Action Centre explain distinct responsibilities and reuse existing queues
+✓ e2e/workflow-review-gate.spec.ts:42:1 › Staff cannot complete internal review in either editor
+✓ e2e/workflow-review-gate.spec.ts:55:3 › desktop HOD approves without exposing the hidden predecessor
+✓ e2e/workflow-review-gate.spec.ts:55:3 › mobile HOD approves without exposing the hidden predecessor
+✓ e2e/workflow-review-gate.spec.ts:71:1 › unfinished predecessors disable HOD approval and the completion option
+✓ e2e/workflow-review-gate.spec.ts:81:1 › legacy completed review needs explicit approval and later revisions clear its signature

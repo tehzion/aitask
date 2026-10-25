@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 // Visual references capture the settled layout, independent of entry motion.
 test.use({ reducedMotion: 'reduce' });
@@ -16,6 +17,7 @@ const screenshotOptions = (page: import('@playwright/test').Page) => ({
 const openStaffWorkspace = async (page: import('@playwright/test').Page) => {
   await page.clock.install({ time: new Date('2026-08-26T00:00:00.000Z') });
   await page.goto('/login');
+  await waitForWorkspaceHydration(page);
   await page.evaluate(() => localStorage.setItem('aitask:locale', 'en'));
   await page.reload();
   await page.getByRole('button', { name: 'Use Staff Demo' }).click();
@@ -28,6 +30,21 @@ const openStaffWorkspace = async (page: import('@playwright/test').Page) => {
   if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
   await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
 };
+
+const seedReviewGateTask = async (page: import('@playwright/test').Page) => page.evaluate(async () => {
+  const { useStore } = await import('/src/app/store/workspaceStore.ts');
+  const { tasks } = useStore.getState();
+  useStore.setState({ tasks: tasks.map(task => task.title !== '6. Video Editing' ? task : {
+    ...task,
+    status: 'In Progress',
+    revisionCount: 0,
+    requiresInternalApproval: true,
+    notes: undefined,
+    workState: { ...task.workState, acceptedBy: task.assignedTo, acceptedAt: '2026-08-25T00:00:00.000Z' },
+    predecessorTaskIds: ['staff-v2-unavailable-predecessor'],
+    workflowDependenciesReady: false,
+  }) });
+});
 
 test('staff v2 puts assigned action ahead of manager controls', async ({ page }) => {
   test.setTimeout(90_000);
@@ -64,10 +81,14 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   await page.locator('main').getByRole('button', { name: 'Clear search' }).click();
   await expect(workSearch).toHaveValue('');
   await expect(page).toHaveURL(/\/tasks$/);
+  const main = page.locator('main');
+  await main.evaluate(element => element.scrollTo(0, 0));
+  await expect.poll(() => main.evaluate(element => element.scrollTop)).toBe(0);
   if (hasCommittedVisualBaseline) {
     await expect(page).toHaveScreenshot('staff-v2-all-work-desktop-light.png', screenshotOptions(page));
   }
 
+  await seedReviewGateTask(page);
   const taskRow = page.getByRole('button', { name: /6\. Video Editing/ });
   await expect(taskRow.getByText('Dependency status unavailable', { exact: true })).toBeVisible();
   await taskRow.click();
@@ -80,7 +101,7 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   // staff-workflow-gaps and the signed review lifecycle has its own suite.
   await expect(page.getByRole('button', { name: 'Send for review' })).toBeDisabled();
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const task = useStore.getState().tasks.find(item => item.title === '6. Video Editing')!;
     useStore.getState().updateTaskAttachment(task.id, 'https://example.com/staff-final-video');
   });
@@ -95,12 +116,16 @@ test('staff mobile keeps focus, task actions and secondary creation reachable', 
   const openTask = page.getByRole('button', { name: /Open task/ });
   const openTaskBox = await openTask.boundingBox();
   expect(openTaskBox && openTaskBox.y + openTaskBox.height).toBeLessThan(780);
+  await expect.poll(() => page.locator('header.app-toolbar').evaluate(toolbar => toolbar.scrollWidth <= toolbar.clientWidth)).toBe(true);
   if (hasCommittedVisualBaseline) {
     await expect(page).toHaveScreenshot('staff-v2-dashboard-mobile-light.png', screenshotOptions(page));
   }
 
   await openTask.click();
+  await expect(page.getByRole('dialog', { name: '6. Video Editing' })).toBeVisible();
+  await seedReviewGateTask(page);
   await expect(page.getByRole('button', { name: 'Send for review' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send for review' })).toBeDisabled();
   if (hasCommittedVisualBaseline) {
     await expect(page).toHaveScreenshot('staff-v2-task-focus-mobile-light.png', screenshotOptions(page));
   }

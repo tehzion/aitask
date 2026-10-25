@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { getVisibleTutorials, type Tutorial } from '../src/lib/tutorials';
+import { getVisibleTutorials, type Tutorial } from '../src/modules/help/domain/tutorials';
 
 const profiles = [
   { persona: 'admin' as const, username: 'Boss Koo' },

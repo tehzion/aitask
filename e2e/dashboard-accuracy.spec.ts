@@ -1,10 +1,11 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 test.use({ timezoneId: 'Asia/Jakarta' });
 test.describe.configure({ timeout: 90_000 });
 
 const expectMetric = async (scope: Locator, label: string, value: number) => {
-  await expect(scope.getByText(label, { exact: true }).locator('..').getByText(String(value), { exact: true })).toBeVisible();
+  await expect(scope.getByText(label, { exact: true }).locator('..').getByText(String(value), { exact: true }).first()).toBeVisible();
 };
 
 const seedDashboard = async (page: Page, time = '2026-10-07T07:00:00Z') => {
@@ -12,9 +13,10 @@ const seedDashboard = async (page: Page, time = '2026-10-07T07:00:00Z') => {
   await page.clock.pauseAt(new Date(time));
   await page.goto('/login');
   await expect(page.getByLabel('Email or username')).toBeVisible();
+  await waitForWorkspaceHydration(page);
   await page.evaluate(async () => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     const staff = { id: 'accuracy-staff', name: 'Accuracy Staff', role: 'Staff', department: 'Designer', departments: ['Designer'] };
@@ -52,7 +54,7 @@ for (const mobile of [false, true]) {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
     await seedDashboard(page);
     await page.evaluate(async () => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       const state = useStore.getState();
       useStore.setState({
         tasks: state.tasks.map(task => task.id === 'accuracy-today' ? { ...task, dueDate: '2026-10-06' } : task),
@@ -98,7 +100,7 @@ test('team workload resets its week and selected member groups at Monday midnigh
   await page.setViewportSize({ width: 1440, height: 900 });
   await seedDashboard(page, '2026-10-11T16:59:50Z');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const base = useStore.getState().tasks[0];
     useStore.setState({ tasks: [
       { ...base, id: 'accuracy-monday', title: 'Accuracy Monday task', dueDate: '2026-10-12' },
@@ -136,7 +138,7 @@ test.describe('daylight-saving day boundary', () => {
   test('refreshes at the next midnight after a 23-hour day', async ({ page }) => {
     await seedDashboard(page, '2026-03-08T05:00:00Z');
     await page.evaluate(async () => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       useStore.setState({ tasks: [{ ...useStore.getState().tasks[0], dueDate: '2026-03-08' }] });
     });
     await expectMetric(page.getByRole('tabpanel'), 'Overdue tasks', 0);

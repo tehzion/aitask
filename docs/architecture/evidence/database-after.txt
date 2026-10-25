@@ -1,0 +1,1 @@
+[rollout] Migration tail does not match the repair manifest. Found: 20261021110000_monthly_plan_renewal_integrity, 20261023120000_pm_hod_staff_assignment_state, 20261023150000_hod_task_execution_permissions, 20261023170000_task_workflow_action_guards, 20261023180000_bind_service_command_entity_types, 20261024090000_security_boundary_hardening

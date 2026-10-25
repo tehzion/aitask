@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AppNotification, User } from '../../../types';
+import { type AppNotification, type User } from '../../../shared/types/index';
 import { getIncomingUnreadNotificationIds, seedSeenNotificationIds } from './notificationPopups';
 
 const staff: User = {

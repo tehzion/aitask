@@ -1,0 +1,210 @@
+import { ArrowRight, Building2, Check, X } from 'lucide-react';
+import React from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useShallow } from 'zustand/react/shallow';
+import BackendFreshness from '../../../app/shell/BackendFreshness';
+import DraftRecoveryNotice from '../../../app/shell/DraftRecoveryNotice';
+import { useStore } from '../../../app/store/workspaceStore';
+import { isPendingMutationResolution } from '../../../infrastructure/commands/mutationGuard';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../../../infrastructure/persistence/workspaceSession';
+import { useI18n } from '../../../shared/components/I18nProvider';
+import ModalShell from '../../../shared/components/ModalShell';
+import SystemMessage from '../../../shared/components/SystemMessage';
+import { Button } from '../../../shared/components/ui';
+import { inputBase, modalFooter } from '../../../shared/components/uiTokens';
+import { acknowledgeActionFeedback, queueActionFeedback } from '../../../shared/feedback/actionFeedback';
+import { useRecoverableForm } from '../../../app/hooks/useRecoverableForm';
+import { useUnsavedChanges } from '../../../shared/hooks/useUnsavedChanges';
+import { msg } from '../../../shared/i18n/messages';
+
+type Props = {
+  onClose: () => void;
+  onCreated?: (clientId: string) => void;
+  onCreateProject?: (clientId: string) => void;
+  onAddServicePlan?: (clientId: string) => void;
+};
+
+const CreateClientProfileModal: React.FC<Props> = ({ onClose, onCreated, onCreateProject, onAddServicePlan }) => {
+  const { createClientProfile, retryPendingSave, discardMutation, backend } = useStore(useShallow(state => ({
+    createClientProfile: state.createClientProfile,
+    retryPendingSave: state.retryPendingSave,
+    discardMutation: state.discardMutation,
+    backend: state.backend,
+  })));
+  const { t } = useI18n();
+  const [, setSearchParams] = useSearchParams();
+  const titleId = React.useId();
+  const [form, setForm] = React.useState({ clientName: '', clientSince: '', contactPerson: '', email: '', phone: '', address: '', website: '', facebookPage: '', notes: '' });
+  const [error, setError] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [pendingClientId, setPendingClientId] = React.useState('');
+  const [createdClientId, setCreatedClientId] = React.useState('');
+  const mounted = React.useRef(false);
+  React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const formDirty = !createdClientId && Object.values(form).some(value => value.trim());
+  const markPristine = useUnsavedChanges(saving || formDirty);
+  const recovery = useRecoverableForm('create-client-profile', form, formDirty, !createdClientId && !pendingClientId);
+  const restoreDraft = () => { const value = recovery.restore(); if (value && typeof value.clientName === 'string') setForm(value); };
+  const requestClose = () => { if (pendingClientId) { void handleDiscard(); return; } if (!saving && (!formDirty || window.confirm(t('Discard unsaved changes?')))) { recovery.clear(); markPristine(); onClose(); } };
+  const syncBusy = backend.isSaving || backend.isPulling;
+  const busy = saving || syncBusy;
+  const pendingResolution = isPendingMutationResolution(backend);
+
+  const update = (key: keyof typeof form, value: string) => {
+    setForm(current => ({ ...current, [key]: value }));
+    setError('');
+  };
+
+  // A company search filter on the Companies page would hide the record that
+  // was just created. Clear it for every entry point (top-level "New client"
+  // and the "New project" modal's "+ Add client") so the company shows at once.
+  const clearCompanySearch = React.useCallback(() => {
+    setSearchParams(current => {
+      if (!current.get('search')) return current;
+      const next = new URLSearchParams(current);
+      next.delete('search');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving) return;
+    if (backend.upgradeRequired && !pendingClientId) {
+      setError(t(backend.error || backend.message));
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    const session = captureWorkspaceSession();
+    const actorId = useStore.getState().currentUser?.id;
+    const isCurrent = () => mounted.current && isWorkspaceSessionCurrent(session) && useStore.getState().currentUser?.id === actorId;
+    try {
+      let clientId = pendingClientId;
+      if (!clientId) {
+        const result = createClientProfile(form);
+        if (!result.ok || !result.id) {
+          setError(t(result.error || 'Unable to add this company.'));
+          return;
+        }
+        clientId = result.id;
+        const createdId = clientId;
+        queueActionFeedback(actorId!, `company:${createdId}:create`, msg('client.companyAdded', { name: form.clientName.trim() }), saved => saved.clients.some(item => item.id === createdId && item.clientName === form.clientName.trim()), false);
+        setPendingClientId(clientId);
+      }
+      const committed = await retryPendingSave();
+      if (!isCurrent()) return;
+      if (!committed.ok) {
+        setError(t(committed.error || 'The company is waiting to be saved. Retry to finish syncing.'));
+        return;
+      }
+      if (!useStore.getState().clients.some(client => client.id === clientId)) {
+        setPendingClientId('');
+        setError(t('The pending company is no longer available. Review your draft before saving again.'));
+        return;
+      }
+      acknowledgeActionFeedback(useStore.getState());
+      recovery.clear(); markPristine(); setPendingClientId('');
+      setCreatedClientId(clientId);
+      clearCompanySearch();
+      onCreated?.(clientId);
+    } catch (error) {
+      if (isCurrent()) setError(error instanceof Error ? error.message : t('Unable to save this change.'));
+    } finally {
+      if (mounted.current) setSaving(false);
+    }
+  };
+
+  const continueTo = (callback?: (clientId: string) => void) => {
+    if (!createdClientId || saving) return;
+    callback?.(createdClientId);
+  };
+
+  const handleDiscard = async () => {
+    if (busy || !window.confirm(t('Discard pending changes and reload the latest saved workspace?'))) return;
+    const session = captureWorkspaceSession();
+    const actorId = useStore.getState().currentUser?.id;
+    setSaving(true);
+    try {
+      await discardMutation();
+      if (!mounted.current || !isWorkspaceSessionCurrent(session) || useStore.getState().currentUser?.id !== actorId) return;
+      const latest = useStore.getState().backend;
+      if (latest.mode === 'supabase' && latest.status !== 'live') { setError(latest.error || 'Unable to reload saved company data. Try again.'); return; }
+      setPendingClientId('');
+      setError('');
+      recovery.clear(); markPristine(); onClose();
+    } catch (failure) {
+      if (mounted.current && isWorkspaceSessionCurrent(session) && useStore.getState().currentUser?.id === actorId) setError(failure instanceof Error ? failure.message : 'Unable to reload saved company data. Try again.');
+    } finally {
+      if (mounted.current && isWorkspaceSessionCurrent(session) && useStore.getState().currentUser?.id === actorId) setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell labelledBy={titleId} onClose={requestClose} panelClassName="max-w-2xl">
+      {recovery.storageFailed && <p role="alert" className="px-5 py-3 text-sm text-amber-800">{t('feedback.draftStorageFailed')}</p>}
+        {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
+      <header className="flex items-start justify-between gap-4 border-b border-line px-5 pb-5 pt-6 sm:px-6">
+        <div>
+          <p className="calm-eyebrow">{t('Companies · New client')}</p>
+          <h2 id={titleId} className="mt-1 text-2xl font-semibold tracking-[-0.035em] text-ink">{createdClientId ? t('Client added') : t('Add a client company')}</h2>
+          <p className="mt-1 text-sm text-muted">{createdClientId ? t('The company is ready for projects, service plans, and tasks.') : t('Save the company profile first. A service plan and project can be added next.')}</p>
+        </div>
+        <button type="button" aria-label={t('Close')} onClick={requestClose} className="flex h-11 w-11 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-5 w-5" /></button>
+      </header>
+
+      {createdClientId ? (
+        <div className="space-y-5 p-5 sm:p-6">
+          <div className="flex items-start gap-3 rounded-panel bg-accent-soft p-5 ring-1 ring-accent/25">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent text-white"><Check className="h-5 w-5" /></span>
+            <div><p className="font-semibold text-ink" data-i18n-skip>{form.clientName}</p><p className="mt-1 text-sm leading-6 text-muted">{t('No login account or service plan was created automatically.')}</p></div>
+          </div>
+          {(onCreateProject || onAddServicePlan) && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {onCreateProject && <Button onClick={() => continueTo(onCreateProject)}><Building2 className="h-4 w-4" />{t('Create project')}<ArrowRight className="ml-auto h-4 w-4" /></Button>}
+              {onAddServicePlan && <Button variant="secondary" onClick={() => continueTo(onAddServicePlan)}>{t('Add service plan')}<ArrowRight className="ml-auto h-4 w-4" /></Button>}
+            </div>
+          )}
+          <button type="button" onClick={requestClose} className="min-h-11 w-full rounded-control border border-line px-4 py-2 text-sm font-semibold text-muted transition hover:bg-inset hover:text-ink">{t('Done')}</button>
+        </div>
+      ) : (
+        <form onSubmit={save} className="max-h-[min(44rem,calc(100dvh-10rem))] overflow-y-auto p-5 sm:p-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="text-sm font-medium text-ink">{t('Company name *')}<input autoFocus required disabled={Boolean(pendingClientId)} maxLength={240} className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.clientName} onChange={event => update('clientName', event.target.value)} /></label>
+            <label className="text-sm font-medium text-ink">{t('Client since')}<input type="date" disabled={Boolean(pendingClientId)} className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.clientSince} onChange={event => update('clientSince', event.target.value)} /></label>
+            <label className="text-sm font-medium text-ink">{t('Contact person')}<input disabled={Boolean(pendingClientId)} className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.contactPerson} onChange={event => update('contactPerson', event.target.value)} /></label>
+            <label className="text-sm font-medium text-ink">{t('Email')}<input disabled={Boolean(pendingClientId)} type="email" className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.email} onChange={event => update('email', event.target.value)} /></label>
+            <label className="text-sm font-medium text-ink">{t('Phone')}<input disabled={Boolean(pendingClientId)} type="tel" className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.phone} onChange={event => update('phone', event.target.value)} /></label>
+            <label className="text-sm font-medium text-ink md:col-span-2">{t('Address')}<textarea disabled={Boolean(pendingClientId)} rows={2} className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.address} onChange={event => update('address', event.target.value)} /></label>
+            <label className="text-sm font-medium text-ink">{t('Website')}<input disabled={Boolean(pendingClientId)} type="url" placeholder="https://" className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.website} onChange={event => update('website', event.target.value)} /></label>
+            <label className="text-sm font-medium text-ink">{t('Facebook page')}<input disabled={Boolean(pendingClientId)} type="url" placeholder="https://" className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.facebookPage} onChange={event => update('facebookPage', event.target.value)} /></label>
+            <label className="text-sm font-medium text-ink md:col-span-2">{t('Notes')}<textarea disabled={Boolean(pendingClientId)} rows={4} className={`${inputBase} mt-1.5 px-3 py-2.5`} value={form.notes} onChange={event => update('notes', event.target.value)} /></label>
+          </div>
+          {(error || pendingResolution) && (
+            <div className="mt-5 rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
+              <p><SystemMessage message={error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
+              {pendingResolution && <BackendFreshness compact className="mt-3" />}
+            </div>
+          )}
+          {pendingClientId && error && (
+            <button
+              type="button"
+              onClick={() => void handleDiscard()}
+              disabled={busy}
+              className="mt-3 text-left text-sm font-medium text-muted underline decoration-dotted underline-offset-4 transition hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {t('Use the latest saved workspace and discard this company')}
+            </button>
+          )}
+          <div className={modalFooter}>
+            <Button type="button" variant="secondary" onClick={requestClose}>{t('Cancel')}</Button>
+            <Button type="submit" disabled={busy || pendingResolution}>{saving ? t('Saving…') : syncBusy && pendingClientId ? t('Waiting for sync…') : pendingClientId ? t('Retry save') : t('Save client')}</Button>
+          </div>
+        </form>
+      )}
+    </ModalShell>
+  );
+};
+
+export default CreateClientProfileModal;

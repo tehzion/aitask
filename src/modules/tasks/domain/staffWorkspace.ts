@@ -1,0 +1,191 @@
+import type { VisibilityScope } from '../../../shared/authorization/access';
+import { getTaskStatusOptions } from '../../../shared/authorization/taskWorkflowAccess';
+import type { MessageId } from '../../../shared/i18n/messages';
+import { getEffectiveTaskApprovalMode } from '../../../shared/rules/projectManagement';
+import type { CustomRole, Deliverable, Priority, ServiceCycle, Task, TaskStatus, User } from '../../../shared/types/index';
+import { isTaskOpen } from '../../reports/domain/taskReporting';
+import { getTaskStatusControls } from './taskStatusControls';
+
+export type HodWorkScope = 'mine' | 'delegated' | 'department';
+
+export const getHodScopeTasks = (tasks: Task[], actorId: string | undefined, scope: HodWorkScope) => {
+  if (!actorId) return [];
+  if (scope === 'mine') return tasks.filter(task => task.assignedTo === actorId);
+  if (scope === 'delegated') return tasks.filter(task => Boolean(task.assignedTo) && task.assignedTo !== actorId && (task.assignedBy === actorId || task.createdBy === actorId));
+  return tasks;
+};
+
+export type StaffWorkBucketKey = 'needs_action' | 'up_next' | 'waiting' | 'done';
+
+export interface StaffWorkQueue {
+  needs_action: Task[];
+  up_next: Task[];
+  waiting: Task[];
+  done: Task[];
+}
+
+export interface StaffGuidedAction {
+  kind: 'advance' | 'picker' | 'waiting' | 'terminal';
+  label: string;
+  targetStatus?: TaskStatus;
+  disabled: boolean;
+}
+
+const priorityRank: Record<Priority, number> = {
+  Urgent: 0,
+  High: 1,
+  Medium: 2,
+  Low: 3,
+};
+
+const isTerminal = (task: Task) => !isTaskOpen(task);
+
+/** Resolve only visible predecessors; unavailable work must not expose hidden data. */
+export const getTaskBlockers = (task: Task, visibleTasks: Task[]): Task[] => {
+  if (!isTaskOpen(task)) return [];
+  const predecessorIds = new Set(task.predecessorTaskIds || []);
+  return visibleTasks.filter(item => predecessorIds.has(item.id) && isTaskOpen(item));
+};
+export const getUnavailableTaskDependencyCount = (task: Task, visibleTasks: Task[]): number => {
+  if (!isTaskOpen(task)) return 0;
+  const visibleIds = new Set(visibleTasks.map(item => item.id));
+  return [...new Set(task.predecessorTaskIds || [])].filter(id => !visibleIds.has(id)).length;
+};
+
+const isWaiting = (task: Task) => !isTerminal(task) && ['Waiting Approval', 'Approved'].includes(task.status);
+
+const urgencyRank = (task: Task, today: string) => {
+  if (task.revisionCount > 0) return 0;
+  if (task.workState?.blocker) return 0;
+  if (task.dueDate && task.dueDate < today) return 1;
+  if (task.dueDate === today) return 2;
+  if (task.status === 'In Progress') return 3;
+  if (task.dueDate) return 4;
+  return 5;
+};
+
+export const compareStaffTasks = (today: string) => (left: Task, right: Task) => {
+  const urgencyDifference = urgencyRank(left, today) - urgencyRank(right, today);
+  if (urgencyDifference !== 0) return urgencyDifference;
+
+  const dueDifference = (left.dueDate || '9999-12-31').localeCompare(right.dueDate || '9999-12-31');
+  if (dueDifference !== 0) return dueDifference;
+
+  const priorityDifference = priorityRank[left.priority] - priorityRank[right.priority];
+  if (priorityDifference !== 0) return priorityDifference;
+
+  const updateDifference = (right.updatedAt || '').localeCompare(left.updatedAt || '');
+  if (updateDifference !== 0) return updateDifference;
+  return left.id.localeCompare(right.id);
+};
+
+export const buildStaffWorkQueue = (tasks: Task[], today: string, options: { isActionable?: (task: Task) => boolean } = {}): StaffWorkQueue => {
+  const queue: StaffWorkQueue = { needs_action: [], up_next: [], waiting: [], done: [] };
+
+  tasks.forEach(task => {
+    if (isTerminal(task)) {
+      queue.done.push(task);
+      return;
+    }
+    if (isWaiting(task)) {
+      // A reviewer (HOD/PM) who can advance a submitted or approved task must see
+      // it in the action queue; everyone else waits for that reviewer.
+      (options.isActionable?.(task) ? queue.needs_action : queue.waiting).push(task);
+      return;
+    }
+    if (
+      task.revisionCount > 0
+      || Boolean(task.workState?.blocker)
+      || task.status === 'In Progress'
+      || Boolean(task.dueDate && task.dueDate <= today)
+    ) {
+      queue.needs_action.push(task);
+      return;
+    }
+    queue.up_next.push(task);
+  });
+
+  const compare = compareStaffTasks(today);
+  queue.needs_action.sort(compare);
+  queue.up_next.sort(compare);
+  queue.waiting.sort(compare);
+  queue.done.sort((left, right) => (
+    (right.completedAt || right.updatedAt || '').localeCompare(left.completedAt || left.updatedAt || '')
+    || left.id.localeCompare(right.id)
+  ));
+  return queue;
+};
+
+export const getStaffFocusTask = (queue: StaffWorkQueue) => queue.needs_action[0] || queue.up_next[0];
+
+export const getStaffGuidedAction = (task: Task, taskStatuses: TaskStatus[], actor?: User | null, roles: CustomRole[] = [], scope: VisibilityScope = {}): StaffGuidedAction => {
+  const options = actor ? getTaskStatusOptions(actor, task, taskStatuses, roles, scope) : taskStatuses;
+  const approvalMode = getEffectiveTaskApprovalMode(task, scope.projects || []);
+  if (task.status === 'Waiting Approval' && approvalMode === 'none' && actor?.role === 'Project Manager' && options.includes('Completed')) return { kind: 'advance', label: 'Confirm completion', targetStatus: 'Completed', disabled: false };
+  if (task.status === 'Waiting Approval' && actor && options.includes('Approved')) return { kind: 'advance', label: 'Approve', targetStatus: 'Approved', disabled: false };
+  if (task.status === 'Approved') return actor && options.includes('Completed')
+    ? { kind: 'advance', label: 'Confirm completion', targetStatus: 'Completed', disabled: false }
+    : { kind: 'waiting', label: 'Awaiting final completion', disabled: true };
+  if (task.isCompleted || task.status === 'Completed') {
+    return { kind: 'terminal', label: 'Completed', disabled: true };
+  }
+  if (task.status === 'Cancelled') {
+    return { kind: 'terminal', label: 'Cancelled', disabled: true };
+  }
+  if (task.status === 'Waiting Approval') {
+    return { kind: 'waiting', label: 'Waiting for review', disabled: true };
+  }
+  if (['Pending', 'Revision'].includes(task.status) && options.includes('In Progress')) {
+    return {
+      kind: 'advance',
+      label: task.status === 'Revision' || task.revisionCount > 0 ? 'Start revision' : 'Start work',
+      targetStatus: 'In Progress',
+      disabled: false,
+    };
+  }
+  if (task.status === 'In Progress' && approvalMode === 'none' && actor?.role === 'Staff' && task.assignedTo === actor.id && options.includes('Completed')) {
+    return {
+      kind: 'advance',
+      label: 'Complete task',
+      targetStatus: 'Completed',
+      disabled: false,
+    };
+  }
+  if (task.status === 'In Progress' && options.includes('Waiting Approval')) {
+    return {
+      kind: 'advance',
+      label: task.revisionCount > 0 ? 'Resubmit for review' : 'Send for review',
+      targetStatus: 'Waiting Approval',
+      disabled: false,
+    };
+  }
+  return { kind: 'picker', label: 'Update status', disabled: false };
+};
+
+/**
+ * True only when the guided action is an enabled advance. The queue must not
+ * surface review work the reviewer cannot actually act on (missing output
+ * evidence, unfinished workflow steps), so it reuses the same control gating.
+ */
+export const isStaffGuidedActionEnabled = (
+  task: Task,
+  taskStatuses: TaskStatus[],
+  actor: User | null | undefined,
+  roles: CustomRole[] = [],
+  scope: VisibilityScope = {},
+  workflow: { tasks: Task[]; cycles: ServiceCycle[]; deliverables: Deliverable[] } = { tasks: [], cycles: [], deliverables: [] },
+) => {
+  const action = getStaffGuidedAction(task, taskStatuses, actor, roles, scope);
+  if (action.kind !== 'advance' || !action.targetStatus) return false;
+  return !getTaskStatusControls(actor, task, taskStatuses, roles, scope, workflow)
+    .find(option => option.status === action.targetStatus)?.disabledReason;
+};
+
+const staffBucketLabels: Record<StaffWorkBucketKey, MessageId> = {
+  needs_action: 'staff.bucketNeedsAction',
+  up_next: 'staff.bucketUpNext',
+  waiting: 'staff.bucketWaiting',
+  done: 'staff.bucketDone',
+};
+
+export const getStaffBucketLabel = (bucket: StaffWorkBucketKey): MessageId => staffBucketLabels[bucket];

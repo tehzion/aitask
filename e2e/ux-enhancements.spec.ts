@@ -18,7 +18,7 @@ for (const width of [320, 375, 390, 414, 768, 1024]) {
     await login(page);
     await page.goto('/tasks');
     await page.evaluate(async role => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       const state = useStore.getState();
       const actor = { ...state.currentUser, role, departments: ['Designer'], department: 'Designer', customRoleId: undefined, permissions: undefined, isSuperAdmin: false };
       useStore.setState({ currentUser: actor, users: state.users.map(user => user.id === actor.id ? actor : user),
@@ -45,7 +45,7 @@ for (const width of [320, 375, 390, 414, 768, 1024]) {
     await expect(dialog).toHaveCount(0);
     await expect(page).toHaveURL(/taskId=/);
     const created = await page.evaluate(async title => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       return useStore.getState().tasks.filter(task => task.title === title).map(task => ({ description: task.description, clientName: task.clientName }));
     }, `UX creation ${width}`);
     expect(created).toEqual([{ description: 'Preserved brief', clientName: 'UX company' }]);
@@ -56,13 +56,13 @@ for (const width of [320, 375, 390, 414, 768, 1024]) {
     await login(page);
     await page.goto('/tasks');
     await page.evaluate(async () => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       const state = useStore.getState();
       const base = state.tasks[0];
       if (!base) throw new Error('Expected demo task fixture');
       useStore.setState({ tasks: [...state.tasks,
-        { ...base, id: 'ux-search-allowed', title: 'UX unique record', createdBy: state.currentUser.id, assignedTo: state.currentUser.id },
-        { ...base, id: 'ux-search-denied', title: 'UX secret record', clientId: 'other-client', clientName: 'Other private company', projectId: undefined, createdBy: 'other-pm', assignedTo: 'other-staff' },
+        { ...base, id: 'ux-search-allowed', title: 'UX unique record', clientId: undefined, clientName: 'UX search company', projectId: undefined, projectName: undefined, createdBy: state.currentUser.id, assignedTo: state.currentUser.id },
+        { ...base, id: 'ux-search-denied', title: 'UX secret record', clientId: undefined, clientName: 'Other private company', projectId: undefined, projectName: undefined, createdBy: 'other-pm', assignedTo: 'other-staff' },
       ] });
     });
     if (width < 640) await page.getByRole('button', { name: 'Search', exact: true }).click();
@@ -110,8 +110,8 @@ test('Boss table and board preference stays URL-backed and persists per user', a
   await page.setViewportSize({ width: 390, height: 900 });
   await page.goto('/login');
   await page.evaluate(async () => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);

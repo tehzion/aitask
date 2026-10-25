@@ -1,10 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 const seed = async (page: Page, actor: 'hod' | 'pm' | 'boss', own = false) => {
   await page.goto('/login');
+  await waitForWorkspaceHydration(page);
   await page.evaluate(async ({ actor, own }) => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     stopBackendAutoSync();
     const old = useStore.getState();
     const users = [
@@ -19,15 +21,17 @@ const seed = async (page: Page, actor: 'hod' | 'pm' | 'boss', own = false) => {
     useStore.setState({ currentUser: users.find(user => user.id === actor), users, tasks: [task], clients: [], projects: [], rolePermissions: [], notifications: [], serviceCycles: [], deliverables: [], clientPlans: [], backend: { ...old.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   }, { actor, own });
   await page.goto('/tasks?taskId=independent-review');
+  await waitForWorkspaceHydration(page);
 };
 
 test('HOD-owned review uses an independent PM and retains accountable ownership', async ({ page }) => {
   await seed(page, 'hod', true);
-  await expect(page.getByRole('button', { name: 'Waiting for review', exact: true })).toBeDisabled();
+  await expect(page.getByRole('dialog', { name: 'Independent artwork review' }).getByRole('status').filter({ hasText: 'Awaiting Review' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
-  await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ currentUser: useStore.getState().users.find(user => user.id === 'pm')! }); });
+  await page.evaluate(async () => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); useStore.setState({ currentUser: useStore.getState().users.find(user => user.id === 'pm')! }); });
   await page.goto('/tasks?taskId=independent-review');
-  await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ users: useStore.getState().users.filter(user => ['hod','staff','pm','boss'].includes(user.id)) }); });
+  await waitForWorkspaceHydration(page);
+  await page.evaluate(async () => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); useStore.setState({ users: useStore.getState().users.filter(user => ['hod','staff','pm','boss'].includes(user.id)) }); });
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeEnabled();
   const settings = page.getByRole('region', { name: 'Review responsibility' });
   await settings.getByRole('combobox', { name: 'Accountable lead', exact: true }).selectOption('hod');
@@ -36,7 +40,7 @@ test('HOD-owned review uses an independent PM and retains accountable ownership'
   await expect(settings.getByText('Review cover and lead saved.', { exact: true })).toBeVisible();
   if (process.env.AITASK_HOD_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.AITASK_HOD_EVIDENCE_DIR}/review-cover-desktop.png`, fullPage: true });
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
-  await expect.poll(() => page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); const task = useStore.getState().tasks[0]; return { status: task.status, lead: task.accountableLeadId, assignee: task.assignedTo }; })).toEqual({ status: 'Approved', lead: 'hod', assignee: 'hod' });
+  await expect.poll(() => page.evaluate(async () => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); const task = useStore.getState().tasks[0]; return { status: task.status, lead: task.accountableLeadId, assignee: task.assignedTo }; })).toEqual({ status: 'Approved', lead: 'hod', assignee: 'hod' });
 });
 
 test('Boss self-review requires a reason and stores explicit override provenance', async ({ page }) => {
@@ -48,14 +52,14 @@ test('Boss self-review requires a reason and stores explicit override provenance
   await settings.getByLabel('Review override reason').fill('Time-critical release; independent cover unavailable.');
   if (process.env.AITASK_HOD_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.AITASK_HOD_EVIDENCE_DIR}/review-override-mobile.png`, fullPage: true });
   await button.click();
-  await expect.poll(() => page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); const task = useStore.getState().tasks[0]; return { status: task.status, by: task.reviewDecision?.reviewedBy, reason: task.reviewDecision?.overrideReason }; })).toEqual({ status: 'Approved', by: 'boss', reason: 'Time-critical release; independent cover unavailable.' });
+  await expect.poll(() => page.evaluate(async () => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); const task = useStore.getState().tasks[0]; return { status: task.status, by: task.reviewDecision?.reviewedBy, reason: task.reviewDecision?.overrideReason }; })).toEqual({ status: 'Approved', by: 'boss', reason: 'Time-critical release; independent cover unavailable.' });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test('department controls recover when an actor-bound cover snapshot expires', async ({ page }) => {
   await seed(page, 'hod');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const expiresAt = new Date(Date.now() + 3000).toISOString();
     useStore.setState({ tasks: useStore.getState().tasks.map(task => ({ ...task, reviewCover: { reviewerId:'pm', expiresAt }, reviewAccess: { actorId:'hod', canApprove:false, expiresAt } })) });
   });

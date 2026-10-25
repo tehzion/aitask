@@ -56,10 +56,10 @@ try {
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = process.env.AITASK_LOCAL_TEST_PUBLIC;
   server = await createServer({ server: { host: '127.0.0.1', port: 58000 + process.pid % 200, strictPort: true, ws: false, hmr: false }, logLevel: 'error' });
   await server.listen();
-  ({ supabase } = await server.ssrLoadModule('/src/lib/supabaseClient.ts'));
-  const secure = await server.ssrLoadModule('/src/lib/secureWorkspace.ts');
-  const { useStore, clearWorkspaceSession } = await server.ssrLoadModule('/src/store/index.ts');
-  const { getManagementSnapshot } = await server.ssrLoadModule('/src/lib/managementIntelligence.ts');
+  ({ supabase } = await server.ssrLoadModule('/src/infrastructure/database/supabaseClient.ts'));
+  const secure = await server.ssrLoadModule('/src/infrastructure/api/secureWorkspace.ts');
+  const { useStore, clearWorkspaceSession } = await server.ssrLoadModule('/src/app/store/workspaceStore.ts');
+  const { getManagementSnapshot } = await server.ssrLoadModule('/src/modules/dashboard/domain/managementIntelligence.ts');
   const initial = useStore.getState();
   const login = async id => {
     clearWorkspaceSession({ discardPending: true });
@@ -94,6 +94,7 @@ try {
       ...(index === 0 ? { serviceCycleId: activated.cycleId, deliverableId: deliveryId } : {}) });
     await save('Create project work', { ok: Boolean(id) }, 'task.create'); taskIds.push(id);
   }
+  await save('Publish monthly delivery cycle', useStore.getState().setServiceCycleStatus(activated.cycleId, 'Published'), 'service_cycle.manage');
   console.log('[phase5] A: Super Admin created the company, three projects, explicit assignments, plan, cycle and tasks through frontend store + Auth/RPC.');
 
   await login('uat-pm-a');
@@ -104,7 +105,8 @@ try {
   console.log('[phase5] B: PM assignment scope, crafted cross-project RPC denial and persisted milestone passed.');
 
   await login('uat-hod');
-  await save('HOD delegates assigned work', useStore.getState().updateTaskAssignee(taskIds[0], 'uat-staff-a'));
+  await save('HOD delegates assigned work across PM projects', useStore.getState().updateTaskAssignee(taskIds[0], 'uat-staff-a'));
+  await save('HOD delegates second PM project work', useStore.getState().updateTaskAssignee(taskIds[1], 'uat-staff-a'));
   await login('uat-staff-a');
   check(taskIds.slice(0, 2).every(id => useStore.getState().tasks.some(task => task.id === id)), 'One Staff account sees work under both PMs');
   check(!useStore.getState().tasks.some(task => task.id === taskIds[2]), 'Staff cannot see another employee task');
@@ -163,18 +165,18 @@ try {
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Access Dashboard', exact: true }).click();
   await page.getByRole('button', { name: 'Happy working', exact: true }).click();
-  await expect.poll(() => page.evaluate(async id => (await import('/src/store/index.ts')).useStore.getState().tasks.some(task => task.id === id), taskIds[1]), { timeout: 15000 }).toBe(true);
-  await expect.poll(() => page.evaluate(async () => (await import('/src/lib/supabaseClient.ts')).supabase.getChannels().some(channel => channel.state === 'joined')), { timeout: 15000 }).toBe(true);
+  await expect.poll(() => page.evaluate(async id => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().tasks.some(task => task.id === id), taskIds[1]), { timeout: 15000 }).toBe(true);
+  await expect.poll(() => page.evaluate(async () => (await import('/src/infrastructure/database/supabaseClient.ts')).supabase.getChannels().some(channel => channel.state === 'joined')), { timeout: 15000 }).toBe(true);
   await login('uat-boss');
   const started = performance.now();
   await save('Concurrent boss edit', useStore.getState().updateTask(taskIds[1], { title: 'Synchronized across PMs and shared Staff' }));
-  await expect.poll(() => page.evaluate(async id => (await import('/src/store/index.ts')).useStore.getState().tasks.find(task => task.id === id)?.title, taskIds[1]), { timeout: 15000 }).toBe('Synchronized across PMs and shared Staff');
+  await expect.poll(() => page.evaluate(async id => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().tasks.find(task => task.id === id)?.title, taskIds[1]), { timeout: 15000 }).toBe('Synchronized across PMs and shared Staff');
   const syncMs = Math.round(performance.now() - started);
   check(syncMs <= 15000, `Synchronization target: ${syncMs}ms`);
   await context.setOffline(true);
   await save('Edit during receiver interruption', useStore.getState().updateTask(taskIds[1], { title: 'Reconnected canonical task' }));
   await context.setOffline(false);
-  await expect.poll(() => page.evaluate(async id => (await import('/src/store/index.ts')).useStore.getState().tasks.find(task => task.id === id)?.title, taskIds[1]), { timeout: 15000 }).toBe('Reconnected canonical task');
+  await expect.poll(() => page.evaluate(async id => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().tasks.find(task => task.id === id)?.title, taskIds[1]), { timeout: 15000 }).toBe('Reconnected canonical task');
   assertions++;
   console.log(`[phase5] G: Independent real browser/Auth session synchronized in ${syncMs}ms and recovered after network interruption.`);
   await context.close();

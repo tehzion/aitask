@@ -1,19 +1,17 @@
-import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../../../lib/workspaceSession';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getUnreadNotifications } from '../../../lib/access';
+import { useStore } from '../../../app/store/workspaceStore';
+import { BACKEND_UPGRADE_REQUIRED_MESSAGE } from '../../../infrastructure/api/workspaceContracts';
+import { setSecureNotificationsRead } from '../../../infrastructure/api/secureWorkspace';
+import { shouldUseSecureSupabase } from '../../../infrastructure/database/supabaseClient';
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../../../infrastructure/persistence/workspaceSession';
+import { getUnreadNotifications } from '../../../shared/authorization/access';
+import { useToastStore } from '../../../shared/feedback/useToastStore';
+import { msg, type MessageDescriptor } from '../../../shared/i18n/messages';
 import {
-  captureNotificationReadState,
-  createNotificationMutationLock,
-  restoreNotificationReadState,
+	captureNotificationReadState,
+	createNotificationMutationLock,
+	restoreNotificationReadState,
 } from '../services/notificationReads';
-import {
-  BACKEND_UPGRADE_REQUIRED_MESSAGE,
-  setSecureNotificationsRead,
-} from '../../../lib/secureWorkspace';
-import { shouldUseSecureSupabase } from '../../../lib/supabaseClient';
-import { useStore } from '../../../store';
-import { useToastStore } from '../../../store/useToastStore';
-import { msg, type MessageDescriptor } from '../../../lib/messages';
 
 export interface NotificationReadActions {
   markRead: (notificationIds: string | string[]) => Promise<boolean>;

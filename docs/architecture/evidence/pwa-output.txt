@@ -1,0 +1,1 @@
+PWA verification passed: manifest, app shell, icons, and cache boundaries are valid.

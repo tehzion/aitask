@@ -34,7 +34,7 @@ select is((select (data->>'completionPercentage')::integer from public.aitask_en
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005503',true);
 set local role authenticated;
-select is((pg_temp.stage_update('{"workState":{"acceptedBy":"stage-staff"}}')->>'ok')::boolean,true,'Staff accepts assignment');
+select is((pg_temp.stage_update('{"workState":{"acceptedBy":"stage-staff"},"status":"In Progress"}')->>'ok')::boolean,true,'Staff accepts and starts the assignment');
 select is((select (data->>'completionPercentage')::integer from public.aitask_entities where entity_id='stage-task'),30,'accepted work is 30 percent');
 select is((pg_temp.stage_update('{"status":"Waiting Approval","completionPercentage":100}')->>'ok')::boolean,true,'Staff submits for review');
 select is((select (data->>'completionPercentage')::integer from public.aitask_entities where entity_id='stage-task'),60,'cached 100 percent review payload is normalized to 60');

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useAppNoticeState } from '../hooks/useAppNoticeState';
-import { useMonthlyServiceCycles } from '../hooks/useMonthlyServiceCycles';
-import { hasBlockingUnsavedChanges, hasUnsavedChanges, configurePendingWork, subscribeUnsavedChanges } from '../lib/unsavedChanges';
-import { clearWorkspaceSession, startBackendAutoSync, stopBackendAutoSync, useStore } from '../store';
-import { shouldUseSecureSupabase, supabase } from '../lib/supabaseClient';
-import { useI18n } from '../components/I18nProvider';
+import { shouldUseSecureSupabase, supabase } from '../infrastructure/database/supabaseClient';
+import { useMonthlyServiceCycles } from '../modules/services/hooks/useMonthlyServiceCycles';
+import { useI18n } from '../shared/components/I18nProvider';
+import { configurePendingWork, hasBlockingUnsavedChanges, hasUnsavedChanges, subscribeUnsavedChanges } from '../shared/forms/unsavedChanges';
+import { useAppNoticeState } from './lifecycle/useAppNoticeState';
+import { clearWorkspaceSession, startBackendAutoSync, stopBackendAutoSync, useStore } from './store/workspaceStore';
 
 /**
  * Coordinates application-wide side effects without coupling route rendering

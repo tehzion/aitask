@@ -50,9 +50,9 @@ try {
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = process.env.AITASK_LOCAL_TEST_PUBLIC;
   process.env.VITE_AITASK_BACKEND = 'supabase';
   server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
-  ({ supabase } = await server.ssrLoadModule('/src/lib/supabaseClient.ts'));
-  const secure = await server.ssrLoadModule('/src/lib/secureWorkspace.ts');
-  const { useStore, clearWorkspaceSession } = await server.ssrLoadModule('/src/store/index.ts');
+  ({ supabase } = await server.ssrLoadModule('/src/infrastructure/database/supabaseClient.ts'));
+  const secure = await server.ssrLoadModule('/src/infrastructure/api/secureWorkspace.ts');
+  const { useStore, clearWorkspaceSession } = await server.ssrLoadModule('/src/app/store/workspaceStore.ts');
   const initial = useStore.getState();
   let loaded;
   const login = async id => {

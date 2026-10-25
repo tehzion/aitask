@@ -12,16 +12,13 @@ select has_function(
 );
 
 select ok(
-  position(
-    'unreadByUserIds' in pg_get_functiondef('private.aitask_can_mutate_entity(text,text,text,text,text,jsonb,jsonb)'::regprocedure)
-  ) > 0,
+  position('aitask_can_mutate_entity_legacy' in pg_get_functiondef('private.aitask_can_mutate_entity(text,text,text,text,text,jsonb,jsonb)'::regprocedure)) > 0
+    and position('unreadByUserIds' in pg_get_functiondef('private.aitask_can_mutate_entity_legacy(text,text,text,text,text,jsonb,jsonb)'::regprocedure)) > 0,
   'notification guard tolerates the client unread tombstone field'
 );
 
 select ok(
-  position(
-    'v_new_reads = (v_old_reads - v_member_id)' in pg_get_functiondef('private.aitask_can_mutate_entity(text,text,text,text,text,jsonb,jsonb)'::regprocedure)
-  ) > 0,
+  position('v_new_reads = (v_old_reads - v_member_id)' in pg_get_functiondef('private.aitask_can_mutate_entity_legacy(text,text,text,text,text,jsonb,jsonb)'::regprocedure)) > 0,
   'notification guard allows the acting member to mark unread'
 );
 

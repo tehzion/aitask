@@ -1,13 +1,15 @@
+import { waitForWorkspaceBoot } from './fixtures/workspaceBoot';
 import { expect, test, type Page } from '@playwright/test';
 
 const rawTechnicalText = /\[object Object\]|row-level security|aitask_entities|PGRST\d+|Cannot read properties|Failed to fetch/;
 const seed = async (page: Page, role: string, locale: 'en' | 'zh') => {
   await page.clock.install({ time: new Date('2026-10-19T12:00:00.000Z') });
   await page.goto('/login');
+  await waitForWorkspaceBoot(page);
   return page.evaluate(async ({ role, locale }) => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
-    const { canAccessPath } = await import('/src/lib/access.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
+    const { canAccessPath } = await import('/src/shared/authorization/access.ts');
     stopBackendAutoSync();
     const state = useStore.getState();
     const user = state.users.find(item => role === 'Boss' ? item.isSuperAdmin : item.role === role && !item.isSuperAdmin)!;
@@ -17,7 +19,9 @@ const seed = async (page: Page, role: string, locale: 'en' | 'zh') => {
     localStorage.setItem('aitask-color-theme', locale === 'zh' ? 'dark' : 'light');
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${actor.id}`, 'acknowledged');
     const today = new Date().toISOString().slice(0, 10);
-    useStore.setState({ currentUser: actor, tasks: [{ ...state.tasks[0], id: 'message-audit-task', title: 'Message audit artwork', clientId: 'message-audit-company', clientName: actor.companyName || 'Message audit company', department: actor.department === 'Client' ? 'Designer' : actor.department || 'Designer', assignedTo: actor.id, createdBy: actor.id, assignedBy: actor.id, startDate: today, dueDate: today, status: 'Pending', isCompleted: false, clientApprovalStatus: 'Pending', attachmentLink: undefined, visibility: 'client-visible', deliverableId: undefined, serviceCycleId: undefined, generatedFromDeliverable: undefined, workflowStepId: undefined, workflowStepKind: undefined, predecessorTaskIds: [], workState: {}, workHistory: [], comments: [], approvalHistory: [] }], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0, error: undefined, conflict: undefined, upgradeRequired: false, hasRemoteUpdate: false } });
+    const clientName = actor.companyName || 'Message audit company';
+    const client = { id: 'message-audit-company', clientName, createdBy: actor.id, createdAt: `${today}T00:00:00.000Z`, updatedAt: `${today}T00:00:00.000Z` };
+    useStore.setState({ currentUser: actor, users: state.users.map(item => item.id === actor.id ? actor : item), clients: [client], projects: [], tasks: [{ ...state.tasks[0], id: 'message-audit-task', title: 'Message audit artwork', clientId: client.id, clientName, projectId: undefined, projectName: undefined, serviceType: 'Graphic Design', priority: 'Medium', department: actor.department === 'Client' ? 'Designer' : actor.department || 'Designer', assignedTo: actor.id, createdBy: actor.id, assignedBy: actor.id, startDate: today, dueDate: today, status: 'Pending', isCompleted: false, clientApprovalStatus: 'Pending', attachmentLink: undefined, visibility: 'client-visible', deliverableId: undefined, serviceCycleId: undefined, generatedFromDeliverable: false, recurrenceFrequency: 'None', workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined, internalReview: undefined, reviewAccess: undefined, predecessorTaskIds: [], workState: {}, workHistory: [], comments: [], approvalHistory: [] }], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0, error: undefined, conflict: undefined, upgradeRequired: false, hasRemoteUpdate: false } });
     return ['/', '/tasks', '/calendar', '/clients', '/projects', '/reports', '/approvals', '/notifications', '/settings'].filter(route => canAccessPath(actor, route, state.rolePermissions));
   }, { role, locale });
 };
@@ -52,7 +56,7 @@ for (const locale of ['en', 'zh'] as const) {
       const dialog = page.getByRole('dialog', { name: locale === 'zh' ? '编辑任务日期' : 'Edit task dates' });
       await expect(dialog).toBeVisible();
       await page.evaluate(async failure => {
-        const { useStore } = await import('/src/store/index.ts');
+        const { useStore } = await import('/src/app/store/workspaceStore.ts');
         useStore.setState({ commitPendingMutation: async () => {
           if (failure === 'network') throw new TypeError('Failed to fetch');
           return { ok: false, code: 'FORBIDDEN', error: 'new row violates row-level security policy for table "aitask_entities"' };
@@ -75,7 +79,7 @@ for (const locale of ['en', 'zh'] as const) {
     await seed(page, 'HOD', locale);
     await page.goto('/tasks');
     await page.evaluate(async () => {
-      const { useToastStore } = await import('/src/store/useToastStore.ts');
+      const { useToastStore } = await import('/src/shared/feedback/useToastStore.ts');
       useToastStore.getState().addToast('duplicate key value violates unique constraint "aitask_entities_pkey"', 'error');
     });
     await expect(page.getByRole('alert')).toContainText(locale === 'zh' ? '已有相同的记录' : 'A matching record already exists');
@@ -85,13 +89,14 @@ for (const locale of ['en', 'zh'] as const) {
   test(`Full edit ${locale}: raw save errors are localized while task content stays unchanged`, async ({ page }) => {
     await seed(page, 'Project Manager', locale);
     await page.goto('/tasks?taskId=message-audit-task');
+    await waitForWorkspaceBoot(page);
     await page.getByRole('dialog', { name: 'Message audit artwork', exact: true }).getByRole('button', { name: locale === 'zh' ? '完整编辑' : 'Full edit', exact: true }).click();
     const dialog = page.getByRole('dialog').last();
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: locale === 'zh' ? '编辑' : 'Edit', exact: true }).click();
     await dialog.getByLabel(locale === 'zh' ? '任务标题' : 'Task Title', { exact: true }).fill('Failed to fetch');
     await page.evaluate(async () => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'invalid input syntax for type uuid: "bad-value"' }) });
     });
     await dialog.getByRole('button', { name: locale === 'zh' ? '保存更改' : 'Save Changes', exact: true }).click();
@@ -102,6 +107,7 @@ for (const locale of ['en', 'zh'] as const) {
   test(`App update ${locale}: software refresh is distinct from saved-data recovery`, async ({ page }) => {
     await seed(page, 'Staff', locale);
     await page.goto('/settings');
+    await waitForWorkspaceBoot(page);
     await page.evaluate(() => window.dispatchEvent(new Event('aitask:pwa-update-ready')));
     await expect(page.getByText(locale === 'zh' ? '应用有新版本' : 'App update available', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: locale === 'zh' ? '立即刷新' : 'Refresh now', exact: true })).toBeEnabled();
@@ -110,8 +116,9 @@ for (const locale of ['en', 'zh'] as const) {
   test(`Conflict ${locale}: field names are readable and recovery uses saved data`, async ({ page }) => {
     await seed(page, 'Staff', locale);
     await page.goto('/settings');
+    await waitForWorkspaceBoot(page);
     await page.evaluate(async () => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       const { mountMessageProbe } = await import('/e2e/fixtures/uiMessageProbe.tsx');
       useStore.setState(state => ({ backend: { ...state.backend, status: 'conflict', conflict: { entityType: 'task', entityId: 'private-internal-id', expectedVersion: 1, actualVersion: 2, changedFields: ['dueDate', 'attachmentLink', 'unknownInternalKey'] } } }));
       mountMessageProbe('conflict');
@@ -126,6 +133,7 @@ for (const locale of ['en', 'zh'] as const) {
   test(`Render recovery ${locale}: a crash explains reload without showing a runtime stack`, async ({ page }) => {
     await seed(page, 'Staff', locale);
     await page.goto('/settings');
+    await waitForWorkspaceBoot(page);
     await page.evaluate(async () => {
       const { mountMessageProbe } = await import('/e2e/fixtures/uiMessageProbe.tsx');
       mountMessageProbe('crash');

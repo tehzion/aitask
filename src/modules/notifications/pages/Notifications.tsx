@@ -1,44 +1,44 @@
-import { notificationCategoryLabel, presentNotification } from '../services/notificationPresentation';
-import SystemMessage from '../../../components/SystemMessage';
-import '../../../lib/staffWorkflowCopy';
+import {
+	AlertCircle,
+	Bell,
+	Check,
+	CheckCheck,
+	ChevronDown,
+	ChevronUp,
+	Clock3,
+	ExternalLink,
+	FileCheck2,
+	Info,
+	LoaderCircle,
+	MessageSquareText,
+	RefreshCw,
+	ShieldCheck,
+	UserRoundPlus,
+} from 'lucide-react';
 import React from 'react';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
+import type { LayoutOutletContext } from '../../../app/shell/Layout';
+import { useStore } from '../../../app/store/workspaceStore';
+import { notificationRouteToPath } from '../../../infrastructure/serialization/security';
+import { getVisibleTasks, isNotificationReadByUser } from '../../../shared/authorization/access';
+import { useI18n } from '../../../shared/components/I18nProvider';
+import SystemMessage from '../../../shared/components/SystemMessage';
+import { Badge, Button, PageHeader } from '../../../shared/components/ui';
+import { cardBase, inputBase, pageShell } from '../../../shared/components/uiTokens';
+import '../../../shared/i18n/staffWorkflowCopy';
+import type { AppNotification, NotificationCategory, NotificationCursor } from '../../../shared/types/index';
+import { formatLocalizedDistanceToNow } from '../../../shared/utils/relativeTime';
+import { cn } from '../../../shared/utils/utils';
+import { isTaskOpen } from '../../reports/domain/taskReporting';
 import {
-  AlertCircle,
-  Bell,
-  Check,
-  CheckCheck,
-  ChevronDown,
-  ChevronUp,
-  Clock3,
-  ExternalLink,
-  FileCheck2,
-  Info,
-  LoaderCircle,
-  MessageSquareText,
-  RefreshCw,
-  ShieldCheck,
-  UserRoundPlus,
-} from 'lucide-react';
-import { Badge, Button, PageHeader } from '../../../components/ui';
-import type { LayoutOutletContext } from '../../../components/Layout';
-import { cardBase, inputBase, pageShell } from '../../../components/uiTokens';
-import { getVisibleTasks, isNotificationReadByUser } from '../../../lib/access';
-import { isTaskOpen } from '../../../lib/taskReporting';
-import {
-  groupNotifications,
-  mergeNotificationPages,
-  NOTIFICATION_CATEGORIES,
-  sectionNotificationGroups,
-  type NotificationGroup,
+	groupNotifications,
+	mergeNotificationPages,
+	NOTIFICATION_CATEGORIES,
+	sectionNotificationGroups,
+	type NotificationGroup,
 } from '../services/notificationCenter';
 import { loadNotificationFeedPage } from '../services/notificationFeed';
-import { notificationRouteToPath } from '../../../lib/security';
-import { cn } from '../../../lib/utils';
-import { formatLocalizedDistanceToNow } from '../../../lib/relativeTime';
-import { useI18n } from '../../../components/I18nProvider';
-import { useStore } from '../../../store';
-import type { AppNotification, NotificationCategory, NotificationCursor } from '../../../types';
+import { notificationCategoryLabel, presentNotification } from '../services/notificationPresentation';
 
 type NotificationTab = 'all' | 'unread';
 

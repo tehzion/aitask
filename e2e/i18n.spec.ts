@@ -63,7 +63,7 @@ test('user-authored task content stays exactly as typed in Chinese mode', async 
 
   // Seed a task whose title collides with UI dictionary keys, plus a client named "Settings".
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     useStore.setState({
       clients: [...state.clients, {
@@ -122,8 +122,8 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
     .getByRole('button', { name: 'Happy working' }).click();
 
   const seeded = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } = await import('/src/lib/serviceManagement.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } = await import('/src/modules/services/domain/serviceManagement.ts');
     const state = useStore.getState();
     const plan = useStore.getState().createClientWithPlan({
       clientName: 'Settings', planName: 'Settings Growth', origin: 'customized',
@@ -151,7 +151,7 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
   });
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     localStorage.setItem('aitask:release-notice:2026-08-service-operations:client-i18n', 'acknowledged');
     useStore.setState({ currentUser: { id: 'client-i18n', name: 'Client I18N', role: 'Client', departments: ['Client'], department: 'Client', companyName: 'Settings', permissions: { viewDashboard: true, viewTasks: true } } });
   });
@@ -211,7 +211,7 @@ test('client delivery search preserves Chinese IME composition without repeating
 
   await page.evaluate(() => localStorage.setItem('aitask:release-notice:2026-08-service-operations:client-ime', 'acknowledged'));
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     useStore.setState({
       currentUser: {

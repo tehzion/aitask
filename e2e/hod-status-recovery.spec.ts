@@ -5,8 +5,8 @@ const title = 'HOD assigned shooting task';
 const seed = async (page: Page, locale: 'en' | 'zh') => {
   await page.goto('/login');
   await page.evaluate(async locale => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     stopBackendAutoSync();
     const state = useStore.getState();
     const hod = { id: 'status-hod', name: 'Status HOD', role: 'HOD' as const, department: 'Video Shooting' as const, departments: ['Video Shooting', 'Video Editor'] as const, mustResetPassword: false };
@@ -31,7 +31,7 @@ for (const locale of ['en', 'zh'] as const) {
       if (locale === 'zh') await page.setViewportSize({ width: 390, height: 844 });
       const dialog = await seed(page, locale);
       await page.evaluate(async code => {
-        const { useStore } = await import('/src/store/index.ts');
+        const { useStore } = await import('/src/app/store/workspaceStore.ts');
         const canonical = structuredClone(useStore.getState().tasks);
         useStore.setState(state => ({
           backend: { ...state.backend },
@@ -56,15 +56,15 @@ for (const locale of ['en', 'zh'] as const) {
       // canonical stage after exercising the UI restore path so the next
       // action still models a fresh submission from In Progress.
       await page.evaluate(async () => {
-        const { useStore } = await import('/src/store/index.ts');
+        const { useStore } = await import('/src/app/store/workspaceStore.ts');
         useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'hod-status-task' ? { ...task, status: 'In Progress', isCompleted: false, completionPercentage: 30 } : task) }));
       });
       await page.evaluate(async () => {
-        const { useStore } = await import('/src/store/index.ts');
+        const { useStore } = await import('/src/app/store/workspaceStore.ts');
         useStore.setState({ commitPendingMutation: async () => ({ ok: true }) });
       });
       await dialog.getByRole('button', { name: locale === 'zh' ? '提交审核' : 'Send for review', exact: true }).click();
-      await expect.poll(() => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks.find(task => task.id === 'hod-status-task')?.status)).toBe('Waiting Approval');
+      await expect.poll(() => page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().tasks.find(task => task.id === 'hod-status-task')?.status)).toBe('Waiting Approval');
     });
   }
 }
@@ -72,7 +72,7 @@ for (const locale of ['en', 'zh'] as const) {
 test('HOD transient status failure can retry and unlock the editor after confirmation', async ({ page }) => {
   const dialog = await seed(page, 'en');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({
       commitPendingMutation: async () => {
         useStore.setState(state => ({ backend: { ...state.backend, mode: 'supabase', status: 'retry_required', hasLocalChanges: true, pendingMutations: 1, errorCode: 'RETRY_REQUIRED', error: 'Save confirmation timed out.' } }));
@@ -87,5 +87,5 @@ test('HOD transient status failure can retry and unlock the editor after confirm
   await dialog.getByRole('button', { name: 'Send for review', exact: true }).click();
   await dialog.getByRole('button', { name: 'Retry my changes', exact: true }).click();
   await expect(dialog.getByRole('alert')).toHaveCount(0);
-  await expect.poll(() => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks.find(task => task.id === 'hod-status-task')?.status)).toBe('Waiting Approval');
+  await expect.poll(() => page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().tasks.find(task => task.id === 'hod-status-task')?.status)).toBe('Waiting Approval');
 });

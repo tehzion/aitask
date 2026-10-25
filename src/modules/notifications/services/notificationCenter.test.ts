@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AppNotification, User } from '../../../types';
+import type { AppNotification, User } from '../../../shared/types/index';
 import {
-  classifyNotification,
-  getNotificationDateSection,
-  getNotificationImportance,
-  groupNotifications,
-  mergeNotificationPages,
+	classifyNotification,
+	getNotificationDateSection,
+	getNotificationImportance,
+	groupNotifications,
+	mergeNotificationPages,
 } from './notificationCenter';
 
 const staff: User = {

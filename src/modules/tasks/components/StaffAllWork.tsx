@@ -1,0 +1,276 @@
+import { Filter, ListFilter, Plus, Search, X } from 'lucide-react';
+import React from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useShallow } from 'zustand/react/shallow';
+import { useStore } from '../../../app/store/workspaceStore';
+import { canCreateTasks, canEditTask, getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../../../shared/authorization/access';
+import { normalizeDepartment } from '../../../shared/authorization/departments';
+import { useI18n } from '../../../shared/components/I18nProvider';
+import SideSheet from '../../../shared/components/SideSheet';
+import { Button, PageHeader, SegmentedTabs, Surface } from '../../../shared/components/ui';
+import { inputBase, pageShell } from '../../../shared/components/uiTokens';
+import { useImeSafeInput } from '../../../shared/hooks/useImeSafeInput';
+import { useLocalToday } from '../../../shared/hooks/useLocalToday';
+import { getLocalizedDepartment, getLocalizedTaskStatus } from '../../../shared/i18n/localeLabels';
+import '../../../shared/i18n/staffWorkflowCopy';
+import type { Priority, TaskStatus } from '../../../shared/types/index';
+import { getTodayInputDate } from '../../../shared/utils/utils';
+import { isTaskOpen } from '../../reports/domain/taskReporting';
+import { buildStaffWorkQueue, getHodScopeTasks, getStaffBucketLabel, isStaffGuidedActionEnabled, type StaffWorkBucketKey } from '../domain/staffWorkspace';
+import StaffTaskFocus from './StaffTaskFocus';
+import StaffWorkItem from './StaffWorkItem';
+import TaskDetailsModal from './TaskDetailsModal';
+import UnavailableWork from './UnavailableWork';
+
+type StaffAllWorkBucket = 'all' | StaffWorkBucketKey;
+const buckets: StaffAllWorkBucket[] = ['all', 'needs_action', 'up_next', 'waiting', 'done'];
+const priorities: Priority[] = ['Urgent', 'High', 'Medium', 'Low'];
+
+const StaffAllWork: React.FC = () => {
+  const { locale, t } = useI18n();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { currentUser, tasks: allTasks, rolePermissions, taskStatuses, clients: clientProfiles, projects, users, serviceCycles, deliverables, setCreateTaskModalOpen } = useStore(useShallow(state => ({
+    currentUser: state.currentUser,
+    tasks: state.tasks,
+    rolePermissions: state.rolePermissions,
+    taskStatuses: state.taskStatuses,
+    clients: state.clients,
+    projects: state.projects,
+    users: state.users,
+    serviceCycles: state.serviceCycles,
+    deliverables: state.deliverables,
+    setCreateTaskModalOpen: state.setCreateTaskModalOpen,
+  })));
+  const canCreateTask = canCreateTasks(currentUser, rolePermissions);
+  const bucket: StaffAllWorkBucket = buckets.includes(searchParams.get('queue') as StaffAllWorkBucket) ? searchParams.get('queue') as StaffAllWorkBucket : 'all';
+  const setParam = (key: string, value: string, defaultValue = 'All') => {
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      if (value && value !== defaultValue) next.set(key, value);
+      else next.delete(key);
+      return next;
+    }, { replace: true });
+  };
+  const setBucket = (value: StaffAllWorkBucket) => setParam('queue', value, 'all');
+  const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const helpOnly = searchParams.get('help') === '1';
+  const unacceptedOnly = searchParams.get('unaccepted') === '1';
+  const client = (searchParams.get('client') || 'All');
+  const setClient = (value: string) => setParam('client', value);
+  const project = (searchParams.get('project') || 'All');
+  const setProject = (value: string) => setParam('project', value);
+  const assignee = (searchParams.get('assignee') || 'All');
+  const setAssignee = (value: string) => setParam('assignee', value);
+  const requestedDepartment = searchParams.get('department') || 'All';
+  const department = normalizeDepartment(requestedDepartment) || requestedDepartment;
+  const setDepartment = (value: string) => setParam('department', value);
+  const creator = (searchParams.get('creator') || 'All');
+  const setCreator = (value: string) => setParam('creator', value);
+  const status = (searchParams.get('status') || 'All') as TaskStatus;
+  const setStatus = (value: TaskStatus) => setParam('status', value);
+  const priority = (searchParams.get('priority') || 'All') as Priority | 'All';
+  const setPriority = (value: Priority | 'All') => setParam('priority', value);
+  const dueFrom = (searchParams.get('dueFrom') || '');
+  const setDueFrom = (value: string) => setParam('dueFrom', value);
+  const dueTo = (searchParams.get('dueTo') || '');
+  const setDueTo = (value: string) => setParam('dueTo', value);
+  const [fullEditorOpen, setFullEditorOpen] = React.useState(false);
+  const search = searchParams.get('search') || '';
+  const updateSearch = (value: string) => setParam('search', value, '');
+  const searchInput = useImeSafeInput(search, updateSearch, { commitDelayMs: 180 });
+
+  const visibleTasks = React.useMemo(
+    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
+    [allTasks, clientProfiles, currentUser, projects, rolePermissions],
+  );
+  const isHod = isHodUser(currentUser, rolePermissions);
+  // A department-scoped custom-role lead oversees a department just like an HOD,
+  // so the page is titled for oversight even though the HOD-only scope tabs and
+  // getHodScopeTasks below stay limited to real HODs (matching StaffMyWork).
+  const isDepartmentLead = isHod || isDepartmentScopedUser(currentUser, rolePermissions);
+  const isProjectManager = currentUser?.role === 'Project Manager';
+  const scopeView = searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'delegated' ? 'delegated' : 'department';
+  const setScopeView = (value: 'mine' | 'delegated' | 'department') => setParam('scope', value, 'department');
+  const tasks = React.useMemo(() => {
+    if (isHod) return getHodScopeTasks(visibleTasks, currentUser?.id, scopeView);
+    if (currentUser?.role === 'Staff' && !isDepartmentLead) {
+      return visibleTasks.filter(task => task.assignedTo === currentUser.id || task.createdBy === currentUser.id);
+    }
+    return visibleTasks;
+  }, [currentUser, isDepartmentLead, isHod, scopeView, visibleTasks]);
+  const today = getTodayInputDate(useLocalToday());
+  const queue = React.useMemo(
+    () => buildStaffWorkQueue(tasks, today, {
+      isActionable: task => isStaffGuidedActionEnabled(task, taskStatuses, currentUser, rolePermissions, { users, clients: clientProfiles, projects }, { tasks: allTasks, cycles: serviceCycles, deliverables }),
+    }),
+    [allTasks, clientProfiles, currentUser, deliverables, projects, rolePermissions, serviceCycles, taskStatuses, tasks, today, users],
+  );
+  const orderedTasks = React.useMemo(() => (
+    bucket === 'all'
+      ? [...queue.needs_action, ...queue.up_next, ...queue.waiting, ...queue.done]
+      : queue[bucket]
+  ), [bucket, queue]);
+  const clients = React.useMemo(() => Array.from(new Set(tasks.map(task => task.clientName).filter(Boolean))).sort(), [tasks]);
+  const projectsForFilter = React.useMemo(() => Array.from(new Set(tasks.map(task => task.projectName).filter(Boolean))).sort(), [tasks]);
+  const departments = React.useMemo(() => Array.from(new Set(tasks.map(task => normalizeDepartment(task.department) || task.department).filter(Boolean))).sort(), [tasks]);
+  const assignees = React.useMemo(() => users.filter(user => tasks.some(task => task.assignedTo === user.id)), [tasks, users]);
+  const creators = React.useMemo(() => users.filter(user => tasks.some(task => task.createdBy === user.id)), [tasks, users]);
+  const deferredSearch = React.useDeferredValue(searchInput.value);
+  const normalizedSearch = deferredSearch.trim().toLowerCase();
+  const filteredTasks = React.useMemo(() => orderedTasks.filter(task => {
+    const searchable = [task.title, task.description, task.clientName, task.projectName, task.serviceType, task.department, getLocalizedDepartment(task.department, locale)].filter(Boolean).join(' ').toLowerCase();
+    return (!normalizedSearch || searchable.includes(normalizedSearch))
+      && (!helpOnly || Boolean(isTaskOpen(task) && task.workState?.blocker))
+      && (!unacceptedOnly || Boolean(isTaskOpen(task) && task.assignedTo && task.workState?.acceptedBy !== task.assignedTo))
+      && (client === 'All' || task.clientName === client)
+      && (project === 'All' || task.projectName === project)
+      && (assignee === 'All' || task.assignedTo === assignee)
+      && (department === 'All' || (normalizeDepartment(task.department) || task.department) === department)
+      && (creator === 'All' || task.createdBy === creator)
+      && (status === 'All' || task.status === status)
+      && (priority === 'All' || task.priority === priority)
+      && (!dueFrom || Boolean(task.dueDate && task.dueDate >= dueFrom))
+      && (!dueTo || Boolean(task.dueDate && task.dueDate <= dueTo));
+  }), [assignee, client, creator, department, dueFrom, dueTo, helpOnly, unacceptedOnly, normalizedSearch, orderedTasks, priority, project, status, locale]);
+  const taskId = searchParams.get('taskId');
+  // List filters and scope must not dismiss authorized details after delegation.
+  const selectedTask = taskId ? visibleTasks.find(task => task.id === taskId) || null : null;
+  const activeFilterCount = [helpOnly, unacceptedOnly, Boolean(searchInput.value.trim()), client !== 'All', project !== 'All', assignee !== 'All', department !== 'All', creator !== 'All', status !== 'All', priority !== 'All', Boolean(dueFrom), Boolean(dueTo)].filter(Boolean).length;
+
+  const setTaskId = (taskIdValue?: string) => {
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      if (taskIdValue) next.set('taskId', taskIdValue);
+      else next.delete('taskId');
+      return next;
+    }, { replace: true });
+  };
+
+  const clearFilters = () => {
+    searchInput.commit('');
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      ['search', 'client', 'project', 'assignee', 'department', 'creator', 'status', 'priority', 'dueFrom', 'dueTo', 'help', 'unaccepted'].forEach(key => next.delete(key));
+      return next;
+    }, { replace: true });
+  };
+
+  return (
+    <div className={`${pageShell} max-w-6xl`}>
+      <PageHeader
+        compact
+        title={t(isProjectManager ? 'Portfolio work' : isDepartmentLead ? 'Department work' : 'Action Centre')}
+        description={t(isProjectManager ? 'Your portfolio work, ordered by delivery risk and next action.' : isDepartmentLead ? 'Department work, including delegated tasks and items that need review.' : 'Decisions and next actions from your existing work queues.')}
+        meta={<span className="calm-number">{filteredTasks.length} {t(filteredTasks.length === 1 ? 'task' : 'tasks')}</span>}
+        action={<div className="flex flex-wrap items-center gap-2">
+          {canCreateTask && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
+          <Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />{t('Filters')}{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>
+        </div>}
+      />
+
+      <div className="mt-5 flex items-center gap-2">
+        <label className="relative block min-w-0 flex-1">
+          <span className="sr-only">{t('Search visible work')}</span>
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <input
+            type="search"
+            aria-label={t('Search visible work')}
+            placeholder={t('Search visible work')}
+            {...searchInput.inputProps}
+            className={`${inputBase} min-h-11 w-full pl-10 ${searchInput.value ? 'pr-10' : 'pr-3'}`}
+          />
+          {searchInput.value && (
+            <button
+              type="button"
+              aria-label={t('Clear search')}
+              onClick={() => searchInput.commit('')}
+              className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"
+            >
+              <X aria-hidden="true" className="h-4 w-4" />
+            </button>
+          )}
+        </label>
+      </div>
+
+      <section aria-labelledby="staff-all-work-list" className="space-y-4">
+        <h2 id="staff-all-work-list" className="sr-only">{t('Visible task list')}</h2>
+
+        <div
+          id="hod-scope-panel"
+          {...(isHod ? { role: 'tabpanel' as const, 'aria-labelledby': `hod-scope-tab-${scopeView}`, tabIndex: 0 } : {})}
+          className="space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+        >
+          {isHod && (
+            <SegmentedTabs<'mine' | 'delegated' | 'department'>
+              items={[{ id: 'mine', label: t('My assignments'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'mine').filter(isTaskOpen).length }, { id: 'delegated', label: t('Delegated by me'), count: getHodScopeTasks(visibleTasks, currentUser?.id, 'delegated').filter(isTaskOpen).length }, { id: 'department', label: t('Department work'), count: visibleTasks.filter(isTaskOpen).length }]}
+              value={scopeView}
+              onChange={setScopeView}
+              label={t('HOD work scope')}
+              idPrefix="hod-scope"
+              panelId="hod-scope-panel"
+              variant="underline"
+            />
+          )}
+
+          <SegmentedTabs<StaffAllWorkBucket>
+            items={buckets.map(item => ({ id: item, label: item === 'all' ? t('All') : t(getStaffBucketLabel(item)), count: item === 'all' ? tasks.length : queue[item].length }))}
+            value={bucket}
+            onChange={setBucket}
+            label={t('All work queues')}
+            idPrefix="all-work"
+            panelId="all-work-panel"
+            variant="underline"
+          />
+
+          {activeFilterCount > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted">
+              <ListFilter className="h-4 w-4" />{activeFilterCount} {t(activeFilterCount === 1 ? 'active filter' : 'active filters')}
+              <button type="button" onClick={clearFilters} className="min-h-11 px-2 text-accent hover:underline">{t('Clear filters')}</button>
+            </div>
+          )}
+
+          {taskId && !selectedTask && <UnavailableWork onDismiss={() => setTaskId()} />}
+          <Surface id="all-work-panel" role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+            {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={visibleTasks} users={users} onOpen={item => setTaskId(item.id)} />)}
+            {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">{t(activeFilterCount > 0 ? 'feedback.noMatches' : tasks.length === 0 ? 'feedback.noAssignments' : bucket === 'needs_action' ? 'feedback.noNeedsAction' : bucket === 'up_next' ? 'feedback.noUpNext' : bucket === 'waiting' ? 'feedback.noWaiting' : 'feedback.noDone')}</p><p className="mt-1 text-sm text-muted">{t('Clear a filter or choose another queue.')}</p></div>}
+          </Surface>
+        </div>
+      </section>
+
+      <SideSheet
+        isOpen={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title={t('Filter visible work')}
+        description={t('Choose which work to show.')}
+        footer={<div className="flex gap-2"><Button variant="secondary" className="flex-1" onClick={clearFilters}>{t('Clear')}</Button><Button className="flex-1" onClick={() => setFiltersOpen(false)}>{t('Show')} {filteredTasks.length}</Button></div>}
+      >
+        <div className="space-y-5">
+          <label className="flex min-h-11 items-center gap-3 text-sm font-medium text-ink"><input type="checkbox" checked={helpOnly} onChange={event => setParam('help', event.target.checked ? '1' : '', '')} />{t('Help requested')}</label>
+          <label className="flex min-h-11 items-center gap-3 text-sm font-medium text-ink"><input type="checkbox" checked={unacceptedOnly} onChange={event => setParam('unaccepted', event.target.checked ? '1' : '', '')} />{t('Awaiting acceptance')}</label>
+          <label className="block text-sm font-medium text-ink">{t('Client')}<select aria-label={t('Filter by client')} value={client} onChange={event => setClient(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{clients.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Project')}<select aria-label={t('Filter by project')} value={project} onChange={event => setProject(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{projectsForFilter.map(name => <option data-i18n-skip key={name} value={name}>{name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Assignee')}<select aria-label={t('Filter by assignee')} value={assignee} onChange={event => setAssignee(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{assignees.map(user => <option data-i18n-skip key={user.id} value={user.id}>{user.name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Department')}<select aria-label={t('Filter by department')} value={department} onChange={event => setDepartment(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{departments.map(name => <option data-i18n-skip key={name} value={name}>{getLocalizedDepartment(name, locale)}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Created by')}<select aria-label={t('Filter by creator')} value={creator} onChange={event => setCreator(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{creators.map(user => <option data-i18n-skip key={user.id} value={user.id}>{user.name}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Status')}<select aria-label={t('Filter by status')} value={status} onChange={event => setStatus(event.target.value as TaskStatus)} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{taskStatuses.map(name => <option key={name} value={name}>{getLocalizedTaskStatus(name, locale)}</option>)}</select></label>
+          <label className="block text-sm font-medium text-ink">{t('Priority')}<select aria-label={t('Filter by priority')} value={priority} onChange={event => setPriority(event.target.value as Priority | 'All')} className={`${inputBase} mt-1.5 min-h-11 px-3`}><option value="All">{t('All')}</option>{priorities.map(name => <option key={name} value={name}>{t(name)}</option>)}</select></label>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium text-ink">{t('Due from')}<input type="date" aria-label={t('Due from')} value={dueFrom} onChange={event => setDueFrom(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`} /></label><label className="block text-sm font-medium text-ink">{t('Due to')}<input type="date" aria-label={t('Due to')} value={dueTo} onChange={event => setDueTo(event.target.value)} className={`${inputBase} mt-1.5 min-h-11 px-3`} /></label></div>
+        </div>
+      </SideSheet>
+
+      <StaffTaskFocus
+        isOpen={Boolean(selectedTask) && !fullEditorOpen}
+        task={selectedTask}
+        onClose={() => setTaskId()}
+        onOpenFullEditor={() => setFullEditorOpen(true)}
+      />
+      <TaskDetailsModal
+        isOpen={Boolean(selectedTask) && fullEditorOpen && canEditTask(currentUser, selectedTask, rolePermissions, { clients: clientProfiles, projects })}
+        task={selectedTask}
+        onClose={() => { setFullEditorOpen(false); setTaskId(); }}
+      />
+    </div>
+  );
+};
+
+export default StaffAllWork;

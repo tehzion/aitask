@@ -1,0 +1,56 @@
+import { describe, expect, it } from 'vitest';
+import { getStaffGuidedAction } from '../../modules/tasks/domain/staffWorkspace';
+import { canApproveInternalReview } from '../rules/workflowReview';
+import type { Task, User } from '../types/index';
+import { canReviewTaskInternally, getDepartmentReviewers, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from './taskWorkflowAccess';
+const pm: User = { id: 'pm', name: 'PM', role: 'Project Manager', departments: [] };
+const other: User = { ...pm, id: 'other' };
+const hod: User = { id: 'hod', name: 'HOD', role: 'HOD', departments: ['Designer'] };
+const task = { id: 'task', department: 'Designer', createdBy: 'staff', clientName: 'Company', status: 'Waiting Approval' } as Task;
+const scope = { users: [pm, other], clients: [{ id: 'co', clientName: 'Company', createdBy: pm.id, createdAt: '', updatedAt: '' }] };
+describe('department PM fallback reviewer', () => {
+  it('explains assignment locks using the canonical workflow statuses', () => {
+    expect(isTaskAssignmentLocked({ status: 'Pending', isCompleted: false })).toBe(false);
+    expect(isTaskAssignmentLocked({ status: 'Revision', isCompleted: false })).toBe(false);
+    expect(isTaskAssignmentLocked({ status: 'Waiting Approval', isCompleted: false })).toBe(true);
+    expect(getTaskAssignmentUnavailableReason(pm, task)).toContain('waiting for approval');
+    expect(getTaskAssignmentUnavailableReason(pm, { ...task, status: 'Completed', isCompleted: true })).toContain('completed');
+  });
+
+  it('routes and permits only the portfolio PM without a Designer HOD', () => {
+    expect(getDepartmentReviewers(scope.users, task, [], scope).map(u => u.id)).toEqual(['pm']);
+    expect(canReviewTaskInternally(pm, task, [], scope)).toBe(true);
+    expect(getStaffGuidedAction(task, ['Waiting Approval', 'Completed'], pm, [], scope)).toMatchObject({ label: 'Approve', targetStatus: 'Approved', disabled: false });
+    expect(canApproveInternalReview(pm, task, [], scope)).toBe(true);
+    expect(canReviewTaskInternally(other, task, [], scope)).toBe(false);
+  });
+  it.each(['Operation', 'Management', 'Video Editor'] as const)('routes %s review to its responsible PM when no HOD exists', department => {
+    expect(getDepartmentReviewers(scope.users, { ...task, department }, [], scope).map(u => u.id)).toEqual(['pm']);
+    expect(canReviewTaskInternally(pm, { ...task, department }, [], scope)).toBe(true);
+    expect(canReviewTaskInternally(other, { ...task, department }, [], scope)).toBe(false);
+  });
+  it('cannot move another department into the PM fallback during approval', () => {
+    expect(taskTransitionError(pm, { ...task, department: 'Video Editor' }, { ...task, status: 'Approved', isCompleted: false }, [], scope)).toBe('Reassign work before submitting it for review.');
+  });
+
+  it('binds submission and no-approval completion to the assigned executor', () => {
+    const staff: User = { id: 'staff', name: 'Staff', role: 'Staff', departments: ['Designer'] };
+    const otherStaff: User = { ...staff, id: 'other-staff' };
+    const working = { ...task, status: 'In Progress', assignedTo: staff.id, approvalMode: 'none' as const, requiresInternalApproval: false };
+    expect(taskTransitionError(otherStaff, working, { ...working, status: 'Completed', isCompleted: true }, [], { users: [staff, otherStaff] })).toBe('Only a project manager can confirm completion after internal approval.');
+    expect(taskTransitionError(staff, working, { ...working, status: 'Completed', isCompleted: true }, [], { users: [staff] })).toBeUndefined();
+    const reviewTask = { ...working, approvalMode: 'hod' as const, requiresInternalApproval: true };
+    expect(taskTransitionError(otherStaff, reviewTask, { ...reviewTask, status: 'Waiting Approval', isCompleted: false }, [], { users: [staff, otherStaff] })).toBe('Only the assigned executor can submit this task for review.');
+  });
+  it('keeps HOD review while preserving the responsible PM authority', () => {
+    const users = [...scope.users, hod];
+    expect(getDepartmentReviewers(users, task, [], scope).map(u => u.id)).toEqual(['hod', 'pm']);
+    expect(canReviewTaskInternally(pm, task, [], { ...scope, users })).toBe(true);
+    expect(canReviewTaskInternally(pm, { ...task, department: 'Video Editor' }, [], scope)).toBe(true);
+  });
+  it('uses canonical actor-bound context over a filtered roster', () => {
+    expect(canReviewTaskInternally(pm, { ...task, reviewAccess: { actorId: pm.id, canApprove: false } }, [], scope)).toBe(false);
+    expect(canReviewTaskInternally(pm, { ...task, reviewAccess: { actorId: pm.id, canApprove: true } })).toBe(true);
+    expect(canReviewTaskInternally(other, { ...task, reviewAccess: { actorId: pm.id, canApprove: true } }, [], scope)).toBe(false);
+  });
+});

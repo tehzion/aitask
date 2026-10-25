@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { AppNotification } from '../../../types';
-import { presentNotification, notificationCategoryLabel } from './notificationPresentation';
+import type { AppNotification } from '../../../shared/types/index';
 import { getNotificationImportance } from './notificationCenter';
+import { notificationCategoryLabel, presentNotification } from './notificationPresentation';
 const notification = (title: string, message: string): AppNotification => ({ id: 'notice', title, message, route: { page: 'tasks', entityId: 'task' }, targetUserId: 'hod', createdAt: '2026-10-14T00:00:00Z', isRead: false, iconType: 'alert' });
 describe('system notification presentation', () => {
   it('translates system text and statuses without changing user names or quoted task titles', () => {

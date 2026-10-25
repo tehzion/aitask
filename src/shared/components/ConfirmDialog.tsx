@@ -1,0 +1,56 @@
+import { AlertTriangle } from 'lucide-react';
+import React from 'react';
+import { useI18n } from './I18nProvider';
+import ModalShell from './ModalShell';
+import SystemMessage from './SystemMessage';
+import { Button } from './ui';
+
+interface ConfirmDialogProps {
+  title: string;
+  description: string;
+  error?: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  tone?: 'danger' | 'primary';
+  labelledBy: string;
+  onConfirm: () => void | Promise<void>;
+  onClose: () => void;
+  busy?: boolean;
+}
+
+const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
+  title,
+  description,
+  error,
+  confirmLabel,
+  cancelLabel = 'Cancel',
+  tone = 'danger',
+  labelledBy,
+  onConfirm,
+  onClose,
+  busy = false,
+}) => {
+  const { t } = useI18n();
+  return (
+  <ModalShell labelledBy={labelledBy} onClose={busy ? () => undefined : onClose} closeOnBackdrop={!busy} panelClassName="max-w-md">
+    <div className="flex items-start gap-3 border-b border-line/70 px-5 py-4">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-red-50 text-red-700">
+        <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+      </span>
+      <div className="min-w-0">
+        <h2 id={labelledBy} className="text-base font-semibold text-ink">{title}</h2>
+        <p className="mt-1 text-sm leading-6 text-muted">{description}</p>
+        {error && <p className="mt-2 text-sm font-semibold text-red-700" role="alert" aria-live="polite"><SystemMessage message={error} /></p>}
+      </div>
+    </div>
+    <div className="flex justify-end gap-3 px-5 py-4">
+      <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>{t(cancelLabel)}</Button>
+      <Button type="button" variant={tone === 'danger' ? 'danger' : 'primary'} onClick={() => void onConfirm()} disabled={busy} aria-busy={busy}>
+        {busy ? t('feedback.working') : t(confirmLabel)}
+      </Button>
+    </div>
+  </ModalShell>
+  );
+};
+
+export default ConfirmDialog;

@@ -1,12 +1,12 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useI18n } from '../components/I18nProvider';
-import { canAccessPath } from '../lib/access';
-import { hasPasswordResetBypass } from '../lib/auth';
-import { msg } from '../lib/messages';
-import { useStore } from '../store';
+import { hasPasswordResetBypass } from '../modules/authentication/domain/auth';
+import { canAccessPath } from '../shared/authorization/access';
+import { useI18n } from '../shared/components/I18nProvider';
+import { msg } from '../shared/i18n/messages';
+import { useStore } from './store/workspaceStore';
 
-const AccessDenied = React.lazy(() => import('../components/AccessDenied'));
+const AccessDenied = React.lazy(() => import('./shell/AccessDenied'));
 
 export const RouteLoading = () => {
   const { t } = useI18n();

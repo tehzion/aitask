@@ -1,0 +1,2 @@
+  ✓  1 [hosted-login-chrome] › e2e/login-recovery-i18n.spec.ts:4:1 › the hosted password recovery entry is complete in English and Chinese (12.2s)
+  1 passed (17.7s)

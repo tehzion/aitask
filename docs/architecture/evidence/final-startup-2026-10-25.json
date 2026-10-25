@@ -1,0 +1,46 @@
+{
+  "conditions": {
+    "localDemoBuild": true,
+    "serviceWorkers": "blocked",
+    "slowMobile": "390x844, CPU 4x, 150ms latency, 1.6Mbps down",
+    "dataset": "5000 synthetic tasks; local persisted workspace, no hosted database latency"
+  },
+  "results": [
+    {
+      "profile": "desktop",
+      "run": 1,
+      "loginFcpMs": 184,
+      "dashboardReadyMs": 1742,
+      "loginLongTaskMs": 328,
+      "largeDashboardReadyMs": 448,
+      "largeWorkspaceLongTaskMs": 141
+    },
+    {
+      "profile": "desktop",
+      "run": 2,
+      "loginFcpMs": 116,
+      "dashboardReadyMs": 1451,
+      "loginLongTaskMs": 77,
+      "largeDashboardReadyMs": 417,
+      "largeWorkspaceLongTaskMs": 88
+    },
+    {
+      "profile": "slow-mobile",
+      "run": 1,
+      "loginFcpMs": 2152,
+      "dashboardReadyMs": 3975,
+      "loginLongTaskMs": 173,
+      "largeDashboardReadyMs": 2986,
+      "largeWorkspaceLongTaskMs": 695
+    },
+    {
+      "profile": "slow-mobile",
+      "run": 2,
+      "loginFcpMs": 2144,
+      "dashboardReadyMs": 3981,
+      "loginLongTaskMs": 178,
+      "largeDashboardReadyMs": 2970,
+      "largeWorkspaceLongTaskMs": 628
+    }
+  ]
+}

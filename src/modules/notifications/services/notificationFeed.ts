@@ -1,18 +1,16 @@
+import { loadSecureNotificationPage } from '../../../infrastructure/api/secureWorkspace';
+import { type NotificationFeedQuery } from '../../../infrastructure/api/workspaceContracts';
+import { shouldUseSecureSupabase } from '../../../infrastructure/database/supabaseClient';
+import { isNotificationReadByUser, isNotificationVisible } from '../../../shared/authorization/access';
 import type {
-  AppNotification,
-  NotificationFeedPage,
-  User,
-} from '../../../types';
-import { isNotificationReadByUser, isNotificationVisible } from '../../../lib/access';
+	AppNotification,
+	NotificationFeedPage,
+	User,
+} from '../../../shared/types/index';
 import {
-  classifyNotification,
-  enrichNotificationMetadata,
+	classifyNotification,
+	enrichNotificationMetadata,
 } from './notificationCenter';
-import {
-  loadSecureNotificationPage,
-  type NotificationFeedQuery,
-} from '../../../lib/secureWorkspace';
-import { shouldUseSecureSupabase } from '../../../lib/supabaseClient';
 
 const compareNewestFirst = (left: AppNotification, right: AppNotification) => (
   new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()

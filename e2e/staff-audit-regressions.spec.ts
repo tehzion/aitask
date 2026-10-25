@@ -5,8 +5,8 @@ test.use({ timezoneId: 'Asia/Kuala_Lumpur' });
 const seed = async (page: Page, waiting = false) => {
   await page.goto('/login');
   await page.evaluate(async isWaiting => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     stopBackendAutoSync();
     const old = useStore.getState();
     const user = { id: 'audit-worker', name: 'Audit Worker', role: 'Staff', departments: ['Designer'], mustResetPassword: false };
@@ -50,7 +50,7 @@ test('Staff review enquiry notifies the displayed HOD contact and PM', async ({ 
   await sheet.getByRole('button', { name: 'Request review update', exact: true }).click();
   await sheet.getByLabel('What review update do you need?').fill('Please share the review result');
   await sheet.getByRole('button', { name: 'Request review update', exact: true }).last().click();
-  await expect.poll(() => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().notifications
+  await expect.poll(() => page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().notifications
     .filter(item => item.title === 'New Comment' && item.targetUserId?.startsWith('audit-'))
     .map(item => item.targetUserId).sort())).toEqual(['audit-hod', 'audit-pm']);
   await expect(sheet.getByText('Please share the review result', { exact: true })).toBeVisible();
@@ -59,8 +59,8 @@ test('Staff review enquiry notifies the displayed HOD contact and PM', async ({ 
 test('All work HOD scope and queue tablists control distinct panels', async ({ page }) => {
   await page.goto('/login');
   await page.evaluate(async () => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     stopBackendAutoSync();
     const old = useStore.getState();
     const hod = { id: 'scope-hod', name: 'Scope HOD', role: 'HOD', departments: ['Designer'], department: 'Designer', mustResetPassword: false };

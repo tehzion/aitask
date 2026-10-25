@@ -1,27 +1,27 @@
-import SystemMessage from '../../../components/SystemMessage';
-import type { MessageDescriptor } from '../../../lib/messages';
-import { useSoundNotifications } from '../hooks/useSoundNotifications';
-import { presentNotification } from '../services/notificationPresentation';
+import {
+	AlertCircle,
+	Check,
+	CheckCircle2,
+	ExternalLink,
+	FileText,
+	Info,
+	X,
+} from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  AlertCircle,
-  Check,
-  CheckCircle2,
-  ExternalLink,
-  FileText,
-  Info,
-  X,
-} from 'lucide-react';
-import { AppNotification, User } from '../../../types';
-import { getUnreadNotifications } from '../../../lib/access';
+import { useAppNoticeState } from '../../../app/lifecycle/useAppNoticeState';
+import { notificationRouteToPath } from '../../../infrastructure/serialization/security';
+import { getUnreadNotifications } from '../../../shared/authorization/access';
+import { useI18n } from '../../../shared/components/I18nProvider';
+import SystemMessage from '../../../shared/components/SystemMessage';
+import type { MessageDescriptor } from '../../../shared/i18n/messages';
+import { type AppNotification, type User } from '../../../shared/types/index';
+import { formatLocalizedDistanceToNow } from '../../../shared/utils/relativeTime';
+import { cn } from '../../../shared/utils/utils';
+import { type NotificationReadActions } from '../hooks/useNotificationReadActions';
+import { useSoundNotifications } from '../hooks/useSoundNotifications';
 import { getIncomingUnreadNotificationIds, seedSeenNotificationIds } from '../services/notificationPopups';
-import { notificationRouteToPath } from '../../../lib/security';
-import { cn } from '../../../lib/utils';
-import { NotificationReadActions } from '../hooks/useNotificationReadActions';
-import { useAppNoticeState } from '../../../hooks/useAppNoticeState';
-import { useI18n } from '../../../components/I18nProvider';
-import { formatLocalizedDistanceToNow } from '../../../lib/relativeTime';
+import { presentNotification } from '../services/notificationPresentation';
 
 interface NotificationPopupHostProps {
   currentUser: User | null;

@@ -136,7 +136,7 @@ select is(
     jsonb_build_array(jsonb_build_object(
       'kind', 'entity', 'action', 'update', 'entityType', 'task', 'entityId', 'pgtap-hod-assigned',
       'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'task' and entity_id = 'pgtap-hod-assigned'),
-      'data', (select data || jsonb_build_object('assignedTo', 'pgtap-hod-staff', 'updatedAt', now()) from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'task' and entity_id = 'pgtap-hod-assigned')
+      'data', (select data || jsonb_build_object('assignedTo', 'pgtap-hod-staff', 'assignedBy', 'pgtap-hod', 'updatedAt', now()) from public.aitask_entities where workspace_id = 'pgtap-hod-authorization' and entity_type = 'task' and entity_id = 'pgtap-hod-assigned')
     ))
   ) ->> 'ok')::boolean,
   true,
@@ -294,8 +294,14 @@ select is(
 );
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000920', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
 select is(
-  (public.aitask_execute_command(
+  (command.result ->> 'ok')::boolean,
+  true,
+  'HOD can link the first task to their own empty project: ' || command.result::text
+)
+from (select public.aitask_execute_command(
     'pgtap-hod-authorization', gen_random_uuid(), 'task.create',
     jsonb_build_array(jsonb_build_object(
       'kind', 'entity', 'action', 'insert', 'entityType', 'task', 'entityId', 'pgtap-hod-own-empty-project-task',
@@ -307,10 +313,7 @@ select is(
         'createdBy', 'pgtap-hod', 'serviceType', 'Design', 'startDate', '2026-09-10', 'status', 'Pending'
       )
     ))
-  ) ->> 'ok')::boolean,
-  true,
-  'HOD can link the first task to their own empty project'
-);
+  ) as result) command;
 select is(
   (public.aitask_execute_command(
     'pgtap-hod-authorization', gen_random_uuid(), 'task.create',

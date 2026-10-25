@@ -1,0 +1,19 @@
+{
+  "sourceAndTestFiles": 319,
+  "staticImportEdges": 1459,
+  "staticRuntimeCycles": [],
+  "unitTestFiles": 120,
+  "unitTests": 919,
+  "typecheck": "passed",
+  "lint": "passed",
+  "productionBuild": "passed",
+  "bundle": {
+    "eagerGzipKiB": 294.1,
+    "eagerRawKiB": 1018.3,
+    "eagerChunks": 4,
+    "indexRawKB": 13.0,
+    "indexGzipKB": 5.4,
+    "reportChartsRawKB": 381.8,
+    "reportChartsGzipKB": 107.4
+  }
+}

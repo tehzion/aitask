@@ -1,0 +1,238 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { useStore } from '../../../app/store/workspaceStore';
+import { defaultRolePermissions } from '../../../shared/authorization/access';
+import type { Task, User } from '../../../shared/types/index';
+
+const initialState = useStore.getState();
+
+const assignedTask: Task = {
+  id: 'task-client-permission',
+  clientName: 'Acme',
+  serviceType: 'Design',
+  title: 'Assigned client work',
+  description: '',
+  department: 'Designer',
+  assignedTo: 'staff-client-manager',
+  createdBy: 'admin-1',
+  startDate: '2026-07-13',
+  dueDate: '',
+  priority: 'Medium',
+  status: 'Pending',
+  completionPercentage: 0,
+  isCompleted: false,
+  revisionCount: 0,
+  clientApprovalStatus: 'Pending',
+  isRecurring: false,
+  recurrenceFrequency: 'None',
+};
+
+const makeStaff = (manageAssignedClients: boolean, viewAllClients = false): User => ({
+  id: 'staff-client-manager',
+  name: 'Client Manager',
+  role: 'Staff',
+  departments: ['Designer'],
+  department: 'Designer',
+  permissions: {
+    ...defaultRolePermissions.Staff,
+    manageAssignedClients,
+    viewAllClients,
+  },
+});
+
+describe('client profile store authorization', () => {
+  beforeEach(() => {
+    useStore.setState({
+      ...initialState,
+      currentUser: makeStaff(false),
+      users: [makeStaff(false)],
+      clients: [],
+      tasks: [assignedTask],
+      projects: [],
+      rolePermissions: [],
+    }, true);
+  });
+
+  afterEach(() => {
+    useStore.setState(initialState, true);
+  });
+
+  it('rejects assignment alone and view-all visibility alone', () => {
+    const assignedOnly = useStore.getState().upsertClientProfile('Acme', { contactPerson: 'Alicia' });
+    expect(assignedOnly.ok).toBe(false);
+    expect(useStore.getState().clients).toEqual([]);
+
+    useStore.setState({ currentUser: makeStaff(false, true) });
+    const viewAllOnly = useStore.getState().upsertClientProfile('Acme', { contactPerson: 'Alicia' });
+    expect(viewAllOnly.ok).toBe(false);
+    expect(useStore.getState().clients).toEqual([]);
+  });
+
+  it('saves for permitted assigned staff and blocks a stale save after revocation', () => {
+    useStore.setState({ currentUser: makeStaff(true) });
+    const permitted = useStore.getState().upsertClientProfile('Acme', { contactPerson: 'Alicia' });
+    expect(permitted.ok).toBe(true);
+    expect(useStore.getState().clients[0]?.contactPerson).toBe('Alicia');
+
+    useStore.setState({ currentUser: makeStaff(false) });
+    const revoked = useStore.getState().upsertClientProfile('Acme', { contactPerson: 'Changed' });
+    expect(revoked.ok).toBe(false);
+    expect(useStore.getState().clients[0]?.contactPerson).toBe('Alicia');
+  });
+
+  it('lets a Project Manager create a real profile for a name that only exists as a discovered placeholder', () => {
+    const admin: User = { id: 'admin-placeholder', name: 'Project Manager', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    useStore.setState({
+      ...initialState,
+      currentUser: admin,
+      users: [admin],
+      clients: [{ id: 'CL-urbaneats', clientName: 'UrbanEats', discovered: true, createdAt: '', updatedAt: '' }],
+      tasks: [],
+      projects: [],
+      rolePermissions: [],
+    }, true);
+
+    const created = useStore.getState().createClientProfile({ clientName: 'UrbanEats' });
+    expect(created.ok).toBe(true);
+    expect(useStore.getState().clients.filter(client => client.clientName === 'UrbanEats')).toHaveLength(2);
+  });
+
+  it('lets only Boss Koo assign a company owner', () => {
+    const boss: User = { id: 'boss-owner', name: 'Boss Koo', role: 'Project Manager', isSuperAdmin: true, departments: ['Management'], department: 'Management' };
+    const pm: User = { id: 'pm-owner', name: 'PM One', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    useStore.setState({
+      ...initialState,
+      currentUser: boss,
+      users: [boss, pm],
+      clients: [{ id: 'CL-owner', clientName: 'Owner Co', createdAt: '', updatedAt: '' }],
+      tasks: [],
+      projects: [],
+      rolePermissions: [],
+    }, true);
+
+    expect(useStore.getState().assignClientOwner('CL-owner', pm.id)).toEqual({ ok: true });
+    expect(useStore.getState().clients[0]?.createdBy).toBe(pm.id);
+
+    useStore.setState({ currentUser: pm });
+    expect(useStore.getState().assignClientOwner('CL-owner', boss.id).ok).toBe(false);
+    expect(useStore.getState().clients[0]?.createdBy).toBe(pm.id);
+  });
+
+  it('treats a legacy Staff + built-in HOD member as an eligible company owner', () => {
+    const boss: User = { id: 'boss-owner-legacy', name: 'Boss Koo', role: 'Project Manager', isSuperAdmin: true, departments: ['Management'], department: 'Management' };
+    const legacyHod: User = { id: 'legacy-hod-owner', name: 'Legacy HOD', role: 'Staff', customRoleId: 'builtin-hod', departments: ['Designer'], department: 'Designer' };
+    const plainStaff: User = { id: 'plain-staff-owner', name: 'Plain Staff', role: 'Staff', departments: ['Designer'], department: 'Designer' };
+    useStore.setState({
+      ...initialState,
+      currentUser: boss,
+      users: [boss, legacyHod, plainStaff],
+      clients: [{ id: 'CL-owner-legacy', clientName: 'Legacy Owner Co', createdAt: '', updatedAt: '' }],
+      tasks: [],
+      projects: [],
+      rolePermissions: [],
+    }, true);
+
+    expect(useStore.getState().assignClientOwner('CL-owner-legacy', legacyHod.id)).toEqual({ ok: true });
+    expect(useStore.getState().clients[0]?.createdBy).toBe(legacyHod.id);
+    expect(useStore.getState().assignClientOwner('CL-owner-legacy', plainStaff.id).ok).toBe(false);
+  });
+
+  it('keeps global rename Project Manager-only', () => {
+    useStore.setState({ currentUser: makeStaff(true) });
+    const result = useStore.getState().renameClient('Acme', 'Acme Global');
+    expect(result).toEqual({ ok: false, error: 'Only Project Managers can rename their own companies.' });
+    expect(useStore.getState().tasks[0]?.clientName).toBe('Acme');
+  });
+
+  it('lets a Project Manager create a profile without a service plan and rejects duplicate names', () => {
+    const admin: User = { id: 'admin-client-profile', name: 'Project Manager', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    useStore.setState({ ...initialState, currentUser: admin, users: [admin], clients: [], tasks: [], projects: [], rolePermissions: [] }, true);
+
+    const created = useStore.getState().createClientProfile({
+      clientName: 'New Company',
+      contactPerson: 'Alicia',
+      email: 'alicia@example.com',
+    });
+    expect(created.ok).toBe(true);
+    expect(useStore.getState().clientPlans).toEqual([]);
+    expect(useStore.getState().clients[0]).toMatchObject({ clientName: 'New Company', contactPerson: 'Alicia' });
+
+    const duplicate = useStore.getState().createClientProfile({ clientName: ' new company ' });
+    expect(duplicate).toEqual({ ok: false, error: 'This company already exists in the Companies database.' });
+  });
+
+  it('cascades a company delete for a Project Manager and blocks ordinary staff', () => {
+    const admin: User = { id: 'admin-delete-client', name: 'Project Manager', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    useStore.setState({
+      ...initialState,
+      currentUser: admin,
+      users: [admin],
+      clients: [],
+      projects: [],
+      tasks: [],
+      clientPlans: [],
+      serviceCycles: [],
+      deliverables: [],
+      cycleComments: [],
+      addons: [],
+      servicePricingSnapshots: [],
+      rolePermissions: [],
+      backend: { ...initialState.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
+    }, true);
+
+    const created = useStore.getState().createClientWithPlan({
+      clientName: 'Delete Co',
+      planName: 'Delete Growth',
+      origin: 'custom',
+      serviceItems: [{ id: 'svc-delete', name: 'Design', platforms: [], unit: 'post', quantity: 1, unitPriceMinor: 10000 }],
+      startDate: '2026-08-15', billingDay: 15, discountType: 'none', discountValue: 0, taxRateBps: 0,
+    });
+    expect(created.ok).toBe(true);
+    const activation = useStore.getState().activateClientPlan(created.planId!);
+    expect(activation.ok).toBe(true);
+    const clientId = created.clientId!;
+    expect(useStore.getState().serviceCycles.some(cycle => cycle.clientId === clientId)).toBe(true);
+    expect(useStore.getState().clientPlans.some(plan => plan.clientId === clientId)).toBe(true);
+
+    const notification = {
+      title: 'Company update', message: 'Review company work.', route: { page: 'clients' as const },
+      isRead: false, createdAt: '2026-09-01T00:00:00Z', iconType: 'status' as const,
+    };
+    useStore.setState({ notifications: [
+      { ...notification, id: 'notification-delete-company', targetClient: ' delete co ' },
+      { ...notification, id: 'notification-keep-company', targetClient: 'Keep Co' },
+    ] });
+
+    expect(useStore.getState().deleteClientProfile(clientId)).toEqual({ ok: true });
+    const state = useStore.getState();
+    expect(state.clients).toEqual([]);
+    expect(state.clientPlans.filter(plan => plan.clientId === clientId)).toEqual([]);
+    expect(state.serviceCycles.filter(cycle => cycle.clientId === clientId)).toEqual([]);
+    expect(state.deliverables.filter(item => item.clientId === clientId)).toEqual([]);
+    expect(state.servicePricingSnapshots.filter(item => item.clientId === clientId)).toEqual([]);
+    expect(state.notifications.map(item => item.id)).toEqual(['notification-keep-company']);
+
+    useStore.setState({
+      currentUser: makeStaff(true),
+      clients: [{ id: 'CL-keep', clientName: 'Keep Co', createdAt: '2026-01-01', updatedAt: '2026-01-01' }],
+    });
+    expect(useStore.getState().deleteClientProfile('CL-keep')).toEqual({ ok: false, error: 'You need permission to delete this company.' });
+    expect(useStore.getState().clients).toHaveLength(1);
+  });
+  it('gates HOD company deletion on edit capability without removing optimistic state', () => {
+    const hod: User = { id: 'hod-delete', name: 'HOD', role: 'HOD', department: 'Video Editor', departments: ['Video Editor'] };
+    useStore.setState({ currentUser: hod, clients: [{ id: 'hidden-company', clientName: 'Hidden Co', createdBy: 'other', createdAt: '', updatedAt: '' }], tasks: [], projects: [], rolePermissions: [] });
+    expect(useStore.getState().deleteClientProfile('hidden-company').ok).toBe(false);
+    expect(useStore.getState().clients).toHaveLength(1);
+    // Owning the profile is not enough; deletion now requires edit capability.
+    useStore.setState({ clients: [{ id: 'hidden-company', clientName: 'Hidden Co', createdBy: hod.id, createdAt: '', updatedAt: '' }] });
+    expect(useStore.getState().deleteClientProfile('hidden-company').ok).toBe(false);
+    expect(useStore.getState().clients).toHaveLength(1);
+    // A HOD who can edit the company (assigned task + manageAssignedClients) may delete it.
+    const editableHod: User = { ...hod, permissions: { ...defaultRolePermissions.HOD, manageAssignedClients: true } };
+    const assigned: Task = { ...assignedTask, id: 'hod-task', clientName: 'Owned Co', assignedTo: hod.id, department: 'Video Editor' };
+    useStore.setState({ currentUser: editableHod, clients: [{ id: 'owned-company', clientName: 'Owned Co', createdAt: '', updatedAt: '' }], tasks: [assigned] });
+    expect(useStore.getState().deleteClientProfile('owned-company').ok).toBe(true);
+    expect(useStore.getState().clients).toHaveLength(0);
+  });
+
+});

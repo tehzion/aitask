@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { getCycleServiceProgress } from '../modules/services/domain/serviceManagement';
 import {
-  createLocalServiceDemoFixture,
-  getLocalServiceDemoFile,
-  LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID,
+	createLocalServiceDemoFixture,
+	getLocalServiceDemoFile,
+	LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID,
 } from './localServiceDemo';
-import { getCycleServiceProgress } from '../lib/serviceManagement';
 
 describe('local service demo fixture', () => {
   const fixture = createLocalServiceDemoFixture('2026-08-16', '2026-08-16T08:00:00.000Z');

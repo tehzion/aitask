@@ -30,6 +30,7 @@ const superAdminQuestionIds = ['registration_approval', 'permissions', 'audit', 
 const feedbackDeadline = new Date('2026-07-30T15:59:59.999Z').getTime();
 const submitRateLimit = 8;
 const submitRateWindowSeconds = 10 * 60;
+const campaignRateLimit = 256;
 
 const corsHeaders = (origin: string | null) => ({
   ...(origin && isAllowedOrigin(origin) ? { 'Access-Control-Allow-Origin': origin } : {}),
@@ -47,11 +48,6 @@ const text = (value: unknown, max: number) => typeof value === 'string' ? value.
 const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const validRating = (value: unknown, nullable = false) => (
   (nullable && value === null) || (Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 5)
-);
-const requestIdentity = (request: Request) => (
-  request.headers.get('cf-connecting-ip')?.trim() ||
-  request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-  'unknown'
 );
 const hashIdentity = async (identity: string) => {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity));
@@ -110,7 +106,10 @@ Deno.serve(async request => {
 
   if (action === 'submit') {
     const rateLimit = await admin.rpc('aitask_consume_feedback_rate_limit', {
-      p_key_hash: await hashIdentity(requestIdentity(request)),
+      // Do not trust client-controlled forwarding headers for abuse control.
+      // The email key limits retries for one identity; the campaign key below
+      // prevents an attacker from bypassing that limit with many addresses.
+      p_key_hash: await hashIdentity(`submit:email:${text(body.email, 254).toLowerCase() || 'invalid'}`),
       p_limit: submitRateLimit,
       p_window_seconds: submitRateWindowSeconds,
     });
@@ -119,6 +118,23 @@ Deno.serve(async request => {
     }
     if (!rateLimit.data.allowed) {
       const retryAfterSeconds = Math.max(1, Number(rateLimit.data.retryAfterSeconds) || submitRateWindowSeconds);
+      return json(
+        origin,
+        { error: 'Too many submissions. Please try again later.' },
+        429,
+        { 'Retry-After': String(retryAfterSeconds) },
+      );
+    }
+    const campaignLimit = await admin.rpc('aitask_consume_feedback_rate_limit', {
+      p_key_hash: await hashIdentity('submit:campaign:launch-week-2026-07'),
+      p_limit: campaignRateLimit,
+      p_window_seconds: submitRateWindowSeconds,
+    });
+    if (campaignLimit.error || !campaignLimit.data || campaignLimit.data.ok !== true || typeof campaignLimit.data.allowed !== 'boolean') {
+      return json(origin, { error: 'Feedback service is temporarily unavailable. Please try again later.' }, 503);
+    }
+    if (!campaignLimit.data.allowed) {
+      const retryAfterSeconds = Math.max(1, Number(campaignLimit.data.retryAfterSeconds) || submitRateWindowSeconds);
       return json(
         origin,
         { error: 'Too many submissions. Please try again later.' },
@@ -207,7 +223,7 @@ Deno.serve(async request => {
   if (authError || !authData.user) return json(origin, { error: 'Reviewer session is invalid' }, 401);
 
   const rateLimit = await admin.rpc('aitask_consume_feedback_rate_limit', {
-    p_key_hash: await hashIdentity(`results:${authData.user.id}:${requestIdentity(request)}`),
+    p_key_hash: await hashIdentity(`results:${authData.user.id}`),
     p_limit: submitRateLimit,
     p_window_seconds: submitRateWindowSeconds,
   });

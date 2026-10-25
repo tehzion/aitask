@@ -1,5 +1,5 @@
-import { AppNotification, User } from '../../../types';
-import { isNotificationReadByUser, isNotificationVisible } from '../../../lib/access';
+import { isNotificationReadByUser, isNotificationVisible } from '../../../shared/authorization/access';
+import { type AppNotification, type User } from '../../../shared/types/index';
 import { isActionNotification } from './notificationCenter';
 
 interface IncomingNotificationResult {

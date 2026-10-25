@@ -1,0 +1,4 @@
+
+> workspace@3.0.0 check /Users/user/Downloads/aitask-master
+> tsc -b --noEmit
+

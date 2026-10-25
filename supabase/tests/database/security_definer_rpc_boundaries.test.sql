@@ -153,6 +153,7 @@ select is((public.aitask_execute_service_command(
 )->>'ok')::boolean, false, 'legacy service delete rejects a foreign PM target');
 
 reset role;
+select set_config('aitask.command_type', '', true);
 select is((select count(*)::integer from public.aitask_entities
   where workspace_id='pgtap-rpc-boundaries' and entity_id='rpc-foreign-cycle'), 1,
   'rejected legacy service delete has no side effect');

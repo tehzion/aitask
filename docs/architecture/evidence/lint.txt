@@ -1,0 +1,4 @@
+
+> workspace@3.0.0 lint /Users/user/Downloads/aitask-master
+> eslint .
+

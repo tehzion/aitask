@@ -1,8 +1,8 @@
-import { User, Project, Task } from '../types';
 import { addDays } from 'date-fns/addDays';
 import { subDays } from 'date-fns/subDays';
-import { getTodayInputDate } from '../lib/utils';
-import { DEFAULT_USER_PASSWORD } from '../lib/auth';
+import { DEFAULT_USER_PASSWORD } from '../modules/authentication/domain/auth';
+import { type Project, type Task, type User } from '../shared/types/index';
+import { getTodayInputDate } from '../shared/utils/utils';
 import { LOCAL_SERVICE_DEMO_USER_IDS } from './localServiceDemo';
 
 const today = new Date();
@@ -23,6 +23,7 @@ export const mockUsers: User[] = [
 export const mockProjects: Project[] = [
   {
     id: 'p1',
+    createdBy: 'u-admin',
     clientName: 'TechNova',
     projectName: 'Q3 Brand Awareness',
     services: ['Social Media', 'Design', 'Ads'],
@@ -31,6 +32,7 @@ export const mockProjects: Project[] = [
   },
   {
     id: 'p2',
+    createdBy: 'u-admin',
     clientName: 'EcoLife',
     projectName: 'Website Revamp',
     services: ['Website', 'SEO', 'Design'],
@@ -39,6 +41,7 @@ export const mockProjects: Project[] = [
   },
   {
     id: 'p3',
+    createdBy: 'u-admin',
     clientName: 'UrbanEats',
     projectName: 'Promo Video Campaign',
     services: ['Video', 'Social Media'],

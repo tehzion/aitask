@@ -1,26 +1,26 @@
-import type {
-  Addon,
-  AttachmentRef,
-  ClientProfile,
-  ClientServicePlan,
-  Deliverable,
-  ServiceCycle,
-  ServiceItem,
-  ServicePackage,
-  ServicePricingSnapshot,
-  ServiceWorkflowTemplate,
-  Task,
-  User,
-  CycleComment,
-} from '../types';
 import {
-  clampBillingDate,
-  cyclePeriodEnd,
-  makePricingSnapshot,
-  SHORT_VIDEO_WORKFLOW_TEMPLATE,
-  snapshotWorkflow,
-} from '../lib/serviceManagement';
-import { getTodayInputDate } from '../lib/utils';
+	clampBillingDate,
+	cyclePeriodEnd,
+	makePricingSnapshot,
+	SHORT_VIDEO_WORKFLOW_TEMPLATE,
+	snapshotWorkflow,
+} from '../modules/services/domain/serviceManagement';
+import type {
+	Addon,
+	AttachmentRef,
+	ClientProfile,
+	ClientServicePlan,
+	CycleComment,
+	Deliverable,
+	ServiceCycle,
+	ServiceItem,
+	ServicePackage,
+	ServicePricingSnapshot,
+	ServiceWorkflowTemplate,
+	Task,
+	User,
+} from '../shared/types/index';
+import { getTodayInputDate } from '../shared/utils/utils';
 
 export const LOCAL_SERVICE_DEMO_VERSION = '2026-08-16.1';
 export const LOCAL_SERVICE_DEMO_VERSION_KEY = 'aitask:local-service-demo-version';

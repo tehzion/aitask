@@ -4,8 +4,8 @@ const seed = async (page: Page, role: 'boss' | 'hod') => {
   await page.goto('/login');
   await expect(page.getByLabel('Email or username')).toBeVisible();
   await page.evaluate(async role => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     stopBackendAutoSync();
     const state = useStore.getState();
     const boss = { id: 'blind-boss', name: 'Boss', role: 'Project Manager' as const, isSuperAdmin: true, departments: ['Management' as const] };
@@ -75,8 +75,8 @@ test('HOD department oversight has edit controls without deletion; delegation re
   await expect(assigned.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
   await expect(assigned.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
   const scope = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { getHodScopeTasks } = await import('/src/lib/staffWorkspace.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { getHodScopeTasks } = await import('/src/modules/tasks/domain/staffWorkspace.ts');
     const state = useStore.getState();
     const task = state.tasks.find(task => task.id === 'blind-assigned')!;
     return { creator: task.createdBy, assignedBy: task.assignedBy, delegated: getHodScopeTasks(state.tasks, state.currentUser?.id, 'delegated').map(task => task.id) };

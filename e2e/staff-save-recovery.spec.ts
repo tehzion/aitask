@@ -1,3 +1,4 @@
+import { waitForWorkspaceBoot } from './fixtures/workspaceBoot';
 import { expect, test, type Page } from '@playwright/test';
 
 const taskA = 'staff-save-task-a';
@@ -7,36 +8,48 @@ const titleB = 'Staff save task B';
 
 const seedStaff = async (page: Page, service = false) => {
   await page.goto('/login');
+  await waitForWorkspaceBoot(page);
   const clientId = await page.evaluate(async keepServices => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const staff = state.users.find(user => user.name === 'Staff Demo')!;
     enablePasswordResetBypass(staff.id);
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${staff.id}`, 'acknowledged');
     const assigned = state.tasks.find(task => task.assignedTo === staff.id && task.clientId && task.serviceCycleId)!;
-    useStore.setState({ currentUser: { ...staff, mustResetPassword: false }, backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
+    const readyStaff = { ...staff, mustResetPassword: false };
+    useStore.setState({ currentUser: readyStaff, users: state.users.map(user => user.id === staff.id ? readyStaff : user), backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
     if (keepServices) return assigned.clientId;
     const template = { ...(assigned || state.tasks[0]), generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined, internalReview: undefined, reviewAccess: undefined, clientName: 'Staff save company', projectId: undefined, projectName: undefined,
       clientId: undefined, department: staff.department, assignedTo: staff.id, createdBy: state.users.find(user => user.isSuperAdmin)!.id,
-      status: 'Pending', priority: 'Medium', completionPercentage: 0, isCompleted: false, comments: [], approvalHistory: [],
+      status: 'Pending', priority: 'Medium', completionPercentage: 0, isCompleted: false, revisionCount: 0, clientApprovalStatus: 'Pending', comments: [], approvalHistory: [], workState: { acceptedBy: staff.id, acceptedAt: '2026-10-01T00:00:00.000Z' },
       predecessorTaskIds: [], serviceCycleId: undefined, deliverableId: undefined, dueDate: '2026-10-30' };
     useStore.setState({ tasks: [{ ...template, id: 'staff-save-task-a', title: 'Staff save task A' }, { ...template, id: 'staff-save-task-b', title: 'Staff save task B' }],
       clients: [], projects: [], notifications: [], clientPlans: [], serviceCycles: [], deliverables: [] });
     return undefined;
   }, service);
-  await page.goto(service ? `/clients/${clientId}` : `/tasks?taskId=${taskA}`);
+  if (service) {
+    await page.goto(`/clients/${clientId}`);
+  } else {
+    // Keep the explicit in-memory fixture on the already booted app instance;
+    // a full reload would rerun initializeBackend and replace its backend state.
+    await page.evaluate(taskId => {
+      window.history.pushState({}, '', `/tasks?taskId=${taskId}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }, taskA);
+  }
+  if (!service) await expect(page.getByRole('dialog', { name: titleA })).toBeVisible();
 };
 
 const holdSave = async (page: Page) => page.evaluate(async () => {
-  const { useStore } = await import('/src/store/index.ts');
+  const { useStore } = await import('/src/app/store/workspaceStore.ts');
   useStore.setState({ commitPendingMutation: () => new Promise(resolve => {
     (window as unknown as { finishStaffSave: () => void }).finishStaffSave = () => resolve({ ok: true });
   }) });
 });
 const finishSave = async (page: Page) => page.evaluate(() => (window as unknown as { finishStaffSave: () => void }).finishStaffSave());
 const savedComments = (page: Page, id = taskA) => page.evaluate(async taskId => {
-  const { useStore } = await import('/src/store/index.ts');
+  const { useStore } = await import('/src/app/store/workspaceStore.ts');
   return useStore.getState().tasks.find(task => task.id === taskId)!.comments!.map(comment => comment.text);
 }, id);
 
@@ -54,13 +67,13 @@ test('Staff slow comment acknowledgement preserves newer input', async ({ page }
   await expect(note).toHaveValue('Later unsent work note');
   await expect(sheet.getByRole('button', { name: 'Send work update' })).toBeEnabled();
   expect(await savedComments(page)).toEqual(['Submitted work note']);
-  expect(await page.evaluate(async () => { const { hasUnsavedChanges } = await import('/src/lib/unsavedChanges.ts'); return hasUnsavedChanges(); })).toBe(true);
+  expect(await page.evaluate(async () => { const { hasUnsavedChanges } = await import('/src/shared/forms/unsavedChanges.ts'); return hasUnsavedChanges(); })).toBe(true);
 });
 
 test('Staff retry acknowledges one comment, clears its error and keeps newer text', async ({ page }) => {
   await seedStaff(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     (window as unknown as { staffCommentApplications: number }).staffCommentApplications = 0;
     useStore.setState({
@@ -91,7 +104,7 @@ test('Staff retry acknowledges one comment, clears its error and keeps newer tex
 test('retrying an unchanged comment clears the submitted draft and prevents a duplicate send', async ({ page }) => {
   await seedStaff(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Confirmation missing.' }), retryPendingSave: async () => ({ ok: true }) });
   });
   const sheet = page.getByRole('dialog', { name: titleA });
@@ -107,22 +120,36 @@ test('retrying an unchanged comment clears the submitted draft and prevents a du
 for (const status of ['In Progress', 'Waiting Approval']) {
   test(`Staff rejected ${status} save does not emit success or completion toasts`, async ({ page }) => {
     await seedStaff(page);
-    await page.evaluate(async () => {
-      const { useStore } = await import('/src/store/index.ts');
-      const { useToastStore } = await import('/src/store/useToastStore.ts');
+    await page.evaluate(async targetStatus => {
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
+      const { useToastStore } = await import('/src/shared/feedback/useToastStore.ts');
       useToastStore.setState({ toasts: [] });
-      useStore.setState({ users: [...useStore.getState().users, { id: 'status-recovery-hod', name: 'Review HOD', role: 'HOD', department: 'Designer', departments: ['Designer'] }], commitPendingMutation: async () => ({ ok: false, error: 'Status was not confirmed.' }), retryPendingSave: async () => ({ ok: true }) });
-    });
+      useStore.setState({
+        users: [...useStore.getState().users, { id: 'status-recovery-hod', name: 'Review HOD', role: 'HOD', department: 'Designer', departments: ['Designer'] }],
+        commitPendingMutation: async () => targetStatus === 'Waiting Approval' ? { ok: true } : { ok: false, error: 'Status was not confirmed.' },
+        retryPendingSave: async () => ({ ok: true }),
+      });
+    }, status);
     const sheet = page.getByRole('dialog', { name: titleA });
     if (status === 'In Progress') {
       await sheet.getByRole('button', { name: 'Start work', exact: true }).click();
     } else {
       await sheet.getByRole('button', { name: 'Start work', exact: true }).click();
+      await expect.poll(() => page.evaluate(async () => {
+        const { useStore } = await import('/src/app/store/workspaceStore.ts');
+        return useStore.getState().tasks.find(task => task.id === 'staff-save-task-a')?.status;
+      })).toBe('In Progress');
+      await page.evaluate(async () => {
+        const { useStore } = await import('/src/app/store/workspaceStore.ts');
+        const { useToastStore } = await import('/src/shared/feedback/useToastStore.ts');
+        useToastStore.setState({ toasts: [] });
+        useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Status was not confirmed.' }) });
+      });
       await sheet.getByRole('button', { name: 'Send for review', exact: true }).click();
     }
     await expect(sheet.getByRole('alert')).toContainText('Status was not confirmed.');
     const successIds = () => page.evaluate(async () => {
-      const { useToastStore } = await import('/src/store/useToastStore.ts');
+      const { useToastStore } = await import('/src/shared/feedback/useToastStore.ts');
       return useToastStore.getState().toasts.filter(toast => toast.type === 'success').map(toast => typeof toast.message === 'object' ? toast.message.id : toast.message);
     });
     expect(await successIds()).toEqual([]);
@@ -149,7 +176,7 @@ for (const mobile of [false, true]) {
     await sheet.getByRole('button', { name: `Close ${titleA}` }).click();
     await confirmation.getByRole('button', { name: 'Discard changes' }).click();
     await expect(sheet).toBeHidden();
-    expect(await page.evaluate(async () => { const { hasUnsavedChanges } = await import('/src/lib/unsavedChanges.ts'); return hasUnsavedChanges(); })).toBe(false);
+    expect(await page.evaluate(async () => { const { hasUnsavedChanges } = await import('/src/shared/forms/unsavedChanges.ts'); return hasUnsavedChanges(); })).toBe(false);
   });
 }
 
@@ -180,7 +207,7 @@ for (const retry of [false, true]) {
     await page.setViewportSize({ width: 390, height: 844 });
     const sheet = await openActivity(page);
     if (retry) await page.evaluate(async () => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Activity not confirmed.' }), retryPendingSave: () => new Promise(resolve => {
         (window as unknown as { finishStaffSave: () => void }).finishStaffSave = () => resolve({ ok: true });
       }) });
@@ -201,7 +228,7 @@ for (const retry of [false, true]) {
     await expect(sheet.getByText('newer-note.pdf', { exact: true })).toBeVisible();
     expect(await sheet.locator('#activity-file').evaluate(input => (input as HTMLInputElement).files?.length)).toBe(1);
     const comments = await page.evaluate(async () => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       return useStore.getState().cycleComments.filter(comment => comment.text === 'Submitted activity');
     });
     expect(comments).toHaveLength(1);
@@ -224,7 +251,7 @@ test('Staff full editor also retains comments typed during saving', async ({ pag
 test('a retry completed outside the Staff sheet reconciles its submitted comment and error', async ({ page }) => {
   await seedStaff(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => {
       useStore.setState(state => ({ backend: { ...state.backend, status: 'retry_required', hasLocalChanges: true, pendingMutations: 1 } }));
       return { ok: false, error: 'Waiting for an external retry.' };
@@ -236,7 +263,7 @@ test('a retry completed outside the Staff sheet reconciles its submitted comment
   await sheet.getByRole('button', { name: 'Send work update' }).click();
   await expect(sheet.getByRole('alert')).toContainText('Waiting for an external retry.');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ backend: { ...state.backend, status: 'live', hasLocalChanges: false, pendingMutations: 0 } }));
   });
   await expect(note).toHaveValue('');
@@ -247,7 +274,7 @@ test('a retry completed outside the Staff sheet reconciles its submitted comment
 test('discarding a failed Staff comment restores saved records before closing', async ({ page }) => {
   await seedStaff(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const before = useStore.getState();
     useStore.setState({
       commitPendingMutation: async () => ({ ok: false, error: 'Pending comment rejected.' }),
@@ -266,7 +293,7 @@ test('discarding a failed Staff comment restores saved records before closing', 
 test('activity retry does not claim a discarded comment was saved or wipe its draft', async ({ page }) => {
   const sheet = await openActivity(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Activity waiting.' }), retryPendingSave: async () => ({ ok: true }) });
   });
   const note = sheet.getByPlaceholder('Share an update...');
@@ -274,7 +301,7 @@ test('activity retry does not claim a discarded comment was saved or wipe its dr
   await sheet.getByRole('button', { name: 'Add activity', exact: true }).click();
   await expect(sheet.getByRole('alert')).toContainText('Activity waiting.');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ cycleComments: state.cycleComments.filter(item => item.text !== 'Keep after external discard') }));
   });
   await sheet.getByRole('button', { name: 'Retry save', exact: true }).last().click();
@@ -285,7 +312,7 @@ test('activity retry does not claim a discarded comment was saved or wipe its dr
 test('a pending activity can be retried even when its newer draft is empty or has an invalid file', async ({ page }) => {
   const sheet = await openActivity(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Retry pending activity.' }), retryPendingSave: async () => ({ ok: true }) });
   });
   const note = sheet.getByPlaceholder('Share an update...');
@@ -303,17 +330,26 @@ test('a pending activity can be retried even when its newer draft is empty or ha
 test('Use latest still resolves a workspace operation started outside the Staff sheet', async ({ page }) => {
   await seedStaff(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     (window as unknown as { externalDiscardCalls: number }).externalDiscardCalls = 0;
-    useStore.setState(state => ({ backend: { ...state.backend, status: 'retry_required', hasLocalChanges: true, pendingMutations: 1 },
+    useStore.setState(state => ({ backend: { ...state.backend, status: 'retry_required', upgradeRequired: false, isSaving: false, isPulling: false, isRestoring: false, hasLocalChanges: true, pendingMutations: 1 },
       discardMutation: async () => {
         (window as unknown as { externalDiscardCalls: number }).externalDiscardCalls++;
         useStore.setState(current => ({ backend: { ...current.backend, status: 'local', hasLocalChanges: false, pendingMutations: 0 } }));
       },
     }));
   });
+  await expect.poll(() => page.evaluate(async () => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    return useStore.getState().backend.status;
+  })).toBe('retry_required');
   const sheet = page.getByRole('dialog', { name: titleA });
-  await sheet.getByRole('button', { name: 'Restore saved data', exact: true }).click();
+  // Workspace-level recovery belongs to the persistent sync banner, not the
+  // Staff task sheet. Keep the sheet open while resolving the external save.
+  const restoreSavedData = page.getByRole('button', { name: 'Restore saved data', exact: true });
+  await expect(restoreSavedData).toBeVisible();
+  await restoreSavedData.click();
   expect(await page.evaluate(() => (window as unknown as { externalDiscardCalls: number }).externalDiscardCalls)).toBe(1);
+  await expect(sheet).toBeVisible();
   await expect(sheet.getByRole('alert')).toHaveCount(0);
 });

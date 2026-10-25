@@ -25,7 +25,7 @@ const signInAsBoss = async (page: Page) => {
 
 const seedRegistrations = async (page: Page) => {
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const current = useStore.getState();
     const keep = current.registrations.filter(registration => !registration.id.startsWith('e2e-approval-'));
     const now = Date.now();

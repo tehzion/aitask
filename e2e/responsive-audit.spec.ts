@@ -1,3 +1,4 @@
+import { waitForWorkspaceBoot } from './fixtures/workspaceBoot';
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
@@ -57,9 +58,10 @@ const dismissTransientOverlays = async (page: Page) => {
 };
 
 const signInAs = async (page: Page, username: string) => {
-  await page.goto('/login');
+  if (page.url() === 'about:blank') await page.goto('/login');
   await page.evaluate(() => localStorage.clear());
-  await page.reload();
+  await page.goto('/login');
+  await waitForWorkspaceBoot(page);
   const demoAccount = page.getByRole('button', { name: `Use ${username}` });
   if (await demoAccount.count()) {
     await demoAccount.click();
@@ -157,12 +159,19 @@ test.describe('responsive role and route audit', () => {
     }
   });
 
-  test('keeps approvals Boss-only and exposes the HOD workbench copy', async ({ page }) => {
+  test('keeps registration and role controls Boss-only while PM team management stays scoped', async ({ page }) => {
     await signInAs(page, 'Project Manager Demo');
     await page.goto('/approvals', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
-    await expect(page.getByText('Approvals are restricted to Boss Koo')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add Member' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Approvals', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Manage team', exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Registrations' })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Roles' })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Members' })).toBeVisible();
+    await page.getByRole('button', { name: 'Add Member' }).click();
+    const memberDialog = page.getByRole('dialog', { name: 'Add new member' });
+    const roleOptions = await memberDialog.getByLabel('System Role').locator('option').evaluateAll(options => options.map(option => (option as HTMLOptionElement).value));
+    expect(roleOptions).toEqual(['HOD', 'Staff']);
+    await memberDialog.getByRole('button', { name: 'Cancel' }).click();
 
     await signInAs(page, 'HOD Demo');
     await page.goto('/tasks', { waitUntil: 'domcontentloaded' });
@@ -177,15 +186,19 @@ test.describe('responsive role and route audit', () => {
       { name: 'phone-landscape', width: 844, height: 390, locale: 'en', theme: 'dark' },
     ] as const;
 
+    await page.goto('/login');
+    await waitForWorkspaceBoot(page);
     for (const scenario of scenarios) {
       await page.setViewportSize({ width: scenario.width, height: scenario.height });
-      await page.goto('/login');
-      await page.evaluate(({ locale, theme }) => {
-        localStorage.clear();
+      await page.evaluate(async ({ locale, theme }) => {
+        const { useStore } = await import('/src/app/store/workspaceStore.ts');
+        useStore.setState({ currentUser: null });
         localStorage.setItem('aitask:locale', locale);
         localStorage.setItem('aitask-color-theme', theme);
       }, scenario);
+      await page.goto('/login');
       await page.reload();
+      await waitForWorkspaceBoot(page);
       await page.getByRole('button', { name: /(?:Use|使用) Staff Demo/ }).click();
       await page.locator('#password').fill('password123');
       await page.getByRole('button', { name: /Access Dashboard|进入仪表板/ }).click();

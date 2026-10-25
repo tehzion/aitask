@@ -5,8 +5,8 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
   await page.clock.install({ time: new Date('2026-10-15T04:00:00Z') });
   await page.goto('/login');
   const seeded = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
@@ -42,7 +42,7 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
   await expect(date).toHaveValue('2026-10-03');
   await expect(revision.getByLabel(locale === 'zh' ? '方案名称' : 'Plan name', { exact: true })).toHaveValue('Revised RM2250 PACKAGE');
   const saved = await page.evaluate(async ({ revisionId, originalId }) => {
-    const state = (await import('/src/store/index.ts')).useStore.getState();
+    const state = (await import('/src/app/store/workspaceStore.ts')).useStore.getState();
     return { revision: state.clientPlans.find(plan => plan.id === revisionId), original: state.clientPlans.find(plan => plan.id === originalId), cycles: state.serviceCycles };
   }, seeded);
   expect(saved.revision).toMatchObject({ startDate: '2026-10-30', contractEndDate: '2026-10-03', name: 'Revised RM2250 PACKAGE' });
@@ -52,5 +52,5 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
   await date.fill('2026-09-29');
   await revision.getByRole('button', { name: locale === 'zh' ? '保存草稿' : 'Save draft', exact: true }).click();
   expect(await date.evaluate(input => (input as HTMLInputElement).validity.rangeUnderflow)).toBe(true);
-  expect(await page.evaluate(async id => (await import('/src/store/index.ts')).useStore.getState().clientPlans.find(plan => plan.id === id)?.contractEndDate, seeded.revisionId)).toBe('2026-10-03');
+  expect(await page.evaluate(async id => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().clientPlans.find(plan => plan.id === id)?.contractEndDate, seeded.revisionId)).toBe('2026-10-03');
 });

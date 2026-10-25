@@ -1,15 +1,19 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/login');
+  await waitForWorkspaceHydration(page);
   const seeded = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const current = useStore.getState();
     const client = current.users.find(user => user.role === 'Client');
     if (!client) throw new Error('Expected a Client demo account');
+    enablePasswordResetBypass(client.id);
     const contact = current.users.find(user => user.role === 'Staff') || current.users.find(user => user.role === 'Project Manager')!;
     const reviewTask = {
       id: 'client-v2-review',
@@ -72,7 +76,7 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ users: useStore.getState().users.map(user => user.role === 'Client' ? user : { ...user, name: 'PRIVATE STAFF IDENTITY' }) });
   });
   await expect(page.getByText('PRIVATE STAFF IDENTITY', { exact: true })).toHaveCount(0);
@@ -130,7 +134,7 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
   await expect(persistedApproval.getByText('Client approved. Awaiting PM final completion.')).toBeVisible();
   await expect(persistedApproval.getByText('approved the delivery', { exact: false })).toHaveCount(1);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const originalCommit = useStore.getState().commitPendingMutation;
     useStore.setState({ commitPendingMutation: async (...args) => {
       await new Promise(resolve => setTimeout(resolve, 800));
@@ -191,10 +195,13 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
 
 test('Client tracker statistics reconcile approvals, cancellations and filtered totals', async ({ page }) => {
   await page.goto('/login');
+  await waitForWorkspaceHydration(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const client = state.users.find(user => user.role === 'Client')!;
+    enablePasswordResetBypass(client.id);
     const base = state.tasks[0];
     const company = client.companyName!;
     const makeTask = (id: string, extra = {}) => ({ ...base, id, title: id,
@@ -232,11 +239,14 @@ test('Client tracker statistics reconcile approvals, cancellations and filtered 
 
 test('Client Home counts the entire review queue and Reports separate completion from approval', async ({ page }) => {
   await page.goto('/login');
+  await waitForWorkspaceHydration(page);
   const timingDates = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { getWorkWeekRange } = await import('/src/lib/workWeek.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
+    const { getWorkWeekRange } = await import('/src/shared/utils/workWeek.ts');
     const state = useStore.getState();
     const client = state.users.find(user => user.role === 'Client')!;
+    enablePasswordResetBypass(client.id);
     const base = state.tasks[0];
     const start = getWorkWeekRange(new Date()).start;
     const due = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;

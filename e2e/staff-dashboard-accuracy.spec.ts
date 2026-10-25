@@ -9,8 +9,8 @@ const seed = async (page: Page, department: 'Operation' | 'Account & Finance' | 
   await page.goto('/login');
   await expect(page.getByLabel('Email or username')).toBeVisible();
   await page.evaluate(async department => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const staff = { ...state.users.find(user => user.name === 'Staff Demo')!, id: 'staff-dash-audit-user', name: 'Dashboard audit staff', department, departments: [department], mustResetPassword: false };
     const other = { ...(state.users.find(user => user.id !== staff.id && user.role === 'Staff') || state.users.find(user => user.isSuperAdmin)!), department, departments: [department] };
@@ -40,7 +40,7 @@ const seed = async (page: Page, department: 'Operation' | 'Account & Finance' | 
   await page.clock.runFor(600);
   await expect(page.getByRole('heading', { name: 'My work', exact: true })).toBeVisible();
   const planClientId = await page.evaluate(async () => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
     stopBackendAutoSync();
     return useStore.getState().clientPlans[0].clientId;
   });
@@ -62,9 +62,9 @@ for (const department of ['Operation', 'Designer'] as const) {
  test(`${department} dashboard counts an accessible predecessor assigned to another member`, async ({ page }) => {
   await seed(page, department);
   const actualVisibleBlockers = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { getVisibleTasks } = await import('/src/lib/access.ts');
-    const { getTaskBlockers } = await import('/src/lib/staffWorkspace.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { getVisibleTasks } = await import('/src/shared/authorization/access.ts');
+    const { getTaskBlockers } = await import('/src/modules/tasks/domain/staffWorkspace.ts');
     const s = useStore.getState();
     return getTaskBlockers(s.tasks.find(task => task.id === 'assigned')!, getVisibleTasks(s.currentUser, s.tasks, s.rolePermissions, { clients: s.clients, projects: s.projects })).length;
   });
@@ -78,7 +78,7 @@ for (const department of ['Operation', 'Designer'] as const) {
 test('assigned clients excludes work only created by Staff', async ({ page }) => {
   await seed(page, 'Account & Finance');
   const actualAssignedClients = await page.evaluate(async () => {
-    const s = (await import('/src/store/index.ts')).useStore.getState();
+    const s = (await import('/src/app/store/workspaceStore.ts')).useStore.getState();
     return new Set(s.tasks.filter(task => task.assignedTo === s.currentUser!.id).map(task => task.clientName)).size;
   });
   expect(actualAssignedClients).toBe(1);
@@ -98,9 +98,9 @@ test('dashboard metrics and queues advance across midnight', async ({ page }) =>
   await page.clock.fastForward(11000);
   expect(await page.evaluate(() => new Date().getDate())).toBe(8);
   const actualDueToday = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { getTodayInputDate } = await import('/src/lib/utils.ts');
-    const { isTaskOpen } = await import('/src/lib/taskReporting.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { getTodayInputDate } = await import('/src/shared/utils/utils.ts');
+    const { isTaskOpen } = await import('/src/modules/reports/domain/taskReporting.ts');
     const s = useStore.getState();
     return s.tasks.filter(task => task.assignedTo === s.currentUser!.id && isTaskOpen(task) && task.dueDate === getTodayInputDate()).length;
   });
@@ -113,7 +113,7 @@ test('dashboard metrics and queues advance across midnight', async ({ page }) =>
 test('blocker metrics do not expose an inaccessible predecessor', async ({ page }) => {
   await seed(page, 'Operation');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'assigned' ? { ...task, predecessorTaskIds: ['foreign'] } : task) }));
   });
   await expect(metric(page, 'Blocked steps')).toHaveText('0');
@@ -125,14 +125,14 @@ test('blocker metrics do not expose an inaccessible predecessor', async ({ page 
 test('account metrics use company IDs across stale and duplicate saved names', async ({ page }) => {
   await seed(page, 'Account & Finance');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'assigned' ? { ...task, clientName: 'Old assigned company' } : task) }));
   });
   await expect(metric(page, 'Assigned clients')).toHaveText('1');
   await expect(metric(page, 'Active plans')).toHaveText('1');
   await expect(metric(page, 'Renewals')).toHaveText('1');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => ({ ...plan, clientId: 'different-company' })) }));
   });
   await expect(metric(page, 'Active plans')).toHaveText('0');
@@ -142,7 +142,7 @@ test('account metrics use company IDs across stale and duplicate saved names', a
 test('canonical profiles resolve legacy assignments without merging ambiguous companies', async ({ page }) => {
   await seed(page, 'Account & Finance');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({
       tasks: state.tasks.map(task => task.assignedTo === state.currentUser!.id ? { ...task, clientId: undefined } : task),
       clients: [{ id: 'staff-dash-a', clientName: 'Assigned company', createdAt: '', updatedAt: '' }],
@@ -153,7 +153,7 @@ test('canonical profiles resolve legacy assignments without merging ambiguous co
   await expect(metric(page, 'Active plans')).toHaveText('1');
   await expect(metric(page, 'Renewals')).toHaveText('1');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ clients: [...state.clients, { id: 'ambiguous-company', clientName: 'Assigned company', createdAt: '', updatedAt: '' }] }));
   });
   await expect(metric(page, 'Active plans')).toHaveText('0');
@@ -165,20 +165,20 @@ test('unavailable dependency notices clear when visible and exclude closed tasks
   const context = page.locator('[aria-labelledby="staff-role-context"]');
   await expect(context).not.toContainText('Dependency status unavailable');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'assigned' ? { ...task, predecessorTaskIds: ['foreign', 'foreign'] } : task) }));
   });
   await expect(context).toContainText('Dependency status unavailable · Tasks: 1');
   await expect(metric(page, 'Blocked steps')).toHaveText('0');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'foreign' ? { ...task, createdBy: state.currentUser!.id } : task) }));
   });
   await expect(context).not.toContainText('Dependency status unavailable');
   await expect(metric(page, 'Blocked steps')).toHaveText('1');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'assigned' ? { ...task, status: 'Cancelled', predecessorTaskIds: ['hidden'] } : task) }));
   });
   await expect(context).not.toContainText('Dependency status unavailable');
@@ -192,7 +192,7 @@ test('account metrics and queue counts react to reassignment and plan changes', 
   await expect(metric(page, 'Assigned clients')).toHaveText('1');
   await expect(metric(page, 'Active plans')).toHaveText('1');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'creator-visible' ? { ...task, assignedTo: state.currentUser!.id } : task),
       clientPlans: state.clientPlans.map(plan => ({ ...plan, status: 'Paused' })) }));
   });
@@ -205,7 +205,7 @@ test('account metrics and queue counts react to reassignment and plan changes', 
 test('renewal metrics refresh at midnight when a day-31 contract enters the window', async ({ page }) => {
   await seed(page, 'Account & Finance', '2026-10-07T16:59:50Z');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => ({ ...plan, contractEndDate: '2026-11-07' })) }));
   });
   await expect(metric(page, 'Renewals')).toHaveText('0');
@@ -236,7 +236,7 @@ test('mobile Staff dashboard counts remain scoped and advance at midnight', asyn
 test('HOD dependency context follows department work across personal scope changes', async ({ page }) => {
   await seed(page, 'Operation');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => {
       const hod = { ...state.currentUser!, role: 'HOD' as const };
       return { currentUser: hod, users: state.users.map(user => user.id === hod.id ? hod : user),

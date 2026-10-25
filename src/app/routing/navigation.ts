@@ -1,0 +1,165 @@
+import type { LucideIcon } from 'lucide-react';
+import {
+	BarChart3,
+	Bell,
+	CalendarDays,
+	CheckSquare,
+	FolderKanban,
+	HelpCircle,
+	LayoutDashboard,
+	ListChecks,
+	PackageCheck,
+	Settings,
+	UserPlus,
+} from 'lucide-react';
+import { canAccessPath, getVisibleNavigation, isBossKoo, isDepartmentScopedUser } from '../../shared/authorization/access';
+import type { CustomRole, User } from '../../shared/types/index';
+
+export type NavigationItem = {
+  path: string;
+  label: string;
+  icon: LucideIcon;
+};
+
+export type NavigationSections = {
+  primary: NavigationItem[];
+  secondary: NavigationItem[];
+  footer: NavigationItem[];
+  mobilePrimary?: NavigationItem[];
+};
+
+export const getDeliveryWorkspaceLabel = (user: User | null | undefined) => (
+  user?.role === 'Client' ? 'Deliveries' : 'Delivery tracker'
+);
+
+const routeIsVisible = (
+  user: User | null | undefined,
+  rolePermissions: CustomRole[],
+  path: string,
+) => path === '/notifications' || path === '/help' || path.startsWith('/clients/') || canAccessPath(user, path, rolePermissions);
+
+const filterVisible = (
+  user: User | null | undefined,
+  rolePermissions: CustomRole[],
+  items: NavigationItem[],
+) => items.filter(item => routeIsVisible(user, rolePermissions, item.path));
+
+const staffPrimary: NavigationItem[] = [
+  { path: '/', label: 'My work', icon: LayoutDashboard },
+  { path: '/calendar', label: 'Schedule', icon: CalendarDays },
+  { path: '/notifications', label: 'Inbox', icon: Bell },
+];
+
+const staffSecondary: NavigationItem[] = [
+  { path: '/tasks', label: 'All work', icon: CheckSquare },
+  { path: '/clients', label: 'Delivery tracker', icon: ListChecks },
+  { path: '/projects', label: 'Companies', icon: FolderKanban },
+  { path: '/reports', label: 'Reports', icon: BarChart3 },
+  { path: '/settings', label: 'Settings', icon: Settings },
+];
+
+const staffMobilePrimary: NavigationItem[] = [
+  staffPrimary[0],
+  staffSecondary[1],
+  staffPrimary[1],
+  staffPrimary[2],
+];
+
+const clientPrimary: NavigationItem[] = [
+  { path: '/', label: 'Home', icon: LayoutDashboard },
+  { path: '/clients', label: 'Deliveries', icon: PackageCheck },
+  { path: '/notifications', label: 'Inbox', icon: Bell },
+];
+
+const createClientSecondary = (clientProfilePath?: string): NavigationItem[] => [
+  { path: '/calendar', label: 'Schedule', icon: CalendarDays },
+  ...(clientProfilePath ? [{ path: clientProfilePath, label: 'Services', icon: PackageCheck }] : []),
+  { path: '/reports', label: 'Reports', icon: BarChart3 },
+  { path: '/settings', label: 'Settings', icon: Settings },
+];
+
+const generalMobilePrimary: NavigationItem[] = [
+  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/clients', label: 'Delivery tracker', icon: ListChecks },
+  { path: '/calendar', label: 'Calendar', icon: CalendarDays },
+  { path: '/notifications', label: 'Inbox', icon: Bell },
+];
+
+const navIcons = {
+  Dashboard: LayoutDashboard,
+  Calendar: CalendarDays,
+  'Delivery tracker': ListChecks,
+  Companies: FolderKanban,
+  Reports: BarChart3,
+  Approvals: UserPlus,
+} as const;
+
+export const getNavigationSections = (
+  user: User | null | undefined,
+  rolePermissions: CustomRole[] = [],
+  clientProfilePath?: string,
+): NavigationSections => {
+  const isStaff = user?.role === 'Staff' || user?.role === 'HOD';
+  const isClient = user?.role === 'Client';
+
+  if (isStaff) {
+    // Any department-scoped role (HOD or a department-lead custom role) oversees
+    // a department, so its primary destinations are labelled for oversight
+    // instead of the plain Staff "My work" / "All work" wording. This matches
+    // the My work / All work page headers, which key off isDepartmentScopedUser.
+    const forHod = (items: NavigationItem[]) => (
+      isDepartmentScopedUser(user, rolePermissions)
+        ? items.map(item => item.path === '/'
+          ? { ...item, label: 'Department work' }
+          : item.path === '/tasks'
+            ? { ...item, label: 'Department tasks' }
+            : item)
+        : items
+    );
+    return {
+      primary: filterVisible(user, rolePermissions, forHod(staffPrimary)),
+      secondary: filterVisible(user, rolePermissions, forHod(staffSecondary)),
+      footer: filterVisible(user, rolePermissions, [{ path: '/help', label: 'Help', icon: HelpCircle }]),
+      mobilePrimary: filterVisible(user, rolePermissions, forHod(staffMobilePrimary)),
+    };
+  }
+
+  if (isClient) {
+    return {
+      primary: filterVisible(user, rolePermissions, clientPrimary),
+      secondary: filterVisible(user, rolePermissions, createClientSecondary(clientProfilePath)),
+      footer: filterVisible(user, rolePermissions, [{ path: '/help', label: 'Help', icon: HelpCircle }]),
+    };
+  }
+
+  const generalPrimary = getVisibleNavigation(user, rolePermissions).map(item => ({
+    ...item,
+    icon: navIcons[item.label as keyof typeof navIcons],
+  }));
+  return {
+    // The management workspace is Boss Koo's; a Project Manager gets the same
+    // page as their portfolio list instead of the workspace-wide management view.
+    primary: isBossKoo(user)
+      ? [{ path: '/tasks', label: 'Tasks', icon: CheckSquare }, ...generalPrimary]
+      : user?.role === 'Project Manager'
+        ? [{ path: '/tasks', label: 'Portfolio work', icon: CheckSquare }, ...generalPrimary]
+        : generalPrimary,
+    secondary: [],
+    footer: filterVisible(user, rolePermissions, [
+      { path: '/settings', label: 'Settings', icon: Settings },
+      { path: '/help', label: 'Help', icon: HelpCircle },
+    ]),
+  };
+};
+
+export const getMobileNavigation = (
+  user: User | null | undefined,
+  rolePermissions: CustomRole[] = [],
+  clientProfilePath?: string,
+) => {
+  const sections = getNavigationSections(user, rolePermissions, clientProfilePath);
+  if (user?.role === 'Staff' || user?.role === 'HOD' || user?.role === 'Client') {
+    return sections.mobilePrimary || sections.primary;
+  }
+  return filterVisible(user, rolePermissions, generalMobilePrimary);
+};

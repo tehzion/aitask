@@ -1,18 +1,23 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
+
+test.use({ timezoneId: 'Asia/Kuala_Lumpur' });
 
 test('Account reports include assigned work and exclude other departments', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-24T12:00:00.000Z') });
   await page.goto('/login');
   await page.getByLabel('Email or username').fill('Account Demo');
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => !/\/login$/.test(url.pathname));
+  await waitForWorkspaceHydration(page);
   const releaseNotice = page.getByRole('button', { name: 'Happy working' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
   if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const account = state.users.find(user => user.name === 'Account Demo');
     const production = state.users.find(user => user.name === 'Staff Demo');

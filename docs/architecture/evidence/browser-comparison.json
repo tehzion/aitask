@@ -1,0 +1,38 @@
+{
+  "initialUntouchedFullRun": {
+    "passed": 248,
+    "failed": 114,
+    "notRun": 3
+  },
+  "refactoredFullRunBeforeFixtureReadinessCorrection": {
+    "passed": 242,
+    "failed": 119,
+    "notRun": 4
+  },
+  "differingFailures": [
+    "e2e/company-profile-actions.spec.ts:334:1 \u203a deletion confirmation lists linked record counts before any records are changed",
+    "e2e/responsive-audit.spec.ts:88:3 \u203a responsive role and route audit \u203a covers every role fixture across the responsive route matrix",
+    "e2e/staff-hod-ui-feedback.spec.ts:56:5 \u203a Staff en review enquiry stays a comment and does not mark work blocked",
+    "e2e/staff-hod-ui-feedback.spec.ts:56:5 \u203a Staff zh review enquiry stays a comment and does not mark work blocked",
+    "e2e/staff-save-recovery.spec.ts:43:1 \u203a Staff slow comment acknowledgement preserves newer input",
+    "e2e/staff-save-recovery.spec.ts:211:1 \u203a Staff full editor also retains comments typed during saving",
+    "e2e/ui-message-audit.spec.ts:110:3 \u203a Conflict en: field names are readable and recovery uses saved data"
+  ],
+  "baselineFailureNowPassing": [
+    "e2e/app-smoke.spec.ts:16:1 \u203a first login reaches the app and critical responsive routes remain usable"
+  ],
+  "isolatedUntouchedDifferential": {
+    "passed": 2,
+    "failed": 5
+  },
+  "isolatedRefactoredDifferentialBeforeReadiness": {
+    "passed": 1,
+    "failed": 6
+  },
+  "isolatedRefactoredDifferentialAfterReadiness": {
+    "passed": 7,
+    "failed": 0
+  },
+  "otherRefactoredFullRunFailuresAlsoFailingInOriginalBaseline": 112,
+  "fullSuiteRerunAfterTestOnlyReadinessCorrection": false
+}

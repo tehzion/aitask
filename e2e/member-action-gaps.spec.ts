@@ -5,8 +5,8 @@ const seed = async (page: Page) => {
   await page.goto('/login');
   await page.evaluate(async () => {
     localStorage.setItem('aitask:locale', 'en');
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
@@ -25,7 +25,7 @@ test('member creation cannot close during saving and retries one account after a
   await dialog.getByRole('textbox').first().fill('Retry member QA');
   await dialog.getByLabel('Designer', { exact: true }).check();
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     let calls = 0;
     useStore.setState({ commitPendingMutation: () => {
       if (++calls > 1) return Promise.resolve({ ok: true });
@@ -42,7 +42,7 @@ test('member creation cannot close during saving and retries one account after a
   await expect(dialog.getByRole('textbox').first()).toBeDisabled();
   await dialog.getByRole('button', { name: /Retry save|Create member/, exact: true }).click();
   await expect(dialog).toBeHidden();
-  expect(await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().users.filter(user => user.name === 'Retry member QA').length)).toBe(1);
+  expect(await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().users.filter(user => user.name === 'Retry member QA').length)).toBe(1);
 });
 
 test('department submission locks its choices and recovers an exception', async ({ page }) => {
@@ -52,7 +52,7 @@ test('department submission locks its choices and recovers an exception', async 
   const dialog = page.getByRole('dialog', { name: 'Edit departments' });
   await dialog.getByLabel('Video Editor', { exact: true }).check();
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ updateMemberDepartments: () => new Promise((_, reject) => {
       (window as unknown as { rejectDepartments: () => void }).rejectDepartments = () => reject(new Error('Injected departments exception'));
     }) });
@@ -72,7 +72,7 @@ test('permission submission locks its choices and restores controls after an exc
   const dialog = page.getByRole('dialog', { name: /Manage access for/ });
   await dialog.getByRole('button', { name: /Custom access/ }).click();
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ updateMemberPermissions: () => new Promise((_, reject) => {
       (window as unknown as { rejectPermissions: () => void }).rejectPermissions = () => reject(new Error('Injected permissions exception'));
     }) });

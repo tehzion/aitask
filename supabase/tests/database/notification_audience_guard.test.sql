@@ -69,7 +69,7 @@ select is((public.aitask_execute_command(
     jsonb_build_object('kind','entity','action','insert','entityType','notification','entityId','atomic-bad','expectedVersion',0,
       'data',jsonb_build_object('id','atomic-bad','targetClient','Guard Client','title','Task Completed','route',jsonb_build_object('page','tasks','entityId','internal-task')))
   )
-)) ->> 'code','VALIDATION','invalid notification rejects the combined command');
+)) ->> 'ok','false','invalid notification rejects the combined command atomically');
 select is((select data->>'status' from public.aitask_entities where workspace_id='pgtap-notification-guard' and entity_type='task' and entity_id='internal-task'),'Pending','combined rejection leaves task unchanged');
 
 reset role;

@@ -7,8 +7,8 @@ const seedReview = async (page: import('@playwright/test').Page, locale: string)
   await expect(page.getByLabel('Email or username')).toBeVisible();
   await page.evaluate(async locale => {
     localStorage.setItem('aitask:locale', locale);
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
@@ -40,7 +40,7 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
   await expect(selectors.nth(0)).toHaveValue('review-deliverable');
   await expect(selectors.nth(1)).toHaveValue('review-deliverable');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'The change is waiting to be saved.' }), retryPendingSave: async () => ({ ok: true }) });
   });
   await panel.getByRole('button', { name: locale === 'en' ? 'Link task' : '关联任务', exact: true }).nth(0).click();
@@ -52,11 +52,11 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
   await retry.click();
   await expect(retry).toHaveCount(0);
   await expect(panel.getByRole('combobox')).toHaveValue('review-deliverable');
-  await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ commitPendingMutation: async () => ({ ok: true }) }); });
+  await page.evaluate(async () => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); useStore.setState({ commitPendingMutation: async () => ({ ok: true }) }); });
   await panel.getByRole('button', { name: locale === 'en' ? 'Publish' : '发布', exact: true }).click();
   await expect(panel.getByRole('combobox')).toHaveValue('review-deliverable');
   const result = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     return { cycle: useStore.getState().serviceCycles[0].status, deliverable: useStore.getState().deliverables[0].status, link: useStore.getState().tasks[0].deliverableId };
   });
   expect(result).toEqual({ cycle: 'Published', deliverable: 'Ready', link: 'review-deliverable' });
@@ -67,7 +67,7 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
 test('invalid links and expired drafts require explicit scoped review', async ({ page }) => {
   await seedReview(page, 'en');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const foreign = { ...state.deliverables[0], id: 'foreign-output', clientId: 'foreign-company', title: 'Foreign secret output', taskIds: ['review-task'] };
     useStore.setState({ tasks: state.tasks.map(task => task.id === 'review-task' ? { ...task, deliverableId: foreign.id } : task),
@@ -90,7 +90,7 @@ test('invalid links and expired drafts require explicit scoped review', async ({
   await page.getByRole('dialog', { name: 'Remove invalid delivery link' }).getByRole('button', { name: 'Remove invalid link', exact: true }).click();
   await expect(panel.getByRole('combobox')).toHaveCount(2);
   const state = await page.evaluate(async () => {
-    const store = (await import('/src/store/index.ts')).useStore.getState();
+    const store = (await import('/src/app/store/workspaceStore.ts')).useStore.getState();
     return { taskExists: store.tasks.some(task => task.id === 'review-task'), taskLink: store.tasks.find(task => task.id === 'review-task')?.deliverableId,
       foreignLinks: store.deliverables.find(item => item.id === 'foreign-output')?.taskIds, oldCycle: store.serviceCycles.find(item => item.id === 'expired-review-cycle')?.status };
   });
@@ -100,7 +100,7 @@ test('invalid links and expired drafts require explicit scoped review', async ({
 for (const action of ['link', 'publication']) test(`a restored-away delivery ${action} cannot report saved on retry`, async ({ page }) => {
   await seedReview(page, 'en');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Delivery confirmation timed out.' }), retryPendingSave: async () => ({ ok: true }) });
   });
   const panel = page.getByRole('region', { name: 'Delivery records need review' });
@@ -110,7 +110,7 @@ for (const action of ['link', 'publication']) test(`a restored-away delivery ${a
   } else await panel.getByRole('button', { name: 'Publish', exact: true }).click();
   await expect(panel.getByRole('status')).toContainText('Delivery confirmation timed out.');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => ({ ...task, serviceCycleId: undefined, deliverableId: undefined })),
       deliverables: state.deliverables.map(item => ({ ...item, taskIds: [], status: 'Planned' as const })),
       serviceCycles: state.serviceCycles.map(cycle => ({ ...cycle, status: 'Draft' as const })),

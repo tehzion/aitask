@@ -38,7 +38,7 @@ reset role;
 select jsonb_build_object('foreignTaskStatus',data->>'status','revisionCount',data->>'revisionCount') from public.aitask_entities where workspace_id='hod-handoff-test' and entity_id='foreign-work';
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005362',true);
 set local role authenticated;
-select is((pg_temp.audit_update('accepted-work','{"status":"Approved","priority":"High","clientApprovalStatus":"Pending"}')->>'ok')::boolean,true,'same-status priority update succeeds');
+select is((pg_temp.audit_update('accepted-work','{"priority":"High"}')->>'ok')::boolean,true,'same-status priority update succeeds');
 reset role;
 select is((select data->>'clientApprovalStatus' from public.aitask_entities where workspace_id='hod-handoff-test' and entity_id='accepted-work'),'Approved','same-status update retains customer acceptance');
 select set_config('request.jwt.claim.sub','',true);

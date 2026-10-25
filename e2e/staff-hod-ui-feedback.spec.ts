@@ -1,11 +1,13 @@
+import { waitForWorkspaceBoot } from './fixtures/workspaceBoot';
 import { expect, test, type Page } from '@playwright/test';
 
 const taskId = 'ui-feedback-task';
 const seed = async (page: Page, role: 'Staff' | 'HOD', locale: 'en' | 'zh' = 'en') => {
   await page.goto('/login');
+  await waitForWorkspaceBoot(page);
   await page.evaluate(async ({ role, locale }) => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const staff = { ...state.users.find(user => user.name === 'Staff Demo')!, mustResetPassword: false };
     const hod = { ...staff, id: 'ui-hod', name: 'Review HOD', role: 'HOD', customRoleId: undefined, customRoleName: undefined };
@@ -28,7 +30,7 @@ const seed = async (page: Page, role: 'Staff' | 'HOD', locale: 'en' | 'zh' = 'en
   await expect(page.getByRole('dialog', { name: 'Pending Designer artwork' })).toBeVisible();
 };
 const successes = (page: Page) => page.evaluate(async () => {
-  const { useToastStore } = await import('/src/store/useToastStore.ts');
+  const { useToastStore } = await import('/src/shared/feedback/useToastStore.ts');
   return useToastStore.getState().toasts.filter(toast => toast.type === 'success').map(toast => typeof toast.message === 'object' ? toast.message.id : toast.message);
 });
 
@@ -36,8 +38,8 @@ for (const role of ['Staff', 'HOD'] as const) {
   test(`${role} details show one confirmation after a slow acknowledgement and preserve later input`, async ({ page }) => {
     await seed(page, role);
     await page.evaluate(async () => {
-      const { useStore } = await import('/src/store/index.ts');
-      const { useToastStore } = await import('/src/store/useToastStore.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
+      const { useToastStore } = await import('/src/shared/feedback/useToastStore.ts');
       useToastStore.setState({ toasts: [] });
       useStore.setState({ commitPendingMutation: () => new Promise(resolve => { (window as unknown as { finishUiSave: () => void }).finishUiSave = () => resolve({ ok: true }); }) });
     });
@@ -56,8 +58,8 @@ for (const role of ['Staff', 'HOD'] as const) {
     test(`${role} ${locale} review enquiry stays a comment and does not mark work blocked`, async ({ page }) => {
       await seed(page, role, locale);
       await page.evaluate(async () => {
-        const { useStore } = await import('/src/store/index.ts');
-        const { useToastStore } = await import('/src/store/useToastStore.ts');
+        const { useStore } = await import('/src/app/store/workspaceStore.ts');
+        const { useToastStore } = await import('/src/shared/feedback/useToastStore.ts');
         useStore.setState(state => ({ tasks: state.tasks.map(task => ({ ...task, status: 'Waiting Approval', workState: { reviewRequestedBy: state.currentUser!.id, reviewRequestedAt: '2026-10-14T00:00:00Z' } })) }));
         useToastStore.setState({ toasts: [] });
       });
@@ -65,7 +67,7 @@ for (const role of ['Staff', 'HOD'] as const) {
       await page.getByLabel(locale === 'en' ? 'What review update do you need?' : '您需要了解哪些审核进度？').fill('Please review Pending Designer artwork');
       await page.getByRole('button', { name: locale === 'en' ? 'Request review update' : '询问审核进度', exact: true }).last().click();
       await expect.poll(() => successes(page)).toEqual(['feedback.reviewUpdateRequested']);
-      const result = await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); const task = useStore.getState().tasks[0]; return { status: task.status, blocker: task.workState?.blocker, comments: task.comments?.map(item => item.text), assignedTo: task.assignedTo, actor: useStore.getState().currentUser!.id }; });
+      const result = await page.evaluate(async () => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); const task = useStore.getState().tasks[0]; return { status: task.status, blocker: task.workState?.blocker, comments: task.comments?.map(item => item.text), assignedTo: task.assignedTo, actor: useStore.getState().currentUser!.id }; });
       expect(result).toMatchObject({ status: 'Waiting Approval', blocker: undefined, comments: ['Please review Pending Designer artwork'] });
       expect(result.assignedTo).toBe(result.actor);
       const confirmation = page.getByRole('dialog').getByText(locale === 'en' ? 'Review update requested.' : '已询问审核进度。', { exact: true });
@@ -125,7 +127,7 @@ for (const locale of ['en', 'zh'] as const) {
     await page.clock.install();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(async () => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       useStore.setState(state => ({ notifications: [{ id: 'popup-ui-test', targetUserId: state.currentUser!.id, title: 'Task Ready for Approval', message: '"Pending Designer artwork" is ready for department review.', route: { page: 'tasks', entityId: 'ui-feedback-task' }, category: 'review', importance: 'action', iconType: 'status', createdAt: new Date().toISOString(), isRead: false }, ...state.notifications] }));
     });
     const popup = page.getByRole('article', { name: locale === 'en' ? 'New notification: Ready for department review' : '新通知：任务待部门审核' });

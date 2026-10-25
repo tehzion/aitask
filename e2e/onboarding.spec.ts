@@ -36,7 +36,7 @@ const loginWithDemo = async (page: import('@playwright/test').Page, username: st
 
 const promoteDemoToFreshMember = async (page: import('@playwright/test').Page, id: string) => {
   await page.evaluate(async freshId => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const currentUser = useStore.getState().currentUser;
     if (currentUser) useStore.setState({ currentUser: { ...currentUser, id: freshId, name: `Fresh ${currentUser.name}`, mustResetPassword: false } });
   }, id);

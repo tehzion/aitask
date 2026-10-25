@@ -3,8 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 const seedPlan = async (page: Page) => {
   await page.goto('/login');
   const result = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
@@ -28,13 +28,13 @@ test('saved drafts accept newer canonical data and dirty drafts require reconcil
   await page.getByRole('button', { name: 'Save draft' }).click();
   await expect(page.getByText('Draft saved. Review the changes before scheduling.', { exact: true })).toBeVisible();
   await page.evaluate(async id => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id ? { ...plan, name: 'Remote B', version: (plan.version || 0) + 1 } : plan) }));
   }, draftId);
   await expect(name).toHaveValue('Remote B');
   await name.fill('Local C');
   await page.evaluate(async id => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id ? { ...plan, name: 'Remote D', taxRateBps: 900, version: (plan.version || 0) + 1 } : plan) }));
   }, draftId);
   await expect(page.getByRole('button', { name: 'Save draft' })).toBeDisabled();
@@ -43,14 +43,14 @@ test('saved drafts accept newer canonical data and dirty drafts require reconcil
   await page.getByRole('button', { name: 'Use my value' }).click();
   await expect(page.getByLabel('Tax rate (%)', { exact: true })).toHaveValue('9');
   await page.getByRole('button', { name: 'Save draft' }).click();
-  const saved = await page.evaluate(async id => { const { useStore } = await import('/src/store/index.ts'); return useStore.getState().clientPlans.find(plan => plan.id === id); }, draftId);
+  const saved = await page.evaluate(async id => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); return useStore.getState().clientPlans.find(plan => plan.id === id); }, draftId);
   expect(saved).toMatchObject({ name: 'Local C', taxRateBps: 900 });
 });
 
 test('saving locks the submitted draft and later edits block PWA reload', async ({ page }) => {
   const { draftId } = await seedPlan(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const pending = window as unknown as { finishAuditSave?: () => void };
     useStore.setState({ commitPendingMutation: () => new Promise(resolve => { pending.finishAuditSave = () => resolve({ ok: true }); }) });
   });
@@ -63,10 +63,10 @@ test('saving locks the submitted draft and later edits block PWA reload', async 
   await expect(page.getByRole('button', { name: 'Save draft' })).toBeEnabled();
   await expect(name).toHaveValue('Submitted');
   await name.fill('Typed after saving');
-  expect(await page.evaluate(async () => { const { hasUnsavedChanges } = await import('/src/lib/unsavedChanges.ts'); return hasUnsavedChanges(); })).toBe(true);
-  expect(await page.evaluate(async id => { const { useStore } = await import('/src/store/index.ts'); return useStore.getState().clientPlans.find(plan => plan.id === id)?.name; }, draftId)).toBe('Submitted');
+  expect(await page.evaluate(async () => { const { hasUnsavedChanges } = await import('/src/shared/forms/unsavedChanges.ts'); return hasUnsavedChanges(); })).toBe(true);
+  expect(await page.evaluate(async id => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); return useStore.getState().clientPlans.find(plan => plan.id === id)?.name; }, draftId)).toBe('Submitted');
   await page.evaluate(async () => {
-    const { PWA_UPDATE_READY_EVENT } = await import('/src/lib/pwaUpdates.ts');
+    const { PWA_UPDATE_READY_EVENT } = await import('/src/app/lifecycle/pwaUpdates.ts');
     window.dispatchEvent(new Event(PWA_UPDATE_READY_EVENT));
   });
   await expect(page.getByRole('button', { name: 'Refresh now' })).toBeDisabled();
@@ -75,7 +75,7 @@ test('saving locks the submitted draft and later edits block PWA reload', async 
 test('a conflicting remote revision during saving preserves the submitted draft for review', async ({ page }) => {
   const { draftId } = await seedPlan(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: () => new Promise(resolve => {
       (window as unknown as { finishAuditSave: () => void }).finishAuditSave = () => resolve({ ok: true });
     }) });
@@ -86,7 +86,7 @@ test('a conflicting remote revision during saving preserves the submitted draft 
   await expect(page.getByRole('button', { name: 'Saving…', exact: true })).toBeVisible();
   await expect(name).toBeDisabled();
   await page.evaluate(async id => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id
       ? { ...plan, name: 'Remote after submission', taxRateBps: 900, version: (plan.version || 0) + 1 }
       : plan) }));
@@ -159,7 +159,7 @@ test('sidebar logout and same-tab login restart synchronization listeners', asyn
   const continueButton = page.getByRole('button', { name: 'Continue for now' });
   if (await continueButton.isVisible()) await continueButton.click();
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
-  expect(await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); return useStore.getState().backend.status; })).toBe('offline');
+  expect(await page.evaluate(async () => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); return useStore.getState().backend.status; })).toBe('offline');
 });
 
 test('a dirty revision requires confirmation before changing tabs', async ({ page }) => {
@@ -178,7 +178,7 @@ test('a dirty revision requires confirmation before changing tabs', async ({ pag
 test('a failed save does not mistake its own optimistic draft for a remote conflict', async ({ page }) => {
   await seedPlan(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'The revision is waiting to be saved.' }) });
   });
   await page.getByLabel('Plan name', { exact: true }).fill('Pending own draft');
@@ -191,7 +191,7 @@ test('a failed save does not mistake its own optimistic draft for a remote confl
 test('a draft save waiting for synchronization offers retry without duplicating the revision', async ({ page }) => {
   const { draftId } = await seedPlan(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const update = useStore.getState().updateDraftClientPlan;
     let stages = 0;
     (window as unknown as { draftSaveStages: () => number }).draftSaveStages = () => stages;
@@ -219,7 +219,7 @@ test('a draft save waiting for synchronization offers retry without duplicating 
   await expect(editor.getByRole('button', { name: 'Review changes', exact: true })).toBeEnabled();
   expect(await page.evaluate(() => (window as unknown as { draftSaveStages: () => number }).draftSaveStages())).toBe(1);
   expect(await page.evaluate(async id => {
-    const state = (await import('/src/store/index.ts')).useStore.getState();
+    const state = (await import('/src/app/store/workspaceStore.ts')).useStore.getState();
     return state.clientPlans.filter(plan => plan.id === id).map(plan => ({ name: plan.name, unitPriceMinor: plan.serviceItems[0].unitPriceMinor }));
   }, draftId)).toEqual([{ name: 'Retained monthly draft', unitPriceMinor: 918000 }]);
 });
@@ -269,7 +269,7 @@ test('field-level service reconciliation preserves independent remote changes', 
   const { draftId } = await seedPlan(page);
   await page.getByRole('textbox', { name: 'Service name', exact: true }).fill('Local design');
   await page.evaluate(async id => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id ? { ...plan, serviceItems: plan.serviceItems.map(item => ({ ...item, quantity: 4 })), version: (plan.version || 0) + 1 } : plan) }));
   }, draftId);
   await page.getByRole('button', { name: 'Keep my draft' }).click();
@@ -284,13 +284,13 @@ test('two tabs retain independent recovery copies and account changes clear owne
   await page.getByLabel('Plan name', { exact: true }).fill('Tab A');
   const second = await context.newPage();
   await second.goto('/login');
-  await second.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); const { enablePasswordResetBypass } = await import('/src/lib/auth.ts'); const actor = useStore.getState().currentUser; if (actor) enablePasswordResetBypass(actor.id); });
+  await second.evaluate(async () => { const { useStore } = await import('/src/app/store/workspaceStore.ts'); const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts'); const actor = useStore.getState().currentUser; if (actor) enablePasswordResetBypass(actor.id); });
   await second.goto(`/clients/${clientId}`);
   await second.getByRole('tab', { name: 'Plan', exact: true }).click();
   await second.getByLabel('Plan name', { exact: true }).fill('Tab B');
   const values = await second.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('aitask:draft-recovery:v1:')).map(key => JSON.parse(localStorage.getItem(key)!).value.name).sort());
   expect(values).toEqual(['Tab A', 'Tab B']);
-  await page.evaluate(async () => { const { clearWorkspaceSession } = await import('/src/store/index.ts'); clearWorkspaceSession({ discardPending: true }); });
+  await page.evaluate(async () => { const { clearWorkspaceSession } = await import('/src/app/store/workspaceStore.ts'); clearWorkspaceSession({ discardPending: true }); });
   expect(await second.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('aitask:draft-recovery:v1:')).length)).toBe(0);
   await second.close();
 });
@@ -299,18 +299,18 @@ test('upload recovery observes command ownership and acknowledgements from anoth
   await seedPlan(page);
   const file = { id: 'cross-tab-upload', bucket: 'client-service-files', path: 'workspace/client/cycle/cross-tab.pdf', uploadedBy: 'audit-actor', fileName: 'cross-tab.pdf', mimeType: 'application/pdf', sizeBytes: 10, uploadedAt: '2026-10-02T00:00:00Z' };
   await page.evaluate(async attachment => {
-    const files = await import('/src/lib/serviceFiles.ts');
+    const files = await import('/src/modules/services/data/serviceFiles.ts');
     files.trackPendingServiceFile(attachment);
   }, file);
   const second = await context.newPage();
   await second.goto('/login');
   await second.evaluate(async attachment => {
-    const files = await import('/src/lib/serviceFiles.ts');
+    const files = await import('/src/modules/services/data/serviceFiles.ts');
     files.bindPendingServiceFiles('cross-tab-command', [{ attachments: [attachment] }]);
   }, file);
-  const pending = await page.evaluate(async () => (await import('/src/lib/serviceFiles.ts')).listPendingServiceFiles('audit-actor'));
+  const pending = await page.evaluate(async () => (await import('/src/modules/services/data/serviceFiles.ts')).listPendingServiceFiles('audit-actor'));
   expect(pending).toEqual([expect.objectContaining({ commandId: 'cross-tab-command' })]);
-  await second.evaluate(async () => (await import('/src/lib/serviceFiles.ts')).acknowledgePendingServiceFiles('cross-tab-command'));
-  expect(await page.evaluate(async () => (await import('/src/lib/serviceFiles.ts')).listPendingServiceFiles('audit-actor'))).toEqual([]);
+  await second.evaluate(async () => (await import('/src/modules/services/data/serviceFiles.ts')).acknowledgePendingServiceFiles('cross-tab-command'));
+  expect(await page.evaluate(async () => (await import('/src/modules/services/data/serviceFiles.ts')).listPendingServiceFiles('audit-actor'))).toEqual([]);
   await second.close();
 });

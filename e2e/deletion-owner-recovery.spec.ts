@@ -1,11 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 const seed = async (page: Page) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto('/login');
+  await waitForWorkspaceHydration(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
@@ -34,6 +36,7 @@ const openOwner = async (page: Page) => {
 const openTask = async (page: Page) => {
   await seed(page);
   await page.goto('/tasks?taskId=recovery-qa-task');
+  await waitForWorkspaceHydration(page);
   const dialog = page.getByRole('dialog', { name: 'Recovery QA Task', exact: true });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -45,8 +48,8 @@ const deleteTask = async (page: Page) => {
 };
 
 const successToasts = (page: Page) => page.evaluate(async () => {
-  const { useToastStore } = await import('/src/store/useToastStore.ts');
-  const { formatMessage } = await import('/src/lib/messages.ts');
+  const { useToastStore } = await import('/src/shared/feedback/useToastStore.ts');
+  const { formatMessage } = await import('/src/shared/i18n/messages.ts');
   return useToastStore.getState().toasts.filter(toast => toast.type === 'success')
     .map(toast => typeof toast.message === 'string' ? toast.message : formatMessage(toast.message, 'en'));
 });
@@ -57,8 +60,8 @@ for (const outcome of ['rejection', 'exception'] as const) {
     page.on('pageerror', error => errors.push(error.message));
     const dialog = await openTask(page);
     await page.evaluate(async outcome => {
-      const { useStore } = await import('/src/store/index.ts');
-      (await import('/src/store/useToastStore.ts')).useToastStore.setState({ toasts: [] });
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
+      (await import('/src/shared/feedback/useToastStore.ts')).useToastStore.setState({ toasts: [] });
       const original = useStore.getState().deleteTask;
       let stages = 0, saves = 0;
       (window as unknown as { deletionStages: () => number }).deletionStages = () => stages;
@@ -83,8 +86,8 @@ for (const outcome of ['rejection', 'exception'] as const) {
 test('task deletion use latest preserves a newer canonical task', async ({ page }) => {
   const dialog = await openTask(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    (await import('/src/store/useToastStore.ts')).useToastStore.setState({ toasts: [] });
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    (await import('/src/shared/feedback/useToastStore.ts')).useToastStore.setState({ toasts: [] });
     const original = useStore.getState().tasks[0];
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Injected uncertain deletion' }),
       discardMutation: async () => { useStore.setState({ tasks: [{ ...original, title: 'Newer canonical task', priority: 'Urgent', version: 9 }] }); } });
@@ -94,7 +97,7 @@ test('task deletion use latest preserves a newer canonical task', async ({ page 
   await dialog.getByRole('button', { name: 'Restore saved data', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Newer canonical task', exact: true })).toBeVisible();
   expect(await page.evaluate(async () => {
-    const task = (await import('/src/store/index.ts')).useStore.getState().tasks[0];
+    const task = (await import('/src/app/store/workspaceStore.ts')).useStore.getState().tasks[0];
     return { title: task.title, priority: task.priority, version: task.version };
   })).toEqual({ title: 'Newer canonical task', priority: 'Urgent', version: 9 });
   expect(await successToasts(page)).toEqual([]);
@@ -103,8 +106,8 @@ test('task deletion use latest preserves a newer canonical task', async ({ page 
 test('task deletion refuses a false retry acknowledgement when the task reappears', async ({ page }) => {
   const dialog = await openTask(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    (await import('/src/store/useToastStore.ts')).useToastStore.setState({ toasts: [] });
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    (await import('/src/shared/feedback/useToastStore.ts')).useToastStore.setState({ toasts: [] });
     const original = useStore.getState().tasks[0];
     let calls = 0;
     useStore.setState({ commitPendingMutation: async () => {
@@ -123,7 +126,7 @@ test('task deletion refuses a false retry acknowledgement when the task reappear
 test('closing a failed deletion confirms discard and closes after reloading saved data', async ({ page }) => {
   const dialog = await openTask(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const original = useStore.getState().tasks[0];
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Injected uncertain deletion' }),
       discardMutation: async () => { useStore.setState({ tasks: [original] }); } });
@@ -133,7 +136,7 @@ test('closing a failed deletion confirms discard and closes after reloading save
   page.once('dialog', async prompt => { expect(prompt.message()).toBe('Discard pending changes and reload the latest saved workspace?'); await prompt.accept(); });
   await dialog.getByRole('button', { name: /Close.*Recovery QA Task/ }).click();
   await expect(dialog).toBeHidden();
-  expect(await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks[0].id)).toBe('recovery-qa-task');
+  expect(await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().tasks[0].id)).toBe('recovery-qa-task');
 });
 
 test('owner save exception shows feedback and retries the same owner without a premature success', async ({ page }) => {
@@ -141,8 +144,8 @@ test('owner save exception shows feedback and retries the same owner without a p
   page.on('pageerror', error => errors.push(error.message));
   const dialog = await openOwner(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    (await import('/src/store/useToastStore.ts')).useToastStore.setState({ toasts: [] });
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    (await import('/src/shared/feedback/useToastStore.ts')).useToastStore.setState({ toasts: [] });
     const original = useStore.getState().assignClientOwner;
     let stages = 0, saves = 0;
     (window as unknown as { ownerStages: () => number }).ownerStages = () => stages;
@@ -166,8 +169,8 @@ test('owner save exception shows feedback and retries the same owner without a p
 test('owner acknowledgement verifies the retained owner against the canonical company', async ({ page }) => {
   const dialog = await openOwner(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    (await import('/src/store/useToastStore.ts')).useToastStore.setState({ toasts: [] });
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    (await import('/src/shared/feedback/useToastStore.ts')).useToastStore.setState({ toasts: [] });
     useStore.setState({ commitPendingMutation: async () => {
       useStore.setState(state => ({ clients: state.clients.map(client => ({ ...client, createdBy: undefined })) }));
       return { ok: true };
@@ -183,8 +186,8 @@ for (const action of ['owner', 'deletion'] as const) {
   test(`${action} late save response cannot affect a different account`, async ({ page }) => {
     const dialog = action === 'owner' ? await openOwner(page) : await openTask(page);
     await page.evaluate(async () => {
-      const { useStore } = await import('/src/store/index.ts');
-      (await import('/src/store/useToastStore.ts')).useToastStore.setState({ toasts: [] });
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
+      (await import('/src/shared/feedback/useToastStore.ts')).useToastStore.setState({ toasts: [] });
       useStore.setState({ commitPendingMutation: () => new Promise(resolve => {
         (window as unknown as { finishOldAction: () => void }).finishOldAction = () => resolve({ ok: true });
       }) });
@@ -195,8 +198,8 @@ for (const action of ['owner', 'deletion'] as const) {
     await page.keyboard.press('Escape');
     await expect(dialog).toBeVisible();
     await page.evaluate(async () => {
-      const { useStore } = await import('/src/store/index.ts');
-      const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
+      const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
       enablePasswordResetBypass('other-recovery-boss');
       localStorage.setItem('aitask:release-notice:2026-08-service-operations:other-recovery-boss', 'acknowledged');
       useStore.setState(state => ({ currentUser: { ...state.currentUser!, id: 'other-recovery-boss', mustResetPassword: false },

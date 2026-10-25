@@ -1,12 +1,12 @@
 import { isToday } from 'date-fns/isToday';
 import { isYesterday } from 'date-fns/isYesterday';
+import { isNotificationReadByUser } from '../../../shared/authorization/access';
 import type {
-  AppNotification,
-  NotificationCategory,
-  NotificationImportance,
-  User,
-} from '../../../types';
-import { isNotificationReadByUser } from '../../../lib/access';
+	AppNotification,
+	NotificationCategory,
+	NotificationImportance,
+	User,
+} from '../../../shared/types/index';
 
 export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   'assignment',

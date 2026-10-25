@@ -116,11 +116,27 @@ const validateEmailTransition = async () => {
     const inviteResult = await jsonResponse(inviteResponse);
     assert.equal(inviteResult.status, 200, JSON.stringify(inviteResult.body));
     assert.equal(inviteResult.body.ok, true, JSON.stringify(inviteResult.body));
+    assert.equal(inviteResult.body.pendingEmail, replacementEmail);
+    assert.equal(inviteResult.body.emailConfirmationRequired, true);
 
     const authState = await admin.auth.admin.getUserById(authUser.id);
     assert.ifError(authState.error);
     const oldTokenUser = await signed.client.auth.getUser(signed.session.access_token);
     assert.ifError(oldTokenUser.error);
+    assert.equal(authState.data.user.email, originalEmail, 'Auth must retain the current email while the change is unconfirmed');
+    assert.equal(oldTokenUser.data.user.email, originalEmail, 'the existing session remains attached to the confirmed email until confirmation');
+    assert.equal(sqlScalar(`select email from public.aitask_members where workspace_id='${workspace}' and id='${memberId}';`), originalEmail,
+      'the workspace member email must not change before Auth confirms the new address');
+
+    // The local mail catcher is outside this verifier's contract. Model the
+    // successful confirmation through local Auth admin after proving the
+    // pending state above, then verify the auth.users trigger synchronizes
+    // the workspace member row before testing the new login.
+    const confirmed = await admin.auth.admin.updateUserById(authUser.id, { email: replacementEmail, email_confirm: true });
+    assert.ifError(confirmed.error);
+    assert.equal(confirmed.data.user.email, replacementEmail);
+    assert.equal(sqlScalar(`select email from public.aitask_members where workspace_id='${workspace}' and id='${memberId}';`), replacementEmail,
+      'confirmed Auth email must synchronize to the workspace member row');
     const replacement = await signIn(replacementEmail, password);
     const reviewerHandler = loadEdgeHandler('supabase/functions/aitask-feedback/index.ts', {
       SUPABASE_URL: localUrl.replace(/\/$/, ''), SUPABASE_SERVICE_ROLE_KEY: localSecretKey,
@@ -141,8 +157,9 @@ const validateEmailTransition = async () => {
     console.log('[security-audit] Email transition local check:', JSON.stringify({
       input: { workspace, memberId, authUserId: authUser.id, originalEmail, replacementEmail, feedbackEmail, feedbackId, currentPassword: '[dummy secret omitted]' },
       updateSelfEmail: { status: inviteResult.status, response: inviteResult.body },
-      authState: { email: authState.data.user.email, emailConfirmedAt: authState.data.user.email_confirmed_at },
+      authState: { pendingEmail: inviteResult.body.pendingEmail, emailConfirmationRequired: inviteResult.body.emailConfirmationRequired, confirmedEmailBeforeConfirmation: authState.data.user.email, confirmedEmailAfterConfirmation: confirmed.data.user.email },
       getUserAfterUpdate: { email: oldTokenUser.data.user.email, emailConfirmedAt: oldTokenUser.data.user.email_confirmed_at },
+      workspaceEmailAfterConfirmation: replacementEmail,
       feedbackReviewer: { status: reviewerResult.status, reviewer: reviewerResult.body.reviewer, returnedDummySubmission: true },
       environmentLimits: ['local HTTP API at 127.0.0.1', 'dummy Auth user and dummy feedback row', 'no hosted Edge ingress or real mailbox delivery'],
     }));
@@ -158,6 +175,7 @@ const validateServiceFilePublication = async () => {
   const clientId = 'client';
   const cycleId = 'cycle';
   const commentId = 'forged-comment';
+  const publishedCommentId = 'owner-comment';
   const path = `${workspace}/${clientId}/${cycleId}/owner-file.pdf`;
   const staffMemberId = `staff-${suffix}`;
   const ownerMemberId = `owner-${suffix}`;
@@ -176,7 +194,7 @@ const validateServiceFilePublication = async () => {
       insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,department,departments,is_super_admin,must_reset_password,permissions,client_name)
       values
         ('${staffMemberId}','${workspace}','${staffAuth.id}','First local Staff','${staffEmail}','Staff','Designer',array['Designer'],false,false,'{"viewAllServiceClients":true}'::jsonb,null),
-        ('${ownerMemberId}','${workspace}','${ownerAuth.id}','Second local Staff','${ownerEmail}','Staff','Designer',array['Designer'],false,false,'{}'::jsonb,null),
+        ('${ownerMemberId}','${workspace}','${ownerAuth.id}','Second local Staff','${ownerEmail}','Staff','Designer',array['Designer'],false,false,'{"viewAllServiceClients":true}'::jsonb,null),
         ('${clientMemberId}','${workspace}','${clientAuth.id}','Local Client','${clientEmail}','Client','Client',array['Client'],false,false,'{}'::jsonb,'Local Service Client');
       insert into public.aitask_entities(workspace_id,entity_type,entity_id,data)
       values
@@ -206,14 +224,28 @@ const validateServiceFilePublication = async () => {
       } }],
     });
     assert.ifError(forgedComment.error);
-    assert.equal(forgedComment.data.ok, true, JSON.stringify(forgedComment.data));
+    assert.equal(forgedComment.data.ok, false, 'Staff cannot publish another member’s file as their own comment attachment');
+    assert.match(forgedComment.data.error || '', /uploader provenance/i);
+    assert.equal(sqlScalar(`select count(*) from public.aitask_entities where workspace_id='${workspace}' and entity_type='cycle_comment' and entity_id='${commentId}';`), '0',
+      'rejected cross-member publication must leave no comment row');
+
+    const ownerComment = await owner.client.rpc('aitask_execute_service_command', {
+      p_workspace_id: workspace, p_command_id: randomUUID(), p_command_type: 'cycle_comment.manage', p_expected_workspace_version: null,
+      p_operations: [{ kind: 'entity', action: 'insert', entityType: 'cycle_comment', entityId: publishedCommentId, expectedVersion: 0, data: {
+        id: publishedCommentId, clientId, clientName: 'Local Service Client', cycleId, userId: ownerMemberId, authorId: ownerMemberId,
+        visibility: 'client-visible', text: 'Owner publishes an output file', message: 'Owner publishes an output file', attachments: [attachment],
+      } }],
+    });
+    assert.ifError(ownerComment.error);
+    assert.equal(ownerComment.data.ok, true, JSON.stringify(ownerComment.data));
 
     const downloaded = await client.client.storage.from('client-service-files').download(path);
     assert.ifError(downloaded.error);
     assert.match(await downloaded.data.text(), /^%PDF-1\.4/);
     console.log('[security-audit] Service-file publication local check:', JSON.stringify({
-      input: { workspace, staffMemberId, ownerMemberId, clientMemberId, cycleId, commentId, path, ownerAuthUserId: ownerAuth.id, commentVisibility: 'client-visible' },
-      forgedStaffComment: { rpcOk: forgedComment.data.ok, responseCode: forgedComment.data.code || null },
+      input: { workspace, staffMemberId, ownerMemberId, clientMemberId, cycleId, commentId, publishedCommentId, path, ownerAuthUserId: ownerAuth.id, commentVisibility: 'client-visible' },
+      forgedStaffComment: { rpcOk: forgedComment.data.ok, responseCode: forgedComment.data.code || null, rejectedFor: 'uploader provenance' },
+      ownerPublishedComment: { rpcOk: ownerComment.data.ok, responseCode: ownerComment.data.code || null },
       clientStorageRead: { allowed: true, path, contentPrefix: '%PDF-1.4' },
       environmentLimits: ['local HTTP API and local Storage only', 'dummy Staff/Client users and dummy PDF object', 'stopped after first Client allow result; no deployed endpoint tested'],
     }));

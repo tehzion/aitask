@@ -15,7 +15,7 @@ const openAdminWorkspace = async (page: import('@playwright/test').Page) => {
 
 const switchDemoUser = async (page: import('@playwright/test').Page, userId: string) => {
   await page.evaluate(async ({ id, updateId }) => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     localStorage.removeItem(`aitask:release-notice:${updateId}:${id}`);
     const user = useStore.getState().users.find(candidate => candidate.id === id)!;
     useStore.setState({ currentUser: { ...user, mustResetPassword: false } });

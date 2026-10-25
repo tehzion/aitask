@@ -1,13 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { User, ServiceWorkflowTemplate } from '../src/types';
+import type { User, ServiceWorkflowTemplate } from '../src/shared/types/index';
 
 const seed = async (page: Page, role: 'Staff' | 'HOD', ready = true, legacy = false) => {
   await page.goto('/login');
   await expect(page.getByLabel('Email or username')).toBeVisible();
   return page.evaluate(async ({ role, ready, legacy }) => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
-    const { snapshotWorkflow } = await import('/src/lib/serviceManagement.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
+    const { snapshotWorkflow } = await import('/src/modules/services/domain/serviceManagement.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     stopBackendAutoSync();
     const initial = useStore.getState();
     const boss: User = { id: 'browser-review-boss', name: 'Boss', role: 'Project Manager', isSuperAdmin: true, departments: ['Management'] };
@@ -62,7 +62,7 @@ for (const mobile of [false, true]) {
     await dialog.getByRole('button', { name: 'Approve internal review', exact: true }).click();
     await expect(dialog.getByText('Reviewed by Department HOD')).toBeVisible();
     await expect.poll(() => page.evaluate(async reviewId => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       return useStore.getState().tasks.find(task => task.id === reviewId)?.internalReview?.reviewedBy;
     }, fixture.reviewId)).toBe('browser-review-hod');
   });
@@ -84,7 +84,7 @@ test('legacy completed review needs explicit approval and later revisions clear 
   const dialog = page.getByRole('dialog', { name: fixture.reviewTitle });
   await expect(dialog.getByRole('button', { name: 'Approve internal review', exact: true })).toHaveCount(0);
   await page.evaluate(async fixture => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     if (!useStore.getState().requestRevision(fixture.reviewId, 'Review this legacy output again').ok) throw new Error('Legacy review return failed');
     const worker = useStore.getState().users.find(user => user.id === 'browser-review-worker')!;
     const hod = useStore.getState().currentUser!;
@@ -95,7 +95,7 @@ test('legacy completed review needs explicit approval and later revisions clear 
   await dialog.getByRole('button', { name: 'Approve internal review', exact: true }).click();
   await expect(dialog.getByText('Reviewed by Department HOD')).toBeVisible();
   await page.evaluate(async fixture => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const worker = useStore.getState().users.find(user => user.id === 'browser-review-worker')!;
     const boss = useStore.getState().users.find(user => user.id === 'browser-review-boss')!;
     useStore.setState({ currentUser: boss });
@@ -107,7 +107,7 @@ test('legacy completed review needs explicit approval and later revisions clear 
     useStore.getState().updateTaskAttachment(fixture.workId, 'https://example.com/new-output.pdf');
   }, fixture);
   await expect.poll(() => page.evaluate(async fixture => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const review = useStore.getState().tasks.find(task => task.id === fixture.reviewId)!;
     const publication = useStore.getState().tasks.find(task => task.id === fixture.publishId)!;
     return { reviewStatus: review.status, signed: Boolean(review.internalReview), publicationStatus: publication.status };

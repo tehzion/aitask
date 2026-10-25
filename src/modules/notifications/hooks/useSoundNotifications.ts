@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { AppNotification } from '../../../types';
-import { getIncomingUnreadNotificationIds, seedSeenNotificationIds } from '../services/notificationPopups';
+import { type AppNotification, type User } from '../../../shared/types/index';
 import { notificationIconType } from '../services/notificationCenter';
-import { playNotificationSound, resumeAudio } from '../../../lib/sounds';
-import { User } from '../../../types';
+import { getIncomingUnreadNotificationIds, seedSeenNotificationIds } from '../services/notificationPopups';
+import { playNotificationSound, resumeAudio } from '../services/sounds';
 
 
 /**

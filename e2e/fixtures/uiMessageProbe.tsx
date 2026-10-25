@@ -1,8 +1,8 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import BackendFreshness from '../../src/components/BackendFreshness';
-import ErrorBoundary from '../../src/components/ErrorBoundary';
-import { I18nProvider } from '../../src/components/I18nProvider';
+import BackendFreshness from '../../src/app/shell/BackendFreshness';
+import ErrorBoundary from '../../src/app/shell/ErrorBoundary';
+import { I18nProvider } from '../../src/shared/components/I18nProvider';
 
 export const mountMessageProbe = (kind: 'conflict' | 'crash') => {
   const host = document.createElement('div');

@@ -1,0 +1,150 @@
+{
+  "modules": {
+    "authentication": {
+      "public": [
+        "domain/auth.ts",
+        "domain/authRecovery.ts",
+        "domain/localCredentials.ts",
+        "domain/temporaryPassword.ts",
+        "pages/AccountPassword.tsx",
+        "pages/Login.tsx"
+      ],
+      "composition": [
+        "application/authenticationActions.ts"
+      ]
+    },
+    "calendar": {
+      "public": [
+        "pages/Calendar.tsx"
+      ],
+      "composition": []
+    },
+    "clients": {
+      "public": [
+        "application/clientScope.ts",
+        "components/ClientPortalDashboard.tsx",
+        "components/CreateClientProfileModal.tsx",
+        "domain/clientDates.ts",
+        "pages/ClientWorkspace.tsx"
+      ],
+      "composition": [
+        "application/clientsActions.ts"
+      ]
+    },
+    "dashboard": {
+      "public": [
+        "domain/dashboardData.ts",
+        "domain/managementIntelligence.ts",
+        "domain/pmDashboard.ts",
+        "domain/staffDashboard.ts",
+        "pages/Dashboard.tsx"
+      ],
+      "composition": []
+    },
+    "feedback": {
+      "public": [
+        "pages/Feedback.tsx",
+        "pages/FeedbackResults.tsx"
+      ],
+      "composition": []
+    },
+    "help": {
+      "public": [
+        "components/ContextualTutorialLink.tsx",
+        "components/OnboardingExperience.tsx",
+        "pages/Help.tsx"
+      ],
+      "composition": []
+    },
+    "notifications": {
+      "public": [
+        "application/notificationRules.ts",
+        "components/NotificationPopupHost.tsx",
+        "components/NotificationPreviewText.tsx",
+        "hooks/useNotificationReadActions.ts",
+        "pages/Notifications.tsx",
+        "services/notificationCenter.ts",
+        "services/sounds.ts"
+      ],
+      "composition": [
+        "application/notificationsActions.ts"
+      ]
+    },
+    "projects": {
+      "public": [
+        "components/CreateProjectModal.tsx",
+        "pages/Clients.tsx"
+      ],
+      "composition": [
+        "application/projectsActions.ts"
+      ]
+    },
+    "reports": {
+      "public": [
+        "domain/taskReporting.ts",
+        "pages/Reports.tsx"
+      ],
+      "composition": []
+    },
+    "services": {
+      "public": [
+        "application/serviceProgress.ts",
+        "components/ClientDeliveries.tsx",
+        "components/ClientDeliveryFocus.tsx",
+        "components/ClientServiceWorkspace.tsx",
+        "components/CreateClientPlanModal.tsx",
+        "components/DeliveryProgress.tsx",
+        "components/DeliveryReviewPanel.tsx",
+        "components/DraftServicePlanEditor.tsx",
+        "components/EditClientPlanDatesModal.tsx",
+        "components/MonthlyPlanSchedule.tsx",
+        "components/MonthlyRecordPicker.tsx",
+        "components/ServicePackageManager.tsx",
+        "components/UploadRecoveryPanel.tsx",
+        "components/WorkflowTemplateManager.tsx",
+        "data/serviceFiles.ts",
+        "domain/deliveryLinks.ts",
+        "domain/monthlyCloseout.ts",
+        "domain/monthlyRecords.ts",
+        "domain/serviceManagement.ts",
+        "hooks/useBillingToday.ts",
+        "hooks/useMonthlyServiceCycles.ts",
+        "pages/DeliveryTracker.tsx"
+      ],
+      "composition": [
+        "application/servicesActions.ts"
+      ]
+    },
+    "settings": {
+      "public": [
+        "pages/Settings.tsx"
+      ],
+      "composition": []
+    },
+    "tasks": {
+      "public": [
+        "application/taskRules.ts",
+        "components/CreateTaskModal.tsx",
+        "components/StaffMyWork.tsx",
+        "components/TaskDetailsModal.tsx",
+        "components/TaskOutputFiles.tsx",
+        "components/UnavailableWork.tsx",
+        "domain/staffWorkflow.ts",
+        "domain/staffWorkspace.ts",
+        "pages/Tasks.tsx"
+      ],
+      "composition": [
+        "application/tasksActions.ts"
+      ]
+    },
+    "users": {
+      "public": [
+        "application/memberNormalization.ts",
+        "pages/Approvals.tsx"
+      ],
+      "composition": [
+        "application/usersActions.ts"
+      ]
+    }
+  }
+}

@@ -1,0 +1,69 @@
+
+> workspace@3.0.0 verify:architecture /Users/user/Downloads/aitask-master
+> node --test scripts/architecture/check.test.mjs && node scripts/architecture/check.mjs
+
+TAP version 13
+# Subtest: finds runtime cycles including an isolated self import
+ok 1 - finds runtime cycles including an isolated self import
+  ---
+  duration_ms: 11.906042
+  type: 'test'
+  ...
+# Subtest: a shared dependency is not a cycle
+ok 2 - a shared dependency is not a cycle
+  ---
+  duration_ms: 0.5265
+  type: 'test'
+  ...
+# Subtest: collects side effects, re-exports, dynamic imports and type imports
+ok 3 - collects side effects, re-exports, dynamic imports and type imports
+  ---
+  duration_ms: 231.096916
+  type: 'test'
+  ...
+# Subtest: type-only edges do not become runtime dependencies
+ok 4 - type-only edges do not become runtime dependencies
+  ---
+  duration_ms: 326.219625
+  type: 'test'
+  ...
+# Subtest: cross-feature imports require explicitly published leaf entry points
+ok 5 - cross-feature imports require explicitly published leaf entry points
+  ---
+  duration_ms: 1.974333
+  type: 'test'
+  ...
+# Subtest: only the workspace composition root may import a private action factory
+ok 6 - only the workspace composition root may import a private action factory
+  ---
+  duration_ms: 1.173041
+  type: 'test'
+  ...
+# Subtest: feature action factories cannot import the composed store
+ok 7 - feature action factories cannot import the composed store
+  ---
+  duration_ms: 2.142542
+  type: 'test'
+  ...
+# Subtest: shared and infrastructure code cannot depend on feature UI
+ok 8 - shared and infrastructure code cannot depend on feature UI
+  ---
+  duration_ms: 0.540791
+  type: 'test'
+  ...
+# Subtest: domain rules cannot depend on UI
+ok 9 - domain rules cannot depend on UI
+  ---
+  duration_ms: 2.267833
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8759.229292
+[architecture] 226 files, 1261 runtime edges, 174 type-only edges, 0 runtime cycles, 0 type-inclusive cycles

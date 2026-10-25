@@ -1,0 +1,1570 @@
+import type { User } from '@supabase/supabase-js';
+import {
+  getLegacyDepartmentMirror,
+  normalizeMemberDepartments,
+} from '../../shared/authorization/departments';
+import type {
+  Addon,
+  AppNotification,
+  ClientPortalPayload,
+  ClientProfile,
+  ClientServicePlan,
+  CustomRole,
+  CycleComment,
+  Deliverable,
+  Department,
+  NotificationFeedPage,
+  Project,
+  Registration,
+  Role,
+  RolePermissions,
+  ServiceCycle,
+  ServicePackage,
+  ServicePricingSnapshot,
+  ServiceWorkflowTemplate,
+  Task,
+  WorkspaceMember
+} from '../../shared/types/index';
+import { userFacingText } from '../../shared/utils/userFacingMessage';
+import { supabase } from '../database/supabaseClient';
+import { reportBackendWarning } from '../observability/backendWarnings';
+import type { PersistedWorkspaceState } from '../persistence/supabaseSnapshot';
+import { assertWorkspaceSession, captureWorkspaceSession, isWorkspaceSessionCurrent, onWorkspaceSessionInvalidated } from '../persistence/workspaceSession';
+import { parseWorkspaceSnapshot } from '../serialization/security';
+import { withoutTaskCascadeNotificationDeletes } from './secureTaskDelete';
+import { BACKEND_RETRY_REQUIRED_MESSAGE, BACKEND_UPGRADE_REQUIRED_MESSAGE, type BaselineRow, type BuildOperationsOptions, type CommandResponse, type EntityRow, isSecureCommandType, type MemberDepartmentsResponse, type MemberPermissionsResponse, type MemberRoleAssignment, type MemberRoleResponse, type MemberRow, type MutationConflict, type MutationErrorCode, type MutationResult, type NotificationFeedQuery, type NotificationReadResponse, type PendingCommandBatch, type PendingCommandEnvelope, type PendingMemberMutationEnvelope, type PendingNotificationEnvelope, type ReleaseNoticeAcknowledgementResult, type RetainedSecureMemberMutation, type RetainedSecureMemberMutationWithId, SECURE_BACKEND_SCHEMA_VERSION, SECURE_SYNC_PROTOCOL_VERSION, SECURE_WORKSPACE_ID, type SecureBackendCompatibility, type SecureCommand, type SecureCommandType, WORKSPACE_ENTITY_TYPES, type WorkspaceLoadOptions, type WorkspaceOperation } from './workspaceContracts';
+import { commandId, entityKey, memberData, memberToUser, stable, stateToRows, stripRuntimeFields } from './workspaceSerialization';
+import { bindSessionRequest, commandErrorCode, isAuthError, refreshSecureSession, SYNC_REQUEST_TIMEOUT_MS, SyncRequestTimeoutError, withSyncTimeout } from './workspaceTransport';
+
+const WORKSPACE_PAGE_SIZE = 500;
+// Equality filters let PostgreSQL use the (workspace_id, entity_type, entity_id)
+// index before running the scoped RLS checks. A broad `<> notification` scan
+// evaluates expensive portfolio checks across the entire workspace and can hit
+// PostgREST's statement timeout even when only a few rows are visible.
+
+const PENDING_COMMAND_STORAGE_VERSION = 1;
+const PENDING_COMMAND_STORAGE_PREFIX = 'aitask:secure-pending-command';
+const PENDING_MEMBER_MUTATION_STORAGE_VERSION = 1;
+const PENDING_MEMBER_MUTATION_STORAGE_PREFIX = 'aitask:secure-pending-member-mutation';
+const PENDING_NOTIFICATION_STORAGE_VERSION = 1;
+const PENDING_NOTIFICATION_STORAGE_PREFIX = 'aitask:secure-pending-notification';
+
+let retryableBatch: PendingCommandBatch | null = null;
+let saveInFlight = false;
+let baseline = new Map<string, BaselineRow>();
+let retryableCommand: SecureCommand | null = null;
+let activeSecureAuthUserId: string | null = null;
+let retryableMemberDepartments: Extract<RetainedSecureMemberMutationWithId, { kind: 'departments' }> | null = null;
+let retryableMemberPermissions: Extract<RetainedSecureMemberMutationWithId, { kind: 'permissions' }> | null = null;
+let retryableMemberRole: Extract<RetainedSecureMemberMutationWithId, { kind: 'role' }> | null = null;
+let retryableNotificationMutation: {
+  id: string;
+  notificationIds: string[];
+  isRead: boolean;
+  markAll: boolean;
+  restored?: boolean;
+} | null = null;
+
+const pendingCommandStorageKey = (authUserId: string) => (
+  `${PENDING_COMMAND_STORAGE_PREFIX}:v${PENDING_COMMAND_STORAGE_VERSION}:${SECURE_WORKSPACE_ID}:${authUserId}`
+);
+
+const pendingMemberMutationStorageKey = (authUserId: string) => (
+  `${PENDING_MEMBER_MUTATION_STORAGE_PREFIX}:v${PENDING_MEMBER_MUTATION_STORAGE_VERSION}:${SECURE_WORKSPACE_ID}:${authUserId}`
+);
+
+const pendingNotificationStorageKey = (authUserId: string) => (
+  `${PENDING_NOTIFICATION_STORAGE_PREFIX}:v${PENDING_NOTIFICATION_STORAGE_VERSION}:${SECURE_WORKSPACE_ID}:${authUserId}`
+);
+
+const getSessionStorage = (): Storage | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+const isWorkspaceOperation = (value: unknown): value is WorkspaceOperation => {
+  if (!value || typeof value !== 'object') return false;
+  const operation = value as Partial<WorkspaceOperation>;
+  return (operation.kind === 'member' || operation.kind === 'entity')
+    && (operation.action === 'insert' || operation.action === 'update' || operation.action === 'delete')
+    && typeof operation.entityType === 'string'
+    && operation.entityType.length > 0
+    && operation.entityType.length <= 80
+    && typeof operation.entityId === 'string'
+    && operation.entityId.length > 0
+    && operation.entityId.length <= 240
+    && Number.isInteger(operation.expectedVersion)
+    && operation.expectedVersion! >= 0
+    && (operation.parentId === undefined || (typeof operation.parentId === 'string' && operation.parentId.length <= 240))
+    && (operation.data === undefined || (typeof operation.data === 'object' && operation.data !== null && !Array.isArray(operation.data)));
+};
+
+const isSecureCommand = (value: unknown, allowEmpty = false): value is SecureCommand => {
+  if (!value || typeof value !== 'object') return false;
+  const command = value as Partial<SecureCommand>;
+  return typeof command.id === 'string'
+    && command.id.length > 0
+    && command.id.length <= 160
+    && isSecureCommandType(command.type)
+    && Array.isArray(command.operations)
+    && (allowEmpty || command.operations.length > 0)
+    && command.operations.length <= 500
+    && command.operations.every(isWorkspaceOperation);
+};
+
+const isRetainedSecureMemberMutation = (value: unknown): value is RetainedSecureMemberMutationWithId => {
+  if (!value || typeof value !== 'object') return false;
+  const mutation = value as Partial<RetainedSecureMemberMutationWithId>;
+  if (
+    (mutation.kind !== 'departments' && mutation.kind !== 'permissions' && mutation.kind !== 'role')
+    || typeof mutation.id !== 'string' || mutation.id.length === 0 || mutation.id.length > 160
+    || typeof mutation.memberId !== 'string' || mutation.memberId.length === 0 || mutation.memberId.length > 240
+    || !Number.isInteger(mutation.expectedVersion) || mutation.expectedVersion! < 1
+  ) return false;
+  if (mutation.kind === 'role') {
+    return ['Project Manager', 'HOD', 'Staff', 'Client'].includes(mutation.role as Role)
+      && (mutation.customRoleId === null || (typeof mutation.customRoleId === 'string' && mutation.customRoleId.length <= 240))
+      && (mutation.companyName === null || (typeof mutation.companyName === 'string' && mutation.companyName.length <= 240))
+      && Array.isArray(mutation.departments)
+      && mutation.departments.length <= 16
+      && mutation.departments.every(department => typeof department === 'string' && department.length > 0 && department.length <= 80);
+  }
+  if (mutation.kind === 'departments') {
+    return Array.isArray(mutation.departments)
+      && mutation.departments.length > 0
+      && mutation.departments.length <= 16
+      && mutation.departments.every(department => typeof department === 'string' && department.length > 0 && department.length <= 80);
+  }
+  return mutation.permissions === null
+    || (typeof mutation.permissions === 'object' && !Array.isArray(mutation.permissions));
+};
+
+const persistRetryableCommand = () => {
+  if (!retryableCommand || !activeSecureAuthUserId) return;
+  const storage = getSessionStorage();
+  if (!storage) return;
+  const envelope: PendingCommandEnvelope = {
+    version: 2,
+    workspaceId: SECURE_WORKSPACE_ID,
+    authUserId: activeSecureAuthUserId,
+    command: retryableCommand,
+    batch: retryableBatch || undefined,
+  };
+  try {
+    storage.setItem(pendingCommandStorageKey(activeSecureAuthUserId), JSON.stringify(envelope));
+  } catch {
+    // In-memory retry remains available; large payloads may exceed session storage quota.
+    reportBackendWarning('pending-command-storage-full');
+  }
+};
+
+const retainSecureWorkspaceCommand = (command: SecureCommand) => {
+  retryableCommand = command;
+  persistRetryableCommand();
+};
+
+const clearPersistedRetryableCommand = (authUserId = activeSecureAuthUserId) => {
+  if (!authUserId) return;
+  try {
+    getSessionStorage()?.removeItem(pendingCommandStorageKey(authUserId));
+  } catch {
+    // The in-memory command is still cleared by the caller.
+  }
+};
+
+const retainedMemberMutationWithId = (): RetainedSecureMemberMutationWithId | null => (
+  retryableMemberDepartments || retryableMemberPermissions || retryableMemberRole
+);
+
+const persistRetryableMemberMutation = () => {
+  const mutation = retainedMemberMutationWithId();
+  if (!mutation || !activeSecureAuthUserId) return;
+  const storage = getSessionStorage();
+  if (!storage) return;
+  const envelope: PendingMemberMutationEnvelope = {
+    version: PENDING_MEMBER_MUTATION_STORAGE_VERSION,
+    workspaceId: SECURE_WORKSPACE_ID,
+    authUserId: activeSecureAuthUserId,
+    mutation,
+  };
+  try {
+    storage.setItem(pendingMemberMutationStorageKey(activeSecureAuthUserId), JSON.stringify(envelope));
+  } catch {
+    reportBackendWarning('pending-member-storage-full');
+  }
+};
+
+const clearPersistedRetryableMemberMutation = (authUserId = activeSecureAuthUserId) => {
+  if (!authUserId) return;
+  try {
+    getSessionStorage()?.removeItem(pendingMemberMutationStorageKey(authUserId));
+  } catch {
+    // The in-memory member mutation is still cleared by the caller.
+  }
+};
+
+const setRetryableNotificationMutation = (value: typeof retryableNotificationMutation) => {
+  retryableNotificationMutation = value;
+  if (!activeSecureAuthUserId) return;
+  const storage = getSessionStorage();
+  if (!storage) return;
+  try {
+    if (value) {
+      const envelope: PendingNotificationEnvelope = {
+        version: PENDING_NOTIFICATION_STORAGE_VERSION,
+        workspaceId: SECURE_WORKSPACE_ID,
+        authUserId: activeSecureAuthUserId,
+        mutation: value,
+      };
+      storage.setItem(pendingNotificationStorageKey(activeSecureAuthUserId), JSON.stringify(envelope));
+    } else {
+      storage.removeItem(pendingNotificationStorageKey(activeSecureAuthUserId));
+    }
+  } catch {
+    // Session storage may be unavailable; the in-memory value still applies.
+  }
+};
+
+const restoreRetryableNotificationMutation = (authUserId: string): typeof retryableNotificationMutation => {
+  if (!authUserId) return null;
+  if (retryableNotificationMutation) return retryableNotificationMutation;
+  const storage = getSessionStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(pendingNotificationStorageKey(authUserId));
+    if (!raw) return null;
+    const envelope = JSON.parse(raw) as Partial<PendingNotificationEnvelope>;
+    const mutation = envelope.mutation;
+    if (
+      envelope.version !== PENDING_NOTIFICATION_STORAGE_VERSION
+      || envelope.workspaceId !== SECURE_WORKSPACE_ID
+      || envelope.authUserId !== authUserId
+      || !mutation
+      || typeof mutation.id !== 'string'
+      || typeof mutation.isRead !== 'boolean'
+      || typeof mutation.markAll !== 'boolean'
+      || !Array.isArray(mutation.notificationIds)
+      || !mutation.notificationIds.every(id => typeof id === 'string')
+    ) {
+      storage.removeItem(pendingNotificationStorageKey(authUserId));
+      return null;
+    }
+    retryableNotificationMutation = { ...mutation, restored: true };
+    return retryableNotificationMutation;
+  } catch {
+    storage.removeItem(pendingNotificationStorageKey(authUserId));
+    return null;
+  }
+};
+
+export const restoreSecureWorkspaceCommand = (authUserId: string): SecureCommand | null => {
+  if (!authUserId) return null;
+  if (activeSecureAuthUserId && activeSecureAuthUserId !== authUserId) {
+    retryableCommand = null;
+    retryableBatch = null;
+    retryableMemberDepartments = null;
+    retryableMemberPermissions = null;
+    retryableMemberRole = null;
+    retryableNotificationMutation = null;
+  }
+  activeSecureAuthUserId = authUserId;
+  restoreRetryableNotificationMutation(authUserId);
+  if (retryableCommand) return retryableCommand;
+  const storage = getSessionStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(pendingCommandStorageKey(authUserId));
+    if (!raw) return null;
+    const envelope = JSON.parse(raw) as Partial<PendingCommandEnvelope>;
+    if (
+      ![1, 2].includes(envelope.version || 0)
+      || envelope.workspaceId !== SECURE_WORKSPACE_ID
+      || envelope.authUserId !== authUserId
+      || !isSecureCommand(envelope.command, envelope.version === 2 && Boolean(envelope.batch))
+    ) {
+      storage.removeItem(pendingCommandStorageKey(authUserId));
+      return null;
+    }
+    if (envelope.batch !== undefined) {
+      const batch = envelope.batch;
+      if (!Array.isArray(batch.commands) || batch.commands.length === 0 || batch.commands.length > 500
+        || !batch.commands.every(command => isSecureCommand(command, true)) || batch.commands.reduce((n, c) => n + c.operations.length, 0) > 500
+        || !Number.isInteger(batch.cursor) || batch.cursor < 0 || batch.cursor >= batch.commands.length
+        || typeof batch.attempted !== 'boolean' || !Array.isArray(batch.before)
+        || batch.before.length > 2000 || !batch.before.every(row => row && typeof row.serialized === 'string'
+          && isWorkspaceOperation({ ...row, action: 'update', expectedVersion: row.version }))
+        || (batch.workspaceVersion !== undefined && (!Number.isInteger(batch.workspaceVersion) || batch.workspaceVersion < 1))
+        || batch.commands[batch.cursor].id !== envelope.command.id) {
+        storage.removeItem(pendingCommandStorageKey(authUserId));
+        return null;
+      }
+      // A restored batch must re-run derived-progress reconciliation before
+      // sending its next group; a persisted `attempted` would skip it.
+      batch.attempted = false;
+      retryableBatch = batch;
+    }
+    retryableCommand = envelope.command;
+    // Older single-command envelopes become a durable one-group batch on retry.
+    persistRetryableCommand();
+    return retryableCommand;
+  } catch {
+    storage.removeItem(pendingCommandStorageKey(authUserId));
+    return null;
+  }
+};
+
+export const restoreSecureMemberMutation = (authUserId: string): RetainedSecureMemberMutation | null => {
+  if (!authUserId) return null;
+  if (activeSecureAuthUserId && activeSecureAuthUserId !== authUserId) {
+    retryableCommand = null;
+    retryableBatch = null;
+    retryableMemberDepartments = null;
+    retryableMemberPermissions = null;
+    retryableMemberRole = null;
+  }
+  activeSecureAuthUserId = authUserId;
+  const retained = getRetainedSecureMemberMutation();
+  if (retained) return retained;
+  const storage = getSessionStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(pendingMemberMutationStorageKey(authUserId));
+    if (!raw) return null;
+    const envelope = JSON.parse(raw) as Partial<PendingMemberMutationEnvelope>;
+    if (
+      envelope.version !== PENDING_MEMBER_MUTATION_STORAGE_VERSION
+      || envelope.workspaceId !== SECURE_WORKSPACE_ID
+      || envelope.authUserId !== authUserId
+      || !isRetainedSecureMemberMutation(envelope.mutation)
+    ) {
+      storage.removeItem(pendingMemberMutationStorageKey(authUserId));
+      return null;
+    }
+    if (envelope.mutation.kind === 'departments') retryableMemberDepartments = envelope.mutation;
+    else if (envelope.mutation.kind === 'permissions') retryableMemberPermissions = envelope.mutation;
+    else retryableMemberRole = envelope.mutation;
+    return getRetainedSecureMemberMutation();
+  } catch {
+    storage.removeItem(pendingMemberMutationStorageKey(authUserId));
+    return null;
+  }
+};
+
+const commandDiagnostic = (command: SecureCommand) => ({
+  commandId: command.id,
+  commandType: command.type,
+  operations: command.operations.map(operation => ({
+    kind: operation.kind,
+    action: operation.action,
+    entityType: operation.entityType,
+    entityId: operation.entityId,
+    expectedVersion: operation.expectedVersion,
+    changedFields: changedFieldsForConflict(
+      operation,
+      baseline.get(entityKey(operation.entityType, operation.entityId))?.data,
+    ),
+  })),
+});
+
+const rowsToBaseline = (members: MemberRow[], entities: EntityRow[]) => {
+  const next = new Map<string, BaselineRow>();
+  members.forEach(row => {
+    const data = memberData(memberToUser(row));
+    next.set(entityKey('member', row.id), {
+      kind: 'member', entityType: 'member', entityId: row.id, version: Number(row.version) || 1,
+      data, serialized: stable({ parentId: null, data }),
+    });
+  });
+  entities.forEach(row => {
+    const data = stripRuntimeFields(row.data);
+    next.set(entityKey(row.entity_type, row.entity_id), {
+      kind: 'entity', entityType: row.entity_type, entityId: row.entity_id,
+      parentId: row.parent_id || undefined, version: Number(row.version) || 1,
+      data, serialized: stable({ parentId: row.parent_id || null, data }),
+    });
+  });
+  baseline = next;
+};
+
+const alignBaselineToCanonicalState = (state: PersistedWorkspaceState) => {
+  const canonical = new Map<string, BaselineRow>();
+  stateToRows(state, baseline).forEach(row => {
+    const previous = baseline.get(entityKey(row.entityType, row.entityId));
+    canonical.set(entityKey(row.entityType, row.entityId), {
+      ...row,
+      version: previous?.version || row.version || 1,
+    });
+  });
+  baseline = canonical;
+};
+
+// Entity types only Boss Koo (super admin) may write through the generic
+// command path. Non-super-admins must never emit these operations, otherwise a
+// routine save (e.g. adding a company) gets rejected by the server guard with
+// "Super Admin permission required."
+const superAdminOnlyEntityTypes = new Set(['custom_role', 'task_status', 'registration']);
+
+// Entity types served by the service RPC (`aitask_execute_service_command`).
+// That RPC also accepts `client` and `task`, which the generic command RPC
+// handles too.
+const serviceEntityTypes = new Set([
+  'service_package', 'service_workflow_template', 'service_pricing_snapshot',
+  'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon',
+]);
+
+// Command types handled by the service RPC. The generic RPC rejects service
+// entity types, so a mixed diff must never be sent under a single generic type.
+const serviceCommandTypes = new Set<SecureCommandType>([
+  'service_package.manage', 'client_plan.manage', 'service_cycle.manage',
+  'deliverable.manage', 'cycle_comment.manage', 'addon.manage',
+  'service_workflow.manage', 'deliverable.workflow.generate',
+]);
+
+export const buildOperations = (
+  state: PersistedWorkspaceState,
+  options: BuildOperationsOptions = {},
+): WorkspaceOperation[] => {
+  const nextRows = stateToRows(state, baseline);
+  // A local approval draft has no server decision ID. Send its task even when
+  // the status was already Completed, so PostgreSQL can journal the sign-off.
+  const reviewDrafts = new Set(state.tasks.filter(task => task.internalReview && !task.internalReview.decisionId).map(task => entityKey('task', task.id)));
+  const nextKeys = new Set(nextRows.map(row => entityKey(row.entityType, row.entityId)));
+  const excludedEntityTypes = new Set<string>(
+    options.excludeSuperAdminEntities ? superAdminOnlyEntityTypes : [],
+  );
+  options.excludedEntityTypes?.forEach(entityType => excludedEntityTypes.add(entityType));
+  // A non-super-admin can only ever change their own member row. Never emit
+  // another member's update, otherwise the whole command is classified as the
+  // Boss-only `member.manage` and rejected with "Super Admin permission required."
+  const skipsRow = (row: BaselineRow) => (
+    excludedEntityTypes.has(row.entityType)
+    || (
+      options.excludeSuperAdminEntities === true
+      && Boolean(options.actorMemberId)
+      && row.entityType === 'member'
+      && row.entityId !== options.actorMemberId
+    )
+  );
+  const operations: WorkspaceOperation[] = [];
+
+  nextRows.forEach(row => {
+    if (skipsRow(row)) return;
+    const key = entityKey(row.entityType, row.entityId);
+    const previous = baseline.get(key);
+    if (!previous) {
+      operations.push({
+        kind: row.kind,
+        action: 'insert',
+        entityType: row.entityType,
+        entityId: row.entityId,
+        parentId: row.parentId,
+        expectedVersion: 0,
+        data: row.data,
+      });
+      return;
+    }
+    if (previous.serialized !== row.serialized || reviewDrafts.has(key)) {
+      operations.push({
+        kind: row.kind,
+        action: 'update',
+        entityType: row.entityType,
+        entityId: row.entityId,
+        parentId: row.parentId,
+        expectedVersion: previous.version,
+        data: row.data,
+      });
+    }
+  });
+
+  baseline.forEach(row => {
+    if (skipsRow(row)) return;
+    const key = entityKey(row.entityType, row.entityId);
+    if (!nextKeys.has(key)) {
+      operations.push({
+        kind: row.kind,
+        action: 'delete',
+        entityType: row.entityType,
+        entityId: row.entityId,
+        parentId: row.parentId,
+        expectedVersion: row.version,
+      });
+    }
+  });
+
+  // Deliverable execution triggers cycle completion. Persist the child first
+  // so a derived cycle update is validated against its completed deliveries.
+  return withoutTaskCascadeNotificationDeletes(operations, baseline).sort((left, right) =>
+    Number(left.entityType === 'service_cycle' && left.action === 'update')
+    - Number(right.entityType === 'service_cycle' && right.action === 'update'));
+};
+
+const changedFieldsForConflict = (operation: WorkspaceOperation, current?: Record<string, unknown>) => {
+  if (!operation.data) return [];
+  const keys = new Set([...Object.keys(operation.data), ...Object.keys(current || {})]);
+  return [...keys].filter(key => stable(operation.data?.[key]) !== stable(current?.[key])).sort();
+};
+
+export const inferSecureCommandType = (
+  operations: WorkspaceOperation[],
+  options: { selfMemberId?: string } = {},
+): SecureCommandType => {
+  const entityTypes = new Set(operations.map(operation => operation.entityType));
+  const actions = new Set(operations.map(operation => operation.action));
+  const only = (entityType: string) => entityTypes.size === 1 && entityTypes.has(entityType);
+
+  // A deliverable status update may also advance its parent cycle. The store
+  // subscription can save that paired change before its UI handler supplies a
+  // command type, so keep the whole operation on the service RPC.
+  if ([...entityTypes].every(entityType => serviceEntityTypes.has(entityType))) {
+    if (entityTypes.has('deliverable')) return 'deliverable.manage';
+    if (entityTypes.has('service_cycle')) return 'service_cycle.manage';
+    if (entityTypes.has('cycle_comment')) return 'cycle_comment.manage';
+    if (entityTypes.has('client_plan')) return 'client_plan.manage';
+    if (entityTypes.has('addon')) return 'addon.manage';
+    if (entityTypes.has('service_workflow_template')) return 'service_workflow.manage';
+    return 'service_package.manage';
+  }
+
+  if (entityTypes.has('member')) {
+    // A self profile update is a `member.update`. Only member inserts/deletes
+    // or updates to another member require the Boss-only `member.manage`.
+    const memberOperations = operations.filter(operation => operation.entityType === 'member');
+    const selfUpdatesOnly = memberOperations.length > 0
+      && memberOperations.every(operation => (
+        operation.action === 'update'
+        && (!options.selfMemberId || operation.entityId === options.selfMemberId)
+      ));
+    return selfUpdatesOnly ? 'member.update' : 'member.manage';
+  }
+  if (only('task')) return actions.size === 1 && actions.has('insert')
+    ? 'task.create'
+    : actions.size === 1 && actions.has('delete')
+      ? 'task.delete'
+      : 'task.update';
+  if (only('project')) return actions.size === 1 && actions.has('insert')
+    ? 'project.create'
+    : actions.size === 1 && actions.has('delete')
+      ? 'project.delete'
+      : 'project.update';
+  if (only('client')) return actions.has('delete') ? 'client.delete' : 'client.upsert';
+  if (only('comment')) return 'comment.add';
+  if (only('approval')) return 'approval.review';
+  if (only('notification')) return operations.length === 1 ? 'notification.read' : 'notification.read_all';
+  if (only('custom_role')) return 'role.manage';
+  if (only('registration')) return 'registration.review';
+  if (only('task_status')) return 'task_status.manage';
+  return 'workspace.patch';
+};
+
+// Split a mixed local diff into command groups that each map to a single RPC.
+// The generic command RPC rejects service entity types, and the service RPC
+// rejects member rows, so an unpartitioned diff could otherwise be sent to the
+// wrong RPC and be stuck as a retry. The service RPC also accepts `client` and
+// `task`, so any generic-only operation forces a separate service command.
+const partitionOperationsForRpc = (
+  operations: WorkspaceOperation[],
+  selfMemberId?: string,
+): { type: SecureCommandType; operations: WorkspaceOperation[] }[] => {
+  const genericOperations = operations.filter(operation => !serviceEntityTypes.has(operation.entityType));
+  const serviceOperations = operations.filter(operation => serviceEntityTypes.has(operation.entityType));
+  const groups: { type: SecureCommandType; operations: WorkspaceOperation[] }[] = [];
+  if (genericOperations.length > 0) {
+    groups.push({
+      type: inferSecureCommandType(genericOperations, { selfMemberId }),
+      operations: genericOperations,
+    });
+  }
+  if (serviceOperations.length > 0) {
+    groups.push({
+      type: inferSecureCommandType(serviceOperations, { selfMemberId }),
+      operations: serviceOperations,
+    });
+  }
+  return groups;
+};
+
+// A caller may supply the command type it knows its own change belongs to (for
+// example `task.create`). The local diff can still contain unrelated service
+// rows (a cycle that changed server-side, derived deliverable progress), and the
+// generic RPC rejects service entity types, failing the whole command with
+// "Unsupported entity type." Keep the requested generic type on the generic
+// operations and send the service rows to the service RPC. Service-typed
+// commands are left whole: the service RPC already accepts `client` and `task`,
+// and `deliverable.workflow.generate` consumes its operation list directly.
+export const partitionOperationsWithExplicitType = (
+  operations: WorkspaceOperation[],
+  type: SecureCommandType,
+  selfMemberId?: string,
+): { type: SecureCommandType; operations: WorkspaceOperation[] }[] => {
+  if (serviceCommandTypes.has(type)) {
+    return [{ type, operations }];
+  }
+  const linkedTaskOperations = operations.filter(operation => (
+    operation.entityType === 'task'
+    && operation.action === 'insert'
+    && typeof operation.data?.deliverableId === 'string'
+  ));
+  const linkedPairs = linkedTaskOperations.flatMap(taskOperation => {
+    const deliverableId = taskOperation.data?.deliverableId;
+    if (typeof deliverableId !== 'string') return [];
+    const deliverableOperation = operations.find(operation => (
+      operation.entityType === 'deliverable'
+      && operation.entityId === deliverableId
+      && operation.action === 'update'
+      && operation.data?.clientId === taskOperation.data?.clientId
+      && operation.data?.cycleId === taskOperation.data?.serviceCycleId
+    ));
+    return deliverableOperation ? [{ taskOperation, deliverableOperation }] : [];
+  });
+  const linkedOperations = new Set<WorkspaceOperation>();
+  linkedPairs.forEach(({ taskOperation, deliverableOperation }) => {
+    linkedOperations.add(taskOperation);
+    linkedOperations.add(deliverableOperation);
+  });
+  const remainingOperations = operations.filter(operation => !linkedOperations.has(operation));
+  const genericOperations = remainingOperations.filter(operation => !serviceEntityTypes.has(operation.entityType));
+  const serviceOperations = remainingOperations.filter(operation => serviceEntityTypes.has(operation.entityType));
+  const groups: { type: SecureCommandType; operations: WorkspaceOperation[] }[] = [];
+  if (linkedPairs.length > 0) {
+    groups.push({
+      type: 'deliverable.manage',
+      // Apply the deliverable's linked-task update before the task insert.
+      // The task trigger derives delivery progress; keeping both writes in
+      // this command avoids a stale version between generic and service RPCs.
+      operations: [
+        ...new Set(linkedPairs.map(pair => pair.deliverableOperation)),
+        ...new Set(linkedPairs.map(pair => pair.taskOperation)),
+      ],
+    });
+  }
+  if (genericOperations.length > 0) {
+    groups.push({ type, operations: genericOperations });
+  }
+  if (serviceOperations.length > 0) {
+    groups.push({
+      type: inferSecureCommandType(serviceOperations, { selfMemberId }),
+      operations: serviceOperations,
+    });
+  }
+  return groups;
+};
+
+const applyCommandVersions = (command: SecureCommand, response: CommandResponse) => {
+  const versions = new Map((response.changed || []).map(item => [entityKey(item.entityType, item.entityId), item]));
+  (response.deleted || []).forEach(item => baseline.delete(entityKey(item.entityType, item.entityId)));
+  command.operations.forEach(operation => {
+    const key = entityKey(operation.entityType, operation.entityId);
+    if (operation.action === 'delete') {
+      baseline.delete(key);
+      return;
+    }
+    const changed = versions.get(key);
+    const data = operation.data || {};
+    baseline.set(key, {
+      kind: operation.kind,
+      entityType: operation.entityType,
+      entityId: operation.entityId,
+      parentId: operation.parentId,
+      version: Number(changed?.version) || Math.max(1, operation.expectedVersion + 1),
+      data,
+      serialized: stable({ parentId: operation.parentId || null, data }),
+    });
+  });
+};
+
+export const isWorkspaceConflict = (conflict?: MutationConflict | null) => (
+  conflict?.entityType === 'workspace'
+);
+
+export const overlayRetainedWorkspaceEntities = (
+  remote: PersistedWorkspaceState,
+  local: PersistedWorkspaceState,
+  operations: WorkspaceOperation[],
+): PersistedWorkspaceState => {
+  if (retryableBatch && operations === retryableCommand?.operations) operations = retryableBatch.commands.slice(retryableBatch.cursor).flatMap(command => command.operations);
+  const opsByType = new Map<string, WorkspaceOperation[]>();
+  operations.forEach(operation => {
+    const list = opsByType.get(operation.entityType) || [];
+    list.push(operation);
+    opsByType.set(operation.entityType, list);
+  });
+
+  const overlayList = <T extends { id: string }>(
+    remoteItems: T[],
+    localItems: T[],
+    type: string,
+  ): T[] => {
+    const ops = opsByType.get(type);
+    if (!ops || ops.length === 0) return remoteItems;
+    const deleted = new Set(ops.filter(operation => operation.action === 'delete').map(operation => operation.entityId));
+    const touched = new Set(ops.filter(operation => operation.action !== 'delete').map(operation => operation.entityId));
+    const localById = new Map(localItems.map(item => [item.id, item]));
+    const operationById = new Map(ops.map(operation => [operation.entityId, operation]));
+    const retainedItem = (id: string, remoteItem?: T): T | undefined => {
+      const localItem = localById.get(id);
+      const operation = operationById.get(id);
+      if (!localItem && !operation?.data) return remoteItem;
+      return {
+        ...(remoteItem || {} as T),
+        ...(localItem || {} as T),
+        ...(operation?.data || {}),
+        id,
+        version: operation
+          ? Math.max(1, operation.expectedVersion + 1)
+          : Math.max(1, Number((localItem as { version?: number } | undefined)?.version) || 1),
+      } as T;
+    };
+    const merged = remoteItems
+      .filter(item => !deleted.has(item.id))
+      .map(item => touched.has(item.id) ? retainedItem(item.id, item) || item : item);
+    const insertedIds = ops
+      .filter(operation => operation.action === 'insert' && !merged.some(existing => existing.id === operation.entityId))
+      .map(operation => operation.entityId);
+    const inserts = insertedIds
+      .map(id => retainedItem(id))
+      .filter((item): item is T => Boolean(item));
+    return [...merged, ...inserts];
+  };
+
+  const taskIdsFromChildren = [
+    ...(opsByType.get('comment') || []),
+    ...(opsByType.get('approval') || []),
+  ]
+    .map(operation => operation.parentId)
+    .filter((id): id is string => Boolean(id));
+  const effectiveTaskOps = [
+    ...(opsByType.get('task') || []),
+    ...taskIdsFromChildren.map(id => ({
+      kind: 'entity',
+      action: 'update',
+      entityType: 'task',
+      entityId: id,
+      expectedVersion: 0,
+    } satisfies WorkspaceOperation)),
+  ];
+
+  const tasks = (() => {
+    if (effectiveTaskOps.length === 0) return remote.tasks;
+    const deleted = new Set(effectiveTaskOps.filter(operation => operation.action === 'delete').map(operation => operation.entityId));
+    const touched = new Set(effectiveTaskOps.filter(operation => operation.action !== 'delete').map(operation => operation.entityId));
+    const localById = new Map(local.tasks.map(item => [item.id, item]));
+    const taskOperationById = new Map(
+      (opsByType.get('task') || []).map(operation => [operation.entityId, operation]),
+    );
+    const retainedTask = (id: string, remoteTask?: Task): Task | undefined => {
+      const localTask = localById.get(id);
+      const operation = taskOperationById.get(id);
+      if (!localTask && !operation?.data) return remoteTask;
+      return {
+        ...(remoteTask || {} as Task),
+        ...(localTask || {} as Task),
+        ...(operation?.data || {}),
+        id,
+        version: operation
+          ? Math.max(1, operation.expectedVersion + 1)
+          : Math.max(1, Number(localTask?.version) || 1),
+      } as Task;
+    };
+    let merged = remote.tasks
+      .filter(item => !deleted.has(item.id))
+      .map(item => touched.has(item.id) ? retainedTask(item.id, item) || item : item);
+    const inserts = (opsByType.get('task') || [])
+      .filter(operation => operation.action === 'insert' && !merged.some(existing => existing.id === operation.entityId))
+      .map(operation => retainedTask(operation.entityId))
+      .filter((item): item is Task => Boolean(item));
+    merged = [...merged, ...inserts];
+
+    const applyChildOperations = (
+      task: Task,
+      type: 'comment' | 'approval',
+      field: 'comments' | 'approvalHistory',
+    ): Task => {
+      const childOps = (opsByType.get(type) || []).filter(operation => operation.parentId === task.id);
+      if (childOps.length === 0) return task;
+      const existing = [...(task[field] || [])] as unknown as Array<Record<string, unknown> & { id: string }>;
+      childOps.forEach(operation => {
+        const index = existing.findIndex(item => item.id === operation.entityId);
+        if (operation.action === 'delete') {
+          if (index >= 0) existing.splice(index, 1);
+          return;
+        }
+        const next = {
+          ...(index >= 0 ? existing[index] : {}),
+          ...(operation.data || {}),
+          id: operation.entityId,
+          version: Math.max(1, operation.expectedVersion + 1),
+        } as Record<string, unknown> & { id: string };
+        if (index >= 0) existing[index] = next;
+        else existing.push(next);
+      });
+      return { ...task, [field]: existing } as Task;
+    };
+
+    return merged.map(task => (
+      applyChildOperations(applyChildOperations(task, 'comment', 'comments'), 'approval', 'approvalHistory')
+    ));
+  })();
+
+  const statuses = (() => {
+    const ops = opsByType.get('task_status');
+    if (!ops || ops.length === 0) return remote.taskStatuses;
+    const next = [...remote.taskStatuses];
+    ops.forEach(operation => {
+      if (operation.action === 'delete') {
+        const index = next.indexOf(operation.entityId);
+        if (index >= 0) next.splice(index, 1);
+      } else if (!next.includes(operation.entityId)) {
+        next.push(operation.entityId);
+      }
+    });
+    return next;
+  })();
+
+  return {
+    ...remote,
+    users: overlayList(remote.users, local.users, 'member'),
+    clients: overlayList(remote.clients, local.clients, 'client'),
+    projects: overlayList(remote.projects, local.projects, 'project'),
+    tasks,
+    notifications: overlayList(remote.notifications, local.notifications, 'notification'),
+    registrations: overlayList(remote.registrations, local.registrations, 'registration'),
+    rolePermissions: overlayList(remote.rolePermissions, local.rolePermissions, 'custom_role'),
+    taskStatuses: statuses,
+    servicePackages: overlayList(remote.servicePackages, local.servicePackages, 'service_package'),
+    clientPlans: overlayList(remote.clientPlans, local.clientPlans, 'client_plan'),
+    serviceCycles: overlayList(remote.serviceCycles, local.serviceCycles, 'service_cycle'),
+    deliverables: overlayList(remote.deliverables, local.deliverables, 'deliverable'),
+    cycleComments: overlayList(remote.cycleComments, local.cycleComments, 'cycle_comment'),
+    addons: overlayList(remote.addons, local.addons, 'addon'),
+    serviceWorkflowTemplates: overlayList(remote.serviceWorkflowTemplates, local.serviceWorkflowTemplates, 'service_workflow_template'),
+    servicePricingSnapshots: overlayList(remote.servicePricingSnapshots, local.servicePricingSnapshots, 'service_pricing_snapshot'),
+  };
+};
+
+const executeCommand = async (
+  command: SecureCommand,
+  expectedWorkspaceVersion?: number,
+): Promise<MutationResult<CommandResponse>> => {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    retainSecureWorkspaceCommand(command);
+    return { ok: false, code: 'OFFLINE', error: 'You are offline. Reconnect before retrying this change.' };
+  }
+
+  const sessionToken = captureWorkspaceSession();
+  const { bindPendingServiceFiles, acknowledgePendingServiceFiles } = await import('../../modules/services/data/serviceFiles');
+  assertWorkspaceSession(sessionToken);
+  bindPendingServiceFiles(command.id, command.operations);
+  const serviceCommand = serviceCommandTypes.has(command.type);
+  const invoke = bindSessionRequest(() => command.type === 'deliverable.workflow.generate'
+    ? withSyncTimeout(supabase.rpc('aitask_generate_deliverable_task_chain', {
+      p_workspace_id: SECURE_WORKSPACE_ID,
+      p_command_id: command.id,
+      p_operations: command.operations,
+      p_expected_workspace_version: expectedWorkspaceVersion ?? null,
+    }))
+    : withSyncTimeout(supabase.rpc(serviceCommand ? 'aitask_execute_service_command' : 'aitask_execute_command', {
+      p_workspace_id: SECURE_WORKSPACE_ID,
+      p_command_id: command.id,
+      p_command_type: command.type,
+      p_operations: command.operations,
+      p_expected_workspace_version: expectedWorkspaceVersion ?? null,
+    })));
+
+  let rpcResult: Awaited<ReturnType<typeof invoke>>;
+  try {
+    rpcResult = await invoke();
+    if (isAuthError(rpcResult.error) && await refreshSecureSession()) {
+      rpcResult = await invoke();
+    }
+  } catch (error) {
+    try { assertWorkspaceSession(sessionToken); } catch { return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' }; }
+    retainSecureWorkspaceCommand(command);
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    return {
+      ok: false,
+      code: offline ? 'OFFLINE' : 'RETRY_REQUIRED',
+      error: offline
+        ? 'You are offline. Reconnect before retrying this change.'
+        : error instanceof SyncRequestTimeoutError
+          ? "The save took longer than expected. Your change is kept safe — retrying it won't create duplicates."
+          : "We couldn't reach the server. Your change is kept safe — please retry.",
+    };
+  }
+
+  assertWorkspaceSession(sessionToken);
+  const { data, error } = rpcResult;
+
+  if (error) {
+    const code = commandErrorCode(error);
+    if (code === 'RETRY_REQUIRED') retainSecureWorkspaceCommand(command);
+    else {
+      retryableCommand = null;
+      clearPersistedRetryableCommand();
+    }
+    console.error('[AiTask sync] Supabase RPC failed.', JSON.stringify({ ...commandDiagnostic(command), code: error.code }));
+    return isAuthError(error)
+      ? { ok: false, code: 'FORBIDDEN', error: 'Your session expired. Sign in again, then retry the retained change.' }
+      : error.code === 'PGRST202'
+        ? { ok: false, code: 'RETRY_REQUIRED', error: BACKEND_UPGRADE_REQUIRED_MESSAGE }
+        : { ok: false, code, error: userFacingText(error, 'The command could not be confirmed.') };
+  }
+
+  const response = data as CommandResponse;
+  if (!response?.ok) {
+    console.error('[AiTask sync] Command rejected.', JSON.stringify({ ...commandDiagnostic(command), code: response?.code }));
+    const operation = command.operations.find(item => (
+      item.entityType === response.conflict?.entityType && item.entityId === response.conflict?.entityId
+    ));
+    const conflict = response.conflict && operation
+      ? { ...response.conflict, attempted: operation.data, changedFields: changedFieldsForConflict(operation, retryableBatch?.before.find(row => row.entityType === operation.entityType && row.entityId === operation.entityId)?.data ?? response.conflict.current) }
+      : response.conflict;
+    if (response.code === 'CONFLICT' || response.code === 'RETRY_REQUIRED') retainSecureWorkspaceCommand(command);
+    else {
+      retryableCommand = null;
+      clearPersistedRetryableCommand();
+    }
+    return {
+      ok: false,
+      code: response.code || 'RETRY_REQUIRED',
+      error: userFacingText(response.error, 'The command was not applied.'),
+      conflict,
+    };
+  }
+
+  acknowledgePendingServiceFiles(command.id);
+  applyCommandVersions(command, response);
+  if (!retryableBatch) {
+    retryableCommand = null;
+    clearPersistedRetryableCommand();
+  }
+  return {
+    ok: true,
+    data: response,
+    commandId: response.commandId || command.id,
+    workspaceVersion: Number(response.workspaceVersion) || 1,
+    replayed: response.replayed,
+  };
+};
+
+export const loadSecureBackendCapabilities = async (): Promise<SecureBackendCompatibility> => {
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_get_backend_capabilities', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+  })));
+  try {
+    const { loadBackendCompatibility } = await import('./secureBackendCapabilities');
+    return loadBackendCompatibility(invoke, refreshSecureSession, isAuthError, SECURE_BACKEND_SCHEMA_VERSION, BACKEND_UPGRADE_REQUIRED_MESSAGE, BACKEND_RETRY_REQUIRED_MESSAGE);
+  } catch {
+    // A thrown transport error is not a schema mismatch; let the caller retry.
+    return { compatible: false, error: BACKEND_RETRY_REQUIRED_MESSAGE, code: 'RETRY_REQUIRED', retryable: true };
+  }
+};
+
+export const loadSecureWorkspaceRevision = async () => {
+  const sessionToken = captureWorkspaceSession();
+  const load = bindSessionRequest(() => withSyncTimeout(supabase
+    .from('aitask_workspaces')
+    .select('version,updated_at,sync_protocol_version')
+    .eq('id', SECURE_WORKSPACE_ID)
+    .single()));
+  let { data, error } = await load();
+  if (isAuthError(error) && await refreshSecureSession()) {
+    ({ data, error } = await load());
+  }
+  assertWorkspaceSession(sessionToken);
+  if (error) throw error;
+  const syncProtocolVersion = Number(data.sync_protocol_version);
+  if (syncProtocolVersion !== SECURE_SYNC_PROTOCOL_VERSION) {
+    throw new Error(
+      `AiTask sync protocol mismatch: app requires ${SECURE_SYNC_PROTOCOL_VERSION}, backend provides ${syncProtocolVersion || 'none'}.`,
+    );
+  }
+  return { version: Number(data.version) || 1, updatedAt: String(data.updated_at), syncProtocolVersion };
+};
+
+// Mutation handlers load only when a member edit is submitted. State stays in this adapter.
+const memberMutationRuntime = () => ({
+  get retryableMemberDepartments() { return retryableMemberDepartments; },
+  set retryableMemberDepartments(value: typeof retryableMemberDepartments) { retryableMemberDepartments = value; },
+  get retryableMemberPermissions() { return retryableMemberPermissions; },
+  set retryableMemberPermissions(value: typeof retryableMemberPermissions) { retryableMemberPermissions = value; },
+  get retryableMemberRole() { return retryableMemberRole; },
+  set retryableMemberRole(value: typeof retryableMemberRole) { retryableMemberRole = value; },
+  get baseline() { return baseline; },
+  captureWorkspaceSession, normalizeMemberDepartments, isWorkspaceSessionCurrent, stable, retainedMemberMutationWithId, commandId, persistRetryableMemberMutation, bindSessionRequest, withSyncTimeout, supabase, isAuthError, refreshSecureSession, SyncRequestTimeoutError, commandErrorCode, clearPersistedRetryableMemberMutation, getLegacyDepartmentMirror, entityKey, memberData, SECURE_WORKSPACE_ID,
+});
+
+export const saveSecureMemberDepartments = async (member: WorkspaceMember, requestedDepartments: Department[]): Promise<MutationResult<MemberDepartmentsResponse>> => {
+  const sessionToken = captureWorkspaceSession();
+  try {
+    const module = await import('./secureMemberMutations');
+    if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberDepartments(member, requestedDepartments);
+  } catch {
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your draft is safe — please retry." };
+  }
+};
+
+export const saveSecureMemberPermissions = async (member: WorkspaceMember, permissions: RolePermissions | null): Promise<MutationResult<MemberPermissionsResponse>> => {
+  const sessionToken = captureWorkspaceSession();
+  try {
+    const module = await import('./secureMemberMutations');
+    if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberPermissions(member, permissions);
+  } catch {
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your draft is safe — please retry." };
+  }
+};
+
+export const saveSecureMemberRole = async (member: WorkspaceMember, assignment: MemberRoleAssignment): Promise<MutationResult<MemberRoleResponse>> => {
+  const sessionToken = captureWorkspaceSession();
+  try {
+    const module = await import('./secureMemberMutations');
+    if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    return module.createSecureMemberMutations(memberMutationRuntime()).saveSecureMemberRole(member, assignment);
+  } catch {
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your draft is safe — please retry." };
+  }
+};
+
+export const getRetainedSecureMemberMutation = (): RetainedSecureMemberMutation | null => {
+  if (retryableMemberDepartments) {
+    return {
+      kind: 'departments',
+      memberId: retryableMemberDepartments.memberId,
+      departments: retryableMemberDepartments.departments,
+      expectedVersion: retryableMemberDepartments.expectedVersion,
+    };
+  }
+  if (retryableMemberPermissions) {
+    return {
+      kind: 'permissions',
+      memberId: retryableMemberPermissions.memberId,
+      permissions: retryableMemberPermissions.permissions,
+      expectedVersion: retryableMemberPermissions.expectedVersion,
+    };
+  }
+  if (retryableMemberRole) {
+    return {
+      kind: 'role',
+      memberId: retryableMemberRole.memberId,
+      role: retryableMemberRole.role,
+      customRoleId: retryableMemberRole.customRoleId,
+      companyName: retryableMemberRole.companyName,
+      departments: retryableMemberRole.departments,
+      expectedVersion: retryableMemberRole.expectedVersion,
+    };
+  }
+  return null;
+};
+
+export const retryRetainedSecureMemberMutation = async (
+  member: WorkspaceMember,
+): Promise<MutationResult<MemberDepartmentsResponse | MemberPermissionsResponse | MemberRoleResponse>> => {
+  const pending = getRetainedSecureMemberMutation();
+  if (!pending || pending.memberId !== member.id) {
+    return { ok: false, code: 'NOT_FOUND', error: 'There is no member change waiting to retry.' };
+  }
+  if (pending.kind === 'departments') return saveSecureMemberDepartments(member, pending.departments);
+  if (pending.kind === 'permissions') return saveSecureMemberPermissions(member, pending.permissions);
+  return saveSecureMemberRole(member, {
+    role: pending.role,
+    customRoleId: pending.customRoleId || undefined,
+    companyName: pending.companyName || undefined,
+    departments: pending.departments,
+  });
+};
+
+export const discardRetainedSecureMemberMutation = () => {
+  retryableMemberDepartments = null;
+  retryableMemberPermissions = null;
+  retryableMemberRole = null;
+  clearPersistedRetryableMemberMutation();
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+);
+
+const cleanPortalText = (value: unknown, maxLength: number) => (
+  typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
+);
+
+const releaseNoticeFailure = (
+  code: MutationErrorCode,
+  error: string,
+): ReleaseNoticeAcknowledgementResult => ({ ok: false, code, error });
+
+const releaseNoticeRuntime = () => ({ cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, commandErrorCode, SyncRequestTimeoutError });
+
+const requestReleaseNotice = async (noticeId: string, acknowledge: boolean): Promise<ReleaseNoticeAcknowledgementResult> => {
+  const sessionToken = captureWorkspaceSession();
+  try {
+    const module = await import('./secureReleaseNotices');
+    assertWorkspaceSession(sessionToken);
+    return module.requestReleaseNotice(noticeId, acknowledge, releaseNoticeRuntime());
+  } catch {
+    return releaseNoticeFailure('RETRY_REQUIRED', acknowledge ? "We couldn't save your acknowledgement. Please try again." : "We couldn't check the release notice. Please try again.");
+  }
+};
+export const getSecureReleaseNoticeAcknowledgement = (noticeId: string) => requestReleaseNotice(noticeId, false);
+export const acknowledgeSecureReleaseNotice = (noticeId: string) => requestReleaseNotice(noticeId, true);
+
+const notificationRuntime = () => ({
+  get retryableNotificationMutation() { return retryableNotificationMutation; },
+  set retryableNotificationMutation(value: typeof retryableNotificationMutation) { setRetryableNotificationMutation(value); },
+  get baseline() { return baseline; },
+  captureWorkspaceSession, isWorkspaceSessionCurrent, isRecord, cleanPortalText, bindSessionRequest, withSyncTimeout, supabase, SECURE_WORKSPACE_ID, isAuthError, refreshSecureSession, entityKey, stable, commandId, commandErrorCode, SyncRequestTimeoutError,
+});
+
+export const loadSecureNotificationPage = async (query: NotificationFeedQuery = {}): Promise<NotificationFeedPage> => {
+  const sessionToken = captureWorkspaceSession();
+  const module = await import('./secureNotifications');
+  assertWorkspaceSession(sessionToken);
+  return module.createSecureNotifications(notificationRuntime()).loadSecureNotificationPage(query);
+};
+
+export const setSecureNotificationsRead = async (notificationIds: string[], isRead: boolean, markAll = false): Promise<MutationResult<NotificationReadResponse>> => {
+  const sessionToken = captureWorkspaceSession();
+  try {
+    const module = await import('./secureNotifications');
+    if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    return module.createSecureNotifications(notificationRuntime()).setSecureNotificationsRead(notificationIds, isRead, markAll);
+  } catch {
+    return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your draft is safe — please retry." };
+  }
+};
+
+const loadClientPortalPayload = async (expectedClientName?: string): Promise<ClientPortalPayload> => {
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_read_client_portal', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+  })));
+  let result = await invoke();
+  if (isAuthError(result.error) && await refreshSecureSession()) result = await invoke();
+  if (result.error) throw result.error;
+  const { parseClientPortalPayload } = await import('./clientPortalPayload');
+  return parseClientPortalPayload(result.data, SECURE_WORKSPACE_ID, expectedClientName);
+};
+
+export const WORKSPACE_LOAD_TIMEOUT_MS = 90000;
+
+export const loadSecureWorkspace = async (authUser: User, options: WorkspaceLoadOptions = {}) => {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      loadSecureWorkspaceInternal(authUser, { ...options, loadSignal: controller.signal }),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('Workspace loading timed out. Please retry.')); }, WORKSPACE_LOAD_TIMEOUT_MS); }),
+    ]);
+  } finally { if (timer) clearTimeout(timer); controller.abort(); }
+};
+
+const loadSecureWorkspaceInternal = async (authUser: User, options: WorkspaceLoadOptions & { loadSignal: AbortSignal }) => {
+  const captured = captureWorkspaceSession();
+  const sessionToken = { ...captured, signal: AbortSignal.any([captured.signal, options.loadSignal]) };
+  const revisionBefore = await loadSecureWorkspaceRevision();
+  assertWorkspaceSession(sessionToken);
+  const retainedBeforeLoad = options.preserveRetainedCommand
+    ? restoreSecureWorkspaceCommand(authUser.id)
+    : null;
+  const retainedMemberBeforeLoad = options.preserveRetainedCommand
+    ? restoreSecureMemberMutation(authUser.id)
+    : null;
+  if (!options.preserveRetainedCommand) {
+    if (activeSecureAuthUserId && activeSecureAuthUserId !== authUser.id) {
+      clearPersistedRetryableCommand(activeSecureAuthUserId);
+      clearPersistedRetryableMemberMutation(activeSecureAuthUserId);
+      retryableCommand = null;
+      retryableMemberDepartments = null;
+      retryableMemberPermissions = null;
+      retryableMemberRole = null;
+    }
+    activeSecureAuthUserId = authUser.id;
+  }
+  const loadPages = async <T,>(queryFactory: () => {
+    abortSignal?: (signal: AbortSignal) => unknown;
+    range?: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown | null }>;
+  }): Promise<T[]> => {
+    const rows: T[] = [];
+    for (let from = 0;;from += WORKSPACE_PAGE_SIZE) {
+      const query = queryFactory();
+      const pageController = new AbortController();
+      const abortPage = () => pageController.abort();
+      sessionToken.signal.addEventListener('abort', abortPage, { once: true });
+      query.abortSignal?.(pageController.signal);
+      const timer = setTimeout(abortPage, SYNC_REQUEST_TIMEOUT_MS);
+      let response: { data: unknown[] | null; error: unknown | null };
+      try {
+        response = await withSyncTimeout(query.range
+          ? query.range(from, from + WORKSPACE_PAGE_SIZE - 1)
+          : query as unknown as PromiseLike<{ data: unknown[] | null; error: unknown | null }>);
+      } finally {
+        clearTimeout(timer);
+        sessionToken.signal.removeEventListener('abort', abortPage);
+      }
+      assertWorkspaceSession(sessionToken);
+      if (response.error) throw response.error;
+      const page = (response.data || []) as T[];
+      rows.push(...page);
+      if (!query.range || page.length < WORKSPACE_PAGE_SIZE) return rows;
+    }
+  };
+  const loadEntities = async () => {
+    const groups: EntityRow[][] = new Array(WORKSPACE_ENTITY_TYPES.length);
+    let nextType = 0;
+    // Bound concurrency to avoid flooding the database with one request per
+    // collection, while keeping each collection's pagination independent.
+    await Promise.all(Array.from({ length: 3 }, async () => {
+      while (nextType < WORKSPACE_ENTITY_TYPES.length) {
+        assertWorkspaceSession(sessionToken);
+        const index = nextType++;
+        const entityType = WORKSPACE_ENTITY_TYPES[index];
+        groups[index] = await loadPages<EntityRow>(() => supabase.from('aitask_entities')
+          .select('workspace_id,entity_type,entity_id,parent_id,data,version,updated_at')
+          .eq('workspace_id', SECURE_WORKSPACE_ID)
+          .eq('entity_type', entityType)
+          .order('entity_id'));
+      }
+    }));
+    return groups.flatMap((rows, index) => rows.filter(row => row.entity_type === WORKSPACE_ENTITY_TYPES[index]));
+  };
+  const [members, entities, revision, notificationFeed] = await Promise.all([
+    loadPages<MemberRow>(() => supabase.from('aitask_members').select('*').eq('workspace_id', SECURE_WORKSPACE_ID).order('id')),
+    loadEntities(),
+    loadSecureWorkspaceRevision(),
+    loadSecureNotificationPage({ limit: 50 }),
+  ]);
+  assertWorkspaceSession(sessionToken);
+  const memberRows = members;
+  const entityRows = entities;
+  const authenticatedMemberRow = memberRows.find(member => member.auth_user_id === authUser.id);
+  const currentUser = authenticatedMemberRow ? memberToUser(authenticatedMemberRow) : undefined;
+  if (!currentUser) throw new Error('This authenticated account is not an AiTask workspace member.');
+
+  let portalProjection: ReturnType<typeof import('./clientPortalPayload')['projectClientPortalWorkspace']> | null = null;
+  if (currentUser.role === 'Client') {
+    const clientPortal = await loadClientPortalPayload(currentUser.companyName);
+    const { projectClientPortalWorkspace } = await import('./clientPortalPayload');
+    assertWorkspaceSession(sessionToken);
+    portalProjection = projectClientPortalWorkspace(clientPortal, currentUser, entityRows, authenticatedMemberRow.custom_role_id, SECURE_WORKSPACE_ID);
+  }
+  const users = portalProjection?.users || memberRows.map(memberToUser);
+  const clientTaskIds = portalProjection?.clientTaskIds || new Set<string>();
+  const visibleEntityRows = portalProjection?.visibleEntityRows || entityRows;
+  const projectedEntityRows = portalProjection?.projectedEntityRows || [];
+  const notificationRows: EntityRow[] = notificationFeed.items.map(notification => ({
+    workspace_id: SECURE_WORKSPACE_ID,
+    entity_type: 'notification',
+    entity_id: notification.id,
+    parent_id: null,
+    // The feed RPC only emits notifications this member may see, so mark them
+    // visible: isNotificationVisible otherwise drops every row and no popups,
+    // sounds or optimistic read counts ever resolve.
+    data: { ...stripRuntimeFields(notification as unknown as Record<string, unknown>), visibleToCurrentUser: true },
+    version: Math.max(1, Number(notification.version) || 1),
+    updated_at: notification.updatedAt || notification.createdAt,
+  }));
+  const effectiveEntityRows = [...visibleEntityRows, ...projectedEntityRows, ...notificationRows];
+
+  const comments = portalProjection?.comments || new Map<string, Task['comments']>();
+  const approvals = portalProjection?.approvals || new Map<string, Task['approvalHistory']>();
+  if (!portalProjection) {
+    visibleEntityRows.forEach(row => {
+      if (!row.parent_id) return;
+      if (row.entity_type === 'comment') {
+        const comment: Record<string, unknown> = { ...row.data, version: Number(row.version) || 1, updatedAt: row.updated_at };
+        delete comment.taskId;
+        comments.set(row.parent_id, [...(comments.get(row.parent_id) || []), comment as unknown as NonNullable<Task['comments']>[number]]);
+      }
+      if (row.entity_type === 'approval') {
+        const approval: Record<string, unknown> = { ...row.data, version: Number(row.version) || 1, updatedAt: row.updated_at };
+        delete approval.taskId;
+        approvals.set(row.parent_id, [...(approvals.get(row.parent_id) || []), approval as unknown as NonNullable<Task['approvalHistory']>[number]]);
+      }
+    });
+  }
+
+  const dataFor = <T>(type: string) => effectiveEntityRows
+    .filter(row => row.entity_type === type)
+    .map(row => ({ ...row.data, version: Number(row.version) || 1, updatedAt: row.updated_at } as T));
+  const raw: PersistedWorkspaceState = {
+    users,
+    clients: dataFor<ClientProfile>('client'),
+    projects: dataFor<Project>('project'),
+    tasks: dataFor<Task>('task').map(task => ({ ...task, comments: comments.get(task.id), approvalHistory: approvals.get(task.id) })),
+    notifications: dataFor<AppNotification>('notification'),
+    registrations: dataFor<Registration>('registration'),
+    rolePermissions: dataFor<CustomRole>('custom_role'),
+    taskStatuses: dataFor<{ status: string }>('task_status').map(item => item.status),
+    servicePackages: dataFor<ServicePackage>('service_package'),
+    clientPlans: dataFor<ClientServicePlan>('client_plan'),
+    serviceCycles: dataFor<ServiceCycle>('service_cycle'),
+    deliverables: dataFor<Deliverable>('deliverable'),
+    cycleComments: dataFor<CycleComment>('cycle_comment'),
+    addons: dataFor<Addon>('addon'),
+    serviceWorkflowTemplates: dataFor<ServiceWorkflowTemplate>('service_workflow_template'),
+    servicePricingSnapshots: dataFor<ServicePricingSnapshot>('service_pricing_snapshot'),
+  };
+  const state = parseWorkspaceSnapshot(raw);
+  if (currentUser.role !== 'Client' && state.tasks.length > 0) {
+    const query = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_get_workflow_task_context', { p_workspace_id: SECURE_WORKSPACE_ID })));
+    const { loadWorkflowContext } = await import('../../shared/rules/workflowContext');
+    assertWorkspaceSession(sessionToken);
+    const tasks = await loadWorkflowContext(state.tasks, query, BACKEND_UPGRADE_REQUIRED_MESSAGE, currentUser.id);
+    assertWorkspaceSession(sessionToken);
+    state.tasks = tasks;
+  }
+  if (currentUser.role === 'Client') {
+    state.users = users;
+    state.tasks = state.tasks.map(task => clientTaskIds.has(task.id)
+      ? { ...task, clientProjection: true }
+      : task
+    );
+  }
+  assertWorkspaceSession(sessionToken);
+  const revisionAfter = await loadSecureWorkspaceRevision();
+  assertWorkspaceSession(sessionToken);
+  if (revisionBefore.version !== revision.version || revisionAfter.version !== revision.version) {
+    const attempt = options.consistencyAttempt || 0;
+    if (attempt >= 2) throw new Error('Workspace changed during loading. Please retry.');
+    return loadSecureWorkspaceInternal(authUser, { ...options, consistencyAttempt: attempt + 1 });
+  }
+  // A refresh superseded by a local edit must not replace the command
+  // baseline either. Keep original row versions so concurrent remote edits
+  // still conflict rather than becoming accidental local overwrites.
+  if (options.shouldApplySnapshot?.() === false) return { state, currentUser, revision, notificationFeed };
+  rowsToBaseline(
+    currentUser.role === 'Client' && authenticatedMemberRow ? [authenticatedMemberRow] : memberRows,
+    effectiveEntityRows,
+  );
+  alignBaselineToCanonicalState(state);
+  if (!options.preserveRetainedCommand) {
+    retryableCommand = null;
+    retryableBatch = null;
+    clearPersistedRetryableCommand();
+  } else if (retainedBeforeLoad) {
+    retryableCommand = retainedBeforeLoad;
+    persistRetryableCommand();
+  }
+  if (!options.preserveRetainedCommand) {
+    retryableMemberDepartments = null;
+    retryableMemberPermissions = null;
+    retryableMemberRole = null;
+    clearPersistedRetryableMemberMutation();
+  } else if (retainedMemberBeforeLoad) {
+    persistRetryableMemberMutation();
+  }
+  return { state, currentUser, revision, notificationFeed };
+};
+
+export const completeSecurePasswordSetup = async (): Promise<MutationResult<CommandResponse>> => {
+  const id = commandId();
+  const invoke = bindSessionRequest(() => withSyncTimeout(supabase.rpc('aitask_complete_password_setup', {
+    p_workspace_id: SECURE_WORKSPACE_ID,
+    p_command_id: id,
+  })));
+
+  const { finalizePasswordSetup } = await import('./securePasswordSetup');
+  return finalizePasswordSetup(invoke, id, isAuthError, refreshSecureSession);
+};
+
+export const saveSecureWorkspace = async (
+  state: PersistedWorkspaceState,
+  type?: SecureCommandType,
+  expectedWorkspaceVersion?: number,
+  options: BuildOperationsOptions = {},
+): Promise<MutationResult<CommandResponse>> => {
+  const saveSession = captureWorkspaceSession();
+  if (type !== undefined && !isSecureCommandType(type)) {
+    return {
+      ok: false,
+      code: 'VALIDATION',
+      error: 'The requested workspace command is not supported.',
+    };
+  }
+  const pendingOperations = buildOperations(state, options);
+  if (pendingOperations.length === 0) {
+    const revision = await loadSecureWorkspaceRevision();
+    return { ok: true, data: { ok: true, workspaceVersion: revision.version }, commandId: commandId(), workspaceVersion: revision.version };
+  }
+
+  if (retryableBatch) return { ok: false, code: 'RETRY_REQUIRED', error: 'Save was not confirmed. Your pending change is retained for retry.' };
+  if (pendingOperations.length > 500) return { ok: false, code: 'VALIDATION', error: 'This change touches too many records. Save it in smaller steps.' };
+  // Guard synchronously: two interleaved saves must not both create a batch,
+  // because the second would clobber the first (the dynamic import below is an
+  // async boundary).
+  if (saveInFlight) return { ok: false, code: 'RETRY_REQUIRED', error: 'A save is already in progress. Your pending change will be confirmed shortly.' };
+  saveInFlight = true;
+  try {
+    const clientDeletes = pendingOperations.filter(operation => operation.entityType === 'client' && operation.action === 'delete');
+    const remaining = pendingOperations.filter(operation => !clientDeletes.includes(operation));
+    const remainingType = type === 'client.delete' ? undefined : type;
+    const groups = remainingType
+      ? partitionOperationsWithExplicitType(remaining, remainingType, options.actorMemberId)
+      : partitionOperationsForRpc(remaining, options.actorMemberId);
+    const commands: SecureCommand[] = [
+      ...clientDeletes.map(operation => ({ id: commandId(), type: 'client.delete' as const, operations: [operation] })),
+      ...groups.filter(group => group.operations.length > 0).map(group => ({ id: commandId(), ...group })),
+    ];
+    const { createCommandBatch } = await import('./secureCommandBatch');
+    if (!isWorkspaceSessionCurrent(saveSession)) return { ok: false, code: 'FORBIDDEN', error: 'Your session changed. Sign in again.' };
+    retryableBatch = createCommandBatch(commands, baseline, expectedWorkspaceVersion);
+    // All later groups are retained before the first request can reach the server.
+    retainSecureWorkspaceCommand(commands[0]);
+    return runSecureCommandBatch(saveSession, options);
+  } finally {
+    saveInFlight = false;
+  }
+};
+
+const runSecureCommandBatch = async (
+  saveSession: ReturnType<typeof captureWorkspaceSession>,
+  options: BuildOperationsOptions = {},
+): Promise<MutationResult<CommandResponse>> => {
+  const batch = retryableBatch;
+  if (!batch) return { ok: false, code: 'NOT_FOUND', error: 'There is no command waiting to retry.' };
+  const module = await import('./secureCommandBatch').catch(() => null);
+  if (!module) return { ok: false, code: 'RETRY_REQUIRED', error: "We couldn't reach the server. Your change is kept safe — please retry." };
+  const { runCommandBatch } = module;
+  return runCommandBatch(batch, options, {
+    isCurrent: () => isWorkspaceSessionCurrent(saveSession),
+    superAdminOnlyEntityTypes, serviceCommandTypes,
+    changedFields: changedFieldsForConflict, baseline,
+    retain: retainSecureWorkspaceCommand,
+    complete: () => { retryableBatch = null; retryableCommand = null; clearPersistedRetryableCommand(); },
+    execute: executeCommand,
+    loadEntity: async operation => {
+      const query = await withSyncTimeout(supabase.from('aitask_entities')
+        .select('entity_type,entity_id,parent_id,data,version,updated_at')
+        .eq('workspace_id', SECURE_WORKSPACE_ID).eq('entity_type', operation.entityType)
+        .eq('entity_id', operation.entityId).single());
+      return { ...query, data: query.data as EntityRow | null };
+    },
+    canonicalRows: (collection, row) => stateToRows(parseWorkspaceSnapshot({
+      [collection]: [{ ...row.data, version: row.version, updatedAt: row.updated_at }],
+    }), baseline),
+  });
+};
+
+export const retrySecureWorkspaceCommand = async (
+  expectedWorkspaceVersion?: number,
+  options: BuildOperationsOptions = {},
+): Promise<MutationResult<CommandResponse>> => {
+  if (!retryableCommand) {
+    return { ok: false, code: 'NOT_FOUND', error: 'There is no command waiting to retry.' };
+  }
+  const command = { ...retryableCommand };
+  // A non-super-admin must never retry an operation type the server reserves
+  // for Boss Koo. Older retained commands can still carry those ops, or an
+  // update to another member that the earlier bundling path misclassified.
+  if (options.excludeSuperAdminEntities && !retryableBatch) {
+    command.operations = command.operations.filter(operation => !superAdminOnlyEntityTypes.has(operation.entityType));
+    if (options.actorMemberId) {
+      command.operations = command.operations.filter(operation => (
+        operation.entityType !== 'member' || operation.entityId === options.actorMemberId
+      ));
+    }
+  }
+  if (command.operations.length === 0 && !retryableBatch) {
+    // Nothing left to send (already applied, or every op was reserved for Boss).
+    retryableCommand = null;
+    clearPersistedRetryableCommand();
+    const revision = await loadSecureWorkspaceRevision();
+    return { ok: true, data: { ok: true, workspaceVersion: revision.version }, commandId: commandId(), workspaceVersion: revision.version };
+  }
+  // Commands retained by older app builds can have a generic workspace.patch
+  // type even when every operation belongs to the service workspace. Upgrade
+  // the envelope before retrying so users can keep their intended change.
+  if (command.type === 'workspace.patch') {
+    const inferredType = inferSecureCommandType(command.operations, { selfMemberId: options.actorMemberId });
+    if (inferredType !== 'workspace.patch') command.type = inferredType;
+  }
+  // Older retained commands may carry the Boss-only `member.manage` envelope
+  // for a self profile update that is now correctly classified as `member.update`.
+  if (command.type === 'member.manage') {
+    const inferredType = inferSecureCommandType(command.operations, { selfMemberId: options.actorMemberId });
+    if (inferredType === 'member.update') command.type = 'member.update';
+  }
+  if (command.operations.some(operation => operation.expectedVersion < 0)) {
+    return { ok: false, code: 'CONFLICT', error: 'Review the latest record before retrying.' };
+  }
+  if (!retryableBatch) retryableBatch = { commands: [command], before: structuredClone(command.operations.map(operation => baseline.get(entityKey(operation.entityType, operation.entityId))).filter((row): row is BaselineRow => Boolean(row))), cursor: 0, workspaceVersion: expectedWorkspaceVersion, attempted: true };
+  else {
+    retryableBatch.commands[retryableBatch.cursor] = command;
+    // Never lower the version already advanced by earlier groups in this
+    // batch; the caller's value can be stale after a partial save failure.
+    if (expectedWorkspaceVersion !== undefined) {
+      retryableBatch.workspaceVersion = Math.max(retryableBatch.workspaceVersion ?? 0, expectedWorkspaceVersion);
+    }
+  }
+  return runSecureCommandBatch(captureWorkspaceSession(), options);
+};
+
+export const rebaseRetryableCommand = (conflict: MutationConflict) => {
+  if (!retryableCommand) return false;
+  const locallyChangedFields = (operation: WorkspaceOperation) => Object.fromEntries(
+    (conflict.changedFields || []).map(key => [
+      key,
+      (operation.data as Record<string, unknown> | undefined)?.[key],
+    ]),
+  );
+  const operations = retryableCommand.operations.flatMap(operation => {
+    if (operation.entityType !== conflict.entityType || operation.entityId !== conflict.entityId) return [operation];
+    // An insert over a row that already exists is rebased into an update against
+    // the server copy, re-applying only the fields this client changed. If
+    // nothing changed the insert was already applied and can be dropped.
+    if (operation.action === 'insert' && conflict.current) {
+      const changed = locallyChangedFields(operation);
+      if (Object.keys(changed).length === 0) return [];
+      return [{
+        ...operation,
+        action: 'update' as const,
+        data: { ...conflict.current, ...changed },
+        expectedVersion: conflict.actualVersion,
+      }];
+    }
+    let mergedData = operation.data;
+    // Only merge when we actually know which fields this client changed.
+    // An empty changed-field set would otherwise replace the row with the
+    // server copy and silently drop the local change.
+    if (conflict.changedFields?.length && operation.data && conflict.current) {
+      mergedData = { ...conflict.current, ...locallyChangedFields(operation) };
+    }
+    return [{ ...operation, data: mergedData, expectedVersion: conflict.actualVersion }];
+  });
+  // Keep the same command id: a previously applied command replays through the
+  // server receipt instead of conflicting again.
+  retryableCommand = { ...retryableCommand, operations };
+  if (retryableBatch) retryableBatch.commands[retryableBatch.cursor] = retryableCommand;
+  persistRetryableCommand();
+  return true;
+};
+
+export const discardSecureWorkspaceCommand = (options: { preserveSession?: boolean } = {}) => {
+  retryableCommand = null;
+  retryableBatch = null;
+  clearPersistedRetryableCommand();
+  retryableMemberDepartments = null;
+  retryableMemberPermissions = null;
+  retryableMemberRole = null;
+  clearPersistedRetryableMemberMutation();
+  setRetryableNotificationMutation(null);
+  if (!options.preserveSession) activeSecureAuthUserId = null;
+};
+
+export const getRetainedSecureCommand = (): SecureCommand | null => retryableCommand;
+
+onWorkspaceSessionInvalidated(() => {
+  baseline = new Map();
+  retryableCommand = null;
+  retryableBatch = null;
+  retryableMemberDepartments = null;
+  retryableMemberPermissions = null;
+  retryableMemberRole = null;
+  retryableNotificationMutation = null;
+  activeSecureAuthUserId = null;
+});
+

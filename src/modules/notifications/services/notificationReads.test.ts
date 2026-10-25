@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { AppNotification } from '../../../types';
+import type { AppNotification } from '../../../shared/types/index';
 import {
-  captureNotificationReadState,
-  createNotificationMutationLock,
-  restoreNotificationReadState,
+	captureNotificationReadState,
+	createNotificationMutationLock,
+	restoreNotificationReadState,
 } from './notificationReads';
 
 const notification = (id: string, isRead = false): AppNotification => ({

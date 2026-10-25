@@ -1,23 +1,34 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 const title = 'Staff workflow artwork';
-const seed = async (page: Page, linked = false) => {
-  await page.goto('/login');
-  await page.evaluate(async isLinked => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+const seedWorkspace = async (page: Page, isLinked = false) => page.evaluate(async linked => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const s = useStore.getState();
     const staff = s.users.find(user => user.name === 'Staff Demo')!;
     const boss = s.users.find(user => user.isSuperAdmin)!;
+    const readyStaff = { ...staff, mustResetPassword: false };
     enablePasswordResetBypass(staff.id);
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${staff.id}`, 'acknowledged');
-    const task = { ...s.tasks[0], generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined, internalReview: undefined, reviewAccess: undefined, id: 'workflow-artwork', title: 'Staff workflow artwork', clientId: undefined, clientName: 'Workflow Company', projectId: undefined, projectName: undefined, department: staff.department, assignedTo: staff.id, createdBy: boss.id, assignedBy: boss.id, status: 'Pending', isCompleted: false, completionPercentage: 0, revisionCount: 0, clientApprovalStatus: 'Pending', comments: [], approvalHistory: [], workHistory: [], workState: {}, predecessorTaskIds: [], serviceCycleId: undefined, deliverableId: isLinked ? 'workflow-output' : undefined, attachmentLink: undefined, attachmentName: undefined, startDate: '2026-10-01', dueDate: '', description: 'Create final artwork', notes: undefined };
-    useStore.setState({ currentUser: { ...staff, mustResetPassword: false }, tasks: [task], deliverables: [], serviceCycles: [], clientPlans: [], clients: [], projects: [], notifications: [], backend: { ...s.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
-  }, linked);
+    localStorage.setItem('aitask:locale', 'en');
+    const client = { id: 'workflow-company', clientName: 'Workflow Company', createdBy: boss.id, createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z' };
+    const task = { ...s.tasks[0], generatedFromDeliverable: false, recurrenceFrequency: 'None', workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined, internalReview: undefined, reviewAccess: undefined, id: 'workflow-artwork', title: 'Staff workflow artwork', clientId: client.id, clientName: client.clientName, projectId: undefined, projectName: undefined, department: staff.department, assignedTo: staff.id, createdBy: boss.id, assignedBy: boss.id, status: 'Pending', isCompleted: false, completionPercentage: 0, revisionCount: 0, clientApprovalStatus: 'Pending', comments: [], approvalHistory: [], workHistory: [], workState: {}, predecessorTaskIds: [], serviceCycleId: undefined, deliverableId: linked ? 'workflow-output' : undefined, attachmentLink: undefined, attachmentName: undefined, startDate: '2026-10-01', dueDate: '', description: 'Create final artwork', notes: undefined };
+    const deliverable = { id: 'workflow-output', clientId: client.id, clientName: client.clientName, planId: 'workflow-plan', cycleId: 'workflow-cycle', serviceItemId: 'workflow-service', sequence: 1, title: 'Staff workflow artwork', status: 'Planned', taskIds: [task.id], attachments: [], createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z' };
+    useStore.setState({ currentUser: readyStaff, users: s.users.map(user => user.id === staff.id ? readyStaff : user), tasks: [task], deliverables: linked ? [deliverable] : [], serviceCycles: [], clientPlans: [], clients: linked ? [client] : [], projects: [], notifications: [], backend: { ...s.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
+  }, isLinked);
+const seed = async (page: Page, linked = false) => {
+  await page.goto('/login');
+  await waitForWorkspaceHydration(page);
+  await seedWorkspace(page, linked);
+  await page.goto('/tasks');
+  await waitForWorkspaceHydration(page);
+  await seedWorkspace(page, linked);
   await page.goto('/tasks?taskId=workflow-artwork');
+  await waitForWorkspaceHydration(page);
   await expect(page.getByRole('dialog', { name: title })).toBeVisible();
 };
-const saved = (page: Page) => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks[0]);
+const saved = (page: Page) => page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().tasks[0]);
 
 test('staff drafts survive reload and a successful send removes their recovery copy', async ({ page }) => {
   await seed(page);
@@ -35,7 +46,7 @@ test('staff drafts survive reload and a successful send removes their recovery c
 
 test('recovered newer input is preserved after a lost earlier acknowledgement', async ({ page }) => {
   await seed(page);
-  await page.evaluate(async () => { (await import('/src/store/index.ts')).useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Confirmation lost' }) }); });
+  await page.evaluate(async () => { (await import('/src/app/store/workspaceStore.ts')).useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Confirmation lost' }) }); });
   const note = page.getByPlaceholder('Add a work update…');
   await note.fill('Submitted once');
   await page.getByRole('button', { name: 'Send work update' }).click();
@@ -47,7 +58,7 @@ test('recovered newer input is preserved after a lost earlier acknowledgement', 
 
 test('recovering an already staged comment cannot offer a duplicate submission', async ({ page }) => {
   await seed(page);
-  await page.evaluate(async () => { (await import('/src/store/index.ts')).useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Confirmation lost' }) }); });
+  await page.evaluate(async () => { (await import('/src/app/store/workspaceStore.ts')).useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Confirmation lost' }) }); });
   await page.getByPlaceholder('Add a work update…').fill('Submitted once');
   await page.getByRole('button', { name: 'Send work update' }).click();
   await page.reload();
@@ -76,7 +87,7 @@ test('staff accepts an assignment, requests help, resolves it, and sees attribut
 
 test('slow help acknowledgement retains a newer help draft', async ({ page }) => {
   await seed(page);
-  await page.evaluate(async () => { (await import('/src/store/index.ts')).useStore.setState({ commitPendingMutation: () => new Promise(resolve => { (window as unknown as { finishHelp: () => void }).finishHelp = () => resolve({ ok: true }); }) }); });
+  await page.evaluate(async () => { (await import('/src/app/store/workspaceStore.ts')).useStore.setState({ commitPendingMutation: () => new Promise(resolve => { (window as unknown as { finishHelp: () => void }).finishHelp = () => resolve({ ok: true }); }) }); });
   await page.getByRole('button', { name: 'Request help or handover' }).click();
   const reason = page.getByLabel('What do you need to continue?');
   await reason.fill('First help request');
@@ -91,7 +102,7 @@ test('slow help acknowledgement retains a newer help draft', async ({ page }) =>
 test('discarded help retry retains the draft and cannot announce acknowledgement', async ({ page }) => {
   await seed(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Help not saved' }), retryPendingSave: async () => {
       useStore.setState(s => ({ tasks: s.tasks.map(task => ({ ...task, workState: {} })) })); return { ok: true };
     } });
@@ -108,11 +119,11 @@ for (const status of ['Waiting Approval']) test(`linked tasks need evidence befo
   await seed(page, true);
   const sheet = page.getByRole('dialog', { name: title });
   await sheet.getByRole('button', { name: 'Start work', exact: true }).click();
-  await sheet.getByRole('button', { name: 'Send for review', exact: true }).click();
-  await expect(sheet.getByRole('alert')).toContainText('Add an output link');
+  await expect(sheet.getByRole('button', { name: 'Send for review', exact: true })).toBeDisabled();
+  await expect(sheet.getByText('Add an output link or upload a deliverable file before sending this linked task for review or completing it.', { exact: true })).toBeVisible();
   expect((await saved(page)).status).toBe('In Progress');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.getState().updateTaskAttachment('workflow-artwork', 'https://example.com/output');
   });
   await sheet.getByRole('button', { name: 'Send for review', exact: true }).click();
@@ -127,18 +138,18 @@ test('help and unaccepted filters follow current task state', async ({ page }) =
   await seed(page);
   await page.goto('/tasks?help=1');
   await expect(page.getByRole('button').filter({ hasText: title })).toHaveCount(0);
-  await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().updateTaskWork('workflow-artwork', { kind: 'block', reason: 'Need help' }));
+  await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().updateTaskWork('workflow-artwork', { kind: 'block', reason: 'Need help' }));
   await expect(page.getByRole('button').filter({ hasText: title })).toBeVisible();
   await page.goto('/tasks?unaccepted=1');
   await expect(page.getByRole('button').filter({ hasText: title })).toBeVisible();
-  await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().updateTaskWork('workflow-artwork', { kind: 'accept' }));
+  await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().updateTaskWork('workflow-artwork', { kind: 'accept' }));
   await expect(page.getByRole('button').filter({ hasText: title })).toHaveCount(0);
 });
 
 test('read inbox updates remain discoverable while linked work is open', async ({ page }) => {
   await seed(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(s => ({ notifications: [{ id: 'workflow-notice', title: 'Assigned artwork', message: 'Please finish the artwork', targetUserId: s.currentUser!.id, route: { page: 'tasks', entityId: 'workflow-artwork' }, iconType: 'task', createdAt: new Date().toISOString(), isRead: false, readByUserIds: [] }] }));
   });
   await page.goto('/notifications');
@@ -147,7 +158,7 @@ test('read inbox updates remain discoverable while linked work is open', async (
   await page.getByRole('button', { name: 'Mark read', exact: true }).click();
   await expect(page.getByText('Assigned artwork', { exact: true })).toBeVisible();
   expect((await saved(page)).status).toBe('Pending');
-  await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().updateTaskStatus('workflow-artwork', 'Cancelled'));
+  await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().updateTaskStatus('workflow-artwork', 'Cancelled'));
   await expect(page.getByText('Assigned artwork', { exact: true })).toHaveCount(0);
 });
 
@@ -167,7 +178,7 @@ test('Full edit recovery merges newer untouched fields and confirms overlapping 
   await page.getByLabel('Task Title', { exact: true }).fill('Recovered artwork title');
   await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter(key => key.includes('staff-full-edit')).length)).toBe(1);
   // Simulate a manager's independent edit while Staff has an unsent title.
-  await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.setState(s => ({ tasks: s.tasks.map(task => ({ ...task, notes: 'New manager instructions' })) })));
+  await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.setState(s => ({ tasks: s.tasks.map(task => ({ ...task, notes: 'New manager instructions' })) })));
   await page.reload();
   await page.getByRole('button', { name: 'Full edit', exact: true }).click();
   await page.getByRole('button', { name: 'Restore draft' }).click();
@@ -183,7 +194,7 @@ test('Full edit recovery requires a choice for overlapping manager changes', asy
   await page.getByRole('button', { name: 'Full edit', exact: true }).click();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.getByLabel('Task Title', { exact: true }).fill('My recovered title');
-  await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.setState(s => ({ tasks: s.tasks.map(task => ({ ...task, title: 'Manager updated title' })) })));
+  await page.evaluate(async () => (await import('/src/app/store/workspaceStore.ts')).useStore.setState(s => ({ tasks: s.tasks.map(task => ({ ...task, title: 'Manager updated title' })) })));
   await page.reload();
   await page.getByRole('button', { name: 'Full edit', exact: true }).click();
   page.once('dialog', dialog => dialog.dismiss());
@@ -199,7 +210,7 @@ test('Full edit recovery requires a choice for overlapping manager changes', asy
 test('Staff completion remains restricted even when linked output evidence exists', async ({ page }) => {
   await seed(page, true);
   const result = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.getState().updateTaskAttachment('workflow-artwork', 'https://example.com/output');
     return useStore.getState().updateTaskStatus('workflow-artwork', 'Completed');
   });

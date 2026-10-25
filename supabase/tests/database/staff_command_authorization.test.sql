@@ -127,13 +127,17 @@ select is(
         'createdBy', 'pgtap-staff-actor', 'status', 'Pending', 'visibility', 'internal'
       )
     ))
-  ) ->> 'code'),
+  ) ->> 'code')::text,
   'FORBIDDEN',
   'ordinary Staff cannot assign a newly created task to a coworker'
 );
 
 select is(
-  (public.aitask_execute_command(
+  (command.result ->> 'ok')::boolean,
+  true,
+  'ordinary Staff can still create a task assigned to themselves: ' || command.result::text
+)
+from (select public.aitask_execute_command(
     'pgtap-staff-authorization', gen_random_uuid(), 'task.create',
     jsonb_build_array(jsonb_build_object(
       'kind', 'entity', 'action', 'insert', 'entityType', 'task', 'entityId', 'pgtap-self-task',
@@ -143,10 +147,7 @@ select is(
         'createdBy', 'pgtap-staff-actor', 'status', 'Pending', 'visibility', 'internal'
       )
     ))
-  ) ->> 'ok')::boolean,
-  true,
-  'ordinary Staff can still create a task assigned to themselves'
-);
+  ) as result) command;
 
 -- Revoking the Staff/HOD Create tasks permission must be enforced server-side,
 -- beyond the creator-identity check in aitask_can_mutate_entity.

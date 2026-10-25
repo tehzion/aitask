@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 const openAs = async (page: Page, actorId: string) => {
   await page.evaluate(async id => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ currentUser: useStore.getState().users.find(user => user.id === id)! });
   }, actorId);
   await page.goto('/tasks?taskId=stage-task');
@@ -12,9 +13,10 @@ const openAs = async (page: Page, actorId: string) => {
 test('milestone progress follows role actions from assignment through revision and PM completion', async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto('/login');
+  await waitForWorkspaceHydration(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const base = state.users.find(user => user.name === 'Staff Demo')!;
     const member = (id: string, role: 'Staff' | 'HOD' | 'Project Manager' | 'Client') => ({ ...base, id, name: id, role, departments: role === 'Client' ? ['Client'] : ['Designer'], department: role === 'Client' ? 'Client' : 'Designer', companyName: role === 'Client' ? 'Stage Company' : undefined, customRoleId: undefined, customRoleName: undefined, permissions: undefined, isSuperAdmin: false, mustResetPassword: false });
@@ -28,7 +30,7 @@ test('milestone progress follows role actions from assignment through revision a
   await expect(page.getByRole('progressbar', { name: 'Work progress', exact: true })).toHaveAttribute('aria-valuenow', '10');
   await openAs(page, 'stage-hod');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     if (!useStore.getState().updateTaskAssignee('stage-task', 'stage-staff').ok) throw new Error('HOD delegation failed');
   });
   await openAs(page, 'stage-staff');

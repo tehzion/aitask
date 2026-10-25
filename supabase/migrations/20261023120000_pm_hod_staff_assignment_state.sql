@@ -12,6 +12,7 @@ create or replace function private.aitask_task_assignment_is_valid(
 )
 returns boolean
 language plpgsql
+stable
 security definer
 set search_path = ''
 as $$
@@ -39,6 +40,7 @@ declare
   v_override_actor text := coalesce(p_new_data -> 'assignmentOverride' ->> 'actorId', '');
   v_project_hod_membership_defined boolean := false;
   v_project_staff_membership_defined boolean := false;
+  v_has_eligible_hod boolean := false;
 begin
   -- Client approval commands use a privacy projection and never mutate the
   -- assignment route. Their existing validator remains authoritative.
@@ -62,6 +64,27 @@ begin
       and project.entity_id = v_project_id;
   end if;
 
+  select exists (
+    select 1
+    from public.aitask_members hod
+    join auth.users auth_user on auth_user.id = hod.auth_user_id
+    where hod.workspace_id = p_workspace_id
+      and (hod.role = 'HOD' or hod.custom_role_id = 'builtin-hod')
+      and v_new_department = any(coalesce(hod.departments, array[]::text[]))
+      and (auth_user.banned_until is null or auth_user.banned_until <= now())
+      and (
+        v_project_id is null
+        or not v_project_hod_membership_defined
+        or exists (
+          select 1 from public.aitask_entities project
+          where project.workspace_id = p_workspace_id
+            and project.entity_type = 'project'
+            and project.entity_id = v_project_id
+            and project.data -> 'hodMemberIds' ? hod.id
+        )
+      )
+  ) into v_has_eligible_hod;
+
   -- A complete non-assignment edit must preserve all route fields. This keeps
   -- the fast path while preventing clients from changing state invisibly.
   if p_action = 'update'
@@ -73,12 +96,13 @@ begin
     return true;
   end if;
 
-  -- A newly-created PM task must have a valid HOD handoff. The existing
-  -- Waiting Approval insertion path remains available for explicit review
-  -- tasks, which are not normal production assignments.
+  -- When a live HOD owns this department/project, new PM tasks must enter the
+  -- HOD handoff stage. Preserve the existing direct assignment path when no
+  -- eligible HOD exists, so departments without HOD coverage remain usable.
   if p_action = 'insert'
     and v_actor_role = 'Project Manager'
     and not private.aitask_is_super_admin(p_workspace_id)
+    and v_has_eligible_hod
     and coalesce(p_new_data ->> 'status', '') <> 'Waiting Approval' then
     if v_new_state <> 'pending_hod' or v_new_hod = '' or v_new_assignee <> v_new_hod then
       return false;
@@ -137,7 +161,19 @@ begin
     and not (
       v_actor_is_hod
       and private.aitask_has_permission(p_workspace_id, 'manageCreatedTasks')
-      and (v_old_assignee = v_actor_member_id or v_old_hod = v_actor_member_id)
+      and (
+        v_old_assignee = v_actor_member_id
+        or v_old_hod = v_actor_member_id
+        or (
+          v_old_department = any(coalesce((
+            select member.departments
+            from public.aitask_members member
+            where member.workspace_id = p_workspace_id
+              and member.id = v_actor_member_id
+          ), array[]::text[]))
+          and (v_project_id is null or private.aitask_hod_is_assigned(p_workspace_id, v_project_id))
+        )
+      )
     )
     and not (
       v_actor_role = 'Project Manager'
@@ -160,7 +196,18 @@ begin
   -- HODs may hand pending work to project-authorized Staff only. Staff cannot
   -- self-assign or mutate a route state, even when they share a project.
   if p_action = 'update' and v_actor_is_hod and v_new_assignee <> v_old_assignee then
-    if v_old_hod <> v_actor_member_id and v_old_assignee <> v_actor_member_id then
+    if v_old_hod <> v_actor_member_id
+      and v_old_assignee <> v_actor_member_id
+      and not (
+        v_actor_is_hod
+        and v_old_department = any(coalesce((
+          select member.departments
+          from public.aitask_members member
+          where member.workspace_id = p_workspace_id
+            and member.id = v_actor_member_id
+        ), array[]::text[]))
+        and (v_project_id is null or private.aitask_hod_is_assigned(p_workspace_id, v_project_id))
+      ) then
       return false;
     end if;
   end if;
@@ -170,7 +217,7 @@ begin
   end if;
 
   -- A PM may bypass the HOD stage only through an explicit, reasoned override.
-  if v_new_assignee <> '' and v_new_assignee <> v_old_assignee
+  if v_new_assignee <> ''
     and v_actor_role = 'Project Manager'
     and not private.aitask_is_super_admin(p_workspace_id)
     and exists (
@@ -179,6 +226,15 @@ begin
         and target.id = v_new_assignee
         and target.role = 'Staff'
         and coalesce(target.custom_role_id, '') <> 'builtin-hod'
+    )
+    and v_has_eligible_hod
+    and not (p_action = 'insert' and coalesce(p_new_data ->> 'status', '') = 'Waiting Approval')
+    and (
+      p_action = 'insert'
+      or v_new_assignee <> v_old_assignee
+      or v_new_department is distinct from v_old_department
+      or v_new_hod is distinct from v_old_hod
+      or v_new_state is distinct from v_old_state
     )
     and v_override_reason = '' then
     return false;
@@ -235,7 +291,7 @@ create or replace function private.aitask_can_mutate_entity(
 )
 returns boolean
 language plpgsql
-stable
+volatile
 security definer
 set search_path = ''
 as $$
@@ -290,6 +346,35 @@ end;
 $$;
 
 revoke all on function private.aitask_can_mutate_entity(text, text, text, text, text, jsonb, jsonb) from public, anon, authenticated;
+grant execute on function private.aitask_can_mutate_entity(text, text, text, text, text, jsonb, jsonb) to service_role;
+
+-- Renaming the previous validator preserves its function OID, so existing RLS
+-- policies would otherwise keep calling the legacy validator. Rebind those
+-- policies to the new wrapper; command RPCs and RLS then share the same
+-- assignment boundary without granting direct execution to authenticated users.
+drop policy if exists "members can insert authorized entities" on public.aitask_entities;
+create policy "members can insert authorized entities" on public.aitask_entities
+  for insert to authenticated
+  with check (private.aitask_can_mutate_entity(
+    workspace_id, 'insert', entity_type, entity_id, parent_id, '{}'::jsonb, data
+  ));
+
+drop policy if exists "members can update authorized entities" on public.aitask_entities;
+create policy "members can update authorized entities" on public.aitask_entities
+  for update to authenticated
+  using (private.aitask_can_mutate_entity(
+    workspace_id, 'update', entity_type, entity_id, parent_id, data, data
+  ))
+  with check (private.aitask_can_mutate_entity(
+    workspace_id, 'update', entity_type, entity_id, parent_id, data, data
+  ));
+
+drop policy if exists "members can delete authorized entities" on public.aitask_entities;
+create policy "members can delete authorized entities" on public.aitask_entities
+  for delete to authenticated
+  using (private.aitask_can_mutate_entity(
+    workspace_id, 'delete', entity_type, entity_id, parent_id, data, '{}'::jsonb
+  ));
 
 -- Keep the explicit routing decision in the task's server-stamped history as
 -- well as in the durable task payload. This trigger runs after the existing

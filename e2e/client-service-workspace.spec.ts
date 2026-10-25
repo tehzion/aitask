@@ -11,8 +11,8 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await page.goto('/login');
 
   const seeded = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } = await import('/src/lib/serviceManagement.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } = await import('/src/modules/services/domain/serviceManagement.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
@@ -101,7 +101,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expect(page.getByText('Internal production checkpoint')).toBeVisible();
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     localStorage.setItem('aitask:release-notice:2026-08-service-operations:operation-e2e', 'acknowledged');
     useStore.setState({ currentUser: { id: 'operation-e2e', name: 'Operation E2E', role: 'Staff', departments: ['Operation'], department: 'Operation', workerType: 'employee', permissions: { manageServiceCycles: true, createTasks: true, viewAllServiceClients: true, viewDashboard: true, viewTasks: true, viewCalendar: true, viewProjects: true } } });
   });
@@ -124,7 +124,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expect(page).toHaveURL(/\/tasks\?.*taskId=/);
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     localStorage.setItem('aitask:release-notice:2026-08-service-operations:account-e2e', 'acknowledged');
     useStore.setState({ currentUser: { id: 'account-e2e', name: 'Account E2E', role: 'Staff', departments: ['Account & Finance'], department: 'Account & Finance', workerType: 'employee', permissions: { viewDashboard: true, viewAllServiceClients: true, viewServicePrices: true, viewProductionReports: true } } });
   });
@@ -137,7 +137,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expectNoAxeViolations(page, 'Account dashboard');
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     localStorage.setItem('aitask:release-notice:2026-08-service-operations:client-e2e', 'acknowledged');
     useStore.setState({ currentUser: { id: 'client-e2e', name: 'Customized Client', role: 'Client', departments: ['Client'], department: 'Client', companyName: 'Customized Co', permissions: { viewDashboard: true } } });
   });

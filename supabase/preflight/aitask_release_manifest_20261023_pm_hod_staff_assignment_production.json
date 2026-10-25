@@ -1,20 +1,23 @@
 {
-  "manifestVersion": "2026-10-23.2",
+  "manifestVersion": "2026-10-24.1",
   "manifestKind": "aitask-release-candidate",
   "supersedes": "aitask_release_manifest_20261021_monthly_renewal_production.json",
   "immutable": false,
-  "capturedAt": "2026-10-23T00:00:00Z",
+  "capturedAt": "2026-10-24T09:35:20Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "Production verified through repository 20261023180000_bind_service_command_entity_types via connector-generated migration aliases.",
+  "status": "Release candidate: production history is verified through repository 20261023180000_bind_service_command_entity_types; 20261024090000_security_boundary_hardening is locally validated and pending production rollout.",
   "validatedMigrationTail": [
     "20261020131544_project_management_completion",
     "20261021110000_monthly_plan_renewal_integrity",
     "20261023120000_pm_hod_staff_assignment_state",
     "20261023150000_hod_task_execution_permissions",
     "20261023170000_task_workflow_action_guards",
-    "20261023180000_bind_service_command_entity_types"
+    "20261023180000_bind_service_command_entity_types",
+    "20261024090000_security_boundary_hardening"
   ],
-  "pendingProductionMigrations": [],
+  "pendingProductionMigrations": [
+    "20261024090000_security_boundary_hardening"
+  ],
   "productionVerification": {
     "historyAligned": false,
     "historyThrough": "20261023154255_bind_service_command_entity_types",
@@ -49,7 +52,9 @@
     }
   },
   "qualityGates": {
-    "applicationChecks": "PASS: pnpm check, pnpm lint, pnpm test (120 files / 919 tests), pnpm build, pnpm verify:bundle, pnpm verify:i18n, pnpm verify:migrations, focused accessibility/app smoke (2 passed)",
-    "disposableSupabaseStack": "PENDING: requires local Docker daemon"
+    "applicationChecks": "PASS: pnpm check, pnpm lint, pnpm test (121 files / 927 tests), pnpm verify:architecture (226 source files; no runtime or type-inclusive cycles), pnpm verify:i18n (0 findings), pnpm verify:bundle, and full Playwright browser suite (365/365). Production build and bundle budgets pass; the existing workspaceRuntime >500 kB raw chunk warning remains.",
+    "disposableSupabaseStack": "PASS: all 125 repository migrations replayed; 76 pgTAP files / 1,161 assertions passed; schema lint reported no errors; security advisors returned 25 INFO findings only; local authenticated role, HOD assignment, review, storage, save recovery, and phase 5 UAT passed (8 scenario groups / 84 assertions).",
+    "productionDatabaseAlignment": "BLOCKED: repository migration 20261024090000_security_boundary_hardening is pending production. The immutable production history was not changed; production alignment verification correctly fails until an approved rollout and reconciliation are completed.",
+    "productionReleaseDecision": "NO-GO pending production migration rollout approval, production alignment verification, and deployment-specific validation. No deployment or production write was performed."
   }
 }

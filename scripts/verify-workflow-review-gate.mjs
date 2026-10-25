@@ -33,13 +33,37 @@ try {
   insert('client', { id: 'review-company', clientName: 'Review QA', createdBy: 'review-pm', createdAt: '2026-10-01', updatedAt: '2026-10-01' });
   insert('service_cycle', { id: 'review-cycle', clientId: 'review-company', clientName: 'Review QA', planId: 'review-plan', planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Published', currency: 'MYR', serviceItems: [{ id: 'review-service', name: 'Design', unit: 'output', quantity: 1, platforms: [], unitPriceMinor: 0, workflow }], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' });
   insert('deliverable', { id: 'review-output', clientId: 'review-company', clientName: 'Review QA', planId: 'review-plan', cycleId: 'review-cycle', serviceItemId: 'review-service', sequence: 1, title: 'Reviewed output', status: 'Planned', taskIds: [], attachments: [], createdAt: '2026-10-01', updatedAt: '2026-10-01' });
+  // Keep the normal RPC response while exposing its caught SQL error inside
+  // this disposable database if generated-workflow verification fails.
+  sql(`do $diagnostic$
+    declare definition text;
+    begin
+      definition := pg_get_functiondef('public.aitask_execute_service_command(text,uuid,text,jsonb,bigint)'::regprocedure);
+      if position($message$'The service command contains invalid data.'$message$ in definition) = 0 then
+        raise exception 'Expected generic service-command validation handler';
+      end if;
+      execute replace(definition, $message$'The service command contains invalid data.'$message$, 'SQLERRM');
+    end;
+    $diagnostic$;`);
+  sql(`do $task_diagnostic$
+    declare definition text;
+    begin
+      definition := pg_get_functiondef('public.aitask_execute_command_legacy(text,uuid,text,jsonb)'::regprocedure);
+      if position($message$'The command contains invalid data.'$message$ in definition) = 0 then
+        raise exception 'Expected generic command validation handler';
+      end if;
+      execute replace(definition, $message$'The command contains invalid data.'$message$, 'SQLERRM');
+    end;
+    $task_diagnostic$;`);
   process.env.VITE_SUPABASE_URL = url;
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = process.env.AITASK_LOCAL_TEST_PUBLIC;
   process.env.VITE_AITASK_BACKEND = 'supabase';
   server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
-  ({ supabase } = await server.ssrLoadModule('/src/lib/supabaseClient.ts'));
-  const secure = await server.ssrLoadModule('/src/lib/secureWorkspace.ts');
-  const { useStore, clearWorkspaceSession } = await server.ssrLoadModule('/src/store/index.ts');
+  const { SHORT_VIDEO_WORKFLOW_TEMPLATE } = await server.ssrLoadModule('/src/modules/services/domain/serviceManagement.ts');
+  insert('service_workflow_template', SHORT_VIDEO_WORKFLOW_TEMPLATE);
+  ({ supabase } = await server.ssrLoadModule('/src/infrastructure/database/supabaseClient.ts'));
+  const secure = await server.ssrLoadModule('/src/infrastructure/api/secureWorkspace.ts');
+  const { useStore, clearWorkspaceSession } = await server.ssrLoadModule('/src/app/store/workspaceStore.ts');
   const initial = useStore.getState();
   const login = async id => {
     clearWorkspaceSession({ discardPending: true });
@@ -51,6 +75,29 @@ try {
   };
   const save = async (label, result, type = 'task.update') => {
     assert.equal(result.ok, true, `${label}: action rejected: ${result.error}`);
+    if (label === 'HOD approval') {
+      const taskId = useStore.getState().tasks.find(item => item.workflowStepId === 'review-step')?.id;
+      const operation = secure.buildOperations(useStore.getState(), { actorMemberId: 'review-hod' }).find(item => item.entityType === 'task' && item.entityId === taskId);
+      const actor = accounts.find(item => item.id === 'review-hod');
+      const data = JSON.stringify(operation?.data || {}).replaceAll("'", "''");
+      const diagnostic = sql(`begin;
+        select set_config('request.jwt.claim.sub','${actor.authId}',true);
+        select jsonb_build_object(
+          'memberRole',private.aitask_member_role('aitask-main'),
+          'isHod',private.aitask_is_hod('aitask-main'),
+          'departmentScoped',private.aitask_role_is_department_scoped('aitask-main'),
+          'canEdit',private.aitask_can_edit_task('aitask-main','${taskId}'),
+          'patchValid',private.aitask_hod_task_execution_patch_is_valid('aitask-main',task.data,'${data}'::jsonb),
+          'canMutate',private.aitask_can_mutate_entity('aitask-main','update','task','${taskId}',task.parent_id,task.data,'${data}'::jsonb),
+          'canSign',private.aitask_can_sign_task_review('aitask-main',task.data,'${data}'::jsonb->>'reviewOverrideReason'),
+          'changedKeys',(select jsonb_object_agg(key,jsonb_build_array(task.data->key,'${data}'::jsonb->key)) from jsonb_object_keys(task.data || '${data}'::jsonb) keys(key) where task.data->key is distinct from '${data}'::jsonb->key),
+          'restrictedDiffs',(select jsonb_agg(key) from jsonb_object_keys(task.data || '${data}'::jsonb) keys(key) where key=any(array['projectId','projectName','clientId','clientName','serviceType','serviceCycleId','deliverableId','milestoneId','department','visibility','customerDetails','facebookPage','website','isRecurring','recurrenceFrequency','assignedBy','assignedAt','responsibleHodId','assignmentState','assignmentOverride','clientApprovalStatus','reviewEvidence','reviewAccess','reviewDecision','reviewCover','accountableLeadId','requiresInternalApproval','approvalMode','outputAttachments','workflowStepKind','workflowStepId','workflowStepOrder','workflowStepRequired','workflowTemplateId','workflowTemplateRevision','generatedFromDeliverable','predecessorTaskIds','workflowOutputVersion','workflowDependenciesReady','internalReview','reviewOverrideReason']) and task.data->key is distinct from '${data}'::jsonb->key),
+          'taskDepartment',task.data->>'department',
+          'memberDepartments',(select to_jsonb(member.departments) from public.aitask_members member where member.auth_user_id=auth.uid() and member.workspace_id='aitask-main')
+        ) from public.aitask_entities task where task.workspace_id='aitask-main' and task.entity_type='task' and task.entity_id='${taskId}';
+        rollback;`);
+      console.log(`[review-gate] HOD SQL diagnostic: ${diagnostic}`);
+    }
     useStore.setState(state => ({ backend: { ...state.backend, hasLocalChanges: true, pendingMutations: 1, pendingCommandType: type } }));
     const saved = await useStore.getState().commitPendingMutation(type);
     assert.equal(saved.ok, true, `${label}: save failed: ${saved.error}`);
@@ -66,6 +113,7 @@ try {
   }
   await login('review-worker');
   assert.equal(useStore.getState().updateTaskStatus(reviewId, 'Completed').ok, false);
+  await save('Work start', useStore.getState().updateTaskStatus(workId, 'In Progress'));
   await save('Work submission', useStore.getState().updateTaskStatus(workId, 'Waiting Approval'));
   await login('review-pm');
   await save('Designer PM review fallback', useStore.getState().updateTaskStatus(workId, 'Approved'));
@@ -77,6 +125,7 @@ try {
   const review = useStore.getState().tasks.find(item => item.id === reviewId);
   const forged = await supabase.rpc('aitask_execute_command', { p_workspace_id: 'aitask-main', p_command_id: randomUUID(), p_command_type: 'task.update', p_operations: [{ kind: 'entity', action: 'update', entityType: 'task', entityId: reviewId, expectedVersion: review.version, data: { ...review, status: 'Completed', isCompleted: true, workflowStepKind: 'work', internalReview: { reviewedBy: 'review-hod' } } }] });
   assert.equal(forged.data?.ok, false, 'canonical SQL must reject a crafted browser request');
+  await save('Review start', useStore.getState().updateTaskStatus(reviewId, 'In Progress'));
   await save('Review submission', useStore.getState().updateTaskStatus(reviewId, 'Waiting Approval'));
   await login('review-hod');
   assert.equal(useStore.getState().tasks.find(item => item.id === reviewId).reviewEvidence.links[0].url, 'https://example.com/output.pdf');
@@ -102,6 +151,7 @@ try {
   assert.equal(useStore.getState().tasks.find(item => item.id === reviewId).internalReview, undefined);
   await save('Return unsigned legacy review', useStore.getState().requestRevision(reviewId, 'Review legacy output again'), 'approval.revision');
   await login('review-worker');
+  await save('Legacy review start', useStore.getState().updateTaskStatus(reviewId, 'In Progress'));
   await save('Legacy resubmission', useStore.getState().updateTaskStatus(reviewId, 'Waiting Approval'));
   await login('review-hod');
   await save('Explicit legacy sign-off', useStore.getState().updateTaskStatus(reviewId, 'Approved'));
@@ -114,6 +164,7 @@ try {
   const completedDecision = useStore.getState().tasks.find(item => item.id === reviewId).internalReview.decisionId;
   await save('Private retrospective', useStore.getState().updateTask(reviewId, { notes: 'Private retrospective' }));
   assert.equal(useStore.getState().tasks.find(item => item.id === reviewId).internalReview.decisionId, completedDecision);
+  await save('Publication start', useStore.getState().updateTaskStatus(publishId, 'In Progress'));
   await save('Publication submission', useStore.getState().updateTaskStatus(publishId, 'Waiting Approval'));
   await login('review-pm');
   await save('Publication review', useStore.getState().updateTaskStatus(publishId, 'Approved'));

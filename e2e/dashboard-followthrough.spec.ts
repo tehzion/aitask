@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 test.use({ timezoneId: 'Asia/Jakarta' });
 test.describe.configure({ timeout: 90_000 });
@@ -8,9 +9,10 @@ const seedBoss = async (page: Page, time = '2026-10-07T07:00:00Z') => {
   await page.clock.pauseAt(new Date(time));
   await page.goto('/login');
   await expect(page.getByLabel('Email or username')).toBeVisible();
+  await waitForWorkspaceHydration(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
@@ -20,7 +22,7 @@ const seedBoss = async (page: Page, time = '2026-10-07T07:00:00Z') => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Agency operations' })).toBeVisible();
   await page.evaluate(async () => {
-    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const task = { ...state.tasks[0], clientName: 'Followup Company', clientId: 'followup-company', department: 'Designer', assignedTo: state.currentUser!.id, status: 'In Progress', isCompleted: false, completedAt: undefined, comments: [], approvalHistory: [] };
     useStore.setState({
@@ -48,7 +50,7 @@ const expectReportMetric = async (page: Page, label: string, value: number) => {
 test('dashboard overdue drilldown and task quick filters use the same task set', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await seedBoss(page);
-  await page.locator('a[href="/tasks?focus=overdue"]').click();
+  await page.locator('a[href="/tasks?focus=overdue"]').first().click();
   await expect(page.getByText('Followup overdue', { exact: true }).first()).toBeVisible();
   for (const title of ['Followup today', 'Followup completed', 'Followup invalid', 'Followup cancelled']) {
     await expect(page.getByText(title, { exact: true })).toHaveCount(0);
@@ -85,7 +87,7 @@ test('weekly task links update to the new work week on Monday', async ({ page })
   await page.setViewportSize({ width: 1600, height: 1000 });
   await seedBoss(page, '2026-10-11T16:59:50Z');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const task = useStore.getState().tasks[0];
     useStore.setState({ tasks: [
       { ...task, id: 'followup-saturday', title: 'Followup Saturday', dueDate: '2026-10-10' },
@@ -117,7 +119,7 @@ test('reports recalculate open and overdue outcomes at midnight without new task
 test('the report cohort window advances on Monday', async ({ page }) => {
   await seedBoss(page, '2026-10-11T16:59:50Z');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const task = useStore.getState().tasks[0];
     useStore.setState({ tasks: [
       { ...task, id: 'followup-expiring', dueDate: '2026-09-14' },
@@ -144,7 +146,7 @@ test('historical completed tasks do not have overdue styling in recent completio
 
 const seedCompanyCycles = async (page: Page) => {
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const plan = { id: 'followup-plan', clientId: 'followup-company', clientName: 'Followup Company', name: 'Followup Plan', revision: 1, status: 'Active', currency: 'MYR', origin: 'custom', serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0, startDate: '2026-10-01', billingDay: 1, createdBy: state.currentUser!.id, createdAt: '2026-10-01', updatedAt: '2026-10-01' };
     const cycle = { id: 'followup-current-cycle', clientId: plan.clientId, clientName: plan.clientName, planId: plan.id, planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Draft', currency: 'MYR', serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' };
@@ -175,12 +177,12 @@ test('company operations keeps current draft planning separate from confirmed pr
   await expect(page.getByText('Awaiting publication', { exact: true })).toBeVisible();
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ serviceCycles: useStore.getState().serviceCycles.map(cycle => cycle.id === 'followup-current-cycle' ? { ...cycle, status: 'Published' } : cycle) });
   });
   await expect(page.getByText('Delivered 0/3', { exact: true })).toBeVisible();
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ serviceCycles: useStore.getState().serviceCycles.filter(cycle => cycle.id !== 'followup-current-cycle') });
   });
   await expect(page.getByText('No current published cycle', { exact: true })).toBeVisible();
@@ -194,7 +196,7 @@ test('company operations progresses to the next dated cycle at midnight', async 
   await seedBoss(page, '2026-10-31T15:59:50Z');
   await seedCompanyCycles(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ serviceCycles: useStore.getState().serviceCycles.map(cycle => cycle.id === 'followup-current-cycle' ? { ...cycle, status: 'Published' } : cycle) });
   });
   await page.goto('/clients/followup-company');

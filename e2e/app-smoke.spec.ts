@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 const switchDemoAccount = async (page: import('@playwright/test').Page, username: string) => {
   await page.getByRole('button', { name: 'Logout' }).click();
@@ -134,7 +135,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.setViewportSize({ width: 1280, height: 800 });
   await switchDemoAccount(page, 'Boss Koo');
   await page.evaluate(async () => {
-    const { stopBackendAutoSync } = await import('/src/store/index.ts');
+    const { stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');
     stopBackendAutoSync();
   });
   await page.getByRole('tab', { name: 'Agency pulse' }).click();
@@ -153,7 +154,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.goto('/');
 
   await page.evaluate(async () => {
-    const { stopBackendAutoSync, useStore } = await import('/src/store/index.ts');
+    const { stopBackendAutoSync, useStore } = await import('/src/app/store/workspaceStore.ts');
     stopBackendAutoSync();
     useStore.setState({ notifications: [], notificationUnreadCount: 0 });
   });
@@ -162,7 +163,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(headerNotificationButton.locator('span')).toHaveCount(0);
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
@@ -183,12 +184,12 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByRole('article', { name: 'New notification: Task Status Updated' })).toHaveCount(0);
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ notifications: [] });
   });
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
@@ -216,7 +217,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
@@ -247,13 +248,13 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(lockedPopup).toBeHidden();
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
   const pendingTaskMutation = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const backend = useStore.getState().backend;
     return { status: backend.status, pendingMutations: backend.pendingMutations, hasLocalChanges: backend.hasLocalChanges };
   });
   expect(pendingTaskMutation).toEqual({ status: 'retry_required', pendingMutations: 1, hasLocalChanges: true });
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: current.notifications.filter(notification => notification.id !== 'popup-notification-locked'),
@@ -270,7 +271,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(lockedPopup).toBeHidden();
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
@@ -299,7 +300,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(headerNotificationButton.locator('span')).toHaveCount(0);
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
@@ -325,7 +326,7 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const current = useStore.getState();
     useStore.setState({
       notifications: [{
@@ -359,7 +360,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.evaluate(async () => {
     window.dispatchEvent(new Event('online'));
     window.dispatchEvent(new Event('aitask:pwa-update-ready'));
-    const toastPath = '/src/store/useToastStore.ts';
+    const toastPath = '/src/shared/feedback/useToastStore.ts';
     const { useToastStore } = await import(toastPath);
     useToastStore.getState().addToast('Mobile overlay QA', 'info');
   });
@@ -375,7 +376,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await mobilePopup.getByRole('button', { name: 'Dismiss notification: Mobile Popup QA' }).click();
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const current = useStore.getState();
     const now = Date.now();
     useStore.setState({
@@ -632,7 +633,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByText('Manage assigned clients', { exact: true })).toBeVisible();
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const kept = state.registrations.filter(reg => (
       reg.id !== 'e2e-reg-qa'
@@ -662,7 +663,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(page.getByRole('heading', { name: 'Delivery tracker', level: 1 })).toBeVisible();
 
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const current = useStore.getState();
     const client = current.users.find(user => user.role === 'Client');
     if (!client) throw new Error('Expected a Client demo account');
@@ -762,15 +763,15 @@ test('first login reaches the app and critical responsive routes remain usable',
   }
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.evaluate(() => {
-    const raw = window.localStorage.getItem('market-task-storage');
-    if (!raw) throw new Error('Expected local AiTask state');
-    const stored = JSON.parse(raw);
-    stored.state.currentUser = {
-      ...stored.state.currentUser,
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const current = useStore.getState();
+    if (!current.currentUser) throw new Error('Expected a signed-in local user');
+    const restrictedUser = {
+      ...current.currentUser,
       id: 'e2e-task-only-role',
       name: 'Task Only User',
-      role: 'Staff',
+      role: 'Staff' as const,
       isSuperAdmin: false,
       mustResetPassword: false,
       permissions: {
@@ -793,18 +794,27 @@ test('first login reaches the app and critical responsive routes remain usable',
         clientReview: false,
       },
     };
-    stored.state.users = [
-      ...stored.state.users.filter((user: { id: string }) => user.id !== stored.state.currentUser.id),
-      stored.state.currentUser,
-    ];
+    useStore.setState(state => ({
+      currentUser: restrictedUser,
+      users: [...state.users.filter(user => user.id !== restrictedUser.id), restrictedUser],
+    }));
     localStorage.setItem(
       'aitask:release-notice:2026-08-service-operations:e2e-task-only-role',
       'acknowledged',
     );
-    window.localStorage.setItem('market-task-storage', JSON.stringify(stored));
     window.sessionStorage.clear();
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
+    if (!enablePasswordResetBypass(restrictedUser.id)) {
+      throw new Error('Expected the local fixture to bypass password setup before testing route permissions');
+    }
   });
   await page.reload();
+  await waitForWorkspaceHydration(page);
+  await expect.poll(() => page.evaluate(async () => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    return useStore.getState().currentUser?.id;
+  })).toBe('e2e-task-only-role');
+  await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
   const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
   await expect(mobileNav.getByText('Dashboard', { exact: true })).toHaveCount(0);
@@ -815,12 +825,12 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.goto('/tasks');
   await expect(page.getByRole('heading', { name: 'Action Centre' })).toBeVisible();
-  await page.evaluate(() => {
-    const raw = window.localStorage.getItem('market-task-storage');
-    if (!raw) throw new Error('Expected local AiTask state');
-    const stored = JSON.parse(raw);
-    stored.state.currentUser.mustResetPassword = true;
-    window.localStorage.setItem('market-task-storage', JSON.stringify(stored));
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const currentUser = useStore.getState().currentUser;
+    if (!currentUser) throw new Error('Expected a signed-in local user');
+    useStore.setState({ currentUser: { ...currentUser, mustResetPassword: true } });
+    window.sessionStorage.removeItem(`aitask:password-reset-bypass:${currentUser.id}`);
   });
   await page.reload();
   await expect(page).toHaveURL(/\/settings$/);

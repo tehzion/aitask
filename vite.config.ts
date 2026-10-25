@@ -112,7 +112,7 @@ export default defineConfig(({ mode }) => {
           reportsCharts: ['recharts'],
           // State, localization, and class merging load at startup. Share one chunk to
           // reduce request and compression overhead in the eager graph.
-          workspaceRuntime: ['./src/store/index.ts', './src/lib/i18n.ts', 'tailwind-merge', 'clsx'],
+          workspaceRuntime: ['./src/app/store/workspaceStore.ts', './src/shared/i18n/i18n.ts', 'tailwind-merge', 'clsx'],
         },
       },
     },

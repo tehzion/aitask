@@ -1,24 +1,29 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
-const seedBoss = async (page: Page) => {
+const seedBoss = async (page: Page, provisionExistingPassword = false) => {
   await page.goto('/login');
-  await page.evaluate(async () => {
+  await waitForWorkspaceHydration(page);
+  await page.evaluate(async provisionExistingPassword => {
     localStorage.setItem('aitask:locale', 'en');
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { DEFAULT_USER_PASSWORD, enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
+    const { setLocalUserPassword } = await import('/src/modules/authentication/domain/localCredentials.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
+    if (provisionExistingPassword) await setLocalUserPassword(boss.id, DEFAULT_USER_PASSWORD);
     localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
-    useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
-  });
+    const readyBoss = { ...boss, mustResetPassword: false };
+    useStore.setState({ currentUser: readyBoss, users: state.users.map(user => user.id === boss.id ? readyBoss : user), backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
+  }, provisionExistingPassword);
 };
 
 test('an old role response cannot clear another account’s in-flight role draft', async ({ page }) => {
   await seedBoss(page);
   await page.goto('/approvals?tab=roles');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const finish: Array<() => void> = [];
     (window as unknown as { finishRoles: Array<() => void> }).finishRoles = finish;
     useStore.setState({ commitPendingMutation: () => new Promise(resolve => finish.push(() => resolve({ ok: true }))) });
@@ -27,8 +32,8 @@ test('an old role response cannot clear another account’s in-flight role draft
   await name.fill('First account role');
   await page.getByRole('button', { name: 'Create Role', exact: true }).click();
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     enablePasswordResetBypass('another-role-account');
     localStorage.setItem('aitask:release-notice:2026-08-service-operations:another-role-account', 'acknowledged');
     useStore.setState(state => ({ currentUser: { ...state.currentUser!, id: 'another-role-account', mustResetPassword: false } }));
@@ -46,13 +51,13 @@ test('an old role response cannot clear another account’s in-flight role draft
 });
 
 test('password exception retains fields and releases its save control', async ({ page }) => {
-  await seedBoss(page);
+  await seedBoss(page, true);
   await page.goto('/settings');
   await page.getByLabel('Current Password', { exact: true }).fill('Password123!');
   await page.getByLabel('New Password', { exact: true }).fill('NextPassword123!');
   await page.getByLabel('Confirm Password', { exact: true }).fill('NextPassword123!');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ updateCurrentUserPassword: async () => { throw new Error('Injected password exception'); } });
   });
   await page.getByRole('button', { name: 'Update password', exact: true }).click();
@@ -67,14 +72,14 @@ test('discarded status creation keeps its newer draft and shows review feedback'
   const input = page.getByPlaceholder('e.g. Under QA, Draft');
   await input.fill('Discarded status');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Injected uncertain status' }) });
   });
   await page.getByRole('button', { name: 'Add Status', exact: true }).click();
   await expect(page.getByText('Injected uncertain status')).toBeVisible();
   await input.fill('Next status draft');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState(state => ({ taskStatuses: state.taskStatuses.filter(status => status !== 'Discarded status'), commitPendingMutation: async () => ({ ok: true }) }));
   });
   await page.getByRole('button', { name: 'Retry save', exact: true }).click();

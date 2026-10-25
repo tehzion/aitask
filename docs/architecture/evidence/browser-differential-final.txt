@@ -1,0 +1,8 @@
+  ✓  1 [desktop-chrome] › e2e/company-profile-actions.spec.ts:336:1 › deletion confirmation lists linked record counts before any records are changed (5.6s)
+  ✓  2 [desktop-chrome] › e2e/responsive-audit.spec.ts:90:3 › responsive role and route audit › covers every role fixture across the responsive route matrix (1.3m)
+  ✓  3 [desktop-chrome] › e2e/staff-hod-ui-feedback.spec.ts:58:5 › Staff en review enquiry stays a comment and does not mark work blocked (1.6s)
+  ✓  4 [desktop-chrome] › e2e/staff-hod-ui-feedback.spec.ts:58:5 › Staff zh review enquiry stays a comment and does not mark work blocked (1.7s)
+  ✓  5 [desktop-chrome] › e2e/staff-save-recovery.spec.ts:45:1 › Staff slow comment acknowledgement preserves newer input (1.5s)
+  ✓  6 [desktop-chrome] › e2e/staff-save-recovery.spec.ts:213:1 › Staff full editor also retains comments typed during saving (2.0s)
+  ✓  7 [desktop-chrome] › e2e/ui-message-audit.spec.ts:113:3 › Conflict en: field names are readable and recovery uses saved data (1.2s)
+  7 passed (1.6m)

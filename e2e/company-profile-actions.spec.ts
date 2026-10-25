@@ -1,3 +1,4 @@
+import { waitForWorkspaceBoot } from './fixtures/workspaceBoot';
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
@@ -5,9 +6,10 @@ const companyName = 'QA Profile Company';
 
 const seedCompany = async (page: Page) => {
   await page.goto('/login');
+  await waitForWorkspaceBoot(page);
   return page.evaluate(async name => {
-    const { useStore } = await import('/src/store/index.ts');
-    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
@@ -113,7 +115,7 @@ for (const desktop of [true, false]) {
     await expect(page.getByText('No companies found', { exact: true })).toBeVisible();
 
     const remaining = await page.evaluate(async id => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       const state = useStore.getState();
       return {
         clients: state.clients.filter(item => item.id === id).length,
@@ -140,7 +142,7 @@ test('a rejected save keeps the company form open with the entered details and a
   const dialog = await openEditor(page, true);
   await dialog.getByPlaceholder('e.g. John Doe').fill('Unsaved contact');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Supabase did not confirm this save.' }) });
   });
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
@@ -174,7 +176,7 @@ test('a linked client account does not recreate a deleted company in the Compani
   await page.setViewportSize({ width: 1600, height: 1000 });
   await seedCompany(page);
   await page.evaluate(async name => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     useStore.setState({ users: [...state.users, {
       id: 'qa-linked-client-account', name: 'QA Client Account', role: 'Client',
@@ -197,7 +199,7 @@ for (const action of ['delete', 'rename'] as const) {
     await page.getByRole('button', { name: 'More actions' }).click();
     await page.getByRole('menuitem', { name: 'Details', exact: true }).click();
     await page.evaluate(async kind => {
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       const state = useStore.getState();
       const audit = window as unknown as { companyApplyCalls: number; companyRetryCalls: number };
       audit.companyApplyCalls = 0;
@@ -246,7 +248,7 @@ test('contact edits typed during saving stay dirty and can be saved afterward', 
   await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
   const dialog = await openEditor(page, true);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: () => new Promise(resolve => {
       (window as unknown as { finishCompanySave: () => void }).finishCompanySave = () => resolve({ ok: true });
     }) });
@@ -261,11 +263,11 @@ test('contact edits typed during saving stay dirty and can be saved afterward', 
   await expect(contact).toHaveValue('Later contact edit');
   await expect(dialog.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
   expect(await page.evaluate(async () => {
-    const { hasUnsavedChanges } = await import('/src/lib/unsavedChanges.ts');
+    const { hasUnsavedChanges } = await import('/src/shared/forms/unsavedChanges.ts');
     return hasUnsavedChanges();
   })).toBe(true);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: true }) });
   });
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
@@ -282,7 +284,7 @@ test('failed contact saves have no success toast and retry the submitted form be
   await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
   const dialog = await openEditor(page, true);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Contact save not confirmed.' }) });
   });
   await dialog.getByLabel('Contact Person', { exact: true }).fill('Submitted contact');
@@ -291,13 +293,13 @@ test('failed contact saves have no success toast and retry the submitted form be
   await expect(page.getByText(`Client details saved for "${companyName}".`, { exact: true })).toHaveCount(0);
   await dialog.getByLabel('Contact Person', { exact: true }).fill('Later draft');
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: true }) });
   });
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(dialog.getByLabel('Contact Person', { exact: true })).toHaveValue('Later draft');
   expect(await page.evaluate(async name => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     return useStore.getState().clients.find(client => client.clientName === name)?.contactPerson;
   }, companyName)).toBe('Submitted contact');
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
@@ -325,7 +327,7 @@ for (const mobile of [false, true]) {
     await confirmation.getByRole('button', { name: 'Discard changes' }).click();
     await expect(dialog).toBeHidden();
     expect(await page.evaluate(async () => {
-      const { hasUnsavedChanges } = await import('/src/lib/unsavedChanges.ts');
+      const { hasUnsavedChanges } = await import('/src/shared/forms/unsavedChanges.ts');
       return hasUnsavedChanges();
     })).toBe(false);
   });
@@ -336,7 +338,7 @@ test('deletion confirmation lists linked record counts before any records are ch
   const fixture = await seedCompany(page);
   await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
   const counts = await page.evaluate(async id => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     return [state.tasks.filter(item => item.clientId === id).length, state.projects.filter(item => item.clientId === id).length,
       state.clientPlans.filter(item => item.clientId === id).length, state.serviceCycles.filter(item => item.clientId === id).length,
@@ -365,7 +367,7 @@ test('discarding a rejected company deletion reloads saved data before closing',
   await seedCompany(page);
   await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const saved = useStore.getState();
     useStore.setState({
       commitPendingMutation: async () => {

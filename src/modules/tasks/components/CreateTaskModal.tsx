@@ -1,0 +1,848 @@
+import { ChevronDown, Plus, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useShallow } from 'zustand/react/shallow';
+import BackendFreshness from '../../../app/shell/BackendFreshness';
+import DraftRecoveryNotice from '../../../app/shell/DraftRecoveryNotice';
+import { useStore } from '../../../app/store/workspaceStore';
+import { isPendingMutationResolution } from '../../../infrastructure/commands/mutationGuard';
+import { safeHttpsUrl } from '../../../infrastructure/serialization/security';
+import { canAssignTasksToOthers, canCreateTasks, canManageProjects, getAssignableProjects, getVisibleClientNames, getVisibleTasks } from '../../../shared/authorization/access';
+import { assignableDepartments, getMemberDepartments } from '../../../shared/authorization/departments';
+import { assignableTaskAssignees, eligibleTaskHods } from '../../../shared/authorization/taskWorkflowAccess';
+import { useI18n } from '../../../shared/components/I18nProvider';
+import ModalShell from '../../../shared/components/ModalShell';
+import SystemMessage from '../../../shared/components/SystemMessage';
+import { modalFooter } from '../../../shared/components/uiTokens';
+import { acknowledgeActionFeedback } from '../../../shared/feedback/actionFeedback';
+import { useRecoverableForm } from '../../../app/hooks/useRecoverableForm';
+import { useSaveAction } from '../../../app/hooks/useSaveAction';
+import { useUnsavedChanges } from '../../../shared/hooks/useUnsavedChanges';
+import '../../../shared/i18n/uxEnhancementCopy';
+import { type Department, type Priority, type ServiceType, type TaskApprovalMode, type TaskVisibility } from '../../../shared/types/index';
+import { getServiceOptions, hasChoice } from '../../../shared/utils/choiceOptions';
+import { getTodayInputDate } from '../../../shared/utils/utils';
+import ContextualTutorialLink from '../../help/components/ContextualTutorialLink';
+import CreateProjectModal from '../../projects/components/CreateProjectModal';
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
+const CUSTOM_SERVICE_VALUE = '__custom_service__';
+
+const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
+  const { t } = useI18n();
+  const { users, clients, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, retryPendingSave, discardMutation, backend } = useStore(useShallow(state => ({
+    users: state.users,
+    clients: state.clients,
+    currentUser: state.currentUser,
+    addTask: state.addTask,
+    projects: state.projects,
+    tasks: state.tasks,
+    createTaskInitialDate: state.createTaskInitialDate,
+    createTaskInitialAssignee: state.createTaskInitialAssignee,
+    createTaskInitialClientId: state.createTaskInitialClientId,
+    createTaskInitialClientName: state.createTaskInitialClientName,
+    createTaskInitialServiceType: state.createTaskInitialServiceType,
+    createTaskInitialCycleId: state.createTaskInitialCycleId,
+    createTaskInitialDeliverableId: state.createTaskInitialDeliverableId,
+    rolePermissions: state.rolePermissions,
+    retryPendingSave: state.retryPendingSave,
+    discardMutation: state.discardMutation,
+    backend: state.backend,
+  })));
+  const navigate = useNavigate();
+  const titleId = React.useId();
+  const descriptionId = React.useId();
+  const projectSelectId = React.useId();
+  const taskTitleId = React.useId();
+  const startDateInputId = React.useId();
+  const dueDateInputId = React.useId();
+  const clientSelectId = React.useId();
+  const departmentId = React.useId();
+  const assigneeId = React.useId();
+  const attachmentLinkId = React.useId();
+  const attachmentNameId = React.useId();
+  const notesId = React.useId();
+  const additionalDetailsRef = React.useRef<HTMLDetailsElement>(null);
+  const briefId = React.useId();
+  const facebookId = React.useId();
+  const websiteId = React.useId();
+
+  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+  const [projectId, setProjectId] = useState('');
+  const [milestoneId, setMilestoneId] = useState('');
+  const [approvalMode, setApprovalMode] = useState<TaskApprovalMode>('inherit');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [customerDetails, setCustomerDetails] = useState('');
+  const [facebookPage, setFacebookPage] = useState('');
+  const [website, setWebsite] = useState('');
+  const [department, setDepartment] = useState<Department | ''>('');
+  const [assignedTo, setAssignedTo] = useState('');
+  const [responsibleHodId, setResponsibleHodId] = useState('');
+  const [serviceType, setServiceType] = useState<ServiceType>('Design');
+  const [isAddingCustomService, setIsAddingCustomService] = useState(false);
+  const [customServiceInput, setCustomServiceInput] = useState('');
+  const [customServiceError, setCustomServiceError] = useState('');
+  const [formEdited, setFormEdited] = React.useState(false);
+  React.useEffect(() => { if (!isOpen) setFormEdited(false); }, [isOpen]);
+  const [priority, setPriority] = useState<Priority>('Medium');
+  const [visibility, setVisibility] = useState<TaskVisibility>(() => (
+    ['Staff', 'HOD'].includes(currentUser?.role || '') ? 'internal' : 'client-visible'
+  ));
+  const [startDate, setStartDate] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [attachmentLink, setAttachmentLink] = useState('');
+  const [attachmentName, setAttachmentName] = useState('');
+  const [notes, setNotes] = useState('');
+  const [assignmentError, setAssignmentError] = useState('');
+  const [formError, setFormError] = useState('');
+  const { busy: isSubmitting, run: runTask } = useSaveAction(String(isOpen));
+  const pendingTaskRecord = React.useRef<(typeof tasks)[number] | null>(null);
+  const markPristine = useUnsavedChanges(isOpen && (formEdited || isSubmitting));
+  const [pendingTaskId, setPendingTaskId] = useState('');
+  const pendingResolution = isPendingMutationResolution(backend);
+
+  const canCreateProjects = canManageProjects(currentUser, rolePermissions);
+  const isStaffTaskCreator = currentUser?.role === 'Staff' || currentUser?.role === 'HOD';
+  const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions);
+  const isProjectManager = currentUser?.role === 'Project Manager';
+  const departmentChoices = React.useMemo(
+    () => assignableDepartments(currentUser),
+    [currentUser],
+  );
+  const assignableProjects = React.useMemo(
+    () => getAssignableProjects(currentUser, projects, tasks, rolePermissions, users, { clients, projects }),
+    [clients, currentUser, projects, rolePermissions, tasks, users]
+  );
+  const visibleTasksForChoices = React.useMemo(
+    () => getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects }),
+    [clients, currentUser, projects, rolePermissions, tasks],
+  );
+  const selectedProject = projectId ? assignableProjects.find(project => project.id === projectId) : undefined;
+  const eligibleHods = React.useMemo(
+    () => eligibleTaskHods(department || undefined, selectedProject, users, rolePermissions),
+    [department, rolePermissions, selectedProject, users],
+  );
+  const filteredUsers = department
+    ? assignableTaskAssignees(currentUser, department, users, rolePermissions)
+        .filter(user => canAssignOthers || user.id === currentUser?.id)
+    : [];
+  const linkedTaskContext = Boolean(createTaskInitialClientId || createTaskInitialClientName);
+  const showCompanyLink = currentUser?.role !== 'Client' || linkedTaskContext;
+  const clientOptions = React.useMemo(() => {
+    const visibilityScope = { clients, projects };
+    const visibleKeys = new Set(
+      getVisibleClientNames(currentUser, tasks, projects, rolePermissions, visibilityScope)
+        .map(name => name.trim().toLowerCase())
+    );
+    const names = clients
+      .filter(client => !client.discovered)
+      .filter(client => client.createdBy === currentUser?.id || visibleKeys.has(client.clientName.trim().toLowerCase()))
+      .map(client => client.clientName.trim());
+    if (selectedProject) names.push(selectedProject.clientName.trim());
+    return Array.from(new Set(names.filter(Boolean))).sort((left, right) => left.localeCompare(right));
+  }, [clients, currentUser, projects, rolePermissions, selectedProject, tasks]);
+  const serviceOptions = React.useMemo(
+    () => getServiceOptions(assignableProjects, visibleTasksForChoices),
+    [assignableProjects, visibleTasksForChoices],
+  );
+  const serviceChoices = React.useMemo(() => {
+    if (!serviceType || hasChoice(serviceOptions, serviceType)) return serviceOptions;
+    return [...serviceOptions, serviceType];
+  }, [serviceOptions, serviceType]);
+
+  const resetForm = React.useCallback(() => {
+    setProjectId('');
+    setMilestoneId('');
+    setApprovalMode('inherit');
+    setTitle('');
+    setDescription('');
+    setClientName('');
+    setCustomerDetails('');
+    setFacebookPage('');
+    setWebsite('');
+    setDepartment('');
+    setAssignedTo('');
+    setResponsibleHodId('');
+    setServiceType('Design');
+    setIsAddingCustomService(false);
+    setCustomServiceInput('');
+    setCustomServiceError('');
+    setPriority('Medium');
+    setVisibility(['Staff', 'HOD'].includes(currentUser?.role || '') ? 'internal' : 'client-visible');
+    setStartDate(getTodayInputDate());
+    setDueDate('');
+    setAttachmentLink('');
+    setAttachmentName('');
+    setNotes('');
+    setAssignmentError('');
+    setFormError('');
+    setPendingTaskId('');
+    pendingTaskRecord.current = null;
+  }, [currentUser?.role]);
+
+  React.useEffect(() => { resetForm(); }, [currentUser?.id, resetForm]);
+
+  const recovery = useRecoverableForm('create-task', { projectId, milestoneId, approvalMode, title, description, clientName, customerDetails, facebookPage, website, department, assignedTo, responsibleHodId, serviceType, priority, visibility, startDate, dueDate, attachmentLink, attachmentName, notes, customServiceInput }, formEdited, isOpen && !pendingTaskId);
+  const restoreDraft = () => {
+    const value = recovery.restore(); if (!value || typeof value.title !== 'string') return;
+    if (additionalDetailsRef.current) additionalDetailsRef.current.open = true;
+    setProjectId(value.projectId); setMilestoneId(typeof value.milestoneId === 'string' ? value.milestoneId : ''); setApprovalMode(['inherit', 'none', 'hod', 'pm'].includes(value.approvalMode) ? value.approvalMode : 'inherit'); setTitle(value.title); setDescription(value.description); setClientName(value.clientName); setCustomerDetails(value.customerDetails); setFacebookPage(value.facebookPage); setWebsite(value.website); setDepartment(value.department); setAssignedTo(value.assignedTo); setResponsibleHodId(typeof value.responsibleHodId === 'string' ? value.responsibleHodId : ''); setServiceType(value.serviceType); setPriority(value.priority); setVisibility(value.visibility); setStartDate(value.startDate); setDueDate(value.dueDate); setAttachmentLink(value.attachmentLink); setAttachmentName(value.attachmentName); setNotes(value.notes); setCustomServiceInput(value.customServiceInput); setFormEdited(true);
+  };
+  const closeAndReset = () => {
+    recovery.clear(); markPristine(); setFormEdited(false); resetForm();
+    onClose();
+  };
+  const requestClose = () => { if (!isSubmitting && (!formEdited || window.confirm(t('Discard unsaved changes?')))) closeAndReset(); };
+
+  React.useEffect(() => {
+    if (isOpen) {
+      const initialMember = createTaskInitialAssignee
+        ? users.find(user => user.id === createTaskInitialAssignee && user.role !== 'Client')
+        : undefined;
+      const initialDepartment = initialMember
+        ? departmentChoices.find(item => getMemberDepartments(initialMember).includes(item))
+        : undefined;
+      setStartDate(createTaskInitialDate || getTodayInputDate());
+      setDueDate(createTaskInitialDate || '');
+      setFormError('');
+      setAssignmentError('');
+      setAssignedTo(initialMember?.id || '');
+      setResponsibleHodId(initialMember && initialMember.role === 'HOD' ? initialMember.id : '');
+      if (createTaskInitialClientName) {
+        const initialProject = assignableProjects.find(project => project.clientId === createTaskInitialClientId || project.clientName.toLowerCase() === createTaskInitialClientName.toLowerCase());
+        setProjectId(initialProject?.id || '');
+        setClientName(createTaskInitialClientName);
+      }
+      if (createTaskInitialServiceType) setServiceType(createTaskInitialServiceType);
+      setDepartment(current => (
+        initialDepartment
+          || (current && departmentChoices.some(item => item === current)
+          ? current
+          : departmentChoices.length === 1 ? departmentChoices[0] : '')
+      ));
+    }
+  }, [assignableProjects, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialDate, createTaskInitialServiceType, departmentChoices, isOpen, users]);
+
+  React.useEffect(() => {
+    if (!isProjectManager || !department) return;
+    setResponsibleHodId(current => eligibleHods.some(user => user.id === current)
+      ? current
+      : eligibleHods.length === 1 ? eligibleHods[0].id : '');
+  }, [department, eligibleHods, isProjectManager]);
+
+  if (!isOpen) return null;
+
+  const isValidOptionalUrl = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return true;
+    try {
+      return Boolean(safeHttpsUrl(trimmed));
+    } catch {
+      return false;
+    }
+  };
+
+  const selectProject = (id: string) => {
+    setProjectId(id);
+    setMilestoneId('');
+    if (isProjectManager) {
+      const nextProject = id ? assignableProjects.find(item => item.id === id) : undefined;
+      const nextHods = eligibleTaskHods(department || undefined, nextProject, users, rolePermissions);
+      setResponsibleHodId(nextHods.length === 1 ? nextHods[0].id : '');
+    }
+    if (!id) return;
+
+    const project = assignableProjects.find(item => item.id === id);
+    if (project) setClientName(project.clientName);
+  };
+
+  const selectService = (value: string) => {
+    if (value === CUSTOM_SERVICE_VALUE) {
+      setIsAddingCustomService(true);
+      setCustomServiceInput('');
+      setCustomServiceError('');
+      return;
+    }
+
+    setServiceType(value);
+    setIsAddingCustomService(false);
+    setCustomServiceInput('');
+    setCustomServiceError('');
+  };
+
+  const addCustomService = () => {
+    const trimmed = customServiceInput.trim();
+    if (!trimmed) return;
+
+    if (trimmed.length > 40) {
+      setCustomServiceError('Service name must be 40 characters or less.');
+      return;
+    }
+
+    const existingService = serviceChoices.find(choice => choice.toLowerCase() === trimmed.toLowerCase());
+    if (existingService) {
+      setServiceType(existingService);
+      setIsAddingCustomService(false);
+      setCustomServiceInput('');
+      setCustomServiceError('');
+      return;
+    }
+
+    setServiceType(trimmed);
+    setIsAddingCustomService(false);
+    setCustomServiceInput('');
+    setCustomServiceError('');
+  };
+
+  const handleCustomServiceKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomService();
+    }
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsAddingCustomService(false);
+      setCustomServiceInput('');
+      setCustomServiceError('');
+    }
+  };
+
+  const confirmTaskSave = async (taskId: string) => {
+    setPendingTaskId(taskId);
+    const result = await runTask(() => retryPendingSave('task.create'));
+    if (!result) return;
+    if (!result.ok) {
+      if (result.code === 'FORBIDDEN' || result.code === 'VALIDATION') {
+        const discarded = await runTask(async () => {
+          await discardMutation({ reload: true, confirm: false });
+          const latest = useStore.getState().backend;
+          return latest.mode === 'supabase' && latest.status !== 'live' ? { ok: false, error: latest.error || 'Unable to reload saved data. Try again.' } : { ok: true, error: undefined };
+        });
+        if (!discarded) return;
+        if (!discarded.ok) { setFormError(discarded.error); return; }
+        pendingTaskRecord.current = null;
+        setPendingTaskId('');
+      }
+      setFormError(result.error || 'The task is waiting to be saved. Review the sync status and retry.');
+      return;
+    }
+    const submitted = pendingTaskRecord.current;
+    const latest = useStore.getState().tasks.find(task => task.id === taskId);
+    if (!submitted || !latest || ['title', 'description', 'assignedTo', 'department', 'clientName', 'projectId', 'startDate', 'dueDate', 'serviceType', 'priority', 'visibility'].some(key => JSON.stringify(latest[key as keyof typeof latest]) !== JSON.stringify(submitted[key as keyof typeof submitted]))) {
+      pendingTaskRecord.current = null;
+      setPendingTaskId('');
+      setFormError(t('The pending task creation is no longer available. Review your draft before saving again.'));
+      return;
+    }
+      acknowledgeActionFeedback(useStore.getState());
+    closeAndReset();
+    navigate(`/tasks?taskId=${taskId}`);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAssignmentError('');
+    setFormError('');
+    if (!currentUser) return;
+
+    if (isSubmitting) return;
+    if (pendingTaskId) { await confirmTaskSave(pendingTaskId); return; }
+
+    const trimmedTitle = title.trim();
+    const trimmedClientName = clientName.trim();
+    const selectedClient = clients.find(client => client.clientName.trim().toLowerCase() === trimmedClientName.toLowerCase());
+    const trimmedServiceType = serviceType.trim();
+    const finalStartDate = startDate.trim() || getTodayInputDate();
+    const finalDueDate = dueDate.trim();
+
+    const hasDeliverableContext = Boolean(createTaskInitialDeliverableId);
+    if (isStaffTaskCreator && !projectId && !hasDeliverableContext) {
+      setFormError('Choose an available company or brand before creating this task.');
+      return;
+    }
+
+    if (!trimmedTitle) {
+      setFormError('Task title is required.');
+      return;
+    }
+
+    if (!trimmedClientName) {
+      setFormError('Choose a company from the Companies database.');
+      return;
+    }
+
+    if (!selectedClient && !selectedProject) {
+      setFormError('Create this company in the Companies tab before creating tasks for it.');
+      return;
+    }
+
+    if (!trimmedServiceType) {
+      setFormError('Service type is required.');
+      return;
+    }
+
+    if (!department) {
+      setAssignmentError('Choose a department for this task.');
+      return;
+    }
+
+    if (isProjectManager) {
+      if (!eligibleHods.length) {
+        setAssignmentError('No eligible HOD is configured for this project and department. Assign an HOD to the project before creating this task.');
+        return;
+      }
+      if (!responsibleHodId || !eligibleHods.some(user => user.id === responsibleHodId)) {
+        setAssignmentError('Choose the responsible HOD for this task.');
+        return;
+      }
+    }
+
+    if (finalStartDate && finalDueDate && new Date(finalDueDate) < new Date(finalStartDate)) {
+      setFormError('Due date cannot be earlier than the start date.');
+      return;
+    }
+
+    if (![facebookPage, website, attachmentLink].every(isValidOptionalUrl)) {
+      setFormError('Links must be valid HTTPS URLs.');
+      if (additionalDetailsRef.current) additionalDetailsRef.current.open = true;
+      return;
+    }
+
+    const resolvedAssignedTo = isProjectManager ? responsibleHodId : assignedTo;
+    const taskId = addTask({
+      title: trimmedTitle,
+      description: description.trim(),
+      projectId: projectId || undefined,
+      milestoneId: milestoneId || undefined,
+      approvalMode,
+      clientId: createTaskInitialClientId || selectedProject?.clientId || selectedClient?.id,
+      serviceCycleId: createTaskInitialCycleId,
+      deliverableId: createTaskInitialDeliverableId,
+      clientName: trimmedClientName,
+      projectName: projectId ? assignableProjects.find(p => p.id === projectId)?.projectName : undefined,
+      customerDetails: customerDetails.trim(),
+      facebookPage: safeHttpsUrl(facebookPage) || undefined,
+      website: safeHttpsUrl(website) || undefined,
+      visibility,
+      department,
+      assignedTo: resolvedAssignedTo,
+      responsibleHodId: isProjectManager ? responsibleHodId : undefined,
+      assignmentState: isProjectManager ? 'pending_hod' : undefined,
+      serviceType: trimmedServiceType,
+      priority,
+      startDate: finalStartDate,
+      dueDate: finalDueDate,
+      createdBy: currentUser.id,
+      status: 'Pending',
+      completionPercentage: 0,
+      attachmentLink: safeHttpsUrl(attachmentLink) || undefined,
+      attachmentName: attachmentName.trim() || undefined,
+      notes: notes.trim() || undefined,
+      isRecurring: false,
+      recurrenceFrequency: 'None',
+    });
+
+    if (!taskId) {
+      setFormError(
+        canCreateTasks(currentUser, rolePermissions)
+          ? 'This task could not be created. Review the selected company, department, and fields.'
+          : 'You do not have permission to create tasks.'
+      );
+      return;
+    }
+
+    pendingTaskRecord.current = useStore.getState().tasks.find(task => task.id === taskId) || null;
+    await confirmTaskSave(taskId);
+  };
+
+  return (
+    <>
+      <ModalShell
+        onEdit={() => setFormEdited(true)}
+        labelledBy={titleId}
+        describedBy={descriptionId}
+        onClose={requestClose}
+        panelClassName="max-w-2xl"
+      >
+      {recovery.storageFailed && <p role="alert" className="px-5 py-3 text-sm text-amber-800">{t('feedback.draftStorageFailed')}</p>}
+        {recovery.available && <DraftRecoveryNotice onRestore={restoreDraft} onDiscard={recovery.clear} />}
+        
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-200/80 bg-slate-50/80 px-6 py-4">
+          <div>
+            <h2 id={titleId} className="text-xl font-semibold text-slate-950">{t('Create task')}</h2>
+            <p id={descriptionId} className="mt-1 text-sm text-slate-600">{t('Assign work to a specific department or position.')}</p>
+            <ContextualTutorialLink tutorialId="create-task" label={t('Need help creating a task?')} />
+          </div>
+          <button 
+            onClick={requestClose}
+            aria-label={t('Close create task modal')}
+            title={t('common.close')}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+          <form id="create-task-form" data-onboarding-target="create-task" onSubmit={handleSubmit} className="space-y-6">
+            <fieldset disabled={isSubmitting || Boolean(pendingTaskId)} className="min-w-0 border-0 p-0 space-y-6">
+            
+            {/* Task Basic Info */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-slate-900">{t('Task details')}</h3>
+              
+              {showCompanyLink && (
+              <div>
+                <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                  <label htmlFor={projectSelectId} className="block text-sm font-medium text-slate-700">
+                    {t('Link to Company / Brand')} {isStaffTaskCreator ? <span className="text-red-500">*</span> : t('(Optional)')}
+                  </label>
+                  {canCreateProjects && !isStaffTaskCreator && (
+                    <button
+                      type="button"
+                      onClick={() => setIsProjectModalOpen(true)}
+                      className="flex items-center whitespace-nowrap text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
+                    >
+                      <Plus className="mr-0.5 h-3 w-3" /> {t('New project')}
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <select
+                    id={projectSelectId}
+                    value={projectId}
+                    onChange={e => selectProject(e.target.value)}
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                  >
+                    <option value="">{t(isStaffTaskCreator ? 'Choose an available company or brand' : 'No Company Link / Independent Task')}</option>
+                    {assignableProjects.map(p => (
+                      <option key={p.id} data-i18n-skip value={p.id}>{p.projectName} ({p.clientName})</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>
+              </div>
+              )}
+
+              {selectedProject && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block text-sm font-medium text-slate-700">{t('Milestone')} {t('(Optional)')}
+                    <select value={milestoneId} onChange={event => setMilestoneId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm shadow-sm">
+                      <option value="">{t('No milestone')}</option>
+                      {(selectedProject.milestones || []).map(milestone => <option key={milestone.id} value={milestone.id} data-i18n-skip>{milestone.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-sm font-medium text-slate-700">{t('Approval workflow')}
+                    <select value={approvalMode} onChange={event => setApprovalMode(event.target.value as TaskApprovalMode)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm shadow-sm">
+                      <option value="inherit">{t('Follow project default')}</option>
+                      <option value="none">{t('No approval')}</option>
+                      <option value="hod">{t('HOD approval')}</option>
+                      <option value="pm">{t('PM approval')}</option>
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor={taskTitleId} className="block text-sm font-medium text-slate-700 mb-1">{t('Task Title')} <span className="text-red-500">*</span></label>
+                <input 
+                  id={taskTitleId}
+                  type="text" required
+                  value={title} onChange={e => setTitle(e.target.value)}
+                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
+                  placeholder={t('e.g., Design Facebook Banners')}
+                />
+              </div>
+
+            </div>
+
+            {/* Client & Customer Info */}
+            <div className="space-y-4 border-t border-slate-200/80 pt-5">
+              <h3 className="text-sm font-semibold text-slate-900">{t('Client and assets')}</h3>
+              
+              <div>
+                <div>
+                  <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                    <label htmlFor={clientSelectId} className="block text-sm font-medium text-slate-700">{t('Client / Brand Name')} <span className="text-red-500">*</span></label>
+                    {!isStaffTaskCreator && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          closeAndReset();
+                          navigate('/projects');
+                        }}
+                        className="flex items-center whitespace-nowrap text-xs font-semibold text-blue-600 transition-colors hover:text-blue-700"
+                      >
+                        <Plus className="w-3 h-3 mr-0.5" /> {t('Manage companies')}
+                      </button>
+                    )}
+                  </div>
+                  <select
+                    id={clientSelectId}
+                    required
+                    disabled={Boolean(selectedProject) || isStaffTaskCreator}
+                    value={clientName} onChange={e => setClientName(e.target.value)}
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
+                  >
+                    <option value="">{t('Choose a company')}</option>
+                    {clientOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                  {selectedProject && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      {t('Company follows')} <span data-i18n-skip>{selectedProject.projectName}</span>.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Assignment & Scheduling */}
+            <div className="space-y-4 border-t border-slate-200/80 pt-5">
+              <h3 className="text-sm font-semibold text-slate-900">{t('Assignment and timeline')}</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor={departmentId} className="block text-sm font-medium text-slate-700 mb-1">{t('Assign to Position/Department')} <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <select
+                      id={departmentId}
+                      value={department}
+                      onChange={e => {
+                        setDepartment(e.target.value as Department);
+                        setAssignedTo(''); // Reset assignee when department changes
+                        setAssignmentError('');
+                      }}
+                      className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                    >
+                      <option value="">{t('Choose department')}</option>
+                      {departmentChoices.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor={assigneeId} className="block text-sm font-medium text-slate-700 mb-1">{t(isProjectManager ? 'Responsible HOD' : 'Assignee')}</label>
+                  <div className="relative">
+                    <select
+                      id={assigneeId}
+                      value={isProjectManager ? responsibleHodId : assignedTo}
+                      onChange={e => isProjectManager ? setResponsibleHodId(e.target.value) : setAssignedTo(e.target.value)}
+                      className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                    >
+                      <option value="">{t(isProjectManager ? (eligibleHods.length ? 'Choose responsible HOD' : 'No eligible HOD configured') : 'Unassigned')}</option>
+                      {(isProjectManager ? eligibleHods : filteredUsers).map(u => (
+                        <option key={u.id} data-i18n-skip value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                  </div>
+                  {isProjectManager && eligibleHods.length > 0 && <p className="mt-1 text-xs text-slate-500">{t('The HOD will assign Staff after reviewing this task.')}</p>}
+                  {assignmentError && (
+                    <p className="text-xs text-red-500 mt-1"><SystemMessage message={assignmentError} /></p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Service Type')}</label>
+                  <div className="relative">
+                    <select
+                      value={serviceType} onChange={e => selectService(e.target.value)}
+                      className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                    >
+                      {serviceChoices.map(s => <option key={s} value={s}>{s}</option>)}
+                      <option value={CUSTOM_SERVICE_VALUE}>+ {t('Add custom service')}</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                  </div>
+                  {isAddingCustomService && (
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        value={customServiceInput}
+                        onChange={e => { setCustomServiceInput(e.target.value); setCustomServiceError(''); }}
+                        onKeyDown={handleCustomServiceKeyDown}
+                        maxLength={40}
+                        autoFocus
+                        className="min-w-0 flex-1 bg-white border border-dashed border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block px-3 py-2 outline-none shadow-sm"
+                        placeholder={t('Custom service')}
+                      />
+                      <button
+                        type="button"
+                        data-draft-control
+                        onClick={addCustomService}
+                        disabled={!customServiceInput.trim()}
+                        className="inline-flex items-center gap-1 px-3 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0 shadow-sm"
+                      >
+                        <Plus className="w-4 h-4" /> {t('Add')}
+                      </button>
+                    </div>
+                  )}
+                  {customServiceError && (
+                    <p className="text-xs text-red-500 mt-1"><SystemMessage message={customServiceError} /></p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Priority')}</label>
+                  <div className="relative">
+                    <select
+                      value={priority} onChange={e => setPriority(e.target.value as Priority)}
+                      className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                    >
+                      {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Client visibility')}</label>
+                  <div className="relative">
+                    <select
+                      value={visibility} onChange={e => setVisibility(e.target.value as TaskVisibility)}
+                      className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
+                    >
+                      <option value="client-visible">{t('Visible to client')}</option>
+                      <option value="internal">{t('Internal only')}</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor={startDateInputId} className="block text-sm font-medium text-slate-700 mb-1">{t('Start Date')} <span className="text-red-500">*</span></label>
+                  <input 
+                    id={startDateInputId}
+                    type="date" required
+                    value={startDate} onChange={e => setStartDate(e.target.value)}
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor={dueDateInputId} className="block text-sm font-medium text-slate-700 mb-1">{t('Due Date')}</label>
+                  <input 
+                    id={dueDateInputId}
+                    type="date"
+                    value={dueDate} onChange={e => setDueDate(e.target.value)}
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
+                  />
+                </div>
+              </div>
+
+            </div>
+
+            {/* Links and notes */}
+            <details ref={additionalDetailsRef} onInvalidCapture={() => { if (additionalDetailsRef.current) additionalDetailsRef.current.open = true; }}>
+              <summary className="min-h-11 cursor-pointer rounded-control py-3 text-sm font-semibold text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">{t('Additional details')}</summary>
+              <div className="space-y-4 py-4">
+                <label htmlFor={briefId} className="block text-sm font-medium text-ink">{t('Description')}</label>
+                <textarea id={briefId} rows={3} value={description} onChange={e => setDescription(e.target.value)} className="w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" placeholder={t('Describe the task requirements...')} />
+                <label htmlFor={facebookId} className="block text-sm font-medium text-ink">{t('Facebook Page')}</label>
+                <input id={facebookId} type="url" value={facebookPage} onChange={e => setFacebookPage(e.target.value)} className="w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" placeholder="https://facebook.com/..." />
+                <label htmlFor={websiteId} className="block text-sm font-medium text-ink">{t('Company Website')}</label>
+                <input id={websiteId} type="url" value={website} onChange={e => setWebsite(e.target.value)} className="w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" placeholder="https://..." />
+              </div>
+            <div className="space-y-4 border-t border-slate-200/80 pt-5">
+              <h3 className="text-sm font-semibold text-slate-900">{t('Links and notes')}</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor={attachmentLinkId} className="block text-sm font-medium text-slate-700 mb-1">{t('Attachment URL')}</label>
+                  <input
+                    id={attachmentLinkId}
+                    type="url"
+                    value={attachmentLink}
+                    onChange={e => setAttachmentLink(e.target.value)}
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
+                    placeholder="https://drive.google.com/..."
+                  />
+                </div>
+                <div>
+                  <label htmlFor={attachmentNameId} className="block text-sm font-medium text-slate-700 mb-1">{t('Attachment Label')}</label>
+                  <input
+                    id={attachmentNameId}
+                    type="text"
+                    value={attachmentName}
+                    onChange={e => setAttachmentName(e.target.value)}
+                    className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
+                    placeholder={t('Brief, artwork, source folder...')}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor={notesId} className="block text-sm font-medium text-slate-700 mb-1">{t('Internal Notes')}</label>
+                <input
+                  id={notesId}
+                  type="text"
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
+                  placeholder={t('Any context the team should keep visible')}
+                />
+              </div>
+            </div>
+
+            </details>
+            </fieldset>
+            {(formError || pendingResolution) && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900" role="alert" aria-live="assertive">
+                <p><SystemMessage message={formError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
+                {pendingResolution && <BackendFreshness compact className="mt-3" />}
+              </div>
+            )}
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className={modalFooter}>
+          <button 
+            type="button"
+            onClick={requestClose}
+            className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            {t('common.cancel')}
+          </button>
+          <button 
+            type="submit"
+            form="create-task-form"
+            disabled={isSubmitting || (pendingResolution && !pendingTaskId)}
+            className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? t('Saving task...') : pendingTaskId ? t('Retry saving task') : t('Create & open task')}
+          </button>
+        </div>
+
+      </ModalShell>
+      
+      {/* Nested Create Project Modal */}
+      <CreateProjectModal 
+        isOpen={isProjectModalOpen} 
+        onClose={() => setIsProjectModalOpen(false)} 
+        onProjectCreated={(newId) => {
+          setProjectId(newId);
+          // Get the newly created project directly from the latest store state
+          const newProj = useStore.getState().projects.find(p => p.id === newId);
+          if (newProj) setClientName(newProj.clientName);
+          setIsProjectModalOpen(false);
+        }}
+      />
+    </>
+  );
+};
+
+export default CreateTaskModal;

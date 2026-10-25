@@ -1,0 +1,13 @@
+
+> workspace@3.0.0 test /Users/user/Downloads/aitask-master
+> vitest run src
+
+
+ RUN  v4.1.10 /Users/user/Downloads/aitask-master
+
+
+ Test Files  121 passed (121)
+      Tests  924 passed (924)
+   Start at  00:58:59
+   Duration  34.32s (transform 13.48s, setup 0ms, import 105.74s, tests 17.26s, environment 26ms)
+

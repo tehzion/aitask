@@ -44,16 +44,40 @@ try {
   const page = await context.newPage();
   page.setDefaultTimeout(20000);
   await page.goto(`${base}login`);
+  // Let React mount the login route and its initial Supabase auth listener
+  // before a fixture signs in through the store. Otherwise INITIAL_SESSION
+  // can clear the session token created by the immediately following login.
+  await expect(page.locator('#username')).toBeVisible();
   const login = async id => {
     const account = accounts.find(a => a.id===id);
     const result = await page.evaluate(async ({ email, password, id }) => {
       localStorage.setItem('aitask:locale','en');
       localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${id}`,'acknowledged');
-      const { useStore } = await import('/src/store/index.ts');
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
       return useStore.getState().login(email,password);
     }, { email: account.email, password, id });
+    if (!result.ok) {
+      const diagnostic = await page.evaluate(async ({ email, password }) => {
+        const { supabase } = await import('/src/infrastructure/database/supabaseClient.ts');
+        const { loadSecureWorkspace } = await import('/src/infrastructure/api/secureWorkspace.ts');
+        const signed = await supabase.auth.signInWithPassword({ email, password });
+        if (signed.error || !signed.data.user) return { authError: signed.error?.message || 'Missing authenticated user' };
+        try {
+          await loadSecureWorkspace(signed.data.user);
+          return { directWorkspaceLoad: 'succeeded' };
+        } catch (error) {
+          return { workspaceError: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined };
+        } finally {
+          await supabase.auth.signOut({ scope: 'local' });
+        }
+      }, { email: account.email, password });
+      console.error(`[hod-output-ui] failed login workspace diagnostic: ${JSON.stringify(diagnostic)}`);
+    }
     assert.equal(result.ok,true, `${id} login failed: ${result.error}`);
     await page.goto(`${base}tasks?taskId=output-task`);
+    // Authenticated workspace loading can complete after goto returns while
+    // the remote snapshot and role-scoped routes are still being mounted.
+    await expect(page.locator('main h1')).toBeVisible({ timeout: 20000 });
     // Hosted acknowledgements live on the server; a localStorage flag cannot
     // dismiss the authenticated release notice for these fresh test accounts.
     if (!acknowledgedAccounts.has(id)) {
@@ -89,7 +113,7 @@ try {
     await expect(page.getByRole('button', { name: 'Close Upload artwork for review', exact: true })).toBeDisabled();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Upload artwork for review' })).toBeVisible();
-    assert.equal(await page.evaluate(async () => (await import('/src/lib/unsavedChanges.ts')).hasBlockingUnsavedChanges()), true);
+    assert.equal(await page.evaluate(async () => (await import('/src/shared/forms/unsavedChanges.ts')).hasBlockingUnsavedChanges()), true);
     // Exercise the actual React Router link despite the modal's inert backdrop.
     // This models a route change while the task output owner must stay mounted.
     await page.evaluate(async () => {
@@ -124,14 +148,25 @@ try {
   await expect(page.getByText('Output file saved for review.', { exact: true })).toBeVisible({ timeout: 30000 });
   await page.unroute('**/storage/v1/object/client-service-files/**');
   await expect(page.getByRole('button', { name: 'Close Upload artwork for review', exact: true })).toBeEnabled();
-  assert.equal(await page.evaluate(async () => (await import('/src/lib/unsavedChanges.ts')).hasBlockingUnsavedChanges()), false);
+  assert.equal(await page.evaluate(async () => (await import('/src/shared/forms/unsavedChanges.ts')).hasBlockingUnsavedChanges()), false);
   const stored = JSON.parse(sql("select coalesce(data->'outputAttachments','[]') from public.aitask_entities where workspace_id='aitask-main' and entity_id='output-task';").trim().split('\n').map(s=>s.trim()).find(s=>s.startsWith('[{')));
   assert.equal(stored.length,2);
   assert.match(sql("select count(*) from storage.objects where bucket_id='client-service-files' and name like 'aitask-main/output-company/output-cycle/%';"), /\n\s*2\s*\n/, 'each upload must attach once and lost confirmation must not duplicate the Storage object');
   paths.push(...stored.map(item => item.path));
   await login('output-worker');
   await page.getByRole('button',{name:'Send for review',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Waiting for review',exact:true})).toBeDisabled();
+  await expect.poll(() => sql("select data->>'status' from public.aitask_entities where workspace_id='aitask-main' and entity_type='task' and entity_id='output-task';").includes('Waiting Approval')).toBe(true);
+  console.log(`[hod-output-ui] review submission state: ${JSON.stringify(await page.evaluate(async () => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    return {
+      href: location.href,
+      storeStatus: useStore.getState().tasks.find(task => task.id === 'output-task')?.status,
+      statuses: [...document.querySelectorAll('[role="status"]')].map(node => node.textContent?.trim()).filter(Boolean),
+      buttons: [...document.querySelectorAll('button')].map(node => node.innerText?.trim()).filter(Boolean),
+    };
+  }))}`);
+  await expect(page.getByText('Awaiting Review',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Send for review',exact:true})).toHaveCount(0);
   await page.getByRole('button', { name: 'Request review update', exact: true }).click();
   await page.getByLabel('What review update do you need?').fill('Please share a review update');
   await page.getByRole('button', { name: 'Request review update', exact: true }).last().click();
@@ -146,7 +181,9 @@ try {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   if (process.env.AITASK_HOD_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.AITASK_HOD_EVIDENCE_DIR}/output-review-mobile.png`, fullPage:true });
   await page.getByRole('button',{name:'Approve',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Awaiting final completion',exact:true})).toBeDisabled();
+  await expect.poll(() => sql("select data->>'status' from public.aitask_entities where workspace_id='aitask-main' and entity_type='task' and entity_id='output-task';").includes('Approved')).toBe(true);
+  await expect(page.getByText('Awaiting final completion',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Approve',exact:true})).toHaveCount(0);
   await login('output-client');
   const clientDownload = page.waitForEvent('download');
   await page.getByRole('button',{name:/Artwork\.pdf/}).click();

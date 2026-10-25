@@ -26,8 +26,9 @@ update public.aitask_members set departments=array['Video Editor'] where workspa
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005503',true);
 set local role authenticated;
+select pg_temp.stage_update('{"status":"In Progress"}');
 select is((pg_temp.stage_update('{"status":"Waiting Approval"}')->>'ok')::boolean,false,'missing HOD and responsible PM reject an orphan submission');
-select is((select data->>'status' from public.aitask_entities where entity_id='stage-task'),'Pending','failed handoff leaves status unchanged');
+select is((select data->>'status' from public.aitask_entities where entity_id='stage-task'),'In Progress','failed handoff leaves status unchanged');
 reset role;
 select is((select count(*)::integer from public.aitask_entities where workspace_id='stage-readiness-test' and entity_type='notification'),0,'failed submission is atomic');
 select set_config('request.jwt.claim.sub','',true);
@@ -46,6 +47,7 @@ select is((select (data->>'revisionCount')::integer from public.aitask_entities 
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005503',true);
 set local role authenticated;
+select pg_temp.stage_update('{"status":"In Progress"}');
 select pg_temp.stage_update('{"status":"Waiting Approval","clientApprovalStatus":"Pending"}');
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005501',true);
@@ -55,6 +57,13 @@ select is((select data->>'status' from public.aitask_entities where entity_id='s
 select is((select (data->>'completionPercentage')::integer from public.aitask_entities where entity_id='stage-task'),10,'reassignment to HOD is 10 percent');
 select ok((select not (data->'workState' ? 'acceptedBy') and not (data->'workState' ? 'reviewRequestedBy') from public.aitask_entities where entity_id='stage-task'),'reassignment clears acceptance and review metadata');
 select ok((select data->'workHistory'->-1->'fields' ? 'status' from public.aitask_entities where entity_id='stage-task'),'normalized reassignment is included in the attributed history');
+reset role;
+select set_config('request.jwt.claim.sub','',true);
+insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
+('stage-readiness-test','client','stage-company','{"id":"stage-company","clientName":"Stage Company","createdBy":"stage-pm"}');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005501',true);
+select set_config('request.jwt.claim.role','authenticated',true);
+set local role authenticated;
 select is((public.aitask_execute_command('stage-readiness-test',gen_random_uuid(),'task.create',jsonb_build_array(jsonb_build_object('kind','entity','action','insert','entityType','task','entityId','created-review','expectedVersion',0,'data',jsonb_build_object('id','created-review','title','Immediate review','clientName','Stage Company','department','Video Shooting','createdBy','stage-pm','assignedTo','stage-staff','status','Waiting Approval','visibility','internal','isCompleted',false,'clientApprovalStatus','Pending'))))->>'ok')::boolean,true,'a task created directly in review saves');
 reset role;
 select is((select count(*)::integer from public.aitask_entities where workspace_id='stage-readiness-test' and entity_type='notification' and data->'route'->>'entityId'='created-review' and data->>'targetUserId'='stage-hod'),1,'INSERT submission generates exactly one HOD handoff');
@@ -72,6 +81,7 @@ select is((pg_temp.stage_update('{"assignedTo":"stage-staff"}')->>'ok')::boolean
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005503',true);
 set local role authenticated;
+select pg_temp.stage_update('{"status":"In Progress"}');
 select pg_temp.stage_update('{"status":"Waiting Approval"}');
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005502',true);
