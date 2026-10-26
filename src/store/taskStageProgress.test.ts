@@ -85,6 +85,29 @@ describe('role-controlled task milestones', () => {
 });
 
 describe('role readiness at alternate entry points', () => {
+  it('requires a responsible assignee before starting work or requesting a revision', () => {
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress')).toEqual({
+      ok: false,
+      error: 'Assign a responsible person before starting work.',
+    });
+    expect(current().status).toBe('Pending');
+
+    useStore.setState({ tasks: [{ ...task, status: 'Completed', isCompleted: true, assignedTo: '' }] });
+    expect(useStore.getState().requestRevision(task.id, 'Rework this output')).toEqual({
+      ok: false,
+      error: 'Assign a responsible person before requesting a revision.',
+    });
+    expect(current()).toMatchObject({ status: 'Completed', isCompleted: true, revisionCount: 0 });
+  });
+
+  it('does not create an In Progress task without a responsible assignee', () => {
+    useStore.setState({ users: [pm], tasks: [], projects: [] });
+    const { id, ...draft } = task;
+    expect(id).toBe(task.id);
+    expect(useStore.getState().addTask({ ...draft, status: 'In Progress', assignedTo: '' })).toBe('');
+    expect(useStore.getState().tasks).toEqual([]);
+  });
+
   it('refuses an orphan review and saves it after a department HOD is configured', () => {
     actor(staff);
     useStore.setState({ users: [pm, staff, client], clients: [], tasks: [{ ...task, createdBy: 'missing-owner', assignedTo: staff.id, status: 'In Progress' }] });

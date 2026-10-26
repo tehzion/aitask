@@ -72,6 +72,9 @@ export const taskTransitionError = (user: User | null | undefined, before: Task 
   if (before && ['Approved', 'Completed'].includes(after.status) && protectedOutput.some(field => Object.prototype.hasOwnProperty.call(after, field) && JSON.stringify(before[field] || '') !== JSON.stringify(after[field] || ''))) return 'Ask the HOD or project manager to return approved work for revision.';
   if (before && before.status !== after.status && ['Approved', 'Completed'].includes(after.status)
     && ['assignedTo', 'department'].some(field => Object.prototype.hasOwnProperty.call(after, field) && before[field as 'assignedTo' | 'department'] !== after[field as 'assignedTo' | 'department'])) return 'Reassign work before submitting it for review.';
+  const nextAssigneeId = after.assignedTo ?? before?.assignedTo;
+  if (after.status === 'In Progress' && (!nextAssigneeId || !nextAssigneeId.trim())
+    && (!before || before.status !== after.status)) return 'Assign a responsible person before starting work.';
   if (before?.status === after.status && before.isCompleted === after.isCompleted) return undefined;
   const ordinaryStaff = user?.role === 'Staff' && !isHodUser(user, roles);
   if (before && before.status !== after.status && after.status === 'In Progress'

@@ -3392,6 +3392,10 @@ export const useStore = create<StoreState>()(
           result = { ok: false, error: 'Request a revision only after work has been submitted for review.' };
           return state;
         }
+        if (!task.assignedTo?.trim()) {
+          result = { ok: false, error: 'Assign a responsible person before requesting a revision.' };
+          return state;
+        }
 
         const revisionComment: TaskComment | null = note?.trim()
           ? {
@@ -3528,7 +3532,7 @@ export const useStore = create<StoreState>()(
 
         if (state.backend.mode === 'local' && status === 'Waiting Approval' && !getDepartmentReviewers(state.users, taskData, state.rolePermissions, { clients: state.clients, projects: state.projects }).length) { useToastStore.getState().addToast(TASK_HOD_REQUIRED, 'warning'); return ''; }
         const taskId = nowId('T');
-        const transitionError = taskTransitionError(currentUser, undefined, { ...taskData, status, isCompleted: status === 'Completed' }, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
+        const transitionError = taskTransitionError(currentUser, undefined, { ...taskData, assignedTo: resolvedAssigneeId || '', status, isCompleted: status === 'Completed' }, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (transitionError) { useToastStore.getState().addToast(transitionError, 'warning'); return ''; }
         if (taskEvidenceError(undefined, { ...taskData, id: taskId, status, isCompleted: status === 'Completed', revisionCount: 0, clientApprovalStatus: 'Pending' }, state.deliverables)) {
           useToastStore.getState().addToast(msg('staff.evidenceRequired'), 'warning');

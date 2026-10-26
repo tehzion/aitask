@@ -79,6 +79,8 @@ const zhCopy: Record<string, string> = {
   'Milestone name': '里程碑名称',
   'Description (optional)': '描述（可选）',
   'No responsible person': '不指定负责人',
+  'Assign a responsible person before starting work.': '开始工作前，请先指定负责人。',
+  'Assign a responsible person before requesting a revision.': '请求修订前，请先指定负责人。',
   'Not Started': '未开始',
   'Delayed': '已延迟',
   'Approval settings': '审批设置',
