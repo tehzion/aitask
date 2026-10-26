@@ -74,12 +74,12 @@ describe('notification popup detection', () => {
     expect(Array.from(result.seenIds).sort()).toEqual([older.id, newer.id]);
   });
 
-  it('keeps routine status updates in the center without showing a popup', () => {
+  it('shows a popup for a new unread routine status update', () => {
     const routine = notification('notice-7', {
       title: 'Task Status Updated',
       category: 'status',
       importance: 'informational',
     });
-    expect(getIncomingUnreadNotificationIds(staff, [routine], new Set()).incomingIds).toEqual([]);
+    expect(getIncomingUnreadNotificationIds(staff, [routine], new Set()).incomingIds).toEqual([routine.id]);
   });
 });

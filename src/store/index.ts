@@ -128,6 +128,7 @@ import {
   resolveAuthEmail,
   shouldUseSecureSupabase,
   subscribeToCurrentMemberAccessChanges,
+  subscribeToWorkspaceNotificationChanges,
   subscribeToWorkspaceTaskChanges,
   subscribeToWorkspaceRevisionChanges,
   supabase,
@@ -6385,6 +6386,8 @@ export const startBackendAutoSync = () => {
   let workspaceRealtimeKey: string | null = null;
   let taskRealtimeCleanup: (() => void) | null = null;
   let taskRealtimeKey: string | null = null;
+  let notificationRealtimeCleanup: (() => void) | null = null;
+  let notificationRealtimeKey: string | null = null;
   let localStorageSyncCleanup: (() => void) | null = null;
   let realtimeRetryTimer: number | null = null;
   let realtimeRetryAttempt = 0;
@@ -6420,9 +6423,11 @@ export const startBackendAutoSync = () => {
         accessRealtimeKey = null;
         workspaceRealtimeKey = null;
         taskRealtimeKey = null;
+        notificationRealtimeKey = null;
         syncAccessRealtime();
         syncWorkspaceRealtime();
         syncTaskRealtime();
+        syncNotificationRealtime();
         accessRefresh.request();
       }, delay);
     }
@@ -6468,6 +6473,21 @@ export const startBackendAutoSync = () => {
     taskRealtimeKey = key;
     if (!key) return;
     taskRealtimeCleanup = subscribeToWorkspaceTaskChanges(key, accessRefresh.request, reportRealtimeFailure);
+  };
+
+  const syncNotificationRealtime = () => {
+    const currentUser = useStore.getState().currentUser;
+    const key = shouldUseSecureSupabase() && currentUser ? SECURE_WORKSPACE_ID : null;
+    if (key === notificationRealtimeKey) return;
+    notificationRealtimeCleanup?.();
+    notificationRealtimeCleanup = null;
+    notificationRealtimeKey = key;
+    if (!key) return;
+    notificationRealtimeCleanup = subscribeToWorkspaceNotificationChanges(
+      key,
+      accessRefresh.request,
+      reportRealtimeFailure,
+    );
   };
 
   // Local mode is intentionally browser-only, but two open tabs should still
@@ -6519,6 +6539,7 @@ export const startBackendAutoSync = () => {
   syncAccessRealtime();
   syncWorkspaceRealtime();
   syncTaskRealtime();
+  syncNotificationRealtime();
   const unsubscribeAccessRealtime = useStore.subscribe((state, previousState) => {
     if (
       state.currentUser?.authUserId !== previousState.currentUser?.authUserId
@@ -6529,6 +6550,7 @@ export const startBackendAutoSync = () => {
     if (state.currentUser?.authUserId !== previousState.currentUser?.authUserId) {
       syncWorkspaceRealtime();
       syncTaskRealtime();
+      syncNotificationRealtime();
     }
 
     const previousSignature = accessSignature(previousState.currentUser);
@@ -6672,9 +6694,11 @@ export const startBackendAutoSync = () => {
       accessRealtimeKey = null;
       workspaceRealtimeKey = null;
       taskRealtimeKey = null;
+      notificationRealtimeKey = null;
       syncAccessRealtime();
       syncWorkspaceRealtime();
       syncTaskRealtime();
+      syncNotificationRealtime();
     }
     const state = useStore.getState();
     if (!shouldUseSecureSupabase() || state.currentUser) {
@@ -6700,6 +6724,9 @@ export const startBackendAutoSync = () => {
     taskRealtimeCleanup?.();
     taskRealtimeCleanup = null;
     taskRealtimeKey = null;
+    notificationRealtimeCleanup?.();
+    notificationRealtimeCleanup = null;
+    notificationRealtimeKey = null;
     accessRefresh.reset();
     localStorageSyncCleanup?.();
     localStorageSyncCleanup = null;

@@ -157,6 +157,51 @@ export const subscribeToWorkspaceTaskChanges = (
   };
 };
 
+/**
+ * Subscribe directly to notification rows visible to the signed-in member.
+ * Workspace revision remains the primary invalidation signal, while this
+ * channel prevents a delayed or missed revision event from holding back the
+ * notification popup and unread badge until the next safety poll.
+ *
+ * RLS on aitask_entities filters the stream to notifications the member may
+ * read. Payload data is never applied directly; the client reloads the guarded
+ * notification feed through the existing workspace snapshot path.
+ */
+export const subscribeToWorkspaceNotificationChanges = (
+  workspaceId: string,
+  onChange: () => void,
+  onError?: () => void,
+) => {
+  if (!isSafeRealtimeFilterValue(workspaceId)) return () => undefined;
+  let active = true;
+  const notify = () => { if (active) onChange(); };
+  const filter = `workspace_id=eq.${workspaceId},entity_type=eq.notification`;
+  const channel = supabase
+    .channel(`aitask-notification-changes:${workspaceId}`, realtimeChannelOptions)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'aitask_entities',
+      filter,
+      select: ['workspace_id', 'entity_type', 'entity_id', 'version', 'updated_at'],
+    }, notify)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'aitask_entities',
+      filter,
+      select: ['workspace_id', 'entity_type', 'entity_id', 'version', 'updated_at'],
+    }, notify);
+
+  channel.subscribe(status => {
+    if (active && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED')) onError?.();
+  });
+  return () => {
+    active = false;
+    void supabase.removeChannel(channel);
+  };
+};
+
 const legacyAliases: Record<string, string> = {
   'boss koo': 'boss@aitask.local',
   'project manager demo': 'admin@aitask.local',

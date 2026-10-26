@@ -189,7 +189,29 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
         : saved.status === submitted.status);
       if (result.ok && applied) finishSave(submitted);
       else {
-        setPendingSave({ ...submitted, failed: true, rejected: ['FORBIDDEN', 'VALIDATION', 'NOT_FOUND'].includes(result.code || useStore.getState().backend.errorCode || '') });
+        const rejectionCode = result.code || useStore.getState().backend.errorCode || '';
+        const rejected = ['FORBIDDEN', 'VALIDATION', 'NOT_FOUND'].includes(rejectionCode);
+        // A rejected quick status action has no draft content to preserve. Reload
+        // its canonical task immediately so Staff are not left on an optimistic
+        // status with every action disabled until they discover Restore saved data.
+        if (rejected && submitted.status) {
+          const rejectionMessage = result.error || 'This task status could not be saved.';
+          await useStore.getState().discardMutation();
+          if (!isCurrent()) return;
+          const refreshedState = useStore.getState();
+          const refreshedTask = refreshedState.tasks.find(item => item.id === submitted.taskId);
+          if (refreshedState.backend.status === 'live' && refreshedTask?.status === submitted.status) {
+            finishSave(submitted);
+            return;
+          }
+          if (refreshedState.backend.status === 'live') {
+            setPendingSave(null);
+            observedResolution.current = false;
+            setError(rejectionMessage);
+            return;
+          }
+        }
+        setPendingSave({ ...submitted, failed: true, rejected });
         observedResolution.current = isPendingMutationResolution(useStore.getState().backend);
         setError(result.error || 'This update is waiting to sync. Use the workspace retry controls to continue.');
       }
