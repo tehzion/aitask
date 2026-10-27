@@ -229,10 +229,41 @@ RESULTS_PLACEHOLDER
 
 ## 11. Remaining issues
 
-RISKS_PLACEHOLDER
+### Critical
+- None introduced by this work.
+
+### High
+- **Browser regression suite is not green on the latest code in this environment.** The untouched latest commit `f39c335` failed 138 of 365 Playwright tests in this Linux container, and the live commit `8eeba61` fails the five worst-affected spec files identically (70/70 of those cases). These failures therefore predate this change.
+  - The go-live audit's 365/365 was recorded on a macOS host for candidate `35f46d6` and could not be reproduced here.
+  - Two hypotheses were tested and **excluded**: timezone (`Asia/Kuala_Lumpur`) and the auto-opening onboarding card.
+  - **Action:** re-run the full suite on the reference release host before any release decision.
+- **Release gate still NO-GO** per `docs/final-go-live-audit-2026-10-25.md`. Production is missing migration `20261024090000_security_boundary_hardening`; historical migration SQL must be reconciled; a live client-acceptance merge can overwrite completion state; leaked-password protection is disabled; 19 `SECURITY DEFINER` advisor warnings are open. None of these is in UI scope and none was touched.
+
+### Medium
+- **Onboarding card can cover list controls.** The non-modal "Welcome to AiTask" card is centred low on the screen and covers controls such as *Clear filters* at 1280×720 until dismissed (seen in `hod-permission-parity`). Behaviour unchanged; consider anchoring it to a corner.
+- **Calendar date-edit message audit** (`ui-message-audit` Calendar variants) fails on both baseline and this branch in this environment.
+- **Approved tasks remain "active".** They wait for PM completion; this is the existing business rule and was intentionally kept. If the business wants Approved work hidden from Staff lists, that is a product decision, not a display bug.
+
+### Low
+- The production-role personas `operation`/`account`/`production` in `ServiceRoleDashboard` still use the older spotlight/icon cards. In the built-in roles these branches are not reached (Staff/HOD render My work), so they were left untouched.
+- The eager JS graph is at 296.1/300 KiB gzip (budget passes). The changed code is on lazily loaded routes, but the margin is thin for future work.
 
 ---
 
 ## 12. Production readiness
 
-READINESS_PLACEHOLDER
+This assessment does **not** mark the release GO because the interface improved.
+
+| Dimension | Status | Basis |
+| --- | --- | --- |
+| UI/UX readiness | **Ready for review** | Distinct page purposes, matching headings, no duplicate metrics, accessible metric markup. Axe is clean on all four internal dashboards at 390 and 1440 px, with no horizontal overflow at 320–1440 px. |
+| Functional readiness (this change) | **Verified locally** | 957/957 unit tests. The new e2e coverage passes for completed-task history, count updates, PM/HOD/Staff review scope, Client privacy, navigation and Chinese labels. No touched spec fails more than on the baseline. |
+| Functional readiness (whole product) | **Not established here** | 138 baseline browser failures in this environment, reproduced on the live commit (section 11). |
+| Security readiness | **Unchanged / open** | No authorization, RLS or RPC change. Review eligibility uses the existing permission functions, so the UI cannot offer actions the backend refuses. Advisor and leaked-password items remain open. |
+| Operational readiness | **Unchanged / open** | No migration. Backup/restore and hosted verification gates are as recorded in the go-live audit. |
+| Deployment readiness | **NO-GO (unchanged)** | Pending migration reconciliation, production role verification and explicit owner approval. Nothing was deployed and no production data was touched. |
+
+**Recommendation.**
+1. Review and merge this UI change on its own merits.
+2. Re-run the full browser suite on the reference release host.
+3. Then close the database, security and hosted-verification gates from the go-live audit before any production release.
